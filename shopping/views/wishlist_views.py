@@ -230,6 +230,7 @@ class WishlistViewSet(GenericViewSet):
             ),
 
         ],
+        request=None,  # GET 요청에는 request body가 없음
         responses={200: WishlistListResponseSerializer},
         summary="찜 목록을 조회한다.",
         description="""처리 내용:
@@ -489,6 +490,7 @@ class WishlistViewSet(GenericViewSet):
             ),
 
         ],
+        request=None,  # GET 요청에는 request body가 없음
         responses={
             200: WishlistCheckResponseSerializer,
             400: WishlistErrorResponseSerializer,
@@ -524,6 +526,7 @@ class WishlistViewSet(GenericViewSet):
     # ===== 통계 조회 =====
 
     @extend_schema(
+        request=None,  # GET 요청에는 request body가 없음
         responses={200: WishlistStatsSerializer},
         summary="찜 목록 통계를 조회한다.",
         description="""처리 내용:

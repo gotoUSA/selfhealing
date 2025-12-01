@@ -180,10 +180,10 @@ class TestSellerProfileValidation:
     @pytest.mark.parametrize(
         "invalid_number",
         [
-            "123456789",      # 9자리
-            "12345678901",    # 11자리
-            "123-45-67890",   # 하이픈 포함
-            "12345abcde",     # 문자 포함
+            "123456789",  # 9자리
+            "12345678901",  # 11자리
+            "123-45-67890",  # 하이픈 포함
+            "12345abcde",  # 문자 포함
         ],
     )
     def test_invalid_business_number_raises_validation_error(self, invalid_number):
