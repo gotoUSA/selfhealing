@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.urls import include, path
 from django.views.generic import TemplateView
+from django.views.decorators.csrf import csrf_exempt
 
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.kakao.views import KakaoOAuth2Adapter
@@ -74,6 +75,9 @@ from shopping.views.user_views import (
     ProfileView,
     withdraw,
 )
+
+# social auth callback
+from shopping.views.social_auth_views import SocialCallbackView
 
 
 # 소셜 로그인 뷰 정의
@@ -291,10 +295,12 @@ urlpatterns = [
         WishlistViewSet.as_view({"post": "move_to_cart"}),
         name="wishlist-move-to-cart",
     ),
-    # 소셜 로그인 엔드포인트
-    path("auth/social/google/", GoogleLogin.as_view(), name="google-login"),
-    path("auth/social/kakao/", KakaoLogin.as_view(), name="kakao-login"),
-    path("auth/social/naver/", NaverLogin.as_view(), name="naver-login"),
+    # 소셜 로그인 엔드포인트 (dj-rest-auth 방식 - access_token 직접 전달용)
+    path("auth/social/google/", csrf_exempt(GoogleLogin.as_view()), name="google-login"),
+    path("auth/social/kakao/", csrf_exempt(KakaoLogin.as_view()), name="kakao-login"),
+    path("auth/social/naver/", csrf_exempt(NaverLogin.as_view()), name="naver-login"),
+    # 소셜 로그인 OAuth 콜백 (authorization code 방식)
+    path("social/callback/", SocialCallbackView.as_view(), name="social-callback"),
     # 소셜 로그인 테스트 페이지
     path(
         "social/test/",

@@ -1,6 +1,8 @@
 """
 Social Authentication Configuration (django-allauth 65.12+)
 소셜 로그인 관련 모든 설정을 관리합니다.
+
+배포 가이드: docs/OAUTH_DEPLOYMENT_GUIDE.md 참조
 """
 
 import os
@@ -36,13 +38,14 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 # ==========================================
 # dj-rest-auth 7.0+ 설정
 # ==========================================
+# JWT_AUTH_SECURE는 production.py에서 True로 오버라이드됨
 REST_AUTH = {
     "USE_JWT": True,
     "JWT_AUTH_HTTPONLY": False,  # 프론트엔드에서 토큰 직접 관리
     "JWT_AUTH_COOKIE": None,  # 쿠키 미사용
     "USER_DETAILS_SERIALIZER": "shopping.serializers.user_serializers.UserSerializer",
     "JWT_AUTH_COOKIE_USE_CSRF": False,
-    "JWT_AUTH_SECURE": False,  # HTTPS 사용 시 True로 변경
+    "JWT_AUTH_SECURE": os.getenv("DJANGO_ENV", "local") == "production",  # 프로덕션에서만 True
     "JWT_AUTH_SAMESITE": "Lax",  # CSRF 보호
 }
 
@@ -57,6 +60,13 @@ SOCIALACCOUNT_ADAPTER = "shopping.adapters.CustomSocialAccountAdapter"
 # ==========================================
 # 소셜 로그인 제공자별 설정
 # ==========================================
+# 각 제공자의 Client ID/Secret은 환경변수로 관리
+# 발급 방법: docs/OAUTH_DEPLOYMENT_GUIDE.md 참조
+#
+# Google: https://console.cloud.google.com/apis/credentials
+# Kakao: https://developers.kakao.com/console/app
+# Naver: https://developers.naver.com/apps
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "SCOPE": [
@@ -73,6 +83,7 @@ SOCIALACCOUNT_PROVIDERS = {
         },
     },
     "kakao": {
+        # Kakao 동의항목에서 이메일 필수 동의 설정 필요
         "APP": {
             "client_id": os.getenv("KAKAO_REST_API_KEY", ""),
             "secret": os.getenv("KAKAO_CLIENT_SECRET", ""),
@@ -80,6 +91,7 @@ SOCIALACCOUNT_PROVIDERS = {
         },
     },
     "naver": {
+        # Naver는 검수 완료 후 일반 사용자 로그인 가능
         "APP": {
             "client_id": os.getenv("NAVER_CLIENT_ID", ""),
             "secret": os.getenv("NAVER_CLIENT_SECRET", ""),
@@ -88,5 +100,7 @@ SOCIALACCOUNT_PROVIDERS = {
     },
 }
 
-# 소셜 로그인 리다이렉트 URI (프론트엔드)
+# 소셜 로그인 리다이렉트 URI (프론트엔드 콜백)
+# 프로덕션: https://yourdomain.com/auth/callback
+# 개발: http://localhost:3000/auth/callback
 SOCIAL_LOGIN_REDIRECT_URI = os.getenv("SOCIAL_LOGIN_REDIRECT_URI", "http://localhost:8000/social/test/")

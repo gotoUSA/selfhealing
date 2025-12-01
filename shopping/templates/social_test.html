@@ -251,27 +251,56 @@
     </div>
 
     <script>
+        // OAuth 설정 - Django settings에서 가져옴
+        const GOOGLE_CLIENT_ID = '36051925388-pr6364s44krk77nq9e85j5fksbirfcpo.apps.googleusercontent.com';
+        const KAKAO_REST_API_KEY = '8851b97acb356b487825a8d30eb5727e';
+        const NAVER_CLIENT_ID = 'eLcnSMM_c8vQ4iRBxJTB';
+        
+        const REDIRECT_URI = window.location.origin + '/api/social/callback/';
         const API_BASE_URL = window.location.origin + '/api';
 
-        async function loginWithGoogle() {
-            alert('Google OAuth 앱 등록이 필요합니다.\n\n1. Google Cloud Console에서 프로젝트 생성\n2. OAuth 2.0 클라이언트 ID 발급\n3. .env에 GOOGLE_CLIENT_ID/SECRET 설정\n4. 리다이렉트 URI: ' + window.location.origin + '/social/test/');
-
-            // 실제 구현 시:
-            // window.location.href = API_BASE_URL + '/auth/social/google/';
+        function loginWithGoogle() {
+            const state = generateState('google');
+            const params = new URLSearchParams({
+                client_id: GOOGLE_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'code',
+                scope: 'openid email profile',
+                state: state,
+                access_type: 'online',
+                prompt: 'select_account'
+            });
+            window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
         }
 
-        async function loginWithKakao() {
-            alert('Kakao Developers에서 앱 등록이 필요합니다.\n\n1. Kakao Developers에서 애플리케이션 추가\n2. REST API 키 발급\n3. .env에 KAKAO_REST_API_KEY/SECRET 설정\n4. Redirect URI: ' + window.location.origin + '/social/test/');
-
-            // 실제 구현 시:
-            // window.location.href = API_BASE_URL + '/auth/social/kakao/';
+        function loginWithKakao() {
+            const state = generateState('kakao');
+            const params = new URLSearchParams({
+                client_id: KAKAO_REST_API_KEY,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'code',
+                state: state
+            });
+            window.location.href = 'https://kauth.kakao.com/oauth/authorize?' + params.toString();
         }
 
-        async function loginWithNaver() {
-            alert('Naver Developers에서 앱 등록이 필요합니다.\n\n1. Naver Developers에서 애플리케이션 등록\n2. Client ID/Secret 발급\n3. .env에 NAVER_CLIENT_ID/SECRET 설정\n4. Callback URL: ' + window.location.origin + '/social/test/');
+        function loginWithNaver() {
+            const state = generateState('naver');
+            const params = new URLSearchParams({
+                client_id: NAVER_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'code',
+                state: state
+            });
+            window.location.href = 'https://nid.naver.com/oauth2.0/authorize?' + params.toString();
+        }
 
-            // 실제 구현 시:
-            // window.location.href = API_BASE_URL + '/auth/social/naver/';
+        function generateState(provider) {
+            // state에 provider 정보 포함 (콜백에서 사용)
+            const random = Math.random().toString(36).substring(2, 15);
+            const state = provider + '_' + random;
+            sessionStorage.setItem('oauth_state', state);
+            return state;
         }
 
         // URL 파라미터에서 토큰 확인 (리다이렉트 후)
@@ -281,20 +310,32 @@
             const refresh = urlParams.get('refresh_token');
 
             if (access) {
+                // 토큰을 localStorage에 저장
+                localStorage.setItem('access_token', access);
+                if (refresh) {
+                    localStorage.setItem('refresh_token', refresh);
+                }
+                
                 showResponse({
                     success: true,
-                    message: '로그인 성공!',
+                    message: '🎉 로그인 성공!',
                     access_token: access,
-                    refresh_token: refresh
+                    refresh_token: refresh,
+                    tip: 'localStorage에 토큰이 저장되었습니다.'
                 });
+                
+                // URL에서 토큰 파라미터 제거 (보안)
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
 
             const error = urlParams.get('error');
             if (error) {
+                const errorDesc = urlParams.get('error_description') || '알 수 없는 오류';
                 showResponse({
                     success: false,
                     error: error,
-                    message: '로그인 실패'
+                    error_description: errorDesc,
+                    message: '❌ 로그인 실패'
                 });
             }
         });

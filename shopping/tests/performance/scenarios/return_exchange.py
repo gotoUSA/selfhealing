@@ -120,12 +120,12 @@ class CustomerReturnBehavior(TaskSet, ReturnTestMixin):
 
     # 환불 사유 분포 (실제 통계 기반)
     REFUND_REASONS = [
-        ("change_of_mind", 0.4),   # 단순변심 40%
-        ("defective", 0.2),        # 상품불량 20%
-        ("wrong_product", 0.1),    # 오배송 10%
+        ("change_of_mind", 0.4),  # 단순변심 40%
+        ("defective", 0.2),  # 상품불량 20%
+        ("wrong_product", 0.1),  # 오배송 10%
         ("description_mismatch", 0.15),  # 상세페이지와 다름 15%
-        ("size_issue", 0.1),       # 사이즈 문제 10%
-        ("other", 0.05),           # 기타 5%
+        ("size_issue", 0.1),  # 사이즈 문제 10%
+        ("other", 0.05),  # 기타 5%
     ]
 
     def on_start(self):
