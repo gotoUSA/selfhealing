@@ -90,6 +90,41 @@ class SocialLoginRequestSerializer(drf_serializers.Serializer):
     access_token = drf_serializers.CharField(help_text="OAuth 제공자로부터 받은 access_token")
 
 
+class BaseSocialLoginView(SocialLoginView):
+    """
+    소셜 로그인 기본 뷰
+    - dj-rest-auth의 SocialLoginView를 확장하여 refresh_token을 Cookie로 설정
+    - 일반 로그인과 동일한 방식으로 토큰을 관리
+    """
+
+    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
+    authentication_classes = []
+
+    def get_response(self):
+        """응답에 refresh_token Cookie 설정"""
+        # 원래 응답 가져오기
+        original_response = super().get_response()
+
+        # refresh_token을 Cookie로 설정
+        refresh_token = original_response.data.get("refresh") or original_response.data.get("refresh_token")
+
+        if refresh_token:
+            cookie_max_age = 7 * 24 * 60 * 60  # 7일 (초 단위)
+            cookie_secure = not settings.DEBUG  # 프로덕션에서는 HTTPS만 허용
+            cookie_samesite = "Lax"  # CSRF 방지
+
+            original_response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                max_age=cookie_max_age,
+                httponly=True,  # JavaScript에서 접근 불가
+                secure=cookie_secure,  # HTTPS에서만 전송
+                samesite=cookie_samesite,
+            )
+
+        return original_response
+
+
 # 소셜 로그인 뷰 정의
 @extend_schema(
     summary="구글 소셜 로그인",
@@ -109,14 +144,12 @@ class SocialLoginRequestSerializer(drf_serializers.Serializer):
     tags=["Social Auth"],
     request=SocialLoginRequestSerializer,
 )
-class GoogleLogin(SocialLoginView):
+class GoogleLogin(BaseSocialLoginView):
     """구글 소셜 로그인"""
 
     adapter_class = GoogleOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
-    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
-    authentication_classes = []
 
 
 @extend_schema(
@@ -137,14 +170,12 @@ class GoogleLogin(SocialLoginView):
     tags=["Social Auth"],
     request=SocialLoginRequestSerializer,
 )
-class KakaoLogin(SocialLoginView):
+class KakaoLogin(BaseSocialLoginView):
     """카카오 소셜 로그인"""
 
     adapter_class = KakaoOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
-    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
-    authentication_classes = []
 
 
 @extend_schema(
@@ -165,14 +196,12 @@ class KakaoLogin(SocialLoginView):
     tags=["Social Auth"],
     request=SocialLoginRequestSerializer,
 )
-class NaverLogin(SocialLoginView):
+class NaverLogin(BaseSocialLoginView):
     """네이버 소셜 로그인"""
 
     adapter_class = NaverOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
-    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
-    authentication_classes = []
 
 
 # DRF의 라우터 생성

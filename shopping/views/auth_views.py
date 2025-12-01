@@ -82,6 +82,15 @@ class LogoutErrorResponseSerializer(drf_serializers.Serializer):
     error = drf_serializers.CharField()
 
 
+class LogoutRequestSerializer(drf_serializers.Serializer):
+    """로그아웃 요청 스키마 (Swagger 테스트용)"""
+
+    refresh = drf_serializers.CharField(
+        required=False,
+        help_text="Refresh Token (Cookie에서 자동으로 읽어오므로 선택사항. Swagger 테스트 시 직접 입력)"
+    )
+
+
 # 토큰 갱신 응답용 Serializer
 class TokenRefreshResponseSerializer(drf_serializers.Serializer):
     """토큰 갱신 응답 스키마"""
@@ -400,7 +409,7 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request=None,
+        request=LogoutRequestSerializer,
         responses={
             200: LogoutResponseSerializer,
             400: LogoutErrorResponseSerializer,
@@ -408,7 +417,10 @@ class LogoutView(APIView):
         summary="로그아웃을 처리한다.",
         description="""처리 내용:
 - Refresh Token을 블랙리스트에 추가하여 무효화한다.
-- Cookie에서 refresh_token을 삭제한다.""",
+- Cookie에서 refresh_token을 삭제한다.
+
+**참고:** Cookie에 refresh_token이 있으면 자동으로 사용됩니다.
+Swagger에서 테스트 시에는 body에 refresh 토큰을 직접 입력하세요.""",
         tags=["Auth"],
     )
     def post(self, request: Request) -> Response:
