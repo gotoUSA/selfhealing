@@ -237,6 +237,184 @@ class TestPaymentServiceConfirmPayment:
 
 
 @pytest.mark.django_db
+class TestPaymentServiceConfirmPaymentValidation:
+    """결제 승인 검증 테스트 (엣지 케이스)"""
+
+    def test_confirm_payment_sync_already_paid(self):
+        """이미 완료된 결제에 대해 승인 시도 (line 115)"""
+        # Arrange - 이미 결제 완료된 Payment
+        order = OrderFactory.paid()
+        user = order.user
+        payment = PaymentFactory.done(order=order)  # 이미 done 상태
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_sync(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.order_number,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "이미 완료된 결제입니다" in str(exc_info.value)
+
+    def test_confirm_payment_sync_invalid_status_expired(self):
+        """만료된 결제에 대해 승인 시도 (line 119)"""
+        # Arrange - 만료 상태의 Payment
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentFactory(order=order, status="expired")
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_sync(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.order_number,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
+
+    def test_confirm_payment_sync_invalid_status_canceled(self):
+        """취소된 결제에 대해 승인 시도 (line 119)"""
+        # Arrange - 취소 상태의 Payment
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentFactory.canceled(order=order)
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_sync(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.order_number,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
+
+    def test_confirm_payment_sync_invalid_status_aborted(self):
+        """중단된 결제에 대해 승인 시도 (line 119)"""
+        # Arrange - 중단 상태의 Payment
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentFactory.aborted(order=order)
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_sync(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.order_number,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
+
+
+@pytest.mark.django_db
+class TestPaymentServiceConfirmPaymentAsync:
+    """비동기 결제 승인 테스트"""
+
+    def test_confirm_payment_async_already_paid(self):
+        """이미 완료된 결제에 대해 비동기 승인 시도 (line 277)"""
+        # Arrange - 이미 결제 완료된 Payment
+        order = OrderFactory.paid()
+        user = order.user
+        payment = PaymentFactory.done(order=order)
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_async(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.id,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "이미 완료된 결제입니다" in str(exc_info.value)
+
+    def test_confirm_payment_async_already_in_progress(self):
+        """이미 처리 중인 결제에 대해 비동기 승인 시도 (line 285)"""
+        # Arrange - 이미 처리 중인 Payment
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentFactory(order=order, status="in_progress")
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_async(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.id,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "이미 처리 중인 결제입니다" in str(exc_info.value)
+
+    def test_confirm_payment_async_invalid_status(self):
+        """유효하지 않은 상태에서 비동기 승인 시도"""
+        # Arrange - 만료된 Payment
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentFactory(order=order, status="expired")
+
+        # Act & Assert
+        with pytest.raises(PaymentConfirmError) as exc_info:
+            PaymentService.confirm_payment_async(
+                payment=payment,
+                payment_key="test_payment_key",
+                order_id=order.id,
+                amount=int(order.final_amount),
+                user=user,
+            )
+
+        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
+
+    @patch("shopping.tasks.payment_tasks.call_toss_confirm_api")
+    @patch("shopping.tasks.payment_tasks.finalize_payment_confirm")
+    def test_confirm_payment_async_eager_mode(self, mock_finalize, mock_toss_api):
+        """CELERY_TASK_ALWAYS_EAGER=True 모드에서 비동기 결제 승인 (line 305-308)"""
+        # Arrange
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentService.create_payment(order, "card")
+
+        # Mock 설정
+        mock_toss_api.return_value = {
+            "paymentKey": "test_key",
+            "orderId": str(order.id),
+            "status": "DONE",
+            "totalAmount": int(order.final_amount),
+        }
+        mock_finalize.return_value = {"success": True}
+
+        # Act - CELERY_TASK_ALWAYS_EAGER가 True이면 동기 실행
+        result = PaymentService.confirm_payment_async(
+            payment=payment,
+            payment_key="test_payment_key",
+            order_id=order.id,
+            amount=int(order.final_amount),
+            user=user,
+        )
+
+        # Assert
+        assert result["status"] == "processing"
+        assert result["payment_id"] == payment.id
+        # Eager 모드에서는 task_id가 "sync-execution"
+        assert result["task_id"] == "sync-execution"
+        mock_toss_api.assert_called_once()
+        mock_finalize.assert_called_once()
+
+
+@pytest.mark.django_db
 class TestPaymentServiceCancelPayment:
     """결제 취소 테스트"""
 
@@ -482,6 +660,117 @@ class TestPaymentServiceCancelPayment:
         assert "결제 취소 실패" in str(exc_info.value)
 
     @patch("shopping.services.payment_service.TossPaymentClient")
+    def test_cancel_payment_insufficient_points(self, mock_toss_client):
+        """포인트 부족으로 취소 불가 (line 464)"""
+        # Arrange - 적립 포인트가 있는 결제 완료
+        user = UserFactory.with_membership("silver")
+        product = ProductFactory(price=Decimal("50000"))
+        cart = CartFactory(user=user)
+        CartItemFactory(cart=cart, product=product, quantity=1)
+
+        order = OrderService.create_order_from_cart(
+            user=user,
+            cart=cart,
+            use_points=0,
+            **ShippingDataBuilder.default(),
+        )
+
+        payment = PaymentService.create_payment(order, "card")
+
+        # 결제 승인
+        mock_instance = mock_toss_client.return_value
+        mock_instance.confirm_payment.return_value = TossResponseBuilder.success_response(
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+        )
+
+        PaymentService.confirm_payment_sync(
+            payment=payment,
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+            user=user,
+        )
+
+        # 적립된 포인트 확인 후 사용자의 포인트를 0으로 만듦 (포인트 소진 시뮬레이션)
+        order.refresh_from_db()
+        earned_points = order.earned_points
+        assert earned_points > 0
+
+        # 포인트를 직접 0으로 설정 (다른 곳에서 사용했다고 가정)
+        user.points = 0
+        user.save()
+
+        # 취소 API 모킹
+        mock_instance.cancel_payment.return_value = TossResponseBuilder.cancel_response(
+            payment_key="test_payment_key_123",
+            cancel_reason="단순 변심",
+        )
+
+        # Act & Assert - 포인트 부족으로 취소 실패
+        with pytest.raises(PaymentCancelError) as exc_info:
+            PaymentService.cancel_payment(
+                payment_id=payment.id,
+                user=user,
+                cancel_reason="단순 변심",
+            )
+
+        assert "포인트가 부족하여 결제를 취소할 수 없습니다" in str(exc_info.value)
+
+    @patch("shopping.services.payment_service.TossPaymentClient")
+    def test_cancel_payment_generic_exception(self, mock_toss_client):
+        """취소 중 예상치 못한 오류 발생 (line 550-551)"""
+        # Arrange - 결제 완료 상태
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentService.create_payment(order, "card")
+
+        # 결제 승인
+        mock_instance = mock_toss_client.return_value
+        mock_instance.confirm_payment.return_value = TossResponseBuilder.success_response(
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+        )
+
+        PaymentService.confirm_payment_sync(
+            payment=payment,
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+            user=user,
+        )
+
+        # 취소 시 일반 예외 발생
+        mock_instance.cancel_payment.side_effect = RuntimeError("예상치 못한 오류")
+
+        # Act & Assert
+        with pytest.raises(RuntimeError) as exc_info:
+            PaymentService.cancel_payment(
+                payment_id=payment.id,
+                user=user,
+                cancel_reason="단순 변심",
+            )
+
+        assert "예상치 못한 오류" in str(exc_info.value)
+
+    def test_cancel_payment_not_found(self):
+        """존재하지 않는 결제 취소 시도"""
+        # Arrange
+        user = UserFactory()
+
+        # Act & Assert
+        with pytest.raises(PaymentCancelError) as exc_info:
+            PaymentService.cancel_payment(
+                payment_id=999999,  # 존재하지 않는 ID
+                user=user,
+                cancel_reason="단순 변심",
+            )
+
+        assert "결제 정보를 찾을 수 없습니다" in str(exc_info.value)
+
+    @patch("shopping.services.payment_service.TossPaymentClient")
     def test_cancel_payment_logging(self, mock_toss_client, caplog):
         """결제 취소 시 로깅 확인"""
         import logging
@@ -528,3 +817,49 @@ class TestPaymentServiceCancelPayment:
         assert any("토스페이먼츠 결제 취소 성공" in msg for msg in log_messages)
         assert any("재고 복구" in msg for msg in log_messages)
         assert any("결제 취소 완료" in msg for msg in log_messages)
+
+    @patch("shopping.services.payment_service.TossPaymentClient")
+    def test_cancel_payment_toss_error_logging(self, mock_toss_client, caplog):
+        """토스 API 에러 시 로깅 확인 (line 527-528)"""
+        import logging
+
+        caplog.set_level(logging.ERROR, logger="shopping.services.payment_service")
+
+        # Arrange - 결제 완료 상태
+        order = OrderFactory.pending()
+        user = order.user
+        payment = PaymentService.create_payment(order, "card")
+
+        mock_instance = mock_toss_client.return_value
+        mock_instance.confirm_payment.return_value = TossResponseBuilder.success_response(
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+        )
+
+        PaymentService.confirm_payment_sync(
+            payment=payment,
+            payment_key="test_payment_key_123",
+            order_id=order.order_number,
+            amount=int(order.final_amount),
+            user=user,
+        )
+
+        # 취소 시 토스 에러 발생
+        mock_instance.cancel_payment.side_effect = TossPaymentError(
+            code="CANCEL_FAILED",
+            message="취소 실패",
+        )
+
+        # Act
+        with pytest.raises(PaymentCancelError):
+            PaymentService.cancel_payment(
+                payment_id=payment.id,
+                user=user,
+                cancel_reason="단순 변심",
+            )
+
+        # Assert - 에러 로그 확인
+        log_messages = [record.message for record in caplog.records]
+        assert any("토스페이먼츠 결제 취소 실패" in msg for msg in log_messages)
+        assert any("CANCEL_FAILED" in msg for msg in log_messages)

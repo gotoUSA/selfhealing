@@ -281,11 +281,13 @@ class TestPointExpiryFIFOConcurrency:
         expiring_soon.refresh_from_db()
         safe_point.refresh_from_db()
 
-        assert expiring_soon.metadata.get("used_amount", 0) == 1000, \
-            f"만료 임박 포인트 전액 사용. 실제: {expiring_soon.metadata.get('used_amount', 0)}"
+        assert (
+            expiring_soon.metadata.get("used_amount", 0) == 1000
+        ), f"만료 임박 포인트 전액 사용. 실제: {expiring_soon.metadata.get('used_amount', 0)}"
 
-        assert safe_point.metadata.get("used_amount", 0) == 0, \
-            f"여유 포인트는 사용 안 됨. 실제: {safe_point.metadata.get('used_amount', 0)}"
+        assert (
+            safe_point.metadata.get("used_amount", 0) == 0
+        ), f"여유 포인트는 사용 안 됨. 실제: {safe_point.metadata.get('used_amount', 0)}"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -651,5 +653,6 @@ class TestPointExpiryAdvancedScenarios:
         # 데이터 일관성 확인
         latest_history = PointHistory.objects.filter(user=user).order_by("-created_at").first()
         if latest_history:
-            assert latest_history.balance == user.points, \
-                f"이력 잔액 일치. 이력: {latest_history.balance}, 실제: {user.points}"
+            assert (
+                latest_history.balance == user.points
+            ), f"이력 잔액 일치. 이력: {latest_history.balance}, 실제: {user.points}"

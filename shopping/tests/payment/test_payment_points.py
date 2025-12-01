@@ -1,4 +1,5 @@
 """결제 포인트 처리 테스트"""
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -500,7 +501,6 @@ class TestPaymentPointsException:
         # 포인트 변동 없음 (롤백되어야 함)
         user.refresh_from_db()
         assert user.points == 2000
-
 
     def test_expired_points_cannot_be_deducted(self, user_factory):
         """만료된 포인트 회수 불가 - 만료 처리 후"""

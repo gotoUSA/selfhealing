@@ -81,13 +81,9 @@ class PointHistoryManager(models.Manager):
         Returns:
             dict: {"earned": 적립, "used": 사용}
         """
-        earned = (
-            self.filter(user=user, points__gt=0, created_at__gte=start_date).aggregate(total=Sum("points"))["total"]
-            or 0
-        )
+        earned = self.filter(user=user, points__gt=0, created_at__gte=start_date).aggregate(total=Sum("points"))["total"] or 0
         used = abs(
-            self.filter(user=user, points__lt=0, created_at__gte=start_date).aggregate(total=Sum("points"))["total"]
-            or 0
+            self.filter(user=user, points__lt=0, created_at__gte=start_date).aggregate(total=Sum("points"))["total"] or 0
         )
         return {"earned": earned, "used": used}
 
@@ -198,14 +194,10 @@ class PointHistory(models.Model):
         negative_types = {"use", "cancel_deduct", "admin_deduct", "expire"}
 
         if self.type in positive_types and self.points <= 0:
-            raise ValidationError(
-                {"points": f"{self.get_type_display()}는 양수 포인트여야 합니다."}
-            )
+            raise ValidationError({"points": f"{self.get_type_display()}는 양수 포인트여야 합니다."})
 
         if self.type in negative_types and self.points >= 0:
-            raise ValidationError(
-                {"points": f"{self.get_type_display()}는 음수 포인트여야 합니다."}
-            )
+            raise ValidationError({"points": f"{self.get_type_display()}는 음수 포인트여야 합니다."})
 
         # 잔액은 항상 0 이상이어야 함
         if self.balance < 0:
@@ -221,10 +213,7 @@ class PointHistory(models.Model):
         Raises:
             ValueError: 항상 발생
         """
-        raise ValueError(
-            "포인트 이력은 삭제할 수 없습니다. "
-            "오류 수정은 반제(Reversal) 거래를 생성해주세요."
-        )
+        raise ValueError("포인트 이력은 삭제할 수 없습니다. " "오류 수정은 반제(Reversal) 거래를 생성해주세요.")
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -247,16 +236,10 @@ class PointHistory(models.Model):
                 requested_fields = set(update_fields)
                 if not requested_fields.issubset(allowed_fields):
                     disallowed = requested_fields - allowed_fields
-                    raise ValueError(
-                        f"포인트 이력의 핵심 필드는 수정할 수 없습니다. "
-                        f"수정 불가 필드: {disallowed}"
-                    )
+                    raise ValueError(f"포인트 이력의 핵심 필드는 수정할 수 없습니다. " f"수정 불가 필드: {disallowed}")
             else:
                 # update_fields 없이 save() 호출 시 경고
-                logger.warning(
-                    f"PointHistory.save() 호출 시 update_fields를 명시해주세요. "
-                    f"(history_id={self.pk})"
-                )
+                logger.warning(f"PointHistory.save() 호출 시 update_fields를 명시해주세요. " f"(history_id={self.pk})")
 
         super().save(*args, **kwargs)
 
@@ -329,9 +312,7 @@ class PointHistory(models.Model):
         Returns:
             int: 현재 포인트 잔액
         """
-        latest_history = (
-            cls.objects.filter(user=user).order_by("-created_at").only("balance").first()
-        )
+        latest_history = cls.objects.filter(user=user).order_by("-created_at").only("balance").first()
         return latest_history.balance if latest_history else 0
 
     @classmethod
@@ -372,9 +353,7 @@ class PointHistory(models.Model):
         total_expiring = expiring_histories.aggregate(total=Sum("points"))["total"] or 0
 
         # 가장 빠른 만료일
-        earliest_expire = (
-            expiring_histories.values_list("expires_at", flat=True).first()
-        )
+        earliest_expire = expiring_histories.values_list("expires_at", flat=True).first()
 
         return {
             "total_expiring_points": total_expiring,

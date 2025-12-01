@@ -114,9 +114,7 @@ class TestCleanupOldPointHistories:
             balance=0,
             description="테스트 만료",
         )
-        PointHistory.objects.filter(id=old_history.id).update(
-            created_at=timezone.now() - timedelta(days=800)
-        )
+        PointHistory.objects.filter(id=old_history.id).update(created_at=timezone.now() - timedelta(days=800))
 
         recent_history = PointHistory.objects.create(
             user=user,
@@ -125,9 +123,7 @@ class TestCleanupOldPointHistories:
             balance=50,
             description="최근 만료",
         )
-        PointHistory.objects.filter(id=recent_history.id).update(
-            created_at=timezone.now() - timedelta(days=365)
-        )
+        PointHistory.objects.filter(id=recent_history.id).update(created_at=timezone.now() - timedelta(days=365))
 
         # Act
         result = cleanup_old_point_histories(days=730)
@@ -182,9 +178,7 @@ class TestCleanupOldPointHistories:
             balance=0,
             description="만료",
         )
-        PointHistory.objects.filter(id=history.id).update(
-            created_at=timezone.now() - timedelta(days=100)
-        )
+        PointHistory.objects.filter(id=history.id).update(created_at=timezone.now() - timedelta(days=100))
 
         # Act
         result = cleanup_old_point_histories(days=90)
@@ -213,9 +207,7 @@ class TestCleanupOldPointHistories:
             balance=0,
             description="경계 케이스",
         )
-        PointHistory.objects.filter(id=boundary_history.id).update(
-            created_at=timezone.now() - timedelta(days=729)
-        )
+        PointHistory.objects.filter(id=boundary_history.id).update(created_at=timezone.now() - timedelta(days=729))
 
         # Act
         result = cleanup_old_point_histories(days=730)
@@ -235,9 +227,7 @@ class TestCleanupOldPointHistories:
             balance=0,
             description="하루 전",
         )
-        PointHistory.objects.filter(id=old_history.id).update(
-            created_at=timezone.now() - timedelta(days=731)
-        )
+        PointHistory.objects.filter(id=old_history.id).update(created_at=timezone.now() - timedelta(days=731))
 
         # Act
         result = cleanup_old_point_histories(days=730)
