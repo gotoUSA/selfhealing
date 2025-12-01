@@ -436,7 +436,72 @@ class OrderService:
         order.status = "canceled"
         order.save(update_fields=["status", "updated_at"])
 
+        # 포인트 처리
+        user = order.user
+        points_refunded = 0
+        points_deducted = 0
+
+        # 사용한 포인트 환불
+        if order.used_points > 0:
+            points_refunded = order.used_points
+            logger.info(
+                f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, "
+                f"points={points_refunded}"
+            )
+
+            PointService.add_points(
+                user=user,
+                amount=points_refunded,
+                type="cancel_refund",
+                order=order,
+                description=f"주문 #{order.order_number} 취소로 인한 포인트 환불",
+                metadata={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                },
+            )
+
+            logger.info(f"포인트 환불 완료: user_id={user.id}, points={points_refunded}")
+
+        # 적립된 포인트 회수
+        if order.earned_points > 0:
+            user.refresh_from_db()
+            if user.points < order.earned_points:
+                logger.warning(
+                    f"포인트 부족으로 주문 취소 불가: user_id={user.id}, "
+                    f"required={order.earned_points}, available={user.points}"
+                )
+                raise OrderServiceError(
+                    f"포인트가 부족하여 주문을 취소할 수 없습니다. "
+                    f"(필요: {order.earned_points}P, 보유: {user.points}P)"
+                )
+
+            points_deducted = order.earned_points
+            logger.info(
+                f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, "
+                f"points={points_deducted}"
+            )
+
+            point_service = PointService()
+            result = point_service.use_points_fifo(
+                user=user,
+                amount=points_deducted,
+                type="cancel_deduct",
+                order=order,
+                description=f"주문 #{order.order_number} 취소로 인한 적립 포인트 회수",
+                metadata={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                },
+            )
+
+            if not result["success"]:
+                raise OrderServiceError(f"포인트 회수 실패: {result['message']}")
+
+            logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
+
         logger.info(
             f"주문 취소 완료: order_id={order.id}, order_number={order.order_number}, "
-            f"user_id={order.user.id}"
+            f"user_id={order.user.id}, points_refunded={points_refunded}, "
+            f"points_deducted={points_deducted}"
         )

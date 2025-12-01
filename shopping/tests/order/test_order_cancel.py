@@ -1,10 +1,14 @@
+from decimal import Decimal
+
 from django.urls import reverse
 
 import pytest
 from rest_framework import status
 
 from shopping.models.order import Order, OrderItem
+from shopping.models.point import PointHistory
 from shopping.models.product import Product
+from shopping.tests.factories import OrderFactory, OrderItemFactory, PointHistoryFactory, ProductFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -118,6 +122,169 @@ class TestOrderCancelHappyPath:
         pending_order.refresh_from_db()
         assert pending_order.status == "canceled"
         assert pending_order.can_cancel is False
+
+    def test_cancel_order_refunds_used_points(self, authenticated_client, user, product, order_factory):
+        """주문 취소 시 사용한 포인트 환불 확인"""
+        # Arrange
+        user.points = 3000
+        user.save()
+        initial_points = user.points
+
+        # paid 상태 주문은 sold_count가 증가된 상태여야 함
+        product.sold_count = 1
+        product.save()
+
+        order = order_factory(
+            user,
+            status="paid",
+            total_amount=product.price,
+            used_points=2000,
+            final_amount=product.price - Decimal("2000"),
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            quantity=1,
+            price=product.price,
+        )
+
+        url = reverse("order-cancel", kwargs={"pk": order.id})
+
+        # Act
+        response = authenticated_client.post(url)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+
+        user.refresh_from_db()
+        assert user.points == initial_points + 2000
+
+        # 포인트 환불 이력 확인
+        refund_history = PointHistory.objects.filter(
+            user=user,
+            type="cancel_refund",
+            order=order,
+        ).first()
+        assert refund_history is not None
+        assert refund_history.points == 2000
+
+    def test_cancel_order_deducts_earned_points(self, authenticated_client, user, product, order_factory):
+        """주문 취소 시 적립된 포인트 회수 확인"""
+        # Arrange
+        earned_points = 100
+        user.points = 5000 + earned_points
+        user.save()
+        initial_points = user.points
+
+        # paid 상태 주문은 sold_count가 증가된 상태여야 함
+        product.sold_count = 1
+        product.save()
+
+        order = order_factory(
+            user,
+            status="paid",
+            total_amount=product.price,
+            earned_points=earned_points,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            quantity=1,
+            price=product.price,
+        )
+
+        # 적립 이력 생성 (FIFO 회수 대상)
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=user.points,
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        url = reverse("order-cancel", kwargs={"pk": order.id})
+
+        # Act
+        response = authenticated_client.post(url)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+
+        user.refresh_from_db()
+        assert user.points == initial_points - earned_points
+
+        # 포인트 회수 이력 확인
+        deduct_history = PointHistory.objects.filter(
+            user=user,
+            type="cancel_deduct",
+            order=order,
+        ).first()
+        assert deduct_history is not None
+        assert deduct_history.points == -earned_points
+
+    def test_cancel_order_with_both_used_and_earned_points(self, authenticated_client, user, product, order_factory):
+        """주문 취소 시 사용 포인트 환불 + 적립 포인트 회수 동시 처리"""
+        # Arrange
+        used_points = 1000
+        earned_points = 100
+        user.points = 2000 + earned_points  # 사용 후 잔액 + 적립
+        user.save()
+        initial_points = user.points
+
+        # paid 상태 주문은 sold_count가 증가된 상태여야 함
+        product.sold_count = 1
+        product.save()
+
+        order = order_factory(
+            user,
+            status="paid",
+            total_amount=product.price,
+            used_points=used_points,
+            earned_points=earned_points,
+            final_amount=product.price - Decimal(str(used_points)),
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            quantity=1,
+            price=product.price,
+        )
+
+        # 적립 이력 생성
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=user.points,
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        url = reverse("order-cancel", kwargs={"pk": order.id})
+
+        # Act
+        response = authenticated_client.post(url)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+
+        user.refresh_from_db()
+        # 환불(+1000) - 회수(-100) = +900
+        assert user.points == initial_points + used_points - earned_points
+
+        # 환불 이력 확인
+        assert PointHistory.objects.filter(
+            user=user, type="cancel_refund", order=order
+        ).exists()
+
+        # 회수 이력 확인
+        assert PointHistory.objects.filter(
+            user=user, type="cancel_deduct", order=order
+        ).exists()
 
 
 @pytest.mark.django_db
@@ -314,7 +481,7 @@ class TestOrderCancelException:
         response = api_client.post(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_cancel_order_with_deleted_product(self, authenticated_client, user, product, order_factory):
         """상품이 삭제된 주문 취소 (재고 복구 스킵)"""
@@ -350,3 +517,61 @@ class TestOrderCancelException:
 
         # 삭제된 상품은 재고 복구 불가 확인
         assert not Product.objects.filter(id=product_id).exists()
+
+    def test_cancel_order_fails_with_insufficient_points_to_deduct(
+        self, authenticated_client, user, product, order_factory
+    ):
+        """적립 포인트 회수할 잔액 부족 시 취소 실패"""
+        # Arrange
+        earned_points = 500
+        user.points = 100  # 회수해야 할 500P보다 적음
+        user.save()
+        initial_points = user.points
+        initial_stock = product.stock
+
+        # paid 상태 주문은 sold_count가 증가된 상태여야 함
+        product.sold_count = 1
+        product.save()
+
+        order = order_factory(
+            user,
+            status="paid",
+            total_amount=product.price,
+            earned_points=earned_points,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            quantity=1,
+            price=product.price,
+        )
+
+        # 적립 이력 생성
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=600,  # 적립 당시 잔액
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        url = reverse("order-cancel", kwargs={"pk": order.id})
+
+        # Act
+        response = authenticated_client.post(url)
+
+        # Assert
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "포인트가 부족" in response.data["error"]
+
+        # 롤백 확인: 주문 상태, 포인트, 재고 모두 원래대로
+        order.refresh_from_db()
+        assert order.status == "paid"
+
+        user.refresh_from_db()
+        assert user.points == initial_points
+
+        product.refresh_from_db()
+        assert product.stock == initial_stock

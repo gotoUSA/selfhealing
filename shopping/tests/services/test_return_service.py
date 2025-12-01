@@ -12,6 +12,7 @@ from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
+    PointHistoryFactory,
     ProductFactory,
     ReturnFactory,
     ReturnItemFactory,
@@ -637,6 +638,191 @@ class TestCompleteRefund:
             # Assert
             log_messages = [record.message for record in caplog.records]
             assert any("환불 완료" in msg for msg in log_messages)
+
+    def test_complete_refund_refunds_used_points(self):
+        """환불 완료 시 사용한 포인트 환불 확인"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        user = UserFactory(points=3000)
+        initial_points = user.points
+
+        order = OrderFactory.delivered(user=user, used_points=2000)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        # Mock 토스 API
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            ReturnService.complete_refund(return_obj)
+
+            # Assert
+            user.refresh_from_db()
+            assert user.points == initial_points + 2000
+
+            # 포인트 환불 이력 확인
+            from shopping.models.point import PointHistory
+
+            refund_history = PointHistory.objects.filter(
+                user=user,
+                type="cancel_refund",
+                order=order,
+            ).first()
+            assert refund_history is not None
+            assert refund_history.points == 2000
+
+    def test_complete_refund_deducts_earned_points(self):
+        """환불 완료 시 적립된 포인트 회수 확인"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 100
+        user = UserFactory(points=5000 + earned_points)
+        initial_points = user.points
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 적립 이력 생성 (FIFO 회수 대상)
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=user.points,
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        # Mock 토스 API
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            ReturnService.complete_refund(return_obj)
+
+            # Assert
+            user.refresh_from_db()
+            assert user.points == initial_points - earned_points
+
+            # 포인트 회수 이력 확인
+            from shopping.models.point import PointHistory
+
+            deduct_history = PointHistory.objects.filter(
+                user=user,
+                type="cancel_deduct",
+                order=order,
+            ).first()
+            assert deduct_history is not None
+            assert deduct_history.points == -earned_points
+
+    def test_complete_refund_with_both_used_and_earned_points(self):
+        """환불 시 사용 포인트 환불 + 적립 포인트 회수 동시 처리"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        used_points = 1000
+        earned_points = 100
+        user = UserFactory(points=2000 + earned_points)
+        initial_points = user.points
+
+        order = OrderFactory.delivered(
+            user=user, used_points=used_points, earned_points=earned_points
+        )
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 적립 이력 생성
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=user.points,
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        # Mock 토스 API
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            ReturnService.complete_refund(return_obj)
+
+            # Assert
+            user.refresh_from_db()
+            # 환불(+1000) - 회수(-100) = +900
+            assert user.points == initial_points + used_points - earned_points
+
+            from shopping.models.point import PointHistory
+
+            # 환불 이력 확인
+            assert PointHistory.objects.filter(
+                user=user, type="cancel_refund", order=order
+            ).exists()
+
+            # 회수 이력 확인
+            assert PointHistory.objects.filter(
+                user=user, type="cancel_deduct", order=order
+            ).exists()
+
+    def test_complete_refund_fails_with_insufficient_points_to_deduct(self):
+        """적립 포인트 회수할 잔액 부족 시 환불 실패"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 500
+        user = UserFactory(points=100)  # 회수해야 할 500P보다 적음
+        initial_points = user.points
+        initial_stock = product.stock
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 적립 이력 생성
+        PointHistoryFactory(
+            user=user,
+            points=earned_points,
+            balance=600,
+            type="earn",
+            order=order,
+            description="결제 완료 적립",
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        # Mock 토스 API
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act & Assert
+            with pytest.raises(ValueError) as exc_info:
+                ReturnService.complete_refund(return_obj)
+
+            assert "포인트가 부족" in str(exc_info.value)
+
+            # 롤백 확인: 상태, 포인트 모두 원래대로
+            return_obj.refresh_from_db()
+            assert return_obj.status == "received"
+
+            user.refresh_from_db()
+            assert user.points == initial_points
+
+            product.refresh_from_db()
+            assert product.stock == initial_stock
 
 
 
