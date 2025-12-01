@@ -9,7 +9,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Max
 from django.utils import timezone
 
 from shopping.models.return_request import Return
@@ -28,9 +27,13 @@ class ReturnService:
     @staticmethod
     def generate_return_number() -> str:
         """
-        교환/환불 번호 자동 생성
+        교환/환불 번호 자동 생성 (동시성 안전)
         형식: RET + YYYYMMDD + 일련번호(3자리)
         예: RET20250115001
+
+        Note:
+            - 이 메서드는 create_return()의 @transaction.atomic 내에서 호출됨
+            - select_for_update()로 동시성 제어하여 중복 번호 생성 방지
 
         Returns:
             str: 생성된 교환/환불 번호
@@ -40,13 +43,16 @@ class ReturnService:
         today = timezone.now().strftime("%Y%m%d")
         prefix = f"RET{today}"
 
-        # 오늘 날짜의 마지막 번호 조회
-        last_return = Return.objects.filter(return_number__startswith=prefix).aggregate(Max("return_number"))[
-            "return_number__max"
-        ]
+        # 동시성 제어: 오늘 날짜 Return 중 마지막 레코드에 락 획득
+        last_return = (
+            Return.objects.filter(return_number__startswith=prefix)
+            .select_for_update()
+            .order_by("-return_number")
+            .values_list("return_number", flat=True)
+            .first()
+        )
 
         if last_return:
-            # 마지막 3자리 추출하여 +1
             last_number = int(last_return[-3:])
             new_number = last_number + 1
         else:
@@ -103,19 +109,18 @@ class ReturnService:
         # 1. return_number 생성
         return_number = ReturnService.generate_return_number()
 
-        # 2. 교환 비즈니스 로직 검증
+        # 2. 교환 비즈니스 로직 검증 (낙관적 방식)
+        # Note: 신청 시점에는 재고 확인만 수행, 실제 차감은 complete_exchange()에서 수행
+        #       이는 업계 표준 방식으로, 승인 전 취소/반품 미도착 등의 상황을 고려한 설계
         if type == "exchange":
             exchange_product = kwargs.get("exchange_product")
 
             # [검증 1] 여러 상품 교환 시 exchange_product 필수
             if len(return_items_data) > 1 and not exchange_product:
-                raise ValueError(
-                    "여러 상품 교환 시 교환받을 상품을 선택해주세요. "
-                    "또는 환불 후 재구매를 권장합니다."
-                )
+                raise ValueError("여러 상품 교환 시 교환받을 상품을 선택해주세요. " "또는 환불 후 재구매를 권장합니다.")
 
             if exchange_product:
-                # 명시적으로 다른 상품 지정한 경우 재고 확인
+                # 명시적으로 다른 상품 지정한 경우 재고 확인 (힌트용, 최종 확인은 complete_exchange)
                 if exchange_product.stock < 1:
                     raise ValueError("교환 상품의 재고가 부족합니다.")
             else:
@@ -125,12 +130,9 @@ class ReturnService:
 
                     # [검증 2] 삭제된 상품 교환 불가
                     if not first_order_item.product:
-                        raise ValueError(
-                            "해당 상품이 삭제되어 동일 상품 교환이 불가합니다. "
-                            "환불을 신청해주세요."
-                        )
+                        raise ValueError("해당 상품이 삭제되어 동일 상품 교환이 불가합니다. " "환불을 신청해주세요.")
 
-                    # [검증 3] 동일 상품 재고 확인
+                    # [검증 3] 동일 상품 재고 확인 (힌트용, 최종 확인은 complete_exchange)
                     if first_order_item.product.stock < 1:
                         raise ValueError(
                             f"동일 상품({first_order_item.product.name})의 재고가 부족합니다. "
@@ -310,7 +312,7 @@ class ReturnService:
             user=return_obj.user,
             notification_type="return",
             title="반품 도착 확인",
-            message=f"{return_obj.return_number} 반품 상품이 도착했습니다. 곷 처리될 예정입니다.",
+            message=f"{return_obj.return_number} 반품 상품이 도착했습니다. 곧 처리될 예정입니다.",
             link=f"/returns/{return_obj.id}",
             metadata={"return_id": return_obj.id, "return_number": return_obj.return_number},
         )
@@ -380,7 +382,7 @@ class ReturnService:
 
         # 2. 재고 복구 (동시성 제어를 위해 락 획득)
         from shopping.models import Product
-        
+
         for return_item in return_items:
             if return_item.order_item.product:
                 # select_for_update로 동시성 제어 (Race Condition 방지)
@@ -548,8 +550,7 @@ class ReturnService:
             # 재고 부족 시 에러 (완료 시점에 최종 확인)
             if exchange_product.stock < 1:
                 raise ValueError(
-                    f"교환 상품({exchange_product.name})의 재고가 부족합니다. "
-                    "환불로 전환하거나 재입고를 기다려주세요."
+                    f"교환 상품({exchange_product.name})의 재고가 부족합니다. " "환불로 전환하거나 재입고를 기다려주세요."
                 )
 
             # 교환 상품 재고 감소

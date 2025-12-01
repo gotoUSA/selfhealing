@@ -595,12 +595,12 @@ class TestCompleteExchangeConcurrency(TransactionTestCase):
         exchange_product.refresh_from_db()
         original_product.refresh_from_db()
 
-        assert exchange_product.stock == initial_exchange_stock - 1, (
-            f"교환 재고 1번만 차감: expected={initial_exchange_stock - 1}, actual={exchange_product.stock}"
-        )
-        assert original_product.stock == initial_original_stock + 1, (
-            f"반품 재고 1번만 증가: expected={initial_original_stock + 1}, actual={original_product.stock}"
-        )
+        assert (
+            exchange_product.stock == initial_exchange_stock - 1
+        ), f"교환 재고 1번만 차감: expected={initial_exchange_stock - 1}, actual={exchange_product.stock}"
+        assert (
+            original_product.stock == initial_original_stock + 1
+        ), f"반품 재고 1번만 증가: expected={initial_original_stock + 1}, actual={original_product.stock}"
 
     def test_concurrent_exchange_last_stock_only_one_succeeds(self):
         """
