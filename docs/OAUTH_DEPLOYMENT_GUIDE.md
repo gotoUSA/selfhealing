@@ -70,7 +70,7 @@ openid
    ```
    # 프로덕션
    https://yourdomain.com
-   
+
    # 개발용 (선택)
    http://localhost:3000
    http://localhost:8000
@@ -80,10 +80,10 @@ openid
    ```
    # 프로덕션 - 프론트엔드 콜백
    https://yourdomain.com/auth/callback
-   
+
    # 프로덕션 - 백엔드 직접 콜백 (선택)
    https://api.yourdomain.com/api/auth/social/google/callback/
-   
+
    # 개발용 (선택)
    http://localhost:3000/auth/callback
    http://localhost:8000/social/test/
@@ -123,7 +123,7 @@ Google의 앱 검증 절차가 필요합니다:
 1. **앱 설정** → **플랫폼** 클릭
 2. **Web** 플랫폼 추가:
    ```
-   사이트 도메인: 
+   사이트 도메인:
    - https://yourdomain.com
    - http://localhost:3000 (개발용)
    - http://localhost:8000 (개발용)
@@ -137,10 +137,10 @@ Google의 앱 검증 절차가 필요합니다:
    ```
    # 프론트엔드 콜백
    https://yourdomain.com/auth/callback
-   
+
    # 백엔드 직접 콜백 (선택)
    https://api.yourdomain.com/api/auth/social/kakao/callback/
-   
+
    # 개발용
    http://localhost:3000/auth/callback
    http://localhost:8000/social/test/
@@ -196,10 +196,10 @@ Google의 앱 검증 절차가 필요합니다:
      ```
      # 프론트엔드 콜백
      https://yourdomain.com/auth/callback
-     
+
      # 백엔드 직접 콜백 (선택)
      https://api.yourdomain.com/api/auth/social/naver/callback/
-     
+
      # 개발용
      http://localhost:3000/auth/callback
      http://localhost:8000/social/test/
@@ -334,7 +334,7 @@ CSRF_COOKIE_SECURE = True
 Error 400: redirect_uri_mismatch
 ```
 **원인**: 등록된 Redirect URI와 실제 요청 URI가 다름
-**해결**: 
+**해결**:
 - 콘솔에서 등록한 URI와 정확히 일치하는지 확인
 - 프로토콜(http/https), 포트, 경로 끝 슬래시 확인
 

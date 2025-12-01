@@ -255,7 +255,7 @@
         const GOOGLE_CLIENT_ID = '36051925388-pr6364s44krk77nq9e85j5fksbirfcpo.apps.googleusercontent.com';
         const KAKAO_REST_API_KEY = '8851b97acb356b487825a8d30eb5727e';
         const NAVER_CLIENT_ID = 'eLcnSMM_c8vQ4iRBxJTB';
-        
+
         const REDIRECT_URI = window.location.origin + '/api/social/callback/';
         const API_BASE_URL = window.location.origin + '/api';
 
@@ -315,7 +315,7 @@
                 if (refresh) {
                     localStorage.setItem('refresh_token', refresh);
                 }
-                
+
                 showResponse({
                     success: true,
                     message: '🎉 로그인 성공!',
@@ -323,7 +323,7 @@
                     refresh_token: refresh,
                     tip: 'localStorage에 토큰이 저장되었습니다.'
                 });
-                
+
                 // URL에서 토큰 파라미터 제거 (보안)
                 window.history.replaceState({}, document.title, window.location.pathname);
             }

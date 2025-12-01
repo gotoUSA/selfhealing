@@ -80,11 +80,34 @@ from shopping.views.user_views import (
 from shopping.views.social_auth_views import SocialCallbackView
 
 
+# 소셜 로그인 요청용 Serializer (Swagger 스키마용)
+from rest_framework import serializers as drf_serializers
+
+
+class SocialLoginRequestSerializer(drf_serializers.Serializer):
+    """소셜 로그인 요청 Serializer"""
+
+    access_token = drf_serializers.CharField(help_text="OAuth 제공자로부터 받은 access_token")
+
+
 # 소셜 로그인 뷰 정의
 @extend_schema(
     summary="구글 소셜 로그인",
-    description="구글 OAuth2를 통한 소셜 로그인",
+    description="""구글 OAuth2를 통한 소셜 로그인
+
+**사용 방법:**
+1. 구글 OAuth2 인증 후 받은 access_token을 전달합니다.
+2. access_token만 전달하면 됩니다 (code, id_token 불필요).
+
+**요청 예시:**
+```json
+{
+  "access_token": "ya29.a0AfH6SMC..."
+}
+```
+    """,
     tags=["Social Auth"],
+    request=SocialLoginRequestSerializer,
 )
 class GoogleLogin(SocialLoginView):
     """구글 소셜 로그인"""
@@ -92,12 +115,27 @@ class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
+    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
+    authentication_classes = []
 
 
 @extend_schema(
     summary="카카오 소셜 로그인",
-    description="카카오 OAuth2를 통한 소셜 로그인",
+    description="""카카오 OAuth2를 통한 소셜 로그인
+
+**사용 방법:**
+1. 카카오 OAuth2 인증 후 받은 access_token을 전달합니다.
+2. access_token만 전달하면 됩니다.
+
+**요청 예시:**
+```json
+{
+  "access_token": "access_token_from_kakao"
+}
+```
+    """,
     tags=["Social Auth"],
+    request=SocialLoginRequestSerializer,
 )
 class KakaoLogin(SocialLoginView):
     """카카오 소셜 로그인"""
@@ -105,12 +143,27 @@ class KakaoLogin(SocialLoginView):
     adapter_class = KakaoOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
+    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
+    authentication_classes = []
 
 
 @extend_schema(
     summary="네이버 소셜 로그인",
-    description="네이버 OAuth2를 통한 소셜 로그인",
+    description="""네이버 OAuth2를 통한 소셜 로그인
+
+**사용 방법:**
+1. 네이버 OAuth2 인증 후 받은 access_token을 전달합니다.
+2. access_token만 전달하면 됩니다.
+
+**요청 예시:**
+```json
+{
+  "access_token": "access_token_from_naver"
+}
+```
+    """,
     tags=["Social Auth"],
+    request=SocialLoginRequestSerializer,
 )
 class NaverLogin(SocialLoginView):
     """네이버 소셜 로그인"""
@@ -118,6 +171,8 @@ class NaverLogin(SocialLoginView):
     adapter_class = NaverOAuth2Adapter
     client_class = OAuth2Client
     callback_url = settings.SOCIAL_LOGIN_REDIRECT_URI
+    # SessionAuthentication은 CSRF 검증을 수행하므로 제외
+    authentication_classes = []
 
 
 # DRF의 라우터 생성

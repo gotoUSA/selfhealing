@@ -34,6 +34,8 @@ urlpatterns = [
     path("api/", include("shopping.urls")),
     # DRF 인증 URLs (로그인/로그아웃 페이지)
     path("api-auth/", include("rest_framework.urls")),
+    # allauth URLs (dj-rest-auth 소셜 로그인에 필요)
+    path("accounts/", include("allauth.urls")),
     # OpenAPI Schema
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Swagger UI
