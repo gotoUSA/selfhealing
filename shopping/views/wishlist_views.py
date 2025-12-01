@@ -206,7 +206,6 @@ class WishlistViewSet(GenericViewSet):
 
     # ===== 찜 목록 조회 =====
 
-
     @extend_schema(
         parameters=[
             OpenApiParameter(
@@ -228,7 +227,6 @@ class WishlistViewSet(GenericViewSet):
                 required=False,
                 type=str,
             ),
-
         ],
         request=None,  # GET 요청에는 request body가 없음
         responses={200: WishlistListResponseSerializer},
@@ -247,7 +245,6 @@ class WishlistViewSet(GenericViewSet):
         # 서비스 호출
         queryset = WishlistService.get_list(request.user, filters)
 
-
         serializer = WishlistProductSerializer(queryset, many=True)
 
         return Response(
@@ -258,7 +255,6 @@ class WishlistViewSet(GenericViewSet):
         )
 
     # ===== 찜하기 토글 =====
-
 
     @extend_schema(
         request=WishlistToggleSerializer,
@@ -355,7 +351,6 @@ class WishlistViewSet(GenericViewSet):
                 required=True,
                 type=int,
             ),
-
         ],
         responses={
             204: WishlistMessageResponseSerializer,
@@ -393,7 +388,6 @@ class WishlistViewSet(GenericViewSet):
             return self._handle_service_error(e)
 
     # ===== 일괄 추가 =====
-
 
     @extend_schema(
         request=WishlistBulkAddSerializer,
@@ -444,7 +438,6 @@ class WishlistViewSet(GenericViewSet):
                 required=True,
                 type=str,
             ),
-
         ],
         responses={
             204: WishlistMessageResponseSerializer,
@@ -488,7 +481,6 @@ class WishlistViewSet(GenericViewSet):
                 required=True,
                 type=int,
             ),
-
         ],
         request=None,  # GET 요청에는 request body가 없음
         responses={
@@ -555,7 +547,6 @@ class WishlistViewSet(GenericViewSet):
         return Response(serializer.data)
 
     # ===== 장바구니로 이동 =====
-
 
     @extend_schema(
         request=WishlistMoveToCartRequestSerializer,

@@ -1856,3 +1856,232 @@ class TestPointServiceHistoryTracking:
         assert use_history.metadata.get("campaign") == "winter_sale"
         # used_details도 함께 저장되어야 함
         assert "used_details" in use_history.metadata
+
+
+@pytest.mark.django_db
+class TestGetUsablePoints:
+    """
+    get_usable_points 메서드 테스트
+
+    원장(PointHistory) 기준으로 실제 사용 가능한 포인트 계산 검증
+    """
+
+    def test_get_usable_points_basic(self):
+        """기본 사용 가능 포인트 조회"""
+        # Arrange
+        user = UserFactory.with_points(1000)
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=1000,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert
+        assert usable == 1000
+
+    def test_get_usable_points_excludes_expired(self):
+        """만료된 포인트 제외 확인"""
+        # Arrange
+        user = UserFactory.with_points(1500)
+
+        # 유효한 포인트
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=1000,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        # 만료된 포인트
+        PointHistoryFactory.earn_expired(
+            user=user,
+            points=500,
+            balance=1500,
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user, for_cancel=True)
+
+        # Assert - 만료된 500P 제외
+        assert usable == 1000
+
+    def test_get_usable_points_with_partial_usage(self):
+        """부분 사용된 포인트 계산"""
+        # Arrange
+        user = UserFactory.with_points(1000)
+        PointHistoryFactory.with_partial_usage(
+            user=user,
+            points=1000,
+            balance=1000,
+            used_amount=300,  # 300P 이미 사용
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert - 1000 - 300 = 700
+        assert usable == 700
+
+    def test_get_usable_points_multiple_earn_records(self):
+        """여러 적립 건의 합계 계산"""
+        # Arrange
+        user = UserFactory.with_points(2500)
+
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=1000,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        PointHistoryFactory.earn(
+            user=user,
+            points=1500,
+            balance=2500,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert
+        assert usable == 2500
+
+    def test_get_usable_points_for_cancel_excludes_expired(self):
+        """cancel_deduct용 조회는 만료된 포인트 제외"""
+        # Arrange
+        user = UserFactory.with_points(2000)
+
+        # 유효한 포인트
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=1000,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        # 만료된 포인트 (for_cancel=True일 때 제외)
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=2000,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        service = PointService()
+
+        # Act
+        usable_for_cancel = service.get_usable_points(user, for_cancel=True)
+        usable_for_normal = service.get_usable_points(user, for_cancel=False)
+
+        # Assert
+        assert usable_for_cancel == 1000  # 만료된 것 제외
+        assert usable_for_normal == 2000  # 전체 (만료 포함)
+
+    def test_get_usable_points_excludes_expired_flag_in_metadata(self):
+        """metadata에 expired=True인 포인트 제외"""
+        # Arrange
+        user = UserFactory.with_points(1500)
+
+        # 정상 포인트
+        PointHistoryFactory.earn(
+            user=user,
+            points=1000,
+            balance=1000,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        # metadata에 expired=True 표시된 포인트
+        expired_point = PointHistoryFactory.earn(
+            user=user,
+            points=500,
+            balance=1500,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        expired_point.metadata = {"expired": True}
+        expired_point.save()
+
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert
+        assert usable == 1000
+
+    def test_get_usable_points_zero_when_no_earn_records(self):
+        """적립 이력이 없으면 0 반환"""
+        # Arrange
+        user = UserFactory.with_points(0)
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert
+        assert usable == 0
+
+    def test_get_usable_points_zero_when_all_used(self):
+        """모든 포인트가 사용된 경우 0 반환"""
+        # Arrange
+        user = UserFactory.with_points(0)
+        PointHistoryFactory.with_partial_usage(
+            user=user,
+            points=1000,
+            balance=0,
+            used_amount=1000,  # 전부 사용됨
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user)
+
+        # Assert
+        assert usable == 0
+
+    def test_get_usable_points_complex_scenario(self):
+        """
+        복합 시나리오: 유효/만료/부분사용 혼합
+
+        적립 1: 1000P, 300P 사용됨, 유효 → 남은 700P
+        적립 2: 500P, 만료됨 → 0P (for_cancel에서 제외)
+        적립 3: 200P, 전부 사용됨 → 0P
+        예상: 700P
+        """
+        # Arrange
+        user = UserFactory.with_points(700)
+
+        # 적립 1: 부분 사용
+        PointHistoryFactory.with_partial_usage(
+            user=user,
+            points=1000,
+            balance=1000,
+            used_amount=300,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        # 적립 2: 만료됨
+        PointHistoryFactory.earn_expired(
+            user=user,
+            points=500,
+            balance=1500,
+        )
+        # 적립 3: 전부 사용
+        PointHistoryFactory.with_partial_usage(
+            user=user,
+            points=200,
+            balance=1700,
+            used_amount=200,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        service = PointService()
+
+        # Act
+        usable = service.get_usable_points(user, for_cancel=True)
+
+        # Assert
+        assert usable == 700

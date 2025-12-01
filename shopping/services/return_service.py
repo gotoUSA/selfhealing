@@ -12,11 +12,11 @@ from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
+from shopping.models.return_request import Return
 from .point_service import PointService
 
 if TYPE_CHECKING:
     from shopping.models.order import Order, OrderItem
-    from shopping.models.return_request import Return
     from shopping.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -172,6 +172,9 @@ class ReturnService:
         Raises:
             ValueError: 승인 불가능한 상태인 경우
         """
+        # 동시성 제어: Return 객체에 락 획득
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+
         if return_obj.status != "requested":
             raise ValueError("신청 상태에서만 승인할 수 있습니다.")
 
@@ -218,6 +221,9 @@ class ReturnService:
         Raises:
             ValueError: 거부 불가능한 상태인 경우
         """
+        # 동시성 제어: Return 객체에 락 획득
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+
         if return_obj.status != "requested":
             raise ValueError("신청 상태에서만 거부할 수 있습니다.")
 
@@ -259,6 +265,9 @@ class ReturnService:
         Raises:
             ValueError: 수령 확인 불가능한 상태인 경우
         """
+        # 동시성 제어: Return 객체에 락 획득
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+
         if return_obj.status != "shipping":
             raise ValueError("배송 중 상태에서만 수령 확인할 수 있습니다.")
 
@@ -305,6 +314,9 @@ class ReturnService:
         Raises:
             ValueError: 환불 처리 불가능한 상태인 경우
         """
+        # 동시성 제어: Return 객체에 락 획득
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+
         if return_obj.type != "refund":
             raise ValueError("환불 타입에서만 사용 가능합니다.")
 
@@ -378,43 +390,68 @@ class ReturnService:
             logger.info(f"포인트 환불 완료: user_id={user.id}, points={points_refunded}")
 
         # 3-2. 적립된 포인트 회수
+        points_deducted = 0
         if order.earned_points > 0:
-            user.refresh_from_db()
-            if user.points < order.earned_points:
-                logger.warning(
-                    f"포인트 부족으로 환불 처리 불가: user_id={user.id}, "
-                    f"required={order.earned_points}, available={user.points}"
-                )
-                raise ValueError(
-                    f"포인트가 부족하여 환불을 처리할 수 없습니다. "
-                    f"(필요: {order.earned_points}P, 보유: {user.points}P)"
-                )
+            # 중복 처리 방지: 이미 해당 주문에 대한 cancel_deduct가 처리되었는지 확인
+            # select_for_update로 동시성 제어 (Race Condition 방지)
+            from shopping.models.point import PointHistory
 
-            points_deducted = order.earned_points
-            logger.info(
-                f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, "
-                f"points={points_deducted}"
+            existing_cancel_deduct = (
+                PointHistory.objects.select_for_update()
+                .filter(
+                    user=user,
+                    type="cancel_deduct",
+                    order=order,
+                )
+                .exists()
             )
 
-            point_service = PointService()
-            result = point_service.use_points_fifo(
-                user=user,
-                amount=points_deducted,
-                type="cancel_deduct",
-                order=order,
-                description=f"환불 #{return_obj.return_number} - 적립 포인트 회수",
-                metadata={
-                    "order_id": order.id,
-                    "order_number": order.order_number,
-                    "return_id": return_obj.id,
-                    "return_number": return_obj.return_number,
-                },
-            )
+            if existing_cancel_deduct:
+                logger.info(
+                    f"이미 적립 포인트 회수 완료됨: user_id={user.id}, order_id={order.id}"
+                )
+            else:
+                user.refresh_from_db()
+                point_service = PointService()
 
-            if not result["success"]:
-                raise ValueError(f"포인트 회수 실패: {result['message']}")
+                # 실제 회수 가능한 포인트 확인 (원장 기준)
+                # 주의: 이 값은 예비 검증용이며, 실제 차감은 use_points_fifo에서 락과 함께 수행
+                usable_points = point_service.get_usable_points(user)
 
-            logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
+                if usable_points < order.earned_points:
+                    logger.warning(
+                        f"유효한 포인트 부족으로 환불 처리 불가: user_id={user.id}, "
+                        f"required={order.earned_points}, usable={usable_points}, cached={user.points}"
+                    )
+                    raise ValueError(
+                        f"유효한 포인트가 부족합니다. "
+                        f"(필요: {order.earned_points}P, 사용 가능: {usable_points}P)"
+                    )
+
+                points_deducted = order.earned_points
+                logger.info(
+                    f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, "
+                    f"points={points_deducted}"
+                )
+
+                result = point_service.use_points_fifo(
+                    user=user,
+                    amount=points_deducted,
+                    type="cancel_deduct",
+                    order=order,
+                    description=f"환불 #{return_obj.return_number} - 적립 포인트 회수",
+                    metadata={
+                        "order_id": order.id,
+                        "order_number": order.order_number,
+                        "return_id": return_obj.id,
+                        "return_number": return_obj.return_number,
+                    },
+                )
+
+                if not result["success"]:
+                    raise ValueError(f"포인트 회수 실패: {result['message']}")
+
+                logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
 
         # 4. 상태 변경
         return_obj.status = "completed"

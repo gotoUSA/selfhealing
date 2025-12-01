@@ -18,11 +18,9 @@ TAG_MAPPING = {
     "wishlist": "Wishlist",
     "payments": "Payments",
     "points": "Points",
-    "returns": "Returns",
     "notifications": "Notifications",
     "webhooks": "Webhooks",
     # 한글 → 영문
-    "교환/환불": "Returns",
     "인증": "Auth",
     "주문": "Orders",
     "상품": "Products",

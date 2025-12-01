@@ -266,6 +266,35 @@ class PointService:
 
         return max(0, remaining)
 
+    def get_usable_points(self, user: AbstractBaseUser, for_cancel: bool = True) -> int:
+        """
+        원장(PointHistory) 기준으로 실제 사용 가능한 포인트 계산
+
+        Args:
+            user: 사용자
+            for_cancel: True면 cancel_deduct용 (만료되지 않은 포인트만),
+                       False면 일반 사용 (모든 포인트)
+
+        Returns:
+            사용 가능한 포인트 합계
+        """
+        now = timezone.now()
+        query = PointHistory.objects.filter(user=user, type="earn")
+
+        if for_cancel:
+            # cancel_deduct는 만료되지 않은 포인트만
+            query = query.filter(expires_at__gt=now)
+
+        query = query.exclude(metadata__contains={"expired": True})
+
+        total_usable = 0
+        for point_history in query:
+            remaining = self.get_remaining_points(point_history)
+            if remaining > 0:
+                total_usable += remaining
+
+        return total_usable
+
     @transaction.atomic
     def use_points_fifo(
         self,

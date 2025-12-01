@@ -1,11 +1,13 @@
 """ReturnService 단위 테스트"""
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
 
+from shopping.models.point import PointHistory
 from shopping.models.return_request import Return, ReturnItem
 from shopping.services.return_service import ReturnService
 from shopping.tests.factories import (
@@ -926,3 +928,332 @@ class TestCompleteExchange:
             )
 
         assert "반품 도착 상태에서만 교환 처리할 수 있습니다" in str(exc_info.value)
+
+
+@pytest.mark.django_db
+class TestCompleteRefundDuplicatePrevention:
+    """
+    중복 cancel_deduct 방지 테스트
+
+    동일 주문에 대해 이미 cancel_deduct가 처리된 경우,
+    중복으로 포인트를 회수하지 않아야 함
+    """
+
+    def test_complete_refund_skips_duplicate_cancel_deduct(self):
+        """이미 cancel_deduct가 있으면 포인트 회수 스킵"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 100
+        user = UserFactory(points=5000)  # cancel_deduct로 회수 후 잔액
+        initial_points = user.points
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 이미 cancel_deduct 이력이 있는 상황 (이전에 처리됨)
+        PointHistoryFactory(
+            user=user,
+            points=-earned_points,
+            balance=user.points,
+            type="cancel_deduct",
+            order=order,
+            description="주문 취소로 인한 적립 포인트 차감",
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        # Mock 토스 API
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            ReturnService.complete_refund(return_obj)
+
+            # Assert - 포인트가 중복으로 차감되지 않음
+            user.refresh_from_db()
+            assert user.points == initial_points
+
+            # cancel_deduct 이력이 1개만 있어야 함 (기존 것)
+            cancel_deduct_count = PointHistory.objects.filter(
+                user=user, type="cancel_deduct", order=order
+            ).count()
+            assert cancel_deduct_count == 1
+
+    def test_complete_refund_skips_duplicate_cancel_deduct_logging(self, caplog):
+        """중복 cancel_deduct 스킵 시 로깅 확인"""
+        import logging
+
+        caplog.set_level(logging.INFO, logger="shopping.services.return_service")
+
+        # Arrange
+        product = ProductFactory(stock=10)
+        user = UserFactory(points=5000)
+        order = OrderFactory.delivered(user=user, earned_points=100)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 이미 cancel_deduct 이력 존재
+        PointHistoryFactory(
+            user=user,
+            points=-100,
+            balance=user.points,
+            type="cancel_deduct",
+            order=order,
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = Decimal("10000")
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            ReturnService.complete_refund(return_obj)
+
+            # Assert - 스킵 로그 확인
+            log_messages = [record.message for record in caplog.records]
+            assert any("이미 적립 포인트 회수 완료됨" in msg for msg in log_messages)
+
+
+@pytest.mark.django_db
+class TestCompleteRefundUsablePointsValidation:
+    """
+    원장(PointHistory) 기반 포인트 검증 테스트
+
+    User.points (캐시)가 아닌 get_usable_points() 원장 기준으로 검증
+    """
+
+    def test_complete_refund_uses_usable_points_validation(self):
+        """원장 기준 사용 가능 포인트로 검증"""
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 100
+        user = UserFactory(points=5100)  # 캐시값
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 원장에 유효한 포인트 이력 생성 (FIFO 대상)
+        PointHistoryFactory.earn(
+            user=user,
+            points=5000,
+            balance=5000,
+            order=None,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        PointHistoryFactory.earn(
+            user=user,
+            points=earned_points,
+            balance=5100,
+            order=order,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act
+            result = ReturnService.complete_refund(return_obj)
+
+            # Assert
+            assert result.status == "completed"
+            user.refresh_from_db()
+            assert user.points == 5100 - earned_points  # 회수됨
+
+    def test_complete_refund_fails_when_usable_points_insufficient(self):
+        """
+        원장 기준 사용 가능 포인트 부족 시 실패
+
+        User.points는 충분하지만, 실제 원장에 유효한 포인트가 부족한 경우
+        """
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 500
+        user = UserFactory(points=1000)  # 캐시값은 충분
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 원장에는 만료된 포인트만 있음 (usable = 0)
+        PointHistoryFactory.earn_expired(
+            user=user,
+            points=1000,
+            balance=1000,
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act & Assert
+            with pytest.raises(ValueError) as exc_info:
+                ReturnService.complete_refund(return_obj)
+
+            assert "유효한 포인트가 부족합니다" in str(exc_info.value)
+            assert f"필요: {earned_points}P" in str(exc_info.value)
+
+    def test_complete_refund_validates_usable_not_cached_points(self):
+        """
+        캐시(User.points)와 원장(usable_points) 불일치 시 원장 기준 검증
+
+        시나리오:
+        - User.points = 200 (관리자가 직접 수정)
+        - 원장에는 10P만 유효 (이미 cancel_deduct로 회수됨)
+        - earned_points = 110
+        - 결과: 실패 (10P < 110P)
+        """
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 110
+        user = UserFactory(points=200)  # 캐시값은 충분해 보임
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        # 원장: 110P 적립 후 100P 사용됨 → 남은 10P
+        earn_history = PointHistoryFactory.earn(
+            user=user,
+            points=110,
+            balance=110,
+            order=order,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+        earn_history.metadata = {"used_amount": 100}
+        earn_history.save()
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act & Assert
+            with pytest.raises(ValueError) as exc_info:
+                ReturnService.complete_refund(return_obj)
+
+            # 원장 기준 10P만 사용 가능하므로 실패
+            assert "유효한 포인트가 부족합니다" in str(exc_info.value)
+            assert "사용 가능: 10P" in str(exc_info.value)
+
+
+@pytest.mark.django_db
+class TestCompleteRefundIdempotency:
+    """
+    환불 완료 멱등성 테스트
+
+    동일한 Return에 대해 complete_refund를 여러 번 호출해도
+    안전하게 처리되어야 함
+    """
+
+    def test_complete_refund_idempotent_second_call_fails(self):
+        """
+        이미 완료된 Return에 대해 다시 호출 시 실패
+
+        첫 번째 호출: 성공 (status → completed)
+        두 번째 호출: ValueError (status != received)
+        """
+        # Arrange
+        product = ProductFactory(stock=10)
+        user = UserFactory(points=5000)
+        order = OrderFactory.delivered(user=user, earned_points=100)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        PointHistoryFactory.earn(
+            user=user,
+            points=100,
+            balance=5000,
+            order=order,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act - 첫 번째 호출 (성공)
+            result = ReturnService.complete_refund(return_obj)
+            assert result.status == "completed"
+
+            # Act - 두 번째 호출 (실패 예상)
+            return_obj.refresh_from_db()
+            with pytest.raises(ValueError) as exc_info:
+                ReturnService.complete_refund(return_obj)
+
+            assert "반품 도착 상태에서만 환불 처리할 수 있습니다" in str(exc_info.value)
+
+    def test_complete_refund_points_not_double_deducted(self):
+        """
+        멱등성: 포인트가 중복 차감되지 않음
+
+        시나리오:
+        1. 첫 번째 complete_refund 호출 → 포인트 차감
+        2. (어떤 이유로) return 상태가 다시 received로 변경됨
+        3. 두 번째 complete_refund 호출 → 포인트 중복 차감 안 됨
+        """
+        # Arrange
+        product = ProductFactory(stock=10)
+        earned_points = 100
+        user = UserFactory(points=5000)
+        initial_points = user.points
+
+        order = OrderFactory.delivered(user=user, earned_points=earned_points)
+        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+
+        PointHistoryFactory.earn(
+            user=user,
+            points=earned_points,
+            balance=initial_points,
+            order=order,
+            expires_at=timezone.now() + timedelta(days=365),
+        )
+
+        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
+        return_obj.save()
+
+        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+
+        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+            # Act - 첫 번째 호출
+            ReturnService.complete_refund(return_obj)
+
+            user.refresh_from_db()
+            points_after_first = user.points
+            assert points_after_first == initial_points - earned_points
+
+            # 강제로 상태 변경 (비정상 시나리오 시뮬레이션)
+            return_obj.status = "received"
+            return_obj.save()
+
+            # Act - 두 번째 호출
+            ReturnService.complete_refund(return_obj)
+
+            # Assert - 포인트가 중복 차감되지 않음
+            user.refresh_from_db()
+            assert user.points == points_after_first
+
+            # cancel_deduct 이력은 1개만
+            cancel_count = PointHistory.objects.filter(
+                user=user, type="cancel_deduct", order=order
+            ).count()
+            assert cancel_count == 1

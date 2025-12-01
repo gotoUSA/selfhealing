@@ -55,7 +55,7 @@ from shopping.views.payment_views import (
 from shopping.views.product_views import CategoryViewSet, ProductViewSet
 
 # return_request view
-from shopping.views.return_views import ReturnViewSet
+from shopping.views.return_views import ReturnViewSet, SellerReturnViewSet
 
 # wishlist
 from shopping.views.wishlist_views import WishlistViewSet
@@ -131,8 +131,11 @@ router.register(r"notifications", NotificationViewSet, basename="notification")
 # 내 문의 라우터
 router.register(r"my/questions", MyQuestionViewSet, basename="my-question")
 
-# 교환 환불 라우터
+# 교환 환불 라우터 (고객용)
 router.register(r"returns", ReturnViewSet, basename="return")
+
+# 판매자용 교환 환불 라우터
+router.register(r"seller/returns", SellerReturnViewSet, basename="seller-return")
 
 # 상품별 문의 중첩 라우터
 # /api/products/{product_pk}/questions/
