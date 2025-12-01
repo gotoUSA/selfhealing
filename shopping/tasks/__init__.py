@@ -11,8 +11,15 @@ from .cleanup_tasks import (
 )
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
 from .order_tasks import process_order_heavy_tasks
-from .point_tasks import expire_points_task, send_email_notification, send_expiry_notification_task
 from .payment_tasks import call_toss_confirm_api, finalize_payment_confirm
+from .point_tasks import (
+    add_points_after_payment,
+    cleanup_old_point_histories,
+    expire_points_task,
+    process_single_user_points,
+    send_email_notification,
+    send_expiry_notification_task,
+)
 
 __all__ = [
     # 이메일 태스크
@@ -28,6 +35,9 @@ __all__ = [
     "expire_points_task",
     "send_expiry_notification_task",
     "send_email_notification",
+    "add_points_after_payment",
+    "process_single_user_points",
+    "cleanup_old_point_histories",
     # 주문 태스크
     "process_order_heavy_tasks",
     # 결제 태스크

@@ -261,9 +261,7 @@ class UserService:
 
             for outstanding_token in outstanding_tokens:
                 # 이미 블랙리스트에 없는 토큰만 추가
-                _, created = BlacklistedToken.objects.get_or_create(
-                    token=outstanding_token
-                )
+                _, created = BlacklistedToken.objects.get_or_create(token=outstanding_token)
                 if created:
                     invalidated_count += 1
 
