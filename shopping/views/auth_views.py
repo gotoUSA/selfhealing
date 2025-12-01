@@ -319,7 +319,7 @@ class CustomTokenRefreshView(TokenRefreshView):
         },
         summary="새로운 Access Token을 발급한다.",
         description="""처리 내용:
-- Refresh Token을 검증한다.
+- Refresh Token을 검증한다. (HTTP Only Cookie 우선, 없으면 Body에서 읽음)
 - 새로운 Access Token을 발급한다.
 - Refresh Token을 갱신하여 Cookie에 저장한다.""",
         tags=["Auth"],
