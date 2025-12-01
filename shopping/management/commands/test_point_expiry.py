@@ -62,45 +62,45 @@ class Command(BaseCommand):
         # 다양한 시점의 포인트 생성
         now = timezone.now()
 
-        # 1. 이미 만료된 포인트
-        with timezone.override(now - timedelta(days=400)):
-            PointHistory.create_history(
-                user=user,
-                points=1000,
-                balance=1000,
-                type="earn",
-                description="[테스트] 400일 전 적립 (만료됨)",
-            )
+        # 1. 이미 만료된 포인트 (400일 전 적립, 이미 만료)
+        PointHistory.create_history(
+            user=user,
+            points=1000,
+            balance=1000,
+            type="earn",
+            description="[테스트] 400일 전 적립 (만료됨)",
+            expires_at=now - timedelta(days=35),  # 이미 만료
+        )
 
         # 2. 오늘 만료되는 포인트
-        with timezone.override(now - timedelta(days=365)):
-            PointHistory.create_history(
-                user=user,
-                points=2000,
-                balance=3000,
-                type="earn",
-                description="[테스트] 365일 전 적립 (오늘 만료)",
-            )
+        PointHistory.create_history(
+            user=user,
+            points=2000,
+            balance=3000,
+            type="earn",
+            description="[테스트] 365일 전 적립 (오늘 만료)",
+            expires_at=now,  # 오늘 만료
+        )
 
         # 3. 7일 후 만료 예정
-        with timezone.override(now - timedelta(days=358)):
-            PointHistory.create_history(
-                user=user,
-                points=3000,
-                balance=6000,
-                type="earn",
-                description="[테스트] 358일 전 적립 (7일 후 만료)",
-            )
+        PointHistory.create_history(
+            user=user,
+            points=3000,
+            balance=6000,
+            type="earn",
+            description="[테스트] 358일 전 적립 (7일 후 만료)",
+            expires_at=now + timedelta(days=7),
+        )
 
         # 4. 한 달 후 만료
-        with timezone.override(now - timedelta(days=335)):
-            PointHistory.create_history(
-                user=user,
-                points=4000,
-                balance=10000,
-                type="earn",
-                description="[테스트] 335일 전 적립 (30일 후 만료)",
-            )
+        PointHistory.create_history(
+            user=user,
+            points=4000,
+            balance=10000,
+            type="earn",
+            description="[테스트] 335일 전 적립 (30일 후 만료)",
+            expires_at=now + timedelta(days=30),
+        )
 
         # 5. 최근 적립 (만료까지 충분)
         PointHistory.create_history(
@@ -109,6 +109,7 @@ class Command(BaseCommand):
             balance=15000,
             type="earn",
             description="[테스트] 오늘 적립 (1년 후 만료)",
+            expires_at=now + timedelta(days=365),
         )
 
         # 사용자 총 포인트 업데이트

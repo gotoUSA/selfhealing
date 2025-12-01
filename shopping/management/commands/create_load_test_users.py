@@ -7,13 +7,9 @@
     python manage.py create_load_test_users --clear  # 기존 사용자 삭제 후 생성
 """
 
-from decimal import Decimal
-
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
-
-from shopping.models import Point
 
 User = get_user_model()
 
@@ -78,16 +74,8 @@ class Command(BaseCommand):
                     first_name="부하테스트",
                     last_name=f"사용자{i}",
                     is_email_verified=True,  # 이메일 인증 완료 상태로 생성
+                    points=initial_points,  # 포인트 직접 설정
                 )
-
-                # 포인트 지급
-                if initial_points > 0:
-                    Point.objects.create(
-                        user=user,
-                        balance=Decimal(str(initial_points)),
-                        earned_points=Decimal(str(initial_points)),
-                        used_points=Decimal("0"),
-                    )
 
                 created_users.append(username)
 

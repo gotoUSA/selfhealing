@@ -124,13 +124,13 @@ class Command(BaseCommand):
                 emails_to_delete = [u["email"] for u in users_to_delete]
 
                 with transaction.atomic():
-                    User.objects.filter(
+                    deleted_result = User.objects.filter(
                         is_email_verified=False,
                         email__in=emails_to_delete,
                     ).delete()
 
                     # 삭제 결과 로깅
-                    print(f"삭제된 사용자 수: {delete_count[0]}")
+                    self.stdout.write(f"삭제된 사용자 수: {deleted_result[0]}")
 
                 self.stdout.write(self.style.SUCCESS(f"\n✅ {delete_count}개의 미인증 계정이 삭제되었습니다."))
 
