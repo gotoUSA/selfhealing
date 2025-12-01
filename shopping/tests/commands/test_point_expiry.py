@@ -1,4 +1,8 @@
-"""test_point_expiry management command 테스트"""
+"""test_point_expiry management command 테스트
+
+이 테스트는 포인트 만료 기능 디버깅용 커맨드를 검증합니다.
+수동 테스트용이므로 일반 CI에서는 실행되지 않습니다. (pytest -m manual 로 실행)
+"""
 
 from datetime import timedelta
 from io import StringIO
@@ -16,6 +20,7 @@ from shopping.tests.factories import UserFactory
 User = get_user_model()
 
 
+@pytest.mark.manual
 class TestPointExpiryCommand:
     """test_point_expiry 커맨드 테스트"""
 

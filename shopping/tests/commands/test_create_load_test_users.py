@@ -1,4 +1,8 @@
-"""create_load_test_users management command 테스트"""
+"""create_load_test_users management command 테스트
+
+이 테스트는 부하 테스트용 사용자 생성 커맨드를 검증합니다.
+일반 CI에서는 실행되지 않습니다. (pytest -m load_test 로 실행)
+"""
 
 from io import StringIO
 
@@ -10,6 +14,7 @@ import pytest
 User = get_user_model()
 
 
+@pytest.mark.load_test
 class TestCreateLoadTestUsers:
     """create_load_test_users 커맨드 테스트"""
 

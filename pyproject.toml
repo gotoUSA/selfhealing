@@ -58,12 +58,15 @@ addopts = """
     -v
     --tb=short
     --strict-markers
+    -m 'not load_test and not manual'
 """
 testpaths = ["shopping/tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "performance: marks tests as performance tests",
+    "load_test: 부하 테스트 관련 (CI에서 기본 제외)",
+    "manual: 수동/디버깅용 테스트 (CI에서 기본 제외)",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)
@@ -86,6 +89,7 @@ omit = [
     "manage.py",
     "myproject/wsgi.py",
     "myproject/asgi.py",
+    "load_tests/*",
 ]
 branch = true
 # Parallel testing support (pytest-xdist)

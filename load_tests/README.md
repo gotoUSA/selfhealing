@@ -1,5 +1,19 @@
 # 성능 테스트 가이드 (Locust)
 
+> ⚠️ **참고**: 이 폴더는 pytest 테스트가 아닌 **Locust 부하 테스트** 전용입니다.
+> 일반 단위/통합 테스트는 `shopping/tests/`에 있습니다.
+
+## 폴더 구조
+
+```
+load_tests/
+├── locustfile.py              # 메인 부하 테스트 시나리오
+├── concurrent_*.py            # 동시성 테스트들
+├── setup_*.py                 # 테스트 데이터 생성 스크립트
+├── scenarios/                 # 추가 시나리오들
+└── *.md                       # 문서
+```
+
 ## 설치
 
 ```bash
@@ -70,7 +84,7 @@ CURRENT_SCENARIO = CUSTOM_SCENARIO
 python manage.py runserver
 
 # Locust 실행 (터미널 2)
-locust -f shopping/tests/performance/locustfile.py --host=http://localhost:8000
+locust -f load_tests/locustfile.py --host=http://localhost:8000
 ```
 
 웹 브라우저에서 http://localhost:8089 접속:
@@ -81,7 +95,7 @@ locust -f shopping/tests/performance/locustfile.py --host=http://localhost:8000
 ### 2. CLI 모드 (CI/CD용)
 
 ```bash
-locust -f shopping/tests/performance/locustfile.py \
+locust -f load_tests/locustfile.py \
     --host=http://localhost:8000 \
     --users 500 \
     --spawn-rate 10 \

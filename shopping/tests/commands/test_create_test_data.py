@@ -1,4 +1,8 @@
-"""create_test_data management command 테스트"""
+"""create_test_data management command 테스트
+
+이 테스트는 개발환경용 테스트 데이터 생성 커맨드를 검증합니다.
+일반 CI에서는 실행되지 않습니다. (pytest -m load_test 로 실행)
+"""
 
 from io import StringIO
 
@@ -14,6 +18,7 @@ from shopping.models.product import Category, Product, ProductReview
 User = get_user_model()
 
 
+@pytest.mark.load_test
 class TestCreateTestData:
     """create_test_data 커맨드 테스트"""
 
