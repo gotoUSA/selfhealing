@@ -617,7 +617,6 @@ class TestCartItemViewSet:
         CartItemFactory(cart=cart, product=product2)
         list_url = reverse("cart-items")
 
-
         # Act
         response = authenticated_client.get(list_url)
 
@@ -638,7 +637,6 @@ class TestCartItemViewSet:
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json()["item"]["quantity"] == 2
-
 
     def test_update_cart_item(self, authenticated_client, user, product):
         """아이템 수정 (PATCH 사용)"""
@@ -687,7 +685,6 @@ class TestCartConcurrency:
         )
         token = response.json()["token"]["access"]
 
-
         success_count = 0
         thread_count = 5
 
@@ -729,7 +726,6 @@ class TestCartConcurrency:
             {"username": user.username, "password": "testpass123"},
         )
         token = response.json()["token"]["access"]
-
 
         quantities = [3, 7, 2, 8, 4]
         results = []

@@ -231,8 +231,8 @@ class PointHistory(models.Model):
         if self.pk:  # 기존 레코드 수정
             update_fields = kwargs.get("update_fields")
             if update_fields:
-                # metadata만 업데이트 허용
-                allowed_fields = {"metadata"}
+                # metadata와 created_at만 업데이트 허용 (테스트용 날짜 조작 포함)
+                allowed_fields = {"metadata", "created_at"}
                 requested_fields = set(update_fields)
                 if not requested_fields.issubset(allowed_fields):
                     disallowed = requested_fields - allowed_fields
