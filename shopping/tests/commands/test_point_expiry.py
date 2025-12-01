@@ -71,7 +71,7 @@ class TestPointExpiryCommand:
         # Arrange
         out = StringIO()
         user = UserFactory()
-        
+
         # 만료된 포인트 이력 생성
         PointHistory.objects.create(
             user=user,
@@ -107,7 +107,7 @@ class TestPointExpiryCommand:
         # Arrange
         out = StringIO()
         user = UserFactory(username="use_points_user", points=5000)
-        
+
         mock_use_points.return_value = {
             "success": True,
             "message": "1000 포인트 사용 완료",

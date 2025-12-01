@@ -73,12 +73,8 @@ class TestCleanupExpiredTokens:
         call_command("cleanup_expired_tokens", stdout=out)
 
         # Assert
-        assert not PasswordResetToken.objects.filter(
-            pk=setup_tokens["expired_unused"].pk
-        ).exists()
-        assert PasswordResetToken.objects.filter(
-            pk=setup_tokens["valid_unused"].pk
-        ).exists()
+        assert not PasswordResetToken.objects.filter(pk=setup_tokens["expired_unused"].pk).exists()
+        assert PasswordResetToken.objects.filter(pk=setup_tokens["valid_unused"].pk).exists()
 
     def test_deletes_old_used_tokens(self, setup_tokens):
         """오래전에 사용된 토큰 삭제"""
@@ -89,12 +85,8 @@ class TestCleanupExpiredTokens:
         call_command("cleanup_expired_tokens", stdout=out)
 
         # Assert
-        assert not PasswordResetToken.objects.filter(
-            pk=setup_tokens["old_used"].pk
-        ).exists()
-        assert PasswordResetToken.objects.filter(
-            pk=setup_tokens["recent_used"].pk
-        ).exists()
+        assert not PasswordResetToken.objects.filter(pk=setup_tokens["old_used"].pk).exists()
+        assert PasswordResetToken.objects.filter(pk=setup_tokens["recent_used"].pk).exists()
 
     def test_dry_run_does_not_delete(self, setup_tokens):
         """dry-run 옵션 시 실제 삭제 안함"""
@@ -118,9 +110,7 @@ class TestCleanupExpiredTokens:
         call_command("cleanup_expired_tokens", used_days=60, stdout=out)
 
         # Assert - old_used(31일)는 삭제 안됨
-        assert PasswordResetToken.objects.filter(
-            pk=setup_tokens["old_used"].pk
-        ).exists()
+        assert PasswordResetToken.objects.filter(pk=setup_tokens["old_used"].pk).exists()
 
     def test_no_tokens_to_delete(self, db):
         """삭제할 토큰이 없는 경우"""

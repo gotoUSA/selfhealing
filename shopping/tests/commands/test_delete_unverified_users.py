@@ -28,9 +28,7 @@ class TestDeleteUnverifiedUsers:
             username="old_unverified",
             is_email_verified=False,
         )
-        User.objects.filter(pk=old_unverified.pk).update(
-            date_joined=now - timedelta(days=10)
-        )
+        User.objects.filter(pk=old_unverified.pk).update(date_joined=now - timedelta(days=10))
 
         # 최근 미인증 사용자 (7일 이내)
         recent_unverified = UserFactory(
@@ -43,18 +41,14 @@ class TestDeleteUnverifiedUsers:
             username="verified_user",
             is_email_verified=True,
         )
-        User.objects.filter(pk=verified.pk).update(
-            date_joined=now - timedelta(days=10)
-        )
+        User.objects.filter(pk=verified.pk).update(date_joined=now - timedelta(days=10))
 
         # 오래된 미인증 사용자이지만 주문 있음
         unverified_with_order = UserFactory(
             username="unverified_with_order",
             is_email_verified=False,
         )
-        User.objects.filter(pk=unverified_with_order.pk).update(
-            date_joined=now - timedelta(days=10)
-        )
+        User.objects.filter(pk=unverified_with_order.pk).update(date_joined=now - timedelta(days=10))
         OrderFactory(user=unverified_with_order)
 
         return {
@@ -97,9 +91,7 @@ class TestDeleteUnverifiedUsers:
         call_command("delete_unverified_users", dry_run=True, stdout=out)
 
         # Assert
-        assert User.objects.filter(
-            pk=setup_users["recent_unverified"].pk
-        ).exists()
+        assert User.objects.filter(pk=setup_users["recent_unverified"].pk).exists()
 
     def test_preserves_verified_users(self, setup_users):
         """인증 완료 사용자 유지"""
@@ -110,9 +102,7 @@ class TestDeleteUnverifiedUsers:
         call_command("delete_unverified_users", dry_run=True, stdout=out)
 
         # Assert
-        assert User.objects.filter(
-            pk=setup_users["verified"].pk
-        ).exists()
+        assert User.objects.filter(pk=setup_users["verified"].pk).exists()
 
     def test_preserves_users_with_orders(self, setup_users):
         """주문 이력 있는 미인증 사용자 유지"""
@@ -124,9 +114,7 @@ class TestDeleteUnverifiedUsers:
         output = out.getvalue()
 
         # Assert
-        assert User.objects.filter(
-            pk=setup_users["unverified_with_order"].pk
-        ).exists()
+        assert User.objects.filter(pk=setup_users["unverified_with_order"].pk).exists()
         # 주문 이력이 있어서 유지됨을 표시
         assert "주문" in output or "유지" in output
 
@@ -136,12 +124,7 @@ class TestDeleteUnverifiedUsers:
         out = StringIO()
 
         # Act - 30일로 설정하면 10일 된 사용자는 유지
-        call_command(
-            "delete_unverified_users", 
-            days=30, 
-            dry_run=True, 
-            stdout=out
-        )
+        call_command("delete_unverified_users", days=30, dry_run=True, stdout=out)
 
         # Assert - 삭제 대상이 없거나 적어야 함
         output = out.getvalue()
@@ -153,12 +136,7 @@ class TestDeleteUnverifiedUsers:
         out = StringIO()
 
         # Act
-        call_command(
-            "delete_unverified_users", 
-            dry_run=True, 
-            verbose=True, 
-            stdout=out
-        )
+        call_command("delete_unverified_users", dry_run=True, verbose=True, stdout=out)
         output = out.getvalue()
 
         # Assert
@@ -195,12 +173,7 @@ class TestDeleteUnverifiedUsers:
         out = StringIO()
 
         # Act
-        call_command(
-            "delete_unverified_users", 
-            dry_run=True, 
-            verbose=True, 
-            stdout=out
-        )
+        call_command("delete_unverified_users", dry_run=True, verbose=True, stdout=out)
         output = out.getvalue()
 
         # Assert - old_unverified가 삭제 대상에 포함

@@ -22,9 +22,7 @@ class TestCreateLoadTestUsers:
         call_command("create_load_test_users", stdout=out)
 
         # Assert
-        created_count = User.objects.filter(
-            username__startswith="load_test_user_"
-        ).count()
+        created_count = User.objects.filter(username__startswith="load_test_user_").count()
         assert created_count == 100
 
     def test_creates_custom_count_users(self, db):
@@ -36,9 +34,7 @@ class TestCreateLoadTestUsers:
         call_command("create_load_test_users", count=10, stdout=out)
 
         # Assert
-        created_count = User.objects.filter(
-            username__startswith="load_test_user_"
-        ).count()
+        created_count = User.objects.filter(username__startswith="load_test_user_").count()
         assert created_count == 10
 
     def test_creates_users_with_points(self, db):
@@ -70,19 +66,13 @@ class TestCreateLoadTestUsers:
         # Arrange
         out = StringIO()
         call_command("create_load_test_users", count=5, stdout=out)
-        initial_ids = set(
-            User.objects.filter(
-                username__startswith="load_test_user_"
-            ).values_list("id", flat=True)
-        )
+        initial_ids = set(User.objects.filter(username__startswith="load_test_user_").values_list("id", flat=True))
 
         # Act
         call_command("create_load_test_users", count=3, clear=True, stdout=out)
 
         # Assert
-        new_count = User.objects.filter(
-            username__startswith="load_test_user_"
-        ).count()
+        new_count = User.objects.filter(username__startswith="load_test_user_").count()
         assert new_count == 3
 
     def test_skips_existing_users(self, db):
@@ -96,9 +86,7 @@ class TestCreateLoadTestUsers:
         output = out.getvalue()
 
         # Assert
-        total_count = User.objects.filter(
-            username__startswith="load_test_user_"
-        ).count()
+        total_count = User.objects.filter(username__startswith="load_test_user_").count()
         assert total_count == 10
         assert "이미 존재" in output or "건너뜀" in output
 

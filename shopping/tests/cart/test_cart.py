@@ -177,7 +177,7 @@ class TestCartAddItem:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "품절" in str(response.json())
+        assert "재고가 부족" in str(response.json())
 
     def test_add_inactive_product_fails(self, authenticated_client, inactive_product, cart_urls):
         """판매 중단 상품 추가 실패"""
@@ -189,7 +189,7 @@ class TestCartAddItem:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "판매하지 않는" in str(response.json())
+        assert "판매 중단" in str(response.json())
 
     def test_add_exceeds_stock_fails(self, authenticated_client, product, cart_urls):
         """재고 초과 수량 추가 실패"""
@@ -213,7 +213,7 @@ class TestCartAddItem:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "찾을 수 없습니다" in str(response.json())
+        assert "찾을 수 없" in str(response.json())
 
     def test_add_with_invalid_quantity_fails(self, authenticated_client, product, cart_urls):
         """유효하지 않은 수량으로 추가 실패"""

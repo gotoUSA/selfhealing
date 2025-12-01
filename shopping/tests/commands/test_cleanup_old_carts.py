@@ -27,9 +27,7 @@ class TestCleanupOldCarts:
             is_active=True,
         )
         anon_old_active.updated_at = now - timedelta(days=8)
-        Cart.objects.filter(pk=anon_old_active.pk).update(
-            updated_at=now - timedelta(days=8)
-        )
+        Cart.objects.filter(pk=anon_old_active.pk).update(updated_at=now - timedelta(days=8))
 
         # 비회원 활성 장바구니 - 최근 것
         anon_recent_active = Cart.objects.create(
@@ -48,9 +46,7 @@ class TestCleanupOldCarts:
             user=user,
             is_active=False,
         )
-        Cart.objects.filter(pk=user_old_inactive.pk).update(
-            updated_at=now - timedelta(days=91)
-        )
+        Cart.objects.filter(pk=user_old_inactive.pk).update(updated_at=now - timedelta(days=91))
 
         # 회원 활성 장바구니
         user2 = UserFactory()
@@ -76,12 +72,8 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", stdout=out)
 
         # Assert
-        assert not Cart.objects.filter(
-            pk=setup_carts["anon_old_active"].pk
-        ).exists()
-        assert Cart.objects.filter(
-            pk=setup_carts["anon_recent_active"].pk
-        ).exists()
+        assert not Cart.objects.filter(pk=setup_carts["anon_old_active"].pk).exists()
+        assert Cart.objects.filter(pk=setup_carts["anon_recent_active"].pk).exists()
 
     def test_deletes_anonymous_inactive_carts_immediately(self, setup_carts):
         """비회원 비활성 장바구니 즉시 삭제"""
@@ -92,9 +84,7 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", stdout=out)
 
         # Assert
-        assert not Cart.objects.filter(
-            pk=setup_carts["anon_inactive"].pk
-        ).exists()
+        assert not Cart.objects.filter(pk=setup_carts["anon_inactive"].pk).exists()
 
     def test_deletes_old_user_inactive_carts(self, setup_carts):
         """오래된 회원 비활성 장바구니 삭제"""
@@ -105,9 +95,7 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", stdout=out)
 
         # Assert
-        assert not Cart.objects.filter(
-            pk=setup_carts["user_old_inactive"].pk
-        ).exists()
+        assert not Cart.objects.filter(pk=setup_carts["user_old_inactive"].pk).exists()
 
     def test_preserves_user_active_carts(self, setup_carts):
         """회원 활성 장바구니 유지"""
@@ -118,9 +106,7 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", stdout=out)
 
         # Assert
-        assert Cart.objects.filter(
-            pk=setup_carts["user_active"].pk
-        ).exists()
+        assert Cart.objects.filter(pk=setup_carts["user_active"].pk).exists()
 
     def test_dry_run_does_not_delete(self, setup_carts):
         """dry-run 옵션 시 실제 삭제 안함"""
@@ -144,9 +130,7 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", anonymous_days=10, stdout=out)
 
         # Assert
-        assert Cart.objects.filter(
-            pk=setup_carts["anon_old_active"].pk
-        ).exists()
+        assert Cart.objects.filter(pk=setup_carts["anon_old_active"].pk).exists()
 
     def test_custom_inactive_days(self, setup_carts):
         """inactive-days 옵션으로 회원 비활성 장바구니 보관 기간 변경"""
@@ -157,9 +141,7 @@ class TestCleanupOldCarts:
         call_command("cleanup_old_carts", inactive_days=100, stdout=out)
 
         # Assert
-        assert Cart.objects.filter(
-            pk=setup_carts["user_old_inactive"].pk
-        ).exists()
+        assert Cart.objects.filter(pk=setup_carts["user_old_inactive"].pk).exists()
 
     def test_output_contains_statistics(self, setup_carts):
         """출력에 통계 정보 포함"""
