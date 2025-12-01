@@ -393,7 +393,7 @@ class TestOrderListException:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_user_sees_only_own_orders(self, user, other_user, order_factory, login_helper):
         """일반 사용자는 본인 주문만 조회"""

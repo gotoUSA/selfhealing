@@ -80,7 +80,7 @@ class TestMyPointView:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 # ==========================================
@@ -205,7 +205,7 @@ class TestPointHistoryListView:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_invalid_start_date_format_returns_400(self, api_client):
         """잘못된 start_date 형식 - 400 에러 (DateParseError)"""
@@ -327,7 +327,7 @@ class TestPointCheckView:
         response = api_client.post(url, data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_missing_order_amount_returns_400(self, api_client):
         """order_amount 누락 - 400 에러"""
@@ -504,7 +504,7 @@ class TestExpiringPointsView:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 # ==========================================
@@ -582,4 +582,4 @@ class TestPointStatistics:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

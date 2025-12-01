@@ -164,7 +164,7 @@ class TestTokenExpiry:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_expired_refresh_token(self, api_client, user):
         """만료된 Refresh Token으로 갱신 실패"""
@@ -195,7 +195,7 @@ class TestTokenExpiry:
         response = api_client.get(url)
 
         # Assert - 비활성화된 사용자는 접근 불가
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_with_drawn_user_token(self, api_client, user):
         """탈퇴한 사용자의 토큰으로 접근 실패"""
@@ -215,7 +215,7 @@ class TestTokenExpiry:
         response = api_client.get(url)
 
         # Assert - 탈퇴한 사용자는 접근 불가
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
@@ -247,7 +247,7 @@ class TestTokenTampering:
         response = api_client.get(url)
 
         # Assert - signature가 맞지 않아 실패해야 함
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_invalid_signature(self, api_client, user):
         """잘못된 signature"""
@@ -265,7 +265,7 @@ class TestTokenTampering:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_different_user_token(self, api_client, user, second_user):
         """다른 사용자의 토큰으로 접근"""
@@ -301,7 +301,7 @@ class TestTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_bearer_typo(self, api_client, get_tokens):
         """Bearer 철자 오류"""
@@ -314,7 +314,7 @@ class TestTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_no_space(self, api_client, get_tokens):
         """Bearer와 토큰 사이 공백 없음"""
@@ -327,7 +327,7 @@ class TestTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_lowercase_bearer(self, api_client, get_tokens):
         """소문자 bearer"""
@@ -341,7 +341,7 @@ class TestTokenFormat:
 
         # Assert
         # DRF는 대소문자 구분할 수 있음
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_multiple_bearer_tokens(self, api_client, get_tokens):
         """여러 개의 Bearer 토큰"""
@@ -354,7 +354,7 @@ class TestTokenFormat:
         response = api_client.get(url)
 
         # Assert - 형식이 잘못되어 실패해야 함
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
@@ -419,7 +419,7 @@ class TestTokenWithoutAuth:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_access_password_change_without_token(self, api_client):
         """토큰 없이 비밀번호 변경 시도"""
@@ -431,7 +431,7 @@ class TestTokenWithoutAuth:
         response = api_client.post(url, data)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
@@ -449,7 +449,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_incomplete_token(self, api_client):
         """불완전한 JWT 토큰 (. 구분자 부족)"""
@@ -463,7 +463,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_non_json_payload(self, api_client, user):
         """JSON이 아닌 payload"""
@@ -482,7 +482,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert - JSON 파싱 실패로 인증 실패
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_null_token(self, api_client):
         """NULL 토큰"""
@@ -494,7 +494,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_empty_token(self, api_client):
         """빈 문자열 토큰"""
@@ -506,7 +506,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_whitespace_only_token(self, api_client):
         """공백만 있는 토큰"""
@@ -518,7 +518,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_very_long_token(self, api_client):
         """매우 긴 토큰 (버퍼 오버플로우 테스트)"""
@@ -532,7 +532,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_special_characters_token(self, api_client):
         """특수문자만으로 구성된 토큰"""
@@ -545,7 +545,7 @@ class TestInvalidTokenFormat:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
@@ -575,7 +575,7 @@ class TestTokenSecurity:
         response = api_client.get(url)
 
         # Assert - signature가 맞지 않아 실패해야 함
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db
@@ -617,7 +617,7 @@ class TestTokenVerify:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_verify_expired_token(self, api_client, user):
         """만료된 토큰 검증"""
@@ -636,4 +636,4 @@ class TestTokenVerify:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

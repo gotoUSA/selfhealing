@@ -182,6 +182,16 @@ class EmailVerificationService:
                 code="TOKEN_MISSING",
             )
 
+        # UUID 형식 검증
+        import uuid
+        try:
+            uuid.UUID(str(token_str))
+        except (ValueError, AttributeError):
+            raise EmailVerificationServiceError(
+                "Must be a valid UUID.",
+                code="TOKEN_INVALID",
+            )
+
         # 토큰 조회
         try:
             token = EmailVerificationToken.objects.select_related("user").get(token=token_str)
@@ -199,9 +209,8 @@ class EmailVerificationService:
         user.is_email_verified = True
         user.save(update_fields=["is_email_verified"])
 
-        # 토큰 사용 완료 처리
-        token.is_used = True
-        token.save(update_fields=["is_used"])
+        # 토큰 사용 완료 처리 (mark_as_used 메서드 사용하여 used_at 설정)
+        token.mark_as_used()
 
         logger.info(
             "[EmailVerification] 토큰 인증 완료 | user_id=%d, token_id=%d",
@@ -272,9 +281,8 @@ class EmailVerificationService:
         user.is_email_verified = True
         user.save(update_fields=["is_email_verified"])
 
-        # 토큰 사용 완료 처리
-        token.is_used = True
-        token.save(update_fields=["is_used"])
+        # 토큰 사용 완료 처리 (mark_as_used 메서드 사용하여 used_at 설정)
+        token.mark_as_used()
 
         logger.info(
             "[EmailVerification] 코드 인증 완료 | user_id=%d, token_id=%d",

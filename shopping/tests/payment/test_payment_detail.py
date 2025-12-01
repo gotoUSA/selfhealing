@@ -643,7 +643,7 @@ class TestPaymentDetailException:
         response = api_client.get(f"/api/payments/{payment.id}/")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_invalid_payment_id_string(
         self,

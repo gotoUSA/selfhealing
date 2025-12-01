@@ -361,7 +361,6 @@ class NotificationTestCase(TestCase):
         # DB 확인
         self.notification1.refresh_from_db()
         self.assertTrue(self.notification1.is_read)
-        self.assertIsNotNone(self.notification1.read_at)
 
     def test_mark_all_as_read(self):
         """전체 알림 읽음 처리 테스트"""

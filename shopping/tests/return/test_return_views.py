@@ -74,7 +74,7 @@ class TestReturnViewAuthentication:
         """미인증 사용자 판매자 액션 시 인증 에러"""
         # Arrange
         return_obj = ReturnFactory()
-        url = reverse("return-approve", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-approve", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -144,7 +144,7 @@ class TestReturnViewPermission:
         # 비판매자로 승인 시도
         non_seller = UserFactory(is_seller=False)
         api_client.force_authenticate(user=non_seller)
-        url = reverse("return-approve", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-approve", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -166,7 +166,7 @@ class TestReturnViewPermission:
 
         # seller_b로 접근 시도
         api_client.force_authenticate(user=seller_b)
-        url = reverse("return-approve", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-approve", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -254,7 +254,8 @@ class TestReturnViewFiltering:
         ReturnItemFactory(return_request=return_b, order_item=order_item_b)
 
         api_client.force_authenticate(user=seller_a)
-        url = reverse("return-list")
+        # 판매자는 seller-return-list URL을 사용해야 함
+        url = reverse("seller-return-list")
 
         # Act
         response = api_client.get(url)
@@ -300,7 +301,7 @@ class TestReturnViewIntegration:
 
         # Act & Assert - 2. 승인
         api_client.force_authenticate(user=seller)
-        approve_url = reverse("return-approve", kwargs={"pk": return_id})
+        approve_url = reverse("seller-return-approve", kwargs={"pk": return_id})
         response = api_client.post(approve_url, {})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["return"]["status"] == "approved"
@@ -318,13 +319,13 @@ class TestReturnViewIntegration:
 
         # Act & Assert - 4. 수령 확인
         api_client.force_authenticate(user=seller)
-        confirm_url = reverse("return-confirm-receive", kwargs={"pk": return_id})
+        confirm_url = reverse("seller-return-confirm-receive", kwargs={"pk": return_id})
         response = api_client.post(confirm_url, {})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["return"]["status"] == "received"
 
         # Act & Assert - 5. 완료
-        complete_url = reverse("return-complete", kwargs={"pk": return_id})
+        complete_url = reverse("seller-return-complete", kwargs={"pk": return_id})
         response = api_client.post(complete_url, {})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["return"]["status"] == "completed"
@@ -357,7 +358,7 @@ class TestReturnViewIntegration:
 
         # Act & Assert - 2. 승인
         api_client.force_authenticate(user=seller)
-        approve_url = reverse("return-approve", kwargs={"pk": return_id})
+        approve_url = reverse("seller-return-approve", kwargs={"pk": return_id})
         response = api_client.post(approve_url, {})
         assert response.status_code == status.HTTP_200_OK
 
@@ -374,12 +375,12 @@ class TestReturnViewIntegration:
 
         # Act & Assert - 4. 수령 확인
         api_client.force_authenticate(user=seller)
-        confirm_url = reverse("return-confirm-receive", kwargs={"pk": return_id})
+        confirm_url = reverse("seller-return-confirm-receive", kwargs={"pk": return_id})
         response = api_client.post(confirm_url, {})
         assert response.status_code == status.HTTP_200_OK
 
         # Act & Assert - 5. 완료 (교환은 송장번호 필수)
-        complete_url = reverse("return-complete", kwargs={"pk": return_id})
+        complete_url = reverse("seller-return-complete", kwargs={"pk": return_id})
         complete_data = {
             "exchange_shipping_company": "CJ대한통운",
             "exchange_tracking_number": "111222333444",

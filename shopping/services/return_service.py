@@ -41,9 +41,9 @@ class ReturnService:
         prefix = f"RET{today}"
 
         # 오늘 날짜의 마지막 번호 조회
-        last_return = Return.objects.filter(
-            return_number__startswith=prefix
-        ).aggregate(Max("return_number"))["return_number__max"]
+        last_return = Return.objects.filter(return_number__startswith=prefix).aggregate(Max("return_number"))[
+            "return_number__max"
+        ]
 
         if last_return:
             # 마지막 3자리 추출하여 +1
@@ -73,13 +73,7 @@ class ReturnService:
     @staticmethod
     @transaction.atomic
     def create_return(
-        order: Order,
-        user: User,
-        type: str,
-        reason: str,
-        reason_detail: str,
-        return_items_data: list[dict],
-        **kwargs
+        order: Order, user: User, type: str, reason: str, reason_detail: str, return_items_data: list[dict], **kwargs
     ) -> Return:
         """
         교환/환불 신청 생성
@@ -118,16 +112,16 @@ class ReturnService:
             reason=reason,
             reason_detail=reason_detail,
             refund_amount=Decimal("0"),  # 임시값
-            **kwargs
+            **kwargs,
         )
 
         # 3. ReturnItem 생성
         return_items = []
         for item_data in return_items_data:
-            order_item = item_data['order_item']
-            quantity = item_data['quantity']
-            product_name = item_data.get('product_name', order_item.product_name)
-            product_price = item_data.get('product_price', order_item.price)
+            order_item = item_data["order_item"]
+            quantity = item_data["quantity"]
+            product_name = item_data.get("product_name", order_item.product_name)
+            product_price = item_data.get("product_price", order_item.price)
 
             return_item = ReturnItem.objects.create(
                 return_request=return_request,
@@ -145,19 +139,14 @@ class ReturnService:
             return_request.save(update_fields=["refund_amount"])
 
         logger.info(
-            f"교환/환불 신청 생성: return_number={return_number}, "
-            f"order_id={order.id}, user_id={user.id}, type={type}"
+            f"교환/환불 신청 생성: return_number={return_number}, " f"order_id={order.id}, user_id={user.id}, type={type}"
         )
 
         return return_request
 
     @staticmethod
     @transaction.atomic
-    def approve_return(
-        return_obj: Return,
-        admin_user: User | None = None,
-        admin_memo: str = ""
-    ) -> Return:
+    def approve_return(return_obj: Return, admin_user: User | None = None, admin_memo: str = "") -> Return:
         """
         교환/환불 승인 처리 (판매자)
 
@@ -244,8 +233,7 @@ class ReturnService:
         )
 
         logger.info(
-            f"교환/환불 거부: return_id={return_obj.id}, "
-            f"return_number={return_obj.return_number}, reason={reason}"
+            f"교환/환불 거부: return_id={return_obj.id}, " f"return_number={return_obj.return_number}, reason={reason}"
         )
 
         return return_obj
@@ -286,10 +274,7 @@ class ReturnService:
             metadata={"return_id": return_obj.id, "return_number": return_obj.return_number},
         )
 
-        logger.info(
-            f"반품 도착 확인: return_id={return_obj.id}, "
-            f"return_number={return_obj.return_number}"
-        )
+        logger.info(f"반품 도착 확인: return_id={return_obj.id}, " f"return_number={return_obj.return_number}")
 
         return return_obj
 
@@ -324,7 +309,7 @@ class ReturnService:
             raise ValueError("반품 도착 상태에서만 환불 처리할 수 있습니다.")
 
         # 성능 최적화: N+1 쿼리 방지
-        return_items = return_obj.return_items.select_related('order_item__product').all()
+        return_items = return_obj.return_items.select_related("order_item__product").all()
 
         # 1. 토스페이먼츠 환불 처리
         actual_refund_amount = return_obj.refund_amount - return_obj.return_shipping_fee
@@ -368,10 +353,7 @@ class ReturnService:
         # 3-1. 사용한 포인트 환불
         if order.used_points > 0:
             points_refunded = order.used_points
-            logger.info(
-                f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, "
-                f"points={points_refunded}"
-            )
+            logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
 
             PointService.add_points(
                 user=user,
@@ -407,9 +389,7 @@ class ReturnService:
             )
 
             if existing_cancel_deduct:
-                logger.info(
-                    f"이미 적립 포인트 회수 완료됨: user_id={user.id}, order_id={order.id}"
-                )
+                logger.info(f"이미 적립 포인트 회수 완료됨: user_id={user.id}, order_id={order.id}")
             else:
                 user.refresh_from_db()
                 point_service = PointService()
@@ -424,15 +404,11 @@ class ReturnService:
                         f"required={order.earned_points}, usable={usable_points}, cached={user.points}"
                     )
                     raise ValueError(
-                        f"유효한 포인트가 부족합니다. "
-                        f"(필요: {order.earned_points}P, 사용 가능: {usable_points}P)"
+                        f"유효한 포인트가 부족합니다. " f"(필요: {order.earned_points}P, 사용 가능: {usable_points}P)"
                     )
 
                 points_deducted = order.earned_points
-                logger.info(
-                    f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, "
-                    f"points={points_deducted}"
-                )
+                logger.info(f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, " f"points={points_deducted}")
 
                 result = point_service.use_points_fifo(
                     user=user,
@@ -487,11 +463,7 @@ class ReturnService:
 
     @staticmethod
     @transaction.atomic
-    def complete_exchange(
-        return_obj: Return,
-        exchange_tracking_number: str,
-        exchange_shipping_company: str
-    ) -> Return:
+    def complete_exchange(return_obj: Return, exchange_tracking_number: str, exchange_shipping_company: str) -> Return:
         """
         교환 완료 처리
 
@@ -518,7 +490,7 @@ class ReturnService:
             raise ValueError("반품 도착 상태에서만 교환 처리할 수 있습니다.")
 
         # 성능 최적화: N+1 쿼리 방지
-        return_items = return_obj.return_items.select_related('order_item__product').all()
+        return_items = return_obj.return_items.select_related("order_item__product").all()
 
         # 1. 재고 조정
         for return_item in return_items:

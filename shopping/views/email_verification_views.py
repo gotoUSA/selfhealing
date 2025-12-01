@@ -254,7 +254,13 @@ class VerifyEmailView(APIView):
 
         http_status = status_map.get(error.code, status.HTTP_400_BAD_REQUEST)
 
-        return Response({"error": error.message}, status=http_status)
+        # 에러 코드에 따라 적절한 필드로 응답
+        if error.code in ("TOKEN_MISSING", "TOKEN_INVALID", "TOKEN_USED", "TOKEN_EXPIRED"):
+            return Response({"token": [error.message]}, status=http_status)
+        elif error.code in ("CODE_MISSING", "CODE_EXPIRED", "CODE_MISMATCH"):
+            return Response({"code": [error.message]}, status=http_status)
+        else:
+            return Response({"error": error.message}, status=http_status)
 
 
 class ResendVerificationEmailView(APIView):

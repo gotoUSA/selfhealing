@@ -73,7 +73,7 @@ class TestReturnRejectAction:
 
         non_seller = UserFactory(is_seller=False)
         api_client.force_authenticate(user=non_seller)
-        url = reverse("return-reject", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-reject", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {"rejected_reason": "테스트 거부"})
@@ -101,7 +101,7 @@ class TestReturnRejectAction:
 
         # seller_a가 접근 (seller_b 상품도 포함되어 있어 권한 없음)
         api_client.force_authenticate(user=seller_a)
-        url = reverse("return-reject", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-reject", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {"rejected_reason": "테스트 거부"})
@@ -122,7 +122,7 @@ class TestReturnRejectAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
         api_client.force_authenticate(user=seller)
-        url = reverse("return-reject", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-reject", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {"rejected_reason": "상품 하자 아님"})
@@ -149,7 +149,7 @@ class TestReturnConfirmReceiveAction:
 
         non_seller = UserFactory(is_seller=False)
         api_client.force_authenticate(user=non_seller)
-        url = reverse("return-confirm-receive", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-confirm-receive", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -174,7 +174,7 @@ class TestReturnConfirmReceiveAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item_b)
 
         api_client.force_authenticate(user=seller_a)
-        url = reverse("return-confirm-receive", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-confirm-receive", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -200,7 +200,7 @@ class TestReturnCompleteAction:
 
         non_seller = UserFactory(is_seller=False)
         api_client.force_authenticate(user=non_seller)
-        url = reverse("return-complete", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-complete", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -225,7 +225,7 @@ class TestReturnCompleteAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item_b)
 
         api_client.force_authenticate(user=seller_a)
-        url = reverse("return-complete", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-complete", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -245,7 +245,7 @@ class TestReturnCompleteAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
         api_client.force_authenticate(user=seller)
-        url = reverse("return-complete", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-complete", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
@@ -273,7 +273,7 @@ class TestReturnCompleteAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
         api_client.force_authenticate(user=seller)
-        url = reverse("return-complete", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-complete", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(
@@ -300,7 +300,7 @@ class TestReturnCompleteAction:
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
         api_client.force_authenticate(user=seller)
-        url = reverse("return-complete", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-complete", kwargs={"pk": return_obj.id})
 
         # Act
         with patch(
@@ -318,8 +318,8 @@ class TestReturnCompleteAction:
 class TestReturnDestroyValidation:
     """교환/환불 삭제 유효성 검사 테스트 - Lines 118, 125 커버"""
 
-    def test_destroy_by_seller_on_buyer_return_returns_403(self, api_client):
-        """판매자가 구매자의 Return 삭제 시도 시 403"""
+    def test_destroy_by_seller_on_buyer_return_returns_404(self, api_client):
+        """판매자가 구매자의 Return 삭제 시도 시 404 (queryset 필터링)"""
         # Arrange
         seller = UserFactory(is_seller=True)
         product = ProductFactory(seller=seller)
@@ -329,16 +329,16 @@ class TestReturnDestroyValidation:
         return_obj = ReturnFactory(order=order, user=buyer, status="requested")
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
-        # 판매자로 인증 (queryset에서 조회 가능하지만 신청자가 아님)
+        # 판매자로 인증 - 고객용 ViewSet은 user=user로 필터링하므로
+        # 판매자는 자신이 신청하지 않은 Return을 조회할 수 없음
         api_client.force_authenticate(user=seller)
         url = reverse("return-detail", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.delete(url)
 
-        # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "권한" in response.data.get("message", "")
+        # Assert - queryset에서 조회되지 않으므로 404 반환
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_destroy_approved_status_returns_400(self, api_client):
         """approved 상태의 Return 삭제 시도 시 400"""
@@ -399,7 +399,7 @@ class TestReturnSellerPermissionCheck:
     """판매자 권한 확인 헬퍼 테스트 - _check_seller_permission 커버"""
 
     def test_non_seller_user_returns_permission_denied(self, api_client):
-        """비판매자가 판매자 액션 시도 시 403 (판매자만 접근 가능)"""
+        """비판매자가 판매자 액션 시도 시 404 (queryset 필터링)"""
         # Arrange
         seller = UserFactory(is_seller=True)
         product = ProductFactory(seller=seller)
@@ -410,13 +410,12 @@ class TestReturnSellerPermissionCheck:
         ReturnItemFactory(return_request=return_obj, order_item=order_item)
 
         # buyer가 자신이 신청한 Return에 approve 시도
-        # queryset에서 조회됨 (user=buyer) → _check_seller_permission에서 403
+        # SellerReturnViewSet의 get_queryset에서 비판매자는 빈 queryset 반환 → 404
         api_client.force_authenticate(user=buyer)
-        url = reverse("return-approve", kwargs={"pk": return_obj.id})
+        url = reverse("seller-return-approve", kwargs={"pk": return_obj.id})
 
         # Act
         response = api_client.post(url, {})
 
-        # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "판매자" in response.data.get("message", "")
+        # Assert - queryset에서 조회되지 않으므로 404 반환
+        assert response.status_code == status.HTTP_404_NOT_FOUND

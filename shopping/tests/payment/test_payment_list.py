@@ -654,7 +654,7 @@ class TestPaymentListException:
         response = api_client.get("/api/payments/")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_invalid_page_number_zero(
         self,

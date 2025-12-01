@@ -284,7 +284,7 @@ class TestOrderDetailException:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_non_existent_order(self, authenticated_client, user):
         """존재하지 않는 주문 조회 (404)"""
@@ -366,7 +366,7 @@ class TestOrderDetailException:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_deleted_user_order(self, api_client, product, order_factory):
         """탈퇴한 사용자의 주문 조회"""

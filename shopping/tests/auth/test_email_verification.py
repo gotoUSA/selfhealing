@@ -386,7 +386,7 @@ class TestEmailVerificationByTokenException:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "유효하지 않은 토큰입니다" in str(response.data["token"][0])
+        assert "이미 사용된 토큰입니다" in str(response.data["token"][0])
 
     def test_verify_with_invalid_uuid_format(self, api_client):
         """잘못된 UUID 형식"""
@@ -423,7 +423,7 @@ class TestEmailVerificationByTokenException:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "토큰이 제공되지 않았습니다" in response.data["error"]
+        assert "토큰이 제공되지 않았습니다" in response.data["token"][0]
 
 
 @pytest.mark.django_db
@@ -453,7 +453,7 @@ class TestEmailVerificationByCodeException:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "유효하지 않은 인증 코드입니다" in response.data["code"][0]
+        assert "인증 코드가 일치하지 않습니다" in response.data["code"][0]
 
     def test_verify_with_expired_code(self, api_client, unverified_user):
         """만료된 코드로 인증 시도"""
@@ -483,7 +483,7 @@ class TestEmailVerificationByCodeException:
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "인증 코드가 제공되지 않았습니다" in response.data["error"]
+        assert "인증 코드가 제공되지 않았습니다" in response.data["code"][0]
 
 
 @pytest.mark.django_db

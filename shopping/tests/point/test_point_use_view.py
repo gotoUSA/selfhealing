@@ -288,7 +288,7 @@ class TestPointUseView:
         response = api_client.post(url, data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_use_points_updates_metadata(self, api_client):
         """포인트 사용 시 metadata 업데이트 검증"""
@@ -577,7 +577,7 @@ class TestPointCancelView:
         response = api_client.post(url, data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_cancel_deduct_excludes_expired_points(self, api_client):
         """회수 시 만료된 포인트 제외 - FIFO 정책"""

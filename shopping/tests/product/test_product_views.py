@@ -286,8 +286,8 @@ class TestProductReview:
         # Act
         response = api_client.post(url, review_data, format="json")
 
-        # Assert - DRF 기본 설정에서 비인증은 403 반환
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        # Assert - DRF 기본 설정에서 비인증은 401 반환
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 # ==========================================

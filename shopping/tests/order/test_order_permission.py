@@ -85,7 +85,7 @@ class TestOrderAuthentication:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_unauthenticated_cannot_create_order(self, api_client: pytest.fixture, shipping_data: dict) -> None:
         """인증되지 않은 사용자는 주문 생성 불가"""
@@ -96,7 +96,7 @@ class TestOrderAuthentication:
         response = api_client.post(url, shipping_data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_unauthenticated_cannot_view_order_detail(
         self, api_client: pytest.fixture, user: User, product: pytest.fixture, order_factory: pytest.fixture
@@ -111,7 +111,7 @@ class TestOrderAuthentication:
         response = api_client.get(url)
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db

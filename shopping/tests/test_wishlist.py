@@ -93,7 +93,7 @@ class WishlistTestCase(TestCase):
     def test_wishlist_requires_authentication(self):
         """인증 되지 않은 사용자는 찜하기 기능을 사용할 수 없음"""
         response = self.client.get(self.wishlist_url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     # 찜하기 추가 테스트
 

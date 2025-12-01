@@ -122,10 +122,7 @@ class TestCompleteRefundConcurrency(TransactionTestCase):
 
         # Act - 동시 요청
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(self._call_complete_refund, return_id)
-                for _ in range(num_requests)
-            ]
+            futures = [executor.submit(self._call_complete_refund, return_id) for _ in range(num_requests)]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -140,9 +137,7 @@ class TestCompleteRefundConcurrency(TransactionTestCase):
 
         # 실패 이유 확인 (상태 오류)
         failed_results = [r for r in results if not r["success"]]
-        assert any(
-            "반품 도착 상태에서만" in r["error"] for r in failed_results
-        ), f"예상치 못한 실패 이유: {failed_results}"
+        assert any("반품 도착 상태에서만" in r["error"] for r in failed_results), f"예상치 못한 실패 이유: {failed_results}"
 
         # Return 상태 확인
         return_obj.refresh_from_db()
@@ -153,9 +148,7 @@ class TestCompleteRefundConcurrency(TransactionTestCase):
         assert user.points == initial_points - 100
 
         # cancel_deduct 이력 1개만
-        cancel_count = PointHistory.objects.filter(
-            user=user, type="cancel_deduct", order=order
-        ).count()
+        cancel_count = PointHistory.objects.filter(user=user, type="cancel_deduct", order=order).count()
         assert cancel_count == 1
 
     def test_concurrent_complete_refund_different_returns(self):
@@ -227,9 +220,7 @@ class TestCompleteRefundConcurrency(TransactionTestCase):
         assert user.points == initial_points - 100 - 200
 
         # 각각의 cancel_deduct 이력
-        cancel_count = PointHistory.objects.filter(
-            user=user, type="cancel_deduct"
-        ).count()
+        cancel_count = PointHistory.objects.filter(user=user, type="cancel_deduct").count()
         assert cancel_count == 2
 
 
@@ -310,10 +301,7 @@ class TestApproveReturnConcurrency(TransactionTestCase):
 
         # Act - 동시 요청
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(self._call_approve_return, return_id)
-                for _ in range(2)
-            ]
+            futures = [executor.submit(self._call_approve_return, return_id) for _ in range(2)]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -339,9 +327,7 @@ class TestApproveReturnConcurrency(TransactionTestCase):
         # Act - 승인과 거부 동시 요청
         with ThreadPoolExecutor(max_workers=2) as executor:
             approve_future = executor.submit(self._call_approve_return, return_id)
-            reject_future = executor.submit(
-                self._call_reject_return, return_id, "테스트 거부"
-            )
+            reject_future = executor.submit(self._call_reject_return, return_id, "테스트 거부")
 
             results.append(approve_future.result())
             results.append(reject_future.result())
@@ -403,10 +389,7 @@ class TestConfirmReceiveConcurrency(TransactionTestCase):
 
         # Act - 동시 요청
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(self._call_confirm_receive, return_id)
-                for _ in range(2)
-            ]
+            futures = [executor.submit(self._call_confirm_receive, return_id) for _ in range(2)]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -485,9 +468,7 @@ class TestPointRecoveryConcurrency(TransactionTestCase):
             )
 
             return_obj = ReturnFactory.received(type="refund", order=order, user=user)
-            ReturnItemFactory(
-                return_request=return_obj, order_item=order_item, quantity=1
-            )
+            ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
             return_obj.refund_amount = Decimal("10000")
             return_obj.save()
 
@@ -499,9 +480,7 @@ class TestPointRecoveryConcurrency(TransactionTestCase):
 
         # Act - 5개 동시 요청
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [
-                executor.submit(self._call_complete_refund, r.id) for r in returns
-            ]
+            futures = [executor.submit(self._call_complete_refund, r.id) for r in returns]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -513,12 +492,8 @@ class TestPointRecoveryConcurrency(TransactionTestCase):
         # 포인트 정합성
         user.refresh_from_db()
         expected_points = initial_points - (100 * 5)
-        assert user.points == expected_points, (
-            f"포인트 정합성 오류: expected={expected_points}, actual={user.points}"
-        )
+        assert user.points == expected_points, f"포인트 정합성 오류: expected={expected_points}, actual={user.points}"
 
         # cancel_deduct 이력 개수
-        cancel_count = PointHistory.objects.filter(
-            user=user, type="cancel_deduct"
-        ).count()
+        cancel_count = PointHistory.objects.filter(user=user, type="cancel_deduct").count()
         assert cancel_count == 5, f"cancel_deduct 이력 개수 오류: {cancel_count}"

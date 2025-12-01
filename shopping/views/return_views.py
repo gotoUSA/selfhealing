@@ -175,9 +175,7 @@ class ReturnViewSet(viewsets.ModelViewSet):
         """교환/환불 신청"""
         order_id = kwargs.get("order_id") or request.data.get("order_id")
 
-        serializer = self.get_serializer(
-            data=request.data, context={"request": request, "order_id": order_id}
-        )
+        serializer = self.get_serializer(data=request.data, context={"request": request, "order_id": order_id})
 
         serializer.is_valid(raise_exception=True)
         return_obj = serializer.save()
@@ -196,9 +194,7 @@ class ReturnViewSet(viewsets.ModelViewSet):
 
         # 권한 확인 (이미 queryset에서 본인 것만 필터링하지만 추가 확인)
         if return_obj.user != request.user:
-            return Response(
-                {"message": "권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"message": "권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # 상태 확인
         if return_obj.status != "requested":
@@ -209,9 +205,7 @@ class ReturnViewSet(viewsets.ModelViewSet):
 
         return_obj.delete()
 
-        return Response(
-            {"message": "교환/환불 신청이 취소되었습니다."}, status=status.HTTP_200_OK
-        )
+        return Response({"message": "교환/환불 신청이 취소되었습니다."}, status=status.HTTP_200_OK)
 
 
 # =============================================================================
@@ -335,9 +329,7 @@ class SellerReturnViewSet(viewsets.ReadOnlyModelViewSet):
             return False, "판매자만 접근할 수 있습니다."
 
         # 교환/환불에 포함된 모든 상품의 판매자 확인
-        return_items = return_obj.return_items.select_related(
-            "order_item__product__seller"
-        ).all()
+        return_items = return_obj.return_items.select_related("order_item__product__seller").all()
 
         for item in return_items:
             if item.order_item.product.seller != user:
@@ -367,13 +359,9 @@ class SellerReturnViewSet(viewsets.ReadOnlyModelViewSet):
         # 판매자 권한 확인
         has_permission, error_message = self._check_seller_permission(return_obj)
         if not has_permission:
-            return Response(
-                {"message": error_message}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"message": error_message}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = self.get_serializer(
-            data=request.data, context={"return_obj": return_obj}
-        )
+        serializer = self.get_serializer(data=request.data, context={"return_obj": return_obj})
         serializer.is_valid(raise_exception=True)
         return_obj = serializer.save()
 
@@ -407,13 +395,9 @@ class SellerReturnViewSet(viewsets.ReadOnlyModelViewSet):
         # 판매자 권한 확인
         has_permission, error_message = self._check_seller_permission(return_obj)
         if not has_permission:
-            return Response(
-                {"message": error_message}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"message": error_message}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = self.get_serializer(
-            data=request.data, context={"return_obj": return_obj}
-        )
+        serializer = self.get_serializer(data=request.data, context={"return_obj": return_obj})
         serializer.is_valid(raise_exception=True)
         return_obj = serializer.save()
 
@@ -447,9 +431,7 @@ class SellerReturnViewSet(viewsets.ReadOnlyModelViewSet):
         # 판매자 권한 확인
         has_permission, error_message = self._check_seller_permission(return_obj)
         if not has_permission:
-            return Response(
-                {"message": error_message}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"message": error_message}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data={}, context={"return_obj": return_obj})
         serializer.is_valid(raise_exception=True)
@@ -486,23 +468,15 @@ class SellerReturnViewSet(viewsets.ReadOnlyModelViewSet):
         # 판매자 권한 확인
         has_permission, error_message = self._check_seller_permission(return_obj)
         if not has_permission:
-            return Response(
-                {"message": error_message}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"message": error_message}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = self.get_serializer(
-            data=request.data, context={"return_obj": return_obj}
-        )
+        serializer = self.get_serializer(data=request.data, context={"return_obj": return_obj})
         serializer.is_valid(raise_exception=True)
 
         try:
             return_obj = serializer.save()
 
-            message = (
-                "환불이 완료되었습니다."
-                if return_obj.type == "refund"
-                else "교환 상품이 발송되었습니다."
-            )
+            message = "환불이 완료되었습니다." if return_obj.type == "refund" else "교환 상품이 발송되었습니다."
 
             return Response(
                 {

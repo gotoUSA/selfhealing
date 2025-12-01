@@ -346,9 +346,7 @@ class TestApproveReturn:
         # Assert
         from shopping.models import Notification
 
-        assert Notification.objects.filter(
-            user=return_obj.user, notification_type="return"
-        ).exists()
+        assert Notification.objects.filter(user=return_obj.user, notification_type="return").exists()
 
     def test_approve_return_invalid_status(self):
         """잘못된 상태에서 승인 시도 (ValueError)"""
@@ -406,9 +404,7 @@ class TestRejectReturn:
         # Assert
         from shopping.models import Notification
 
-        assert Notification.objects.filter(
-            user=return_obj.user, notification_type="return"
-        ).exists()
+        assert Notification.objects.filter(user=return_obj.user, notification_type="return").exists()
 
     def test_reject_return_invalid_status(self):
         """잘못된 상태에서 거부 시도 (ValueError)"""
@@ -448,9 +444,7 @@ class TestConfirmReceiveReturn:
         # Assert
         from shopping.models import Notification
 
-        assert Notification.objects.filter(
-            user=return_obj.user, notification_type="return"
-        ).exists()
+        assert Notification.objects.filter(user=return_obj.user, notification_type="return").exists()
 
     def test_confirm_receive_invalid_status(self):
         """잘못된 상태에서 수령 확인 시도 (ValueError)"""
@@ -578,16 +572,12 @@ class TestCompleteRefund:
             # Assert
             from shopping.models import Notification
 
-            assert Notification.objects.filter(
-                user=return_obj.user, notification_type="return"
-            ).exists()
+            assert Notification.objects.filter(user=return_obj.user, notification_type="return").exists()
 
     def test_complete_refund_zero_amount(self):
         """환불 금액 0원 (배송비만 차감)"""
         # Arrange
-        return_obj = ReturnFactory.received(
-            type="refund", refund_amount=Decimal("0"), return_shipping_fee=Decimal("3000")
-        )
+        return_obj = ReturnFactory.received(type="refund", refund_amount=Decimal("0"), return_shipping_fee=Decimal("3000"))
         PaymentFactory(order=return_obj.order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
@@ -735,9 +725,7 @@ class TestCompleteRefund:
         user = UserFactory(points=2000 + earned_points)
         initial_points = user.points
 
-        order = OrderFactory.delivered(
-            user=user, used_points=used_points, earned_points=earned_points
-        )
+        order = OrderFactory.delivered(user=user, used_points=used_points, earned_points=earned_points)
         order_item = OrderItemFactory(order=order, product=product, quantity=1)
 
         # 적립 이력 생성
@@ -770,14 +758,10 @@ class TestCompleteRefund:
             from shopping.models.point import PointHistory
 
             # 환불 이력 확인
-            assert PointHistory.objects.filter(
-                user=user, type="cancel_refund", order=order
-            ).exists()
+            assert PointHistory.objects.filter(user=user, type="cancel_refund", order=order).exists()
 
             # 회수 이력 확인
-            assert PointHistory.objects.filter(
-                user=user, type="cancel_deduct", order=order
-            ).exists()
+            assert PointHistory.objects.filter(user=user, type="cancel_deduct", order=order).exists()
 
     def test_complete_refund_fails_with_insufficient_points_to_deduct(self):
         """적립 포인트 회수할 잔액 부족 시 환불 실패"""
@@ -825,7 +809,6 @@ class TestCompleteRefund:
 
             product.refresh_from_db()
             assert product.stock == initial_stock
-
 
 
 @pytest.mark.django_db
@@ -895,9 +878,7 @@ class TestCompleteExchange:
         # Assert
         from shopping.models import Notification
 
-        assert Notification.objects.filter(
-            user=return_obj.user, notification_type="return"
-        ).exists()
+        assert Notification.objects.filter(user=return_obj.user, notification_type="return").exists()
 
     def test_complete_exchange_wrong_type(self):
         """환불 타입에서 교환 완료 호출 (ValueError)"""
@@ -977,9 +958,7 @@ class TestCompleteRefundDuplicatePrevention:
             assert user.points == initial_points
 
             # cancel_deduct 이력이 1개만 있어야 함 (기존 것)
-            cancel_deduct_count = PointHistory.objects.filter(
-                user=user, type="cancel_deduct", order=order
-            ).count()
+            cancel_deduct_count = PointHistory.objects.filter(user=user, type="cancel_deduct", order=order).count()
             assert cancel_deduct_count == 1
 
     def test_complete_refund_skips_duplicate_cancel_deduct_logging(self, caplog):
@@ -1253,7 +1232,5 @@ class TestCompleteRefundIdempotency:
             assert user.points == points_after_first
 
             # cancel_deduct 이력은 1개만
-            cancel_count = PointHistory.objects.filter(
-                user=user, type="cancel_deduct", order=order
-            ).count()
+            cancel_count = PointHistory.objects.filter(user=user, type="cancel_deduct", order=order).count()
             assert cancel_count == 1

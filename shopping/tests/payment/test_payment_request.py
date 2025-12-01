@@ -404,7 +404,7 @@ class TestPaymentRequestException:
         )
 
         # Assert - 401 Unauthorized
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_missing_order_id(self, authenticated_client):
         """order_id 누락"""

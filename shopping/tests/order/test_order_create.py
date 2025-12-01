@@ -406,7 +406,7 @@ class TestOrderCreateException:
         response = api_client.post(url, shipping_data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_create_order_with_unverified_email(
         self, authenticated_client, unverified_user, product, add_to_cart_helper, shipping_data
