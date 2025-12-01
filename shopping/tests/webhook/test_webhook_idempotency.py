@@ -690,7 +690,7 @@ class TestWebhookDatabaseConsistency:
         # 두 Payment의 payment_key가 다르거나, 하나는 처리 실패
         payment2.refresh_from_db()
         # payment_key unique 제약으로 인해 두 번째는 업데이트 안 됨
-        assert payment2.payment_key != "shared_payment_key" or response2.status_code == 500
+        assert payment2.payment_key != "shared_payment_key" or response2.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
     # 2단계: 경계값 케이스 (Boundary)
 

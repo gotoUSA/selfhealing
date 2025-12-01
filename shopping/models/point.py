@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -10,6 +11,8 @@ from django.db.models import QuerySet, Sum
 if TYPE_CHECKING:
     from shopping.models.order import Order
     from shopping.models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class PointHistoryManager(models.Manager):
@@ -208,14 +211,53 @@ class PointHistory(models.Model):
         if self.balance < 0:
             raise ValidationError({"balance": "잔액은 음수가 될 수 없습니다."})
 
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """
+        포인트 이력은 삭제할 수 없습니다.
+
+        원장(Ledger) 시스템의 무결성을 위해 삭제를 금지합니다.
+        오류 수정이 필요한 경우 반제(Reversal) 거래를 생성하세요.
+
+        Raises:
+            ValueError: 항상 발생
+        """
+        raise ValueError(
+            "포인트 이력은 삭제할 수 없습니다. "
+            "오류 수정은 반제(Reversal) 거래를 생성해주세요."
+        )
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         """
-        포인트 이력을 직접 저장하지 마세요.
-        반드시 PointHistory.create_history() 또는 PointService를 사용하세요.
+        포인트 이력 저장 (수정 제한)
 
-        create_history() 메서드는 balance를 필수 파라미터로 요구하여
-        잔액이 항상 명시적으로 기록되도록 보장합니다.
+        원장(Ledger) 시스템의 무결성을 위해:
+        - 신규 생성: 허용
+        - metadata 업데이트: 허용 (FIFO 추적용)
+        - 핵심 필드(points, balance, type 등) 수정: 금지
+
+        Note:
+            포인트 이력을 직접 저장하지 마세요.
+            반드시 PointHistory.create_history() 또는 PointService를 사용하세요.
         """
+        if self.pk:  # 기존 레코드 수정
+            update_fields = kwargs.get("update_fields")
+            if update_fields:
+                # metadata만 업데이트 허용
+                allowed_fields = {"metadata"}
+                requested_fields = set(update_fields)
+                if not requested_fields.issubset(allowed_fields):
+                    disallowed = requested_fields - allowed_fields
+                    raise ValueError(
+                        f"포인트 이력의 핵심 필드는 수정할 수 없습니다. "
+                        f"수정 불가 필드: {disallowed}"
+                    )
+            else:
+                # update_fields 없이 save() 호출 시 경고
+                logger.warning(
+                    f"PointHistory.save() 호출 시 update_fields를 명시해주세요. "
+                    f"(history_id={self.pk})"
+                )
+
         super().save(*args, **kwargs)
 
     @classmethod

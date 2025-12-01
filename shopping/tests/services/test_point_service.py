@@ -402,7 +402,7 @@ class TestPointServiceExpiredPoints:
             expires_at=timezone.now() - timedelta(days=1),
         )
         already_expired.metadata["expired"] = True
-        already_expired.save()
+        already_expired.save(update_fields=["metadata"])
 
         # 새로 만료된 포인트
         PointHistoryFactory.earn(
@@ -512,7 +512,7 @@ class TestPointServiceExpiringPointsSoon:
             expires_at=timezone.now() + timedelta(days=5),
         )
         notified_point.metadata["expiry_notified"] = True
-        notified_point.save()
+        notified_point.save(update_fields=["metadata"])
 
         # 알림 안 보낸 포인트
         not_notified = PointHistoryFactory.earn(
@@ -623,7 +623,7 @@ class TestPointServiceExpirePoints:
             expires_at=timezone.now() - timedelta(days=1),
         )
         expired_point.metadata["used_amount"] = 30
-        expired_point.save()
+        expired_point.save(update_fields=["metadata"])
 
         # Act
         count = service.expire_points()
@@ -651,7 +651,7 @@ class TestPointServiceExpirePoints:
             expires_at=timezone.now() - timedelta(days=1),
         )
         expired_point.metadata["used_amount"] = 100
-        expired_point.save()
+        expired_point.save(update_fields=["metadata"])
 
         # Act
         count = service.expire_points()
@@ -798,7 +798,7 @@ class TestPointServiceGetRemainingPoints:
 
         point_history = PointHistoryFactory.earn(user=user, points=100)
         point_history.metadata["used_amount"] = 30
-        point_history.save()
+        point_history.save(update_fields=["metadata"])
 
         # Act
         remaining = service.get_remaining_points(point_history)
@@ -814,7 +814,7 @@ class TestPointServiceGetRemainingPoints:
 
         point_history = PointHistoryFactory.earn(user=user, points=100)
         point_history.metadata["used_amount"] = 100
-        point_history.save()
+        point_history.save(update_fields=["metadata"])
 
         # Act
         remaining = service.get_remaining_points(point_history)
@@ -849,7 +849,7 @@ class TestPointServiceGetRemainingPoints:
 
         point_history = PointHistoryFactory.earn(user=user, points=100)
         point_history.metadata = {}
-        point_history.save()
+        point_history.save(update_fields=["metadata"])
 
         # Act
         remaining = service.get_remaining_points(point_history)
@@ -1521,7 +1521,7 @@ class TestPointServiceExpirePointsMetadata:
             expires_at=timezone.now() - timedelta(days=1),
         )
         expired_point.metadata["used_amount"] = 300
-        expired_point.save()
+        expired_point.save(update_fields=["metadata"])
 
         # Act
         service.expire_points()
@@ -1576,7 +1576,7 @@ class TestPointServiceNotificationsEdgeCases:
             expires_at=timezone.now() + timedelta(days=5),
         )
         point_history.metadata["used_amount"] = 100  # 전액 사용
-        point_history.save()
+        point_history.save(update_fields=["metadata"])
 
         # Act
         count = service.send_expiry_notifications()
@@ -1599,7 +1599,7 @@ class TestPointServiceNotificationsEdgeCases:
             expires_at=timezone.now() + timedelta(days=5),
         )
         point_history.metadata["used_amount"] = 30
-        point_history.save()
+        point_history.save(update_fields=["metadata"])
 
         # Act
         count = service.send_expiry_notifications()
@@ -2003,7 +2003,7 @@ class TestGetUsablePoints:
             expires_at=timezone.now() + timedelta(days=365),
         )
         expired_point.metadata = {"expired": True}
-        expired_point.save()
+        expired_point.save(update_fields=["metadata"])
 
         service = PointService()
 

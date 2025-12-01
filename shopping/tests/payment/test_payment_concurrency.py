@@ -292,7 +292,7 @@ class TestPaymentConcurrencyHappyPath:
                     results.append(
                         {
                             "success": response.status_code == status.HTTP_201_CREATED,
-                            "payment_id": response.json().get("payment_id") if response.status_code == 201 else None,
+                            "payment_id": response.json().get("payment_id") if response.status_code == status.HTTP_201_CREATED else None,
                         }
                     )
             except Exception as e:

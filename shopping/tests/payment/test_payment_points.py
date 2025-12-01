@@ -650,7 +650,7 @@ class TestPaymentPointsException:
             expires_at=now + timedelta(days=30),
         )
         history1.metadata["used_amount"] = 500
-        history1.save()
+        history1.save(update_fields=["metadata"])
 
         # 두 번째 적립 (2000P, 사용 안 됨)
         history2 = PointHistoryFactory(

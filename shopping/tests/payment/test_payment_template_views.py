@@ -9,6 +9,7 @@ from unittest.mock import patch
 from django.urls import reverse
 
 import pytest
+from rest_framework import status
 
 from shopping.models.payment import Payment
 from shopping.services.payment_service import PaymentConfirmError
@@ -42,7 +43,7 @@ class TestPaymentTestPageNormalCase:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_test.html" in [t.name for t in response.templates]
 
     def test_admin_can_access_any_order(self, client, user, order):
@@ -55,7 +56,7 @@ class TestPaymentTestPageNormalCase:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
 
     def test_context_data(self, client, user, order, settings):
         """컨텍스트 데이터 확인"""
@@ -66,7 +67,7 @@ class TestPaymentTestPageNormalCase:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         context = response.context
 
         assert "order" in context
@@ -97,7 +98,7 @@ class TestPaymentTestPageBoundary:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert response.context["used_points"] == 0
 
 
@@ -117,7 +118,7 @@ class TestPaymentTestPageException:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert - 주문 상세 페이지로 리다이렉트
-        assert response.status_code == 302
+        assert response.status_code == status.HTTP_302_FOUND
         assert f"/orders/{order.id}/" in response.url or "order_detail" in response.url
 
     def test_other_user_order_404(self, client, user, other_user, product):
@@ -131,7 +132,7 @@ class TestPaymentTestPageException:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 404
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_nonexistent_order_404(self, client, user):
         """존재하지 않는 주문 404"""
@@ -142,7 +143,7 @@ class TestPaymentTestPageException:
         response = client.get(reverse("payment_test", kwargs={"order_id": 999999}))
 
         # Assert
-        assert response.status_code == 404
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_unauthenticated_redirect(self, client, order):
         """비인증 사용자 로그인 페이지로 리다이렉트"""
@@ -150,7 +151,7 @@ class TestPaymentTestPageException:
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
 
         # Assert
-        assert response.status_code == 302
+        assert response.status_code == status.HTTP_302_FOUND
         assert "login" in response.url or "accounts/login" in response.url
 
 
@@ -191,7 +192,7 @@ class TestPaymentSuccessCallbackNormalCase:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_success.html" in [t.name for t in response.templates]
 
     def test_renders_success_template_with_context(self, client, user, order, mocker):
@@ -222,7 +223,7 @@ class TestPaymentSuccessCallbackNormalCase:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         context = response.context
         assert "payment" in context
         assert "order" in context
@@ -248,7 +249,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
         assert "필수 파라미터가 누락되었습니다" in response.context.get("message", "")
 
@@ -267,7 +268,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
     def test_missing_amount(self, client, user):
@@ -285,7 +286,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
     def test_payment_not_found(self, client, user):
@@ -304,7 +305,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
         assert "결제 정보를 찾을 수 없습니다" in response.context.get("message", "")
 
@@ -330,7 +331,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
         assert "오류가 발생했습니다" in response.context.get("message", "")
 
@@ -356,7 +357,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
     def test_generic_exception(self, client, user, order, mocker):
@@ -381,7 +382,7 @@ class TestPaymentSuccessCallbackException:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
         assert "오류가 발생했습니다" in response.context.get("message", "")
 
@@ -412,7 +413,7 @@ class TestPaymentFailCallbackNormalCase:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
         # Assert - Payment 상태 변경 확인
@@ -436,7 +437,7 @@ class TestPaymentFailCallbackNormalCase:
         )
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         context = response.context
         assert context["code"] == "TIMEOUT"
         assert context["message"] == "결제 시간 초과"
@@ -462,7 +463,7 @@ class TestPaymentFailCallbackException:
         )
 
         # Assert - orderId 없어도 템플릿은 렌더링
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
     def test_payment_not_found(self, client, user):
@@ -481,7 +482,7 @@ class TestPaymentFailCallbackException:
         )
 
         # Assert - 에러 없이 템플릿 렌더링 (로그만 기록)
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
 
     def test_fail_callback_all_params_none(self, client, user):
@@ -493,7 +494,7 @@ class TestPaymentFailCallbackException:
         response = client.get(reverse("payment_fail"))
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_fail.html" in [t.name for t in response.templates]
         assert response.context["code"] is None
         assert response.context["message"] is None

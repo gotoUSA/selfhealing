@@ -483,7 +483,7 @@ class TestPointExpiryExceptionCases:
 
         # 수동으로 만료 표시
         expired_point.metadata["expired"] = True
-        expired_point.save()
+        expired_point.save(update_fields=["metadata"])
 
         # Act - 만료 처리 시도
         count = service.expire_points()

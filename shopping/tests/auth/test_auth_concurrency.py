@@ -89,7 +89,7 @@ class TestConcurrentLogin:
             try:
                 response = client.post(login_url, {"username": username, "password": password}, format="json")
                 # 새 구조: token.access
-                access = response.data.get("token", {}).get("access") if response.status_code == 200 else None
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 # refresh는 Cookie에서 가져옴
                 refresh = response.cookies.get("refresh_token")
                 refresh_value = refresh.value if refresh else None
@@ -145,7 +145,7 @@ class TestConcurrentLogin:
             try:
                 response = client.post(login_url, {"username": username, "password": password}, format="json")
                 # 새 구조: token.access
-                access = response.data.get("token", {}).get("access") if response.status_code == 200 else None
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 return {
                     "status": response.status_code,
                     "access": access,
@@ -179,7 +179,7 @@ class TestConcurrentLogin:
             try:
                 response = client.post(login_url, {"username": "sameuser", "password": "testpass123"}, format="json")
                 # 새 구조: token.access
-                access = response.data.get("token", {}).get("access") if response.status_code == 200 else None
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 # refresh는 Cookie에서 가져옴
                 refresh = response.cookies.get("refresh_token")
                 refresh_value = refresh.value if refresh else None
@@ -232,7 +232,7 @@ class TestRefreshTokenConcurrency:
                 return {
                     "status": response.status_code,
                     "success": response.status_code == status.HTTP_200_OK,
-                    "new_access": response.data.get("access") if response.status_code == 200 else None,
+                    "new_access": response.data.get("access") if response.status_code == status.HTTP_200_OK else None,
                 }
             except Exception as e:
                 return {"error": str(e)}

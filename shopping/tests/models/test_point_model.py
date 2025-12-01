@@ -11,6 +11,96 @@ from shopping.tests.factories import OrderFactory, PointHistoryFactory, UserFact
 
 
 @pytest.mark.django_db
+class TestPointHistoryLedgerImmutability:
+    """PointHistory 원장 불변성 테스트 - delete/save 제한"""
+
+    def test_delete_raises_value_error(self):
+        """포인트 이력 삭제 시도 시 ValueError 발생"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistoryFactory(user=user, type="earn", points=100, balance=100)
+
+        # Act & Assert
+        with pytest.raises(ValueError) as exc_info:
+            history.delete()
+
+        assert "포인트 이력은 삭제할 수 없습니다" in str(exc_info.value)
+        assert "반제(Reversal) 거래" in str(exc_info.value)
+
+    def test_save_allows_new_record_creation(self):
+        """신규 레코드 생성은 허용"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistory(
+            user=user,
+            type="earn",
+            points=100,
+            balance=100,
+            description="신규 적립",
+        )
+
+        # Act - 새 레코드 생성은 허용되어야 함
+        history.save()
+
+        # Assert
+        assert history.pk is not None
+
+    def test_save_allows_metadata_update_with_update_fields(self):
+        """update_fields로 metadata 업데이트 허용"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistoryFactory(user=user, type="earn", points=100, balance=100)
+        history.metadata = {"remaining_points": 50}
+
+        # Act - metadata 업데이트는 허용
+        history.save(update_fields=["metadata"])
+
+        # Assert
+        history.refresh_from_db()
+        assert history.metadata == {"remaining_points": 50}
+
+    def test_save_raises_error_for_core_field_update(self):
+        """핵심 필드(points, balance 등) 수정 시도 시 ValueError 발생"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistoryFactory(user=user, type="earn", points=100, balance=100)
+        history.points = 200  # 핵심 필드 수정 시도
+
+        # Act & Assert
+        with pytest.raises(ValueError) as exc_info:
+            history.save(update_fields=["points"])
+
+        assert "핵심 필드는 수정할 수 없습니다" in str(exc_info.value)
+        assert "points" in str(exc_info.value)
+
+    def test_save_raises_error_for_balance_update(self):
+        """balance 필드 수정 시도 시 ValueError 발생"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistoryFactory(user=user, type="earn", points=100, balance=100)
+        history.balance = 999
+
+        # Act & Assert
+        with pytest.raises(ValueError) as exc_info:
+            history.save(update_fields=["balance"])
+
+        assert "핵심 필드는 수정할 수 없습니다" in str(exc_info.value)
+
+    def test_save_raises_error_for_type_update(self):
+        """type 필드 수정 시도 시 ValueError 발생"""
+        # Arrange
+        user = UserFactory()
+        history = PointHistoryFactory(user=user, type="earn", points=100, balance=100)
+        history.type = "use"
+
+        # Act & Assert
+        with pytest.raises(ValueError) as exc_info:
+            history.save(update_fields=["type"])
+
+        assert "핵심 필드는 수정할 수 없습니다" in str(exc_info.value)
+
+
+@pytest.mark.django_db
 class TestPointHistoryManagerOptimizedQuery:
     """PointHistoryManager.optimized_for_list() 최적화 쿼리 테스트"""
 

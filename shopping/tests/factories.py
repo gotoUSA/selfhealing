@@ -793,7 +793,7 @@ class PointHistoryFactory(DjangoModelFactory):
         """부분 사용된 포인트"""
         history = cls.earn(**kwargs)
         history.metadata["used_amount"] = used_amount
-        history.save()
+        history.save(update_fields=["metadata"])
         return history
 
 

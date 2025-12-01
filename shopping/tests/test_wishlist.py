@@ -374,7 +374,7 @@ class WishlistTestCase(TestCase):
             format="json",  # JSON 형식으로 전송
         )
         # 404인 경우 응답 내용 확인
-        if response.status_code == 404:
+        if response.status_code == status.HTTP_404_NOT_FOUND:
             print(f"404 에러 응답: {response.data}")
             self.fail(f"404 에러 발생: {response.data}")
 

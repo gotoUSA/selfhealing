@@ -1318,7 +1318,7 @@ class TestCompleteRefundUsablePointsValidation:
             expires_at=timezone.now() + timedelta(days=365),
         )
         earn_history.metadata = {"used_amount": 100}
-        earn_history.save()
+        earn_history.save(update_fields=["metadata"])
 
         return_obj = ReturnFactory.received(type="refund", order=order, user=user)
         ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
