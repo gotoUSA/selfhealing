@@ -92,15 +92,8 @@ class ReturnCreateSerializer(serializers.ModelSerializer):
             if not attrs.get("refund_account_bank") or not attrs.get("refund_account_number"):
                 raise serializers.ValidationError("환불 계좌 정보를 입력해주세요.")
 
-        # 교환인 경우 교환 상품 필수
-        if attrs["type"] == "exchange":
-            if not attrs.get("exchange_product"):
-                raise serializers.ValidationError("교환할 상품을 선택해주세요.")
-
-            # 교환 상품 재고 확인
-            exchange_product = attrs["exchange_product"]
-            if exchange_product.stock < 1:
-                raise serializers.ValidationError("교환 상품의 재고가 부족합니다.")
+        # 교환인 경우: 비즈니스 로직(재고, 삭제된 상품 등)은 Service에서 처리
+        # Serializer는 데이터 형식만 검증
 
         # 반품 상품 검증
         return_items = attrs.get("return_items", [])
@@ -151,18 +144,22 @@ class ReturnCreateSerializer(serializers.ModelSerializer):
 
         # ReturnService를 통해 생성
         with transaction.atomic():
-            return_obj = ReturnService.create_return(
-                order=order,
-                user=request.user,
-                type=validated_data["type"],
-                reason=validated_data["reason"],
-                reason_detail=validated_data["reason_detail"],
-                return_items_data=return_items_list,
-                refund_account_bank=validated_data.get("refund_account_bank", ""),
-                refund_account_number=validated_data.get("refund_account_number", ""),
-                refund_account_holder=validated_data.get("refund_account_holder", ""),
-                exchange_product=validated_data.get("exchange_product"),
-            )
+            try:
+                return_obj = ReturnService.create_return(
+                    order=order,
+                    user=request.user,
+                    type=validated_data["type"],
+                    reason=validated_data["reason"],
+                    reason_detail=validated_data["reason_detail"],
+                    return_items_data=return_items_list,
+                    refund_account_bank=validated_data.get("refund_account_bank", ""),
+                    refund_account_number=validated_data.get("refund_account_number", ""),
+                    refund_account_holder=validated_data.get("refund_account_holder", ""),
+                    exchange_product=validated_data.get("exchange_product"),
+                )
+            except ValueError as e:
+                # Service 레이어의 비즈니스 로직 에러를 ValidationError로 변환
+                raise serializers.ValidationError(str(e))
 
             # 판매자에게 알림 발송
             from shopping.models import Notification

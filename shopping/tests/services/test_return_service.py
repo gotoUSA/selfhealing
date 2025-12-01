@@ -184,6 +184,171 @@ class TestCreateReturn:
         assert return_obj.exchange_product == exchange_product
         assert return_obj.refund_amount == Decimal("0")  # 교환은 환불 금액 없음
 
+    def test_create_exchange_without_exchange_product_uses_same_product(self):
+        """교환 신청 시 exchange_product 미지정 시 동일 상품으로 자동 설정"""
+        # Arrange
+        order = OrderFactory.delivered()
+        original_product = ProductFactory(stock=10)
+        order_item = OrderItemFactory(order=order, product=original_product)
+        user = order.user
+
+        return_items_data = [
+            {
+                "order_item": order_item,
+                "quantity": 1,
+                "product_name": order_item.product_name,
+                "product_price": order_item.price,
+            }
+        ]
+
+        # Act - exchange_product를 지정하지 않음
+        return_obj = ReturnService.create_return(
+            order=order,
+            user=user,
+            type="exchange",
+            reason="size_issue",
+            reason_detail="사이즈가 맞지 않음",
+            return_items_data=return_items_data,
+            # exchange_product 미지정
+        )
+
+        # Assert - 동일 상품으로 자동 설정되어야 함
+        assert return_obj.type == "exchange"
+        assert return_obj.exchange_product == original_product
+        assert return_obj.exchange_product.id == order_item.product.id
+
+    def test_create_exchange_with_different_product(self):
+        """교환 신청 시 다른 상품 명시적 지정"""
+        # Arrange
+        order = OrderFactory.delivered()
+        original_product = ProductFactory(name="원래 상품", stock=10)
+        different_product = ProductFactory(name="다른 상품", stock=5)
+        order_item = OrderItemFactory(order=order, product=original_product)
+        user = order.user
+
+        return_items_data = [
+            {
+                "order_item": order_item,
+                "quantity": 1,
+                "product_name": order_item.product_name,
+                "product_price": order_item.price,
+            }
+        ]
+
+        # Act - 다른 상품으로 명시적 지정
+        return_obj = ReturnService.create_return(
+            order=order,
+            user=user,
+            type="exchange",
+            reason="defective",
+            reason_detail="상품 불량으로 다른 상품으로 교환",
+            return_items_data=return_items_data,
+            exchange_product=different_product,
+        )
+
+        # Assert - 지정한 다른 상품으로 설정되어야 함
+        assert return_obj.type == "exchange"
+        assert return_obj.exchange_product == different_product
+        assert return_obj.exchange_product.id != original_product.id
+
+    def test_create_exchange_multiple_items_without_exchange_product_raises_error(self):
+        """여러 상품 교환 시 exchange_product 미지정하면 ValueError"""
+        # Arrange
+        order = OrderFactory.delivered()
+        product1 = ProductFactory(stock=10)
+        product2 = ProductFactory(stock=10)
+        order_item1 = OrderItemFactory(order=order, product=product1)
+        order_item2 = OrderItemFactory(order=order, product=product2)
+        user = order.user
+
+        return_items_data = [
+            {
+                "order_item": order_item1,
+                "quantity": 1,
+                "product_name": order_item1.product_name,
+                "product_price": order_item1.price,
+            },
+            {
+                "order_item": order_item2,
+                "quantity": 1,
+                "product_name": order_item2.product_name,
+                "product_price": order_item2.price,
+            },
+        ]
+
+        # Act & Assert - ValueError 발생
+        with pytest.raises(ValueError, match="여러 상품 교환 시"):
+            ReturnService.create_return(
+                order=order,
+                user=user,
+                type="exchange",
+                reason="defective",
+                reason_detail="상품 불량",
+                return_items_data=return_items_data,
+                # exchange_product 미지정
+            )
+
+    def test_create_exchange_deleted_product_raises_error(self):
+        """삭제된 상품 교환 시 ValueError"""
+        # Arrange
+        order = OrderFactory.delivered()
+        # product=None일 때 product_name, price 명시 필요 (LazyAttribute가 product 참조)
+        order_item = OrderItemFactory(
+            order=order,
+            product=None,
+            product_name="삭제된 상품",
+            price=10000,
+        )
+        user = order.user
+
+        return_items_data = [
+            {
+                "order_item": order_item,
+                "quantity": 1,
+                "product_name": order_item.product_name,
+                "product_price": order_item.price,
+            }
+        ]
+
+        # Act & Assert - ValueError 발생
+        with pytest.raises(ValueError, match="삭제되어"):
+            ReturnService.create_return(
+                order=order,
+                user=user,
+                type="exchange",
+                reason="defective",
+                reason_detail="상품 불량",
+                return_items_data=return_items_data,
+            )
+
+    def test_create_exchange_out_of_stock_raises_error(self):
+        """재고 부족 시 ValueError"""
+        # Arrange
+        order = OrderFactory.delivered()
+        out_of_stock_product = ProductFactory(stock=0)  # 재고 없음
+        order_item = OrderItemFactory(order=order, product=out_of_stock_product)
+        user = order.user
+
+        return_items_data = [
+            {
+                "order_item": order_item,
+                "quantity": 1,
+                "product_name": order_item.product_name,
+                "product_price": order_item.price,
+            }
+        ]
+
+        # Act & Assert - ValueError 발생
+        with pytest.raises(ValueError, match="재고가 부족"):
+            ReturnService.create_return(
+                order=order,
+                user=user,
+                type="exchange",
+                reason="size_issue",
+                reason_detail="사이즈 문제",
+                return_items_data=return_items_data,
+            )
+
     def test_create_return_with_multiple_items(self):
         """여러 상품 반품 신청"""
         # Arrange
@@ -909,6 +1074,48 @@ class TestCompleteExchange:
             )
 
         assert "반품 도착 상태에서만 교환 처리할 수 있습니다" in str(exc_info.value)
+
+    def test_complete_exchange_out_of_stock_at_completion_raises_error(self):
+        """교환 완료 시점에 재고 부족하면 ValueError"""
+        # Arrange
+        exchange_product = ProductFactory(stock=0)  # 재고 없음
+        return_obj = ReturnFactory.received(type="exchange", exchange_product=exchange_product)
+
+        # Act & Assert
+        with pytest.raises(ValueError) as exc_info:
+            ReturnService.complete_exchange(
+                return_obj,
+                exchange_tracking_number="987654321098",
+                exchange_shipping_company="CJ대한통운",
+            )
+
+        assert "재고가 부족합니다" in str(exc_info.value)
+
+    def test_complete_exchange_stock_not_decreased_on_failure(self):
+        """교환 완료 실패 시 재고 변경 없음 (트랜잭션 롤백)"""
+        # Arrange
+        original_product = ProductFactory(stock=10)
+        exchange_product = ProductFactory(stock=0)  # 재고 없음 → 실패 유도
+
+        order = OrderFactory.delivered()
+        order_item = OrderItemFactory(order=order, product=original_product, quantity=1)
+
+        return_obj = ReturnFactory.received(type="exchange", order=order, exchange_product=exchange_product)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+
+        initial_original_stock = original_product.stock
+
+        # Act & Assert
+        with pytest.raises(ValueError):
+            ReturnService.complete_exchange(
+                return_obj,
+                exchange_tracking_number="987654321098",
+                exchange_shipping_company="CJ대한통운",
+            )
+
+        # Assert - 트랜잭션 롤백으로 재고 변경 없음
+        original_product.refresh_from_db()
+        assert original_product.stock == initial_original_stock
 
 
 @pytest.mark.django_db

@@ -63,7 +63,6 @@ class TestReturnViewAuthentication:
         # Act
         response = api_client.post(url, {"order_id": 1})
 
-
         # Assert
         assert response.status_code in [
             status.HTTP_401_UNAUTHORIZED,
@@ -286,7 +285,6 @@ class TestReturnViewIntegration:
         create_url = reverse("return-list")
         create_data = {
             "order_id": order.id,
-
             "type": "refund",
             "reason": "change_of_mind",
             "reason_detail": "단순 변심",
@@ -345,7 +343,6 @@ class TestReturnViewIntegration:
         create_url = reverse("return-list")
         create_data = {
             "order_id": order.id,
-
             "type": "exchange",
             "reason": "size_issue",
             "reason_detail": "사이즈가 맞지 않음",
@@ -388,3 +385,119 @@ class TestReturnViewIntegration:
         response = api_client.post(complete_url, complete_data, format="json")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["return"]["status"] == "completed"
+
+    def test_exchange_without_exchange_product_uses_same_product(self, api_client):
+        """교환 신청 시 exchange_product 미지정 시 동일 상품으로 자동 설정 (API 테스트)"""
+        # Arrange
+        seller = UserFactory(is_seller=True)
+        original_product = ProductFactory(seller=seller, stock=10)
+        buyer = UserFactory(is_seller=False)
+        order = OrderFactory.delivered(user=buyer)
+        order_item = OrderItemFactory(order=order, product=original_product, quantity=1)
+
+        # Act - exchange_product 미지정
+        api_client.force_authenticate(user=buyer)
+        create_url = reverse("return-list")
+        create_data = {
+            "order_id": order.id,
+            "type": "exchange",
+            "reason": "size_issue",
+            "reason_detail": "사이즈가 맞지 않아 동일 상품으로 교환",
+            "items": [{"order_item_id": order_item.id, "quantity": 1}],
+            # exchange_product 미지정 - 동일 상품 교환
+        }
+        response = api_client.post(create_url, create_data, format="json")
+
+        # Assert
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["return"]["type"] == "exchange"
+        # 동일 상품으로 자동 설정되어야 함
+        assert response.data["return"]["exchange_product_info"]["id"] == original_product.id
+        assert response.data["return"]["exchange_product_info"]["name"] == original_product.name
+
+    def test_exchange_without_exchange_product_fails_if_out_of_stock(self, api_client):
+        """동일 상품 교환 시 재고 부족하면 에러"""
+        # Arrange
+        seller = UserFactory(is_seller=True)
+        original_product = ProductFactory(seller=seller, stock=0)  # 재고 없음
+        buyer = UserFactory(is_seller=False)
+        order = OrderFactory.delivered(user=buyer)
+        order_item = OrderItemFactory(order=order, product=original_product, quantity=1)
+
+        # Act - exchange_product 미지정 (동일 상품 교환)
+        api_client.force_authenticate(user=buyer)
+        create_url = reverse("return-list")
+        create_data = {
+            "order_id": order.id,
+            "type": "exchange",
+            "reason": "size_issue",
+            "reason_detail": "사이즈가 맞지 않음",
+            "items": [{"order_item_id": order_item.id, "quantity": 1}],
+            # exchange_product 미지정
+        }
+        response = api_client.post(create_url, create_data, format="json")
+
+        # Assert - 재고 부족 에러
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_exchange_multiple_items_without_exchange_product_fails(self, api_client):
+        """여러 상품 교환 시 exchange_product 미지정하면 에러"""
+        # Arrange
+        seller = UserFactory(is_seller=True)
+        product1 = ProductFactory(seller=seller, stock=10)
+        product2 = ProductFactory(seller=seller, stock=10)
+        buyer = UserFactory(is_seller=False)
+        order = OrderFactory.delivered(user=buyer)
+        order_item1 = OrderItemFactory(order=order, product=product1, quantity=1)
+        order_item2 = OrderItemFactory(order=order, product=product2, quantity=1)
+
+        # Act - 여러 상품 교환인데 exchange_product 미지정
+        api_client.force_authenticate(user=buyer)
+        create_url = reverse("return-list")
+        create_data = {
+            "order_id": order.id,
+            "type": "exchange",
+            "reason": "defective",
+            "reason_detail": "상품 불량",
+            "items": [
+                {"order_item_id": order_item1.id, "quantity": 1},
+                {"order_item_id": order_item2.id, "quantity": 1},
+            ],
+            # exchange_product 미지정 - 여러 상품이라 에러 발생해야 함
+        }
+        response = api_client.post(create_url, create_data, format="json")
+
+        # Assert - 여러 상품 교환 시 exchange_product 필수 에러
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_exchange_deleted_product_fails_with_helpful_message(self, api_client):
+        """삭제된 상품 교환 시 환불 유도 메시지와 함께 에러"""
+        # Arrange
+        seller = UserFactory(is_seller=True)
+        buyer = UserFactory(is_seller=False)
+        order = OrderFactory.delivered(user=buyer)
+        # product=None으로 설정하여 삭제된 상품 시뮬레이션
+        # product_name, price 명시 필요 (LazyAttribute가 product 참조하기 때문)
+        order_item = OrderItemFactory(
+            order=order,
+            product=None,
+            product_name="삭제된 상품",
+            price=10000,
+            quantity=1,
+        )
+
+        # Act - 삭제된 상품으로 동일 상품 교환 시도
+        api_client.force_authenticate(user=buyer)
+        create_url = reverse("return-list")
+        create_data = {
+            "order_id": order.id,
+            "type": "exchange",
+            "reason": "defective",
+            "reason_detail": "상품 불량",
+            "items": [{"order_item_id": order_item.id, "quantity": 1}],
+            # exchange_product 미지정 - 동일 상품 교환 시도
+        }
+        response = api_client.post(create_url, create_data, format="json")
+
+        # Assert - 삭제된 상품 교환 불가 에러
+        assert response.status_code == status.HTTP_400_BAD_REQUEST

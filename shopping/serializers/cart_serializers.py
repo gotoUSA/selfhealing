@@ -2,15 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db import transaction
-from django.db.models import F
-from django.utils import timezone
-
 from rest_framework import serializers
 
 # 모델 import
 from ..models.cart import Cart, CartItem
-from ..models.product import Product
 
 # 다른 Serializer import
 from .product_serializers import ProductListSerializer
@@ -86,7 +81,7 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
     장바구니에 상품 추가용 Serializer
 
     POST 요청으로 장바구니에 새 상품을 추가할 때 사용합니다.
-    이미 담긴 상품인 경우 수량을 증가시킵니다.
+    비즈니스 로직(재고 검증, 동시성 처리 등)은 CartService에서 담당합니다.
     """
 
     # 상품 ID로 받기 (필수)
@@ -104,103 +99,6 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         model = CartItem
         fields = ["product_id", "quantity"]
 
-    def validate_product_id(self, value: int) -> int:
-        """
-        상품 ID 유효성 검증
-
-        - 존재하는 상품인지 확인
-        - 활성화된 상품인지 확인
-        - 재고가 있는지 확인
-        """
-        try:
-            product = Product.objects.get(pk=value)
-        except Product.DoesNotExist:
-            raise serializers.ValidationError(f"상품 ID {value}를 찾을 수 없습니다.")
-
-        # 비활성 상품 체크
-        if not product.is_active:
-            raise serializers.ValidationError("현재 판매하지 않는 상품입니다.")
-
-        # 재고 체크
-        if product.stock == 0:
-            raise serializers.ValidationError("품절된 상품입니다.")
-
-        # validated_data에 product 객체 저장
-        self.product = product
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """
-        전체 유효성 검증
-
-        요청한 수량이 재고보다 많은지 확인합니다.
-        """
-        quantity = attrs.get("quantity", 1)
-
-        # validate_product_id에서 저장한 product 사용
-        if hasattr(self, "product"):
-            if quantity > self.product.stock:
-                raise serializers.ValidationError({"quantity": f"재고가 부족합니다. 현재 재고: {self.product.stock}개"})
-
-        return attrs
-
-    def create(self, validated_data: dict[str, Any]) -> CartItem:
-        """
-        장바구니 아이템 생성 또는 수량 증가
-
-        IntegrityError retry 패턴으로 동시성 문제를 완벽하게 방지합니다.
-        동시에 여러 요청이 같은 상품을 추가해도 안전하게 처리됩니다.
-        """
-        from django.db import IntegrityError
-
-        product_id = validated_data.pop("product_id")
-        quantity = validated_data.get("quantity", 1)
-
-        # ViewSet에서 cart를 context로 전달받음
-        cart = self.context.get("cart")
-        if not cart:
-            raise serializers.ValidationError("장바구니 정보가 없습니다.")
-
-        with transaction.atomic():
-            # Cart를 잠금 (동시 접근 방지)
-            cart = Cart.objects.select_for_update().get(pk=cart.pk)
-
-            # 먼저 조회 시도 (lock을 걸어서)
-            try:
-                cart_item = CartItem.objects.select_for_update().get(
-                    cart=cart,
-                    product_id=product_id
-                )
-                # 이미 존재하는 경우 수량 증가 (F() 사용하여 atomic update)
-                CartItem.objects.filter(pk=cart_item.pk).update(
-                    quantity=F("quantity") + quantity,
-                    updated_at=timezone.now()
-                )
-                cart_item.refresh_from_db()
-
-            except CartItem.DoesNotExist:
-                # 없으면 생성 시도
-                try:
-                    cart_item = CartItem.objects.create(
-                        cart=cart,
-                        product_id=product_id,
-                        quantity=quantity
-                    )
-                except IntegrityError:
-                    # 다른 트랜잭션이 동시에 생성함 → 다시 조회하고 수량 증가
-                    # 이 시점에는 반드시 존재하므로 get()이 성공
-                    cart_item = CartItem.objects.select_for_update().get(
-                        cart=cart,
-                        product_id=product_id
-                    )
-                    CartItem.objects.filter(pk=cart_item.pk).update(
-                        quantity=F("quantity") + quantity,
-                        updated_at=timezone.now()
-                    )
-                    cart_item.refresh_from_db()
-
-            return cart_item
-
     def to_representation(self, instance: CartItem) -> dict[str, Any]:
         """
         응답 시 CartItemSerializer 형식으로 변환
@@ -215,6 +113,7 @@ class CartItemUpdateSerializer(serializers.ModelSerializer):
     장바구니 아이템 수량 변경용 Serializer
 
     PUT/PATCH 요청으로 수량을 변경할 때 사용합니다.
+    비즈니스 로직(재고 검증, 동시성 처리 등)은 CartService에서 담당합니다.
     수량이 0이 되면 자동으로 삭제됩니다.
     """
 
@@ -227,44 +126,6 @@ class CartItemUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CartItem
         fields = ["quantity"]
-
-    def validate_quantity(self, value: int) -> int:
-        """
-        수량 유효성 검증
-
-        재고보다 많은 수량을 요청하는지 확인합니다.
-        """
-        if self.instance and value > 0:
-            # 재고 확인
-            if value > self.instance.product.stock:
-                raise serializers.ValidationError(f"재고가 부족합니다. 현재 재고: {self.instance.product.stock}개")
-
-        return value
-
-    def update(self, instance: CartItem, validated_data: dict[str, Any]) -> CartItem:
-        """
-        수량 업데이트
-
-        0이면 삭제, 아니면 수량 변경
-        select_for_update()로 동시성 처리
-        """
-        from django.db import transaction
-
-        quantity = validated_data.get("quantity")
-
-        with transaction.atomic():
-            # 해당 CartItem을 잠금
-            cart_item = CartItem.objects.select_for_update().get(pk=instance.pk)
-
-            if quantity == 0:
-                # 수량이 0이면 삭제
-                cart_item.delete()
-                return cart_item
-            else:
-                # 직접 UPDATE 쿼리로 수량 변경 (race condition 방지)
-                CartItem.objects.filter(pk=cart_item.pk).update(quantity=quantity, updated_at=timezone.now())
-                cart_item.refresh_from_db()
-                return cart_item
 
 
 class CartSerializer(serializers.ModelSerializer):

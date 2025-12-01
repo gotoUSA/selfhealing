@@ -183,8 +183,8 @@ class CartService:
         # 1. 수량 검증
         CartService._validate_quantity(quantity)
 
-        # 2. 상품 조회 (동시성 제어를 위해 락 획득)
-        product = CartService._get_product_with_lock(product_id)
+        # 2. 상품 조회 (장바구니 추가 시점에는 재고를 변경하지 않으므로 락 불필요)
+        product = CartService._get_product(product_id)
 
         # 3. 장바구니 락 획득 (동시성 제어)
         cart = Cart.objects.select_for_update().get(pk=cart.pk)
@@ -561,10 +561,10 @@ class CartService:
             )
 
     @staticmethod
-    def _get_product_with_lock(product_id: int) -> Product:
-        """상품 조회 (동시성 제어용 락 포함)"""
+    def _get_product(product_id: int) -> Product:
+        """상품 조회"""
         try:
-            product = Product.objects.select_for_update().get(
+            product = Product.objects.get(
                 id=product_id,
                 is_active=True,
             )

@@ -497,3 +497,155 @@ class TestPointRecoveryConcurrency(TransactionTestCase):
         # cancel_deduct 이력 개수
         cancel_count = PointHistory.objects.filter(user=user, type="cancel_deduct").count()
         assert cancel_count == 5, f"cancel_deduct 이력 개수 오류: {cancel_count}"
+
+
+class TestCompleteExchangeConcurrency(TransactionTestCase):
+    """
+    교환 완료 동시성 테스트
+
+    TransactionTestCase 사용 이유:
+    - 실제 DB 트랜잭션 테스트 필요
+    - 동시성 시나리오에서 select_for_update 검증
+    - 재고 정합성 검증
+    """
+
+    def setUp(self):
+        """테스트 설정"""
+        connection.close()
+
+    def _call_complete_exchange(self, return_id: int) -> dict:
+        """
+        교환 완료 요청 헬퍼
+
+        각 스레드에서 독립적인 DB 연결 사용
+        """
+        from django.db import connection
+
+        connection.close()
+
+        try:
+            return_obj = Return.objects.get(id=return_id)
+            result = ReturnService.complete_exchange(
+                return_obj,
+                exchange_tracking_number="123456789012",
+                exchange_shipping_company="CJ대한통운",
+            )
+
+            return {
+                "success": True,
+                "status": result.status,
+                "error": None,
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "status": None,
+                "error": str(e),
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "status": None,
+                "error": f"{type(e).__name__}: {str(e)}",
+            }
+
+    def test_concurrent_complete_exchange_same_return(self):
+        """
+        동일 Return에 대한 2회 동시 교환 완료 요청
+
+        시나리오:
+        - Return 1건이 received 상태
+        - 2개의 스레드가 동시에 complete_exchange 호출
+        - 예상: 1개만 성공, 1개는 상태 오류로 실패
+        - 검증: 재고 정합성 (중복 차감 없음)
+        """
+        # Arrange
+        original_product = ProductFactory(stock=10)
+        exchange_product = ProductFactory(stock=5)
+
+        order = OrderFactory.delivered()
+        order_item = OrderItemFactory(order=order, product=original_product, quantity=1)
+
+        return_obj = ReturnFactory.received(type="exchange", order=order, exchange_product=exchange_product)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+
+        return_id = return_obj.id
+        initial_exchange_stock = exchange_product.stock
+        initial_original_stock = original_product.stock
+        results = []
+
+        # Act - 동시 요청
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(self._call_complete_exchange, return_id),
+                executor.submit(self._call_complete_exchange, return_id),
+            ]
+
+            for future in as_completed(futures):
+                results.append(future.result())
+
+        # Assert - 1개만 성공
+        success_count = sum(1 for r in results if r["success"])
+        failure_count = sum(1 for r in results if not r["success"])
+
+        assert success_count == 1, f"1개만 성공해야 함: results={results}"
+        assert failure_count == 1, f"1개는 실패해야 함: results={results}"
+
+        # 재고 정합성 (1번만 조정)
+        exchange_product.refresh_from_db()
+        original_product.refresh_from_db()
+
+        assert exchange_product.stock == initial_exchange_stock - 1, (
+            f"교환 재고 1번만 차감: expected={initial_exchange_stock - 1}, actual={exchange_product.stock}"
+        )
+        assert original_product.stock == initial_original_stock + 1, (
+            f"반품 재고 1번만 증가: expected={initial_original_stock + 1}, actual={original_product.stock}"
+        )
+
+    def test_concurrent_exchange_last_stock_only_one_succeeds(self):
+        """
+        교환 상품 재고 1개, 2개 교환 동시 요청
+
+        시나리오:
+        - 교환 상품 재고 = 1
+        - 2건의 교환이 동시에 complete_exchange 호출
+        - 예상: 1건만 성공, 1건은 재고 부족으로 실패
+        - 검증: select_for_update로 재고 정합성 보장
+        """
+        # Arrange
+        exchange_product = ProductFactory(stock=1)  # 재고 1개
+
+        # 교환 신청 2건 생성
+        returns = []
+        for _ in range(2):
+            original_product = ProductFactory(stock=10)
+            order = OrderFactory.delivered()
+            order_item = OrderItemFactory(order=order, product=original_product, quantity=1)
+
+            return_obj = ReturnFactory.received(type="exchange", order=order, exchange_product=exchange_product)
+            ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+            returns.append(return_obj)
+
+        results = []
+
+        # Act - 동시 요청
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(self._call_complete_exchange, r.id) for r in returns]
+
+            for future in as_completed(futures):
+                results.append(future.result())
+
+        # Assert - 1개만 성공
+        success_count = sum(1 for r in results if r["success"])
+        failure_count = sum(1 for r in results if not r["success"])
+
+        assert success_count == 1, f"1개만 성공해야 함: results={results}"
+        assert failure_count == 1, f"1개는 재고 부족으로 실패해야 함: results={results}"
+
+        # 재고 정합성 (0이 되어야 함, 음수 안됨)
+        exchange_product.refresh_from_db()
+        assert exchange_product.stock == 0, f"재고는 0이어야 함: actual={exchange_product.stock}"
+
+        # 실패 이유 확인
+        failure_errors = [r["error"] for r in results if not r["success"]]
+        assert any("재고가 부족" in e for e in failure_errors), f"재고 부족 에러여야 함: {failure_errors}"

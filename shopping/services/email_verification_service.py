@@ -184,6 +184,7 @@ class EmailVerificationService:
 
         # UUID 형식 검증
         import uuid
+
         try:
             uuid.UUID(str(token_str))
         except (ValueError, AttributeError):
@@ -251,11 +252,7 @@ class EmailVerificationService:
             )
 
         # 최신 미사용 토큰 조회
-        token = (
-            EmailVerificationToken.objects.filter(user=user, is_used=False)
-            .order_by("-created_at")
-            .first()
-        )
+        token = EmailVerificationToken.objects.filter(user=user, is_used=False).order_by("-created_at").first()
 
         if not token:
             raise EmailVerificationServiceError(
@@ -368,22 +365,14 @@ class EmailVerificationService:
         Returns:
             EmailVerificationToken | None: 활성 토큰 (없으면 None)
         """
-        return (
-            EmailVerificationToken.objects.filter(user=user, is_used=False)
-            .order_by("-created_at")
-            .first()
-        )
+        return EmailVerificationToken.objects.filter(user=user, is_used=False).order_by("-created_at").first()
 
     # ===== Private Helper Methods =====
 
     @staticmethod
     def _check_resend_cooldown(user: User) -> None:
         """재발송 대기 시간 체크"""
-        latest_token = (
-            EmailVerificationToken.objects.filter(user=user)
-            .order_by("-created_at")
-            .first()
-        )
+        latest_token = EmailVerificationToken.objects.filter(user=user).order_by("-created_at").first()
 
         if latest_token and not latest_token.can_resend():
             cooldown = EmailVerificationService.RESEND_COOLDOWN_SECONDS

@@ -103,7 +103,48 @@ class ReturnService:
         # 1. return_number 생성
         return_number = ReturnService.generate_return_number()
 
-        # 2. Return 객체 생성 (refund_amount는 나중에 계산)
+        # 2. 교환 비즈니스 로직 검증
+        if type == "exchange":
+            exchange_product = kwargs.get("exchange_product")
+
+            # [검증 1] 여러 상품 교환 시 exchange_product 필수
+            if len(return_items_data) > 1 and not exchange_product:
+                raise ValueError(
+                    "여러 상품 교환 시 교환받을 상품을 선택해주세요. "
+                    "또는 환불 후 재구매를 권장합니다."
+                )
+
+            if exchange_product:
+                # 명시적으로 다른 상품 지정한 경우 재고 확인
+                if exchange_product.stock < 1:
+                    raise ValueError("교환 상품의 재고가 부족합니다.")
+            else:
+                # exchange_product가 None인 경우: 동일 상품 교환
+                if return_items_data:
+                    first_order_item = return_items_data[0]["order_item"]
+
+                    # [검증 2] 삭제된 상품 교환 불가
+                    if not first_order_item.product:
+                        raise ValueError(
+                            "해당 상품이 삭제되어 동일 상품 교환이 불가합니다. "
+                            "환불을 신청해주세요."
+                        )
+
+                    # [검증 3] 동일 상품 재고 확인
+                    if first_order_item.product.stock < 1:
+                        raise ValueError(
+                            f"동일 상품({first_order_item.product.name})의 재고가 부족합니다. "
+                            "다른 상품으로 교환하거나 환불을 신청해주세요."
+                        )
+
+                    # 동일 상품으로 자동 설정
+                    kwargs["exchange_product"] = first_order_item.product
+                    logger.info(
+                        f"동일 상품 교환: exchange_product 자동 설정 "
+                        f"(product_id={first_order_item.product.id}, name={first_order_item.product.name})"
+                    )
+
+        # 3. Return 객체 생성 (refund_amount는 나중에 계산)
         return_request = Return.objects.create(
             order=order,
             user=user,
@@ -115,7 +156,7 @@ class ReturnService:
             **kwargs,
         )
 
-        # 3. ReturnItem 생성
+        # 4. ReturnItem 생성
         return_items = []
         for item_data in return_items_data:
             order_item = item_data["order_item"]
@@ -337,10 +378,13 @@ class ReturnService:
                     refund_account=refund_account,
                 )
 
-        # 2. 재고 복구
+        # 2. 재고 복구 (동시성 제어를 위해 락 획득)
+        from shopping.models import Product
+        
         for return_item in return_items:
             if return_item.order_item.product:
-                product = return_item.order_item.product
+                # select_for_update로 동시성 제어 (Race Condition 방지)
+                product = Product.objects.select_for_update().get(pk=return_item.order_item.product.pk)
                 product.stock += return_item.quantity
                 product.save(update_fields=["stock"])
 
@@ -468,9 +512,11 @@ class ReturnService:
         교환 완료 처리
 
         교환 상품 발송 후 호출:
-        1. 재고 조정 (반품 +1, 교환 -1)
-        2. 상태 변경
-        3. 교환 상품 송장번호 저장
+        1. 동시성 제어를 위한 락 획득
+        2. 교환 상품 재고 확인 및 차감
+        3. 반품 상품 재고 증가
+        4. 상태 변경
+        5. 교환 상품 송장번호 저장
 
         Args:
             return_obj: 교환 처리할 Return 객체
@@ -483,38 +529,53 @@ class ReturnService:
         Raises:
             ValueError: 교환 처리 불가능한 상태인 경우
         """
+        from shopping.models import Product
+
+        # 동시성 제어: Return 객체에 락 획득
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+
         if return_obj.type != "exchange":
             raise ValueError("교환 타입에서만 사용 가능합니다.")
 
         if return_obj.status != "received":
             raise ValueError("반품 도착 상태에서만 교환 처리할 수 있습니다.")
 
-        # 성능 최적화: N+1 쿼리 방지
+        # 1. 교환 상품 재고 확인 및 차감 (락 획득)
+        if return_obj.exchange_product:
+            # select_for_update로 동시성 제어 (Race Condition 방지)
+            exchange_product = Product.objects.select_for_update().get(pk=return_obj.exchange_product.pk)
+
+            # 재고 부족 시 에러 (완료 시점에 최종 확인)
+            if exchange_product.stock < 1:
+                raise ValueError(
+                    f"교환 상품({exchange_product.name})의 재고가 부족합니다. "
+                    "환불로 전환하거나 재입고를 기다려주세요."
+                )
+
+            # 교환 상품 재고 감소
+            exchange_product.stock -= 1
+            exchange_product.save(update_fields=["stock"])
+
+        # 2. 반품 상품 재고 증가 (성능 최적화: N+1 쿼리 방지)
         return_items = return_obj.return_items.select_related("order_item__product").all()
 
-        # 1. 재고 조정
         for return_item in return_items:
-            # 반품 상품 재고 증가
             if return_item.order_item.product:
-                product = return_item.order_item.product
+                # 반품 상품도 락 획득하여 재고 증가
+                product = Product.objects.select_for_update().get(pk=return_item.order_item.product.pk)
                 product.stock += return_item.quantity
                 product.save(update_fields=["stock"])
 
-        # 교환 상품 재고 감소
-        if return_obj.exchange_product:
-            return_obj.exchange_product.stock -= 1
-            return_obj.exchange_product.save(update_fields=["stock"])
-
-        # 2. 교환 상품 송장번호 저장
+        # 3. 교환 상품 송장번호 저장
         return_obj.exchange_tracking_number = exchange_tracking_number
         return_obj.exchange_shipping_company = exchange_shipping_company
 
-        # 3. 상태 변경
+        # 4. 상태 변경
         return_obj.status = "completed"
         return_obj.completed_at = timezone.now()
         return_obj.save()
 
-        # 알림 발송
+        # 5. 알림 발송
         from shopping.models import Notification
 
         Notification.objects.create(

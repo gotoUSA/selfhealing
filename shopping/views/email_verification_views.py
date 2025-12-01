@@ -354,10 +354,12 @@ def check_verification_status(request: Request) -> Response:
 
     # 인증되지 않은 경우에만 추가 정보 포함
     if not status_info.is_verified and status_info.pending_verification:
-        response_data.update({
-            "pending_verification": status_info.pending_verification,
-            "token_expired": status_info.token_expired,
-            "can_resend": status_info.can_resend,
-        })
+        response_data.update(
+            {
+                "pending_verification": status_info.pending_verification,
+                "token_expired": status_info.token_expired,
+                "can_resend": status_info.can_resend,
+            }
+        )
 
     return Response(response_data, status=status.HTTP_200_OK)
