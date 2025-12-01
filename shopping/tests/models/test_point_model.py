@@ -41,10 +41,11 @@ class TestPointHistoryCleanValidation:
         user = UserFactory()
         history = PointHistory(user=user, points=0, balance=100, type="earn")
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             history.full_clean()
 
+        # Assert
         assert "포인트 변동량은 0이 될 수 없습니다" in str(exc_info.value)
 
     @pytest.mark.parametrize(
@@ -62,10 +63,11 @@ class TestPointHistoryCleanValidation:
         user = UserFactory()
         history = PointHistory(user=user, points=-100, balance=0, type=point_type)
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             history.full_clean()
 
+        # Assert
         assert f"{display_name}는 양수 포인트여야 합니다" in str(exc_info.value)
 
     @pytest.mark.parametrize(
@@ -83,10 +85,11 @@ class TestPointHistoryCleanValidation:
         user = UserFactory()
         history = PointHistory(user=user, points=100, balance=100, type=point_type)
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             history.full_clean()
 
+        # Assert
         assert f"{display_name}는 음수 포인트여야 합니다" in str(exc_info.value)
 
     def test_negative_balance_raises_validation_error(self):
@@ -95,10 +98,11 @@ class TestPointHistoryCleanValidation:
         user = UserFactory()
         history = PointHistory(user=user, points=-100, balance=-50, type="use")
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             history.full_clean()
 
+        # Assert
         assert "잔액은 음수가 될 수 없습니다" in str(exc_info.value)
 
 

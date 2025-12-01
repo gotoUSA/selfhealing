@@ -11,6 +11,7 @@ from shopping.models import Return, ReturnItem
 from shopping.models.email_verification import EmailLog, EmailVerificationToken
 
 from .models import Cart, CartItem, Category, Order, OrderItem, Product, ProductImage, ProductReview, User
+from .models.seller import SellerProfile
 from .models.notification import Notification
 from .models.payment import Payment, PaymentLog
 from .models.point import PointHistory
@@ -21,6 +22,30 @@ from .models.product_qa import ProductAnswer, ProductQuestion
 # ==========================================
 # allauth의 기본 Admin을 사용합니다.
 # Admin 페이지 → Social accounts 메뉴에서 확인 가능
+
+
+# ==========================================
+# 판매자 프로필 Inline (User Admin에서 사용)
+# ==========================================
+class SellerProfileInline(admin.StackedInline):
+    """User Admin에서 판매자 프로필을 함께 편집"""
+
+    model = SellerProfile
+    can_delete = False
+    verbose_name = "판매자 프로필"
+    verbose_name_plural = "판매자 프로필"
+    fk_name = "user"
+
+    # 판매자인 경우에만 표시
+    def has_change_permission(self, request, obj=None):
+        if obj and not obj.is_seller:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request, obj=None):
+        if obj and not obj.is_seller:
+            return False
+        return super().has_add_permission(request, obj)
 
 
 # User Admin
@@ -78,6 +103,7 @@ class UserAdmin(admin.ModelAdmin):
                 "fields": (
                     "points",
                     "membership_level",
+                    "is_seller",  # 판매자 여부
                     "is_email_verified",
                     "wishlist_products",  # 찜한 상품
                 ),
@@ -130,6 +156,9 @@ class UserAdmin(admin.ModelAdmin):
     # readonly 필드
     readonly_fields = ("date_joined", "last_login")
 
+    # 판매자 프로필 인라인
+    inlines = [SellerProfileInline]
+
     def get_wishlist_count(self, obj):
         """찜한 상품 개수 표시"""
         count = obj.wishlist_products.count()
@@ -143,7 +172,7 @@ class UserAdmin(admin.ModelAdmin):
     # 쿼리 최적화
     def get_queryset(self, request):
         """성능 최적화를 위해 관련 객체 미리 로드"""
-        return super().get_queryset(request).prefetch_related("wishlist_products")
+        return super().get_queryset(request).prefetch_related("wishlist_products", "seller_profile")
 
 
 # Category Admin
@@ -1394,6 +1423,57 @@ class ReturnItemAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         """직접 추가 방지"""
         return False
+
+
+# ==========================================
+# 판매자 프로필 Admin
+# ==========================================
+@admin.register(SellerProfile)
+class SellerProfileAdmin(admin.ModelAdmin):
+    """
+    판매자 프로필 관리자 페이지
+    """
+
+    list_display = [
+        "store_name",
+        "user",
+        "business_number",
+        "representative_name",
+        "bank_name",
+        "created_at",
+    ]
+
+    list_filter = [
+        "bank_name",
+        "created_at",
+    ]
+
+    search_fields = [
+        "store_name",
+        "user__username",
+        "user__email",
+        "business_number",
+        "representative_name",
+    ]
+
+    readonly_fields = ["created_at", "updated_at"]
+
+    fieldsets = (
+        ("스토어 정보", {"fields": ("user", "store_name", "store_description")}),
+        (
+            "사업자 정보",
+            {"fields": ("business_number", "representative_name", "business_address")},
+        ),
+        ("정산 정보", {"fields": ("bank_name", "bank_account", "bank_holder")}),
+        (
+            "시간 정보",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def get_queryset(self, request):
+        """쿼리 최적화"""
+        return super().get_queryset(request).select_related("user")
 
 
 # Admin 사이트 설정

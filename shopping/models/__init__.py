@@ -8,6 +8,7 @@ from .point import PointHistory
 from .product import Category, Product, ProductImage, ProductReview
 from .product_qa import ProductAnswer, ProductQuestion
 from .return_request import Return, ReturnItem
+from .seller import SellerProfile
 from .user import User
 
 # import 위해
@@ -33,4 +34,5 @@ __all__ = [
     "ProductAnswer",
     "Return",
     "ReturnItem",
+    "SellerProfile",
 ]

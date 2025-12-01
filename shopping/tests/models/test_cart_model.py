@@ -39,10 +39,11 @@ class TestCartClean:
         # Arrange
         cart = Cart(user=None, session_key=None)
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             cart.full_clean()
 
+        # Assert
         assert "회원 또는 세션 키 중 하나는 필수입니다" in str(exc_info.value)
 
     def test_allows_both_user_and_session_key_present(self):
@@ -153,10 +154,11 @@ class TestCartGetOrCreateActiveCart:
 
     def test_raises_error_when_neither_user_nor_session_key(self):
         """user와 session_key 모두 None이면 ValueError 발생"""
-        # Act & Assert
+        # Act
         with pytest.raises(ValueError) as exc_info:
             Cart.get_or_create_active_cart(user=None, session_key=None)
 
+        # Assert
         assert "user 또는 session_key 중 하나는 필수입니다" in str(exc_info.value)
 
 
@@ -399,9 +401,10 @@ class TestCartItemClean:
         cart_item.cart = CartFactory()
         cart_item.product = product
 
-        # Act & Assert
+        # Act
         with pytest.raises(ValidationError) as exc_info:
             cart_item.clean()
 
+        # Assert
         assert "재고가 부족합니다" in str(exc_info.value)
         assert "5개" in str(exc_info.value)
