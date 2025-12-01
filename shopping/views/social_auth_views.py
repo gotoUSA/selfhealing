@@ -3,6 +3,8 @@
 
 각 OAuth 제공자로부터 authorization code를 받아
 access token으로 교환하고 JWT 토큰을 발급합니다.
+
+비즈니스 로직은 UserService에 위임합니다.
 """
 
 from __future__ import annotations
@@ -16,7 +18,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect
 from django.views import View
-from rest_framework_simplejwt.tokens import RefreshToken
+
+from shopping.services.user_service import UserService, UserServiceError
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -55,7 +58,7 @@ class SocialCallbackView(View):
         },
     }
 
-    def get(self, request):
+    def get(self, request: "HttpRequest"):
         """OAuth 콜백 처리"""
         code = request.GET.get("code")
         state = request.GET.get("state", "")
@@ -89,16 +92,21 @@ class SocialCallbackView(View):
             if not user_info:
                 return self._redirect_with_error("사용자 정보 조회 실패")
 
-            # 3. 사용자 생성 또는 조회
-            user = self._get_or_create_user(provider, user_info)
+            # 3. 서비스 레이어를 통한 소셜 로그인 처리
+            result = UserService.process_social_login(
+                provider=provider,
+                user_info=user_info,
+            )
 
-            # 4. JWT 토큰 발급
-            refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
-            refresh_token = str(refresh)
+            # 4. 프론트엔드로 리다이렉트 (토큰 포함)
+            return self._redirect_with_tokens(
+                result.tokens["access"],
+                result.tokens["refresh"],
+            )
 
-            # 5. 프론트엔드로 리다이렉트 (토큰 포함)
-            return self._redirect_with_tokens(access_token, refresh_token)
+        except UserServiceError as e:
+            logger.error(f"소셜 로그인 서비스 에러: {e.message}")
+            return self._redirect_with_error(e.message)
 
         except Exception as e:
             logger.exception(f"소셜 로그인 처리 중 오류: {e}")
@@ -192,55 +200,6 @@ class SocialCallbackView(View):
                 "profile_image": response.get("profile_image"),
             }
         return {}
-
-    def _get_or_create_user(self, provider: str, user_info: dict):
-        """사용자 조회 또는 생성"""
-        email = user_info.get("email")
-        provider_id = user_info.get("provider_id")
-
-        # 이메일이 없는 경우 (카카오 비즈니스 심사 전 등)
-        if not email:
-            if provider_id:
-                email = f"{provider}_{provider_id}@social.local"
-                logger.info(f"{provider} 이메일 없음, 대체 이메일 생성: {email}")
-            else:
-                raise ValueError("이메일 정보가 없습니다. OAuth 제공자 설정에서 이메일 권한을 확인하세요.")
-
-        # 기존 사용자 확인
-        try:
-            user = User.objects.get(email=email)
-            logger.info(f"기존 사용자 로그인: {email} via {provider}")
-        except User.DoesNotExist:
-            # 새 사용자 생성
-            username = self._generate_username(email, provider, provider_id)
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                is_email_verified=True,  # 소셜 로그인은 이메일 인증 완료
-            )
-
-            # 이름 설정 (있으면)
-            if user_info.get("name"):
-                user.first_name = user_info["name"]
-                user.save(update_fields=["first_name"])
-
-            logger.info(f"새 사용자 생성: {email} via {provider}")
-
-        return user
-
-    def _generate_username(self, email: str, provider: str, provider_id: str) -> str:
-        """고유한 username 생성"""
-        base_username = email.split("@")[0]
-        username = f"{base_username}_{provider}"
-
-        # 중복 체크
-        counter = 1
-        original_username = username
-        while User.objects.filter(username=username).exists():
-            username = f"{original_username}_{counter}"
-            counter += 1
-
-        return username
 
     def _redirect_with_tokens(self, access_token: str, refresh_token: str) -> HttpResponseRedirect:
         """토큰과 함께 프론트엔드로 리다이렉트"""

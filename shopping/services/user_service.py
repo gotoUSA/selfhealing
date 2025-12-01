@@ -1,9 +1,26 @@
-"""사용자 서비스 레이어"""
+"""사용자 서비스 레이어
+
+사용자 관련 비즈니스 로직을 처리합니다.
+- 회원가입 후처리 (토큰 생성 + 이메일 발송)
+- 로그인 처리 (장바구니 병합 + 로그인 정보 업데이트)
+- 회원 탈퇴 처리 (상태 변경 + 토큰 무효화)
+- 소셜 로그인 처리 (OAuth + 사용자 생성)
+"""
+
+from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+    from shopping.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +28,37 @@ logger = logging.getLogger(__name__)
 class UserServiceError(Exception):
     """사용자 서비스 관련 에러"""
 
-    pass
+    def __init__(self, message: str, code: str = "USER_SERVICE_ERROR"):
+        self.message = message
+        self.code = code
+        super().__init__(message)
+
+
+@dataclass
+class LoginResult:
+    """로그인 처리 결과"""
+
+    user: "User"
+    tokens: dict[str, str]
+    cart_merged: bool = False
+
+
+@dataclass
+class WithdrawResult:
+    """회원 탈퇴 처리 결과"""
+
+    success: bool
+    message: str
+    invalidated_tokens: int = 0
+
+
+@dataclass
+class SocialLoginResult:
+    """소셜 로그인 처리 결과"""
+
+    user: "User"
+    tokens: dict[str, str]
+    is_new_user: bool = False
 
 
 class UserService:
@@ -100,3 +147,247 @@ class UserService:
             "tokens": tokens,
             "verification_result": verification_result,
         }
+
+    @staticmethod
+    def login_user(
+        user: "User",
+        session_key: str | None = None,
+        request_meta: dict[str, Any] | None = None,
+    ) -> LoginResult:
+        """
+        로그인 처리 로직
+
+        비즈니스 로직:
+        1. 비회원 장바구니 병합 (세션 키가 있는 경우)
+        2. 마지막 로그인 시간 업데이트
+        3. 로그인 IP 업데이트
+        4. JWT 토큰 생성
+
+        Args:
+            user: 인증된 사용자 객체
+            session_key: 비회원 세션 키 (장바구니 병합용)
+            request_meta: request.META 딕셔너리 (IP 추출용)
+
+        Returns:
+            LoginResult: 로그인 처리 결과
+        """
+        logger.info(f"로그인 처리 시작: user_id={user.id}, username={user.username}")
+
+        cart_merged = False
+
+        # 1. 비회원 장바구니 병합
+        if session_key:
+            try:
+                from shopping.models.cart import Cart
+
+                Cart.merge_anonymous_cart(user, session_key)
+                cart_merged = True
+                logger.info(f"장바구니 병합 완료: user_id={user.id}, session_key={session_key}")
+            except Exception as e:
+                # 병합 실패해도 로그인은 진행 (에러 무시)
+                logger.warning(f"장바구니 병합 실패: user_id={user.id}, error={str(e)}")
+
+        # 2. 마지막 로그인 시간 업데이트
+        user.last_login = timezone.now()
+
+        # 3. 로그인 IP 업데이트
+        if request_meta:
+            ip = UserService._extract_client_ip(request_meta)
+            user.last_login_ip = ip
+            logger.debug(f"로그인 IP 업데이트: user_id={user.id}, ip={ip}")
+
+        user.save(update_fields=["last_login", "last_login_ip"])
+
+        # 4. JWT 토큰 생성
+        tokens = UserService.create_tokens_for_user(user)
+
+        logger.info(f"로그인 처리 완료: user_id={user.id}")
+
+        return LoginResult(
+            user=user,
+            tokens=tokens,
+            cart_merged=cart_merged,
+        )
+
+    @staticmethod
+    def _extract_client_ip(request_meta: dict[str, Any]) -> str:
+        """
+        요청 메타데이터에서 클라이언트 IP 추출
+
+        Args:
+            request_meta: request.META 딕셔너리
+
+        Returns:
+            str: 클라이언트 IP 주소
+        """
+        x_forwarded_for = request_meta.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request_meta.get("REMOTE_ADDR", "")
+
+    @staticmethod
+    def withdraw_user(user: "User") -> WithdrawResult:
+        """
+        회원 탈퇴 처리 로직
+
+        비즈니스 로직 (트랜잭션 보장):
+        1. 사용자 탈퇴 상태 변경 (is_withdrawn, withdrawn_at, is_active)
+        2. 모든 JWT 토큰 무효화 (블랙리스트 추가)
+
+        Args:
+            user: 탈퇴할 사용자 객체
+
+        Returns:
+            WithdrawResult: 탈퇴 처리 결과
+        """
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
+
+        logger.info(f"회원 탈퇴 처리 시작: user_id={user.id}, username={user.username}")
+
+        with transaction.atomic():
+            # 1. 사용자 탈퇴 처리
+            user.is_withdrawn = True
+            user.withdrawn_at = timezone.now()
+            user.is_active = False
+            user.save(update_fields=["is_withdrawn", "withdrawn_at", "is_active"])
+            logger.info(f"사용자 탈퇴 상태 변경 완료: user_id={user.id}")
+
+            # 2. 모든 JWT 토큰 무효화
+            outstanding_tokens = OutstandingToken.objects.filter(user=user)
+            invalidated_count = 0
+
+            for outstanding_token in outstanding_tokens:
+                # 이미 블랙리스트에 없는 토큰만 추가
+                _, created = BlacklistedToken.objects.get_or_create(
+                    token=outstanding_token
+                )
+                if created:
+                    invalidated_count += 1
+
+            logger.info(
+                f"JWT 토큰 무효화 완료: user_id={user.id}, "
+                f"total={outstanding_tokens.count()}, invalidated={invalidated_count}"
+            )
+
+        return WithdrawResult(
+            success=True,
+            message="회원 탈퇴가 완료되었습니다.",
+            invalidated_tokens=invalidated_count,
+        )
+
+    @staticmethod
+    def process_social_login(
+        provider: str,
+        user_info: dict[str, Any],
+    ) -> SocialLoginResult:
+        """
+        소셜 로그인 처리 로직
+
+        비즈니스 로직:
+        1. 이메일로 기존 사용자 확인
+        2. 없으면 새 사용자 생성
+        3. JWT 토큰 발급
+
+        Args:
+            provider: OAuth 제공자 (google, kakao, naver)
+            user_info: 정규화된 사용자 정보
+                - email: 이메일 주소
+                - name: 사용자 이름
+                - provider_id: 제공자별 고유 ID
+                - profile_image: 프로필 이미지 URL (선택)
+
+        Returns:
+            SocialLoginResult: 소셜 로그인 처리 결과
+        """
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        email = user_info.get("email")
+        provider_id = user_info.get("provider_id")
+        name = user_info.get("name")
+
+        logger.info(f"소셜 로그인 처리 시작: provider={provider}, email={email}")
+
+        # 1. 이메일이 없는 경우 대체 이메일 생성
+        if not email:
+            if provider_id:
+                email = f"{provider}_{provider_id}@social.local"
+                logger.info(f"{provider} 이메일 없음, 대체 이메일 생성: {email}")
+            else:
+                raise UserServiceError(
+                    "이메일 정보가 없습니다. OAuth 제공자 설정에서 이메일 권한을 확인하세요.",
+                    code="EMAIL_NOT_PROVIDED",
+                )
+
+        # 2. 기존 사용자 확인 또는 새 사용자 생성
+        is_new_user = False
+        try:
+            user = User.objects.get(email=email)
+            # 기존 사용자 로그인 시간 업데이트
+            user.last_login = timezone.now()
+            user.save(update_fields=["last_login"])
+            logger.info(f"기존 사용자 로그인: email={email} via {provider}")
+        except User.DoesNotExist:
+            # 새 사용자 생성
+            username = UserService._generate_unique_username(email, provider, provider_id)
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                is_email_verified=True,  # 소셜 로그인은 이메일 인증 완료
+            )
+
+            # 이름 설정 (있으면)
+            if name:
+                user.first_name = name
+                user.save(update_fields=["first_name"])
+
+            is_new_user = True
+            logger.info(f"새 사용자 생성: email={email} via {provider}")
+
+        # 3. JWT 토큰 생성
+        tokens = UserService.create_tokens_for_user(user)
+
+        logger.info(f"소셜 로그인 처리 완료: user_id={user.id}, is_new={is_new_user}")
+
+        return SocialLoginResult(
+            user=user,
+            tokens=tokens,
+            is_new_user=is_new_user,
+        )
+
+    @staticmethod
+    def _generate_unique_username(
+        email: str,
+        provider: str,
+        provider_id: str | None,
+    ) -> str:
+        """
+        고유한 username 생성
+
+        Args:
+            email: 이메일 주소
+            provider: OAuth 제공자
+            provider_id: 제공자별 고유 ID
+
+        Returns:
+            str: 고유한 username
+        """
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        base_username = email.split("@")[0]
+        username = f"{base_username}_{provider}"
+
+        # 중복 체크
+        counter = 1
+        original_username = username
+        while User.objects.filter(username=username).exists():
+            username = f"{original_username}_{counter}"
+            counter += 1
+
+        return username

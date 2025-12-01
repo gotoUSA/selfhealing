@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
-from django.utils import timezone
-
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, serializers as drf_serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -12,9 +9,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from shopping.serializers.user_serializers import PasswordChangeSerializer, UserSerializer
+from shopping.services.user_service import UserService, UserServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -172,9 +169,10 @@ def withdraw(request: Request) -> Response:
 
     처리 내용:
     1. 비밀번호 확인
-    2. 사용자 상태 변경 (is_withdrawn, is_active)
-    3. 모든 JWT 토큰 무효화 (보안 강화)
-    4. 포인트 및 주문 내역은 보존
+    2. 서비스 레이어를 통한 탈퇴 처리
+       - 사용자 상태 변경 (is_withdrawn, is_active)
+       - 모든 JWT 토큰 무효화 (보안 강화)
+    3. 포인트 및 주문 내역은 보존
     """
     password = request.data.get("password")
 
@@ -193,30 +191,17 @@ def withdraw(request: Request) -> Response:
         )
 
     try:
-        # 트랜잭션으로 원자성 보장
-        with transaction.atomic():
-            # 1. 사용자 탈퇴 처리
-            user.is_withdrawn = True
-            user.withdrawn_at = timezone.now()
-            user.is_active = False
-            user.save()
-            logger.info(f"사용자 탈퇴 처리: user_id={user.id}, username={user.username}")
+        # 서비스 레이어를 통한 탈퇴 처리
+        result = UserService.withdraw_user(user)
 
-            # 2. 모든 JWT 토큰 무효화
-            outstanding_tokens = OutstandingToken.objects.filter(user=user)
+        return Response({"message": result.message}, status=status.HTTP_200_OK)
 
-            for outstanding_token in outstanding_tokens:
-                # 이미 블랙리스트에 없는 토큰만 추가
-                BlacklistedToken.objects.get_or_create(token=outstanding_token)
-
-            logger.info(f"JWT 토큰 무효화 완료: user_id={user.id}, token_count={outstanding_tokens.count()}")
-
-        return Response({"message": "회원 탈퇴가 완료되었습니다."}, status=status.HTTP_200_OK)
-
-    except OutstandingToken.DoesNotExist:
-        # 토큰이 없는 경우 (정상 케이스일 수 있음)
-        logger.warning(f"탈퇴 처리 - 토큰 없음: user_id={user.id}")
-        return Response({"message": "회원 탈퇴가 완료되었습니다."}, status=status.HTTP_200_OK)
+    except UserServiceError as e:
+        logger.error(f"탈퇴 처리 중 서비스 오류: user_id={user.id}, error={str(e)}")
+        return Response(
+            {"error": e.message},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     except Exception as e:
         # 예상치 못한 에러

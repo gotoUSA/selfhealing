@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
-from django.utils import timezone
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers as drf_serializers
@@ -86,8 +85,7 @@ class LogoutRequestSerializer(drf_serializers.Serializer):
     """로그아웃 요청 스키마 (Swagger 테스트용)"""
 
     refresh = drf_serializers.CharField(
-        required=False,
-        help_text="Refresh Token (Cookie에서 자동으로 읽어오므로 선택사항. Swagger 테스트 시 직접 입력)"
+        required=False, help_text="Refresh Token (Cookie에서 자동으로 읽어오므로 선택사항. Swagger 테스트 시 직접 입력)"
     )
 
 
@@ -236,32 +234,12 @@ class LoginView(APIView):
         if serializer.is_valid():
             user = serializer.validated_data["user"]
 
-            # 비회원 장바구니 병합 (로그인 전 세션에 장바구니가 있었다면)
-            session_key = request.session.session_key
-            if session_key:
-                try:
-                    from shopping.models.cart import Cart
-
-                    Cart.merge_anonymous_cart(user, session_key)
-                except Exception:
-                    # 병합 실패해도 로그인은 진행 (에러 무시)
-                    pass
-
-            # 마지막 로그인 시간 및 IP 업데이트
-            user.last_login = timezone.now()
-
-            # IP 주소 가져오기
-            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-            if x_forwarded_for:
-                ip = x_forwarded_for.split(",")[0]
-            else:
-                ip = request.META.get("REMOTE_ADDR")
-            user.last_login_ip = ip
-
-            user.save(update_fields=["last_login", "last_login_ip"])
-
-            # JWT 토큰 생성
-            refresh = RefreshToken.for_user(user)
+            # 서비스 레이어를 통한 로그인 처리
+            login_result = UserService.login_user(
+                user=user,
+                session_key=request.session.session_key,
+                request_meta=request.META,
+            )
 
             # 최소한의 사용자 정보만 반환
             response_data = {
@@ -271,7 +249,7 @@ class LoginView(APIView):
                     "email": user.email,
                 },
                 "token": {
-                    "access": str(refresh.access_token),
+                    "access": login_result.tokens["access"],
                 },
             }
 
@@ -286,7 +264,7 @@ class LoginView(APIView):
 
             response.set_cookie(
                 key="refresh_token",
-                value=str(refresh),
+                value=login_result.tokens["refresh"],
                 max_age=cookie_max_age,
                 httponly=True,  # JavaScript에서 접근 불가
                 secure=cookie_secure,  # HTTPS에서만 전송

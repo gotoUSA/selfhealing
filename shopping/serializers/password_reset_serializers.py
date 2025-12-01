@@ -183,33 +183,21 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self) -> UserType:
         """비밀번호 변경 처리
 
-        트랜잭션으로 보장:
+        서비스 레이어를 통해 트랜잭션으로 보장:
         - 비밀번호 변경
         - 토큰 사용 처리 (is_used=True, used_at 설정)
         - EmailLog 상태 업데이트
         """
-        from django.db import transaction
-
-        from shopping.models.email_verification import EmailLog
+        from shopping.services.password_reset_service import PasswordResetService
 
         token_obj = self.validated_data["token_obj"]
         user = self.validated_data["user"]
         new_password = self.validated_data["new_password"]
 
-        with transaction.atomic():
-            # 비밀번호 변경
-            user.set_password(new_password)
-            user.save(update_fields=["password"])
+        result = PasswordResetService.confirm_password_reset(
+            user=user,
+            token_obj=token_obj,
+            new_password=new_password,
+        )
 
-            # 토큰 사용 처리
-            token_obj.mark_as_used()
-
-            # EmailLog 업데이트 (있는 경우)
-            EmailLog.objects.filter(
-                user=user,
-                email_type="password_reset",
-                status="sent",
-                sent_at__gte=token_obj.created_at,
-            ).update(status="verified", verified_at=timezone.now())
-
-        return user
+        return result.user
