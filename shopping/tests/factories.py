@@ -630,6 +630,10 @@ class OrderFactory(DjangoModelFactory):
     earned_points = 0
     payment_method = ""
 
+    # 주문 시점 적립률/등급 스냅샷 (user의 현재 정보를 스냅샷)
+    earn_rate_at_order = factory.LazyAttribute(lambda obj: obj.user.get_earn_rate())
+    membership_at_order = factory.LazyAttribute(lambda obj: obj.user.membership_level)
+
     # 배송 정보
     shipping_name = TestConstants.DEFAULT_SHIPPING_NAME
     shipping_phone = TestConstants.DEFAULT_SHIPPING_PHONE

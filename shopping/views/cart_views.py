@@ -156,15 +156,34 @@ class CartViewSet(viewsets.GenericViewSet):
         summary="장바구니 전체 정보를 조회한다.",
         description="""처리 내용:
 - 현재 사용자의 장바구니 전체 정보를 반환한다.
-- 아이템 목록과 총 금액을 포함한다.""",
+- 아이템 목록과 총 금액을 포함한다.
+- 재고/가격 변경 시 경고 정보를 포함한다.""",
         tags=["Cart"],
     )
     def retrieve(self, request: Request) -> Response:
         """장바구니 전체 정보 조회"""
         cart = self._get_cart()
 
+        # 자동으로 재고/가격 변경 확인
+        from dataclasses import asdict
+
+        stock_issues = CartService.check_stock(cart)
+        price_changes = CartService.check_price_changes(cart)
+
         serializer = self.get_serializer(cart)
-        return Response(serializer.data)
+        response_data = serializer.data
+
+        # 경고 정보 추가
+        if stock_issues or price_changes:
+            response_data["warnings"] = {
+                "stock_issues": [asdict(issue) for issue in stock_issues],
+                "price_changes": [asdict(change) for change in price_changes],
+                "has_issues": True,
+            }
+        else:
+            response_data["warnings"] = {"has_issues": False}
+
+        return Response(response_data)
 
     @extend_schema(
         responses={200: SimpleCartSerializer},
@@ -211,7 +230,6 @@ class CartViewSet(viewsets.GenericViewSet):
         product_id = serializer.validated_data["product_id"]
         quantity = serializer.validated_data.get("quantity", 1)
 
-
         try:
             cart_item = CartService.add_item(
                 cart=cart,
@@ -230,7 +248,6 @@ class CartViewSet(viewsets.GenericViewSet):
                 {"error": e.message, "code": e.code},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
 
     @extend_schema(
         responses={200: CartItemSerializer(many=True)},
@@ -274,7 +291,6 @@ class CartViewSet(viewsets.GenericViewSet):
 
         quantity = serializer.validated_data.get("quantity")
 
-
         try:
             cart_item = CartService.update_item_quantity(
                 cart=cart,
@@ -288,7 +304,6 @@ class CartViewSet(viewsets.GenericViewSet):
                     {"message": "장바구니에서 삭제되었습니다."},
                     status=status.HTTP_204_NO_CONTENT,
                 )
-
 
             return Response(
                 {
@@ -408,7 +423,6 @@ class CartViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
     @extend_schema(
         responses={
             200: CartStockCheckResponseSerializer,
@@ -426,7 +440,6 @@ class CartViewSet(viewsets.GenericViewSet):
         cart = self._get_cart()
 
         issues = CartService.check_stock(cart=cart)
-
 
         if issues:
             # StockIssue dataclass를 dict로 변환
@@ -455,6 +468,68 @@ class CartViewSet(viewsets.GenericViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        responses={
+            200: CartMessageResponseSerializer,
+        },
+        summary="장바구니에서 구매 불가능한 상품을 자동 정리한다.",
+        description="""처리 내용:
+- 판매 중단, 품절 상품을 자동으로 제거한다.
+- 재고 부족 상품은 재고에 맞게 수량을 조정한다.
+- 정리된 상품 목록을 반환한다.""",
+        tags=["Cart"],
+    )
+    @action(detail=False, methods=["post"])
+    def cleanup(self, request: Request) -> Response:
+        """구매 불가능한 상품 자동 정리"""
+        cart = self._get_cart()
+
+        result = CartService.cleanup_unavailable_items(cart=cart)
+
+        if result["removed_count"] == 0 and result["updated_count"] == 0:
+            return Response(
+                {"message": "정리할 상품이 없습니다."},
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "message": f"{result['removed_count']}개 상품이 제거되고, "
+                f"{result['updated_count']}개 상품의 수량이 조정되었습니다.",
+                "removed": result["removed"],
+                "updated": result["updated"],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        responses={
+            200: CartMessageResponseSerializer,
+        },
+        summary="장바구니 상품 가격을 현재 가격으로 업데이트한다.",
+        description="""처리 내용:
+- 가격이 변경된 상품들의 담은 시점 가격을 현재 가격으로 갱신한다.
+- 사용자가 가격 변경을 확인하고 동의한 후 호출한다.""",
+        tags=["Cart"],
+    )
+    @action(detail=False, methods=["post"])
+    def update_prices(self, request: Request) -> Response:
+        """장바구니 상품 가격을 현재 가격으로 업데이트"""
+        cart = self._get_cart()
+
+        updated_count = CartService.update_item_prices(cart=cart)
+
+        if updated_count == 0:
+            return Response(
+                {"message": "업데이트할 가격 변경 상품이 없습니다."},
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"message": f"{updated_count}개 상품의 가격이 현재 가격으로 업데이트되었습니다."},
+            status=status.HTTP_200_OK,
+        )
+
 
 # ===== CartItemViewSet 응답 Serializers =====
 
@@ -463,7 +538,6 @@ class CartItemListResponseSerializer(drf_serializers.Serializer):
     """장바구니 아이템 목록 응답"""
 
     pass  # CartItemSerializer(many=True)와 동일
-
 
 
 class CartItemCreateResponseSerializer(drf_serializers.Serializer):
@@ -582,7 +656,6 @@ class CartItemViewSet(viewsets.GenericViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-
         product_id = serializer.validated_data["product_id"]
         quantity = serializer.validated_data.get("quantity", 1)
 
@@ -611,7 +684,6 @@ class CartItemViewSet(viewsets.GenericViewSet):
 
         quantity = serializer.validated_data.get("quantity", 1)
 
-
         try:
             cart_item = CartService.update_item_quantity(
                 cart=cart,
@@ -634,7 +706,6 @@ class CartItemViewSet(viewsets.GenericViewSet):
     def destroy(self, request: Request, pk: int | None = None) -> Response:
         """아이템 삭제"""
         cart = self._get_cart()
-
 
         try:
             CartService.remove_item(cart=cart, item_id=pk)

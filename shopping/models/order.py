@@ -138,6 +138,21 @@ class Order(models.Model):
 
     earned_points = models.PositiveIntegerField(default=0, verbose_name="적립 포인트", help_text="이 주문으로 적립된 포인트")
 
+    # 주문 시점 적립률/등급 스냅샷 (등급 변경 시에도 일관성 보장)
+    earn_rate_at_order = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="주문 시점 적립률",
+        help_text="주문 생성 시점의 회원 등급별 적립률 (%)",
+    )
+
+    membership_at_order = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        verbose_name="주문 시점 회원등급",
+        help_text="주문 생성 시점의 회원 등급",
+    )
+
     # 배송비 관련 필드 추가
     shipping_fee = models.DecimalField(
         max_digits=10,
@@ -238,36 +253,24 @@ class Order(models.Model):
         expected_final = self.total_amount - Decimal(self.used_points)
         if self.final_amount != expected_final:
             raise ValidationError(
-                {
-                    "final_amount": f"최종 금액이 올바르지 않습니다. "
-                    f"예상: {expected_final}, 실제: {self.final_amount}"
-                }
+                {"final_amount": f"최종 금액이 올바르지 않습니다. " f"예상: {expected_final}, 실제: {self.final_amount}"}
             )
 
         # 2. 무료배송 검증
         if self.is_free_shipping and self.get_total_shipping_fee() > 0:
-            raise ValidationError(
-                {"is_free_shipping": "무료배송인 경우 배송비는 0이어야 합니다."}
-            )
+            raise ValidationError({"is_free_shipping": "무료배송인 경우 배송비는 0이어야 합니다."})
 
         # 3. 결제 완료 상태에서는 결제 방법 필수
         paid_statuses = ["paid", "preparing", "shipped", "delivered"]
         if self.status in paid_statuses and not self.payment_method:
-            raise ValidationError(
-                {
-                    "payment_method": f"'{self.get_status_display()}' 상태에서는 "
-                    f"결제 방법이 필수입니다."
-                }
-            )
+            raise ValidationError({"payment_method": f"'{self.get_status_display()}' 상태에서는 " f"결제 방법이 필수입니다."})
 
         # 4. 포인트 사용 검증
         if self.used_points < 0:
             raise ValidationError({"used_points": "사용 포인트는 0 이상이어야 합니다."})
 
         if self.used_points > self.total_amount:
-            raise ValidationError(
-                {"used_points": "사용 포인트가 총 주문금액보다 클 수 없습니다."}
-            )
+            raise ValidationError({"used_points": "사용 포인트가 총 주문금액보다 클 수 없습니다."})
 
 
 class OrderItem(models.Model):

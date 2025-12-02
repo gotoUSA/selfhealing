@@ -131,9 +131,7 @@ class Cart(models.Model):
         self.save(update_fields=["is_active"])
 
     @classmethod
-    def get_or_create_active_cart(
-        cls, user: User | None = None, session_key: str | None = None
-    ) -> tuple[Cart, bool]:
+    def get_or_create_active_cart(cls, user: User | None = None, session_key: str | None = None) -> tuple[Cart, bool]:
         """
         회원/비회원 활성 장바구니 가져오기 또는 생성
 
@@ -219,9 +217,7 @@ class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items", verbose_name="장바구니")
 
     # 상품 참조
-    product = models.ForeignKey(
-        "Product", on_delete=models.CASCADE, related_name="cart_items", verbose_name="상품"
-    )
+    product = models.ForeignKey("Product", on_delete=models.CASCADE, related_name="cart_items", verbose_name="상품")
 
     # 수량
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name="수량")

@@ -163,6 +163,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         검증 항목:
         - 비활성 상품 (is_active=False)
         - 품절 상품 (stock=0)
+        - 가격 변경 확인 (사용자에게 확인 요구)
 
         Note: 재고 부족 검증은 OrderService에서 select_for_update로 락을 걸고 처리
 
@@ -175,6 +176,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         Raises:
             ValidationError: 검증 실패 시 (모든 에러를 리스트로 반환)
         """
+        from ..services.cart_service import CartService
+
         cart_items = cart.items.select_related("product")
 
         if not cart_items.exists():
@@ -202,7 +205,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 errors.append(f"'{product.name}'의 재고가 부족합니다. (주문: {item.quantity}, 재고: {product.stock})")
                 continue
 
-
+        # 4. 가격 변경 확인
+        price_changes = CartService.check_price_changes(cart)
+        if price_changes:
+            changes_info = ", ".join([f"{c.product_name}: {c.original_price}원 → {c.current_price}원" for c in price_changes])
+            errors.append(f"일부 상품의 가격이 변경되었습니다. " f"장바구니에서 확인 후 다시 주문해주세요. ({changes_info})")
 
         # 에러가 있으면 모두 반환
         if errors:
@@ -287,7 +294,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             return order, task_id
         except OrderServiceError as e:
             raise serializers.ValidationError(str(e))
-
 
     def to_representation(self, instance: Order) -> dict[str, Any]:
         """

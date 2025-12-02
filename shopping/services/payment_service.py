@@ -225,8 +225,8 @@ class PaymentService:
         points_to_add = 0
         # 포인트로만 결제한 경우는 적립하지 않음
         if order.final_amount > 0:
-            # 등급별 적립률 적용
-            earn_rate = user.get_earn_rate()  # 1, 2, 3, 5 (%)
+            # 주문 시점에 스냅샷된 적립률 사용 (등급 변경 시에도 일관성 보장)
+            earn_rate = order.earn_rate_at_order  # 스냅샷 사용
             # total_amount는 이미 순수 상품 금액 (배송비 미포함)
             product_amount = order.total_amount
             points_to_add = int(product_amount * Decimal(earn_rate) / Decimal("100"))
@@ -234,7 +234,8 @@ class PaymentService:
             if points_to_add > 0:
                 logger.info(
                     f"포인트 적립 시작: user_id={user.id}, order_id={order.id}, "
-                    f"points={points_to_add}, earn_rate={earn_rate}%"
+                    f"points={points_to_add}, earn_rate={earn_rate}%, "
+                    f"membership_at_order={order.membership_at_order}"
                 )
 
                 # 포인트 적립 (PointService 사용)
@@ -251,7 +252,8 @@ class PaymentService:
                         "product_amount": str(product_amount),
                         "shipping_fee": str(order.get_total_shipping_fee()),
                         "earn_rate": f"{earn_rate}%",
-                        "membership_level": user.membership_level,
+                        "membership_at_order": order.membership_at_order,  # 주문 시점 등급
+                        "current_membership": user.membership_level,  # 현재 등급
                     },
                 )
 

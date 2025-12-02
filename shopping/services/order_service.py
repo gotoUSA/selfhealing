@@ -137,7 +137,7 @@ class OrderService:
         # 5. 최종 결제 금액 계산 (배송비 포함, 포인트 차감)
         final_amount = max(Decimal("0"), total_payment_amount - Decimal(str(use_points)))
 
-        # 6. 주문 생성
+        # 6. 주문 생성 (적립률/등급 스냅샷 포함)
         order = Order.objects.create(
             user=user,
             status="pending",  # 결제 대기 상태
@@ -153,6 +153,8 @@ class OrderService:
             shipping_address=shipping_address,
             shipping_address_detail=shipping_address_detail,
             order_memo=order_memo,
+            earn_rate_at_order=user.get_earn_rate(),  # 주문 시점 적립률 스냅샷
+            membership_at_order=user.membership_level,  # 주문 시점 회원 등급 스냅샷
         )
         logger.info(
             f"주문 생성 완료: order_id={order.id}, order_number={order.order_number}, "
@@ -251,6 +253,8 @@ class OrderService:
                 shipping_address=shipping_address,
                 shipping_address_detail=shipping_address_detail,
                 order_memo=order_memo,
+                earn_rate_at_order=user.get_earn_rate(),  # 주문 시점 적립률 스냅샷
+                membership_at_order=user.membership_level,  # 주문 시점 회원 등급 스냅샷
             )
 
         logger.info(f"Order 레코드 생성 완료: order_id={order.id}, order_number={order.order_number}")

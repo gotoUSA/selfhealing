@@ -228,7 +228,13 @@ class CartService:
                 quantity=quantity,
                 price_at_add=product.price,
             )
-            logger.info("[Cart] 아이템 추가 | cart_id=%d, product_id=%d, qty=%d, price=%s", cart.id, product_id, quantity, product.price)
+            logger.info(
+                "[Cart] 아이템 추가 | cart_id=%d, product_id=%d, qty=%d, price=%s",
+                cart.id,
+                product_id,
+                quantity,
+                product.price,
+            )
 
         return cart_item
 
@@ -620,6 +626,92 @@ class CartService:
         )
 
         return merged_count
+
+    # ===== 장바구니 자동 정리 =====
+
+    @staticmethod
+    @log_service_call
+    @transaction.atomic
+    def cleanup_unavailable_items(cart: Cart) -> dict:
+        """
+        구매 불가능한 상품 자동 정리
+
+        비활성 상품, 품절 상품을 제거하고, 재고 부족 상품은 수량을 조정합니다.
+
+        Args:
+            cart: 장바구니
+
+        Returns:
+            dict: 정리 결과
+                - removed: 제거된 상품 목록
+                - updated: 수량 조정된 상품 목록
+                - removed_count: 제거된 상품 수
+                - updated_count: 수량 조정된 상품 수
+        """
+        removed_items: list[dict] = []
+        updated_items: list[dict] = []
+
+        for item in cart.items.select_related("product"):
+            product = item.product
+
+            # 비활성 상품 제거
+            if not product.is_active:
+                removed_items.append(
+                    {
+                        "item_id": item.id,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "quantity": item.quantity,
+                        "reason": "판매 중단",
+                    }
+                )
+                item.delete()
+                continue
+
+            # 품절 상품 제거
+            if product.stock == 0:
+                removed_items.append(
+                    {
+                        "item_id": item.id,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "quantity": item.quantity,
+                        "reason": "품절",
+                    }
+                )
+                item.delete()
+                continue
+
+            # 재고 부족 시 수량 조정
+            if item.quantity > product.stock:
+                old_quantity = item.quantity
+                item.quantity = product.stock
+                item.save(update_fields=["quantity"])
+                updated_items.append(
+                    {
+                        "item_id": item.id,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "old_quantity": old_quantity,
+                        "new_quantity": product.stock,
+                        "reason": "재고 부족",
+                    }
+                )
+
+        if removed_items or updated_items:
+            logger.info(
+                "[Cart] 장바구니 정리 완료 | cart_id=%d, removed=%d, updated=%d",
+                cart.id,
+                len(removed_items),
+                len(updated_items),
+            )
+
+        return {
+            "removed": removed_items,
+            "updated": updated_items,
+            "removed_count": len(removed_items),
+            "updated_count": len(updated_items),
+        }
 
     # ===== Private Helper Methods =====
 

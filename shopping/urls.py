@@ -313,6 +313,16 @@ urlpatterns = [
         CartViewSet.as_view({"get": "check_stock"}),
         name="cart-check-stock",
     ),
+    path(
+        "cart/cleanup/",
+        CartViewSet.as_view({"post": "cleanup"}),
+        name="cart-cleanup",
+    ),
+    path(
+        "cart/update_prices/",
+        CartViewSet.as_view({"post": "update_prices"}),
+        name="cart-update-prices",
+    ),
     # 결제(Payment) 관련 URLs
     # 결제 요청 및 처리
     path("payments/request/", PaymentRequestView.as_view(), name="payment-request"),
