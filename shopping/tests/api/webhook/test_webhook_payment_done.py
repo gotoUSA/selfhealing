@@ -48,7 +48,7 @@ class TestPaymentDoneWebhook:
             HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
-        # Assert - 응답 검증
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["message"] == "Webhook processed"
 
@@ -64,9 +64,9 @@ class TestPaymentDoneWebhook:
         assert self.order.status == "paid"
         assert self.order.payment_method == "카드"
 
-        # Assert - 재고 차감 확인 (order fixture: -1, webhook: -1 = total -2)
+        # Assert - 재고 차감 확인 (order fixture에서 이미 -1 차감, webhook은 sold_count만 증가)
         self.product.refresh_from_db()
-        assert self.product.stock == 8
+        assert self.product.stock == 9
         assert self.product.sold_count == 1
 
         # Assert - 포인트 적립 확인 (배송비 제외된 order.total_amount 기준, 1%)
@@ -93,9 +93,20 @@ class TestPaymentDoneWebhook:
     ):
         """여러 상품이 포함된 주문의 결제 승인"""
         # Arrange
+        from django.db.models import F
+
         from shopping.models.payment import Payment
+        from shopping.models.product import Product
 
         mock_verify_webhook()
+
+        # 주문 상태를 confirmed로 변경하고 재고 차감 (비동기 처리 완료 시뮬레이션)
+        order_with_multiple_items.status = "confirmed"
+        order_with_multiple_items.save()
+
+        for product in multiple_products:
+            Product.objects.filter(pk=product.pk).update(stock=F("stock") - 1)
+            product.refresh_from_db()
 
         payment = Payment.objects.create(
             order=order_with_multiple_items,
@@ -120,13 +131,13 @@ class TestPaymentDoneWebhook:
             HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
-        # Assert - 응답 검증
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert - 모든 상품의 재고 차감 확인
+        # Assert - 재고는 유지되고 sold_count만 증가 확인
         for product in multiple_products:
             product.refresh_from_db()
-            assert product.stock == initial_stocks[product.id] - 1
+            assert product.stock == initial_stocks[product.id]
             assert product.sold_count == 1
 
     # ==========================================
@@ -159,7 +170,7 @@ class TestPaymentDoneWebhook:
             HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
-        # Assert - 응답 검증
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         # Assert - 재고가 중복 차감되지 않았는지 확인
@@ -190,7 +201,7 @@ class TestPaymentDoneWebhook:
             HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
-        # Assert - 응답 검증
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         # Assert - Payment는 업데이트되어야 함
@@ -223,7 +234,7 @@ class TestPaymentDoneWebhook:
             HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
-        # Assert - 웹훅은 성공 응답
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         # Assert - Payment와 Order 상태는 업데이트됨
