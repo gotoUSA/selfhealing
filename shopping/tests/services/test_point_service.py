@@ -71,28 +71,22 @@ class TestPointServiceAddPoints:
         history = PointHistory.objects.filter(user=user, type="event").first()
         assert history.metadata == metadata
 
-    def test_add_points_zero_amount(self):
-        """0 포인트 추가 시도 (경계값)"""
+    @pytest.mark.parametrize(
+        "invalid_amount,description",
+        [
+            (0, "0 포인트"),
+            (-100, "음수 포인트"),
+        ],
+        ids=["zero", "negative"],
+    )
+    def test_add_points_invalid_amount(self, invalid_amount, description):
+        """0 또는 음수 포인트 추가 시도 (경계값)"""
         # Arrange
         user = UserFactory.with_points(1000)
         initial_points = user.points
 
         # Act
-        result = PointService.add_points(user, 0)
-
-        # Assert
-        assert result is False
-        user.refresh_from_db()
-        assert user.points == initial_points
-
-    def test_add_points_negative_amount(self):
-        """음수 포인트 추가 시도 (경계값)"""
-        # Arrange
-        user = UserFactory.with_points(1000)
-        initial_points = user.points
-
-        # Act
-        result = PointService.add_points(user, -100)
+        result = PointService.add_points(user, invalid_amount)
 
         # Assert
         assert result is False
@@ -202,28 +196,22 @@ class TestPointServiceUsePoints:
         user.refresh_from_db()
         assert user.points == initial_points
 
-    def test_use_points_zero_amount(self):
-        """0 포인트 차감 시도 (경계값)"""
+    @pytest.mark.parametrize(
+        "invalid_amount,description",
+        [
+            (0, "0 포인트"),
+            (-100, "음수 포인트"),
+        ],
+        ids=["zero", "negative"],
+    )
+    def test_use_points_invalid_amount(self, invalid_amount, description):
+        """0 또는 음수 포인트 차감 시도 (경계값)"""
         # Arrange
         user = UserFactory.with_points(1000)
         initial_points = user.points
 
         # Act
-        result = PointService.use_points(user, 0)
-
-        # Assert
-        assert result is False
-        user.refresh_from_db()
-        assert user.points == initial_points
-
-    def test_use_points_negative_amount(self):
-        """음수 포인트 차감 시도 (경계값)"""
-        # Arrange
-        user = UserFactory.with_points(1000)
-        initial_points = user.points
-
-        # Act
-        result = PointService.use_points(user, -100)
+        result = PointService.use_points(user, invalid_amount)
 
         # Assert
         assert result is False

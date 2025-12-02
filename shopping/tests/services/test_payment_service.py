@@ -259,50 +259,30 @@ class TestPaymentServiceConfirmPaymentValidation:
 
         assert "이미 완료된 결제입니다" in str(exc_info.value)
 
-    def test_confirm_payment_sync_invalid_status_expired(self):
-        """만료된 결제에 대해 승인 시도 (line 119)"""
-        # Arrange - 만료 상태의 Payment
+    @pytest.mark.parametrize(
+        "status,factory_method",
+        [
+            ("expired", "create_expired"),
+            ("canceled", "canceled"),
+            ("aborted", "aborted"),
+        ],
+        ids=["expired", "canceled", "aborted"],
+    )
+    def test_confirm_payment_sync_invalid_status(self, status, factory_method):
+        """유효하지 않은 결제 상태에 대해 승인 시도 (line 119)
+
+        테스트 대상 상태: expired, canceled, aborted
+        모두 동일한 에러 메시지 검증
+        """
+        # Arrange - 유효하지 않은 상태의 Payment
         order = OrderFactory.pending()
         user = order.user
-        payment = PaymentFactory(order=order, status="expired")
 
-        # Act & Assert
-        with pytest.raises(PaymentConfirmError) as exc_info:
-            PaymentService.confirm_payment_sync(
-                payment=payment,
-                payment_key="test_payment_key",
-                order_id=order.order_number,
-                amount=int(order.final_amount),
-                user=user,
-            )
-
-        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
-
-    def test_confirm_payment_sync_invalid_status_canceled(self):
-        """취소된 결제에 대해 승인 시도 (line 119)"""
-        # Arrange - 취소 상태의 Payment
-        order = OrderFactory.pending()
-        user = order.user
-        payment = PaymentFactory.canceled(order=order)
-
-        # Act & Assert
-        with pytest.raises(PaymentConfirmError) as exc_info:
-            PaymentService.confirm_payment_sync(
-                payment=payment,
-                payment_key="test_payment_key",
-                order_id=order.order_number,
-                amount=int(order.final_amount),
-                user=user,
-            )
-
-        assert "유효하지 않은 결제 상태입니다" in str(exc_info.value)
-
-    def test_confirm_payment_sync_invalid_status_aborted(self):
-        """중단된 결제에 대해 승인 시도 (line 119)"""
-        # Arrange - 중단 상태의 Payment
-        order = OrderFactory.pending()
-        user = order.user
-        payment = PaymentFactory.aborted(order=order)
+        # Factory 메서드 호출 (expired는 직접 생성, 나머지는 팩토리 메서드)
+        if status == "expired":
+            payment = PaymentFactory(order=order, status="expired")
+        else:
+            payment = getattr(PaymentFactory, factory_method)(order=order)
 
         # Act & Assert
         with pytest.raises(PaymentConfirmError) as exc_info:

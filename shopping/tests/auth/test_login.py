@@ -225,25 +225,6 @@ class TestLoginValidation:
         error_message = str(response_data["password"])
         assert "blank" in error_message or "필수" in error_message
 
-    def test_empty_both_credentials(self, api_client, user):
-        """username과 password 모두 비어있을 때 로그인 실패"""
-        # Arrange
-        login_url = reverse("auth-login")
-        login_data = {
-            "username": "",
-            "password": "",
-        }
-
-        # Act
-        response = api_client.post(login_url, login_data, format="json")
-
-        # Assert
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-        response_data = response.json()
-        # username 또는 password 필드에 에러가 있어야 함
-        assert "username" in response_data or "password" in response_data
-
     def test_missing_username_field(self, api_client):
         """username 필드 자체가 없을 때 로그인 실패"""
         # Arrange

@@ -58,7 +58,7 @@ from locust import HttpUser, between, events
 
 # scenarios 모듈에서 TaskSet import
 # Note: 'return'은 Python 예약어이므로 'return_exchange.py' 사용
-from shopping.tests.performance.scenarios.return_exchange import (
+from .scenarios.return_exchange import (
     CustomerReturnBehavior,
     SellerReturnBehavior,
     ReturnE2EBehavior,
