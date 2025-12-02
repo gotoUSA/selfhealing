@@ -623,6 +623,3 @@ class TestPhoneValidation:
         assert response.status_code == status.HTTP_201_CREATED
         user = User.objects.get(username="phonevalid")
         assert user.phone_number == "010-1234-5678"
-
-
-

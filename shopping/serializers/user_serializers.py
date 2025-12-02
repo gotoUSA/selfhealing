@@ -14,6 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class UserListSerializer(serializers.ModelSerializer):
     """
     사용자 목록 조회용 경량 시리얼라이저
@@ -37,7 +38,6 @@ class UserListSerializer(serializers.ModelSerializer):
             "last_login",
         ]
         read_only_fields = fields  # 모든 필드 읽기 전용
-
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -175,7 +175,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {"username": {"required": True}, "email": {"required": True}}
 
-
     def validate_email(self, value: str) -> str:
         """이메일 중복 검사"""
         if User.objects.filter(email=value).exists():
@@ -193,7 +192,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         if attrs["password"] != attrs["password2"]:
             raise serializers.ValidationError({"password": "비밀번호가 일치하지 않습니다."})
         return attrs
-
 
     def create(self, validated_data: dict[str, Any]) -> User:
         """
@@ -215,7 +213,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 extra={
                     "username": validated_data.get("username"),
                     "email": validated_data.get("email"),
-                }
+                },
             )
             return user
         except IntegrityError as e:
@@ -226,7 +224,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                     "username": validated_data.get("username"),
                     "email": validated_data.get("email"),
                     "error": str(e),
-                }
+                },
             )
 
             # 에러 메시지 파싱하여 어떤 필드가 중복되었는지 확인
@@ -234,23 +232,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
             # PostgreSQL: 'duplicate key value violates unique constraint "shopping_user_email_key"'
             # SQLite: 'UNIQUE constraint failed: shopping_user.email'
-            if 'email' in error_msg or 'shopping_user_email' in error_msg:
-                raise serializers.ValidationError(
-                    {"email": "이미 사용중인 이메일입니다."},
-                    code='unique'
-                )
-            elif 'username' in error_msg or 'shopping_user_username' in error_msg:
-                raise serializers.ValidationError(
-                    {"username": "이미 사용중인 사용자명입니다."},
-                    code='unique'
-                )
+            if "email" in error_msg or "shopping_user_email" in error_msg:
+                raise serializers.ValidationError({"email": "이미 사용중인 이메일입니다."}, code="unique")
+            elif "username" in error_msg or "shopping_user_username" in error_msg:
+                raise serializers.ValidationError({"username": "이미 사용중인 사용자명입니다."}, code="unique")
 
             # phone_number도 unique일 수 있음
-            elif 'phone' in error_msg or 'shopping_user_phone' in error_msg:
-                raise serializers.ValidationError(
-                    {"phone_number": "이미 사용중인 전화번호입니다."},
-                    code='unique'
-                )
+            elif "phone" in error_msg or "shopping_user_phone" in error_msg:
+                raise serializers.ValidationError({"phone_number": "이미 사용중인 전화번호입니다."}, code="unique")
 
             # 예상치 못한 IntegrityError - 로깅 후 일반적인 에러 메시지 반환
             logger.error(
@@ -260,11 +249,10 @@ class RegisterSerializer(serializers.ModelSerializer):
                     "email": validated_data.get("email"),
                     "error": str(e),
                 },
-                exc_info=True
+                exc_info=True,
             )
             raise serializers.ValidationError(
-                {"detail": "회원가입 중 오류가 발생했습니다. 관리자에게 문의하세요."},
-                code='integrity_error'
+                {"detail": "회원가입 중 오류가 발생했습니다. 관리자에게 문의하세요."}, code="integrity_error"
             )
 
 

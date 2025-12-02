@@ -6,7 +6,6 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import F
-from django.db.models.functions import Greatest
 from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import status
@@ -174,12 +173,24 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
     if order.status != "paid":
         for order_item in order.order_items.select_for_update():
             if order_item.product:
-                # 재고 차감 및 sold_count 증가 (F 객체로 안전하게)
-                # Greatest를 사용하여 재고가 음수가 되지 않도록 방지
-                Product.objects.filter(pk=order_item.product.pk).update(
-                    stock=Greatest(F("stock") - order_item.quantity, 0),
+                # 조건부 업데이트: 재고가 충분할 때만 차감 (업계 표준)
+                updated = Product.objects.filter(
+                    pk=order_item.product.pk,
+                    stock__gte=order_item.quantity,  # 재고가 충분할 때만
+                ).update(
+                    stock=F("stock") - order_item.quantity,
                     sold_count=F("sold_count") + order_item.quantity,
                 )
+
+                if updated == 0:
+                    # 재고 부족 - 로깅만 하고 진행 (결제는 이미 완료됨)
+                    # 실제 운영에서는 관리자 알림 발송 필요
+                    logger.error(
+                        f"재고 부족으로 차감 실패: product_id={order_item.product.pk}, "
+                        f"product_name={order_item.product.name}, "
+                        f"required={order_item.quantity}, "
+                        f"order_id={order.id}"
+                    )
 
     # 주문 상태 변경
     order.status = "paid"
@@ -263,11 +274,25 @@ def handle_payment_canceled(event_data: dict[str, Any]) -> None:
     if order.status in ["paid", "preparing"]:
         for order_item in order.order_items.all():
             if order_item.product:
-                # Greatest를 사용하여 sold_count가 음수가 되지 않도록 방지
-                Product.objects.filter(pk=order_item.product.pk).update(
+                # 조건부 업데이트: sold_count가 충분할 때만 차감
+                updated = Product.objects.filter(
+                    pk=order_item.product.pk,
+                    sold_count__gte=order_item.quantity,  # sold_count가 충분할 때만
+                ).update(
                     stock=F("stock") + order_item.quantity,
-                    sold_count=Greatest(F("sold_count") - order_item.quantity, 0),
+                    sold_count=F("sold_count") - order_item.quantity,
                 )
+
+                if updated == 0:
+                    # sold_count 부족 시 재고만 복구
+                    Product.objects.filter(pk=order_item.product.pk).update(
+                        stock=F("stock") + order_item.quantity,
+                        sold_count=0,  # 최소값 0으로 설정
+                    )
+                    logger.warning(
+                        f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
+                        f"order_id={order.id}"
+                    )
 
     # 포인트 회수 (상태 변경 전) - 실제 적립된 포인트만 회수
     if order.user and order.status in ["paid", "preparing"]:
