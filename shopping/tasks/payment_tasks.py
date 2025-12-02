@@ -175,10 +175,7 @@ def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int)
                     f"elapsed={total_elapsed:.2f}s, possible_lock_contention=True"
                 )
 
-        logger.info(
-            f"결제 최종 처리 완료: payment_id={payment_id}, order_id={order.id}, "
-            f"elapsed={total_elapsed:.2f}s"
-        )
+        logger.info(f"결제 최종 처리 완료: payment_id={payment_id}, order_id={order.id}, " f"elapsed={total_elapsed:.2f}s")
 
         # 6. 포인트 적립은 별도 태스크로 (비동기)
         from .point_tasks import add_points_after_payment

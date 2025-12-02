@@ -42,7 +42,7 @@ class WishlistProductSerializer(serializers.ModelSerializer):
     def get_discount_rate(self, obj: Product) -> float:
         """할인율 계산"""
         if obj.compare_price and obj.compare_price > obj.price:
-            rate = (obj.compare_price - obj.price / obj.compare_price) * 100
+            rate = ((obj.compare_price - obj.price) / obj.compare_price) * 100
             return round(rate, 1)
         return 0
 

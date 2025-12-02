@@ -93,11 +93,7 @@ class BrowsingOnlyUser(TaskSet):
     def browse_product_list(self):
         """상품 목록 조회 (페이지네이션)"""
         page = random.randint(1, 10)
-        with self.client.get(
-            f"/api/products/?page={page}",
-            catch_response=True,
-            name="/api/products/?page=[N]"
-        ) as response:
+        with self.client.get(f"/api/products/?page={page}", catch_response=True, name="/api/products/?page=[N]") as response:
             if response.status_code == 200:
                 response.success()
             else:
@@ -141,10 +137,7 @@ class CartIntenseUser(TaskSet):
         """장바구니에 상품 추가"""
         if hasattr(self.user, "product_ids") and self.user.product_ids:
             product_id = random.choice(self.user.product_ids)
-            self.client.post(
-                "/api/cart-items/",
-                json={"product_id": product_id, "quantity": random.randint(1, 3)}
-            )
+            self.client.post("/api/cart-items/", json={"product_id": product_id, "quantity": random.randint(1, 3)})
 
     @task(3)
     def view_cart(self):
@@ -160,10 +153,7 @@ class CartIntenseUser(TaskSet):
             if items and len(items) > 0:
                 item_id = items[0].get("id")
                 if item_id:
-                    self.client.put(
-                        f"/api/cart-items/{item_id}/",
-                        json={"quantity": random.randint(1, 5)}
-                    )
+                    self.client.put(f"/api/cart-items/{item_id}/", json={"quantity": random.randint(1, 5)})
 
     @task(1)
     def delete_cart_item(self):
@@ -210,10 +200,7 @@ class OrderIntenseUser(TaskSet):
         hot_products = self.user.product_ids[:5] if len(self.user.product_ids) >= 5 else self.user.product_ids
         product_id = random.choice(hot_products)
 
-        add_response = self.client.post(
-            "/api/cart-items/",
-            json={"product_id": product_id, "quantity": random.randint(1, 2)}
-        )
+        add_response = self.client.post("/api/cart-items/", json={"product_id": product_id, "quantity": random.randint(1, 2)})
 
         if add_response.status_code != 201:
             metrics.failed_orders += 1
@@ -230,7 +217,7 @@ class OrderIntenseUser(TaskSet):
                 "shipping_address_detail": f"{random.randint(1, 100)}호",
             },
             catch_response=True,
-            name="/api/orders/ [CREATE]"
+            name="/api/orders/ [CREATE]",
         ) as response:
             if response.status_code in [201, 202]:
                 metrics.successful_orders += 1
@@ -279,10 +266,7 @@ class PaymentCompleteUser(TaskSet):
 
         # 2. 상품 추가
         product_id = random.choice(self.user.product_ids)
-        add_response = self.client.post(
-            "/api/cart-items/",
-            json={"product_id": product_id, "quantity": 1}
-        )
+        add_response = self.client.post("/api/cart-items/", json={"product_id": product_id, "quantity": 1})
 
         if add_response.status_code != 201:
             return
@@ -296,7 +280,7 @@ class PaymentCompleteUser(TaskSet):
                 "shipping_postal_code": "12345",
                 "shipping_address": "서울시 강남구",
                 "shipping_address_detail": "101호",
-            }
+            },
         )
 
         if order_response.status_code not in [201, 202]:
@@ -314,13 +298,9 @@ class PaymentCompleteUser(TaskSet):
 
         with self.client.post(
             "/api/payments/confirm/",
-            json={
-                "payment_key": payment_key,
-                "order_id": order_id,
-                "amount": int(final_amount)
-            },
+            json={"payment_key": payment_key, "order_id": order_id, "amount": int(final_amount)},
             catch_response=True,
-            name="/api/payments/confirm/ [PAYMENT]"
+            name="/api/payments/confirm/ [PAYMENT]",
         ) as response:
             if response.status_code == 200:
                 response.success()
@@ -369,11 +349,7 @@ class LargeScaleUser(HttpUser):
 
         user_id = random.randint(0, 999)
         response = self.client.post(
-            "/api/auth/login/",
-            json={
-                "username": f"load_test_user_{user_id}",
-                "password": "testpass123"
-            }
+            "/api/auth/login/", json={"username": f"load_test_user_{user_id}", "password": "testpass123"}
         )
 
         if response.status_code == 200:
@@ -403,13 +379,13 @@ class LargeScaleLoadShape(LoadTestShape):
 
     stages = [
         # (duration_seconds, users, spawn_rate)
-        {"duration": 120, "users": 100, "spawn_rate": 10},      # 워밍업
-        {"duration": 300, "users": 300, "spawn_rate": 15},      # 증가 1
-        {"duration": 480, "users": 600, "spawn_rate": 20},      # 증가 2
-        {"duration": 900, "users": 1000, "spawn_rate": 25},     # 피크
-        {"duration": 1020, "users": 1200, "spawn_rate": 50},    # 스파이크
-        {"duration": 1500, "users": 1000, "spawn_rate": 25},    # 피크 유지
-        {"duration": 1800, "users": 500, "spawn_rate": 20},     # 감소
+        {"duration": 120, "users": 100, "spawn_rate": 10},  # 워밍업
+        {"duration": 300, "users": 300, "spawn_rate": 15},  # 증가 1
+        {"duration": 480, "users": 600, "spawn_rate": 20},  # 증가 2
+        {"duration": 900, "users": 1000, "spawn_rate": 25},  # 피크
+        {"duration": 1020, "users": 1200, "spawn_rate": 50},  # 스파이크
+        {"duration": 1500, "users": 1000, "spawn_rate": 25},  # 피크 유지
+        {"duration": 1800, "users": 500, "spawn_rate": 20},  # 감소
     ]
 
     def tick(self):
@@ -437,9 +413,9 @@ class SimpleStepLoadShape(LoadTestShape):
     """
 
     step_duration = 300  # 5분
-    step_users = 200     # 단계당 증가 사용자
-    max_users = 1000     # 최대 사용자
-    spawn_rate = 25      # 초당 생성
+    step_users = 200  # 단계당 증가 사용자
+    max_users = 1000  # 최대 사용자
+    spawn_rate = 25  # 초당 생성
 
     def tick(self):
         run_time = self.get_run_time()
