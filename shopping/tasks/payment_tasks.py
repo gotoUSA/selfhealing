@@ -1,10 +1,16 @@
 """결제 관련 Celery 태스크"""
 
+import time
+
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.db import transaction
 from django.db.models import F
 
+from ..constants import (
+    LOCK_CONTENTION_CRITICAL_THRESHOLD,
+    LOCK_CONTENTION_WARNING_THRESHOLD,
+)
 from ..models.cart import Cart
 from ..models.order import Order
 from ..models.payment import Payment, PaymentLog
@@ -105,8 +111,18 @@ def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int)
 
     try:
         with transaction.atomic():
+            start_time = time.time()
+
             # 1. Payment 업데이트 (짧은 트랜잭션)
+            lock_start_time = time.time()
             payment = Payment.objects.select_for_update().get(pk=payment_id)
+            lock_elapsed = time.time() - lock_start_time
+
+            if lock_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+                logger.warning(
+                    f"결제 락 획득 지연: payment_id={payment_id}, elapsed={lock_elapsed:.2f}s, "
+                    f"possible_lock_contention=True"
+                )
 
             # 중복 처리 방지
             if payment.is_paid:
@@ -117,9 +133,17 @@ def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int)
             order = payment.order
 
             # 2. 재고 차감 (sold_count만 증가, stock은 주문 생성 시 이미 차감)
+            stock_start_time = time.time()
             for order_item in order.order_items.select_for_update():
                 if order_item.product:
                     Product.objects.filter(pk=order_item.product.pk).update(sold_count=F("sold_count") + order_item.quantity)
+
+            stock_elapsed = time.time() - stock_start_time
+            if stock_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+                logger.warning(
+                    f"sold_count 업데이트 지연: payment_id={payment_id}, order_id={order.id}, "
+                    f"elapsed={stock_elapsed:.2f}s, possible_lock_contention=True"
+                )
 
             # 3. Order 상태 변경
             order.status = "paid"
@@ -137,7 +161,24 @@ def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int)
                 data=toss_response,
             )
 
-        logger.info(f"결제 최종 처리 완료: payment_id={payment_id}, order_id={order.id}")
+            total_elapsed = time.time() - start_time
+
+            # 동시성 모니터링: 전체 처리 시간 체크
+            if total_elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
+                logger.error(
+                    f"결제 처리 심각한 지연: payment_id={payment_id}, order_id={order.id}, "
+                    f"elapsed={total_elapsed:.2f}s, possible_deadlock=True"
+                )
+            elif total_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+                logger.warning(
+                    f"결제 처리 지연: payment_id={payment_id}, order_id={order.id}, "
+                    f"elapsed={total_elapsed:.2f}s, possible_lock_contention=True"
+                )
+
+        logger.info(
+            f"결제 최종 처리 완료: payment_id={payment_id}, order_id={order.id}, "
+            f"elapsed={total_elapsed:.2f}s"
+        )
 
         # 6. 포인트 적립은 별도 태스크로 (비동기)
         from .point_tasks import add_points_after_payment

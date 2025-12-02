@@ -6,6 +6,7 @@ FIFO 방식 포인트 사용 및 만료 처리
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -15,6 +16,10 @@ from django.db.models import F
 from django.db.models.functions import Greatest
 from django.utils import timezone
 
+from shopping.constants import (
+    LOCK_CONTENTION_CRITICAL_THRESHOLD,
+    LOCK_CONTENTION_WARNING_THRESHOLD,
+)
 from shopping.models.point import PointHistory
 
 if TYPE_CHECKING:
@@ -323,6 +328,8 @@ class PointService:
                 'message': str
             }
         """
+        start_time = time.time()
+
         # 최소 포인트 사용 정책 (100포인트 미만 사용 불가)
         MINIMUM_USE_AMOUNT = 100
 
@@ -342,7 +349,15 @@ class PointService:
             }
 
         # 동시성 제어: select_for_update로 락 획득
+        lock_start_time = time.time()
         locked_user = User.objects.select_for_update().get(pk=user.pk)
+        lock_elapsed = time.time() - lock_start_time
+
+        if lock_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+            logger.warning(
+                f"포인트 사용자 락 획득 지연: user_id={user.pk}, elapsed={lock_elapsed:.2f}s, "
+                f"possible_lock_contention=True"
+            )
 
         if locked_user.points < amount:
             return {
@@ -436,6 +451,22 @@ class PointService:
             description=description or "포인트 사용 (FIFO)",
             metadata=history_metadata,
         )
+
+        total_elapsed = time.time() - start_time
+
+        # 동시성 모니터링: 전체 처리 시간 체크
+        if total_elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
+            logger.error(
+                f"포인트 FIFO 사용 심각한 지연: user_id={user.pk}, amount={amount}, "
+                f"elapsed={total_elapsed:.2f}s, histories_processed={len(used_details)}, "
+                f"possible_deadlock=True"
+            )
+        elif total_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+            logger.warning(
+                f"포인트 FIFO 사용 지연: user_id={user.pk}, amount={amount}, "
+                f"elapsed={total_elapsed:.2f}s, histories_processed={len(used_details)}, "
+                f"possible_lock_contention=True"
+            )
 
         return {
             "success": True,

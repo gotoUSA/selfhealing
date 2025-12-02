@@ -1,12 +1,17 @@
 """주문 서비스 레이어"""
 
 import logging
+import time
 from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
 from django.db.models import F
 
+from ..constants import (
+    LOCK_CONTENTION_CRITICAL_THRESHOLD,
+    LOCK_CONTENTION_WARNING_THRESHOLD,
+)
 from ..models.cart import Cart
 from ..models.order import Order, OrderItem
 from ..models.product import Product
@@ -295,14 +300,26 @@ class OrderService:
         Raises:
             OrderServiceError: 재고 부족
         """
+        start_time = time.time()
+
         logger.info(
             f"주문 아이템 생성 및 재고 차감 시작: order_id={order.id}, "
             f"cart_items_count={cart.items.count()}"
         )
 
+        items_processed = 0
         for cart_item in cart.items.all():
+            item_start_time = time.time()
+
             # 재고 최종 확인 (select_for_update로 동시성 제어)
             product = Product.objects.select_for_update().get(pk=cart_item.product.pk)
+
+            item_lock_elapsed = time.time() - item_start_time
+            if item_lock_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+                logger.warning(
+                    f"재고 락 획득 지연 감지: order_id={order.id}, product_id={product.pk}, "
+                    f"elapsed={item_lock_elapsed:.2f}s, possible_lock_contention=True"
+                )
 
             if product.stock < cart_item.quantity:
                 logger.error(
@@ -334,7 +351,26 @@ class OrderService:
                 f"product_name={product.name}, quantity={cart_item.quantity}, price={cart_item.product.price}"
             )
 
-        logger.info(f"주문 아이템 생성 및 재고 차감 완료: order_id={order.id}")
+            items_processed += 1
+
+        total_elapsed = time.time() - start_time
+
+        # 동시성 모니터링: 전체 처리 시간 체크
+        if total_elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
+            logger.error(
+                f"재고 차감 심각한 지연: order_id={order.id}, elapsed={total_elapsed:.2f}s, "
+                f"items_count={items_processed}, possible_deadlock=True"
+            )
+        elif total_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+            logger.warning(
+                f"재고 차감 지연: order_id={order.id}, elapsed={total_elapsed:.2f}s, "
+                f"items_count={items_processed}, possible_lock_contention=True"
+            )
+
+        logger.info(
+            f"주문 아이템 생성 및 재고 차감 완료: order_id={order.id}, "
+            f"items_count={items_processed}, elapsed={total_elapsed:.2f}s"
+        )
 
     @staticmethod
     def _process_point_usage(
