@@ -208,8 +208,7 @@ class PaymentService:
                     sold_count=F("sold_count") + order_item.quantity,
                 )
                 logger.info(
-                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, "
-                    f"quantity={order_item.quantity}"
+                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, " f"quantity={order_item.quantity}"
                 )
 
         # 4. 주문 상태 변경

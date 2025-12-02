@@ -157,9 +157,7 @@ class TestConfirmAndWebhookRaceCondition:
         assert order.status == "paid", "Order가 paid 상태여야 함"
 
         # 재고는 주문 생성 시 이미 차감됨, Confirm/Webhook에서는 sold_count만 증가
-        assert (
-            product.stock == initial_stock
-        ), f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
+        assert product.stock == initial_stock, f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
 
     def test_confirm_and_webhook_simultaneous_points_earned_once(self, category):
         """
@@ -382,9 +380,7 @@ class TestConfirmAndWebhookRaceCondition:
         assert order.status == "paid", "Order가 paid 상태여야 함"
 
         # 재고는 주문 생성 시 이미 차감됨, Confirm/Webhook에서는 sold_count만 증가
-        assert (
-            product.stock == initial_stock
-        ), f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
+        assert product.stock == initial_stock, f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
 
 
 @pytest.mark.django_db(transaction=True)
