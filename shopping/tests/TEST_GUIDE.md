@@ -84,7 +84,7 @@ Exception
 
 테스트 파일에서 아래는 금지:
 
-과도한 assert message, print, try/except
+print, try/except
 
 상태 코드는 숫자 대신 http 상수를 사용한다
 
