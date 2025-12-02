@@ -197,16 +197,20 @@ class PaymentService:
         payment.mark_as_paid(payment_data)
         logger.info(f"결제 정보 업데이트 완료: payment_id={payment.id}, status={payment.status}")
 
-        # 3. 재고 차감 (sold_count 증가, Product 락으로 동시성 제어)
-        logger.info(f"판매량 증가 시작: order_id={order.id}")
+        # 3. 재고 차감 및 판매량 증가 (Product 락으로 동시성 제어)
+        logger.info(f"재고 차감 및 판매량 증가 시작: order_id={order.id}")
         for order_item in order.order_items.all():
             if order_item.product:
                 # Product를 락으로 보호
                 product = Product.objects.select_for_update().get(pk=order_item.product.pk)
-                # sold_count만 증가 (F 객체로 안전하게)
-                Product.objects.filter(pk=product.pk).update(sold_count=F("sold_count") + order_item.quantity)
+                # 재고 차감 및 sold_count 증가 (F 객체로 안전하게)
+                Product.objects.filter(pk=product.pk).update(
+                    stock=F("stock") - order_item.quantity,
+                    sold_count=F("sold_count") + order_item.quantity,
+                )
                 logger.info(
-                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, " f"quantity={order_item.quantity}"
+                    f"재고 차감 및 판매량 증가: product_id={product.pk}, product_name={product.name}, "
+                    f"quantity={order_item.quantity}"
                 )
 
         # 4. 주문 상태 변경
