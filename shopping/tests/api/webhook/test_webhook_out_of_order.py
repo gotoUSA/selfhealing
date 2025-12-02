@@ -73,8 +73,7 @@ class TestWebhookOutOfOrder:
         user = UserFactory(is_email_verified=True, points=0)
         product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
         order, payment = _create_order_with_payment(user, product, "confirmed", "done")
-        payment.is_paid = True
-        payment.save()
+        # is_paid는 status=="done"일 때 자동으로 True (property)
 
         # CANCELED 먼저
         TossWebhookService.handle_payment_canceled(_make_canceled_event(payment))
@@ -157,8 +156,7 @@ class TestWebhookDuplicate:
         user = UserFactory(is_email_verified=True, points=5100)
         product = ProductFactory(category=category, stock=9, sold_count=1, price=Decimal("10000"))
         order, payment = _create_order_with_payment(user, product, "paid", "done")
-        payment.is_paid = True
-        payment.save()
+        # is_paid는 status=="done"일 때 자동으로 True (property)
         order.earned_points = 100
         order.save()
         initial_stock = product.stock
@@ -197,14 +195,15 @@ class TestWebhookDuplicate:
         user = UserFactory(is_email_verified=True)
         product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
         order, payment = _create_order_with_payment(user, product, "paid", "done")
-        payment.is_paid = True
-        payment.save()
+        # is_paid는 status=="done"일 때 자동으로 True (property)
 
         # Act
-        TossWebhookService.handle_payment_failed({
-            "orderId": payment.toss_order_id,
-            "failReason": "카드 한도 초과",
-        })
+        TossWebhookService.handle_payment_failed(
+            {
+                "orderId": payment.toss_order_id,
+                "failReason": "카드 한도 초과",
+            }
+        )
 
         # Assert
         payment.refresh_from_db()

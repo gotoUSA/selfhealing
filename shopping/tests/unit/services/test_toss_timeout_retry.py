@@ -87,11 +87,13 @@ class TestTossConfirmRetry:
             requests.exceptions.Timeout("Timeout"),
             Mock(
                 status_code=200,
-                json=Mock(return_value=TossResponseBuilder.success_response(
-                    payment_key=payment.payment_key,
-                    order_id=str(order.id),
-                    amount=int(payment.amount),
-                ))
+                json=Mock(
+                    return_value=TossResponseBuilder.success_response(
+                        payment_key=payment.payment_key,
+                        order_id=str(order.id),
+                        amount=int(payment.amount),
+                    )
+                ),
             ),
         ]
         mock_post = mocker.patch("requests.post", side_effect=mock_responses)
@@ -126,11 +128,13 @@ class TestTossConfirmRetry:
 
         success_response = Mock(
             status_code=200,
-            json=Mock(return_value=TossResponseBuilder.success_response(
-                payment_key=payment.payment_key,
-                order_id=str(order.id),
-                amount=int(payment.amount),
-            ))
+            json=Mock(
+                return_value=TossResponseBuilder.success_response(
+                    payment_key=payment.payment_key,
+                    order_id=str(order.id),
+                    amount=int(payment.amount),
+                )
+            ),
         )
         mocker.patch("requests.post", return_value=success_response)
         client = TossPaymentClient()

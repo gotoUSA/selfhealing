@@ -35,9 +35,7 @@ class TestKakaoPopulateUser:
         adapter = CustomSocialAccountAdapter()
 
         # Act
-        result = adapter.populate_user(
-            Mock(), Mock(), {"name": "카카오유저"}
-        )
+        result = adapter.populate_user(Mock(), Mock(), {"name": "카카오유저"})
 
         # Assert
         assert result.is_email_verified is True
@@ -48,10 +46,12 @@ class TestKakaoPopulateUser:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": 123456789,
-            "kakao_account": {"has_email": False, "profile": {"nickname": "닉네임유저"}},
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": 123456789,
+                "kakao_account": {"has_email": False, "profile": {"nickname": "닉네임유저"}},
+            }
+        )
 
         # Act
         result = adapter.populate_user(Mock(), sociallogin, {"name": "닉네임유저"})
@@ -65,20 +65,20 @@ class TestKakaoPopulateUser:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user("unverified@kakao.com")
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": 123456789,
-            "kakao_account": {
-                "has_email": True,
-                "is_email_valid": False,
-                "is_email_verified": False,
-                "email": "unverified@kakao.com",
-            },
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": 123456789,
+                "kakao_account": {
+                    "has_email": True,
+                    "is_email_valid": False,
+                    "is_email_verified": False,
+                    "email": "unverified@kakao.com",
+                },
+            }
+        )
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "unverified@kakao.com"}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "unverified@kakao.com"})
 
         # Assert
         assert result.is_email_verified is True
@@ -89,10 +89,12 @@ class TestKakaoPopulateUser:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": 123456789,
-            "kakao_account": {"has_email": True, "email_needs_agreement": True},
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": 123456789,
+                "kakao_account": {"has_email": True, "email_needs_agreement": True},
+            }
+        )
 
         # Act
         result = adapter.populate_user(Mock(), sociallogin, {"name": "동의필요유저"})
@@ -124,15 +126,15 @@ class TestKakaoMissingPayload:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user("noname@kakao.com")
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": 123456789,
-            "kakao_account": {"has_email": True, "email": "noname@kakao.com"},
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": 123456789,
+                "kakao_account": {"has_email": True, "email": "noname@kakao.com"},
+            }
+        )
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "noname@kakao.com"}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "noname@kakao.com"})
 
         # Assert
         assert result.is_email_verified is True
@@ -143,15 +145,15 @@ class TestKakaoMissingPayload:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user("test@kakao.com")
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": 123456789,
-            "kakao_account": {"email": "test@kakao.com", "profile": {"nickname": None}},
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": 123456789,
+                "kakao_account": {"email": "test@kakao.com", "profile": {"nickname": None}},
+            }
+        )
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "test@kakao.com", "name": None}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "test@kakao.com", "name": None})
 
         # Assert
         assert result.is_email_verified is True
@@ -162,16 +164,16 @@ class TestKakaoMissingPayload:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_mock_sociallogin(extra_data={
-            "id": "123456789",
-            "kakao_account": {"email": "stringid@kakao.com"},
-        })
+        sociallogin = _create_mock_sociallogin(
+            extra_data={
+                "id": "123456789",
+                "kakao_account": {"email": "stringid@kakao.com"},
+            }
+        )
         sociallogin.account.uid = "123456789"
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "stringid@kakao.com"}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "stringid@kakao.com"})
 
         # Assert
         assert result.is_email_verified is True

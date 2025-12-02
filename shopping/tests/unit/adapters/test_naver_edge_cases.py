@@ -76,9 +76,7 @@ class TestNaverPopulateUser:
         }
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "direct@naver.com"}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "direct@naver.com"})
 
         # Assert
         assert result.is_email_verified is True
@@ -93,17 +91,17 @@ class TestNaverFieldVariations:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_naver_sociallogin({
-            "id": "null_fields_id",
-            "email": None,
-            "name": None,
-            "nickname": None,
-        })
+        sociallogin = _create_naver_sociallogin(
+            {
+                "id": "null_fields_id",
+                "email": None,
+                "name": None,
+                "nickname": None,
+            }
+        )
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": None, "name": None}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": None, "name": None})
 
         # Assert
         assert result.is_email_verified is True
@@ -114,12 +112,14 @@ class TestNaverFieldVariations:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_naver_sociallogin({
-            "id": "empty_string_id",
-            "email": "",
-            "name": "",
-            "nickname": "",
-        })
+        sociallogin = _create_naver_sociallogin(
+            {
+                "id": "empty_string_id",
+                "email": "",
+                "name": "",
+                "nickname": "",
+            }
+        )
 
         # Act
         result = adapter.populate_user(Mock(), sociallogin, {"email": "", "name": ""})
@@ -133,16 +133,16 @@ class TestNaverFieldVariations:
         # Arrange
         mock_parent_populate.return_value = _create_mock_user()
         adapter = CustomSocialAccountAdapter()
-        sociallogin = _create_naver_sociallogin({
-            "id": "unicode_nick_id",
-            "nickname": "🎉테스트유저✨",
-            "email": "emoji@naver.com",
-        })
+        sociallogin = _create_naver_sociallogin(
+            {
+                "id": "unicode_nick_id",
+                "nickname": "🎉테스트유저✨",
+                "email": "emoji@naver.com",
+            }
+        )
 
         # Act
-        result = adapter.populate_user(
-            Mock(), sociallogin, {"email": "emoji@naver.com", "name": "🎉테스트유저✨"}
-        )
+        result = adapter.populate_user(Mock(), sociallogin, {"email": "emoji@naver.com", "name": "🎉테스트유저✨"})
 
         # Assert
         assert result.is_email_verified is True

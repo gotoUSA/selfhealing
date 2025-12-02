@@ -245,23 +245,23 @@ shopping/tests/
 
 class TestTossConfirmTimeoutRetry:
     """Toss Confirm API Timeout 및 Retry 테스트"""
-    
+
     def test_confirm_timeout_triggers_retry(self):
         """첫 번째 요청 timeout 시 자동 재시도"""
         pass
-    
+
     def test_confirm_retry_success_after_timeout(self):
         """재시도에서 성공하는 케이스"""
         pass
-    
+
     def test_confirm_max_retry_exceeded(self):
         """최대 재시도 횟수 초과 시 실패 처리"""
         pass
-    
+
     def test_confirm_idempotency_on_retry(self):
         """재시도 시 멱등성 보장"""
         pass
-    
+
     def test_confirm_timeout_partial_rollback(self):
         """Timeout 발생 시 부분 처리된 상태 롤백"""
         pass
@@ -274,19 +274,19 @@ class TestTossConfirmTimeoutRetry:
 
 class TestWebhookOutOfOrder:
     """Webhook 도착 순서 뒤바뀜 시나리오"""
-    
+
     def test_canceled_then_done_ignores_done(self):
         """CANCELED 먼저 → DONE 나중: DONE 무시"""
         pass
-    
+
     def test_done_canceled_done_final_canceled(self):
         """DONE → CANCELED → DONE: 최종 상태 canceled"""
         pass
-    
+
     def test_multiple_done_webhooks(self):
         """DONE 여러 번 도착해도 1번만 처리"""
         pass
-    
+
     def test_webhook_before_payment_ready(self):
         """Payment가 ready 전에 webhook 도착"""
         pass
@@ -299,15 +299,15 @@ class TestWebhookOutOfOrder:
 
 class TestKakaoNoEmailConsent:
     """Kakao 이메일 미동의 사용자 처리"""
-    
+
     def test_kakao_no_email_consent(self):
         """이메일 제공 미동의 사용자 가입"""
         pass
-    
+
     def test_kakao_has_email_false(self):
         """has_email: false인 경우"""
         pass
-    
+
     def test_kakao_email_not_verified_by_kakao(self):
         """카카오에서 이메일 미인증된 경우"""
         pass
@@ -315,15 +315,15 @@ class TestKakaoNoEmailConsent:
 
 class TestKakaoPayloadMissing:
     """Kakao OAuth payload 필드 누락"""
-    
+
     def test_missing_kakao_account(self):
         """kakao_account 필드 없음"""
         pass
-    
+
     def test_missing_profile(self):
         """profile 객체 없음"""
         pass
-    
+
     def test_nickname_is_none(self):
         """nickname이 None"""
         pass
@@ -336,19 +336,19 @@ class TestKakaoPayloadMissing:
 
 class TestNaverMinimalData:
     """Naver 최소 데이터 케이스"""
-    
+
     def test_naver_only_nickname(self):
         """email 없이 nickname만 있는 경우"""
         pass
-    
+
     def test_naver_no_name_field(self):
         """name 필드 없음"""
         pass
-    
+
     def test_naver_only_id(self):
         """id만 있는 극단적 케이스"""
         pass
-    
+
     def test_naver_response_wrapper_missing(self):
         """response 래퍼 없는 경우"""
         pass
