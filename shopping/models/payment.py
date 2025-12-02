@@ -51,6 +51,17 @@ class Payment(models.Model):
         help_text="우리 시스템의 주문번호",
     )
 
+    # 멱등성 키 (결제 중복 방지)
+    idempotency_key = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="멱등성 키",
+        help_text="결제 요청의 멱등성을 보장하기 위한 고유 키 (클라이언트가 생성)",
+    )
+
     # 금액 정보
     amount = models.DecimalField(
         max_digits=10,

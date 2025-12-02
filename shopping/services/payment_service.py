@@ -35,21 +35,37 @@ class PaymentService:
 
     @staticmethod
     @transaction.atomic
-    def create_payment(order: Order, payment_method: str = "card") -> Payment:
+    def create_payment(order: Order, payment_method: str = "card", idempotency_key: str | None = None) -> Payment:
         """
         결제 정보 생성 (동시성 제어 포함)
 
         Args:
             order: 주문
             payment_method: 결제 수단
+            idempotency_key: 멱등성 키 (클라이언트가 생성, 중복 결제 방지)
 
         Returns:
             Payment: 생성된 결제 정보
+
+        Note:
+            idempotency_key가 제공되고 해당 키로 이미 결제가 존재하면,
+            새로 생성하지 않고 기존 결제를 반환합니다. (멱등성 보장)
         """
         logger.info(
             f"결제 정보 생성 시작: order_id={order.id}, order_number={order.order_number}, "
-            f"payment_method={payment_method}, amount={order.final_amount}"
+            f"payment_method={payment_method}, amount={order.final_amount}, "
+            f"idempotency_key={idempotency_key}"
         )
+
+        # 멱등성 키가 있으면 기존 결제 확인 (중복 방지)
+        if idempotency_key:
+            existing_payment = Payment.objects.filter(idempotency_key=idempotency_key).first()
+            if existing_payment:
+                logger.info(
+                    f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, "
+                    f"payment_id={existing_payment.id}"
+                )
+                return existing_payment
 
         # 동시성 제어: Order를 락으로 보호
         Order.objects.select_for_update().get(pk=order.pk)
@@ -67,6 +83,7 @@ class PaymentService:
             amount=order.final_amount,
             method=payment_method,  # 결제 수단 저장
             status="ready",
+            idempotency_key=idempotency_key,  # 멱등성 키 저장
         )
 
         # 로그 기록

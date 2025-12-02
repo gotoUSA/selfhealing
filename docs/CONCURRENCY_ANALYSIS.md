@@ -315,9 +315,9 @@ def _create_order_items_and_decrease_stock(order, cart):
 
 ### 단기 (2주차)
 
-- [ ] **Confirm + Webhook 동시 도착 테스트**
-- [ ] **Idempotency Key 도입**
-- [ ] **Locust 웹훅 스트레스 테스트**
+- [x] **Confirm + Webhook 동시 도착 테스트** - `test_confirm_webhook_race.py`
+- [x] **Idempotency Key 도입** - `Payment.idempotency_key`, `payment_service.py`
+- [x] **Locust 웹훅 스트레스 테스트** - `load_tests/webhook_stress_test.py`
 
 ### 중기 (3-4주차)
 

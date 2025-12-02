@@ -289,10 +289,7 @@ def handle_payment_canceled(event_data: dict[str, Any]) -> None:
                         stock=F("stock") + order_item.quantity,
                         sold_count=0,  # 최소값 0으로 설정
                     )
-                    logger.warning(
-                        f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
-                        f"order_id={order.id}"
-                    )
+                    logger.warning(f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}")
 
     # 포인트 회수 (상태 변경 전) - 실제 적립된 포인트만 회수
     if order.user and order.status in ["paid", "preparing"]:

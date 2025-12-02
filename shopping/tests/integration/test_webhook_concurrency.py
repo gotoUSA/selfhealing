@@ -382,14 +382,16 @@ class TestWebhookAndAlreadyPaid:
             toss_order_id=str(order.id),
             payment_key="test_already_paid_key",
         )
-        payment.mark_as_paid({
-            "paymentKey": payment.payment_key,
-            "orderId": payment.toss_order_id,
-            "status": "DONE",
-            "totalAmount": int(payment.amount),
-            "method": "카드",
-            "approvedAt": "2025-01-15T10:00:00+09:00",
-        })
+        payment.mark_as_paid(
+            {
+                "paymentKey": payment.payment_key,
+                "orderId": payment.toss_order_id,
+                "status": "DONE",
+                "totalAmount": int(payment.amount),
+                "method": "카드",
+                "approvedAt": "2025-01-15T10:00:00+09:00",
+            }
+        )
 
         initial_stock = product.stock
         initial_points = user.points

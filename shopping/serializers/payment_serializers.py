@@ -75,6 +75,13 @@ class PaymentRequestSerializer(serializers.Serializer):
         default="card",
         help_text="결제 수단 (card, bank_transfer 등)",
     )
+    idempotency_key = serializers.CharField(
+        max_length=64,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text="멱등성 키 (클라이언트가 생성, 중복 결제 방지)",
+    )
 
     def validate_order_id(self, value):
         """주문 검증"""
@@ -125,9 +132,14 @@ class PaymentRequestSerializer(serializers.Serializer):
 
         order = self.order
         payment_method = validated_data.get("payment_method", "card")
+        idempotency_key = validated_data.get("idempotency_key")
 
-        # PaymentService를 통해 결제 정보 생성
-        payment = PaymentService.create_payment(order=order, payment_method=payment_method)
+        # PaymentService를 통해 결제 정보 생성 (멱등성 키 전달)
+        payment = PaymentService.create_payment(
+            order=order,
+            payment_method=payment_method,
+            idempotency_key=idempotency_key if idempotency_key else None,
+        )
 
         return payment
 
