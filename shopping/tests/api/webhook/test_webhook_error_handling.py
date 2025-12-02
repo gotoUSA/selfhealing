@@ -211,10 +211,11 @@ class TestWebhookStockBoundaryHandling:
     # ==========================================
 
     def test_sufficient_stock_deducts_correctly(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
-        """충분한 재고가 있으면 정상 차감"""
+        """웹훅 처리 시 sold_count 증가 확인 (재고 차감은 주문 생성 시 이미 처리됨)"""
         # Arrange
         mock_verify_webhook()
         initial_stock = self.product.stock
+        initial_sold_count = self.product.sold_count
 
         webhook_data = webhook_data_builder(
             order_id=str(self.order.id),
@@ -232,21 +233,23 @@ class TestWebhookStockBoundaryHandling:
         # Assert - 응답 검증
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert - 재고 차감 확인
+        # Assert - sold_count 증가 확인 (재고는 주문 생성 시 이미 차감됨)
         self.product.refresh_from_db()
-        assert self.product.stock == initial_stock - 1
+        assert self.product.stock == initial_stock  # 재고는 변경되지 않음
+        assert self.product.sold_count == initial_sold_count + 1  # sold_count만 증가
 
     # ==========================================
     # 2단계: 경계값 케이스 (Boundary)
     # ==========================================
 
-    def test_exact_stock_quantity_becomes_zero(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
-        """재고가 주문 수량과 정확히 일치 (재고 0이 됨)"""
+    def test_zero_stock_sold_count_increases(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+        """재고가 0이어도 sold_count는 정상 증가 (재고 차감은 주문 생성 시 처리됨)"""
         # Arrange
         mock_verify_webhook()
 
-        self.product.stock = 1
+        self.product.stock = 0
         self.product.save()
+        initial_sold_count = self.product.sold_count
 
         webhook_data = webhook_data_builder(
             order_id=str(self.order.id),
@@ -264,9 +267,10 @@ class TestWebhookStockBoundaryHandling:
         # Assert - 응답 검증
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert - 재고 0이 됨
+        # Assert - 재고는 0 유지, sold_count만 증가
         self.product.refresh_from_db()
         assert self.product.stock == 0
+        assert self.product.sold_count == initial_sold_count + 1
 
     def test_insufficient_stock_prevented_by_greatest(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
         """재고 부족 시 Greatest로 음수 방지"""
@@ -357,6 +361,7 @@ class TestWebhookTransactionRollback:
         # Arrange
         mock_verify_webhook()
         initial_stock = self.product.stock
+        initial_sold_count = self.product.sold_count
         initial_points = self.user.points
 
         webhook_data = webhook_data_builder(
@@ -381,7 +386,8 @@ class TestWebhookTransactionRollback:
         self.user.refresh_from_db()
 
         assert self.payment.status == "done"
-        assert self.product.stock == initial_stock - 1
+        assert self.product.stock == initial_stock  # 재고는 주문 생성 시 이미 차감됨
+        assert self.product.sold_count == initial_sold_count + 1  # sold_count만 증가
         # 배송비 제외된 order.total_amount 기준 포인트 적립
         expected_points = initial_points + int(self.order.total_amount * Decimal("0.01"))
         assert self.user.points == expected_points
@@ -398,7 +404,7 @@ class TestWebhookTransactionRollback:
         order_with_multiple_items,
         multiple_products,
     ):
-        """여러 상품 모두 처리됨"""
+        """여러 상품 모두 처리됨 (sold_count 증가 확인)"""
         # Arrange
         from shopping.models.payment import Payment
 
@@ -412,6 +418,7 @@ class TestWebhookTransactionRollback:
         )
 
         initial_stocks = {p.id: p.stock for p in multiple_products}
+        initial_sold_counts = {p.id: p.sold_count for p in multiple_products}
 
         webhook_data = webhook_data_builder(
             order_id=str(order_with_multiple_items.id),
@@ -429,10 +436,11 @@ class TestWebhookTransactionRollback:
         # Assert - 응답 검증
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert - 모든 상품의 재고 차감
+        # Assert - 모든 상품의 sold_count 증가 (재고는 주문 생성 시 이미 차감됨)
         for product in multiple_products:
             product.refresh_from_db()
-            assert product.stock == initial_stocks[product.id] - 1
+            assert product.stock == initial_stocks[product.id]  # 재고는 변경되지 않음
+            assert product.sold_count == initial_sold_counts[product.id] + 1  # sold_count만 증가
 
     # ==========================================
     # 3단계: 예외 케이스 (Exception)
