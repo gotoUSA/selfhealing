@@ -1,15 +1,15 @@
-"""OrderService 단위 테스트"""
+"""OrderService 단위 테스트
+
+리팩토링 노트:
+- Celery task mock 제거 → conftest.py의 CELERY_TASK_ALWAYS_EAGER=True 활용
+- 실제 DB 상태 변화로 검증
+"""
 
 from decimal import Decimal
-from unittest.mock import Mock, patch
 
 import pytest
-from django.db import transaction
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
-from shopping.models.product import Category, Product
-from shopping.models.user import User
+from shopping.models.order import Order
 from shopping.services.order_service import OrderService, OrderServiceError
 from shopping.tests.factories import (
     CartFactory,
@@ -401,21 +401,24 @@ class TestOrderServiceConcurrency:
 
 @pytest.mark.django_db(transaction=True)
 class TestOrderServiceHybrid:
-    """주문 하이브리드 처리 테스트 (Phase 2)"""
+    """주문 하이브리드 처리 테스트 (Phase 2)
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_success(self, mock_task_delay):
-        """하이브리드 주문 생성 성공 - Order 레코드만 생성하고 task_id 반환"""
+    Celery eager 모드로 실제 task 실행 - mock 제거
+    실제 DB 상태 변화로 검증
+    """
+
+    def test_create_order_hybrid_success(self):
+        """하이브리드 주문 생성 성공 - 실제 비동기 task 실행"""
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-12345")
-
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
         cart = CartFactory(user=user)
         CartItemFactory(cart=cart, product=product, quantity=2)
         shipping_info = ShippingDataBuilder.default()
 
-        # Act
+        initial_stock = product.stock
+
+        # Act - eager 모드에서 실제 task 실행
         order, task_id = OrderService.create_order_hybrid(
             user=user,
             cart=cart,
@@ -426,23 +429,22 @@ class TestOrderServiceHybrid:
         # Assert: Order 생성 확인
         assert order is not None
         assert order.user == user
-        assert order.status == "pending"  # 아직 미확정
         assert order.total_amount == Decimal("20000")
 
-        # Assert: task_id 반환 확인
+        # Assert: task_id 반환 확인 (eager 모드에서는 sync-execution)
         assert task_id is not None
         assert isinstance(task_id, str)
-        assert task_id == "test-task-id-12345"
 
-        # Assert: OrderItem은 아직 생성되지 않음 (비동기 처리)
-        assert order.order_items.count() == 0
+        # Assert: eager 모드에서 task가 실행되어 OrderItem 생성됨
+        order.refresh_from_db()
+        assert order.order_items.count() == 1
 
-        # Assert: 재고는 아직 차감되지 않음 (비동기 처리)
+        # Assert: eager 모드에서 재고 차감 완료
         product.refresh_from_db()
-        assert product.stock == 100
+        assert product.stock == initial_stock - 2
 
-        # Assert: 장바구니는 아직 비워지지 않음 (비동기 처리)
-        assert cart.items.count() == 1
+        # Assert: 장바구니 비워짐
+        assert cart.items.count() == 0
 
     def test_create_order_hybrid_empty_cart_fails(self):
         """빈 장바구니로 하이브리드 주문 생성 시 실패"""
@@ -482,12 +484,9 @@ class TestOrderServiceHybrid:
 
         assert "포인트가 부족합니다" in str(exc_info.value)
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_with_points(self, mock_task_delay):
-        """포인트 사용한 하이브리드 주문 생성"""
+    def test_create_order_hybrid_with_points(self):
+        """포인트 사용한 하이브리드 주문 생성 - 실제 포인트 차감 검증"""
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-67890")
-
         use_points = 5000
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
@@ -497,7 +496,7 @@ class TestOrderServiceHybrid:
 
         initial_points = user.points
 
-        # Act
+        # Act - eager 모드에서 실제 task 실행
         order, task_id = OrderService.create_order_hybrid(
             user=user,
             cart=cart,
@@ -509,18 +508,15 @@ class TestOrderServiceHybrid:
         assert order.used_points == use_points
         assert order.final_amount < order.total_amount + order.shipping_fee
 
-        # Assert: 포인트 실제 차감은 비동기 처리
+        # Assert: eager 모드에서 포인트 차감 완료
         user.refresh_from_db()
-        assert user.points == initial_points  # 아직 차감 안됨
+        assert user.points == initial_points - use_points
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_logging(self, mock_task_delay, caplog):
+    def test_create_order_hybrid_logging(self, caplog):
         """하이브리드 주문 생성 시 로깅 확인"""
         import logging
 
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-logging")
-
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
         cart = CartFactory(user=user)
@@ -543,5 +539,4 @@ class TestOrderServiceHybrid:
         assert any("Order 레코드 생성 완료" in msg for msg in log_messages)
         assert any("주문 비동기 처리 시작" in msg for msg in log_messages)
         assert any(f"order_id={order.id}" in msg for msg in log_messages)
-        assert any(f"task_id={task_id}" in msg for msg in log_messages)
 

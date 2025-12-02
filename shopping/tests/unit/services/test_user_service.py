@@ -1,40 +1,51 @@
-"""UserService 단위 테스트"""
+"""UserService 단위 테스트
+
+리팩토링 노트:
+- Celery task mock 제거 → conftest.py의 CELERY_TASK_ALWAYS_EAGER=True 활용
+- 외부 의존성(send_mail)만 mock 유지
+- 실제 DB 상태 변화로 검증
+"""
 
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
-from shopping.models.email_verification import EmailVerificationToken
+from shopping.models.email_verification import EmailLog, EmailVerificationToken
 from shopping.services.user_service import UserService
 from shopping.tests.factories import EmailVerificationTokenFactory, UserFactory
 
 
 @pytest.mark.django_db
 class TestUserServiceSendVerificationEmail:
-    """이메일 인증 발송 기능 테스트"""
+    """이메일 인증 발송 기능 테스트
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_send_email_task_called(self, mock_task):
-        """정상 케이스: Celery 태스크 호출 확인"""
+    Celery eager 모드에서 실제 task 실행, send_mail만 mock
+    """
+
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_send_email_creates_email_log(self, mock_send_mail):
+        """정상 케이스: 이메일 발송 시 EmailLog 생성 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
         token = EmailVerificationTokenFactory(user=user)
 
         # Act
         UserService.send_verification_email(user, token)
 
-        # Assert
-        mock_task.assert_called_once_with(
-            user_id=user.id, token_id=token.id, is_resend=False
-        )
+        # Assert - 실제 DB 상태 검증
+        assert EmailLog.objects.filter(token=token).exists()
+        email_log = EmailLog.objects.filter(token=token).first()
+        assert email_log.status == "sent"
+        assert email_log.recipient_email == user.email
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_send_email_returns_message(self, mock_task):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_send_email_returns_message(self, mock_send_mail):
         """정상 케이스: 응답 메시지 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
         token = EmailVerificationTokenFactory(user=user)
 
@@ -45,11 +56,12 @@ class TestUserServiceSendVerificationEmail:
         assert "message" in result
         assert result["message"] == "인증 이메일을 발송했습니다."
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
+    @patch("shopping.tasks.email_tasks.send_mail")
     @patch("shopping.services.user_service.settings.DEBUG", True)
-    def test_send_email_debug_mode_returns_code(self, mock_task):
+    def test_send_email_debug_mode_returns_code(self, mock_send_mail):
         """정상 케이스: DEBUG 모드에서 verification_code 반환"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
         token = EmailVerificationTokenFactory(user=user)
 
@@ -60,11 +72,12 @@ class TestUserServiceSendVerificationEmail:
         assert "verification_code" in result
         assert result["verification_code"] == token.verification_code
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
+    @patch("shopping.tasks.email_tasks.send_mail")
     @patch("shopping.services.user_service.settings.DEBUG", False)
-    def test_send_email_prod_mode_no_code(self, mock_task):
+    def test_send_email_prod_mode_no_code(self, mock_send_mail):
         """경계 케이스: 프로덕션 모드에서 verification_code 미반환"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
         token = EmailVerificationTokenFactory(user=user)
 
@@ -75,10 +88,11 @@ class TestUserServiceSendVerificationEmail:
         assert "verification_code" not in result
         assert "message" in result
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_send_email_logging(self, mock_task, caplog):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_send_email_logging(self, mock_send_mail, caplog):
         """정상 케이스: 로깅 기록 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         caplog.set_level(logging.INFO, logger="shopping.services.user_service")
         user = UserFactory.unverified()
         token = EmailVerificationTokenFactory(user=user)
@@ -195,12 +209,16 @@ class TestUserServiceCreateTokensForUser:
 
 @pytest.mark.django_db
 class TestUserServiceRegisterUser:
-    """회원가입 후처리 기능 테스트"""
+    """회원가입 후처리 기능 테스트
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_creates_tokens(self, mock_task):
+    Celery eager 모드에서 실제 task 실행, send_mail만 mock
+    """
+
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_creates_tokens(self, mock_send_mail):
         """정상 케이스: JWT 토큰 생성 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
 
         # Act
@@ -211,10 +229,11 @@ class TestUserServiceRegisterUser:
         assert "access" in result["tokens"]
         assert "refresh" in result["tokens"]
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_creates_email_token(self, mock_task):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_creates_email_token(self, mock_send_mail):
         """정상 케이스: EmailVerificationToken 생성 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
         initial_token_count = EmailVerificationToken.objects.filter(user=user).count()
 
@@ -229,25 +248,25 @@ class TestUserServiceRegisterUser:
         assert token.user == user
         assert token.is_used is False
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_sends_email(self, mock_task):
-        """정상 케이스: 이메일 발송 확인"""
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_creates_email_log(self, mock_send_mail):
+        """정상 케이스: EmailLog 생성 확인 (실제 task 실행)"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
 
         # Act
         UserService.register_user(user)
 
-        # Assert
-        mock_task.assert_called_once()
-        call_kwargs = mock_task.call_args[1]
-        assert call_kwargs["user_id"] == user.id
-        assert call_kwargs["is_resend"] is False
+        # Assert - 실제 task가 실행되어 EmailLog 생성됨
+        token = EmailVerificationToken.objects.filter(user=user).latest("created_at")
+        assert EmailLog.objects.filter(token=token).exists()
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_returns_structure(self, mock_task):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_returns_structure(self, mock_send_mail):
         """정상 케이스: 반환 구조 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
 
         # Act
@@ -258,11 +277,12 @@ class TestUserServiceRegisterUser:
         assert "verification_result" in result
         assert "message" in result["verification_result"]
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
+    @patch("shopping.tasks.email_tasks.send_mail")
     @patch("shopping.services.user_service.settings.DEBUG", True)
-    def test_register_user_debug_mode(self, mock_task):
+    def test_register_user_debug_mode(self, mock_send_mail):
         """경계 케이스: DEBUG 모드에서 verification_code 포함 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
 
         # Act
@@ -271,10 +291,11 @@ class TestUserServiceRegisterUser:
         # Assert
         assert "verification_code" in result["verification_result"]
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_logging(self, mock_task, caplog):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_logging(self, mock_send_mail, caplog):
         """정상 케이스: 로깅 기록 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         caplog.set_level(logging.INFO, logger="shopping.services.user_service")
         user = UserFactory.unverified()
 
@@ -288,10 +309,11 @@ class TestUserServiceRegisterUser:
         assert any("이메일 인증 토큰 생성" in msg for msg in log_messages)
         assert any("회원가입 후처리 완료" in msg for msg in log_messages)
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_register_user_token_association(self, mock_task):
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_register_user_token_association(self, mock_send_mail):
         """정상 케이스: 생성된 토큰과 사용자 연결 확인"""
         # Arrange
+        mock_send_mail.return_value = 1
         user = UserFactory.unverified()
 
         # Act

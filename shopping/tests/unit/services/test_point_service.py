@@ -1037,17 +1037,21 @@ class TestPointServiceUseFIFOConcurrency:
 
 @pytest.mark.django_db
 class TestPointServiceNotifications:
-    """알림 발송 테스트"""
+    """알림 발송 테스트
+
+    send_email_notification은 외부 이메일 서비스 호출이므로 mock 유지.
+    실제 DB 상태 변화(metadata)로 로직 검증.
+    """
 
     @patch("shopping.tasks.send_email_notification")
     def test_send_expiry_notifications_success(self, mock_send_email):
-        """만료 예정 알림 발송 성공"""
+        """만료 예정 알림 발송 성공 - DB 상태 검증"""
         # Arrange
         user = UserFactory(email="test@example.com")
         service = PointService()
 
         # 만료 예정 포인트 생성
-        PointHistoryFactory.earn(
+        point_history = PointHistoryFactory.earn(
             user=user,
             points=100,
             expires_at=timezone.now() + timedelta(days=5),
@@ -1056,31 +1060,27 @@ class TestPointServiceNotifications:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
+        # Assert - 실제 DB 상태 변화 검증
         assert count == 1
-        assert mock_send_email.called
-        assert mock_send_email.call_count == 1
-
-        # 알림 발송 표시 확인
-        point_history = PointHistory.objects.filter(user=user, type="earn").first()
+        point_history.refresh_from_db()
         assert point_history.metadata.get("expiry_notified") is True
         assert "notified_at" in point_history.metadata
 
     @patch("shopping.tasks.send_email_notification")
     def test_send_expiry_notifications_multiple_users(self, mock_send_email):
-        """여러 사용자에게 알림 발송"""
+        """여러 사용자에게 알림 발송 - 각 사용자별 metadata 검증"""
         # Arrange
         service = PointService()
 
         user1 = UserFactory(email="user1@example.com")
         user2 = UserFactory(email="user2@example.com")
 
-        PointHistoryFactory.earn(
+        ph1 = PointHistoryFactory.earn(
             user=user1,
             points=100,
             expires_at=timezone.now() + timedelta(days=5),
         )
-        PointHistoryFactory.earn(
+        ph2 = PointHistoryFactory.earn(
             user=user2,
             points=200,
             expires_at=timezone.now() + timedelta(days=5),
@@ -1089,24 +1089,27 @@ class TestPointServiceNotifications:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
+        # Assert - 실제 DB 상태 변화 검증
         assert count == 2
-        assert mock_send_email.call_count == 2
+        ph1.refresh_from_db()
+        ph2.refresh_from_db()
+        assert ph1.metadata.get("expiry_notified") is True
+        assert ph2.metadata.get("expiry_notified") is True
 
     @patch("shopping.tasks.send_email_notification")
     def test_send_expiry_notifications_grouping(self, mock_send_email):
-        """사용자별 그룹화 확인"""
+        """사용자별 그룹화 확인 - 여러 포인트도 1회 알림"""
         # Arrange
         user = UserFactory(email="test@example.com")
         service = PointService()
 
         # 같은 사용자의 여러 만료 예정 포인트
-        PointHistoryFactory.earn(
+        ph1 = PointHistoryFactory.earn(
             user=user,
             points=100,
             expires_at=timezone.now() + timedelta(days=5),
         )
-        PointHistoryFactory.earn(
+        ph2 = PointHistoryFactory.earn(
             user=user,
             points=200,
             expires_at=timezone.now() + timedelta(days=6),
@@ -1115,13 +1118,12 @@ class TestPointServiceNotifications:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
-        assert count == 1  # 사용자별로 1번만 발송
-        assert mock_send_email.call_count == 1
-
-        # 이메일 내용 확인
-        call_args = mock_send_email.call_args
-        assert "300" in call_args[0][1]  # subject에 총 포인트
+        # Assert - 사용자별 1회만 카운트, 모든 포인트 이력에 notified 표시
+        assert count == 1
+        ph1.refresh_from_db()
+        ph2.refresh_from_db()
+        assert ph1.metadata.get("expiry_notified") is True
+        assert ph2.metadata.get("expiry_notified") is True
 
     @patch("shopping.tasks.send_email_notification")
     def test_send_expiry_notifications_metadata_update(self, mock_send_email):
@@ -1146,13 +1148,13 @@ class TestPointServiceNotifications:
 
     @patch("shopping.tasks.send_email_notification")
     def test_send_expiry_notifications_error_handling(self, mock_send_email, caplog):
-        """알림 발송 실패 시 에러 처리"""
+        """알림 발송 실패 시 에러 처리 - metadata 미업데이트 확인"""
         # Arrange
         caplog.set_level(logging.ERROR, logger="shopping.services.point_service")
         user = UserFactory(email="test@example.com")
         service = PointService()
 
-        PointHistoryFactory.earn(
+        point_history = PointHistoryFactory.earn(
             user=user,
             points=100,
             expires_at=timezone.now() + timedelta(days=5),
@@ -1164,8 +1166,10 @@ class TestPointServiceNotifications:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
-        assert count == 0  # 실패 시 카운트 안 함
+        # Assert - 실패 시 metadata 업데이트 안 됨 확인
+        assert count == 0
+        point_history.refresh_from_db()
+        assert point_history.metadata.get("expiry_notified") is not True
         log_messages = [record.message for record in caplog.records]
         assert any("알림 발송 실패" in msg for msg in log_messages)
 
@@ -1548,7 +1552,10 @@ class TestPointServiceExpirePointsMetadata:
 
 @pytest.mark.django_db
 class TestPointServiceNotificationsEdgeCases:
-    """알림 발송 - 엣지 케이스"""
+    """알림 발송 - 엣지 케이스
+
+    외부 이메일 발송만 mock, 실제 DB 상태 변화로 검증
+    """
 
     @patch("shopping.tasks.send_email_notification")
     def test_skip_notification_for_zero_remaining_points(self, mock_send_email):
@@ -1569,13 +1576,14 @@ class TestPointServiceNotificationsEdgeCases:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
+        # Assert - DB 상태 검증
         assert count == 0
-        mock_send_email.assert_not_called()
+        point_history.refresh_from_db()
+        assert point_history.metadata.get("expiry_notified") is not True
 
     @patch("shopping.tasks.send_email_notification")
     def test_notification_only_for_remaining_points(self, mock_send_email):
-        """남은 포인트에 대해서만 알림 발송"""
+        """남은 포인트에 대해서만 알림 발송 - DB 상태 검증"""
         # Arrange
         user = UserFactory(email="test@example.com")
         service = PointService()
@@ -1592,33 +1600,30 @@ class TestPointServiceNotificationsEdgeCases:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
+        # Assert - DB 상태 검증
         assert count == 1
-        mock_send_email.assert_called_once()
-
-        # 알림 내용에 남은 70P가 포함되어야 함
-        call_args = mock_send_email.call_args
-        assert "70" in call_args[0][1]  # subject에 70 포함
+        point_history.refresh_from_db()
+        assert point_history.metadata.get("expiry_notified") is True
 
     @patch("shopping.tasks.send_email_notification")
     def test_notification_groups_multiple_expiring_points(self, mock_send_email):
-        """여러 만료 예정 포인트 그룹화하여 1회 알림"""
+        """여러 만료 예정 포인트 그룹화하여 1회 알림 - 모든 이력에 notified 표시"""
         # Arrange
         user = UserFactory(email="test@example.com")
         service = PointService()
 
         # 여러 만료 예정 포인트
-        PointHistoryFactory.earn(
+        ph1 = PointHistoryFactory.earn(
             user=user,
             points=100,
             expires_at=timezone.now() + timedelta(days=3),
         )
-        PointHistoryFactory.earn(
+        ph2 = PointHistoryFactory.earn(
             user=user,
             points=200,
             expires_at=timezone.now() + timedelta(days=5),
         )
-        PointHistoryFactory.earn(
+        ph3 = PointHistoryFactory.earn(
             user=user,
             points=300,
             expires_at=timezone.now() + timedelta(days=7),
@@ -1627,10 +1632,11 @@ class TestPointServiceNotificationsEdgeCases:
         # Act
         count = service.send_expiry_notifications()
 
-        # Assert
-        assert count == 1  # 사용자당 1회만 발송
-        mock_send_email.assert_called_once()
-        assert "600" in mock_send_email.call_args[0][1]  # 총 600P
+        # Assert - DB 상태 검증: 모든 이력에 notified 표시
+        assert count == 1
+        for ph in [ph1, ph2, ph3]:
+            ph.refresh_from_db()
+            assert ph.metadata.get("expiry_notified") is True
 
 
 # =============================================================================

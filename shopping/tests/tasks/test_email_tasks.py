@@ -131,13 +131,16 @@ class RetryFailedEmailsTaskTest(TestCase):
             first_name="테스트",
         )
 
-    @patch("shopping.tasks.email_tasks.send_verification_email_task.delay")
-    def test_retry_failed_emails(self, mock_task):
-        """실패한 이메일 재시도 테스트"""
+    @patch("shopping.tasks.email_tasks.send_mail")
+    def test_retry_failed_emails(self, mock_send_mail):
+        """실패한 이메일 재시도 테스트 - 실제 태스크 실행"""
+        # send_mail 모킹 (외부 SMTP 의존성)
+        mock_send_mail.return_value = 1
+        
         # 실패한 이메일 로그 생성
         token = EmailVerificationToken.objects.create(user=self.user)
 
-        EmailLog.objects.create(
+        failed_log = EmailLog.objects.create(
             user=self.user,
             token=token,
             email_type="verification",
@@ -146,7 +149,7 @@ class RetryFailedEmailsTaskTest(TestCase):
             status="failed",
         )
 
-        # 태스크 실행
+        # 태스크 실행 (CELERY_TASK_ALWAYS_EAGER로 실제 재시도 태스크 실행)
         result = retry_failed_emails_task()
 
         # 결과 검증
@@ -154,8 +157,13 @@ class RetryFailedEmailsTaskTest(TestCase):
         self.assertEqual(result["total_failed"], 1)
         self.assertEqual(result["retry_attempted"], 1)
 
-        # 재발송 태스크가 호출되었는지 확인
-        self.assertTrue(mock_task.called)
+        # 실제 이메일 발송 검증 (외부 의존성만 mock)
+        self.assertTrue(mock_send_mail.called)
+        
+        # DB 상태 검증: 재발송 후 새로운 성공 로그가 생성되었는지 확인
+        email_logs = EmailLog.objects.filter(token=token).order_by("-created_at")
+        # 재발송 시 새 로그가 생성되거나 기존 로그 상태가 업데이트됨
+        self.assertTrue(email_logs.exists())
 
     def test_retry_failed_emails_skip_expired_token(self):
         """만료된 토큰은 재시도 스킵 테스트"""

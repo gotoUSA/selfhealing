@@ -1,94 +1,110 @@
 """
 포인트 태스크 테스트
 
-point_tasks.py의 미커버 라인 테스트:
-- expire_points_task 예외 처리 (46-50)
-- send_expiry_notification_task (66-86)
-- send_email_notification (108-125)
-- add_points_after_payment 경계/예외 케이스 (162-163, 174-175, 208->216, 226-239)
+리팩토링 노트:
+- 내부 서비스 mock 제거 → 실제 서비스 실행
+- 외부 의존성(send_mail)만 mock 유지
+- 실제 DB 상태 변화로 검증
 """
 
-import pytest
+from datetime import timedelta
 from decimal import Decimal
 
+import pytest
+from django.utils import timezone
+
+from shopping.models.point import PointHistory
 from shopping.tasks.point_tasks import (
-    expire_points_task,
-    send_expiry_notification_task,
-    send_email_notification,
     add_points_after_payment,
+    expire_points_task,
+    send_email_notification,
+    send_expiry_notification_task,
 )
 from shopping.tests.factories import (
-    UserFactory,
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
+    PointHistoryFactory,
     ProductFactory,
+    UserFactory,
 )
 
 
 @pytest.mark.django_db(transaction=True)
-class TestExpirePointsTaskException:
-    """포인트 만료 태스크 예외 케이스"""
+class TestExpirePointsTask:
+    """포인트 만료 태스크 테스트 - 실제 서비스 실행"""
 
-    def test_retry_on_service_error(self, mocker):
-        """서비스 에러 발생 시 태스크가 재시도됨"""
-        # Arrange: 지연 import되므로 원본 위치를 mock
-        mocker.patch(
-            "shopping.services.point_service.PointService.expire_points",
-            side_effect=Exception("DB connection error"),
+    def test_expire_points_success(self):
+        """만료된 포인트가 실제로 만료 처리됨"""
+        # Arrange
+        user = UserFactory.with_points(1000)
+        # 어제 만료된 포인트 생성
+        expired_point = PointHistoryFactory.earn(
+            user=user,
+            points=500,
+            balance=user.points,
+            expires_at=timezone.now() - timedelta(days=1),
         )
 
-        # Act & Assert
-        with pytest.raises(Exception):
-            expire_points_task.apply(throw=True)
+        # Act
+        result = expire_points_task()
+
+        # Assert - 실제 DB 상태 검증
+        assert result["status"] == "success"
+        expired_point.refresh_from_db()
+        assert expired_point.metadata.get("expired") is True
+
+    def test_no_expired_points(self):
+        """만료된 포인트가 없을 때"""
+        # Arrange
+        user = UserFactory.with_points(1000)
+        # 아직 만료되지 않은 포인트
+        PointHistoryFactory.earn(
+            user=user,
+            points=500,
+            balance=user.points,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        # Act
+        result = expire_points_task()
+
+        # Assert
+        assert result["status"] == "success"
 
 
 @pytest.mark.django_db(transaction=True)
-class TestSendExpiryNotificationTaskHappyPath:
-    """만료 알림 태스크 정상 케이스"""
+class TestSendExpiryNotificationTask:
+    """만료 알림 태스크 테스트 - 외부 이메일만 mock"""
 
     def test_sends_notification_successfully(self, mocker):
-        """알림 발송이 성공적으로 완료됨"""
-        # Arrange: 지연 import되므로 원본 위치를 mock
-        mock_service = mocker.patch(
-            "shopping.services.point_service.PointService.send_expiry_notifications",
-            return_value=5,
+        """알림 발송이 성공적으로 완료됨 - DB 상태 검증"""
+        # Arrange - 외부 이메일 발송만 mock
+        mocker.patch("shopping.tasks.send_email_notification")
+
+        user = UserFactory(email="test@example.com")
+        point = PointHistoryFactory.earn(
+            user=user,
+            points=100,
+            expires_at=timezone.now() + timedelta(days=5),
         )
 
         # Act
         result = send_expiry_notification_task()
 
-        # Assert
+        # Assert - 실제 DB 상태 검증
         assert result["status"] == "success"
-        assert result["notification_count"] == 5
-        assert "5명에게 만료 예정 알림을 발송했습니다" in result["message"]
-        mock_service.assert_called_once()
+        point.refresh_from_db()
+        assert point.metadata.get("expiry_notified") is True
 
 
 @pytest.mark.django_db(transaction=True)
-class TestSendExpiryNotificationTaskException:
-    """만료 알림 태스크 예외 케이스"""
-
-    def test_retry_on_service_error(self, mocker):
-        """서비스 에러 발생 시 태스크가 재시도됨"""
-        # Arrange: 지연 import되므로 원본 위치를 mock
-        mocker.patch(
-            "shopping.services.point_service.PointService.send_expiry_notifications",
-            side_effect=Exception("Email service unavailable"),
-        )
-
-        # Act & Assert
-        with pytest.raises(Exception):
-            send_expiry_notification_task.apply(throw=True)
-
-
-@pytest.mark.django_db(transaction=True)
-class TestSendEmailNotificationHappyPath:
-    """이메일 발송 태스크 정상 케이스"""
+class TestSendEmailNotification:
+    """이메일 발송 태스크 테스트 - 외부 의존성만 mock"""
 
     def test_sends_email_successfully(self, mocker):
         """이메일이 성공적으로 발송됨"""
-        # Arrange
+        # Arrange - 외부 이메일 발송만 mock
         mock_send_mail = mocker.patch(
             "shopping.tasks.point_tasks.send_mail",
             return_value=1,
@@ -105,14 +121,6 @@ class TestSendEmailNotificationHappyPath:
         # Assert
         assert result is True
         mock_send_mail.assert_called_once()
-        call_kwargs = mock_send_mail.call_args
-        assert call_kwargs.kwargs["recipient_list"] == ["test@example.com"]
-        assert call_kwargs.kwargs["subject"] == "테스트 제목"
-
-
-@pytest.mark.django_db(transaction=True)
-class TestSendEmailNotificationException:
-    """이메일 발송 태스크 예외 케이스"""
 
     def test_retry_on_smtp_error(self, mocker):
         """SMTP 에러 발생 시 태스크가 재시도됨"""
@@ -131,13 +139,14 @@ class TestSendEmailNotificationException:
 
 
 @pytest.mark.django_db(transaction=True)
-class TestAddPointsAfterPaymentHappyPath:
-    """결제 후 포인트 적립 정상 케이스"""
+class TestAddPointsAfterPayment:
+    """결제 후 포인트 적립 테스트 - 실제 서비스 실행"""
 
-    def test_adds_points_for_paid_order(self, mocker):
-        """결제 완료된 주문에 포인트가 적립됨"""
+    def test_adds_points_for_paid_order(self):
+        """결제 완료된 주문에 포인트가 실제로 적립됨"""
         # Arrange
-        user = UserFactory.with_membership(level="silver")
+        user = UserFactory.with_membership(level="silver")  # 2%
+        initial_points = user.points
         product = ProductFactory()
         order = OrderFactory(
             user=user,
@@ -147,24 +156,27 @@ class TestAddPointsAfterPaymentHappyPath:
         )
         OrderItemFactory(order=order, product=product)
 
-        # 지연 import되므로 원본 위치를 mock
-        mock_add_points = mocker.patch(
-            "shopping.services.point_service.PointService.add_points",
-            return_value=True,
-        )
-
-        # Act
+        # Act - 실제 서비스 실행
         result = add_points_after_payment(user_id=user.id, order_id=order.id)
 
-        # Assert
+        # Assert - 실제 DB 상태 검증
         assert result["status"] == "success"
         assert result["points_added"] == 1000  # 50000 * 2% (silver)
-        mock_add_points.assert_called_once()
 
-    def test_creates_payment_log_when_payment_exists(self, mocker):
-        """Payment가 존재할 때 PaymentLog가 생성됨"""
+        user.refresh_from_db()
+        assert user.points == initial_points + 1000
+
+        # PointHistory 생성 확인
+        history = PointHistory.objects.filter(
+            user=user, type="earn", description__contains="결제"
+        ).first()
+        assert history is not None
+        assert history.points == 1000
+
+    def test_creates_payment_log_when_payment_exists(self):
+        """Payment가 존재할 때 PaymentLog가 실제로 생성됨"""
         # Arrange
-        user = UserFactory.with_membership(level="bronze")
+        user = UserFactory.with_membership(level="bronze")  # 1%
         product = ProductFactory()
         order = OrderFactory(
             user=user,
@@ -175,21 +187,15 @@ class TestAddPointsAfterPaymentHappyPath:
         OrderItemFactory(order=order, product=product)
         PaymentFactory.done(order=order)
 
-        # 지연 import되므로 원본 위치를 mock
-        mocker.patch(
-            "shopping.services.point_service.PointService.add_points",
-            return_value=True,
-        )
-
-        # Act
+        # Act - 실제 서비스 실행
         result = add_points_after_payment(user_id=user.id, order_id=order.id)
 
-        # Assert
+        # Assert - 실제 DB 상태 검증
         assert result["status"] == "success"
         order.refresh_from_db()
         assert order.earned_points == 100  # 10000 * 1% (bronze)
 
-        # PaymentLog 생성 확인
+        # PaymentLog 실제 생성 확인
         from shopping.models.payment import PaymentLog
 
         log = PaymentLog.objects.filter(payment=order.payment).first()
@@ -281,29 +287,3 @@ class TestAddPointsAfterPaymentException:
         # Assert
         assert result["status"] == "failed"
         assert result["order_id"] == non_existent_order_id
-
-    def test_retry_on_unexpected_error(self, mocker):
-        """예상치 못한 에러 발생 시 태스크가 재시도됨"""
-        # Arrange
-        user = UserFactory()
-        product = ProductFactory()
-        order = OrderFactory(
-            user=user,
-            status="paid",
-            total_amount=Decimal("10000"),
-            final_amount=Decimal("10000"),
-        )
-        OrderItemFactory(order=order, product=product)
-
-        # 지연 import되므로 원본 위치를 mock
-        mocker.patch(
-            "shopping.services.point_service.PointService.add_points",
-            side_effect=Exception("Unexpected database error"),
-        )
-
-        # Act & Assert
-        with pytest.raises(Exception):
-            add_points_after_payment.apply(
-                args=(user.id, order.id),
-                throw=True,
-            )

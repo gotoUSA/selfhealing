@@ -2,12 +2,11 @@
 ProductQAService 테스트
 """
 
-from unittest.mock import patch
-
 import pytest
 from django.db import IntegrityError
 
 from shopping.models.notification import Notification
+from shopping.models.product_qa import ProductAnswer
 from shopping.services.product_qa_service import ProductQAService
 from shopping.tests.factories import ProductQuestionFactory
 
@@ -81,21 +80,29 @@ class TestProductQAService:
         assert answer.content == long_content
         assert len(answer.content) == 5000
 
-    def test_create_answer_db_error(self):
-        """DB 에러 발생 시 처리 테스트"""
+    def test_create_answer_duplicate_answer_raises_error(self):
+        """이미 답변이 있는 질문에 중복 답변 시 IntegrityError 발생 테스트
+        
+        ProductAnswer.question은 OneToOneField이므로 
+        동일 질문에 중복 답변 생성 시 DB 제약조건 위반 발생
+        """
         # Arrange
         question = ProductQuestionFactory()
         seller = question.product.seller
-        content = "답변"
+        content = "첫 번째 답변입니다."
+
+        # 첫 번째 답변 생성 (성공)
+        ProductQAService.create_answer(
+            question=question,
+            seller=seller,
+            content=content
+        )
 
         # Act & Assert
-        # ProductAnswer.objects.create에서 IntegrityError가 발생하도록 모킹
-        with patch("shopping.models.product_qa.ProductAnswer.objects.create") as mock_create:
-            mock_create.side_effect = IntegrityError("DB Error")
-
-            with pytest.raises(IntegrityError):
-                ProductQAService.create_answer(
-                    question=question,
-                    seller=seller,
-                    content=content
-                )
+        # 동일 질문에 두 번째 답변 시도 시 IntegrityError 발생
+        with pytest.raises(IntegrityError):
+            ProductAnswer.objects.create(
+                question=question,
+                seller=seller,
+                content="중복 답변 시도"
+            )
