@@ -1189,5 +1189,3 @@ class TestOrderConcurrencyScaleValidation:
         # 성능 확인 (적절한 시간 내 완료)
         max_time = 120  # 2분
         assert elapsed_time < max_time, f"{max_time}초 내 완료되어야 함. 실제: {elapsed_time:.2f}초"
-
-        print(f"\n✅ {user_count}명 동시 주문 성공 (실행 시간: {elapsed_time:.2f}초)")
