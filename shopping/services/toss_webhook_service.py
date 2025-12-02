@@ -255,8 +255,7 @@ class TossWebhookService:
                             sold_count=0,
                         )
                         logger.warning(
-                            f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
-                            f"order_id={order.id}"
+                            f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}"
                         )
 
         # 포인트 회수 (상태 변경 전)
