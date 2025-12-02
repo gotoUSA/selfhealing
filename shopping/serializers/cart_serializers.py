@@ -33,6 +33,28 @@ class CartItemSerializer(serializers.ModelSerializer):
         help_text="상품 단가",
     )
 
+    # 가격 스냅샷 관련 필드
+    price_at_add = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        read_only=True,
+        help_text="담은 시점 가격",
+    )
+    is_price_changed = serializers.BooleanField(read_only=True, help_text="가격 변경 여부")
+    price_difference = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        read_only=True,
+        help_text="가격 차이 (양수면 인상, 음수면 인하)",
+    )
+    current_price = serializers.DecimalField(
+        source="product.price",
+        max_digits=10,
+        decimal_places=0,
+        read_only=True,
+        help_text="현재 가격",
+    )
+
     # 계산 필드들
     subtotal = serializers.SerializerMethodField(help_text="소계 (단가 x 수량)")
     is_available = serializers.SerializerMethodField(help_text="구매 가능 여부 (재고 확인)")
@@ -50,6 +72,10 @@ class CartItemSerializer(serializers.ModelSerializer):
             "subtotal",  # 소계
             "is_available",  # 구매 가능 여부
             "available_stock",  # 재고
+            "price_at_add",  # 담은 시점 가격
+            "is_price_changed",  # 가격 변경 여부
+            "price_difference",  # 가격 차이
+            "current_price",  # 현재 가격
             "added_at",  # 추가일시
             "updated_at",  # 수정일시
         ]

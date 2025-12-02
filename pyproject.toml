@@ -48,8 +48,6 @@ python_files = ["tests.py", "test_*.py", "*_tests.py"]
 python_classes = ["Test*", "*Tests", "*TestCase"]
 python_functions = ["test_*"]
 addopts = """
-    --reuse-db
-    --nomigrations
     -n auto
     --cov=shopping
     --cov-report=html

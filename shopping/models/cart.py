@@ -226,6 +226,15 @@ class CartItem(models.Model):
     # 수량
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name="수량")
 
+    # 담은 시점 가격 스냅샷
+    price_at_add = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        null=True,
+        verbose_name="담은 시점 가격",
+        help_text="장바구니에 담을 때의 상품 가격",
+    )
+
     # 시간 정보
     added_at = models.DateTimeField(auto_now_add=True, verbose_name="추가일시")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일시")
@@ -249,6 +258,20 @@ class CartItem(models.Model):
     def subtotal(self) -> Decimal:
         """소계 계산 (현재 상품 가격 x 수량)"""
         return self.product.price * self.quantity
+
+    @property
+    def is_price_changed(self) -> bool:
+        """가격 변경 여부"""
+        if self.price_at_add is None:
+            return False
+        return self.product.price != self.price_at_add
+
+    @property
+    def price_difference(self) -> Decimal:
+        """가격 차이 (양수면 인상, 음수면 인하)"""
+        if self.price_at_add is None:
+            return Decimal("0")
+        return self.product.price - self.price_at_add
 
     def increase_quantity(self, quantity: int = 1) -> None:
         """수량 증가"""

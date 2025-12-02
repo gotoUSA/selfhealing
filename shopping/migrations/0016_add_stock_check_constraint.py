@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                check=models.Q(stock__gte=0),
+                condition=models.Q(stock__gte=0),
                 name="product_stock_non_negative",
                 violation_error_message="재고는 0 이상이어야 합니다.",
             ),
@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                check=models.Q(sold_count__gte=0),
+                condition=models.Q(sold_count__gte=0),
                 name="product_sold_count_non_negative",
                 violation_error_message="판매량은 0 이상이어야 합니다.",
             ),

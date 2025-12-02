@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
@@ -61,6 +62,19 @@ class StockIssue:
     issue_type: str  # 'inactive', 'out_of_stock', 'insufficient'
     requested: int
     available: int
+
+
+@dataclass
+class PriceChange:
+    """가격 변경 정보"""
+
+    item_id: int
+    product_id: int
+    product_name: str
+    original_price: Decimal
+    current_price: Decimal
+    difference: Decimal
+    change_type: str  # 'increased', 'decreased'
 
 
 @dataclass
@@ -199,6 +213,7 @@ class CartService:
         # 6. 아이템 생성 또는 수량 업데이트
         if existing_item:
             # 기존 아이템 수량 증가 (F 객체로 안전하게)
+            # 가격은 최초 담은 시점 유지
             CartItem.objects.filter(pk=existing_item.pk).update(quantity=F("quantity") + quantity)
             existing_item.refresh_from_db()
             cart_item = existing_item
@@ -206,13 +221,14 @@ class CartService:
                 "[Cart] 아이템 수량 증가 | cart_id=%d, product_id=%d, new_qty=%d", cart.id, product_id, cart_item.quantity
             )
         else:
-            # 새 아이템 생성
+            # 새 아이템 생성 (가격 스냅샷 저장)
             cart_item = CartItem.objects.create(
                 cart=cart,
                 product=product,
                 quantity=quantity,
+                price_at_add=product.price,
             )
-            logger.info("[Cart] 아이템 추가 | cart_id=%d, product_id=%d, qty=%d", cart.id, product_id, quantity)
+            logger.info("[Cart] 아이템 추가 | cart_id=%d, product_id=%d, qty=%d, price=%s", cart.id, product_id, quantity, product.price)
 
         return cart_item
 
@@ -483,6 +499,68 @@ class CartService:
         }
         return messages.get(issue_type, "알 수 없는 문제")
 
+    # ===== 가격 변경 확인 =====
+
+    @staticmethod
+    @log_service_call
+    def check_price_changes(cart: Cart) -> list[PriceChange]:
+        """
+        장바구니 상품들의 가격 변경 확인
+
+        Args:
+            cart: 장바구니
+
+        Returns:
+            list[PriceChange]: 가격 변경된 상품 목록 (변경 없으면 빈 리스트)
+        """
+        changes: list[PriceChange] = []
+
+        for item in cart.items.select_related("product"):
+            if item.is_price_changed:
+                changes.append(
+                    PriceChange(
+                        item_id=item.id,
+                        product_id=item.product.id,
+                        product_name=item.product.name,
+                        original_price=item.price_at_add,
+                        current_price=item.product.price,
+                        difference=item.price_difference,
+                        change_type="increased" if item.price_difference > 0 else "decreased",
+                    )
+                )
+
+        if changes:
+            logger.info("[Cart] 가격 변경 감지 | cart_id=%d, changes=%d", cart.id, len(changes))
+
+        return changes
+
+    @staticmethod
+    @log_service_call
+    @transaction.atomic
+    def update_item_prices(cart: Cart) -> int:
+        """
+        장바구니 상품 가격을 현재 가격으로 업데이트
+        (사용자가 가격 변경을 확인하고 동의한 후 호출)
+
+        Args:
+            cart: 장바구니
+
+        Returns:
+            int: 업데이트된 아이템 수
+        """
+        updated_count = 0
+
+        for item in cart.items.select_related("product"):
+            if item.is_price_changed:
+                item.price_at_add = item.product.price
+                item.save(update_fields=["price_at_add"])
+                updated_count += 1
+
+        if updated_count:
+            logger.info("[Cart] 가격 업데이트 완료 | cart_id=%d, updated=%d", cart.id, updated_count)
+
+        return updated_count
+
     # ===== 장바구니 병합 =====
 
     @staticmethod
@@ -633,15 +711,17 @@ class CartService:
         cart_item = cart.items.filter(product_id=product_id).select_for_update().first()
 
         if cart_item:
-            # 기존 아이템 수량 증가
+            # 기존 아이템 수량 증가 (가격은 최초 담은 시점 유지)
             CartItem.objects.filter(pk=cart_item.pk).update(quantity=F("quantity") + quantity)
             cart_item.refresh_from_db()
         else:
-            # 새 아이템 생성
+            # 새 아이템 생성 (가격 스냅샷 저장)
+            product = Product.objects.get(pk=product_id)
             cart_item = CartItem.objects.create(
                 cart=cart,
                 product_id=product_id,
                 quantity=quantity,
+                price_at_add=product.price,
             )
 
         return cart_item
