@@ -1,7 +1,14 @@
-from datetime import timedelta
+"""
+정리 태스크 테스트
 
-from django.test import TestCase
-from django.utils import timezone
+Celery 비동기 작업의 데이터 정리 기능 검증:
+- delete_unverified_users_task: 미인증 계정 삭제
+- cleanup_old_email_logs_task: 오래된 이메일 로그 정리
+- cleanup_used_tokens_task: 사용된 토큰 정리
+- cleanup_expired_tokens_task: 만료된 토큰 정리
+"""
+
+import pytest
 
 from shopping.models.email_verification import EmailLog, EmailVerificationToken
 from shopping.models.user import User
@@ -11,342 +18,287 @@ from shopping.tasks.cleanup_tasks import (
     cleanup_used_tokens_task,
     delete_unverified_users_task,
 )
+from shopping.tests.factories import (
+    EmailLogFactory,
+    EmailVerificationTokenFactory,
+    UserFactory,
+)
 
 
-class DeleteUnverifiedUsersTaskTest(TestCase):
+# ==========================================
+# Fixtures
+# ==========================================
+
+
+@pytest.fixture
+def unverified_users(db):
+    """
+    미인증 사용자 목록 생성 (Factory 사용)
+
+    - old_unverified: 8일 전 가입, 미인증 (삭제 대상)
+    - recent_unverified: 5일 전 가입, 미인증 (유지 대상)
+    - verified: 10일 전 가입, 인증됨 (유지 대상)
+    """
+    return {
+        "old_unverified": UserFactory.old_unverified(days_ago=8),
+        "recent_unverified": UserFactory.recent_unverified(days_ago=5),
+        "verified": UserFactory.old_verified(days_ago=10),
+    }
+
+
+@pytest.fixture
+def email_logs(db):
+    """
+    이메일 로그 목록 생성 (Factory 사용)
+
+    - old_sent: 100일 전, sent 상태 (삭제 대상)
+    - old_verified: 100일 전, verified 상태 (삭제 대상)
+    - old_pending: 100일 전, pending 상태 (유지 대상 - pending)
+    - recent_sent: 50일 전, sent 상태 (유지 대상 - 90일 미만)
+    """
+    user = UserFactory()
+    return {
+        "old_sent": EmailLogFactory.old_sent(user=user, days_ago=100),
+        "old_verified": EmailLogFactory.old_verified(user=user, days_ago=100),
+        "old_pending": EmailLogFactory.old_pending(user=user, days_ago=100),
+        "recent_sent": EmailLogFactory.old_sent(user=user, days_ago=50),
+    }
+
+
+@pytest.fixture
+def verification_tokens(db):
+    """
+    인증 토큰 목록 생성 (Factory 사용)
+
+    - old_used: 40일 전 사용됨 (삭제 대상)
+    - recent_used: 20일 전 사용됨 (유지 대상 - 30일 미만)
+    - unused: 미사용 (유지 대상)
+    """
+    user = UserFactory.unverified()
+    return {
+        "old_used": EmailVerificationTokenFactory.old_used(user=user, days_ago=40),
+        "recent_used": EmailVerificationTokenFactory.recent_used(user=user, days_ago=20),
+        "unused": EmailVerificationTokenFactory(user=user),
+    }
+
+
+@pytest.fixture
+def expired_tokens(db):
+    """
+    만료 토큰 목록 생성 (Factory 사용)
+
+    - expired: 25시간 전 생성, 미사용 (삭제 대상 - 만료됨)
+    - valid: 20시간 전 생성, 미사용 (유지 대상 - 아직 유효)
+    - used: 30시간 전 생성, 사용됨 (유지 대상 - 이미 사용)
+    """
+    user = UserFactory.unverified()
+    return {
+        "expired": EmailVerificationTokenFactory.expired(user=user, hours_ago=25),
+        "valid": EmailVerificationTokenFactory.expired(user=user, hours_ago=20),
+        "used": EmailVerificationTokenFactory.used(user=user),
+    }
+
+
+# ==========================================
+# 미인증 계정 삭제 태스크 테스트
+# ==========================================
+
+
+@pytest.mark.django_db
+class TestDeleteUnverifiedUsersTask:
     """미인증 계정 삭제 태스크 테스트"""
 
-    def setUp(self):
-        """테스트 데이터 준비"""
-        # 8일 전 미인증 사용자 (삭제 대상)
-        self.old_unverified_user = User.objects.create_user(
-            username="old_unverified",
-            email="old@example.com",
-            password="testpass123!",
-            is_email_verified=False,
-        )
-        self.old_unverified_user.date_joined = timezone.now() - timedelta(days=8)
-        self.old_unverified_user.save()
+    def test_delete_unverified_users_default(self, unverified_users):
+        """기본 설정(7일)으로 미인증 계정 삭제"""
+        # Arrange
+        # unverified_users fixture에서 3명의 사용자 생성됨
+        # - old_unverified: 8일 전, 미인증 → 삭제 대상
+        # - recent_unverified: 5일 전, 미인증 → 유지
+        # - verified: 10일 전, 인증됨 → 유지
+        old_email = unverified_users["old_unverified"].email
+        recent_email = unverified_users["recent_unverified"].email
+        verified_email = unverified_users["verified"].email
 
-        # 5일 전 미인증 사용자 (유지 대상 - 7일 미만)
-        self.recent_unverified_user = User.objects.create_user(
-            username="recent_unverified",
-            email="recent@example.com",
-            password="testpass123!",
-            is_email_verified=False,
-        )
-        self.recent_unverified_user.date_joined = timezone.now() - timedelta(days=5)
-        self.recent_unverified_user.save()
-
-        # 10일 전 인증된 사용자 (유지 대상 - 인증됨)
-        self.verified_user = User.objects.create_user(
-            username="verified",
-            email="verified@example.com",
-            password="testpass123!",
-            is_email_verified=True,
-        )
-        self.verified_user.date_joined = timezone.now() - timedelta(days=10)
-        self.verified_user.save()
-
-    def test_delete_unverified_users_default(self):
-        """기본 설정(7일)으로 미인증 계정 삭제 테스트"""
-        # 삭제 전 사용자 수
-        total_before = User.objects.count()
-        self.assertEqual(total_before, 3)
-
-        # 태스크 실행
+        # Act
         result = delete_unverified_users_task()
 
-        # 결과 검증
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 1)
+        # Assert - 태스크 결과 확인
+        assert result["success"] is True
+        assert result["deleted_count"] == 1
 
-        # 8일 전 미인증 사용자만 삭제되었는지 확인
-        self.assertFalse(User.objects.filter(email="old@example.com").exists())
+        # Assert - 8일 전 미인증 사용자만 삭제되었는지 확인
+        assert not User.objects.filter(email=old_email).exists()
 
-        # 나머지는 유지되었는지 확인
-        self.assertTrue(User.objects.filter(email="recent@example.com").exists())
-        self.assertTrue(User.objects.filter(email="verified@example.com").exists())
+        # Assert - 나머지는 유지되었는지 확인
+        assert User.objects.filter(email=recent_email).exists()
+        assert User.objects.filter(email=verified_email).exists()
 
-        # 최종 사용자 수
-        total_after = User.objects.count()
-        self.assertEqual(total_after, 2)
+    def test_delete_unverified_users_custom_days(self, unverified_users):
+        """커스텀 일수(5일)로 삭제"""
+        # Arrange
+        # 5일로 설정하면 8일, 5일 전 미인증 사용자 모두 삭제됨
+        old_email = unverified_users["old_unverified"].email
+        recent_email = unverified_users["recent_unverified"].email
+        verified_email = unverified_users["verified"].email
 
-    def test_delet_unverified_users_custom_days(self):
-        """커스텀 일수(5일)로 삭제 테스트"""
-        # 5일로 설정하면 8일 전 사용자도 삭제됨
+        # Act
         result = delete_unverified_users_task(days=5)
 
-        # 8일 전 미인증 사용자 삭제 확인
-        self.assertEqual(result["deleted_count"], 2)
-        self.assertFalse(User.objects.filter(email="old@example.com").exists())
-        self.assertFalse(User.objects.filter(email="recent@example.com").exists())
+        # Assert - 5일 이상 된 미인증 사용자 2명 삭제
+        assert result["deleted_count"] == 2
+        assert not User.objects.filter(email=old_email).exists()
+        assert not User.objects.filter(email=recent_email).exists()
 
-    def test_delete_unverified_users_with_order(self):
-        """주문이 있는 미인증 사용자는 유지 테스트"""
-        # 주문 모델을 임포트하고 주문 생성
-        # (실제로는 Order 모델이 있어야 함)
-        # 이 테스트는 Order 모델이 구현되면 활성화
+        # Assert - 인증된 사용자는 유지
+        assert User.objects.filter(email=verified_email).exists()
 
-    def test_delete_unverified_users_none_to_delete(self):
-        """삭제할 계정이 없는 경우 테스트"""
+    def test_delete_unverified_users_none_to_delete(self, unverified_users):
+        """삭제할 계정이 없는 경우"""
+        # Arrange
         # 모든 사용자를 인증 처리
         User.objects.filter(is_email_verified=False).update(is_email_verified=True)
 
-        # 태스크 실행
+        # Act
         result = delete_unverified_users_task()
 
-        # 결과 검증
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 0)
+        # Assert - 삭제된 계정 0개
+        assert result["success"] is True
+        assert result["deleted_count"] == 0
 
 
-class CleanupOldEmailLogsTaskTest(TestCase):
+# ==========================================
+# 오래된 이메일 로그 정리 태스크 테스트
+# ==========================================
+
+
+@pytest.mark.django_db
+class TestCleanupOldEmailLogsTask:
     """오래된 이메일 로그 정리 태스크 테스트"""
 
-    def setUp(self):
-        """테스트 데이터 준비"""
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123!",
-        )
+    def test_cleanup_old_email_logs_default(self, email_logs):
+        """기본 설정(90일)으로 오래된 로그 삭제"""
+        # Arrange
+        # email_logs fixture에서 4개의 로그 생성됨
+        # - old_sent: 100일 전, sent → 삭제 대상
+        # - old_verified: 100일 전, verified → 삭제 대상
+        # - old_pending: 100일 전, pending → 유지 (pending 상태)
+        # - recent_sent: 50일 전, sent → 유지 (90일 미만)
 
-        # 100일 전 발송 완료 로그 (삭제 대상)
-        self.old_sent_log = EmailLog.objects.create(
-            user=self.user,
-            email_type="verification",
-            recipient_email=self.user.email,
-            subject="테스트 이메일",
-            status="sent",
-        )
-        self.old_sent_log.created_at = timezone.now() - timedelta(days=100)
-        self.old_sent_log.save()
-
-        # 100일 전 인증 완료 로그 (삭제 대상)
-        self.old_verified_log = EmailLog.objects.create(
-            user=self.user,
-            email_type="verification",
-            recipient_email=self.user.email,
-            subject="테스트 이메일 2",
-            status="verified",
-        )
-        self.old_verified_log.created_at = timezone.now() - timedelta(days=100)
-        self.old_verified_log.save()
-
-        # 100일 전 대기중 로그 (유지 대상 - pending)
-        self.old_pending_log = EmailLog.objects.create(
-            user=self.user,
-            email_type="verification",
-            recipient_email=self.user.email,
-            subject="테스트 이메일 3",
-            status="pending",
-        )
-        self.old_pending_log.created_at = timezone.now() - timedelta(days=100)
-        self.old_pending_log.save()
-
-        # 50일 전 발송 완료 로그 (유지 대상 - 90일 미만)
-        self.recent_sent_log = EmailLog.objects.create(
-            user=self.user,
-            email_type="verification",
-            recipient_email=self.user.email,
-            subject="테스트 이메일 4",
-            status="sent",
-        )
-        self.recent_sent_log.created_at = timezone.now() - timedelta(days=50)
-        self.recent_sent_log.save()
-
-    def test_cleanup_old_email_logs_default(self):
-        """기본 설정(90일)으로 오래된 로그 삭제 테스트"""
-        # 삭제 전 로그 수
-        total_before = EmailLog.objects.count()
-        self.assertEqual(total_before, 4)
-
-        # 태스크 실행
+        # Act
         result = cleanup_old_email_logs_task()
 
-        # 결과 검증
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 2)  # sent, verified 2개
+        # Assert - 태스크 결과 확인
+        assert result["success"] is True
+        assert result["deleted_count"] == 2
 
-        # sent, verified 상태의 오래된 로그만 삭제되었는지 확인
-        self.assertFalse(EmailLog.objects.filter(id=self.old_sent_log.id).exists())
-        self.assertFalse(EmailLog.objects.filter(id=self.old_verified_log.id).exists())
+        # Assert - sent, verified 상태의 오래된 로그만 삭제
+        assert not EmailLog.objects.filter(id=email_logs["old_sent"].id).exists()
+        assert not EmailLog.objects.filter(id=email_logs["old_verified"].id).exists()
 
-        # pending과 최근 로그는 유지되었는지 확인
-        self.assertTrue(EmailLog.objects.filter(id=self.old_pending_log.id).exists())
-        self.assertTrue(EmailLog.objects.filter(id=self.recent_sent_log.id).exists())
+        # Assert - pending과 최근 로그는 유지
+        assert EmailLog.objects.filter(id=email_logs["old_pending"].id).exists()
+        assert EmailLog.objects.filter(id=email_logs["recent_sent"].id).exists()
 
-        # 최종 로그 수
-        total_after = EmailLog.objects.count()
-        self.assertEqual(total_after, 2)
+    def test_cleanup_old_email_logs_custom_days(self, email_logs):
+        """커스텀 일수(60일)로 삭제"""
+        # Arrange
+        # 60일로 설정하면 100일 전 sent, verified 2개 삭제
 
-    def test_cleanup_old_email_logs_custom_days(self):
-        """커스텀 일수(60일)로 삭제 테스트"""
+        # Act
         result = cleanup_old_email_logs_task(days=60)
 
-        # 100일 전 sent, verified 2개 삭제
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 2)
+        # Assert
+        assert result["success"] is True
+        assert result["deleted_count"] == 2
 
 
-class CleanupUsedTokensTaskTest(TestCase):
-    """사용된 도큰 정리 태스크 테스트"""
+# ==========================================
+# 사용된 토큰 정리 태스크 테스트
+# ==========================================
 
-    def setUp(self):
-        """테스트 데이터 준비"""
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123!",
-        )
 
-        # 40일 전 사용된 토큰 (삭제 대상)
-        self.old_used_token = EmailVerificationToken.objects.create(user=self.user)
-        self.old_used_token.is_used = True
-        self.old_used_token.used_at = timezone.now() - timedelta(days=40)
-        self.old_used_token.save()
+@pytest.mark.django_db
+class TestCleanupUsedTokensTask:
+    """사용된 토큰 정리 태스크 테스트"""
 
-        # 20일 전 사용된 토큰 (유지 대상 - 30일 미만)
-        self.recent_used_token = EmailVerificationToken.objects.create(user=self.user)
-        self.recent_used_token.is_used = True
-        self.recent_used_token.used_at = timezone.now() - timedelta(days=20)
-        self.recent_used_token.save()
+    def test_cleanup_used_tokens_default(self, verification_tokens):
+        """기본 설정(30일)으로 사용된 토큰 삭제"""
+        # Arrange
+        # verification_tokens fixture에서 3개의 토큰 생성됨
+        # - old_used: 40일 전 사용 → 삭제 대상
+        # - recent_used: 20일 전 사용 → 유지 (30일 미만)
+        # - unused: 미사용 → 유지
 
-        # 미사용 토큰 (유지 대상)
-        self.unused_token = EmailVerificationToken.objects.create(user=self.user)
-
-    def test_cleanup_used_tokens_default(self):
-        """기본 설정(30일)으로 사용된 토큰 삭제 테스트"""
-        # 삭제 전 토큰 수
-        total_before = EmailVerificationToken.objects.count()
-        self.assertEqual(total_before, 3)
-
-        # 태스크 실행
+        # Act
         result = cleanup_used_tokens_task()
 
-        # 결과 검증
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 1)
+        # Assert - 태스크 결과 확인
+        assert result["success"] is True
+        assert result["deleted_count"] == 1
 
-        # 40일 전 사용된 토큰만 삭제되었는지 확인
-        self.assertFalse(EmailVerificationToken.objects.filter(id=self.old_used_token.id).exists())
+        # Assert - 40일 전 사용된 토큰만 삭제
+        assert not EmailVerificationToken.objects.filter(id=verification_tokens["old_used"].id).exists()
 
-        # 나머지는 유지되었는지 확인
-        self.assertTrue(EmailVerificationToken.objects.filter(id=self.recent_used_token.id).exists())
-        self.assertTrue(EmailVerificationToken.objects.filter(id=self.unused_token.id).exists())
-
-        # 최종 토큰 수
-        total_after = EmailVerificationToken.objects.count()
-        self.assertEqual(total_after, 2)
+        # Assert - 나머지는 유지
+        assert EmailVerificationToken.objects.filter(id=verification_tokens["recent_used"].id).exists()
+        assert EmailVerificationToken.objects.filter(id=verification_tokens["unused"].id).exists()
 
 
-class CleanupExpiredTokensTaskTest(TestCase):
+# ==========================================
+# 만료된 토큰 정리 태스크 테스트
+# ==========================================
+
+
+@pytest.mark.django_db
+class TestCleanupExpiredTokensTask:
     """만료된 토큰 정리 태스크 테스트"""
 
-    def setUp(self):
-        """테스트 데이터 준비"""
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123!",
-        )
+    def test_cleanup_expired_tokens(self, expired_tokens):
+        """만료된 미사용 토큰 삭제"""
+        # Arrange
+        # expired_tokens fixture에서 3개의 토큰 생성됨
+        # - expired: 25시간 전 생성, 미사용 → 삭제 대상 (24시간 초과)
+        # - valid: 20시간 전 생성, 미사용 → 유지 (24시간 미만)
+        # - used: 사용됨 → 유지 (이미 사용)
 
-        # 25시간 전 생성된 미사용 토큰 (삭제 대상 - 만료됨)
-        self.expired_token = EmailVerificationToken.objects.create(user=self.user)
-        self.expired_token.created_at = timezone.now() - timedelta(hours=25)
-        self.expired_token.save()
-
-        # 20시간 전 생성된 미사용 토큰 (유지 대상 - 아직 유효)
-        self.valid_token = EmailVerificationToken.objects.create(user=self.user)
-        self.valid_token.created_at = timezone.now() - timedelta(hours=20)
-        self.valid_token.save()
-
-        # 30시간 전 생성되었지만 사용된 토큰 (유지 대상)
-        # 먼저 생성
-        self.used_token = EmailVerificationToken.objects.create(user=self.user)
-
-        # 그 다음 속성 설정
-        self.used_token.created_at = timezone.now() - timedelta(hours=30)
-        self.used_token.is_used = True
-        self.used_token.used_at = timezone.now() - timedelta(hours=29)
-        self.used_token.save()
-
-    def test_cleanup_expired_tokens(self):
-        """만료된 미사용 토큰 삭제 테스트"""
-        # 삭제 전 토큰 수
-        total_before = EmailVerificationToken.objects.count()
-        self.assertEqual(total_before, 3)
-
-        # 태스크 실행
+        # Act
         result = cleanup_expired_tokens_task()
 
-        # 결과 검증
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_count"], 1)
+        # Assert - 태스크 결과 확인
+        assert result["success"] is True
+        assert result["deleted_count"] == 1
 
-        # 만료된 미사용 토큰만 삭제되었는지 확인
-        self.assertFalse(EmailVerificationToken.objects.filter(id=self.expired_token.id).exists())
+        # Assert - 만료된 미사용 토큰만 삭제
+        assert not EmailVerificationToken.objects.filter(id=expired_tokens["expired"].id).exists()
 
-        # 유효한 토큰과 사용된 토큰은 유지되었는지 확인
-        self.assertTrue(EmailVerificationToken.objects.filter(id=self.valid_token.id).exists())
-        self.assertTrue(EmailVerificationToken.objects.filter(id=self.used_token.id).exists())
-
-        # 최종 토큰 수
-        total_after = EmailVerificationToken.objects.count()
-        self.assertEqual(total_after, 2)
+        # Assert - 유효한 토큰과 사용된 토큰은 유지
+        assert EmailVerificationToken.objects.filter(id=expired_tokens["valid"].id).exists()
+        assert EmailVerificationToken.objects.filter(id=expired_tokens["used"].id).exists()
 
 
-class CleanupTaskIntegrationTest(TestCase):
+# ==========================================
+# 정리 태스크 통합 테스트
+# ==========================================
+
+
+@pytest.mark.django_db
+class TestCleanupTaskIntegration:
     """정리 태스크 통합 테스트"""
 
-    def setUp(self):
-        """테스트 데이터 준비"""
-        # 다양한 상태의 데이터 생성
-        self.create_test_data()
+    def test_full_cleanup_workflow(self, db):
+        """전체 정리 워크플로우 (Factory 사용)"""
+        # Arrange - 오래된 미인증 사용자 + 연관 데이터 생성
+        old_user = UserFactory.old_unverified(days_ago=10)
+        token = EmailVerificationTokenFactory.expired(user=old_user, hours_ago=240)  # 10일
+        EmailLogFactory.old_sent(user=old_user, token=token, days_ago=10)
 
-    def create_test_data(self):
-        """복잡한 테스트 데이터 생성"""
-        # 오래된 미인증 사용자 (삭제 대상)
-        old_user = User.objects.create_user(
-            username="old_user",
-            email="old@example.com",
-            password="testpass123!",
-            is_email_verified=False,
-        )
-        old_user.date_joined = timezone.now() - timedelta(days=10)
-        old_user.save()
-
-        # 토큰 생성
-        token = EmailVerificationToken.objects.create(user=old_user)
-        token.created_at = timezone.now() - timedelta(days=10)
-        token.save()
-
-        # 이메일 로그 생성
-        log = EmailLog.objects.create(
-            user=old_user,
-            token=token,
-            email_type="verification",
-            recipient_email=old_user.email,
-            subject="테스트",
-            status="sent",
-        )
-        log.created_at = timezone.now() - timedelta(days=10)
-        log.save()
-
-    def test_full_cleanup_workflow(self):
-        """전체 정리 워크플로우 테스트"""
-        # 1. 초기 데이터 수
         users_before = User.objects.count()
-        EmailVerificationToken.objects.count()
-        EmailLog.objects.count()
 
-        # 2. 미인증 계정 삭제(CASCADE로 토큰, 로그도 삭제)
+        # Act - 미인증 계정 삭제 (CASCADE로 토큰, 로그도 삭제)
         delete_result = delete_unverified_users_task(days=7)
 
-        # 3. 결과 확인
-        self.assertTrue(delete_result["success"])
+        # Assert - 태스크 성공
+        assert delete_result["success"] is True
 
-        # 사용자 삭제되면 연관 데이터도 삭제됨 (CASCADE)
-        users_after = User.objects.count()
-        self.assertLess(users_after, users_before)
+        # Assert - 사용자 삭제되면 연관 데이터도 삭제됨 (CASCADE)
+        assert User.objects.count() < users_before

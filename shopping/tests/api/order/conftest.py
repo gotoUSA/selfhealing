@@ -412,6 +412,36 @@ def mock_payment_cancel():
     }
 
 
+@pytest.fixture
+def payment_confirm_context(mock_payment_success):
+    """
+    결제 승인 Mock 컨텍스트 매니저
+
+    Toss API와 비동기 처리를 한 번에 mock 처리
+    """
+    from contextlib import contextmanager
+    from unittest.mock import patch
+
+    @contextmanager
+    def _confirm_context(amount):
+        with (
+            patch("shopping.utils.toss_payment.TossPaymentClient.confirm_payment") as mock_confirm,
+            patch("shopping.services.payment_service.PaymentService.confirm_payment_async") as mock_async,
+        ):
+            mock_confirm.return_value = mock_payment_success(amount)
+
+            from shopping.services.payment_service import PaymentService
+
+            def sync_wrapper(payment, payment_key, order_id, amount, user):
+                PaymentService.confirm_payment_sync(payment, payment_key, order_id, amount, user)
+                return {"status": "processing", "payment_id": payment.id, "task_id": "test", "message": "test"}
+
+            mock_async.side_effect = sync_wrapper
+            yield mock_confirm, mock_async
+
+    return _confirm_context
+
+
 # ==========================================
 # 8. 동시성/비동기 테스트 설정 Fixture
 # ==========================================

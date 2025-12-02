@@ -166,10 +166,8 @@ class TestAddPointsAfterPayment:
         user.refresh_from_db()
         assert user.points == initial_points + 1000
 
-        # PointHistory 생성 확인
-        history = PointHistory.objects.filter(
-            user=user, type="earn", description__contains="결제"
-        ).first()
+        # PointHistory 생성 확인 (description에 "구매 적립" 포함)
+        history = PointHistory.objects.filter(user=user, type="earn", description__contains="구매 적립").first()
         assert history is not None
         assert history.points == 1000
 

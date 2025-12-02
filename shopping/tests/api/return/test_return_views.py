@@ -28,7 +28,6 @@ def get_results(response_data):
     """
     페이지네이션 응답에서 results 추출 헬퍼
 
-
     DRF PageNumberPagination 응답: {"count": N, "results": [...]}
     페이지네이션 없는 응답: [...]
     """

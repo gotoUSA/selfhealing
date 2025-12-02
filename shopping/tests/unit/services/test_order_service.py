@@ -539,4 +539,3 @@ class TestOrderServiceHybrid:
         assert any("Order 레코드 생성 완료" in msg for msg in log_messages)
         assert any("주문 비동기 처리 시작" in msg for msg in log_messages)
         assert any(f"order_id={order.id}" in msg for msg in log_messages)
-

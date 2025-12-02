@@ -334,7 +334,6 @@ class TestPaymentConfirmBoundary:
 
         # Assert
         assert response.status_code == status.HTTP_202_ACCEPTED
-        # Points earned check moved to DB validation
 
         # Assert - 포인트 적립 없음
         user.refresh_from_db()
@@ -348,6 +347,10 @@ class TestPaymentConfirmBoundary:
         )
         assert not earn_history.exists()
 
+    @pytest.mark.parametrize(
+        "level,expected_rate",
+        [("bronze", 1), ("silver", 2), ("gold", 3), ("vip", 5)],
+    )
     def test_earn_rate_by_membership_level(
         self,
         authenticated_client,
@@ -356,83 +359,80 @@ class TestPaymentConfirmBoundary:
         add_to_cart_helper,
         shipping_data,
         mocker,
+        level,
+        expected_rate,
     ):
         """등급별 포인트 적립률 (bronze 1%, silver 2%, gold 3%, vip 5%)"""
         # Arrange
-        membership_levels = ["bronze", "silver", "gold", "vip"]
-        expected_rates = {"bronze": 1, "silver": 2, "gold": 3, "vip": 5}
+        user = user_factory(
+            username=f"user_{level}",
+            points=10000,
+            membership_level=level,
+        )
 
-        for level in membership_levels:
-            user = user_factory(
-                username=f"user_{level}",
-                points=10000,
-                membership_level=level,
-            )
+        add_to_cart_helper(user, product, quantity=1)
 
-            add_to_cart_helper(user, product, quantity=1)
+        authenticated_client.force_authenticate(user=user)
 
-            authenticated_client.force_authenticate(user=user)
+        # 주문 생성
+        order_response = authenticated_client.post(
+            "/api/orders/",
+            shipping_data,
+            format="json",
+        )
+        order = Order.objects.filter(user=user).order_by("-created_at").first()
 
-            # 주문 생성
-            order_response = authenticated_client.post(
-                "/api/orders/",
-                shipping_data,
-                format="json",
-            )
-            order = Order.objects.filter(user=user).order_by("-created_at").first()
+        # Payment 생성
+        authenticated_client.post(
+            "/api/payments/request/",
+            {"order_id": order.id},
+            format="json",
+        )
 
-            # Payment 생성
-            authenticated_client.post(
-                "/api/payments/request/",
-                {"order_id": order.id},
-                format="json",
-            )
+        payment = Payment.objects.get(order=order)
 
-            payment = Payment.objects.get(order=order)
+        toss_response = TossResponseBuilder.success_response(
+            payment_key=payment.payment_key,
+            order_id=order.id,
+            amount=int(payment.amount),
+        )
 
-            toss_response = TossResponseBuilder.success_response(
-                payment_key=payment.payment_key,
-                order_id=order.id,
-                amount=int(payment.amount),
-            )
+        mocker.patch(
+            "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
+            return_value=toss_response,
+        )
 
-            mocker.patch(
-                "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-                return_value=toss_response,
-            )
+        request_data = {
+            "order_id": order.id,
+            "payment_key": "test_key",
+            "amount": int(payment.amount),
+        }
 
-            request_data = {
-                "order_id": order.id,
-                "payment_key": "test_key",
-                "amount": int(payment.amount),
-            }
+        # Act
+        response = authenticated_client.post(
+            "/api/payments/confirm/",
+            request_data,
+            format="json",
+        )
 
-            # Act
-            response = authenticated_client.post(
-                "/api/payments/confirm/",
-                request_data,
-                format="json",
-            )
+        # Assert
+        assert response.status_code == status.HTTP_202_ACCEPTED
 
-            # Assert
-            assert response.status_code == status.HTTP_202_ACCEPTED
+        user.refresh_from_db()
+        # total_amount는 이미 순수 상품금액 (배송비 미포함)
+        expected_earn = int(order.total_amount * Decimal(expected_rate) / Decimal("100"))
+        actual_earn = user.points - 10000
 
-            user.refresh_from_db()
-            expected_rate = expected_rates[level]
-            # total_amount는 이미 순수 상품금액 (배송비 미포함)
-            expected_earn = int(order.total_amount * Decimal(expected_rate) / Decimal("100"))
-            actual_earn = user.points - 10000
+        assert actual_earn == expected_earn, f"{level} 등급 적립률 검증 실패"
 
-            assert actual_earn == expected_earn, f"{level} 등급 적립률 검증 실패"
-
-            # Assert - 포인트 이력 메타데이터 확인
-            point_history = PointHistory.objects.filter(
-                user=user,
-                type="earn",
-                order=order,
-            ).first()
-            assert point_history.metadata["earn_rate"] == f"{expected_rate}%"
-            assert point_history.metadata["membership_level"] == level
+        # Assert - 포인트 이력 메타데이터 확인
+        point_history = PointHistory.objects.filter(
+            user=user,
+            type="earn",
+            order=order,
+        ).first()
+        assert point_history.metadata["earn_rate"] == f"{expected_rate}%"
+        assert point_history.metadata["membership_level"] == level
 
 
 @pytest.mark.django_db
@@ -624,7 +624,7 @@ class TestPaymentConfirmException:
     ):
         """토스 API 실패 (비동기 태스크에서 실패)"""
         # Arrange
-        mock_confirm = mocker.patch(
+        mocker.patch(
             "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
             side_effect=TossPaymentError("PROVIDER_ERROR", "결제 승인에 실패했습니다."),
         )

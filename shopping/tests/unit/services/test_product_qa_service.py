@@ -23,11 +23,7 @@ class TestProductQAService:
         content = "문의하신 내용에 대한 답변입니다."
 
         # Act
-        answer = ProductQAService.create_answer(
-            question=question,
-            seller=seller,
-            content=content
-        )
+        answer = ProductQAService.create_answer(question=question, seller=seller, content=content)
 
         # Assert
         assert answer.id is not None
@@ -47,11 +43,7 @@ class TestProductQAService:
         content = "답변입니다."
 
         # Act
-        ProductQAService.create_answer(
-            question=question,
-            seller=seller,
-            content=content
-        )
+        ProductQAService.create_answer(question=question, seller=seller, content=content)
 
         # Assert
         notifications = Notification.objects.filter(user=question.user)
@@ -70,11 +62,7 @@ class TestProductQAService:
         long_content = "A" * 5000  # 5000자 답변
 
         # Act
-        answer = ProductQAService.create_answer(
-            question=question,
-            seller=seller,
-            content=long_content
-        )
+        answer = ProductQAService.create_answer(question=question, seller=seller, content=long_content)
 
         # Assert
         assert answer.content == long_content
@@ -82,8 +70,8 @@ class TestProductQAService:
 
     def test_create_answer_duplicate_answer_raises_error(self):
         """이미 답변이 있는 질문에 중복 답변 시 IntegrityError 발생 테스트
-        
-        ProductAnswer.question은 OneToOneField이므로 
+
+        ProductAnswer.question은 OneToOneField이므로
         동일 질문에 중복 답변 생성 시 DB 제약조건 위반 발생
         """
         # Arrange
@@ -92,17 +80,9 @@ class TestProductQAService:
         content = "첫 번째 답변입니다."
 
         # 첫 번째 답변 생성 (성공)
-        ProductQAService.create_answer(
-            question=question,
-            seller=seller,
-            content=content
-        )
+        ProductQAService.create_answer(question=question, seller=seller, content=content)
 
         # Act & Assert
         # 동일 질문에 두 번째 답변 시도 시 IntegrityError 발생
         with pytest.raises(IntegrityError):
-            ProductAnswer.objects.create(
-                question=question,
-                seller=seller,
-                content="중복 답변 시도"
-            )
+            ProductAnswer.objects.create(question=question, seller=seller, content="중복 답변 시도")

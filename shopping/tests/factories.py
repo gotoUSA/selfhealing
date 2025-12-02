@@ -169,6 +169,33 @@ class UserFactory(DjangoModelFactory):
         kwargs.setdefault("membership_level", level)
         return cls(**kwargs)
 
+    @classmethod
+    def old_unverified(cls, days_ago=8, **kwargs):
+        """오래된 미인증 사용자 (정리 대상)"""
+        kwargs.setdefault("is_email_verified", False)
+        user = cls(**kwargs)
+        user.date_joined = timezone.now() - timedelta(days=days_ago)
+        user.save(update_fields=["date_joined"])
+        return user
+
+    @classmethod
+    def recent_unverified(cls, days_ago=5, **kwargs):
+        """최근 미인증 사용자 (유지 대상)"""
+        kwargs.setdefault("is_email_verified", False)
+        user = cls(**kwargs)
+        user.date_joined = timezone.now() - timedelta(days=days_ago)
+        user.save(update_fields=["date_joined"])
+        return user
+
+    @classmethod
+    def old_verified(cls, days_ago=10, **kwargs):
+        """오래된 인증 사용자"""
+        kwargs.setdefault("is_email_verified", True)
+        user = cls(**kwargs)
+        user.date_joined = timezone.now() - timedelta(days=days_ago)
+        user.save(update_fields=["date_joined"])
+        return user
+
 
 class EmailVerificationTokenFactory(DjangoModelFactory):
     """
@@ -213,6 +240,22 @@ class EmailVerificationTokenFactory(DjangoModelFactory):
         token.save()
         return token
 
+    @classmethod
+    def old_used(cls, days_ago=40, **kwargs):
+        """오래된 사용된 토큰 (정리 대상)"""
+        token = cls.used(**kwargs)
+        token.used_at = timezone.now() - timedelta(days=days_ago)
+        token.save()
+        return token
+
+    @classmethod
+    def recent_used(cls, days_ago=20, **kwargs):
+        """최근 사용된 토큰 (유지 대상)"""
+        token = cls.used(**kwargs)
+        token.used_at = timezone.now() - timedelta(days=days_ago)
+        token.save()
+        return token
+
 
 class PasswordResetTokenFactory(DjangoModelFactory):
     """
@@ -240,6 +283,95 @@ class PasswordResetTokenFactory(DjangoModelFactory):
         token.created_at = timezone.now() - timedelta(hours=hours_ago)
         token.save()
         return token
+
+
+class EmailLogFactory(DjangoModelFactory):
+    """
+    이메일 로그 Factory
+
+    사용 예시:
+        log = EmailLogFactory()  # 기본 (pending)
+        log = EmailLogFactory.sent()  # 발송 완료
+        log = EmailLogFactory.failed()  # 발송 실패
+        log = EmailLogFactory.verified()  # 인증 완료
+        log = EmailLogFactory.old_sent(days_ago=100)  # 오래된 발송 로그
+    """
+
+    class Meta:
+        model = "shopping.EmailLog"
+
+    user = factory.SubFactory(UserFactory)
+    email_type = "verification"
+    recipient_email = factory.LazyAttribute(lambda obj: obj.user.email)
+    subject = "[쇼핑몰] 이메일 인증을 완료해주세요"
+    status = "pending"
+
+    @classmethod
+    def pending(cls, **kwargs):
+        """대기 상태 (기본값)"""
+        kwargs.setdefault("status", "pending")
+        return cls(**kwargs)
+
+    @classmethod
+    def sent(cls, **kwargs):
+        """발송 완료 상태"""
+        kwargs.setdefault("status", "sent")
+        kwargs.setdefault("sent_at", timezone.now())
+        return cls(**kwargs)
+
+    @classmethod
+    def failed(cls, error_message="SMTP connection failed", **kwargs):
+        """발송 실패 상태"""
+        kwargs.setdefault("status", "failed")
+        kwargs.setdefault("error_message", error_message)
+        return cls(**kwargs)
+
+    @classmethod
+    def verified(cls, **kwargs):
+        """인증 완료 상태"""
+        kwargs.setdefault("status", "verified")
+        kwargs.setdefault("sent_at", timezone.now() - timedelta(minutes=10))
+        kwargs.setdefault("verified_at", timezone.now())
+        return cls(**kwargs)
+
+    @classmethod
+    def old_sent(cls, days_ago=100, **kwargs):
+        """오래된 발송 완료 로그"""
+        log = cls.sent(**kwargs)
+        old_date = timezone.now() - timedelta(days=days_ago)
+        log.created_at = old_date
+        log.sent_at = old_date
+        log.save()
+        return log
+
+    @classmethod
+    def old_verified(cls, days_ago=100, **kwargs):
+        """오래된 인증 완료 로그"""
+        log = cls.verified(**kwargs)
+        old_date = timezone.now() - timedelta(days=days_ago)
+        log.created_at = old_date
+        log.sent_at = old_date
+        log.verified_at = old_date + timedelta(minutes=10)
+        log.save()
+        return log
+
+    @classmethod
+    def old_pending(cls, days_ago=100, **kwargs):
+        """오래된 대기 상태 로그"""
+        log = cls.pending(**kwargs)
+        log.created_at = timezone.now() - timedelta(days=days_ago)
+        log.save()
+        return log
+
+    @classmethod
+    def with_token(cls, token=None, **kwargs):
+        """토큰이 연결된 로그"""
+        if token is None:
+            user = kwargs.get("user") or UserFactory.unverified()
+            token = EmailVerificationTokenFactory(user=user)
+            kwargs["user"] = user
+        kwargs["token"] = token
+        return cls(**kwargs)
 
 
 class SocialAppFactory(DjangoModelFactory):
@@ -794,6 +926,48 @@ class PointHistoryFactory(DjangoModelFactory):
         history = cls.earn(**kwargs)
         history.metadata["used_amount"] = used_amount
         history.save(update_fields=["metadata"])
+        return history
+
+    @classmethod
+    def old_expire(cls, days_ago=800, **kwargs):
+        """오래된 만료 이력 (정리 대상)
+
+        Note: expire 타입은 points가 음수, balance는 0 이상이어야 함
+        """
+        kwargs.setdefault("type", "expire")
+        kwargs.setdefault("points", -100)
+        kwargs.setdefault("balance", 0)  # 만료 후 잔액은 보통 0 또는 감소된 값
+        kwargs.setdefault("description", "만료")
+        kwargs.setdefault("expires_at", None)  # 만료 이력은 expires_at 불필요
+        history = cls(**kwargs)
+        PointHistory.objects.filter(id=history.id).update(created_at=timezone.now() - timedelta(days=days_ago))
+        history.refresh_from_db()
+        return history
+
+    @classmethod
+    def recent_expire(cls, days_ago=365, **kwargs):
+        """최근 만료 이력 (유지 대상)
+
+        Note: expire 타입은 points가 음수, balance는 0 이상이어야 함
+        """
+        kwargs.setdefault("type", "expire")
+        kwargs.setdefault("points", -50)
+        kwargs.setdefault("balance", 50)  # 부분 만료 후 남은 잔액
+        kwargs.setdefault("description", "최근 만료")
+        kwargs.setdefault("expires_at", None)
+        history = cls(**kwargs)
+        PointHistory.objects.filter(id=history.id).update(created_at=timezone.now() - timedelta(days=days_ago))
+        history.refresh_from_db()
+        return history
+
+    @classmethod
+    def old_earn(cls, days_ago=800, **kwargs):
+        """오래된 적립 이력"""
+        kwargs.setdefault("type", "earn")
+        kwargs.setdefault("description", "오래된 적립")
+        history = cls(**kwargs)
+        PointHistory.objects.filter(id=history.id).update(created_at=timezone.now() - timedelta(days=days_ago))
+        history.refresh_from_db()
         return history
 
 
