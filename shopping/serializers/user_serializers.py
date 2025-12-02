@@ -153,8 +153,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         label="비밀번호",
     )
 
-    # 이메일 필수
-    email = serializers.EmailField(required=True, label="이메일")
+    # 이메일 필수 (Django EmailField 기본 max_length=254)
+    email = serializers.EmailField(required=True, max_length=254, label="이메일")
 
     class Meta:
         model = User

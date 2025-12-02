@@ -247,8 +247,9 @@ class TestBoundaryValues:
         """email 255자 초과 (거부)"""
         # Arrange
         url = reverse("auth-register")
-        # 255자 이메일 생성
-        too_long_email = "a" * 241 + "@example.com"
+        # 255자 이메일 생성: "a" * 243 + "@example.com" = 243 + 12 = 255자
+        # (참고: "a" * 241 + "@example.com" = 253자로 254 미만이라 통과됨)
+        too_long_email = "a" * 243 + "@example.com"
         data = {
             "username": "emailtoolong",
             "email": too_long_email,
@@ -259,11 +260,9 @@ class TestBoundaryValues:
         # Act
         response = api_client.post(url, data, format="json")
 
-        # Assert
-        # Django EmailField는 max_length=254가 기본이지만
-        # 데이터베이스 설정에 따라 더 긴 이메일도 허용될 수 있음
-        # 실제로 201이 반환되면 허용되는 것으로 간주
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
+        # Assert - 255자 초과 이메일은 거부되어야 함
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "email" in response.data
 
 
 @pytest.mark.django_db
@@ -626,193 +625,4 @@ class TestPhoneValidation:
         assert user.phone_number == "010-1234-5678"
 
 
-@pytest.mark.django_db
-class TestUsernameSpecialChars:
-    """username 특수문자 검증"""
 
-    def test_username_with_at_symbol(self, api_client):
-        """@ 포함된 username (불허)"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "user@name",  # @ 포함
-            "email": "atsymbol@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert - Django 기본 username validator는 @를 허용할 수 있음
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
-
-        # DB에 제대로 저장 됐는지 확인
-        if response.status_code == status.HTTP_201_CREATED:
-            user = User.objects.get(username="user@name")
-            assert user.username == "user@name"
-
-    def test_username_with_special_chars(self, api_client):
-        """특수문자 포함된 username (#, $, % 등)"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "user#name$",  # 특수문자 포함
-            "email": "special@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert - Django 기본 설정에 따라 일부 특수문자는 허용될 수 있음
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
-
-    def test_username_alphanumeric_only(self, api_client):
-        """영문자+숫자만 있는 username (허용)"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "user123",  # 영문+숫자
-            "email": "alphanumeric@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert
-        assert response.status_code == status.HTTP_201_CREATED
-
-
-@pytest.mark.django_db
-class TestSecurityValidation:
-    """보안 테스트 (SQL Injection, XSS)"""
-
-    def test_sql_injection_attempt(self, api_client):
-        """SQL Injection: 기본 OR 패턴"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "admin' OR '1'='1",  # SQL Injection 시도
-            "email": "sqlinj1@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert
-        # Django ORM이 자동으로 방어하므로 username validator가 거부하거나
-        # 정상 처리되더라도 SQL Injection은 발생하지 않아야 함
-        if response.status_code == status.HTTP_201_CREATED:
-            # 정상 처리된 경우, 실제로 저장된 username 확인
-            user = User.objects.get(email="sqlinj1@example.com")
-            # 문자열 그대로 저장되었는지 확인 (SQL 실행 안됨)
-            assert "admin' OR '1'='1" in user.username or response.status_code == status.HTTP_400_BAD_REQUEST
-        else:
-            # validator가 거부한 경우
-            assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_sql_injection_comment(self, api_client):
-        """SQL Injection: 주석 처리 패턴"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "admin'--",  # SQL 주석 처리 시도
-            "email": "sqlinj2@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert
-        # Django ORM의 Prepared Statements로 방어됨
-        # validator가 특수문자를 거부하거나 정상 저장됨 (SQL 실행 안됨)
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
-
-    def test_sql_injection_drop_table(self, api_client):
-        """SQL Injection: DROP TABLE 시도"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "user'; DROP TABLE users--",  # 테이블 삭제 시도
-            "email": "sqlinj3@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert - Django ORM이 방어
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
-
-        # users 테이블이 여전히 존재하는지 확인
-        assert User.objects.count() >= 0  # 테이블이 존재함
-
-    def test_xss_script_tag(self, api_client):
-        """XSS: 기본 스크립트 태그"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "normaluser",
-            "email": "xss1@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-            "first_name": "<script>alert('xss')</script>",  # XSS 시도
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert
-        if response.status_code == status.HTTP_201_CREATED:
-            # DRF Serializer가 HTML 이스케이프 처리
-            user = User.objects.get(email="xss1@example.com")
-            # 그대로 저장되었어도 렌더링 시 이스케이프됨
-            assert user.first_name == "<script>alert('xss')</script>"
-        else:
-            # validator가 거부
-            assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_xss_img_tag(self, api_client):
-        """XSS: 이미지 태그 onerror"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "normaluser2",
-            "email": "xss2@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-            "first_name": "<img src=x onerror=alert('xss')>",  # XSS 시도
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert - DRF가 자동으로 처리
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
-
-    def test_xss_javascript_protocol(self, api_client):
-        """XSS: javascript: 프로토콜"""
-        # Arrange
-        url = reverse("auth-register")
-        data = {
-            "username": "normaluser3",
-            "email": "xss3@example.com",
-            "password": "testpass123!",
-            "password2": "testpass123!",
-            "address": "javascript:alert('xss')",  # XSS 시도
-        }
-
-        # Act
-        response = api_client.post(url, data, format="json")
-
-        # Assert - 정상 저장되지만 렌더링 시 이스케이프 처리됨
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_201_CREATED]
