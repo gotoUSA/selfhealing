@@ -10,6 +10,7 @@ from .product_qa import ProductAnswer, ProductQuestion
 from .return_request import Return, ReturnItem
 from .seller import SellerProfile
 from .user import User
+from .webhook_event import WebhookEvent
 
 # import 위해
 
@@ -35,4 +36,5 @@ __all__ = [
     "Return",
     "ReturnItem",
     "SellerProfile",
+    "WebhookEvent",
 ]

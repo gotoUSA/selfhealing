@@ -4,6 +4,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
@@ -30,8 +31,47 @@ class PaymentConfirmError(Exception):
     pass
 
 
+# Redis TTL 상수 (Toss 실시간 결제 환경에 최적화)
+IDEMPOTENCY_KEY_TTL = 60  # 60초 - 사용자 중복 요청 방어
+
+
 class PaymentService:
     """결제 관련 비즈니스 로직을 처리하는 서비스"""
+
+    @staticmethod
+    def _get_idempotency_cache_key(key: str) -> str:
+        """멱등성 키의 Redis 캐시 키 생성"""
+        return f"payment:idempotency:{key}"
+
+    @staticmethod
+    def _check_idempotency_key(key: str) -> Payment | None:
+        """
+        Redis에서 멱등성 키 확인 (TTL 60초)
+
+        Returns:
+            기존 Payment 객체 또는 None
+        """
+        if not key:
+            return None
+
+        cache_key = PaymentService._get_idempotency_cache_key(key)
+        payment_id = cache.get(cache_key)
+
+        if payment_id:
+            try:
+                return Payment.objects.get(pk=payment_id)
+            except Payment.DoesNotExist:
+                # Redis에는 있지만 DB에 없는 경우 (드문 케이스)
+                cache.delete(cache_key)
+
+        return None
+
+    @staticmethod
+    def _set_idempotency_key(key: str, payment_id: int) -> None:
+        """Redis에 멱등성 키 저장 (TTL 60초)"""
+        if key:
+            cache_key = PaymentService._get_idempotency_cache_key(key)
+            cache.set(cache_key, payment_id, timeout=IDEMPOTENCY_KEY_TTL)
 
     @staticmethod
     @transaction.atomic
@@ -48,8 +88,8 @@ class PaymentService:
             Payment: 생성된 결제 정보
 
         Note:
-            idempotency_key가 제공되고 해당 키로 이미 결제가 존재하면,
-            새로 생성하지 않고 기존 결제를 반환합니다. (멱등성 보장)
+            멱등성 키는 Redis TTL 60초로 관리됩니다.
+            60초 내 동일한 키로 요청 시 기존 결제를 반환합니다.
         """
         logger.info(
             f"결제 정보 생성 시작: order_id={order.id}, order_number={order.order_number}, "
@@ -57,15 +97,14 @@ class PaymentService:
             f"idempotency_key={idempotency_key}"
         )
 
-        # 멱등성 키가 있으면 기존 결제 확인 (중복 방지)
-        if idempotency_key:
-            existing_payment = Payment.objects.filter(idempotency_key=idempotency_key).first()
-            if existing_payment:
-                logger.info(
-                    f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, "
-                    f"payment_id={existing_payment.id}"
-                )
-                return existing_payment
+        # 멱등성 키 확인 (Redis TTL 60초)
+        existing_payment = PaymentService._check_idempotency_key(idempotency_key)
+        if existing_payment:
+            logger.info(
+                f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, "
+                f"payment_id={existing_payment.id}"
+            )
+            return existing_payment
 
         # 동시성 제어: Order를 락으로 보호
         Order.objects.select_for_update().get(pk=order.pk)
@@ -76,15 +115,18 @@ class PaymentService:
             logger.warning(f"기존 결제 정보 삭제: order_id={order.id}, count={existing_count}")
             Payment.objects.filter(order=order).delete()
 
-        # 새 Payment 생성 (포인트 차감 후 금액으로)
+        # 새 Payment 생성
         payment = Payment.objects.create(
             order=order,
-            toss_order_id=str(order.id),  # Toss에 전송하는 orderId와 일치시킴
+            toss_order_id=str(order.id),
             amount=order.final_amount,
-            method=payment_method,  # 결제 수단 저장
+            method=payment_method,
             status="ready",
-            idempotency_key=idempotency_key,  # 멱등성 키 저장
+            idempotency_key=idempotency_key,
         )
+
+        # Redis에 멱등성 키 저장 (TTL 60초)
+        PaymentService._set_idempotency_key(idempotency_key, payment.id)
 
         # 로그 기록
         PaymentLog.objects.create(
@@ -95,7 +137,7 @@ class PaymentService:
                 "order_id": order.id,
                 "total_amount": str(order.total_amount),
                 "used_points": order.used_points,
-                "amount": str(order.final_amount),  # 실제 결제 금액
+                "amount": str(order.final_amount),
                 "payment_method": payment_method,
             },
         )

@@ -54,12 +54,11 @@ class Payment(models.Model):
     # 멱등성 키 (결제 중복 방지)
     idempotency_key = models.CharField(
         max_length=64,
-        unique=True,
         null=True,
         blank=True,
         db_index=True,
         verbose_name="멱등성 키",
-        help_text="결제 요청의 멱등성을 보장하기 위한 고유 키 (클라이언트가 생성)",
+        help_text="결제 요청의 멱등성을 보장하기 위한 고유 키 (클라이언트가 생성, Redis TTL 60초로 관리)",
     )
 
     # 금액 정보
@@ -193,27 +192,19 @@ class Payment(models.Model):
 
         # 2. 취소 금액이 결제 금액을 초과할 수 없음
         if self.canceled_amount > self.amount:
-            raise ValidationError(
-                {"canceled_amount": "취소 금액이 결제 금액을 초과할 수 없습니다."}
-            )
+            raise ValidationError({"canceled_amount": "취소 금액이 결제 금액을 초과할 수 없습니다."})
 
         # 3. 완료 상태에서는 payment_key 필수
         if self.status == "done" and not self.payment_key:
-            raise ValidationError(
-                {"payment_key": "결제 완료 상태에서는 결제키가 필요합니다."}
-            )
+            raise ValidationError({"payment_key": "결제 완료 상태에서는 결제키가 필요합니다."})
 
         # 4. 완료 상태에서는 승인 일시 필수
         if self.status == "done" and not self.approved_at:
-            raise ValidationError(
-                {"approved_at": "결제 완료 상태에서는 승인 일시가 필요합니다."}
-            )
+            raise ValidationError({"approved_at": "결제 완료 상태에서는 승인 일시가 필요합니다."})
 
         # 5. 취소 상태에서는 취소 관련 필드 필수
         if self.status == "canceled" and not self.canceled_at:
-            raise ValidationError(
-                {"canceled_at": "결제 취소 상태에서는 취소 일시가 필요합니다."}
-            )
+            raise ValidationError({"canceled_at": "결제 취소 상태에서는 취소 일시가 필요합니다."})
 
     @property
     def is_paid(self) -> bool:
@@ -272,9 +263,7 @@ class Payment(models.Model):
 
         self.save()
 
-    def mark_as_partial_canceled(
-        self, partial_amount: Decimal, cancel_data: dict[str, Any]
-    ) -> None:
+    def mark_as_partial_canceled(self, partial_amount: Decimal, cancel_data: dict[str, Any]) -> None:
         """
         부분 취소 처리
 
@@ -308,10 +297,7 @@ class Payment(models.Model):
                 elif isinstance(value, dict):
                     sanitized[key] = _sanitize(value)
                 elif isinstance(value, list):
-                    sanitized[key] = [
-                        _sanitize(item) if isinstance(item, dict) else item
-                        for item in value
-                    ]
+                    sanitized[key] = [_sanitize(item) if isinstance(item, dict) else item for item in value]
                 else:
                     sanitized[key] = value
             return sanitized

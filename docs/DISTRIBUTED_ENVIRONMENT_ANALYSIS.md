@@ -1,6 +1,6 @@
 # 🐳 분산 환경 분석 및 개선 가이드
 
-> **작성일**: 2025년 12월 2일  
+> **작성일**: 2025년 12월 2일
 > **목적**: 현재 Docker Compose 환경에서 동시성 제어의 적절성 분석 및 개선 방안
 
 ---
@@ -158,11 +158,11 @@ CACHES = {
 def confirm_payment_sync(payment, payment_key, order_id, amount, user):
     # 1. DB 락 획득
     payment = Payment.objects.select_for_update().get(pk=payment.pk)
-    
+
     # 2. 상태 체크 (중복 방지)
     if payment.is_paid:
         raise PaymentConfirmError("이미 완료된 결제입니다.")
-    
+
     # 3. 토스 API 호출 → 결제 완료
 ```
 
@@ -176,7 +176,7 @@ def confirm_payment_sync(payment, payment_key, order_id, amount, user):
 def handle_payment_done(event_data):
     # DB 락으로 동시 웹훅 직렬화
     payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
-    
+
     if payment.is_paid:
         logger.info(f"Payment already processed: {order_id}")
         return  # 중복 무시
@@ -238,10 +238,10 @@ def check_idempotency_key(key: str, payment_id: int) -> tuple[bool, int | None]:
     """
     cache_key = f"idempotency:{key}"
     existing = cache.get(cache_key)
-    
+
     if existing:
         return True, existing
-    
+
     # 24시간 TTL로 저장
     cache.set(cache_key, payment_id, timeout=86400)
     return False, None
@@ -260,7 +260,7 @@ class WebhookEvent(models.Model):
     processed_at = models.DateTimeField(auto_now_add=True)
 ```
 
-**장점**: 
+**장점**:
 - 더 명확한 중복 방지 (토스가 제공하는 eventId 활용)
 - 로깅/디버깅 용이
 
@@ -277,31 +277,31 @@ from django.core.cache import cache
 
 class PaymentService:
     IDEMPOTENCY_TTL = 86400  # 24시간
-    
+
     @staticmethod
     def _check_idempotency_key(key: str) -> Payment | None:
         """Redis에서 멱등성 키 확인 (TTL 적용)"""
         if not key:
             return None
-        
+
         cache_key = f"payment:idempotency:{key}"
         payment_id = cache.get(cache_key)
-        
+
         if payment_id:
             try:
                 return Payment.objects.get(pk=payment_id)
             except Payment.DoesNotExist:
                 cache.delete(cache_key)  # 정리
-        
+
         return None
-    
+
     @staticmethod
     def _set_idempotency_key(key: str, payment_id: int) -> None:
         """Redis에 멱등성 키 저장"""
         if key:
             cache_key = f"payment:idempotency:{key}"
             cache.set(cache_key, payment_id, timeout=PaymentService.IDEMPOTENCY_TTL)
-    
+
     @staticmethod
     @transaction.atomic
     def create_payment(order, payment_method="card", idempotency_key=None):
@@ -309,18 +309,18 @@ class PaymentService:
         existing = PaymentService._check_idempotency_key(idempotency_key)
         if existing:
             return existing
-        
+
         # DB에도 저장 (영구 기록)
         if idempotency_key:
             existing_db = Payment.objects.filter(idempotency_key=idempotency_key).first()
             if existing_db:
                 return existing_db
-        
+
         # ... 새 Payment 생성 ...
-        
+
         # Redis에 저장 (TTL 24시간)
         PaymentService._set_idempotency_key(idempotency_key, payment.id)
-        
+
         return payment
 ```
 
@@ -345,18 +345,18 @@ class WebhookEvent(models.Model):
     event_type = models.CharField(max_length=50)
     source = models.CharField(max_length=50, default="toss")
     processed_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = "shopping_webhook_event"
         indexes = [
             models.Index(fields=["-processed_at"]),
         ]
-    
+
     @classmethod
     def is_processed(cls, event_id: str) -> bool:
         """이미 처리된 이벤트인지 확인"""
         return cls.objects.filter(event_id=event_id).exists()
-    
+
     @classmethod
     def mark_processed(cls, event_id: str, event_type: str, source: str = "toss"):
         """이벤트 처리 완료 기록"""
@@ -422,7 +422,7 @@ from django_redis import get_redis_connection
 def call_external_api_with_rate_limit(api_name: str):
     redis = get_redis_connection("default")
     lock = Lock(redis, f"api_rate:{api_name}", timeout=1)
-    
+
     if lock.acquire(blocking=False):
         try:
             # API 호출
@@ -450,7 +450,7 @@ def call_external_api_with_rate_limit(api_name: str):
 ### 핵심 메시지
 
 > **현재 Docker Compose 환경에서 PostgreSQL 락만으로 충분합니다.**
-> 
+>
 > Redis 분산락은 "여러 PostgreSQL 인스턴스" 또는 "DB에 저장하지 않는 리소스 락"이 필요할 때만 의미가 있습니다.
 >
 > 현재 아키텍처는:

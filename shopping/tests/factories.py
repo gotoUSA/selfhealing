@@ -1187,6 +1187,59 @@ class WebhookDataBuilder:
 
 
 # ==========================================
+# WebhookEvent Factory
+# ==========================================
+
+
+class WebhookEventFactory(DjangoModelFactory):
+    """
+    WebhookEvent factory
+
+    웹훅 이벤트 로깅 레코드를 생성합니다.
+
+    사용 예시:
+        event = WebhookEventFactory()
+        event = WebhookEventFactory.payment_done(order_id="ORDER_001")
+        event = WebhookEventFactory.payment_canceled(order_id="ORDER_001")
+    """
+
+    class Meta:
+        model = "shopping.WebhookEvent"
+
+    event_id = factory.Sequence(lambda n: f"toss:ORDER_{n:06d}:PAYMENT.DONE")
+    event_type = "PAYMENT.DONE"
+    source = "toss"
+    order_id = factory.Sequence(lambda n: f"ORDER_{n:06d}")
+
+    @classmethod
+    def payment_done(cls, order_id=None, **kwargs):
+        """결제 완료 이벤트"""
+        if order_id:
+            kwargs["order_id"] = order_id
+            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.DONE"
+        kwargs.setdefault("event_type", "PAYMENT.DONE")
+        return cls(**kwargs)
+
+    @classmethod
+    def payment_canceled(cls, order_id=None, **kwargs):
+        """결제 취소 이벤트"""
+        if order_id:
+            kwargs["order_id"] = order_id
+            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.CANCELED"
+        kwargs.setdefault("event_type", "PAYMENT.CANCELED")
+        return cls(**kwargs)
+
+    @classmethod
+    def payment_failed(cls, order_id=None, **kwargs):
+        """결제 실패 이벤트"""
+        if order_id:
+            kwargs["order_id"] = order_id
+            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.FAILED"
+        kwargs.setdefault("event_type", "PAYMENT.FAILED")
+        return cls(**kwargs)
+
+
+# ==========================================
 # OAuth 데이터 빌더
 # ==========================================
 

@@ -4,6 +4,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 from django.views.decorators.csrf import csrf_exempt
@@ -19,12 +20,16 @@ from drf_spectacular.utils import extend_schema
 from ..models.cart import Cart
 from ..models.payment import Payment, PaymentLog
 from ..models.product import Product
+from ..models.webhook_event import WebhookEvent
 from ..serializers.payment_serializers import PaymentWebhookSerializer
 from ..services.point_service import PointService
 from ..utils.toss_payment import TossPaymentClient
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+# Redis TTL 상수 (Toss 실시간 결제 환경에 최적화)
+WEBHOOK_EVENT_TTL = 60  # 60초 - 웹훅 재전송 방어
 
 
 @extend_schema(
@@ -136,11 +141,22 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
     """
     결제 완료 이벤트 처리
 
-    결제창에서 결제 완류 후 confirm API 호출 전에
+    결제창에서 결제 완료 후 confirm API 호출 전에
     웹훅이 먼저 도착할 수 있으므로 중복 처리 방지 필요
+
+    중복 방어:
+    1. Redis TTL 60초 (빠른 중복 체크)
+    2. is_paid 상태 체크 (2차 방어)
     """
-    event_data.get("paymentKey")
     order_id = event_data.get("orderId")
+
+    # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
+    if _is_webhook_duplicate(order_id, "PAYMENT.DONE"):
+        logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
+        return
+
+    # 2. Redis에 먼저 마킹 (다른 요청 차단)
+    _mark_webhook_processed(order_id, "PAYMENT.DONE")
 
     try:
         payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -148,7 +164,7 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
         logger.error(f"Payment not found for order_id: {order_id}")
         return
 
-    # 이미 처리된 결제인지 확인 (중복 방지)
+    # 3. 이미 처리된 결제인지 확인 (2차 방어)
     if payment.is_paid:
         logger.info(f"Payment already processed: {order_id}")
         return
@@ -167,6 +183,7 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
     # 이미 paid 상태면 스킵 (confirm API에서 이미 처리)
     if order.status == "paid":
         logger.info(f"Order already paid: {order_id}")
+        _log_webhook_event(order_id, "PAYMENT.DONE")
         return
 
     # 재고 차감 및 sold_count 증가 (결제 완료 시점)
@@ -176,15 +193,13 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
                 # 조건부 업데이트: 재고가 충분할 때만 차감 (업계 표준)
                 updated = Product.objects.filter(
                     pk=order_item.product.pk,
-                    stock__gte=order_item.quantity,  # 재고가 충분할 때만
+                    stock__gte=order_item.quantity,
                 ).update(
                     stock=F("stock") - order_item.quantity,
                     sold_count=F("sold_count") + order_item.quantity,
                 )
 
                 if updated == 0:
-                    # 재고 부족 - 로깅만 하고 진행 (결제는 이미 완료됨)
-                    # 실제 운영에서는 관리자 알림 발송 필요
                     logger.error(
                         f"재고 부족으로 차감 실패: product_id={order_item.product.pk}, "
                         f"product_name={order_item.product.name}, "
@@ -202,9 +217,8 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
 
     # 포인트 적립 (confirm API에서 이미 적립된 경우 스킵)
     if order.user and order.earned_points == 0:
-        # 등급별 적립률 적용 (confirm과 동일한 로직)
         earn_rate = order.user.get_earn_rate()
-        product_amount = order.total_amount  # 순수 상품 금액 (배송비 미포함)
+        product_amount = order.total_amount
         points_to_add = int(product_amount * Decimal(earn_rate) / Decimal("100"))
 
         if points_to_add > 0:
@@ -219,7 +233,6 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
                     "earn_rate": f"{earn_rate}%",
                 },
             )
-            # 주문에 적립 포인트 기록
             order.earned_points = points_to_add
             order.save(update_fields=["earned_points"])
             logger.info(f"Webhook 포인트 적립: order={order_id}, points={points_to_add}")
@@ -232,6 +245,9 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
         data=event_data,
     )
 
+    # 웹훅 이벤트 로깅
+    _log_webhook_event(order_id, "PAYMENT.DONE")
+
     logger.info(f"Payment done webhook processed: {order_id}")
 
 
@@ -239,9 +255,20 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
 def handle_payment_canceled(event_data: dict[str, Any]) -> None:
     """
     결제 취소 이벤트 처리
+
+    중복 방어:
+    1. Redis TTL 60초 (빠른 중복 체크)
+    2. is_canceled 상태 체크 (2차 방어)
     """
-    event_data.get("paymentKey")
     order_id = event_data.get("orderId")
+
+    # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
+    if _is_webhook_duplicate(order_id, "PAYMENT.CANCELED"):
+        logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
+        return
+
+    # 2. Redis에 먼저 마킹 (다른 요청 차단)
+    _mark_webhook_processed(order_id, "PAYMENT.CANCELED")
 
     try:
         payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -249,7 +276,7 @@ def handle_payment_canceled(event_data: dict[str, Any]) -> None:
         logger.error(f"Payment not found for order_id: {order_id}")
         return
 
-    # 이미 취소된 결제인지 확인
+    # 3. 이미 취소된 결제인지 확인 (2차 방어)
     if payment.is_canceled:
         logger.info(f"Payment already canceled: {order_id}")
         return
@@ -268,30 +295,32 @@ def handle_payment_canceled(event_data: dict[str, Any]) -> None:
     # 이미 cancelled 상태면 스킵
     if order.status == "canceled":
         logger.info(f"Order already cancelled: {order_id}")
+        _log_webhook_event(order_id, "PAYMENT.CANCELED")
         return
 
     # 재고 복구 (paid 상태였던 경우만)
     if order.status in ["paid", "preparing"]:
         for order_item in order.order_items.all():
             if order_item.product:
-                # 조건부 업데이트: sold_count가 충분할 때만 차감
                 updated = Product.objects.filter(
                     pk=order_item.product.pk,
-                    sold_count__gte=order_item.quantity,  # sold_count가 충분할 때만
+                    sold_count__gte=order_item.quantity,
                 ).update(
                     stock=F("stock") + order_item.quantity,
                     sold_count=F("sold_count") - order_item.quantity,
                 )
 
                 if updated == 0:
-                    # sold_count 부족 시 재고만 복구
                     Product.objects.filter(pk=order_item.product.pk).update(
                         stock=F("stock") + order_item.quantity,
-                        sold_count=0,  # 최소값 0으로 설정
+                        sold_count=0,
                     )
-                    logger.warning(f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}")
+                    logger.warning(
+                        f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
+                        f"order_id={order.id}"
+                    )
 
-    # 포인트 회수 (상태 변경 전) - 실제 적립된 포인트만 회수
+    # 포인트 회수 (상태 변경 전)
     if order.user and order.status in ["paid", "preparing"]:
         points_to_deduct = order.earned_points
         if points_to_deduct > 0:
@@ -314,6 +343,9 @@ def handle_payment_canceled(event_data: dict[str, Any]) -> None:
         message="결제 취소 웹훅 처리",
         data=event_data,
     )
+
+    # 웹훅 이벤트 로깅
+    _log_webhook_event(order_id, "PAYMENT.CANCELED")
 
     logger.info(f"Payment canceled webhook processed: {order_id}")
 
@@ -352,4 +384,43 @@ def handle_payment_failed(event_data: dict[str, Any]) -> None:
         data=event_data,
     )
 
+    # 웹훅 이벤트 로깅
+    _log_webhook_event(order_id, "PAYMENT.FAILED")
+
     logger.info(f"Payment failed webhook processed: {order_id}")
+
+
+def _get_webhook_cache_key(order_id: str, event_type: str) -> str:
+    """웹훅 이벤트의 Redis 캐시 키 생성"""
+    return f"webhook:toss:{order_id}:{event_type}"
+
+
+def _is_webhook_duplicate(order_id: str, event_type: str) -> bool:
+    """
+    Redis에서 웹훅 중복 여부 확인 (TTL 60초)
+
+    Returns:
+        True if duplicate (already processed within 60s)
+    """
+    cache_key = _get_webhook_cache_key(order_id, event_type)
+    return cache.get(cache_key) is not None
+
+
+def _mark_webhook_processed(order_id: str, event_type: str) -> None:
+    """Redis에 웹훅 처리 완료 마킹 (TTL 60초)"""
+    cache_key = _get_webhook_cache_key(order_id, event_type)
+    cache.set(cache_key, "1", timeout=WEBHOOK_EVENT_TTL)
+
+
+def _log_webhook_event(order_id: str, event_type: str) -> None:
+    """웹훅 이벤트 DB 로깅 (감사 추적용)"""
+    try:
+        WebhookEvent.objects.create(
+            event_id=f"toss:{order_id}:{event_type}",
+            event_type=event_type,
+            source="toss",
+            order_id=order_id,
+        )
+    except Exception as e:
+        # 로깅 실패는 무시 (핵심 로직에 영향 주지 않음)
+        logger.warning(f"Failed to log webhook event: {e}")

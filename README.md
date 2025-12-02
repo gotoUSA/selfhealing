@@ -54,7 +54,7 @@ cp .env.example .env
 docker-compose up -d
 # 실행되는 서비스:
 # - web (Django API 서버) - 포트 8000
-# - db (PostgreSQL) - 포트 5432  
+# - db (PostgreSQL) - 포트 5432
 # - redis (Redis)
 # - celery_worker (비동기 작업 처리)
 # - celery_beat (스케줄 작업)
