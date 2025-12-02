@@ -50,7 +50,7 @@ test_invalid_status_returns_400
 📌 3. 작성 규칙
 3.1 AAA 패턴
 
-필요한 경우에만 간단히 사용
+반드시 사용 및 설명이 필요하면 2줄 이내로 작성
 
 # Arrange
 # Act
