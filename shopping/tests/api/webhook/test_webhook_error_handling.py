@@ -599,7 +599,7 @@ class TestWebhookUnexpectedExceptions:
         mock_verify_webhook()
 
         mocker.patch(
-            "shopping.webhooks.toss_webhook_view.handle_payment_done",
+            "shopping.services.toss_webhook_service.TossWebhookService.handle_payment_done",
             side_effect=Exception("Unexpected error"),
         )
 

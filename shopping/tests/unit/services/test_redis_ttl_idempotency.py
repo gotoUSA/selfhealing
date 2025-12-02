@@ -15,12 +15,9 @@ from shopping.models.payment import Payment
 from shopping.models.webhook_event import WebhookEvent
 from shopping.services.payment_service import IDEMPOTENCY_KEY_TTL, PaymentService
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
-from shopping.webhooks.toss_webhook_view import (
+from shopping.services.toss_webhook_service import (
     WEBHOOK_EVENT_TTL,
-    _get_webhook_cache_key,
-    _is_webhook_duplicate,
-    _log_webhook_event,
-    _mark_webhook_processed,
+    TossWebhookService,
 )
 
 
@@ -148,7 +145,7 @@ class TestWebhookEventRedisTTL:
 
     def test_get_webhook_cache_key_format(self):
         """웹훅 캐시 키 형식 확인"""
-        cache_key = _get_webhook_cache_key("ORDER_001", "PAYMENT.DONE")
+        cache_key = TossWebhookService._get_webhook_cache_key("ORDER_001", "PAYMENT.DONE")
         assert cache_key == "webhook:toss:ORDER_001:PAYMENT.DONE"
 
     def test_mark_webhook_processed_sets_cache(self):
@@ -158,10 +155,10 @@ class TestWebhookEventRedisTTL:
         event_type = "PAYMENT.DONE"
 
         # Act
-        _mark_webhook_processed(order_id, event_type)
+        TossWebhookService.mark_webhook_processed(order_id, event_type)
 
         # Assert
-        cache_key = _get_webhook_cache_key(order_id, event_type)
+        cache_key = TossWebhookService._get_webhook_cache_key(order_id, event_type)
         assert cache.get(cache_key) == "1"
 
     def test_is_webhook_duplicate_returns_true_within_ttl(self):
@@ -169,39 +166,39 @@ class TestWebhookEventRedisTTL:
         # Arrange
         order_id = "ORDER_002"
         event_type = "PAYMENT.DONE"
-        _mark_webhook_processed(order_id, event_type)
+        TossWebhookService.mark_webhook_processed(order_id, event_type)
 
         # Act & Assert
-        assert _is_webhook_duplicate(order_id, event_type) is True
+        assert TossWebhookService.is_webhook_duplicate(order_id, event_type) is True
 
     def test_is_webhook_duplicate_returns_false_after_ttl(self):
         """TTL 만료 후 중복 아님"""
         # Arrange
         order_id = "ORDER_003"
         event_type = "PAYMENT.DONE"
-        _mark_webhook_processed(order_id, event_type)
+        TossWebhookService.mark_webhook_processed(order_id, event_type)
 
         # TTL 만료 시뮬레이션
-        cache_key = _get_webhook_cache_key(order_id, event_type)
+        cache_key = TossWebhookService._get_webhook_cache_key(order_id, event_type)
         cache.delete(cache_key)
 
         # Act & Assert
-        assert _is_webhook_duplicate(order_id, event_type) is False
+        assert TossWebhookService.is_webhook_duplicate(order_id, event_type) is False
 
     def test_is_webhook_duplicate_returns_false_for_new_event(self):
         """처음 받는 이벤트는 중복 아님"""
         # Act & Assert
-        assert _is_webhook_duplicate("NEW_ORDER_001", "PAYMENT.DONE") is False
+        assert TossWebhookService.is_webhook_duplicate("NEW_ORDER_001", "PAYMENT.DONE") is False
 
     def test_different_event_types_are_independent(self):
         """다른 이벤트 타입은 독립적으로 처리"""
         # Arrange
         order_id = "ORDER_004"
-        _mark_webhook_processed(order_id, "PAYMENT.DONE")
+        TossWebhookService.mark_webhook_processed(order_id, "PAYMENT.DONE")
 
         # Act & Assert - DONE은 중복, CANCELED는 아님
-        assert _is_webhook_duplicate(order_id, "PAYMENT.DONE") is True
-        assert _is_webhook_duplicate(order_id, "PAYMENT.CANCELED") is False
+        assert TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.DONE") is True
+        assert TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.CANCELED") is False
 
 
 @pytest.mark.django_db
@@ -215,7 +212,7 @@ class TestWebhookEventLogging:
         event_type = "PAYMENT.DONE"
 
         # Act
-        _log_webhook_event(order_id, event_type)
+        TossWebhookService.log_webhook_event(order_id, event_type)
 
         # Assert
         event = WebhookEvent.objects.filter(order_id=order_id).first()
@@ -230,8 +227,8 @@ class TestWebhookEventLogging:
         order_id = "ORDER_LOG_002"
 
         # Act
-        _log_webhook_event(order_id, "PAYMENT.DONE")
-        _log_webhook_event(order_id, "PAYMENT.CANCELED")
+        TossWebhookService.log_webhook_event(order_id, "PAYMENT.DONE")
+        TossWebhookService.log_webhook_event(order_id, "PAYMENT.CANCELED")
 
         # Assert
         events = WebhookEvent.objects.filter(order_id=order_id)

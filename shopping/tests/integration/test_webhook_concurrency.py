@@ -25,7 +25,7 @@ from shopping.tests.factories import (
     ProductFactory,
     UserFactory,
 )
-from shopping.webhooks.toss_webhook_view import handle_payment_done
+from shopping.services.toss_webhook_service import TossWebhookService
 
 
 def close_db_connection():
@@ -87,7 +87,7 @@ class TestWebhookDuplicateDone:
         def call_webhook():
             """Webhook 호출"""
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"success": True})
             except Exception as e:
@@ -96,7 +96,7 @@ class TestWebhookDuplicateDone:
             finally:
                 close_db_connection()
 
-        # Act - 2개 스레드로 동시에 handle_payment_done 호출
+        # Act - 2개 스레드로 동시에 TossWebhookService.handle_payment_done 호출
         threads = [threading.Thread(target=call_webhook) for _ in range(2)]
         for t in threads:
             t.start()
@@ -163,7 +163,7 @@ class TestWebhookDuplicateDone:
         def call_webhook():
             """Webhook 호출"""
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"success": True})
             except Exception as e:
@@ -235,7 +235,7 @@ class TestWebhookDuplicateDone:
         def call_webhook():
             """Webhook 호출"""
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"success": True})
             except Exception as e:
@@ -315,7 +315,7 @@ class TestWebhookHighConcurrency:
         def call_webhook():
             """Webhook 호출"""
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"success": True})
             except Exception as e:
@@ -406,7 +406,7 @@ class TestWebhookAndAlreadyPaid:
         }
 
         # Act - 이미 paid인 상태에서 다시 webhook 호출
-        handle_payment_done(event_data)
+        TossWebhookService.handle_payment_done(event_data)
 
         # Assert
         product.refresh_from_db()
@@ -466,7 +466,7 @@ class TestWebhookStockValidation:
         }
 
         # Act
-        handle_payment_done(event_data)
+        TossWebhookService.handle_payment_done(event_data)
 
         # Assert
         product.refresh_from_db()

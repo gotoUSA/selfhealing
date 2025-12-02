@@ -6,7 +6,7 @@ Confirm API + Webhook 동시 도착 Race Condition 테스트
 
 시나리오:
 1. 스레드 1: /api/payments/confirm/ 호출
-2. 스레드 2: handle_payment_done 호출 (웹훅 시뮬레이션)
+2. 스레드 2: TossWebhookService.handle_payment_done 호출 (웹훅 시뮬레이션)
 3. 결과: 딱 1번만 처리되어야 함
 """
 
@@ -21,12 +21,12 @@ import pytest
 from shopping.models.order import Order, OrderItem
 from shopping.models.payment import Payment
 from shopping.services.payment_service import PaymentService
+from shopping.services.toss_webhook_service import TossWebhookService
 from shopping.tests.factories import (
     ProductFactory,
     TossResponseBuilder,
     UserFactory,
 )
-from shopping.webhooks.toss_webhook_view import handle_payment_done
 
 
 def close_db_connection():
@@ -128,7 +128,7 @@ class TestConfirmAndWebhookRaceCondition:
         def call_webhook():
             """Webhook 호출"""
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"source": "webhook", "success": True})
             except Exception as e:
@@ -237,7 +237,7 @@ class TestConfirmAndWebhookRaceCondition:
 
         def call_webhook():
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"source": "webhook", "success": True})
             except Exception as e:
@@ -348,7 +348,7 @@ class TestConfirmAndWebhookRaceCondition:
 
         def call_webhook(thread_id):
             try:
-                handle_payment_done(event_data)
+                TossWebhookService.handle_payment_done(event_data)
                 with lock:
                     results.append({"source": f"webhook_{thread_id}", "success": True})
             except Exception as e:
@@ -439,7 +439,7 @@ class TestConfirmAfterWebhook:
         }
 
         # Act 1: Webhook 먼저 처리
-        handle_payment_done(event_data)
+        TossWebhookService.handle_payment_done(event_data)
 
         payment.refresh_from_db()
         product.refresh_from_db()
@@ -561,7 +561,7 @@ class TestConfirmBeforeWebhook:
         }
 
         # Webhook은 에러 없이 무시되어야 함
-        handle_payment_done(event_data)
+        TossWebhookService.handle_payment_done(event_data)
 
         # Assert: 재고는 변하지 않아야 함 (주문 생성 시 차감된 상태 유지)
         product.refresh_from_db()
