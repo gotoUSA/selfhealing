@@ -186,26 +186,13 @@ def handle_payment_done(event_data: dict[str, Any]) -> None:
         _log_webhook_event(order_id, "PAYMENT.DONE")
         return
 
-    # 재고 차감 및 sold_count 증가 (결제 완료 시점)
+    # sold_count 증가 (재고 차감은 주문 생성 시 이미 처리됨)
     if order.status != "paid":
         for order_item in order.order_items.select_for_update():
             if order_item.product:
-                # 조건부 업데이트: 재고가 충분할 때만 차감 (업계 표준)
-                updated = Product.objects.filter(
-                    pk=order_item.product.pk,
-                    stock__gte=order_item.quantity,
-                ).update(
-                    stock=F("stock") - order_item.quantity,
+                Product.objects.filter(pk=order_item.product.pk).update(
                     sold_count=F("sold_count") + order_item.quantity,
                 )
-
-                if updated == 0:
-                    logger.error(
-                        f"재고 부족으로 차감 실패: product_id={order_item.product.pk}, "
-                        f"product_name={order_item.product.name}, "
-                        f"required={order_item.quantity}, "
-                        f"order_id={order.id}"
-                    )
 
     # 주문 상태 변경
     order.status = "paid"

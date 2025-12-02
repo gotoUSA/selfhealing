@@ -71,6 +71,10 @@ class TestConfirmAndWebhookRaceCondition:
             price=product.price,
         )
 
+        # 주문 생성 시 재고 차감을 시뮬레이션 (실제로는 order_service에서 차감됨)
+        product.stock -= 1
+        product.save()
+
         payment = Payment.objects.create(
             order=order,
             amount=order.final_amount,
@@ -152,10 +156,10 @@ class TestConfirmAndWebhookRaceCondition:
         assert payment.is_paid is True, "Payment가 paid 상태여야 함"
         assert order.status == "paid", "Order가 paid 상태여야 함"
 
-        # 재고는 1번만 차감되어야 함 (10 - 1 = 9)
+        # 재고는 주문 생성 시 이미 차감됨, Confirm/Webhook에서는 sold_count만 증가
         assert (
-            product.stock == initial_stock - 1
-        ), f"재고가 1번만 차감되어야 함. 예상: {initial_stock - 1}, 실제: {product.stock}"
+            product.stock == initial_stock
+        ), f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
 
     def test_confirm_and_webhook_simultaneous_points_earned_once(self, category):
         """
@@ -292,6 +296,10 @@ class TestConfirmAndWebhookRaceCondition:
             price=product.price,
         )
 
+        # 주문 생성 시 재고 차감을 시뮬레이션 (실제로는 order_service에서 차감됨)
+        product.stock -= 3
+        product.save()
+
         payment = Payment.objects.create(
             order=order,
             amount=order.final_amount,
@@ -373,10 +381,10 @@ class TestConfirmAndWebhookRaceCondition:
         assert payment.is_paid is True, "Payment가 paid 상태여야 함"
         assert order.status == "paid", "Order가 paid 상태여야 함"
 
-        # 재고는 1번만 차감 (3개)
+        # 재고는 주문 생성 시 이미 차감됨, Confirm/Webhook에서는 sold_count만 증가
         assert (
-            product.stock == initial_stock - 3
-        ), f"재고가 3개만 차감되어야 함. 예상: {initial_stock - 3}, 실제: {product.stock}"
+            product.stock == initial_stock
+        ), f"재고가 변하지 않아야 함. 예상: {initial_stock}, 실제: {product.stock}"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -411,6 +419,10 @@ class TestConfirmAfterWebhook:
             price=product.price,
         )
 
+        # 주문 생성 시 재고 차감을 시뮬레이션 (실제로는 order_service에서 차감됨)
+        product.stock -= 1
+        product.save()
+
         payment = Payment.objects.create(
             order=order,
             amount=order.final_amount,
@@ -436,9 +448,9 @@ class TestConfirmAfterWebhook:
         payment.refresh_from_db()
         product.refresh_from_db()
 
-        # 중간 검증: Webhook으로 결제 완료
+        # 중간 검증: Webhook으로 결제 완료 (재고는 주문 생성 시 이미 차감됨)
         assert payment.is_paid is True
-        assert product.stock == initial_stock - 1
+        assert product.stock == initial_stock
 
         # Act 2: Confirm API 호출
         mock_response = TossResponseBuilder.success_response(
@@ -465,9 +477,9 @@ class TestConfirmAfterWebhook:
         # Assert
         assert "이미 완료된 결제" in str(exc_info.value)
 
-        # 재고는 변하지 않아야 함 (이미 1번 차감됨)
+        # 재고는 변하지 않아야 함 (주문 생성 시 차감된 상태 유지)
         product.refresh_from_db()
-        assert product.stock == initial_stock - 1
+        assert product.stock == initial_stock
 
 
 @pytest.mark.django_db(transaction=True)
@@ -502,6 +514,10 @@ class TestConfirmBeforeWebhook:
             price=product.price,
         )
 
+        # 주문 생성 시 재고 차감을 시뮬레이션 (실제로는 order_service에서 차감됨)
+        product.stock -= 1
+        product.save()
+
         payment = Payment.objects.create(
             order=order,
             amount=order.final_amount,
@@ -534,9 +550,9 @@ class TestConfirmBeforeWebhook:
         payment.refresh_from_db()
         product.refresh_from_db()
 
-        # 중간 검증: Confirm으로 결제 완료
+        # 중간 검증: Confirm으로 결제 완료 (재고는 주문 생성 시 이미 차감됨)
         assert payment.is_paid is True
-        assert product.stock == initial_stock - 1
+        assert product.stock == initial_stock
 
         # Act 2: Webhook 도착
         event_data = {
@@ -551,8 +567,8 @@ class TestConfirmBeforeWebhook:
         # Webhook은 에러 없이 무시되어야 함
         handle_payment_done(event_data)
 
-        # Assert: 재고는 변하지 않아야 함
+        # Assert: 재고는 변하지 않아야 함 (주문 생성 시 차감된 상태 유지)
         product.refresh_from_db()
         assert (
-            product.stock == initial_stock - 1
-        ), f"Webhook이 무시되어 재고 변화 없어야 함. 예상: {initial_stock - 1}, 실제: {product.stock}"
+            product.stock == initial_stock
+        ), f"Webhook이 무시되어 재고 변화 없어야 함. 예상: {initial_stock}, 실제: {product.stock}"
