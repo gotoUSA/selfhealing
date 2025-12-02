@@ -100,10 +100,7 @@ class PaymentService:
         # 멱등성 키 확인 (Redis TTL 60초)
         existing_payment = PaymentService._check_idempotency_key(idempotency_key)
         if existing_payment:
-            logger.info(
-                f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, "
-                f"payment_id={existing_payment.id}"
-            )
+            logger.info(f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, " f"payment_id={existing_payment.id}")
             return existing_payment
 
         # 동시성 제어: Order를 락으로 보호

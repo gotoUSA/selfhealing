@@ -24,9 +24,19 @@ from shopping.webhooks.toss_webhook_view import (
 )
 
 
+# 테스트용 실제 캐시 설정 (DummyCache 대신 LocMemCache 사용)
+TEST_CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-redis-ttl",
+    }
+}
+
+
 @pytest.fixture(autouse=True)
-def clear_cache():
-    """각 테스트 전후 Redis 캐시 초기화"""
+def use_locmem_cache(settings):
+    """테스트에서 실제 캐시(LocMemCache) 사용"""
+    settings.CACHES = TEST_CACHES
     cache.clear()
     yield
     cache.clear()

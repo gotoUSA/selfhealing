@@ -6,40 +6,63 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('shopping', '0018_payment_idempotency_key'),
+        ("shopping", "0018_payment_idempotency_key"),
     ]
 
     operations = [
         # 1. WebhookEvent 모델 추가
         migrations.CreateModel(
-            name='WebhookEvent',
+            name="WebhookEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('event_id', models.CharField(db_index=True, help_text='웹훅 고유 식별자 (orderId + createdAt 조합)', max_length=200, verbose_name='이벤트 ID')),
-                ('event_type', models.CharField(help_text='PAYMENT.DONE, PAYMENT.CANCELED 등', max_length=50, verbose_name='이벤트 타입')),
-                ('source', models.CharField(default='toss', help_text='웹훅 발송 서비스 (toss, kakao 등)', max_length=50, verbose_name='소스')),
-                ('order_id', models.CharField(db_index=True, max_length=100, verbose_name='주문 ID')),
-                ('processed_at', models.DateTimeField(auto_now_add=True, verbose_name='처리 시간')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "event_id",
+                    models.CharField(
+                        db_index=True,
+                        help_text="웹훅 고유 식별자 (orderId + createdAt 조합)",
+                        max_length=200,
+                        verbose_name="이벤트 ID",
+                    ),
+                ),
+                (
+                    "event_type",
+                    models.CharField(help_text="PAYMENT.DONE, PAYMENT.CANCELED 등", max_length=50, verbose_name="이벤트 타입"),
+                ),
+                (
+                    "source",
+                    models.CharField(
+                        default="toss", help_text="웹훅 발송 서비스 (toss, kakao 등)", max_length=50, verbose_name="소스"
+                    ),
+                ),
+                ("order_id", models.CharField(db_index=True, max_length=100, verbose_name="주문 ID")),
+                ("processed_at", models.DateTimeField(auto_now_add=True, verbose_name="처리 시간")),
             ],
             options={
-                'verbose_name': '웹훅 이벤트',
-                'verbose_name_plural': '웹훅 이벤트 목록',
-                'db_table': 'shopping_webhook_event',
-                'ordering': ['-processed_at'],
+                "verbose_name": "웹훅 이벤트",
+                "verbose_name_plural": "웹훅 이벤트 목록",
+                "db_table": "shopping_webhook_event",
+                "ordering": ["-processed_at"],
             },
         ),
         migrations.AddIndex(
-            model_name='webhookevent',
-            index=models.Index(fields=['source', '-processed_at'], name='shopping_we_source_f4c8e3_idx'),
+            model_name="webhookevent",
+            index=models.Index(fields=["source", "-processed_at"], name="shopping_we_source_f4c8e3_idx"),
         ),
         migrations.AddIndex(
-            model_name='webhookevent',
-            index=models.Index(fields=['-processed_at'], name='shopping_we_process_c5b9e1_idx'),
+            model_name="webhookevent",
+            index=models.Index(fields=["-processed_at"], name="shopping_we_process_c5b9e1_idx"),
         ),
         # 2. Payment.idempotency_key unique 제약 제거
         migrations.AlterField(
-            model_name='payment',
-            name='idempotency_key',
-            field=models.CharField(blank=True, db_index=True, help_text='결제 요청의 멱등성을 보장하기 위한 고유 키 (클라이언트가 생성, Redis TTL 60초로 관리)', max_length=64, null=True, verbose_name='멱등성 키'),
+            model_name="payment",
+            name="idempotency_key",
+            field=models.CharField(
+                blank=True,
+                db_index=True,
+                help_text="결제 요청의 멱등성을 보장하기 위한 고유 키 (클라이언트가 생성, Redis TTL 60초로 관리)",
+                max_length=64,
+                null=True,
+                verbose_name="멱등성 키",
+            ),
         ),
     ]
