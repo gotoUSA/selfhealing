@@ -509,9 +509,9 @@ class TestOrderConcurrencyScale:
     @pytest.mark.parametrize(
         "user_count,expected_stock_remaining",
         [
-            (5, 5),  # 10 - 5 = 5
             (10, 10),  # 20 - 10 = 10
             (20, 20),  # 40 - 20 = 20
+            (50, 50),  # 100 - 50 = 50
         ],
     )
     def test_concurrent_order_scale(
