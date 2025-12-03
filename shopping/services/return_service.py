@@ -21,8 +21,99 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class ReturnValidationError(Exception):
+    """반품 검증 관련 예외"""
+
+    pass
+
+
 class ReturnService:
     """교환/환불 관련 서비스 클래스"""
+
+    @staticmethod
+    def validate_order_for_return(order: Order, user: User) -> None:
+        """
+        반품 신청 가능 여부 검증 (비즈니스 규칙)
+
+        검증 항목:
+        1. 주문 상태가 'delivered'인지 확인
+        2. 배송 완료 후 7일 이내인지 확인
+        3. 이미 처리 중인 교환/환불이 있는지 확인
+
+        Args:
+            order: 검증할 주문 객체
+            user: 요청한 사용자
+
+        Raises:
+            ReturnValidationError: 검증 실패 시
+        """
+        from shopping.models.return_request import Return
+
+        # 1. 주문 상태 확인
+        if order.status != "delivered":
+            raise ReturnValidationError("배송 완료된 주문만 신청 가능합니다.")
+
+        # 2. 배송 완료 후 7일 이내 확인
+        days_passed = (timezone.now() - order.created_at).days
+        if days_passed > 7:
+            raise ReturnValidationError("배송 완료 후 7일이 지나 신청할 수 없습니다.")
+
+        # 3. 이미 신청한 교환/환불이 있는지 확인
+        existing_returns = Return.objects.filter(
+            order=order, status__in=["requested", "approved", "shipping", "received"]
+        ).exists()
+
+        if existing_returns:
+            raise ReturnValidationError("이미 처리 중인 교환/환불이 있습니다.")
+
+    @staticmethod
+    def validate_return_items(order: Order, return_items_data: list[dict]) -> list:
+        """
+        반품 상품 항목 검증
+
+        검증 항목:
+        1. 반품 상품이 1개 이상인지 확인
+        2. 각 OrderItem이 해당 주문에 속하는지 확인
+        3. 반품 수량이 주문 수량을 초과하지 않는지 확인
+
+        Args:
+            order: 원본 주문 객체
+            return_items_data: 반품 항목 데이터 리스트
+                [{'order_item_id': int, 'quantity': int}, ...]
+
+        Returns:
+            list: 검증된 OrderItem 객체 리스트
+
+        Raises:
+            ReturnValidationError: 검증 실패 시
+        """
+        from shopping.models.order import OrderItem
+
+        if not return_items_data:
+            raise ReturnValidationError("반품할 상품을 선택해주세요.")
+
+        validated_items = []
+
+        for item_data in return_items_data:
+            order_item_id = item_data.get("order_item_id")
+            quantity = item_data.get("quantity")
+
+            # OrderItem 존재 여부 및 해당 주문 소속 확인
+            try:
+                order_item = OrderItem.objects.get(id=order_item_id, order=order)
+            except OrderItem.DoesNotExist:
+                raise ReturnValidationError(f"주문 상품(ID: {order_item_id})을 찾을 수 없습니다.")
+
+            # 수량 검증
+            if quantity > order_item.quantity:
+                raise ReturnValidationError(
+                    f"{order_item.product_name}: 반품 수량({quantity})이 "
+                    f"주문 수량({order_item.quantity})을 초과할 수 없습니다."
+                )
+
+            validated_items.append(order_item)
+
+        return validated_items
 
     @staticmethod
     def generate_return_number() -> str:

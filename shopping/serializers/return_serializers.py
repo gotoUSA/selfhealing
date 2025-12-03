@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
-from django.utils import timezone
 
 from rest_framework import serializers
 
 from shopping.models import Order, OrderItem, Return, ReturnItem
+from shopping.services.return_service import ReturnService, ReturnValidationError
 
 
 class ReturnItemSerializer(serializers.ModelSerializer):
@@ -70,51 +70,23 @@ class ReturnCreateSerializer(serializers.ModelSerializer):
         except Order.DoesNotExist:
             raise serializers.ValidationError("주문을 찾을 수 없습니다.")
 
-        # 주문 상태 확인
-        if order.status != "delivered":
-            raise serializers.ValidationError("배송 완료된 주문만 신청 가능합니다.")
+        # 비즈니스 규칙 검증 (Service Layer 위임)
+        try:
+            ReturnService.validate_order_for_return(order, request.user)
+        except ReturnValidationError as e:
+            raise serializers.ValidationError(str(e))
 
-        # 배송 완료 후 7일 이내 확인
-        days_passed = (timezone.now() - order.created_at).days
-        if days_passed > 7:
-            raise serializers.ValidationError("배송 완료 후 7일이 지나 신청할 수 없습니다.")
-
-        # 이미 신청한 교환/환불이 있는지 확인
-        existing_returns = Return.objects.filter(
-            order=order, status__in=["requested", "approved", "shipping", "received"]
-        ).exists()
-
-        if existing_returns:
-            raise serializers.ValidationError("이미 처리 중인 교환/환불이 있습니다.")
-
-        # 환불인 경우 계좌 정보 필수
+        # 환불인 경우 계좌 정보 필수 (데이터 형식 검증)
         if attrs["type"] == "refund":
             if not attrs.get("refund_account_bank") or not attrs.get("refund_account_number"):
                 raise serializers.ValidationError("환불 계좌 정보를 입력해주세요.")
 
-        # 교환인 경우: 비즈니스 로직(재고, 삭제된 상품 등)은 Service에서 처리
-        # Serializer는 데이터 형식만 검증
-
-        # 반품 상품 검증
+        # 반품 상품 검증 (Service Layer 위임)
         return_items = attrs.get("return_items", [])
-        if not return_items:
-            raise serializers.ValidationError("반품할 상품을 선택해주세요.")
-
-        for item_data in return_items:
-            order_item_id = item_data.get("order_item_id")
-            quantity = item_data.get("quantity")
-
-            # OrderItem 존재 여부 확인
-            try:
-                order_item = OrderItem.objects.get(id=order_item_id, order=order)
-            except OrderItem.DoesNotExist:
-                raise serializers.ValidationError(f"주문 상품(ID: {order_item_id})을 찾을 수 없습니다.")
-
-            # 수량 검증
-            if quantity > order_item.quantity:
-                raise serializers.ValidationError(
-                    f"{order_item.product_name}: 반품 수량({quantity})이 주문 수량({order_item.quantity})을 초과할 수 없습니다."
-                )
+        try:
+            ReturnService.validate_return_items(order, return_items)
+        except ReturnValidationError as e:
+            raise serializers.ValidationError(str(e))
 
         attrs["order"] = order
         return attrs

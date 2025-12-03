@@ -74,7 +74,7 @@ docker-compose exec web vulture shopping --min-confidence 80
 | vulture | `docker-compose exec web vulture shopping --min-confidence 80` |
 | pipdeptree | `docker-compose exec web pipdeptree --warn fail` |
 | pip-audit | `docker-compose exec web pip-audit` |
-| mutmut | `docker-compose exec web mutmut run` | # 절대 하지말것
+| mutmut | `docker-compose exec web mutmut run` | # 절대 금지
 
 ### Docker에서 파일 출력 시 주의사항
 
