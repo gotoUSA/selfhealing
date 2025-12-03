@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, BooleanField, Case, Count, Q, Value, When
 from django.utils.text import slugify
+
+from shopping.dtos.product_filter import ProductFilterParams
 
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import filters, permissions, serializers as drf_serializers, status, viewsets
@@ -197,24 +199,19 @@ class ProductViewSet(viewsets.ModelViewSet):
         - min_price, max_price: 가격 범위
         - in_stock: 재고 여부
         - seller: 판매자
-        - is_active: 활성 상품만 (기본)
         """
-        from django.db.models import Case, When, Value, BooleanField
-
         # 현재 사용자 ID (인증되지 않은 경우 None)
         user_id = self.request.user.id if self.request.user.is_authenticated else None
 
+        # 기본 쿼리셋 생성
         queryset = (
             Product.objects.filter(is_active=True)
             .select_related("seller", "category")
             .prefetch_related("images", "reviews")
             .annotate(
-                # 평균 평점과 리뷰 수를 미리 계산
                 avg_rating=Avg("reviews__rating"),
                 review_cnt=Count("reviews", distinct=True),
-                # 찜한 사용자 수 (distinct 필수: JOIN으로 인한 중복 방지)
                 wishlist_cnt=Count("wished_by_users", distinct=True),
-                # 현재 사용자가 찜했는지 여부 (SQL에서 계산)
                 is_wished=Case(
                     When(wished_by_users__id=user_id, then=Value(True)),
                     default=Value(False),
@@ -223,46 +220,34 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
         )
 
-        # 카테고리 필터링
-        category_id = self.request.query_params.get("category", None)
-        if category_id:
+        # Request에서 필터 파라미터 추출
+        filters = ProductFilterParams.from_request(self.request)
+
+        # 카테고리 필터링 (하위 카테고리 포함)
+        if filters.category_id is not None:
             try:
-                # 하위 카테고리도 포함하여 필터링
-                category = Category.objects.get(pk=category_id)
-                # 현재 카테고리와 모든 하위 카테고리의 상품 조회
+                category = Category.objects.get(pk=filters.category_id)
                 categories = category.get_descendants(include_self=True)
                 queryset = queryset.filter(category__in=categories)
             except Category.DoesNotExist:
                 pass
 
         # 가격 범위 필터링
-        min_price = self.request.query_params.get("min_price", None)
-        max_price = self.request.query_params.get("max_price", None)
-
-        if min_price:
-            try:
-                queryset = queryset.filter(price__gte=int(min_price))
-            except ValueError:
-                pass
-
-        if max_price:
-            try:
-                queryset = queryset.filter(price__lte=int(max_price))
-            except ValueError:
-                pass
+        if filters.min_price is not None:
+            queryset = queryset.filter(price__gte=filters.min_price)
+        if filters.max_price is not None:
+            queryset = queryset.filter(price__lte=filters.max_price)
 
         # 재고 상태 필터링
-        in_stock = self.request.query_params.get("in_stock", None)
-        if in_stock is not None:
-            if in_stock.lower() == "true":
+        if filters.in_stock is not None:
+            if filters.in_stock:
                 queryset = queryset.filter(stock__gt=0)
-            elif in_stock.lower() == "false":
+            else:
                 queryset = queryset.filter(stock=0)
 
         # 판매자 필터링
-        seller_id = self.request.query_params.get("seller", None)
-        if seller_id:
-            queryset = queryset.filter(seller_id=seller_id)
+        if filters.seller_id is not None:
+            queryset = queryset.filter(seller_id=filters.seller_id)
 
         return queryset
 
@@ -576,17 +561,15 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=["get"])
     def products(self, request: Request, pk: int | None = None) -> Response:
-        from django.db.models import Case, When, Value, BooleanField
-
         category = self.get_object()
-
-        # 현재 카테고리와 모든 하위 카테고리 가져오기
-        categories = category.get_descendants(include_self=True)
 
         # 현재 사용자 ID
         user_id = request.user.id if request.user.is_authenticated else None
 
-        # 해당 카테고리들의 상품 조회 (ProductViewSet과 동일한 annotate 적용)
+        # 현재 카테고리와 모든 하위 카테고리 가져오기
+        categories = category.get_descendants(include_self=True)
+
+        # 상품 조회
         products = (
             Product.objects.filter(category__in=categories, is_active=True)
             .select_related("seller", "category")
@@ -601,10 +584,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
                     output_field=BooleanField(),
                 ),
             )
-            .order_by("-created_at")  # 페이지네이션 일관성을 위한 정렬
+            .order_by("-created_at")
         )
 
-        # ProductViewSet의 필터링 로직 재사용
         # 페이지네이션 적용
         paginator = ProductPagination()
         page = paginator.paginate_queryset(products, request)
