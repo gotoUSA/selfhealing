@@ -598,9 +598,11 @@ class TestWebhookUnexpectedExceptions:
         # Arrange
         mock_verify_webhook()
 
-        mocker.patch(
-            "shopping.services.toss_webhook_service.TossWebhookService.handle_payment_done",
-            side_effect=Exception("Unexpected error"),
+        # EVENT_HANDLERS 딕셔너리가 모듈 로드 시점에 함수 참조를 저장하므로
+        # view 모듈의 EVENT_HANDLERS를 직접 패치해야 함
+        mocker.patch.dict(
+            "shopping.webhooks.toss_webhook_view.EVENT_HANDLERS",
+            {"PAYMENT.DONE": mocker.Mock(side_effect=Exception("Unexpected error"))},
         )
 
         webhook_data = webhook_data_builder(
