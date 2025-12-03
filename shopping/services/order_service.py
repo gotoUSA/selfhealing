@@ -234,6 +234,10 @@ class OrderService:
             # ✅ Cart 락: 동시에 같은 장바구니로 여러 주문 생성 방지
             locked_cart = Cart.objects.select_for_update().get(pk=cart.id)
 
+            # 멱등성 체크: 이미 비활성화된 장바구니는 중복 주문 방지
+            if not locked_cart.is_active:
+                raise OrderServiceError("이미 주문이 진행 중이거나 완료된 장바구니입니다.")
+
             # 재검증: 트랜잭션 내에서 장바구니가 비어있지 않은지 다시 확인
             if not locked_cart.items.exists():
                 raise OrderServiceError("장바구니가 비어있습니다.")
@@ -256,6 +260,10 @@ class OrderService:
                 earn_rate_at_order=user.get_earn_rate(),  # 주문 시점 적립률 스냅샷
                 membership_at_order=user.membership_level,  # 주문 시점 회원 등급 스냅샷
             )
+
+            # ✅ 장바구니 즉시 비활성화 (동시 요청 중복 주문 방지)
+            locked_cart.is_active = False
+            locked_cart.save(update_fields=["is_active"])
 
         logger.info(f"Order 레코드 생성 완료: order_id={order.id}, order_number={order.order_number}")
 

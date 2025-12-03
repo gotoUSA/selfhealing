@@ -109,21 +109,20 @@ def run_concurrent_payment_confirms(
             response = client.post("/api/payments/confirm/", request_data, format="json")
 
             with lock:
-                results.append({
-                    "user": user_obj.username,
-                    "status": response.status_code,
-                    "success": response.status_code == status.HTTP_202_ACCEPTED,
-                })
+                results.append(
+                    {
+                        "user": user_obj.username,
+                        "status": response.status_code,
+                        "success": response.status_code == status.HTTP_202_ACCEPTED,
+                    }
+                )
         except Exception as e:
             with lock:
                 results.append({"user": user_obj.username, "error": str(e)})
         finally:
             close_db_connection()
 
-    threads = [
-        threading.Thread(target=confirm_payment, args=(u, p))
-        for u, p in users_and_payments
-    ]
+    threads = [threading.Thread(target=confirm_payment, args=(u, p)) for u, p in users_and_payments]
     for t in threads:
         t.start()
     for t in threads:
@@ -198,10 +197,12 @@ class TestPaymentDuplicatePreventionInvariant:
                 response = client.post("/api/payments/confirm/", request_data, format="json")
 
                 with lock:
-                    results.append({
-                        "success": response.status_code == status.HTTP_202_ACCEPTED,
-                        "status": response.status_code,
-                    })
+                    results.append(
+                        {
+                            "success": response.status_code == status.HTTP_202_ACCEPTED,
+                            "status": response.status_code,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"error": str(e)})
@@ -275,10 +276,12 @@ class TestPaymentDuplicatePreventionInvariant:
                 response = client.post("/api/payments/cancel/", request_data, format="json")
 
                 with lock:
-                    results.append({
-                        "success": response.status_code == status.HTTP_200_OK,
-                        "status": response.status_code,
-                    })
+                    results.append(
+                        {
+                            "success": response.status_code == status.HTTP_200_OK,
+                            "status": response.status_code,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"error": str(e)})
@@ -576,10 +579,13 @@ class TestPaymentConcurrencyIntegration:
             user.refresh_from_db()
             assert user.points == 4100, f"포인트는 4100P여야 함. 실제: {user.points}"
 
-    @pytest.mark.parametrize("stock,user_count,expected_success", [
-        (1, 5, 1),   # 1재고, 5명 -> 1명만 성공
-        (5, 3, 3),   # 5재고, 3명 (2개씩) -> mock에서 2명만 성공 설정
-    ])
+    @pytest.mark.parametrize(
+        "stock,user_count,expected_success",
+        [
+            (1, 5, 1),  # 1재고, 5명 -> 1명만 성공
+            (5, 3, 3),  # 5재고, 3명 (2개씩) -> mock에서 2명만 성공 설정
+        ],
+    )
     def test_stock_boundary_payment_confirm(
         self,
         stock: int,
@@ -631,6 +637,7 @@ class TestPaymentConcurrencyIntegration:
                 )
             else:
                 from shopping.utils.toss_payment import TossPaymentError
+
                 raise TossPaymentError("SOLD_OUT", "재고 부족")
 
         mocker.patch(
@@ -691,10 +698,14 @@ class TestPaymentConcurrencyIntegration:
                 response = client.post("/api/payments/request/", request_data, format="json")
 
                 with lock:
-                    results.append({
-                        "success": response.status_code == status.HTTP_201_CREATED,
-                        "payment_id": response.json().get("payment_id") if response.status_code == status.HTTP_201_CREATED else None,
-                    })
+                    results.append(
+                        {
+                            "success": response.status_code == status.HTTP_201_CREATED,
+                            "payment_id": (
+                                response.json().get("payment_id") if response.status_code == status.HTTP_201_CREATED else None
+                            ),
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"error": str(e)})

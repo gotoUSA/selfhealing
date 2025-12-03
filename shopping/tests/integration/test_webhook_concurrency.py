@@ -100,20 +100,21 @@ class TestWebhookDuplicateDoneInvariant:
     def test_duplicate_done_webhook_stock_deducted_once(self, category):
         """
         Purpose:
-            동일 결제에 DONE 이벤트 2번 도착 시 재고 1번만 차감
+            동일 결제에 DONE 이벤트 2번 도착 시 sold_count 1번만 증가
         Scenario:
-            stock=10, 2개 스레드 동시 DONE 이벤트 처리
+            sold_count=0, quantity=1, 2개 스레드 동시 DONE 이벤트 처리
         Expected:
-            Payment paid, Order paid, stock=9
+            Payment paid, Order paid, sold_count=1
+        Note:
+            재고(stock)는 주문 생성 시 차감됨. 웹훅은 sold_count만 증가시킴.
         Concurrency Control:
             is_paid 플래그로 중복 처리 방지
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
-        product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
+        product = ProductFactory(category=category, stock=10, sold_count=0, price=Decimal("10000"))
         order, payment = create_test_order_with_payment(user, product, "test_webhook_dup_key")
 
-        initial_stock = product.stock
         results = []
         lock = threading.Lock()
 
@@ -151,7 +152,8 @@ class TestWebhookDuplicateDoneInvariant:
 
         assert payment.is_paid is True, "Payment paid 상태"
         assert order.status == "paid", "Order paid 상태"
-        assert product.stock == initial_stock - 1, f"재고 1번만 차감. 실제: {product.stock}"
+        # 웹훅은 sold_count만 증가시킴 (재고 차감은 주문 생성 시 처리)
+        assert product.sold_count == 1, f"sold_count 1번만 증가. 실제: {product.sold_count}"
 
     def test_duplicate_done_webhook_sold_count_increased_once(self, category):
         """
@@ -331,13 +333,15 @@ class TestWebhookHighConcurrency:
         Purpose:
             5개 스레드로 동시에 DONE 이벤트 처리
         Scenario:
-            stock=100, quantity=5, 5개 스레드 동시 처리
+            sold_count=0, quantity=5, 5개 스레드 동시 처리
         Expected:
-            재고 5개만 차감 (100 - 5 = 95)
+            sold_count 5만 증가 (0 + 5 = 5)
+        Note:
+            재고(stock)는 주문 생성 시 차감됨. 웹훅은 sold_count만 증가시킴.
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
-        product = ProductFactory(category=category, stock=100, price=Decimal("10000"))
+        product = ProductFactory(category=category, stock=100, sold_count=0, price=Decimal("10000"))
 
         order = Order.objects.create(
             user=user,
@@ -367,7 +371,6 @@ class TestWebhookHighConcurrency:
             payment_key="test_webhook_high_conc_key",
         )
 
-        initial_stock = product.stock
         results = []
         lock = threading.Lock()
 
@@ -405,7 +408,8 @@ class TestWebhookHighConcurrency:
 
         assert payment.is_paid is True
         assert order.status == "paid"
-        assert product.stock == initial_stock - 5, f"재고 5개만 차감. 실제: {product.stock}"
+        # 웹훅은 sold_count만 증가시킴 (재고 차감은 주문 생성 시 처리)
+        assert product.sold_count == 5, f"sold_count 5만 증가. 실제: {product.sold_count}"
 
 
 # =============================================================================

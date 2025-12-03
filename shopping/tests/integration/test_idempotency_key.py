@@ -371,12 +371,14 @@ class TestIdempotencyKeyConcurrency:
                     idempotency_key=idempotency_key,
                 )
                 with lock:
-                    results.append({
-                        "thread_id": thread_id,
-                        "success": True,
-                        "payment_id": payment.id,
-                        "idempotency_key": idempotency_key,
-                    })
+                    results.append(
+                        {
+                            "thread_id": thread_id,
+                            "success": True,
+                            "payment_id": payment.id,
+                            "idempotency_key": idempotency_key,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"thread_id": thread_id, "success": False, "error": str(e)})
@@ -385,10 +387,7 @@ class TestIdempotencyKeyConcurrency:
 
         # Act
         keys = [str(uuid.uuid4()) for _ in range(5)]
-        threads = [
-            threading.Thread(target=create_payment_thread, args=(orders[i].pk, keys[i], i))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=create_payment_thread, args=(orders[i].pk, keys[i], i)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:

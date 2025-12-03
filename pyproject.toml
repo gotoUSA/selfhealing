@@ -65,11 +65,19 @@ markers = [
     "performance: marks tests as performance tests",
     "load_test: 부하 테스트 관련 (CI에서 기본 제외)",
     "manual: 수동/디버깅용 테스트 (CI에서 기본 제외)",
+    "concurrency: 동시성 테스트 (race condition 검증)",
+    "auth_race: 인증 관련 race condition 테스트",
+    "payment_race: 결제 관련 race condition 테스트",
+    "order_race: 주문 관련 race condition 테스트",
+    "point_race: 포인트 관련 race condition 테스트",
+    "return_race: 반품 관련 race condition 테스트",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)
     "ignore:app_settings.USERNAME_REQUIRED is deprecated:UserWarning:dj_rest_auth.registration.serializers",
     "ignore:app_settings.EMAIL_REQUIRED is deprecated:UserWarning:dj_rest_auth.registration.serializers",
+    # Ignore factory_boy deprecation warning (library internal)
+    "ignore:.*_after_postgeneration will stop saving the instance.*:DeprecationWarning:factory.django",
 ]
 
 # ==========================================

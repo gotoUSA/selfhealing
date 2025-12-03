@@ -135,11 +135,7 @@ class TestConcurrentLoginInvariant:
                     {"username": username, "password": password},
                     format="json",
                 )
-                access = (
-                    response.data.get("token", {}).get("access")
-                    if response.status_code == status.HTTP_200_OK
-                    else None
-                )
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 refresh = response.cookies.get("refresh_token")
                 refresh_value = refresh.value if refresh else None
                 return {
@@ -197,11 +193,7 @@ class TestConcurrentLoginInvariant:
                     {"username": "sameuser", "password": "testpass123"},
                     format="json",
                 )
-                access = (
-                    response.data.get("token", {}).get("access")
-                    if response.status_code == status.HTTP_200_OK
-                    else None
-                )
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 refresh = response.cookies.get("refresh_token")
                 refresh_value = refresh.value if refresh else None
                 return {
@@ -270,11 +262,7 @@ class TestConcurrentLoginScale:
                     {"username": username, "password": password},
                     format="json",
                 )
-                access = (
-                    response.data.get("token", {}).get("access")
-                    if response.status_code == status.HTTP_200_OK
-                    else None
-                )
+                access = response.data.get("token", {}).get("access") if response.status_code == status.HTTP_200_OK else None
                 return {"status": response.status_code, "access": access}
             except Exception as e:
                 return {"error": str(e)}
@@ -492,11 +480,13 @@ class TestMixedAuthConcurrency:
                     format="json",
                 )
                 with lock:
-                    results.append({
-                        "action": "login",
-                        "status": response.status_code,
-                        "success": response.status_code == status.HTTP_200_OK,
-                    })
+                    results.append(
+                        {
+                            "action": "login",
+                            "status": response.status_code,
+                            "success": response.status_code == status.HTTP_200_OK,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"action": "login", "error": str(e)})
@@ -506,11 +496,13 @@ class TestMixedAuthConcurrency:
             try:
                 response = client.post(refresh_url, {"refresh": str(refresh)}, format="json")
                 with lock:
-                    results.append({
-                        "action": "refresh",
-                        "status": response.status_code,
-                        "success": response.status_code == status.HTTP_200_OK,
-                    })
+                    results.append(
+                        {
+                            "action": "refresh",
+                            "status": response.status_code,
+                            "success": response.status_code == status.HTTP_200_OK,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"action": "refresh", "error": str(e)})
@@ -573,10 +565,12 @@ class TestJWTTokenValidation:
                 client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
                 response = client.get(profile_url)
                 with lock:
-                    results.append({
-                        "status": response.status_code,
-                        "success": response.status_code == status.HTTP_200_OK,
-                    })
+                    results.append(
+                        {
+                            "status": response.status_code,
+                            "success": response.status_code == status.HTTP_200_OK,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"error": str(e)})
@@ -618,10 +612,12 @@ class TestJWTTokenValidation:
                 client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
                 response = client.post(logout_url, {"refresh": refresh_token_str}, format="json")
                 with lock:
-                    results.append({
-                        "status": response.status_code,
-                        "success": response.status_code == status.HTTP_200_OK,
-                    })
+                    results.append(
+                        {
+                            "status": response.status_code,
+                            "success": response.status_code == status.HTTP_200_OK,
+                        }
+                    )
             except Exception as e:
                 with lock:
                     results.append({"error": str(e)})

@@ -657,9 +657,9 @@ class TestExpiryScaleTest:
         # 데이터 일관성 확인
         latest_history = PointHistory.objects.filter(user=user).order_by("-created_at").first()
         if latest_history:
-            assert latest_history.balance == user.points, (
-                f"이력 잔액 일치. 이력: {latest_history.balance}, 실제: {user.points}"
-            )
+            assert (
+                latest_history.balance == user.points
+            ), f"이력 잔액 일치. 이력: {latest_history.balance}, 실제: {user.points}"
 
     def test_complex_mix_operations(self):
         """

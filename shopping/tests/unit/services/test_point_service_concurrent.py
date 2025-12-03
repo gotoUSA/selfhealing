@@ -200,12 +200,15 @@ class TestPointUseConcurrencyInvariant:
         assert user.points == 50, f"최종 포인트는 50P. 실제: {user.points}"
         assert user.points >= 0, "포인트는 절대 음수가 되어서는 안 됨"
 
-    @pytest.mark.parametrize("initial_points,use_amount,thread_count,expected_success", [
-        (1000, 100, 5, 5),   # 충분한 잔액
-        (500, 100, 10, 5),   # 절반만 성공
-        (100, 100, 5, 1),    # 1개만 성공
-        (50, 100, 3, 0),     # 모두 실패
-    ])
+    @pytest.mark.parametrize(
+        "initial_points,use_amount,thread_count,expected_success",
+        [
+            (1000, 100, 5, 5),  # 충분한 잔액
+            (500, 100, 10, 5),  # 절반만 성공
+            (100, 100, 5, 1),  # 1개만 성공
+            (50, 100, 3, 0),  # 모두 실패
+        ],
+    )
     def test_concurrent_use_points_boundary(
         self,
         initial_points: int,
