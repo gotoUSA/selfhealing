@@ -112,3 +112,46 @@ skip_covered = false
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+# ==========================================
+# radon Configuration (Code Complexity)
+# ==========================================
+[tool.radon]
+exclude = "*/migrations/*,*/tests/*,*/__pycache__/*,*/venv/*"
+cc_min = "C"  # 복잡도 C 이상만 표시 (A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F=41+)
+
+# ==========================================
+# bandit Configuration (Security Analysis)
+# ==========================================
+[tool.bandit]
+exclude_dirs = ["tests", "migrations", "venv", "env", "htmlcov", "load_tests"]
+skips = ["B101", "B311"]  # B101: assert 사용, B311: random (보안용 아닌 경우)
+targets = ["shopping"]
+
+# ==========================================
+# vulture Configuration (Dead Code Detection)
+# ==========================================
+[tool.vulture]
+exclude = ["*/migrations/*", "*/tests/*", "venv/", "env/", "htmlcov/"]
+min_confidence = 80
+paths = ["shopping"]
+sort_by_size = true
+
+# ==========================================
+# mutmut Configuration (Mutation Testing)
+# ==========================================
+# mutmut은 setup.cfg 또는 pyproject.toml의 [tool.mutmut] 지원
+# 돈 관련 서비스만 대상으로 제한
+[tool.mutmut]
+paths_to_mutate = [
+    "shopping/services/payment_service.py",
+    "shopping/services/point_service.py",
+    "shopping/services/point_query_service.py",
+    "shopping/services/cart_service.py",
+    "shopping/services/order_service.py",
+    "shopping/services/return_service.py",
+    "shopping/services/toss_webhook_service.py",
+]
+tests_dir = "shopping/tests/"
+runner = "python -m pytest -x --tb=short -q"
+dict_synonyms = "Struct,NamedStruct"

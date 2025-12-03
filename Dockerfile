@@ -6,6 +6,7 @@ WORKDIR /code
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
 # libev-dev, libevent-dev: gevent/locust 빌드에 필요
 # libffi-dev: cffi 빌드에 필요
+# graphviz: pydeps 의존성 그래프 생성에 필요
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
@@ -14,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libevent-dev \
     libffi-dev \
     python3-dev \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 파일 복사
