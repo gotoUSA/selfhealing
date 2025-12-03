@@ -14,7 +14,7 @@
 6. [bandit (보안 분석)](#4-bandit-보안-분석)
 7. [vulture (죽은 코드 탐지)](#5-vulture-죽은-코드-탐지)
 8. [pipdeptree (의존성 트리)](#6-pipdeptree-의존성-트리)
-9. [safety (의존성 보안)](#7-safety-의존성-보안)
+9. [pip-audit (의존성 보안)](#7-pip-audit-의존성-보안)
 10. [mutmut (Mutation Testing)](#8-mutmut-mutation-testing)
 11. [통합 스크립트](#통합-스크립트)
 12. [CI/CD 통합](#cicd-통합)
@@ -31,7 +31,7 @@
 | bandit | 보안 취약점 탐지 | 매 PR |
 | vulture | 죽은 코드 탐지 | 주 1회 |
 | pipdeptree | pip 의존성 트리 | 패키지 추가 시 |
-| safety | 의존성 보안 검사 | 주 1회 |
+| pip-audit | 의존성 보안 검사 | 주 1회 |
 | mutmut | 테스트 품질 검증 | 핵심 로직 변경 시 |
 
 ---
@@ -73,8 +73,8 @@ docker-compose exec web vulture shopping --min-confidence 80
 | bandit | `docker-compose exec web bandit -r shopping -x shopping/tests` |
 | vulture | `docker-compose exec web vulture shopping --min-confidence 80` |
 | pipdeptree | `docker-compose exec web pipdeptree --warn fail` |
-| safety | `docker-compose exec web safety check` |
-| mutmut | `docker-compose exec web mutmut run` |
+| pip-audit | `docker-compose exec web pip-audit` |
+| mutmut | `docker-compose exec web mutmut run` | # 절대 하지말것
 
 ### Docker에서 파일 출력 시 주의사항
 
@@ -570,83 +570,84 @@ docker-compose exec web pipdeptree -r -p requests
 
 ---
 
-## 7. safety (의존성 보안)
+## 7. pip-audit (의존성 보안)
 
-> 설치된 패키지의 알려진 보안 취약점(CVE) 검사.
+> 설치된 패키지의 알려진 보안 취약점(CVE) 검사. PyPI 공식 보안 도구.
+
+### safety vs pip-audit
+
+| 도구 | 장점 | 단점 |
+|------|------|------|
+| **safety** | 상세한 리포트 | 계정 등록 필요, deprecated |
+| **pip-audit** ✓ | 무료, 계정 불필요, PyPI 공식 | - |
+
+> ⚠️ `safety check` 명령어는 2024년 6월부터 deprecated되었습니다. `pip-audit`를 권장합니다.
 
 ### 기본 사용법 (로컬)
 
 ```bash
 # 기본 검사
-safety check
+pip-audit
 
 # requirements.txt 검사
-safety check -r requirements.txt
+pip-audit -r requirements.txt
 
 # JSON 출력
-safety check --output json > safety_report.json
-
-# 전체 출력 (상세)
-safety check --full-report
+pip-audit --format json > audit_report.json
 
 # 특정 취약점 무시
-safety check --ignore 12345
+pip-audit --ignore-vuln CVE-2024-12345
+
+# 수정 버전 자동 적용 (dry-run)
+pip-audit --fix --dry-run
+
+# 실제 수정 적용
+pip-audit --fix
 ```
 
 ### Docker에서 실행
 
 ```bash
 # 기본 검사
-docker-compose exec web safety check
+docker-compose exec web pip-audit
 
 # requirements.txt 검사
-docker-compose exec web safety check -r requirements.txt
-
-# 전체 리포트
-docker-compose exec web safety check --full-report
+docker-compose exec web pip-audit -r requirements.txt
 
 # JSON 출력
-docker-compose exec web safety check --output json > safety_report.json
+docker-compose exec web pip-audit --format json > audit_report.json
+
+# 수정 버전 확인 (dry-run)
+docker-compose exec web pip-audit --fix --dry-run
 ```
 
 ### 출력 예시
 
 ```
-+==============================================================================+
-|                                                                              |
-|                               /$$$$$$            /$$                         |
-|                              /$$__  $$          | $$                         |
-|           /$$$$$$$  /$$$$$$ | $$  \__//$$$$$$  /$$$$$$   /$$   /$$           |
-|          /$$_____/ |____  $$| $$$$   /$$__  $$|_  $$_/  | $$  | $$           |
-|         |  $$$$$$   /$$$$$$$| $$_/  | $$$$$$$$  | $$    | $$  | $$           |
-|          \____  $$ /$$__  $$| $$    | $$_____/  | $$ /$$| $$  | $$           |
-|          /$$$$$$$/|  $$$$$$$| $$    |  $$$$$$$  |  $$$$/|  $$$$$$$           |
-|         |_______/  \_______/|__/     \_______/   \___/   \____  $$           |
-|                                                          /$$  | $$           |
-|                                                         |  $$$$$$/           |
-|  by safetycli.com                                        \______/            |
-|                                                                              |
-+==============================================================================+
-
-  REPORT
-
-  Safety found 0 known security vulnerabilities in your dependencies.
+Found 5 known vulnerabilities in 1 package
+Name   Version ID             Fix Versions
+------ ------- -------------- -------------------
+django 5.2.4   CVE-2025-57833 4.2.24,5.1.12,5.2.6
+django 5.2.4   CVE-2025-59681 4.2.25,5.1.13,5.2.7
+django 5.2.4   CVE-2025-59682 4.2.25,5.1.13,5.2.7
+django 5.2.4   CVE-2025-64458 4.2.26,5.1.14,5.2.8
+django 5.2.4   CVE-2025-64459 4.2.26,5.1.14,5.2.8
 ```
 
 ### 권장 명령어
 
 ```bash
 # 로컬: 주간 검사
-safety check --full-report
+pip-audit
 
-# 로컬: CI용
-safety check --output json
+# 로컬: CI용 (JSON 출력)
+pip-audit --format json
 
 # Docker: 주간 검사
-docker-compose exec web safety check --full-report
+docker-compose exec web pip-audit
 
 # Docker: CI용
-docker-compose exec web safety check --output json
+docker-compose exec web pip-audit --format json
 ```
 
 ---
@@ -864,8 +865,8 @@ echo "6. 의존성 충돌 검사 (pipdeptree)..."
 pipdeptree --warn fail
 
 echo ""
-echo "7. 의존성 보안 검사 (safety)..."
-safety check --output text | tee $REPORT_DIR/safety.txt
+echo "7. 의존성 보안 검사 (pip-audit)..."
+pip-audit | tee $REPORT_DIR/audit.txt
 
 echo ""
 echo "=================================="
@@ -949,9 +950,9 @@ jobs:
           bandit -r shopping -x shopping/tests -ll
           # HIGH 심각도만 실패 처리
 
-      - name: Dependency Check (safety)
+      - name: Dependency Check (pip-audit)
         run: |
-          safety check
+          pip-audit
         continue-on-error: true  # 경고만 (선택)
 
       - name: Dead Code Check (vulture)
@@ -1020,4 +1021,4 @@ vulture shopping vulture_whitelist.py
 - [vulture 문서](https://github.com/jendrikseipp/vulture)
 - [mutmut 문서](https://mutmut.readthedocs.io/)
 - [pydeps 문서](https://github.com/thebjorn/pydeps)
-- [safety 문서](https://docs.safetycli.com/)
+- [pip-audit 문서](https://github.com/pypa/pip-audit)

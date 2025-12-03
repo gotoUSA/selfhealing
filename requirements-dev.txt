@@ -35,7 +35,7 @@ pydeps==3.0.1         # Python 의존성 그래프 시각화
 radon==6.0.1          # 코드 복잡도 분석 (Cyclomatic Complexity)
 vulture==2.14         # 죽은 코드(Dead Code) 탐지
 bandit==1.9.2         # 보안 취약점 분석
-safety==3.7.0         # 의존성 보안 취약점 검사
+pip-audit>=2.10.0     # 의존성 보안 취약점 검사 (safety 대체)
 pipdeptree==2.30.0    # pip 의존성 트리 시각화
 pygount==3.1.0        # 코드 라인 수 통계 (cloc 대안)
 mutmut==2.4.4         # Mutation Testing (테스트 품질 검증) - Windows 호환 버전
