@@ -1,75 +1,117 @@
 """
 Webhook 동시성 테스트
 
-동시 Webhook 도착 시 중복 처리 방지 검증
-- 동일 결제에 DONE 이벤트 2번 동시 도착
-- Confirm API와 Webhook 동시 도착 (Race Condition)
+Purpose:
+    동시 Webhook 도착 시 중복 처리 방지 검증
+
+Test Categories:
+    A. Core Invariant Tests (핵심 불변 조건):
+        - 동일 결제 DONE 이벤트 중복 처리 방지
+        - 재고/포인트/sold_count 1회만 변경
+    B. High Concurrency Tests:
+        - 5개 스레드 동시 처리
+    C. Edge Cases:
+        - 이미 완료된 결제에 Webhook 도착
+
+Concurrency Control:
+    - Payment.is_paid 플래그 - 중복 처리 방지
+    - select_for_update - 행 단위 락
 """
 
 import threading
 from decimal import Decimal
 
 from django.db import connection
-from django.db.models import F
 
 import pytest
-from rest_framework import status
-from rest_framework.test import APIClient
 
 from shopping.models.order import Order, OrderItem
 from shopping.models.payment import Payment
-from shopping.models.product import Product
+from shopping.services.toss_webhook_service import TossWebhookService
 from shopping.tests.factories import (
-    OrderFactory,
-    PaymentFactory,
     ProductFactory,
     UserFactory,
 )
-from shopping.services.toss_webhook_service import TossWebhookService
+
+
+# =============================================================================
+# 헬퍼 함수
+# =============================================================================
 
 
 def close_db_connection():
-    """스레드별 DB 연결 정리"""
+    """스레드별 DB 연결 정리 - 멀티스레딩 테스트 필수"""
     connection.close()
 
 
-@pytest.mark.django_db(transaction=True)
-class TestWebhookDuplicateDone:
-    """동일 결제에 DONE 이벤트 2번 동시 도착 테스트"""
+def create_test_order_with_payment(user, product, payment_key: str) -> tuple[Order, Payment]:
+    """테스트용 주문 및 결제 생성 헬퍼"""
+    order = Order.objects.create(
+        user=user,
+        status="confirmed",
+        total_amount=product.price,
+        final_amount=product.price,
+        shipping_name="홍길동",
+        shipping_phone="010-1234-5678",
+        shipping_postal_code="12345",
+        shipping_address="서울시 강남구",
+        shipping_address_detail="101동",
+    )
 
-    def test_duplicate_payment_done_webhook_only_one_succeeds(self, category):
-        """동일 결제에 DONE 이벤트 2번 동시 도착 시 1번만 처리"""
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        quantity=1,
+        price=product.price,
+    )
+
+    payment = Payment.objects.create(
+        order=order,
+        amount=order.final_amount,
+        status="ready",
+        toss_order_id=str(order.id),
+        payment_key=payment_key,
+    )
+
+    return order, payment
+
+
+# =============================================================================
+# A. 핵심 불변 조건 테스트 (Core Invariant Tests)
+# =============================================================================
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
+@pytest.mark.payment_race
+class TestWebhookDuplicateDoneInvariant:
+    """
+    핵심 불변 조건: 동일 DONE 이벤트 중복 처리 방지
+
+    Purpose:
+        동일 결제에 DONE 이벤트가 여러 번 도착해도 1번만 처리
+    Type:
+        Core invariant test (must never fail)
+    Concurrency Control:
+        Payment.is_paid 플래그 + select_for_update
+    """
+
+    def test_duplicate_done_webhook_stock_deducted_once(self, category):
+        """
+        Purpose:
+            동일 결제에 DONE 이벤트 2번 도착 시 재고 1번만 차감
+        Scenario:
+            stock=10, 2개 스레드 동시 DONE 이벤트 처리
+        Expected:
+            Payment paid, Order paid, stock=9
+        Concurrency Control:
+            is_paid 플래그로 중복 처리 방지
+        """
         # Arrange
         user = UserFactory(is_email_verified=True)
         product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
-
-        order = Order.objects.create(
-            user=user,
-            status="confirmed",
-            total_amount=product.price,
-            final_amount=product.price,
-            shipping_name="홍길동",
-            shipping_phone="010-1234-5678",
-            shipping_postal_code="12345",
-            shipping_address="서울시 강남구",
-            shipping_address_detail="101동",
-        )
-
-        OrderItem.objects.create(
-            order=order,
-            product=product,
-            product_name=product.name,
-            quantity=1,
-            price=product.price,
-        )
-
-        payment = Payment.objects.create(
-            order=order,
-            amount=order.final_amount,
-            status="ready",
-            toss_order_id=str(order.id),
-            payment_key="test_webhook_dup_key",
-        )
+        order, payment = create_test_order_with_payment(user, product, "test_webhook_dup_key")
 
         initial_stock = product.stock
         results = []
@@ -85,7 +127,6 @@ class TestWebhookDuplicateDone:
         }
 
         def call_webhook():
-            """Webhook 호출"""
             try:
                 TossWebhookService.handle_payment_done(event_data)
                 with lock:
@@ -96,7 +137,7 @@ class TestWebhookDuplicateDone:
             finally:
                 close_db_connection()
 
-        # Act - 2개 스레드로 동시에 TossWebhookService.handle_payment_done 호출
+        # Act
         threads = [threading.Thread(target=call_webhook) for _ in range(2)]
         for t in threads:
             t.start()
@@ -108,14 +149,19 @@ class TestWebhookDuplicateDone:
         order.refresh_from_db()
         product.refresh_from_db()
 
-        assert payment.is_paid is True, "Payment가 paid 상태여야 함"
-        assert order.status == "paid", "Order가 paid 상태여야 함"
+        assert payment.is_paid is True, "Payment paid 상태"
+        assert order.status == "paid", "Order paid 상태"
+        assert product.stock == initial_stock - 1, f"재고 1번만 차감. 실제: {product.stock}"
 
-        # 재고는 1번만 차감되어야 함 (10 - 1 = 9)
-        assert product.stock == initial_stock - 1, f"재고가 1번만 차감되어야 함. 실제: {product.stock}"
-
-    def test_duplicate_payment_done_webhook_sold_count_once(self, category):
-        """동일 결제에 DONE 이벤트 2번 도착 시 sold_count도 1번만 증가"""
+    def test_duplicate_done_webhook_sold_count_increased_once(self, category):
+        """
+        Purpose:
+            동일 결제에 DONE 이벤트 2번 도착 시 sold_count 1번만 증가
+        Scenario:
+            sold_count=0, quantity=2, 2개 스레드 동시 처리
+        Expected:
+            sold_count = 2 (1회 증가분만)
+        """
         # Arrange
         user = UserFactory(is_email_verified=True)
         product = ProductFactory(category=category, stock=10, sold_count=0, price=Decimal("10000"))
@@ -161,7 +207,6 @@ class TestWebhookDuplicateDone:
         }
 
         def call_webhook():
-            """Webhook 호출"""
             try:
                 TossWebhookService.handle_payment_done(event_data)
                 with lock:
@@ -181,12 +226,17 @@ class TestWebhookDuplicateDone:
 
         # Assert
         product.refresh_from_db()
+        assert product.sold_count == 2, f"sold_count = 2. 실제: {product.sold_count}"
 
-        # sold_count는 quantity(2)만큼만 1번 증가해야 함
-        assert product.sold_count == 2, f"sold_count가 2여야 함. 실제: {product.sold_count}"
-
-    def test_duplicate_payment_done_webhook_points_earned_once(self, category):
-        """동일 결제에 DONE 이벤트 2번 도착 시 포인트도 1번만 적립"""
+    def test_duplicate_done_webhook_points_earned_once(self, category):
+        """
+        Purpose:
+            동일 결제에 DONE 이벤트 2번 도착 시 포인트 1번만 적립
+        Scenario:
+            user.points=0, 10000원 결제 (1% = 100P), 2개 스레드 동시 처리
+        Expected:
+            user.points = 100P
+        """
         # Arrange
         user = UserFactory(is_email_verified=True, points=0)
         product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
@@ -233,7 +283,6 @@ class TestWebhookDuplicateDone:
         }
 
         def call_webhook():
-            """Webhook 호출"""
             try:
                 TossWebhookService.handle_payment_done(event_data)
                 with lock:
@@ -255,18 +304,37 @@ class TestWebhookDuplicateDone:
         user.refresh_from_db()
         order.refresh_from_db()
 
-        # 포인트는 1번만 적립 (1% 기준 = 100P)
         expected_points = int(order.total_amount * Decimal("0.01"))
-        assert user.points == expected_points, f"포인트가 {expected_points}P여야 함. 실제: {user.points}P"
-        assert order.earned_points == expected_points, f"earned_points가 {expected_points}P여야 함"
+        assert user.points == expected_points, f"포인트 = {expected_points}P. 실제: {user.points}P"
+        assert order.earned_points == expected_points
+
+
+# =============================================================================
+# B. 높은 동시성 테스트 (High Concurrency Tests)
+# =============================================================================
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
+@pytest.mark.payment_race
+@pytest.mark.slow
 class TestWebhookHighConcurrency:
-    """Webhook 높은 동시성 테스트"""
+    """
+    높은 동시성 테스트
 
-    def test_many_concurrent_done_webhooks(self, category):
-        """5개 스레드로 동시에 DONE 이벤트 처리"""
+    Purpose:
+        5개 이상 스레드 동시 처리에서도 정합성 유지
+    """
+
+    def test_5_concurrent_done_webhooks(self, category):
+        """
+        Purpose:
+            5개 스레드로 동시에 DONE 이벤트 처리
+        Scenario:
+            stock=100, quantity=5, 5개 스레드 동시 처리
+        Expected:
+            재고 5개만 차감 (100 - 5 = 95)
+        """
         # Arrange
         user = UserFactory(is_email_verified=True)
         product = ProductFactory(category=category, stock=100, price=Decimal("10000"))
@@ -313,7 +381,6 @@ class TestWebhookHighConcurrency:
         }
 
         def call_webhook():
-            """Webhook 호출"""
             try:
                 TossWebhookService.handle_payment_done(event_data)
                 with lock:
@@ -324,7 +391,7 @@ class TestWebhookHighConcurrency:
             finally:
                 close_db_connection()
 
-        # Act - 5개 스레드로 동시 호출
+        # Act
         threads = [threading.Thread(target=call_webhook) for _ in range(5)]
         for t in threads:
             t.start()
@@ -338,17 +405,34 @@ class TestWebhookHighConcurrency:
 
         assert payment.is_paid is True
         assert order.status == "paid"
+        assert product.stock == initial_stock - 5, f"재고 5개만 차감. 실제: {product.stock}"
 
-        # 재고는 1번만 차감 (5개)
-        assert product.stock == initial_stock - 5, f"재고가 5개만 차감되어야 함. 실제: {product.stock}"
+
+# =============================================================================
+# C. 엣지 케이스 테스트 (Edge Cases)
+# =============================================================================
 
 
 @pytest.mark.django_db(transaction=True)
-class TestWebhookAndAlreadyPaid:
-    """이미 결제 완료된 주문에 대한 Webhook 테스트"""
+@pytest.mark.concurrency
+@pytest.mark.payment_race
+class TestWebhookEdgeCases:
+    """
+    엣지 케이스: 이미 처리된 결제, 재고 부족 등
+
+    Purpose:
+        비정상 상황에서도 데이터 정합성 유지
+    """
 
     def test_webhook_on_already_paid_order_is_ignored(self, category):
-        """이미 paid 상태인 주문에 DONE 웹훅 도착 시 무시"""
+        """
+        Purpose:
+            이미 paid 상태인 주문에 DONE 웹훅 도착 시 무시
+        Scenario:
+            이미 완료된 결제에 Webhook 도착
+        Expected:
+            재고/포인트 변화 없음
+        """
         # Arrange
         user = UserFactory(is_email_verified=True, points=100)
         product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
@@ -405,24 +489,25 @@ class TestWebhookAndAlreadyPaid:
             "approvedAt": "2025-01-15T10:00:00+09:00",
         }
 
-        # Act - 이미 paid인 상태에서 다시 webhook 호출
+        # Act
         TossWebhookService.handle_payment_done(event_data)
 
         # Assert
         product.refresh_from_db()
         user.refresh_from_db()
 
-        # 재고/포인트 변화 없어야 함
-        assert product.stock == initial_stock, "이미 처리된 주문이므로 재고 변화 없어야 함"
-        assert user.points == initial_points, "이미 처리된 주문이므로 포인트 변화 없어야 함"
-
-
-@pytest.mark.django_db(transaction=True)
-class TestWebhookStockValidation:
-    """Webhook 재고 검증 테스트"""
+        assert product.stock == initial_stock, "재고 변화 없음"
+        assert user.points == initial_points, "포인트 변화 없음"
 
     def test_webhook_does_not_allow_negative_stock(self, category):
-        """재고가 부족해도 음수가 되지 않아야 함"""
+        """
+        Purpose:
+            재고 부족 시에도 음수가 되지 않음
+        Scenario:
+            stock=1, quantity=5 (재고 < 주문 수량)
+        Expected:
+            stock >= 0 (Greatest 사용)
+        """
         # Arrange
         user = UserFactory(is_email_verified=True)
         product = ProductFactory(category=category, stock=1, price=Decimal("10000"))
@@ -439,7 +524,6 @@ class TestWebhookStockValidation:
             shipping_address_detail="101동",
         )
 
-        # 재고(1) < 주문 수량(5)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -470,7 +554,4 @@ class TestWebhookStockValidation:
 
         # Assert
         product.refresh_from_db()
-
-        # 재고가 음수가 되어서는 안 됨 (조건부 업데이트 적용 시)
-        # 현재 코드는 Greatest(F("stock") - quantity, 0)를 사용하므로 최소 0
-        assert product.stock >= 0, f"재고는 음수가 될 수 없음. 실제: {product.stock}"
+        assert product.stock >= 0, f"재고 음수 불가. 실제: {product.stock}"

@@ -1,21 +1,37 @@
 """
 Idempotency Key 테스트
 
-- Idempotency Key 도입 검증
-- 중복 결제 요청 방지 테스트
+Purpose:
+    Idempotency Key를 통한 중복 결제 요청 방지 검증
+
+Test Categories:
+    A. Basic Tests (기본 동작):
+        - Idempotency Key로 결제 생성
+        - 동일 키로 중복 요청 시 기존 결제 반환
+        - 다른 키로 요청 시 새 결제 생성
+    B. Concurrency Tests (동시성):
+        - 동일 키로 동시 요청 시 최종 1개만 남음
+        - 다른 키로 동시 요청 시 각각 생성
+    C. API Integration Tests (API 통합):
+        - /api/payments/request/ API에서 지원 확인
 
 Idempotency Key 개념:
-- 클라이언트가 생성하는 고유 식별자
-- 동일한 키로 요청 시 기존 결제 반환 (멱등성 보장)
-- 네트워크 재시도, 중복 클릭 등으로 인한 중복 결제 방지
+    - 클라이언트가 생성하는 고유 식별자
+    - 동일한 키로 요청 시 기존 결제 반환 (멱등성 보장)
+    - 네트워크 재시도, 중복 클릭 등으로 인한 중복 결제 방지
+
+Concurrency Control:
+    - DB Unique Constraint
+    - select_for_update
+    - 캐시 기반 멱등성 (프로덕션: Redis)
 """
 
 import threading
 import uuid
 from decimal import Decimal
 
-from django.db import connection
 from django.core.cache import cache
+from django.db import connection
 
 import pytest
 from rest_framework import status
@@ -29,7 +45,11 @@ from shopping.tests.factories import (
 )
 
 
-# 테스트용 실제 캐시 설정 (DummyCache 대신 LocMemCache 사용)
+# =============================================================================
+# 테스트 설정
+# =============================================================================
+
+
 TEST_CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -39,7 +59,7 @@ TEST_CACHES = {
 
 
 def close_db_connection():
-    """스레드별 DB 연결 정리"""
+    """스레드별 DB 연결 정리 - 멀티스레딩 테스트 필수"""
     connection.close()
 
 
@@ -52,13 +72,29 @@ def use_locmem_cache(settings):
     cache.clear()
 
 
-@pytest.mark.django_db(transaction=True)
-class TestIdempotencyKeyBasic:
-    """Idempotency Key 기본 동작 테스트"""
+# =============================================================================
+# A. 기본 동작 테스트 (Basic Tests)
+# =============================================================================
 
-    def test_create_payment_with_idempotency_key(self, category):
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
+class TestIdempotencyKeyBasic:
+    """
+    Idempotency Key 기본 동작 테스트
+
+    Purpose:
+        멱등성 보장 기본 동작 검증
+    """
+
+    def test_create_payment_with_idempotency_key_stores_key(self, category):
         """
-        idempotency_key로 결제 생성 시 해당 키가 저장됨
+        Purpose:
+            idempotency_key로 결제 생성 시 해당 키가 저장됨
+        Scenario:
+            idempotency_key 포함하여 결제 생성
+        Expected:
+            Payment.idempotency_key에 저장됨
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -92,7 +128,12 @@ class TestIdempotencyKeyBasic:
 
     def test_duplicate_idempotency_key_returns_existing_payment(self, category):
         """
-        동일한 idempotency_key로 결제 요청 시 기존 결제 반환 (멱등성)
+        Purpose:
+            동일 idempotency_key로 요청 시 기존 결제 반환 (멱등성)
+        Scenario:
+            동일 키로 2번 결제 생성 요청
+        Expected:
+            동일한 Payment 반환, DB에 1개만 존재
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -112,27 +153,31 @@ class TestIdempotencyKeyBasic:
 
         idempotency_key = str(uuid.uuid4())
 
-        # Act - 첫 번째 결제 생성
+        # Act
         payment1 = PaymentService.create_payment(
             order=order,
             payment_method="card",
             idempotency_key=idempotency_key,
         )
 
-        # Act - 동일한 키로 두 번째 결제 시도
         payment2 = PaymentService.create_payment(
             order=order,
             payment_method="card",
             idempotency_key=idempotency_key,
         )
 
-        # Assert - 동일한 Payment 반환
-        assert payment1.id == payment2.id
+        # Assert
+        assert payment1.id == payment2.id, "동일한 Payment 반환"
         assert Payment.objects.filter(idempotency_key=idempotency_key).count() == 1
 
     def test_different_idempotency_keys_create_different_payments(self, category):
         """
-        서로 다른 idempotency_key는 서로 다른 결제를 생성
+        Purpose:
+            서로 다른 idempotency_key는 서로 다른 결제 생성
+        Scenario:
+            다른 키로 2개 결제 생성 요청
+        Expected:
+            각각 별도의 Payment 생성
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -166,25 +211,21 @@ class TestIdempotencyKeyBasic:
         key2 = str(uuid.uuid4())
 
         # Act
-        payment1 = PaymentService.create_payment(
-            order=order1,
-            payment_method="card",
-            idempotency_key=key1,
-        )
-
-        payment2 = PaymentService.create_payment(
-            order=order2,
-            payment_method="card",
-            idempotency_key=key2,
-        )
+        payment1 = PaymentService.create_payment(order=order1, payment_method="card", idempotency_key=key1)
+        payment2 = PaymentService.create_payment(order=order2, payment_method="card", idempotency_key=key2)
 
         # Assert
         assert payment1.id != payment2.id
         assert payment1.idempotency_key != payment2.idempotency_key
 
-    def test_create_payment_without_idempotency_key(self, category):
+    def test_create_payment_without_idempotency_key_works(self, category):
         """
-        idempotency_key 없이도 결제 생성 가능 (기존 동작 유지)
+        Purpose:
+            idempotency_key 없이도 결제 생성 가능 (기존 동작 유지)
+        Scenario:
+            idempotency_key 없이 결제 생성
+        Expected:
+            Payment 생성, idempotency_key = None
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -203,35 +244,39 @@ class TestIdempotencyKeyBasic:
         )
 
         # Act
-        payment = PaymentService.create_payment(
-            order=order,
-            payment_method="card",
-        )
+        payment = PaymentService.create_payment(order=order, payment_method="card")
 
         # Assert
         assert payment.idempotency_key is None
         assert payment.order == order
 
 
+# =============================================================================
+# B. 동시성 테스트 (Concurrency Tests)
+# =============================================================================
+
+
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
 class TestIdempotencyKeyConcurrency:
-    """Idempotency Key 동시성 테스트"""
+    """
+    Idempotency Key 동시성 테스트
 
-    def test_concurrent_requests_with_same_idempotency_key(self, category):
+    Purpose:
+        동시 요청 시 멱등성 보장 검증
+    Note:
+        테스트 환경 LocMemCache는 스레드 간 공유 안 됨
+        프로덕션 Redis는 중앙 집중형으로 동시 요청에서도 작동
+    """
+
+    def test_concurrent_same_key_final_1_payment(self, category):
         """
-        동일한 idempotency_key로 동시 요청 시 최종 1개만 남음
-
-        시나리오:
-        - 5개 스레드가 동일한 idempotency_key로 동시에 결제 생성 시도
-        - 결과: DB에 최종 1개의 Payment만 존재
-
-        Note:
-        - 테스트 환경에서 LocMemCache는 스레드 간 공유되지 않음
-        - 따라서 캐시 기반 멱등성은 순차 요청에서만 작동
-        - 동시 요청은 DB 락(select_for_update)으로 직렬화되어
-          기존 Payment 삭제 후 새로 생성하는 방식으로 처리됨
-        - 프로덕션에서는 Redis가 중앙 집중형으로 동작하여
-          캐시 기반 멱등성도 동시 요청에서 작동함
+        Purpose:
+            동일 idempotency_key로 5개 동시 요청 시 최종 1개만 남음
+        Scenario:
+            5개 스레드가 동일 키로 동시 결제 생성
+        Expected:
+            모두 성공, 최종 DB에 1개만 존재
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -254,7 +299,6 @@ class TestIdempotencyKeyConcurrency:
         lock = threading.Lock()
 
         def create_payment_thread(thread_id):
-            """결제 생성 스레드"""
             try:
                 payment = PaymentService.create_payment(
                     order=Order.objects.get(pk=order.pk),
@@ -262,26 +306,14 @@ class TestIdempotencyKeyConcurrency:
                     idempotency_key=idempotency_key,
                 )
                 with lock:
-                    results.append(
-                        {
-                            "thread_id": thread_id,
-                            "success": True,
-                            "payment_id": payment.id,
-                        }
-                    )
+                    results.append({"thread_id": thread_id, "success": True, "payment_id": payment.id})
             except Exception as e:
                 with lock:
-                    results.append(
-                        {
-                            "thread_id": thread_id,
-                            "success": False,
-                            "error": str(e),
-                        }
-                    )
+                    results.append({"thread_id": thread_id, "success": False, "error": str(e)})
             finally:
                 close_db_connection()
 
-        # Act - 5개 스레드 동시 실행
+        # Act
         threads = [threading.Thread(target=create_payment_thread, args=(i,)) for i in range(5)]
         for t in threads:
             t.start()
@@ -289,22 +321,25 @@ class TestIdempotencyKeyConcurrency:
             t.join()
 
         # Assert
-        # 모든 스레드가 성공해야 함
         successful_results = [r for r in results if r["success"]]
-        assert len(successful_results) == 5, f"모든 스레드가 성공해야 함. 실제: {len(successful_results)}"
+        assert len(successful_results) == 5, f"모든 스레드 성공. 실제: {len(successful_results)}"
 
-        # 최종적으로 DB에 Payment는 1개만 존재해야 함
-        # (DB 락으로 직렬화되어 마지막 스레드의 Payment만 남음)
+        # 최종 DB에 1개만 존재
         final_payment_count = Payment.objects.filter(order=order).count()
-        assert final_payment_count == 1, f"최종 Payment가 1개만 있어야 함. 실제: {final_payment_count}"
+        assert final_payment_count == 1, f"최종 1개. 실제: {final_payment_count}"
 
-        # 최종 Payment가 idempotency_key를 가지고 있어야 함
+        # 최종 Payment가 idempotency_key 보유
         final_payment = Payment.objects.get(order=order)
         assert final_payment.idempotency_key == idempotency_key
 
-    def test_concurrent_requests_with_different_idempotency_keys(self, category):
+    def test_concurrent_different_keys_all_created(self, category):
         """
-        서로 다른 idempotency_key로 동시 요청 시 각각 생성
+        Purpose:
+            서로 다른 idempotency_key로 5개 동시 요청 시 각각 생성
+        Scenario:
+            5개 스레드가 각각 다른 키로 동시 결제 생성
+        Expected:
+            5개 모두 성공, 5개 서로 다른 Payment 생성
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -329,7 +364,6 @@ class TestIdempotencyKeyConcurrency:
         lock = threading.Lock()
 
         def create_payment_thread(order_pk, idempotency_key, thread_id):
-            """결제 생성 스레드"""
             try:
                 payment = PaymentService.create_payment(
                     order=Order.objects.get(pk=order_pk),
@@ -337,33 +371,22 @@ class TestIdempotencyKeyConcurrency:
                     idempotency_key=idempotency_key,
                 )
                 with lock:
-                    results.append(
-                        {
-                            "thread_id": thread_id,
-                            "success": True,
-                            "payment_id": payment.id,
-                            "idempotency_key": idempotency_key,
-                        }
-                    )
+                    results.append({
+                        "thread_id": thread_id,
+                        "success": True,
+                        "payment_id": payment.id,
+                        "idempotency_key": idempotency_key,
+                    })
             except Exception as e:
                 with lock:
-                    results.append(
-                        {
-                            "thread_id": thread_id,
-                            "success": False,
-                            "error": str(e),
-                        }
-                    )
+                    results.append({"thread_id": thread_id, "success": False, "error": str(e)})
             finally:
                 close_db_connection()
 
-        # Act - 5개 스레드, 각각 다른 idempotency_key로 실행
+        # Act
         keys = [str(uuid.uuid4()) for _ in range(5)]
         threads = [
-            threading.Thread(
-                target=create_payment_thread,
-                args=(orders[i].pk, keys[i], i),
-            )
+            threading.Thread(target=create_payment_thread, args=(orders[i].pk, keys[i], i))
             for i in range(5)
         ]
         for t in threads:
@@ -373,20 +396,36 @@ class TestIdempotencyKeyConcurrency:
 
         # Assert
         successful_results = [r for r in results if r["success"]]
-        assert len(successful_results) == 5, f"5개 모두 성공해야 함. 실제: {len(successful_results)}"
+        assert len(successful_results) == 5, f"5개 모두 성공. 실제: {len(successful_results)}"
 
         # 각각 다른 Payment ID
         payment_ids = set(r["payment_id"] for r in successful_results)
-        assert len(payment_ids) == 5, f"5개의 서로 다른 Payment가 생성되어야 함"
+        assert len(payment_ids) == 5, "5개 서로 다른 Payment"
+
+
+# =============================================================================
+# C. API 통합 테스트 (API Integration Tests)
+# =============================================================================
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
 class TestIdempotencyKeyAPIIntegration:
-    """Idempotency Key API 통합 테스트"""
+    """
+    Idempotency Key API 통합 테스트
+
+    Purpose:
+        /api/payments/request/ API에서 idempotency_key 지원 검증
+    """
 
     def test_payment_request_api_with_idempotency_key(self, category, api_client):
         """
-        /api/payments/request/ API에서 idempotency_key 지원 테스트
+        Purpose:
+            API에서 idempotency_key 지원 - 중복 요청 시 동일 결제 반환
+        Scenario:
+            동일 idempotency_key로 API 2번 호출
+        Expected:
+            동일한 payment_id 반환, DB에 1개만
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -413,48 +452,41 @@ class TestIdempotencyKeyAPIIntegration:
         )
 
         idempotency_key = str(uuid.uuid4())
-
-        # 인증
         api_client.force_authenticate(user=user)
 
-        # Act - 첫 번째 요청
+        # Act 1 - 첫 번째 요청
         response1 = api_client.post(
             "/api/payments/request/",
-            {
-                "order_id": order.id,
-                "payment_method": "card",
-                "idempotency_key": idempotency_key,
-            },
+            {"order_id": order.id, "payment_method": "card", "idempotency_key": idempotency_key},
             format="json",
         )
 
-        # Assert - 첫 번째 요청 성공
+        # Assert 1
         assert response1.status_code == status.HTTP_201_CREATED
         payment_id1 = response1.data["payment_id"]
 
-        # Act - 동일한 키로 두 번째 요청
+        # Act 2 - 동일 키로 두 번째 요청
         response2 = api_client.post(
             "/api/payments/request/",
-            {
-                "order_id": order.id,
-                "payment_method": "card",
-                "idempotency_key": idempotency_key,
-            },
+            {"order_id": order.id, "payment_method": "card", "idempotency_key": idempotency_key},
             format="json",
         )
 
-        # Assert - 두 번째 요청도 성공하고 동일한 payment_id 반환
+        # Assert 2
         assert response2.status_code == status.HTTP_201_CREATED
         payment_id2 = response2.data["payment_id"]
 
-        assert payment_id1 == payment_id2, "동일한 idempotency_key는 동일한 Payment를 반환해야 함"
-
-        # DB에 1개만 존재
+        assert payment_id1 == payment_id2, "동일 idempotency_key는 동일 Payment 반환"
         assert Payment.objects.filter(idempotency_key=idempotency_key).count() == 1
 
     def test_payment_request_api_without_idempotency_key(self, category, api_client):
         """
-        /api/payments/request/ API에서 idempotency_key 없이도 동작
+        Purpose:
+            API에서 idempotency_key 없이도 동작 (기존 동작 유지)
+        Scenario:
+            idempotency_key 없이 API 호출
+        Expected:
+            결제 생성 성공, idempotency_key = None
         """
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -485,10 +517,7 @@ class TestIdempotencyKeyAPIIntegration:
         # Act
         response = api_client.post(
             "/api/payments/request/",
-            {
-                "order_id": order.id,
-                "payment_method": "card",
-            },
+            {"order_id": order.id, "payment_method": "card"},
             format="json",
         )
 
