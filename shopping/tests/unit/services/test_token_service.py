@@ -140,14 +140,10 @@ class TestValidateAndRefreshToken:
 
         assert exc_info.value.code == "TOKEN_INVALID"
 
-    @patch("shopping.services.token_service.settings")
-    def test_refresh_token_rotation_enabled(self, mock_settings):
+    @patch("django.conf.settings.SIMPLE_JWT", {"ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": False})
+    def test_refresh_token_rotation_enabled(self):
         """경계 케이스: ROTATE_REFRESH_TOKENS=True일 때 새 refresh token 반환"""
         # Arrange
-        mock_settings.SIMPLE_JWT = {
-            "ROTATE_REFRESH_TOKENS": True,
-            "BLACKLIST_AFTER_ROTATION": False,
-        }
         user = UserFactory()
         refresh = RefreshToken.for_user(user)
 
