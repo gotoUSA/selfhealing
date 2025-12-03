@@ -19,6 +19,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from shopping.models.user import User
 from shopping.serializers.user_serializers import LoginSerializer, PasswordChangeSerializer, RegisterSerializer, UserSerializer
+from shopping.services.token_service import TokenService, TokenServiceError
 from shopping.services.user_service import UserService
 from shopping.throttles import LoginRateThrottle, RegisterRateThrottle, TokenRefreshRateThrottle
 
@@ -312,69 +313,45 @@ class CustomTokenRefreshView(TokenRefreshView):
         tags=["Auth"],
     )
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        from django.conf import settings
-        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
-        import jwt as pyjwt
-
         # Cookie에서 refresh token 읽기 (우선), 없으면 body에서 읽기
         refresh_token = request.COOKIES.get("refresh_token") or request.data.get("refresh")
 
-        if not refresh_token:
-            return Response({"error": "refresh token이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # 블랙리스트된 토큰인지 확인
         try:
-            # JWT에서 jti 추출하여 블랙리스트 확인
-            decoded = pyjwt.decode(refresh_token, options={"verify_signature": False})
-            jti = decoded.get("jti")
+            result = TokenService.validate_and_refresh_token(refresh_token)
+        except TokenServiceError as e:
+            if e.code == "TOKEN_REQUIRED":
+                return Response({"error": e.message}, status=status.HTTP_400_BAD_REQUEST)
+            raise InvalidToken(e.message)
 
-            if jti and BlacklistedToken.objects.filter(token__jti=jti).exists():
-                raise InvalidToken("Token is blacklisted")
-
-            # SimpleJWT의 RefreshToken 검증 (만료, 서명 등)
-            token = RefreshToken(refresh_token)
-        except pyjwt.exceptions.DecodeError:
-            # 토큰 형식이 잘못된 경우
-            raise InvalidToken("Invalid token format")
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
-
-        # request.data를 수정하여 serializer에 전달
-        mutable_data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
-        mutable_data["refresh"] = refresh_token
-
-        serializer = self.get_serializer(data=mutable_data)
-        try:
-            serializer.is_valid(raise_exception=True)
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
-
-        validated_data = serializer.validated_data
-
-        # Access Token만 body에 반환
         response_data = {
-            "access": validated_data.get("access"),
+            "access": result.access_token,
             "message": "토큰이 갱신되었습니다.",
         }
 
         response = Response(response_data, status=status.HTTP_200_OK)
 
         # 새 Refresh Token이 있으면 Cookie 갱신 (ROTATE_REFRESH_TOKENS=True인 경우)
-        new_refresh = validated_data.get("refresh")
-        if new_refresh:
-            cookie_max_age = 7 * 24 * 60 * 60  # 7일
-            cookie_secure = not settings.DEBUG
-            cookie_samesite = "Lax"
+        if result.refresh_token:
+            response = self._set_refresh_cookie(response, result.refresh_token)
 
-            response.set_cookie(
-                key="refresh_token",
-                value=new_refresh,
-                max_age=cookie_max_age,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-            )
+        return response
 
+    def _set_refresh_cookie(self, response: Response, refresh_token: str) -> Response:
+        """Refresh Token을 HTTP Only Cookie로 설정한다."""
+        from django.conf import settings
+
+        cookie_max_age = 7 * 24 * 60 * 60  # 7일
+        cookie_secure = not settings.DEBUG
+        cookie_samesite = "Lax"
+
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            max_age=cookie_max_age,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+        )
         return response
 
 
@@ -402,39 +379,19 @@ Swagger에서 테스트 시에는 body에 refresh 토큰을 직접 입력하세�
         tags=["Auth"],
     )
     def post(self, request: Request) -> Response:
+        # Cookie에서 refresh token 읽기 (우선), 없으면 body에서 읽기
+        refresh_token = request.COOKIES.get("refresh_token") or request.data.get("refresh")
+
         try:
-            # Cookie에서 refresh token 읽기 (우선), 없으면 body에서 읽기
-            refresh_token = request.COOKIES.get("refresh_token") or request.data.get("refresh")
-
-            if not refresh_token:
-                return Response(
-                    {"error": "Refresh token이 필요합니다."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # 토큰 블랙리스트에 추가
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-
+            TokenService.blacklist_token(refresh_token)
             response = Response({"message": "로그아웃 되었습니다."}, status=status.HTTP_200_OK)
+        except TokenServiceError as e:
+            error_status = status.HTTP_400_BAD_REQUEST
+            response = Response({"error": e.message}, status=error_status)
 
-            # Refresh Token Cookie 삭제
-            response.delete_cookie("refresh_token")
-
-            return response
-
-        except TokenError:
-            # 토큰이 유효하지 않아도 Cookie는 삭제
-            response = Response(
-                {"error": "유효하지 않은 토큰입니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-            response.delete_cookie("refresh_token")
-            return response
-        except Exception as e:
-            response = Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            response.delete_cookie("refresh_token")
-            return response
+        # 성공/실패 관계없이 Cookie 삭제
+        response.delete_cookie("refresh_token")
+        return response
 
 
 @extend_schema(
