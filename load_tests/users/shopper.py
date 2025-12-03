@@ -15,20 +15,20 @@ from load_tests.config import ENDPOINTS
 class ShopperUser(BaseUser):
     """
     장바구니까지 담는 사용자
-    
+
     행동 패턴:
     - 상품 조회 후 장바구니 추가
     - 장바구니 확인
     - 장바구니 수정/삭제 (마음 바뀜)
-    
+
     로그인: 필요
     """
-    
+
     def on_start(self):
         """시작 시 로그인"""
         super().on_start()
         self.login()
-    
+
     @task(5)
     @tag("read", "products")
     def browse_and_view(self):
@@ -38,7 +38,7 @@ class ShopperUser(BaseUser):
             f"{ENDPOINTS['products']}?page={random.randint(1, 3)}",
             name="GET /api/products/",
         )
-        
+
         # 상세 조회
         product_id = self.get_random_product_id()
         if product_id:
@@ -46,24 +46,24 @@ class ShopperUser(BaseUser):
                 ENDPOINTS["product_detail"].format(id=product_id),
                 name="GET /api/products/{id}/",
             )
-    
+
     @task(4)
     @tag("write", "cart")
     def add_to_cart(self):
         """장바구니에 상품 추가"""
         if not self.ensure_logged_in():
             return
-        
+
         product_id = self.get_random_product_id()
         if not product_id:
             return
-        
+
         # 상세 조회 후 장바구니 추가 (실제 사용자 패턴)
         self.client.get(
             ENDPOINTS["product_detail"].format(id=product_id),
             name="GET /api/products/{id}/",
         )
-        
+
         self.client.post(
             ENDPOINTS["cart_items"],
             json={
@@ -72,47 +72,43 @@ class ShopperUser(BaseUser):
             },
             name="POST /api/cart-items/",
         )
-    
+
     @task(3)
     @tag("read", "cart")
     def view_cart(self):
         """장바구니 확인"""
         if not self.ensure_logged_in():
             return
-        
+
         self.client.get(
             ENDPOINTS["cart_items"],
             name="GET /api/cart-items/",
         )
-    
+
     @task(2)
     @tag("write", "cart")
     def modify_cart(self):
         """장바구니 수정/삭제"""
         if not self.ensure_logged_in():
             return
-        
-        with self.client.get(
-            ENDPOINTS["cart_items"],
-            name="GET /api/cart-items/",
-            catch_response=True
-        ) as response:
+
+        with self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/", catch_response=True) as response:
             if response.status_code != 200:
                 response.failure(f"Failed to get cart: {response.status_code}")
                 return
-            
+
             items = response.json()
             response.success()
-            
+
             if not items:
                 return
-            
+
             item = random.choice(items)
             item_id = item.get("id")
-            
+
             if not item_id:
                 return
-            
+
             # 50% 삭제, 50% 수량 변경
             if random.random() < 0.5:
                 self.client.delete(

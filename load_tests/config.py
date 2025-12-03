@@ -1,12 +1,8 @@
 """
 Locust 부하 테스트 설정
 
-CLI로 override 가능:
-    locust -f load_tests/locustfile.py \
-        --host=http://localhost:8000 \
-        --users=100 \
-        --spawn-rate=10 \
-        --run-time=5m
+CLI로 override 가능 (Windows는 한 줄 명령어 권장):
+    PYTHONUTF8=1 locust -f load_tests/locustfile.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=5m
 """
 
 import os
@@ -29,9 +25,9 @@ TEST_USER_PASSWORD = "testpass123"
 # =============================================================================
 # 실제 서비스 기준: 방문자 65%, 장바구니 25%, 구매자 10%
 USER_WEIGHTS = {
-    "browser": 65,   # 조회만 하는 사용자
-    "shopper": 25,   # 장바구니까지 담는 사용자
-    "buyer": 10,     # 결제까지 완료하는 사용자
+    "browser": 65,  # 조회만 하는 사용자
+    "shopper": 25,  # 장바구니까지 담는 사용자
+    "buyer": 10,  # 결제까지 완료하는 사용자
 }
 
 # =============================================================================
@@ -47,20 +43,16 @@ WAIT_TIME_MAX = 5
 ENDPOINTS = {
     # 인증
     "login": "/api/auth/login/",
-    
     # 상품
     "products": "/api/products/",
     "product_detail": "/api/products/{id}/",
     "categories": "/api/categories/",
-    
     # 장바구니
     "cart_items": "/api/cart-items/",
     "cart_item_detail": "/api/cart-items/{id}/",
-    
     # 주문
     "orders": "/api/orders/",
     "order_detail": "/api/orders/{id}/",
-    
     # 결제
     "payment_confirm": "/api/payments/confirm/",
 }
@@ -70,8 +62,8 @@ ENDPOINTS = {
 # =============================================================================
 SLA_TARGETS = {
     "products_list": {
-        "p95": 800,    # ms
-        "p99": 1500,   # ms
+        "p95": 800,  # ms
+        "p99": 1500,  # ms
         "error_rate": 0.01,  # 1%
     },
     "product_detail": {

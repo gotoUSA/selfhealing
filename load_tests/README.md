@@ -2,6 +2,24 @@
 
 Django Shopping Mall의 성능 및 확장성을 검증하기 위한 부하 테스트 스위트입니다.
 
+## ⚡ 빠른 시작 (Docker 권장)
+
+```bash
+# 1. Docker 서비스 시작
+docker compose up -d
+
+# 2. 테스트 데이터 생성
+docker compose exec web python manage.py create_load_test_users
+docker compose exec web python manage.py create_test_data
+
+# 3. 부하 테스트 실행 (100명, 5분)
+docker compose exec web locust -f load_tests/locustfile.py --host=http://web:8000 --users=100 --spawn-rate=10 --run-time=5m --headless --html=reports/load_test_100.html
+```
+
+> 📌 로컬 환경에서 실행하려면 **반드시 가상환경을 활성화**하세요!
+
+---
+
 ## 📋 목차
 
 - [테스트 전략](#-테스트-전략)
@@ -31,7 +49,7 @@ Django Shopping Mall의 성능 및 확장성을 검증하기 위한 부하 테�
 1. Smoke Test (10명 × 2분)
    → 기본 동작 확인
 
-2. Load Test (100명 × 5분)  
+2. Load Test (100명 × 5분)
    → 목표 성능 달성 확인
 
 3. Stress Test (점진적 100→500→1000명)
@@ -96,14 +114,22 @@ docker compose ps
 | flower | 5555 | Celery 모니터링 UI |
 
 ```bash
-# 테스트 데이터 생성 (Docker 환경)
+# 테스트 데이터 생성 (Docker 환경) - 권장
 docker compose exec web python manage.py create_load_test_users
 docker compose exec web python manage.py create_test_data
 ```
 
 #### Option B: 로컬 개발 환경
 
+> ⚠️ **필수**: 반드시 가상환경을 활성화한 후 실행하세요!
+
 ```bash
+# 가상환경 활성화 (Windows)
+.\venv\Scripts\activate
+
+# 가상환경 활성화 (macOS/Linux)
+source venv/bin/activate
+
 # Redis 실행 확인
 redis-cli ping  # PONG 응답 확인
 
@@ -115,7 +141,7 @@ celery -A myproject worker -l info
 ```
 
 ```bash
-# 테스트 데이터 생성 (로컬 환경)
+# 테스트 데이터 생성 (로컬 환경 - 가상환경 활성화 필수)
 python manage.py create_load_test_users
 python manage.py create_test_data
 ```
@@ -128,35 +154,57 @@ python manage.py create_test_data
 - ✅ 이메일 인증 완료됨
 - ✅ 상품 재고 충분함
 
+```bash
+# 데이터 확인 - Docker 환경
+docker compose exec web python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); print(f'테스트 유저 수: {User.objects.filter(username__startswith=\"load_test_user_\").count()}')"
+
+# 데이터 확인 - 로컬 환경 (가상환경 활성화 필수)
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); print(f'테스트 유저 수: {User.objects.filter(username__startswith=\"load_test_user_\").count()}')"
+```
+
 ### 3. Locust 설치
 
 ```bash
+# 로컬 환경
 pip install locust
+
+# Docker 환경 (web 컨테이너에 이미 설치됨)
+docker compose exec web pip install locust
 ```
 
 ---
 
 ## 🚀 실행 방법
 
+> ⚠️ **중요**: Docker 환경에서는 `docker compose exec web` 접두사를 붙여야 합니다.  
+> 로컬 환경에서는 반드시 **가상환경을 활성화**한 후 실행하세요.
+
 ### Windows 환경 주의사항
 
 Windows에서 실행 시 인코딩 문제가 발생할 수 있습니다. `PYTHONUTF8=1` 환경변수를 설정하세요:
 
 ```bash
-# Windows (Git Bash / MINGW64)
+# Windows (Git Bash / MINGW64) - 로컬 가상환경
 PYTHONUTF8=1 locust -f load_tests/locustfile.py --host=http://localhost:8000
 
-# Windows (PowerShell)
+# Windows (PowerShell) - 로컬 가상환경
 $env:PYTHONUTF8=1; locust -f load_tests/locustfile.py --host=http://localhost:8000
 
-# Windows (CMD)
+# Windows (CMD) - 로컬 가상환경
 set PYTHONUTF8=1 && locust -f load_tests/locustfile.py --host=http://localhost:8000
+
+# Docker 환경 (인코딩 문제 없음)
+docker compose exec web locust -f load_tests/locustfile.py --host=http://localhost:8000
 ```
 
 ### 기본 실행 (웹 UI)
 
 ```bash
+# 로컬 환경 (가상환경 활성화 필수)
 locust -f load_tests/locustfile.py --host=http://localhost:8000
+
+# Docker 환경
+docker compose exec web locust -f load_tests/locustfile.py --host=http://web:8000
 ```
 
 브라우저에서 http://localhost:8089 접속
@@ -164,32 +212,29 @@ locust -f load_tests/locustfile.py --host=http://localhost:8000
 ### CLI 모드 (자동 실행)
 
 ```bash
-# Load Test: 100명, 5분
-locust -f load_tests/locustfile.py \
-    --host=http://localhost:8000 \
-    --users=100 \
-    --spawn-rate=10 \
-    --run-time=5m \
-    --headless \
-    --html=reports/load_test_100.html
+# 로컬 환경 - Load Test: 100명, 5분 (한 줄 명령어 - 권장)
+PYTHONUTF8=1 locust -f load_tests/locustfile.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=5m --headless --html=reports/load_test_100.html
+
+# Docker 환경 - Load Test: 100명, 5분
+docker compose exec web locust -f load_tests/locustfile.py --host=http://web:8000 --users=100 --spawn-rate=10 --run-time=5m --headless --html=reports/load_test_100.html
 ```
+
+> ⚠️ **Windows 주의**: 멀티라인 명령어(`\` 사용)를 복사-붙여넣기하면 공백이 누락될 수 있습니다. 한 줄 명령어를 사용하세요.
 
 ### 특수 시나리오 실행
 
 ```bash
-# 결제 스트레스 테스트
-locust -f load_tests/scenarios/payment_stress.py \
-    --host=http://localhost:8000 \
-    --users=50 \
-    --spawn-rate=10 \
-    --run-time=3m
+# 결제 스트레스 테스트 - 로컬 환경
+PYTHONUTF8=1 locust -f load_tests/scenarios/payment_stress.py --host=http://localhost:8000 --users=50 --spawn-rate=10 --run-time=3m
 
-# 재고 경쟁 테스트
-locust -f load_tests/scenarios/concurrent_order.py \
-    --host=http://localhost:8000 \
-    --users=100 \
-    --spawn-rate=50 \
-    --run-time=2m
+# 결제 스트레스 테스트 - Docker 환경
+docker compose exec web locust -f load_tests/scenarios/payment_stress.py --host=http://web:8000 --users=50 --spawn-rate=10 --run-time=3m
+
+# 재고 경쟁 테스트 - 로컬 환경
+PYTHONUTF8=1 locust -f load_tests/scenarios/concurrent_order.py --host=http://localhost:8000 --users=100 --spawn-rate=50 --run-time=2m
+
+# 재고 경쟁 테스트 - Docker 환경
+docker compose exec web locust -f load_tests/scenarios/concurrent_order.py --host=http://web:8000 --users=100 --spawn-rate=50 --run-time=2m
 ```
 
 ---
@@ -228,7 +273,7 @@ locust -f load_tests/scenarios/concurrent_order.py \
 - 같은 상품에 대한 동시 주문
 - Overselling 방지 확인
 
-**주의:** 
+**주의:**
 - pytest 동시성 테스트에서 correctness는 이미 검증됨
 - Locust에서는 실제 부하 상황에서의 동작 확인이 목적
 
@@ -254,7 +299,7 @@ locust -f load_tests/scenarios/concurrent_order.py \
 - 결제: P95 ≈ 280ms, P99 ≈ 420ms
 
 → 목표 SLA (V1):
-- 상품 목록: P95 < 800ms, P99 < 1500ms  
+- 상품 목록: P95 < 800ms, P99 < 1500ms
 - 결제: P95 < 300ms, P99 < 500ms
 ```
 

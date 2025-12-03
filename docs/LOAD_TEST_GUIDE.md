@@ -55,24 +55,16 @@ locust -f shopping/tests/performance/point_concurrent_load_test.py --host=http:/
 
 ### CLI 모드 (Headless)
 ```bash
-# 100명 동시 사용자, 10명/초 증가, 60초 실행
-locust -f shopping/tests/performance/point_concurrent_load_test.py \
-  --host=http://localhost:8000 \
-  --users 100 \
-  --spawn-rate 10 \
-  --run-time 60s \
-  --headless
+# 100명 동시 사용자, 10명/초 증가, 60초 실행 (한 줄 명령어 - 권장)
+PYTHONUTF8=1 locust -f shopping/tests/performance/point_concurrent_load_test.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=60s --headless
 ```
+
+> ⚠️ **Windows 주의**: 멀티라인 명령어(`\` 사용)를 복사-붙여넣기하면 공백이 누락될 수 있습니다.
 
 ### 고부하 테스트
 ```bash
-# 1000명 동시 사용자
-locust -f shopping/tests/performance/point_concurrent_load_test.py \
-  --host=http://localhost:8000 \
-  --users 1000 \
-  --spawn-rate 50 \
-  --run-time 120s \
-  --headless
+# 1000명 동시 사용자 (한 줄 명령어)
+PYTHONUTF8=1 locust -f shopping/tests/performance/point_concurrent_load_test.py --host=http://localhost:8000 --users=1000 --spawn-rate=50 --run-time=120s --headless
 ```
 
 ## 테스트 시나리오
