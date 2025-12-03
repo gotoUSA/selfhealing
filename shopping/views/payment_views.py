@@ -26,7 +26,7 @@ from ..serializers.payment_serializers import (
 )
 from ..services.payment_service import PaymentConfirmError, PaymentService
 from ..throttles import PaymentCancelRateThrottle, PaymentConfirmRateThrottle, PaymentRequestRateThrottle
-from ..utils.toss_payment import TossPaymentClient, TossPaymentError, get_error_message
+from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 from .mixins import EmailVerificationRequiredMixin
 
 logger = logging.getLogger(__name__)

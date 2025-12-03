@@ -27,7 +27,7 @@ from shopping.serializers import (
 )
 
 # 권한
-from shopping.permissions import IsSeller, IsSellerAndOwner
+from shopping.permissions import IsSellerAndOwner
 
 
 # ===== Swagger 문서화용 응답 Serializers =====
