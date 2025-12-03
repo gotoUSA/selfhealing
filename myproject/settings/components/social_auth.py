@@ -104,3 +104,17 @@ SOCIALACCOUNT_PROVIDERS = {
 # 프로덕션: https://yourdomain.com/auth/callback
 # 개발: http://localhost:3000/auth/callback
 SOCIAL_LOGIN_REDIRECT_URI = os.getenv("SOCIAL_LOGIN_REDIRECT_URI", "http://localhost:8000/social/test/")
+
+# ==========================================
+# OAuth 서비스 설정 (SocialAuthService)
+# ==========================================
+
+# OAuth 콜백 URI (OAuth 제공자 콘솔에 등록한 것과 정확히 일치해야 함)
+OAUTH_CALLBACK_URI = os.getenv("OAUTH_CALLBACK_URI", "http://localhost:8000/api/social/callback/")
+
+# OAuth API 요청 타임아웃 (초)
+OAUTH_REQUEST_TIMEOUT = int(os.getenv("OAUTH_REQUEST_TIMEOUT", "10"))
+
+# OAuth API 요청 재시도 설정
+OAUTH_RETRY_ATTEMPTS = int(os.getenv("OAUTH_RETRY_ATTEMPTS", "3"))
+OAUTH_RETRY_WAIT_SECONDS = int(os.getenv("OAUTH_RETRY_WAIT_SECONDS", "1"))
