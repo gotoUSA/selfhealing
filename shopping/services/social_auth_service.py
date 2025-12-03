@@ -163,10 +163,7 @@ class SocialAuthService:
         client_secret = os.getenv(config["client_secret_env"])
 
         logger.info(f"{provider} 토큰 교환 시도 - redirect_uri: {redirect_uri}")
-        logger.debug(
-            f"{provider} client_id 존재: {bool(client_id)}, "
-            f"client_secret 존재: {bool(client_secret)}"
-        )
+        logger.debug(f"{provider} client_id 존재: {bool(client_id)}, " f"client_secret 존재: {bool(client_secret)}")
 
         data = {
             "grant_type": "authorization_code",
@@ -220,9 +217,7 @@ class SocialAuthService:
 
             if response.status_code != 200:
                 error_detail = response.text
-                logger.error(
-                    f"{provider} 토큰 교환 실패: {response.status_code} - {error_detail}"
-                )
+                logger.error(f"{provider} 토큰 교환 실패: {response.status_code} - {error_detail}")
                 raise SocialAuthError(
                     f"토큰 교환 실패: {error_detail}",
                     code="TOKEN_EXCHANGE_FAILED",
@@ -309,9 +304,7 @@ class SocialAuthService:
             )
 
             if response.status_code != 200:
-                logger.error(
-                    f"{provider} 사용자 정보 조회 실패: {response.status_code}"
-                )
+                logger.error(f"{provider} 사용자 정보 조회 실패: {response.status_code}")
                 raise SocialAuthError(
                     f"사용자 정보 조회 실패: HTTP {response.status_code}",
                     code="USER_INFO_FETCH_FAILED",

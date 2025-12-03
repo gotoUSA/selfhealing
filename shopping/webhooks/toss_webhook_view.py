@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Callable
 
 from django.views.decorators.csrf import csrf_exempt
 
@@ -18,6 +19,18 @@ from ..utils.toss_payment import TossPaymentClient
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+# 이벤트 핸들러 매핑 (if-elif 체인 대체)
+EVENT_HANDLERS: dict[str, Callable[[dict], None]] = {
+    "PAYMENT.DONE": TossWebhookService.handle_payment_done,
+    "PAYMENT.CANCELED": TossWebhookService.handle_payment_canceled,
+    "PAYMENT.FAILED": TossWebhookService.handle_payment_failed,
+}
+
+
+def _error_response(message: str, status_code: int) -> Response:
+    """에러 응답 생성 헬퍼"""
+    return Response({"error": message}, status=status_code)
 
 
 @extend_schema(
@@ -65,32 +78,24 @@ def toss_webhook(request: Request) -> Response:
 
     # 1. 웹훅 서명 검증
     signature = request.headers.get("X-Toss-Webhook-Signature")
-
     if not signature:
         logger.warning("Webhook signature missing")
-        return Response({"error": "Signature missing"}, status=status.HTTP_401_UNAUTHORIZED)
+        return _error_response("Signature missing", status.HTTP_401_UNAUTHORIZED)
 
     # 토스페이먼츠 클라이언트로 서명 검증
     toss_client = TossPaymentClient()
+    webhook_data = request.data
 
     try:
-        webhook_data = request.data
-
-        # 서명 검증
         if not toss_client.verify_webhook(webhook_data, signature):
             logger.warning("Invalid webhook signature")
-            return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
-
+            return _error_response("Invalid signature", status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
         logger.error(f"Webhook signature verification error: {str(e)}")
-        return Response(
-            {"error": "Signature verification failed"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _error_response("Signature verification failed", status.HTTP_400_BAD_REQUEST)
 
     # 2. 웹훅 데이터 파싱
     serializer = PaymentWebhookSerializer(data=webhook_data)
-
     if not serializer.is_valid():
         logger.error(f"Invalid webhook data: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -102,23 +107,17 @@ def toss_webhook(request: Request) -> Response:
     event_type = serializer.validated_data["eventType"]
     event_data = serializer.validated_data["data"]
 
-    # 3. 이벤트 처리
+    # 3. 이벤트 핸들러 디스패치
+    handler = EVENT_HANDLERS.get(event_type)
+
     try:
-        if event_type == "PAYMENT.DONE":
-            TossWebhookService.handle_payment_done(event_data)
-
-        elif event_type == "PAYMENT.CANCELED":
-            TossWebhookService.handle_payment_canceled(event_data)
-
-        elif event_type == "PAYMENT.FAILED":
-            TossWebhookService.handle_payment_failed(event_data)
-
+        if handler:
+            handler(event_data)
         elif event_type == "PAYMENT.PARTIAL_CANCELED":
             # 부분 취소는 향후 지원
             logger.info(f"Partial cancel event received: {event_data}")
 
         return Response({"message": "Webhook processed"}, status=status.HTTP_200_OK)
-
     except Exception as e:
         logger.error(f"Webhook processing error: {str(e)}")
-        return Response({"error": "Processing failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return _error_response("Processing failed", status.HTTP_500_INTERNAL_SERVER_ERROR)
