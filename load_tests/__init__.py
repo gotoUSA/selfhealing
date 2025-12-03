@@ -1,1 +1,1 @@
-# Performance testing package
+# Load Tests Package
