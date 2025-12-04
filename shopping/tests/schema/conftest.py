@@ -1,12 +1,46 @@
 """
-Schemathesis 테스트 전용 설정
+Schemathesis 테스트 전용 설정 (conftest.py)
+==========================================
 
-OpenAPI 스키마 기반 자동 API 테스트를 위한 fixture들
+배경 및 목적
+-----------
+OpenAPI 스키마 기반 API Contract 테스트를 위한 fixture 및 설정 파일입니다.
+test_api_contract.py에서 사용하는 모든 테스트 데이터와 인증 정보를 제공합니다.
 
-Phase 2: Contract Testing 구현
-- 인증 처리 개선
-- 제외 엔드포인트 관리
-- 테스트 데이터 생성
+구성 요소
+--------
+1. 엔드포인트 분류
+   - EXCLUDED_ENDPOINTS: 테스트에서 완전히 제외 (외부 의존, 부작용 있음)
+   - PUBLIC_ENDPOINTS: 인증 불필요 (공개 API)
+   - SELLER_ENDPOINTS: 판매자 권한 필요
+   - MUTATING_ENDPOINTS: 데이터 변경 발생 (주의 필요)
+
+2. 인증 Fixture
+   - auth_token / auth_headers: 일반 사용자 JWT 인증
+   - seller_auth_token / seller_auth_headers: 판매자 JWT 인증
+
+3. 테스트 데이터 Fixture
+   - schema_test_category: 테스트용 카테고리
+   - schema_test_product: 테스트용 상품
+   - schema_test_cart: 테스트용 장바구니 (아이템 포함)
+   - schema_test_order: 테스트용 주문
+
+4. 헬퍼 함수
+   - is_excluded_endpoint(): 제외 대상 확인
+   - is_public_endpoint(): 공개 API 확인
+   - is_seller_endpoint(): 판매자 전용 확인
+   - should_skip_mutation(): 변경 API 스킵 여부
+
+제외 엔드포인트 기준
+------------------
+1. 외부 서비스 의존: Toss 웹훅, OAuth 콜백
+2. 부작용 발생: 이메일 발송, 결제 처리
+3. HTML 반환: 테스트 페이지 (JSON이 아님)
+
+의존성
+-----
+- shopping/tests/conftest.py의 user, seller_user fixture 필요
+- seller_user는 is_seller=True 설정 필요 (2024.12 수정됨)
 """
 
 from decimal import Decimal

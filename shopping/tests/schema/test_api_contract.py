@@ -1,13 +1,67 @@
 """
 OpenAPI 스키마 기반 API Contract 테스트
+=======================================
 
-Schemathesis 4.x를 사용하여 OpenAPI 스키마와 실제 API 응답이
-일치하는지 자동으로 검증합니다.
+배경 및 목적
+-----------
+Schemathesis 4.x를 사용하여 OpenAPI 스키마와 실제 API 응답이 일치하는지 자동으로 검증합니다.
+이 테스트는 API 문서(스키마)와 실제 구현 간의 불일치를 조기에 발견하기 위해 설계되었습니다.
 
-Phase 2: Contract Testing 구현
-- Stateless 테스트: 각 엔드포인트 독립적으로 검증
-- 인증 처리: JWT Bearer 토큰 자동 설정
-- 응답 검증: 스키마 정의와 실제 응답 비교
+테스트 범위
+----------
+- Stateless 테스트: 각 엔드포인트를 독립적으로 검증 (상태 의존 없음)
+- 인증 처리: JWT Bearer 토큰을 자동으로 설정 (user, seller_user fixture 활용)
+- 응답 검증: 스키마 정의와 실제 응답의 구조/타입 비교
+- 에러 핸들링: 401, 404, 5xx 응답 코드 검증
+
+테스트 클래스 구조
+-----------------
+1. TestSchemaDiscovery (3 tests)
+   - 스키마가 유효한지, 필수 엔드포인트가 정의되어 있는지 확인
+
+2. TestPublicEndpoints (5 tests)
+   - 인증 없이 접근 가능한 공개 API 검증 (products, categories 등)
+
+3. TestAuthenticatedEndpoints (17 tests)
+   - JWT 인증이 필요한 엔드포인트 검증 (cart, orders, wishlist 등)
+
+4. TestPathParameterEndpoints (8 tests)
+   - 경로 파라미터({id})가 있는 엔드포인트 검증
+   - 유효/무효한 ID로 200/404 응답 확인
+
+5. TestAuthenticationRequired (6 tests)
+   - 인증 필요 엔드포인트에 인증 없이 접근 시 401 반환 확인
+
+6. TestPostEndpoints (4 tests)
+   - POST 요청 (생성/수정) 엔드포인트 검증
+
+7. TestFullSchemaValidation (2 tests, @slow)
+   - 전체 GET 엔드포인트에서 5xx 에러 없음 확인
+   - 모든 응답이 유효한 JSON인지 확인
+
+제외된 엔드포인트 (conftest.py EXCLUDED_ENDPOINTS)
+------------------------------------------------
+- Webhook: /api/webhooks/toss/ (외부 서비스 콜백)
+- 이메일 발송: /api/auth/password/reset/request/ 등 (실제 발송됨)
+- 소셜 로그인: /api/auth/social/* (외부 OAuth 의존)
+- 테스트 페이지: /api/payment/test/ (HTML 반환)
+
+실행 방법
+--------
+    pytest shopping/tests/schema/ -v -m schema          # 스키마 테스트만
+    pytest shopping/tests/schema/ -v -m "schema and not slow"  # 느린 테스트 제외
+    pytest shopping/tests/schema/ -v                    # 전체 실행
+
+사전 조건
+--------
+- PostgreSQL 데이터베이스 실행 중 (Docker: localhost:5432)
+- requirements-dev.txt의 schemathesis, pytest-env 설치
+- Windows 환경: PGCLIENTENCODING=UTF8 설정 (pyproject.toml에 정의됨)
+
+관련 파일
+--------
+- conftest.py: 인증 fixture, 테스트 데이터, 제외 엔드포인트 정의
+- shopping/tests/conftest.py: user, seller_user 등 공통 fixture
 """
 
 import json
@@ -102,7 +156,16 @@ def get_all_operations(schema, method: str = None, include_path_params: bool = F
 @pytest.mark.schema
 @pytest.mark.django_db(transaction=True)
 class TestPublicEndpoints:
-    """인증이 필요 없는 공개 엔드포인트 테스트"""
+    """
+    인증이 필요 없는 공개 엔드포인트 테스트
+
+    검증 대상:
+    - /api/products/ (목록, 인기, 평점순)
+    - /api/categories/ (목록, 트리)
+    - 상세 조회 (/api/products/{id}/, /api/categories/{id}/)
+
+    참고: /api/products/low_stock/은 판매자 권한 필요 (TestAuthenticatedEndpoints에서 테스트)
+    """
 
     def test_products_list(self, openapi_schema, client, schema_test_product):
         """상품 목록 API 스키마 검증"""
@@ -155,7 +218,20 @@ class TestPublicEndpoints:
 @pytest.mark.schema
 @pytest.mark.django_db(transaction=True)
 class TestAuthenticatedEndpoints:
-    """인증이 필요한 엔드포인트 테스트"""
+    """
+    인증이 필요한 엔드포인트 테스트 (JWT Bearer 토큰 필수)
+
+    검증 대상:
+    - 장바구니: /api/cart/, /api/cart/summary/, /api/cart/items/
+    - 주문: /api/orders/, /api/orders/{id}/
+    - 위시리스트: /api/wishlist/, /api/wishlist/stats/
+    - 알림: /api/notifications/, /api/notifications/unread/
+    - 결제: /api/payments/
+    - 포인트: /api/points/my/, /api/points/history/
+    - 사용자: /api/users/profile/, /api/my/questions/
+    - 반품: /api/returns/, /api/seller/returns/ (판매자)
+    - 상품: /api/products/low_stock/ (판매자 권한 필요)
+    """
 
     def test_cart_retrieve(self, openapi_schema, client, auth_headers, schema_test_cart):
         """장바구니 조회 API 스키마 검증"""
@@ -260,7 +336,17 @@ class TestAuthenticatedEndpoints:
 @pytest.mark.schema
 @pytest.mark.django_db(transaction=True)
 class TestPathParameterEndpoints:
-    """path parameter가 있는 엔드포인트 테스트 (실제 데이터로 검증)"""
+    """
+    Path Parameter가 있는 엔드포인트 테스트
+
+    검증 대상:
+    - 유효한 ID: 200 응답 + 올바른 데이터 반환
+    - 무효한 ID (99999999): 404 응답
+    - 인증 없이 접근: 401 응답
+
+    참고: GET /api/products/, GET /api/cart/ 등 path parameter 없는
+    엔드포인트는 TestPublicEndpoints, TestAuthenticatedEndpoints에서 테스트
+    """
 
     def test_product_detail_with_valid_id(self, client, schema_test_product):
         """유효한 상품 ID로 상세 조회"""
@@ -329,7 +415,15 @@ class TestPathParameterEndpoints:
 @pytest.mark.schema
 @pytest.mark.django_db(transaction=True)
 class TestAuthenticationRequired:
-    """인증 필요 엔드포인트에 인증 없이 접근 시 401 반환 검증"""
+    """
+    인증 필요 엔드포인트의 401 응답 검증
+
+    목적:
+    - 보호된 엔드포인트가 실제로 인증을 요구하는지 확인
+    - 인증 없이 접근 시 401 Unauthorized 반환 확인
+
+    제외: /api/cart/ (세션 기반 비회원 장바구니 허용)
+    """
 
     @pytest.mark.parametrize(
         "endpoint",
@@ -357,7 +451,17 @@ class TestAuthenticationRequired:
 @pytest.mark.schema
 @pytest.mark.django_db(transaction=True)
 class TestPostEndpoints:
-    """POST 엔드포인트 스키마 검증"""
+    """
+    POST 엔드포인트 스키마 검증 (생성/수정 API)
+
+    검증 대상:
+    - 장바구니 추가: POST /api/cart/add_item/
+    - 위시리스트 토글: POST /api/wishlist/toggle/
+    - 로그인: POST /api/auth/login/
+    - 회원가입 유효성: POST /api/auth/register/ (실패 케이스)
+
+    참고: 실제 데이터 생성이 발생하므로 트랜잭션 롤백으로 정리됨
+    """
 
     def test_cart_add_item(self, client, auth_headers, schema_test_product):
         """장바구니 상품 추가 API 스키마 검증"""
@@ -412,10 +516,24 @@ class TestPostEndpoints:
 @pytest.mark.django_db(transaction=True)
 class TestFullSchemaValidation:
     """
-    전체 API 스키마 검증
+    전체 API 스키마 검증 (Smoke Test)
 
-    모든 엔드포인트를 테스트하므로 시간이 오래 걸림
-    CI에서는 별도로 실행 권장
+    목적:
+    - 모든 GET 엔드포인트에서 5xx 서버 에러가 발생하지 않는지 확인
+    - 모든 성공 응답이 유효한 JSON인지 확인
+
+    실행 시간:
+    - 전체 엔드포인트를 순회하므로 시간이 오래 걸림 (~30초+)
+    - @pytest.mark.slow로 표시되어 기본 실행에서 제외 가능
+
+    실행 방법:
+    ```bash
+    # slow 테스트 포함 실행
+    pytest shopping/tests/schema/ -v -m "schema"
+
+    # slow 테스트 제외
+    pytest shopping/tests/schema/ -v -m "schema and not slow"
+    ```
     """
 
     def test_all_get_endpoints_no_5xx(self, openapi_schema, client, auth_headers, schema_test_product, schema_test_order):
@@ -497,7 +615,19 @@ class TestFullSchemaValidation:
 @pytest.mark.schema
 @pytest.mark.django_db
 class TestSchemaDiscovery:
-    """스키마 구조 검증 및 엔드포인트 발견"""
+    """
+    스키마 구조 검증 및 엔드포인트 발견
+
+    목적:
+    - OpenAPI 스키마가 정상적으로 로드되는지 확인
+    - 필수 엔드포인트가 스키마에 정의되어 있는지 확인
+    - 스키마 누락 시 조기 실패로 다른 테스트 영향 방지
+
+    필수 엔드포인트:
+    - /api/products/, /api/categories/ (공개)
+    - /api/cart/, /api/orders/ (인증 필요)
+    - /api/auth/login/, /api/auth/register/ (인증)
+    """
 
     def test_schema_is_valid(self, openapi_schema):
         """OpenAPI 스키마가 유효한지 확인"""
