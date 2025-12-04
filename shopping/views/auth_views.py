@@ -417,17 +417,3 @@ def check_token(request: Request) -> Response:
         },
         status=status.HTTP_200_OK,
     )
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def email_verification_request(request: Request) -> Response:
-    """
-    이메일 인증 요청 API (추후 구현)
-    - POST: 인증 이메일 발송
-    """
-    # TODO: 이메일 발송 로직 구현
-    return Response(
-        {"message": "이메일 인증 기능은 준비중입니다."},
-        status=status.HTTP_501_NOT_IMPLEMENTED,
-    )

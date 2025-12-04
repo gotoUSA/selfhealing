@@ -439,6 +439,7 @@ class CartItemInline(admin.TabularInline):
 class CartAdmin(admin.ModelAdmin):
     """
     장바구니 관리자 페이지 설정
+    - CartItemInline으로 아이템 함께 관리
     """
 
     list_display = [
@@ -453,6 +454,8 @@ class CartAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     ordering = ["-created_at"]
 
+    inlines = [CartItemInline]
+
     def item_count(self, obj):
         """장바구니 아이템 수"""
         return obj.items.count()
@@ -460,26 +463,7 @@ class CartAdmin(admin.ModelAdmin):
     item_count.short_description = "아이템 수"
 
 
-# CartItem Admin
-@admin.register(CartItem)
-class CartItemAdmin(admin.ModelAdmin):
-    """
-    장바구니 아이템 관리자 페이지 설정
-    """
-
-    list_display = ["cart", "product", "quantity", "formatted_subtotal"]
-    list_filter = ["cart__created_at"]
-    search_fields = ["cart__user__username", "product__name"]
-
-    def formatted_subtotal(self, obj):
-        """소계 원화 형식"""
-        subtotal = obj.product.price * obj.quantity
-        return f"₩{subtotal:,.0f}"
-
-    formatted_subtotal.short_description = "소계"
-
-
-# 모델 등록 (맨 아래에 추가)
+# 모델 등록
 admin.site.register(Cart, CartAdmin)
 
 
