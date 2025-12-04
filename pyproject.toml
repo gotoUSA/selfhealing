@@ -72,6 +72,7 @@ markers = [
     "point_race: 포인트 관련 race condition 테스트",
     "return_race: 반품 관련 race condition 테스트",
     "heavy: 고부하 스트레스 테스트 (CI에서 선택적 제외)",
+    "schema: OpenAPI 스키마 기반 계약 테스트 (Schemathesis)",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)

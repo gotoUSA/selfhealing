@@ -1,0 +1,1 @@
+# Schemathesis API Contract Tests
