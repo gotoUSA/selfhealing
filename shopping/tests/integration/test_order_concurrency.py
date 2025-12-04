@@ -18,6 +18,21 @@ Concurrency Control:
     - select_for_update on Product.stock
     - F() atomic decrement with gte=quantity condition
     - Transaction isolation level: READ COMMITTED
+
+APIClient Usage:
+    ⚠️ 동시성 테스트에서는 반드시 각 스레드/함수 내부에서 독립적인 APIClient()를 생성해야 합니다.
+    공유된 api_client fixture를 사용하면 상태 오염(state pollution)으로 인해
+    테스트 결과가 비결정적(non-deterministic)이 됩니다.
+
+    올바른 패턴:
+        def concurrent_request():
+            client = APIClient()  # 스레드별 독립 인스턴스
+            client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+            return client.post(...)
+
+    잘못된 패턴:
+        def concurrent_request(shared_client):  # 공유된 클라이언트
+            return shared_client.post(...)  # Race condition 발생!
 """
 
 import threading

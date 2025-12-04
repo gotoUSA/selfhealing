@@ -176,7 +176,7 @@ docker compose exec web pip install locust
 
 ## 🚀 실행 방법
 
-> ⚠️ **중요**: Docker 환경에서는 `docker compose exec web` 접두사를 붙여야 합니다.  
+> ⚠️ **중요**: Docker 환경에서는 `docker compose exec web` 접두사를 붙여야 합니다.
 > 로컬 환경에서는 반드시 **가상환경을 활성화**한 후 실행하세요.
 
 ### Windows 환경 주의사항

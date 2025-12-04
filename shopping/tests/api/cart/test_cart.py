@@ -9,6 +9,18 @@ Factory를 사용하여 테스트 데이터를 생성합니다.
 - CartItemViewSet: 아이템 개별 관리
 - 동시성 처리
 - 비회원(익명) 장바구니
+
+APIClient Usage (동시성 테스트):
+    ⚠️ 동시성 테스트(TestConcurrentAccess 클래스)에서는 반드시 각 스레드 내부에서
+    독립적인 APIClient()를 생성해야 합니다.
+    공유된 api_client fixture를 사용하면 상태 오염(state pollution)으로 인해
+    테스트 결과가 비결정적(non-deterministic)이 됩니다.
+
+    올바른 패턴:
+        def concurrent_request():
+            client = APIClient()  # 스레드별 독립 인스턴스
+            client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+            return client.post(...)
 """
 
 import threading
