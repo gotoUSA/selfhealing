@@ -18,6 +18,7 @@ pytest-django==4.7.0  # Django용 pytest
 pytest-xdist==3.5.0   # 병렬 테스트 (속도 2-3배↑)
 pytest-cov==4.1.0     # pytest용 커버리지
 pytest-mock==3.14.1   # Mock 객체 생성 (외부 API 테스트용)
+pytest-env==1.2.0     # pytest 환경 변수 설정 (Windows PostgreSQL 인코딩 문제 해결)
 factory-boy==3.3.0    # 테스트 데이터 쉽게 생성
 
 # ==========================================

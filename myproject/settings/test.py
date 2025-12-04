@@ -19,14 +19,16 @@ DEBUG = True
 # Database (PostgreSQL - Test with optimized connection settings)
 # ==========================================================================
 
+# 테스트 환경에서는 Docker 네트워크(db)가 아닌 localhost 사용
+# .env의 DATABASE_HOST=db 설정을 오버라이드
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DATABASE_NAME", "myproject_dev"),
-        "USER": os.getenv("DATABASE_USER", "postgres"),
-        "PASSWORD": os.getenv("DATABASE_PASSWORD", "postgres"),
-        "HOST": os.getenv("DATABASE_HOST", "localhost"),
-        "PORT": os.getenv("DATABASE_PORT", "5432"),
+        "NAME": os.getenv("TEST_DATABASE_NAME", "shopping_db"),
+        "USER": os.getenv("TEST_DATABASE_USER", "shopping_user"),
+        "PASSWORD": os.getenv("TEST_DATABASE_PASSWORD", "shopping_pass"),
+        "HOST": "localhost",  # Docker 외부에서 실행하므로 localhost 고정
+        "PORT": os.getenv("TEST_DATABASE_PORT", "5432"),
         # 테스트에서는 연결 즉시 닫기 (동시성 테스트에서 "too many clients" 방지)
         "CONN_MAX_AGE": 0,
         # Health checks 비활성화하여 연결 절약
@@ -34,6 +36,11 @@ DATABASES = {
         "OPTIONS": {
             "connect_timeout": 10,
             "options": "-c statement_timeout=30000",
+            "client_encoding": "UTF8",  # Windows 인코딩 문제 해결
+        },
+        # 테스트 DB 이름 설정
+        "TEST": {
+            "NAME": "test_shopping_db",
         },
     }
 }

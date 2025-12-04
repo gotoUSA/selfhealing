@@ -9,60 +9,106 @@
 | 기존 테스트 | ✅ 풍부함 | pytest 기반, api/unit/integration 분리 |
 | Factory | ✅ 구성됨 | `factory-boy`, `conftest.py` fixtures |
 
+## 📊 진행 상태
+
+| Phase | 상태 | 완료일 |
+|-------|------|--------|
+| Phase 1: 기본 설정 | ✅ 완료 | 2025-12-05 |
+| Phase 2: Contract 테스트 | ✅ 완료 | 2025-12-05 |
+| Phase 3: Stateful 테스트 | 🔲 예정 | - |
+| Phase 4: CI 통합 | 🔲 예정 | - |
+| Phase 5: 고급 활용 | 🔲 선택 | - |
+
 ---
 
-## 📌 Phase 1: 기본 설정 (1일)
+## 📌 Phase 1: 기본 설정 (1일) ✅ 완료
 
-### 1.1 패키지 설치
+### 1.1 패키지 설치 ✅
 ```bash
-# requirements-dev.txt에 추가
-schemathesis==3.40.0  # 최신 안정 버전
+# requirements-dev.txt에 추가됨
+schemathesis==4.6.7  # 최신 버전으로 설치됨
 ```
 
-### 1.2 기본 테스트 파일 생성
+### 1.2 기본 테스트 파일 생성 ✅
 ```
 shopping/tests/
-└── schema/           # 새로 생성
+└── schema/           # 생성됨
     ├── __init__.py
     ├── conftest.py   # Schemathesis 전용 설정
     └── test_api_contract.py
 ```
 
-### 1.3 고려사항
-- **인증 처리**: JWT Bearer 토큰 설정 필요
+### 1.3 고려사항 ✅ 구현됨
+- **인증 처리**: JWT Bearer 토큰 설정 (`auth_token`, `auth_headers` fixture)
 - **테스트 DB**: `pytest-django`와 통합
-- **스키마 생성**: 런타임 vs 정적 파일
+- **스키마 생성**: Django Test Client로 런타임 로드
 
 ---
 
-## 📌 Phase 2: 기본 Contract 테스트 (2-3일)
+## 📌 Phase 2: 기본 Contract 테스트 (2-3일) ✅ 완료
 
-### 2.1 Stateless 테스트 먼저 시작
+### 2.1 구현된 테스트 클래스
+
+#### TestPublicEndpoints (공개 API)
+- `test_products_list` - 상품 목록 API
+- `test_categories_list` - 카테고리 목록 API
+- `test_products_detail` - 상품 상세 API
+- `test_categories_detail` - 카테고리 상세 API
+- `test_categories_tree` - 카테고리 트리 API
+
+#### TestAuthenticatedEndpoints (인증 필요)
+- `test_cart_*` - 장바구니 API (retrieve, summary, items)
+- `test_orders_*` - 주문 API (list, detail)
+- `test_wishlist_*` - 위시리스트 API (list, stats)
+- `test_notifications_*` - 알림 API (list, unread)
+- `test_my_questions` - 내 문의 목록
+- `test_payments_list` - 결제 목록
+- `test_returns_list` - 교환/환불 목록
+- `test_user_profile` - 사용자 프로필
+- `test_points_*` - 포인트 API (my, history)
+
+#### TestAuthenticationRequired (인증 검증)
+- 7개 핵심 엔드포인트에 대한 401 응답 검증
+
+#### TestPostEndpoints (생성 API)
+- `test_cart_add_item` - 장바구니 상품 추가
+- `test_wishlist_toggle` - 위시리스트 토글
+- `test_auth_login` - 로그인 API
+- `test_auth_register_validation` - 회원가입 유효성 검증
+
+#### TestFullSchemaValidation (전체 검증)
+- `test_all_get_endpoints_no_5xx` - 모든 GET에서 5xx 에러 없음
+- `test_all_endpoints_return_valid_json` - 유효한 JSON 반환
+
+#### TestSchemaDiscovery (스키마 발견)
+- `test_schema_is_valid` - 스키마 유효성
+- `test_schema_has_paths` - 경로 존재
+- `test_critical_endpoints_exist` - 핵심 엔드포인트 존재
+
+### 2.2 제외된 엔드포인트 (10개)
 ```python
-# shopping/tests/schema/test_api_contract.py
-import schemathesis
-from django.test import override_settings
-
-schema = schemathesis.from_uri("http://localhost:8000/api/schema/")
-
-@schema.parametrize()
-def test_api_contract(case):
-    """OpenAPI 스키마 기반 자동 API 테스트"""
-    response = case.call()
-    case.validate_response(response)
+EXCLUDED_ENDPOINTS = [
+    "/api/webhooks/toss/",           # 외부 서비스 콜백
+    "/api/auth/password/reset/request/",
+    "/api/auth/email/send/",
+    "/api/auth/email/resend/",       # 이메일 발송
+    "/api/auth/social/google/",
+    "/api/auth/social/kakao/",
+    "/api/auth/social/naver/",
+    "/api/social/callback/",         # 소셜 로그인
+    "/api/payment/test/",
+    "/api/social/test/",             # 테스트 페이지
+]
 ```
 
-### 2.2 인증이 필요한 엔드포인트 처리
-```python
-@schema.parametrize()
-def test_authenticated_endpoints(case, auth_token):
-    case.call(headers={"Authorization": f"Bearer {auth_token}"})
-```
+### 2.3 테스트 실행 방법
+```bash
+# 스키마 테스트만 실행
+pytest -m schema --no-cov -v -n 0
 
-### 2.3 제외할 엔드포인트 설정
-- Webhook 엔드포인트 (외부 서비스 콜백)
-- 관리자 전용 엔드포인트
-- 이메일 발송 관련
+# slow 테스트 제외
+pytest -m "schema and not slow" --no-cov -v
+```
 
 ---
 

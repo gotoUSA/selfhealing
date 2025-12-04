@@ -1,3 +1,16 @@
+import os
+import sys
+
+# ==========================================
+# Windows 인코딩 문제 해결 (psycopg2 + cp949 충돌)
+# 반드시 다른 import보다 먼저 실행되어야 함
+# ==========================================
+if sys.platform == "win32":
+    # PostgreSQL 클라이언트 인코딩을 UTF-8로 강제 설정
+    os.environ.setdefault("PGCLIENTENCODING", "UTF8")
+    # Python 표준 출력 인코딩 설정
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
 from decimal import Decimal
 
 from django.conf import settings
@@ -164,6 +177,7 @@ def seller_user(db):
         password="sellerpass123",
         phone_number="010-9999-8888",
         is_email_verified=True,
+        is_seller=True,  # 판매자 권한 부여
     )
 
 
