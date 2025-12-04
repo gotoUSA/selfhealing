@@ -128,8 +128,7 @@ class TestProductQuestion:
         assert question.is_secret is True
 
     def test_list_questions_with_secret(
-        self, api_client, authenticated_buyer_client, authenticated_seller_client,
-        qa_buyer, qa_product
+        self, api_client, authenticated_buyer_client, authenticated_seller_client, qa_buyer, qa_product
     ):
         """비밀글 포함 문의 목록 조회 테스트"""
         # Arrange
@@ -186,9 +185,7 @@ class TestProductQuestion:
         assert question.title == "수정된 제목"
         assert question.content == "수정된 내용"
 
-    def test_cannot_update_answered_question(
-        self, authenticated_buyer_client, qa_buyer, qa_seller, qa_product
-    ):
+    def test_cannot_update_answered_question(self, authenticated_buyer_client, qa_buyer, qa_seller, qa_product):
         """답변 달린 문의는 수정 불가 테스트"""
         # Arrange
         question = ProductQuestion.objects.create(
@@ -197,9 +194,7 @@ class TestProductQuestion:
             title="배송 문의",
             content="배송 언제 되나요?",
         )
-        ProductQAService.create_answer(
-            question=question, seller=qa_seller, content="내일 출발합니다"
-        )
+        ProductQAService.create_answer(question=question, seller=qa_seller, content="내일 출발합니다")
         url = reverse(
             "product-question-detail",
             kwargs={"product_pk": qa_product.id, "pk": question.id},
@@ -277,9 +272,7 @@ class TestProductAnswer:
         )
 
         # Act
-        ProductQAService.create_answer(
-            question=question, seller=qa_seller, content="내일 출발 예정입니다!"
-        )
+        ProductQAService.create_answer(question=question, seller=qa_seller, content="내일 출발 예정입니다!")
 
         # Assert
         assert Notification.objects.count() == 1
@@ -319,9 +312,7 @@ class TestProductAnswer:
 class TestMyQuestions:
     """내 문의 목록 테스트"""
 
-    def test_my_questions(
-        self, authenticated_buyer_client, qa_buyer, qa_seller, qa_category, qa_product
-    ):
+    def test_my_questions(self, authenticated_buyer_client, qa_buyer, qa_seller, qa_category, qa_product):
         """내 문의 목록 조회 테스트"""
         # Arrange
         product2 = Product.objects.create(
@@ -347,9 +338,7 @@ class TestMyQuestions:
             content="내용2",
         )
 
-        other_user = User.objects.create_user(
-            username="other", email="other@test.com", password="testpass123"
-        )
+        other_user = User.objects.create_user(username="other", email="other@test.com", password="testpass123")
         ProductQuestion.objects.create(
             product=qa_product,
             user=other_user,
@@ -417,9 +406,7 @@ def authenticated_notification_client(notification_user):
 class TestNotification:
     """알림 기능 테스트"""
 
-    def test_unread_count(
-        self, authenticated_notification_client, notification_fixtures
-    ):
+    def test_unread_count(self, authenticated_notification_client, notification_fixtures):
         """읽지 않은 알림 개수 조회 테스트"""
         # Arrange
         url = reverse("notification-unread")
@@ -431,9 +418,7 @@ class TestNotification:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1  # 읽지 않은 알림 1개
 
-    def test_mark_notification_as_read(
-        self, authenticated_notification_client, notification_fixtures
-    ):
+    def test_mark_notification_as_read(self, authenticated_notification_client, notification_fixtures):
         """알림 읽음 처리 테스트"""
         # Arrange
         notification1 = notification_fixtures["notification1"]
@@ -449,9 +434,7 @@ class TestNotification:
         notification1.refresh_from_db()
         assert notification1.is_read is True
 
-    def test_mark_all_as_read(
-        self, authenticated_notification_client, notification_user, notification_fixtures
-    ):
+    def test_mark_all_as_read(self, authenticated_notification_client, notification_user, notification_fixtures):
         """전체 알림 읽음 처리 테스트"""
         # Arrange
         Notification.objects.create(
@@ -469,14 +452,10 @@ class TestNotification:
         # Assert
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 2  # 읽지 않은 것 2개
-        unread_count = Notification.objects.filter(
-            user=notification_user, is_read=False
-        ).count()
+        unread_count = Notification.objects.filter(user=notification_user, is_read=False).count()
         assert unread_count == 0
 
-    def test_clear_read_notifications(
-        self, authenticated_notification_client, notification_user, notification_fixtures
-    ):
+    def test_clear_read_notifications(self, authenticated_notification_client, notification_user, notification_fixtures):
         """읽은 알림 삭제 테스트"""
         # Arrange
         url = reverse("notification-clear")

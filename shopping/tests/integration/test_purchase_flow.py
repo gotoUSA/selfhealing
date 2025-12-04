@@ -63,9 +63,7 @@ def purchase_urls():
 class TestCompletePurchaseFlow:
     """완전한 구매 플로우 테스트"""
 
-    def test_complete_purchase_flow_with_verification(
-        self, api_client, purchase_product, purchase_urls
-    ):
+    def test_complete_purchase_flow_with_verification(self, api_client, purchase_product, purchase_urls):
         """
         ✅ 정상 플로우: 회원가입 → 이메일 인증 → 상품 담기 → 주문 → 결제
         """
@@ -78,9 +76,7 @@ class TestCompletePurchaseFlow:
         }
 
         # Act & Assert - Step 1: 회원가입
-        response = api_client.post(
-            purchase_urls["register"], register_data, format="json"
-        )
+        response = api_client.post(purchase_urls["register"], register_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
         assert "token" in response.data
         assert "access" in response.data["token"]
@@ -103,9 +99,7 @@ class TestCompletePurchaseFlow:
 
         # Act & Assert - Step 4: 장바구니에 상품 추가
         cart_data = {"product_id": purchase_product.id, "quantity": 1}
-        response = api_client.post(
-            f"{purchase_urls['cart']}add_item/", cart_data, format="json"
-        )
+        response = api_client.post(f"{purchase_urls['cart']}add_item/", cart_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
 
         # Act & Assert - Step 5: 주문 생성
@@ -117,9 +111,7 @@ class TestCompletePurchaseFlow:
             "shipping_address_detail": "101동 202호",
         }
 
-        response = api_client.post(
-            purchase_urls["order_list"], order_data, format="json"
-        )
+        response = api_client.post(purchase_urls["order_list"], order_data, format="json")
         assert response.status_code == status.HTTP_202_ACCEPTED
 
         order = Order.objects.get(user=user)
@@ -129,9 +121,7 @@ class TestCompletePurchaseFlow:
 
         # Act & Assert - Step 6: 결제 요청 (성공)
         payment_data = {"order_id": order.id, "payment_method": "card"}
-        response = api_client.post(
-            purchase_urls["payment_request"], payment_data, format="json"
-        )
+        response = api_client.post(purchase_urls["payment_request"], payment_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
         assert "payment_id" in response.data
 
@@ -140,9 +130,7 @@ class TestCompletePurchaseFlow:
         assert payment.status == "ready"
         assert payment.amount == order.final_amount
 
-    def test_verified_user_full_flow(
-        self, api_client, purchase_product, purchase_urls
-    ):
+    def test_verified_user_full_flow(self, api_client, purchase_product, purchase_urls):
         """
         ✅ 인증된 사용자는 전체 플로우 정상 작동
         """
@@ -158,9 +146,7 @@ class TestCompletePurchaseFlow:
 
         # Act & Assert - Step 1: 장바구니 추가
         cart_data = {"product_id": purchase_product.id, "quantity": 1}
-        response = api_client.post(
-            f"{purchase_urls['cart']}add_item/", cart_data, format="json"
-        )
+        response = api_client.post(f"{purchase_urls['cart']}add_item/", cart_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
 
         # Act & Assert - Step 2: 주문 생성
@@ -171,18 +157,14 @@ class TestCompletePurchaseFlow:
             "shipping_address": "서울시 강남구",
             "shipping_address_detail": "101동 202호",
         }
-        response = api_client.post(
-            purchase_urls["order_list"], order_data, format="json"
-        )
+        response = api_client.post(purchase_urls["order_list"], order_data, format="json")
         assert response.status_code == status.HTTP_202_ACCEPTED
 
         order = Order.objects.get(user=user)
 
         # Act & Assert - Step 3: 결제 요청
         payment_data = {"order_id": order.id, "payment_method": "card"}
-        response = api_client.post(
-            purchase_urls["payment_request"], payment_data, format="json"
-        )
+        response = api_client.post(purchase_urls["payment_request"], payment_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
 
 
@@ -194,9 +176,7 @@ class TestCompletePurchaseFlow:
 class TestUnverifiedUserRestrictions:
     """미인증 사용자 제한 테스트"""
 
-    def test_unverified_user_cannot_create_order(
-        self, api_client, purchase_product, purchase_urls
-    ):
+    def test_unverified_user_cannot_create_order(self, api_client, purchase_product, purchase_urls):
         """
         ❌ 미인증 사용자는 주문 생성 불가
         """
@@ -208,9 +188,7 @@ class TestUnverifiedUserRestrictions:
             "password2": "TestPass123!@",
         }
 
-        response = api_client.post(
-            purchase_urls["register"], register_data, format="json"
-        )
+        response = api_client.post(purchase_urls["register"], register_data, format="json")
         access_token = response.data["token"]["access"]
         api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
 
@@ -219,9 +197,7 @@ class TestUnverifiedUserRestrictions:
 
         # Act & Assert - Step 1: 장바구니에 상품 추가 (허용)
         cart_data = {"product_id": purchase_product.id, "quantity": 1}
-        response = api_client.post(
-            f"{purchase_urls['cart']}add_item/", cart_data, format="json"
-        )
+        response = api_client.post(f"{purchase_urls['cart']}add_item/", cart_data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
 
         # Act - Step 2: 주문 생성 시도
@@ -233,9 +209,7 @@ class TestUnverifiedUserRestrictions:
             "shipping_address_detail": "101동 202호",
         }
 
-        response = api_client.post(
-            purchase_urls["order_list"], order_data, format="json"
-        )
+        response = api_client.post(purchase_urls["order_list"], order_data, format="json")
 
         # Assert - 주문 생성 차단 확인
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -243,9 +217,7 @@ class TestUnverifiedUserRestrictions:
         assert response.data["verification_required"] is True
         assert Order.objects.filter(user=user).count() == 0
 
-    def test_unverified_user_cannot_request_payment(
-        self, db, api_client, purchase_urls
-    ):
+    def test_unverified_user_cannot_request_payment(self, db, api_client, purchase_urls):
         """
         ❌ 미인증 사용자는 결제 요청 불가
         """
@@ -273,9 +245,7 @@ class TestUnverifiedUserRestrictions:
 
         # Act - 결제 요청 시도
         payment_data = {"order_id": order.id, "payment_method": "card"}
-        response = api_client.post(
-            purchase_urls["payment_request"], payment_data, format="json"
-        )
+        response = api_client.post(purchase_urls["payment_request"], payment_data, format="json")
 
         # Assert - 결제 요청 차단 확인
         assert response.status_code == status.HTTP_403_FORBIDDEN

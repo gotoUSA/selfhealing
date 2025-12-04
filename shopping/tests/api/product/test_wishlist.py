@@ -148,17 +148,13 @@ class TestWishlistAuthentication:
 class TestWishlistAdd:
     """찜하기 추가 테스트"""
 
-    def test_add_to_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_add_to_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """상품을 찜 목록에 추가"""
         # Arrange
         product1 = wishlist_products["product1"]
 
         # Act
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["add"], {"product_id": product1.id}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["add"], {"product_id": product1.id})
 
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
@@ -167,18 +163,14 @@ class TestWishlistAdd:
         assert wishlist_user.is_in_wishlist(product1)
         assert wishlist_user.get_wishlist_count() == 1
 
-    def test_add_duplicate_to_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_add_duplicate_to_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """이미 찜한 상품을 다시 추가하려고 할 때"""
         # Arrange
         product1 = wishlist_products["product1"]
         wishlist_user.add_to_wishlist(product1)
 
         # Act
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["add"], {"product_id": product1.id}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["add"], {"product_id": product1.id})
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -188,9 +180,7 @@ class TestWishlistAdd:
     def test_add_invalid_product(self, authenticated_wishlist_client, wishlist_urls):
         """존재하지 않는 상품 찜하기 시도"""
         # Act
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["add"], {"product_id": 99999}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["add"], {"product_id": 99999})
 
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -205,33 +195,25 @@ class TestWishlistAdd:
 class TestWishlistToggle:
     """찜하기 토글 테스트"""
 
-    def test_toggle_wishlist(
-        self, authenticated_wishlist_client, wishlist_products, wishlist_urls
-    ):
+    def test_toggle_wishlist(self, authenticated_wishlist_client, wishlist_products, wishlist_urls):
         """찜하기 토글 (추가 -> 제거 -> 추가)"""
         # Arrange
         product1 = wishlist_products["product1"]
 
         # Act & Assert 1 - 처음 토글 (추가)
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["toggle"], {"product_id": product1.id}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["toggle"], {"product_id": product1.id})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_wished"] is True
         assert "추가" in response.data["message"]
 
         # Act & Assert 2 - 두 번째 토글 (제거)
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["toggle"], {"product_id": product1.id}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["toggle"], {"product_id": product1.id})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_wished"] is False
         assert "제거" in response.data["message"]
 
         # Act & Assert 3 - 세 번째 토글 (다시 추가)
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["toggle"], {"product_id": product1.id}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["toggle"], {"product_id": product1.id})
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_wished"] is True
 
@@ -244,9 +226,7 @@ class TestWishlistToggle:
 class TestWishlistList:
     """찜 목록 조회 테스트"""
 
-    def test_list_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_list_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """찜 목록 조회"""
         # Arrange
         wishlist_user.add_to_wishlist(wishlist_products["product1"])
@@ -268,9 +248,7 @@ class TestWishlistList:
         assert "is_available" in product_data
         assert "wishlist_count" in product_data
 
-    def test_list_wishlist_with_filters(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_list_wishlist_with_filters(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """필터를 적용한 찜 목록 조회"""
         # Arrange
         wishlist_user.add_to_wishlist(wishlist_products["product1"])  # 세일 중, 재고 있음
@@ -299,9 +277,7 @@ class TestWishlistList:
 class TestWishlistBulkAdd:
     """여러 상품 한번에 찜하기 테스트"""
 
-    def test_bulk_add_to_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_bulk_add_to_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """여러 상품을 한번에 찜하기"""
         # Arrange
         product_ids = [
@@ -311,9 +287,7 @@ class TestWishlistBulkAdd:
         ]
 
         # Act
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["bulk_add"], {"product_ids": product_ids}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["bulk_add"], {"product_ids": product_ids})
 
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
@@ -322,9 +296,7 @@ class TestWishlistBulkAdd:
         assert response.data["total_wishlist_count"] == 3
         assert wishlist_user.get_wishlist_count() == 3
 
-    def test_bulk_add_with_duplicates(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_bulk_add_with_duplicates(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """이미 찜한 상품 포함하여 여러 상품 찜하기"""
         # Arrange
         product1 = wishlist_products["product1"]
@@ -332,9 +304,7 @@ class TestWishlistBulkAdd:
         wishlist_user.add_to_wishlist(product1)
 
         # Act
-        response = authenticated_wishlist_client.post(
-            wishlist_urls["bulk_add"], {"product_ids": [product1.id, product2.id]}
-        )
+        response = authenticated_wishlist_client.post(wishlist_urls["bulk_add"], {"product_ids": [product1.id, product2.id]})
 
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
@@ -351,17 +321,13 @@ class TestWishlistBulkAdd:
 class TestWishlistCheck:
     """찜 상태 확인 테스트"""
 
-    def test_check_wishlist_status(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_check_wishlist_status(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """특정 상품의 찜 상태 확인"""
         # Arrange
         product1 = wishlist_products["product1"]
 
         # Act & Assert - 찜하기 전
-        response = authenticated_wishlist_client.get(
-            f"{wishlist_urls['check']}?product_id={product1.id}"
-        )
+        response = authenticated_wishlist_client.get(f"{wishlist_urls['check']}?product_id={product1.id}")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_wished"] is False
 
@@ -369,9 +335,7 @@ class TestWishlistCheck:
         wishlist_user.add_to_wishlist(product1)
 
         # Act & Assert - 찜하기 후
-        response = authenticated_wishlist_client.get(
-            f"{wishlist_urls['check']}?product_id={product1.id}"
-        )
+        response = authenticated_wishlist_client.get(f"{wishlist_urls['check']}?product_id={product1.id}")
         assert response.data["is_wished"] is True
         assert response.data["wishlist_count"] == 1
 
@@ -390,9 +354,7 @@ class TestWishlistCheck:
         other_user.add_to_wishlist(product1)
 
         # Act
-        response = authenticated_wishlist_client.get(
-            f"{wishlist_urls['check']}?product_id={product1.id}"
-        )
+        response = authenticated_wishlist_client.get(f"{wishlist_urls['check']}?product_id={product1.id}")
 
         # Assert
         assert response.data["wishlist_count"] == 2
@@ -406,9 +368,7 @@ class TestWishlistCheck:
 class TestWishlistStatistics:
     """찜 목록 통계 테스트"""
 
-    def test_wishlist_statistics(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_wishlist_statistics(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """찜 목록 통계 조회"""
         # Arrange
         wishlist_user.add_to_wishlist(wishlist_products["product1"])  # 세일, 재고 있음
@@ -443,9 +403,7 @@ class TestWishlistStatistics:
 class TestWishlistRemove:
     """찜 목록 삭제 테스트"""
 
-    def test_remove_from_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_remove_from_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """찜 목록에서 제거"""
         # Arrange
         product1 = wishlist_products["product1"]
@@ -453,18 +411,14 @@ class TestWishlistRemove:
         assert wishlist_user.get_wishlist_count() == 1
 
         # Act
-        response = authenticated_wishlist_client.delete(
-            f"{wishlist_urls['remove']}?product_id={product1.id}"
-        )
+        response = authenticated_wishlist_client.delete(f"{wishlist_urls['remove']}?product_id={product1.id}")
 
         # Assert
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert wishlist_user.get_wishlist_count() == 0
         assert not wishlist_user.is_in_wishlist(product1)
 
-    def test_clear_wishlist(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_clear_wishlist(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """찜 목록 전체 삭제"""
         # Arrange
         wishlist_user.add_to_wishlist(wishlist_products["product1"])
@@ -491,9 +445,7 @@ class TestWishlistRemove:
 class TestWishlistMoveToCart:
     """장바구니 연동 테스트"""
 
-    def test_move_to_cart(
-        self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls
-    ):
+    def test_move_to_cart(self, authenticated_wishlist_client, wishlist_user, wishlist_products, wishlist_urls):
         """찜 목록에서 장바구니로 이동"""
         # Arrange
         product1 = wishlist_products["product1"]
@@ -558,9 +510,7 @@ class TestWishlistMoveToCart:
 class TestWishlistOwnership:
     """본인 찜 목록만 보기 테스트"""
 
-    def test_user_can_only_see_own_wishlist(
-        self, api_client, wishlist_user, other_user, wishlist_products, wishlist_urls
-    ):
+    def test_user_can_only_see_own_wishlist(self, api_client, wishlist_user, other_user, wishlist_products, wishlist_urls):
         """사용자는 본인의 찜 목록만 볼 수 있음"""
         # Arrange
         product1 = wishlist_products["product1"]
