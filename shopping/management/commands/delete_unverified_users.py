@@ -90,17 +90,21 @@ class Command(BaseCommand):
 
         for user in users:
             if hasattr(user, "orders") and user.orders.exists():
-                to_keep.append({
-                    "email": user.email,
-                    "joined": user.date_joined,
-                    "order_count": user.orders.count(),
-                })
+                to_keep.append(
+                    {
+                        "email": user.email,
+                        "joined": user.date_joined,
+                        "order_count": user.orders.count(),
+                    }
+                )
             else:
-                to_delete.append({
-                    "email": user.email,
-                    "joined": user.date_joined,
-                    "username": user.username,
-                })
+                to_delete.append(
+                    {
+                        "email": user.email,
+                        "joined": user.date_joined,
+                        "username": user.username,
+                    }
+                )
 
         return to_delete, to_keep
 
@@ -115,19 +119,13 @@ class Command(BaseCommand):
         if to_delete:
             self.stdout.write(self.style.WARNING("삭제 대상 목록:"))
             for i, user_info in enumerate(to_delete, 1):
-                self.stdout.write(
-                    f"  {i}. {user_info['email']} "
-                    f"(가입일: {user_info['joined'].strftime('%Y-%m-%d')})"
-                )
+                self.stdout.write(f"  {i}. {user_info['email']} " f"(가입일: {user_info['joined'].strftime('%Y-%m-%d')})")
             self.stdout.write("")
 
         if to_keep:
             self.stdout.write(self.style.SUCCESS("유지 대상 목록:"))
             for i, user_info in enumerate(to_keep, 1):
-                self.stdout.write(
-                    f"  {i}. {user_info['email']} "
-                    f"(주문: {user_info['order_count']}건)"
-                )
+                self.stdout.write(f"  {i}. {user_info['email']} " f"(주문: {user_info['order_count']}건)")
             self.stdout.write("")
 
     def _confirm_and_delete(self, to_delete, verbose, force=False):

@@ -381,10 +381,13 @@ class SocialAppFactory(DjangoModelFactory):
     사용 예시:
         app = SocialAppFactory.google()
         app = SocialAppFactory.kakao()
+
+    Note: provider별로 하나만 생성됨 (get_or_create 패턴)
     """
 
     class Meta:
         model = "socialaccount.SocialApp"
+        django_get_or_create = ("provider",)
 
     name = "Test Social App"
     provider = "google"
@@ -399,7 +402,8 @@ class SocialAppFactory(DjangoModelFactory):
         from django.contrib.sites.models import Site
 
         site = Site.objects.get_or_create(id=1, defaults={"domain": "testserver", "name": "testserver"})[0]
-        self.sites.add(site)
+        if not self.sites.filter(id=site.id).exists():
+            self.sites.add(site)
 
     @classmethod
     def google(cls, **kwargs):
