@@ -1,10 +1,8 @@
 # 구현된 기능 목록 (Implemented Features)
 
 > 자동 생성일: 2025-12-04
-> 최종 검증일: 2025-12-04
 > 스캔 범위: 프로젝트 루트, `myproject/`, `shopping/`, `load_tests/`, `scripts/` 디렉토리 전체
 > 아키텍처: 5-Layer Architecture
-> 검증 상태: ✅ Models 검증 완료 | ✅ Services 검증 완료
 
 ---
 
@@ -28,48 +26,58 @@
 
 ### 1.1.1 인증 (Authentication) `shopping/views/auth_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 회원가입 | `RegisterView` | POST | `/api/auth/register/` | 새 사용자 생성 + JWT 토큰 발급 + 이메일 인증 발송 |
-| 로그인 | `LoginView` | POST | `/api/auth/login/` | 인증 후 JWT 토큰 발급 + 장바구니 병합 |
-| 로그아웃 | `LogoutView` | POST | `/api/auth/logout/` | Refresh Token 블랙리스트 등록 + Cookie 삭제 |
-| 토큰 갱신 | `CustomTokenRefreshView` | POST | `/api/auth/token/refresh/` | Access Token 재발급 (Cookie 기반) |
-| 토큰 확인 | `check_token` | GET | `/api/auth/check-token/` | Access Token 유효성 확인 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 회원가입 | `RegisterView` | 새 사용자 생성 + JWT 토큰 발급 + 이메일 인증 발송 |
+| 로그인 | `LoginView` | 인증 후 JWT 토큰 발급 + 장바구니 병합 |
+| 로그아웃 | `LogoutView` | Refresh Token 블랙리스트 등록 + Cookie 삭제 |
+| 토큰 갱신 | `CustomTokenRefreshView` | Access Token 재발급 (Cookie 기반) |
+| 토큰 확인 | `check_token` | Access Token 유효성 확인 |
 
 ### 1.1.2 프로필 관리 (Profile) `shopping/views/user_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 프로필 조회 | `ProfileView.retrieve` | GET | `/api/profile/` | 현재 사용자 프로필 조회 |
-| 프로필 전체 수정 | `ProfileView.update` | PUT | `/api/profile/` | 프로필 전체 필드 수정 |
-| 프로필 부분 수정 | `ProfileView.partial_update` | PATCH | `/api/profile/` | 프로필 일부 필드 수정 |
-| 비밀번호 변경 | `PasswordChangeView` | POST | `/api/profile/password/` | 현재 비밀번호 확인 후 변경 |
-| 회원 탈퇴 | `withdraw` | POST | `/api/auth/withdraw/` | 비밀번호 확인 + 상태 변경 + 토큰 무효화 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 프로필 조회 | `ProfileView.retrieve` | 현재 사용자 프로필 조회 |
+| 프로필 전체 수정 | `ProfileView.update` | 프로필 전체 필드 수정 |
+| 프로필 부분 수정 | `ProfileView.partial_update` | 프로필 일부 필드 수정 |
+| 비밀번호 변경 | `PasswordChangeView` | 현재 비밀번호 확인 후 변경 |
+| 회원 탈퇴 | `withdraw` | 비밀번호 확인 + 상태 변경 + 토큰 무효화 |
 
 ### 1.1.3 이메일 인증 (Email Verification) `shopping/views/email_verification_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 인증 메일 발송 | `SendVerificationEmailView` | POST | `/api/auth/email/send/` | 새 인증 토큰 생성 + 이메일 발송 (Celery) |
-| UUID 토큰 인증 | `VerifyEmailView.get` | GET | `/api/auth/email/verify/` | 이메일 링크 클릭 시 인증 처리 |
-| 6자리 코드 인증 | `VerifyEmailView.post` | POST | `/api/auth/email/verify/` | 6자리 코드 입력으로 인증 |
-| 인증 메일 재발송 | `ResendVerificationEmailView` | POST | `/api/auth/email/resend/` | 1분 쿨다운 + 재발송 |
-| 인증 상태 확인 | `check_verification_status` | GET | `/api/auth/email/status/` | 현재 인증 상태 조회 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 인증 메일 발송 | `SendVerificationEmailView` | 새 인증 토큰 생성 + 이메일 발송 (Celery) |
+| UUID 토큰 인증 | `VerifyEmailView.get` | 이메일 링크 클릭 시 인증 처리 |
+| 6자리 코드 인증 | `VerifyEmailView.post` | 6자리 코드 입력으로 인증 |
+| 인증 메일 재발송 | `ResendVerificationEmailView` | 1분 쿨다운 + 재발송 |
+| 인증 상태 확인 | `check_verification_status` | 현재 인증 상태 조회 |
 
 ### 1.1.4 비밀번호 재설정 (Password Reset) `shopping/views/password_reset_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 재설정 요청 | `PasswordResetRequestView` | POST | `/api/auth/password/reset/request/` | 재설정 링크 이메일 발송 |
-| 재설정 확인 | `PasswordResetConfirmView` | POST | `/api/auth/password/reset/confirm/` | 토큰 검증 + 새 비밀번호 설정 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 재설정 요청 | `PasswordResetRequestView` | 재설정 링크 이메일 발송 |
+| 재설정 확인 | `PasswordResetConfirmView` | 토큰 검증 + 새 비밀번호 설정 |
 
-### 1.1.5 소셜 로그인 (Social Auth) `shopping/views/social_auth_views.py`
+### 1.1.5 소셜 로그인 (Social Auth) `shopping/urls.py`, `shopping/views/social_auth_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| OAuth 콜백 | `SocialCallbackView` | GET | `/api/social/{provider}/callback/` | Google/Kakao/Naver OAuth 콜백 처리 |
+**Access Token 방식 (dj-rest-auth)** - 클라이언트가 직접 OAuth 인증 후 토큰 전달
 
-> ⚠️ **검증 필요**: 기존 문서에 있던 `GoogleLogin`, `KakaoLogin`, `NaverLogin`, `SocialAccountListView`, `SocialAccountDisconnectView`는 코드에서 확인되지 않음 - allauth 기반으로 변경된 것으로 보임
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 구글 로그인 | `GoogleLogin` | 구글 access_token으로 로그인 |
+| 카카오 로그인 | `KakaoLogin` | 카카오 access_token으로 로그인 |
+| 네이버 로그인 | `NaverLogin` | 네이버 access_token으로 로그인 |
+
+**Authorization Code 방식** - 서버 사이드 OAuth 콜백 처리
+
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| OAuth 콜백 | `SocialCallbackView` | Google/Kakao/Naver OAuth 콜백 처리 |
+
+> ℹ️ **참고**: 두 가지 방식 모두 지원. Access Token 방식은 SPA/모바일 앱용, Authorization Code 방식은 서버 사이드 렌더링용
 
 ---
 
@@ -77,50 +85,48 @@
 
 ### 1.2.1 상품 조회 (Product) `shopping/views/product_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 상품 목록 | `ProductViewSet.list` | GET | `/api/products/` | 검색/필터/페이지네이션 지원 |
-| 상품 상세 | `ProductViewSet.retrieve` | GET | `/api/products/{id}/` | 판매자, 이미지, 리뷰 포함 |
-| 상품 등록 | `ProductViewSet.create` | POST | `/api/products/` | 판매자 전용 + slug 자동 생성 |
-| 상품 수정 | `ProductViewSet.update` | PUT | `/api/products/{id}/` | 판매자 본인만 |
-| 상품 부분 수정 | `ProductViewSet.partial_update` | PATCH | `/api/products/{id}/` | 판매자 본인만 |
-| 상품 삭제 | `ProductViewSet.destroy` | DELETE | `/api/products/{id}/` | 판매자 본인만 |
-| 인기 상품 | `ProductViewSet.popular` | GET | `/api/products/popular/` | 리뷰 수 기준 상위 12개 |
-| 평점 높은 상품 | `ProductViewSet.best_rating` | GET | `/api/products/best_rating/` | 평균 평점 기준 (리뷰 3개 이상) |
-| 재고 부족 상품 | `ProductViewSet.low_stock` | GET | `/api/products/low_stock/` | 판매자용 재고 10개 이하 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `ProductViewSet.my_products`, `ProductViewSet.set_primary_image`는 코드에서 확인되지 않음
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 상품 목록 | `ProductViewSet.list` | 검색/필터/페이지네이션 지원 |
+| 상품 상세 | `ProductViewSet.retrieve` | 판매자, 이미지, 리뷰 포함 |
+| 상품 등록 | `ProductViewSet.create` | 판매자 전용 + slug 자동 생성 |
+| 상품 수정 | `ProductViewSet.update` | 판매자 본인만 |
+| 상품 부분 수정 | `ProductViewSet.partial_update` | 판매자 본인만 |
+| 상품 삭제 | `ProductViewSet.destroy` | 판매자 본인만 |
+| 인기 상품 | `ProductViewSet.popular` | 리뷰 수 기준 상위 12개 |
+| 평점 높은 상품 | `ProductViewSet.best_rating` | 평균 평점 기준 (리뷰 3개 이상) |
+| 재고 부족 상품 | `ProductViewSet.low_stock` | 판매자용 재고 10개 이하 |
 
 ### 1.2.2 상품 리뷰 (Reviews) `shopping/views/product_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 리뷰 목록 | `ProductViewSet.reviews` | GET | `/api/products/{id}/reviews/` | 상품별 리뷰 조회 + 페이지네이션 |
-| 리뷰 작성 | `ProductViewSet.create_review` | POST | `/api/products/{id}/reviews/` | 상품당 1개 제한 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 리뷰 목록 | `ProductViewSet.reviews` | 상품별 리뷰 조회 + 페이지네이션 |
+| 리뷰 작성 | `ProductViewSet.create_review` | 상품당 1개 제한 |
 
 ### 1.2.3 카테고리 (Category) `shopping/views/product_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 카테고리 목록 | `CategoryViewSet.list` | GET | `/api/categories/` | 활성 카테고리 + 상품 수 |
-| 카테고리 상세 | `CategoryViewSet.retrieve` | GET | `/api/categories/{id}/` | 부모 카테고리 정보 포함 |
-| 카테고리 트리 | `CategoryViewSet.tree` | GET | `/api/categories/tree/` | MPTT 계층 구조 + Redis 캐싱 |
-| 카테고리별 상품 | `CategoryViewSet.products` | GET | `/api/categories/{id}/products/` | 하위 카테고리 포함 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 카테고리 목록 | `CategoryViewSet.list` | 활성 카테고리 + 상품 수 |
+| 카테고리 상세 | `CategoryViewSet.retrieve` | 부모 카테고리 정보 포함 |
+| 카테고리 트리 | `CategoryViewSet.tree` | MPTT 계층 구조 + Redis 캐싱 |
+| 카테고리별 상품 | `CategoryViewSet.products` | 하위 카테고리 포함 |
 
 ### 1.2.4 상품 문의 (Product Q&A) `shopping/views/product_qa_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 문의 목록 | `ProductQuestionViewSet.list` | GET | `/api/products/{id}/questions/` | 비밀글 필터링 적용 |
-| 문의 상세 | `ProductQuestionViewSet.retrieve` | GET | `/api/products/{id}/questions/{qid}/` | 답변 포함 |
-| 문의 작성 | `ProductQuestionViewSet.create` | POST | `/api/products/{id}/questions/` | 인증 사용자만 |
-| 문의 수정 | `ProductQuestionViewSet.update` | PUT | `/api/products/{id}/questions/{qid}/` | 작성자만 + 답변 없을 때만 |
-| 문의 삭제 | `ProductQuestionViewSet.destroy` | DELETE | `/api/products/{id}/questions/{qid}/` | 작성자/관리자만 |
-| 답변 작성 | `ProductQuestionViewSet.answer` | POST | `/api/products/{id}/questions/{qid}/answer/` | 판매자만 |
-| 답변 수정 | `ProductQuestionViewSet.update_answer` | PATCH | `/api/products/{id}/questions/{qid}/update_answer/` | 판매자/관리자만 |
-| 답변 삭제 | `ProductQuestionViewSet.delete_answer` | DELETE | `/api/products/{id}/questions/{qid}/delete_answer/` | 판매자/관리자만 |
-| 내 문의 목록 | `MyQuestionViewSet.list` | GET | `/api/my-questions/` | 현재 사용자 문의 |
-| 내 문의 상세 | `MyQuestionViewSet.retrieve` | GET | `/api/my-questions/{id}/` | 답변 포함 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 문의 목록 | `ProductQuestionViewSet.list` | 비밀글 필터링 적용 |
+| 문의 상세 | `ProductQuestionViewSet.retrieve` | 답변 포함 |
+| 문의 작성 | `ProductQuestionViewSet.create` | 인증 사용자만 |
+| 문의 수정 | `ProductQuestionViewSet.update` | 작성자만 + 답변 없을 때만 |
+| 문의 삭제 | `ProductQuestionViewSet.destroy` | 작성자/관리자만 |
+| 답변 작성 | `ProductQuestionViewSet.answer` | 판매자만 |
+| 답변 수정 | `ProductQuestionViewSet.update_answer` | 판매자/관리자만 |
+| 답변 삭제 | `ProductQuestionViewSet.delete_answer` | 판매자/관리자만 |
+| 내 문의 목록 | `MyQuestionViewSet.list` | 현재 사용자 문의 |
+| 내 문의 상세 | `MyQuestionViewSet.retrieve` | 답변 포함 |
 
 ---
 
@@ -128,35 +134,44 @@
 
 ### 1.3.1 장바구니 (Cart) `shopping/views/cart_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 장바구니 조회 | `CartViewSet.retrieve` | GET | `/api/cart/` | 재고/가격 변동 경고 포함 |
-| 장바구니 요약 | `CartViewSet.summary` | GET | `/api/cart/summary/` | 헤더용 간단 정보 |
-| 상품 추가 | `CartViewSet.add_item` | POST | `/api/cart/add_item/` | 동일 상품은 수량 증가 |
-| 아이템 목록 | `CartViewSet.items` | GET | `/api/cart/items/` | 최근 추가순 정렬 |
-| 수량 변경 | `CartViewSet.update_item` | PATCH | `/api/cart/{id}/items/` | 0이면 삭제 |
-| 아이템 삭제 | `CartViewSet.delete_item` | DELETE | `/api/cart/{id}/items/` | 완전 제거 |
-| 장바구니 비우기 | `CartViewSet.clear` | POST | `/api/cart/clear/` | confirm=true 필수 |
-| 일괄 추가 | `CartViewSet.bulk_add` | POST | `/api/cart/bulk_add/` | 다중 상품 추가 |
-| 재고 확인 | `CartViewSet.check_stock` | GET | `/api/cart/check_stock/` | 주문 전 확인용 |
-| 구매불가 정리 | `CartViewSet.cleanup` | POST | `/api/cart/cleanup/` | 자동 정리 |
-| 가격 업데이트 | `CartViewSet.update_prices` | POST | `/api/cart/update_prices/` | 현재 가격으로 갱신 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 장바구니 조회 | `CartViewSet.retrieve` | 재고/가격 변동 경고 포함 |
+| 장바구니 요약 | `CartViewSet.summary` | 헤더용 간단 정보 |
+| 상품 추가 | `CartViewSet.add_item` | 동일 상품은 수량 증가 |
+| 아이템 목록 | `CartViewSet.items` | 최근 추가순 정렬 |
+| 수량 변경 | `CartViewSet.update_item` | 0이면 삭제 |
+| 아이템 삭제 | `CartViewSet.delete_item` | 완전 제거 |
+| 장바구니 비우기 | `CartViewSet.clear` | confirm=true 필수 |
+| 일괄 추가 | `CartViewSet.bulk_add` | 다중 상품 추가 |
+| 재고 확인 | `CartViewSet.check_stock` | 주문 전 확인용 |
+| 구매불가 정리 | `CartViewSet.cleanup` | 자동 정리 |
+| 가격 업데이트 | `CartViewSet.update_prices` | 현재 가격으로 갱신 |
 
-> ⚠️ **검증 필요**: 기존 문서의 `CartItemViewSet.check_price_changes`는 `CartViewSet`에 통합됨
+#### 장바구니 아이템 RESTful API `CartItemViewSet`
+
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 아이템 목록 | `CartItemViewSet.list` | 장바구니 아이템 목록 조회 |
+| 아이템 추가 | `CartItemViewSet.create` | 상품 추가 |
+| 수량 변경 | `CartItemViewSet.update` | 수량 변경 (0이면 삭제) |
+| 아이템 삭제 | `CartItemViewSet.destroy` | 아이템 삭제 |
+
+> ℹ️ **참고**: `CartViewSet`의 action들과 동일한 기능을 RESTful 방식으로 제공. 회원/비회원 모두 사용 가능.
 
 ### 1.3.2 찜 목록 (Wishlist) `shopping/views/wishlist_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 찜 목록 조회 | `WishlistViewSet.list` | GET | `/api/wishlist/` | 필터/정렬 지원 |
-| 찜 토글 | `WishlistViewSet.toggle` | POST | `/api/wishlist/toggle/` | 추가/제거 토글 |
-| 찜 추가 | `WishlistViewSet.add` | POST | `/api/wishlist/add/` | 중복 시 무시 |
-| 찜 제거 | `WishlistViewSet.remove` | DELETE | `/api/wishlist/remove/` | 단일 상품 제거 |
-| 일괄 추가 | `WishlistViewSet.bulk_add` | POST | `/api/wishlist/bulk_add/` | 다중 상품 추가 |
-| 전체 삭제 | `WishlistViewSet.clear` | DELETE | `/api/wishlist/clear/` | confirm=true 필수 |
-| 찜 상태 확인 | `WishlistViewSet.check` | GET | `/api/wishlist/check/` | 단일 상품 상태 |
-| 통계 조회 | `WishlistViewSet.stats` | GET | `/api/wishlist/stats/` | 가격 합계/할인 금액 등 |
-| 장바구니 이동 | `WishlistViewSet.move_to_cart` | POST | `/api/wishlist/move_to_cart/` | 선택 상품 이동 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 찜 목록 조회 | `WishlistViewSet.list` | 필터/정렬 지원 |
+| 찜 토글 | `WishlistViewSet.toggle` | 추가/제거 토글 |
+| 찜 추가 | `WishlistViewSet.add` | 중복 시 무시 |
+| 찜 제거 | `WishlistViewSet.remove` | 단일 상품 제거 |
+| 일괄 추가 | `WishlistViewSet.bulk_add` | 다중 상품 추가 |
+| 전체 삭제 | `WishlistViewSet.clear` | confirm=true 필수 |
+| 찜 상태 확인 | `WishlistViewSet.check` | 단일 상품 상태 |
+| 통계 조회 | `WishlistViewSet.stats` | 가격 합계/할인 금액 등 |
+| 장바구니 이동 | `WishlistViewSet.move_to_cart` | 선택 상품 이동 |
 
 ---
 
@@ -164,53 +179,47 @@
 
 ### 1.4.1 주문 (Orders) `shopping/views/order_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 주문 목록 | `OrderViewSet.list` | GET | `/api/orders/` | 상태별 필터 + 페이지네이션 |
-| 주문 상세 | `OrderViewSet.retrieve` | GET | `/api/orders/{id}/` | 본인/관리자만 조회 |
-| 주문 생성 | `OrderViewSet.create` | POST | `/api/orders/` | 이메일 인증 필수 + 비동기 처리 (202) |
-| 주문 취소 | `OrderViewSet.cancel` | POST | `/api/orders/{id}/cancel/` | 배송 전만 + 포인트/재고 복구 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `OrderViewSet.my_orders`, `OrderViewSet.status`는 코드에서 별도 action으로 확인되지 않음
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 주문 목록 | `OrderViewSet.list` | 상태별 필터 + 페이지네이션 |
+| 주문 상세 | `OrderViewSet.retrieve` | 본인/관리자만 조회 |
+| 주문 생성 | `OrderViewSet.create` | 이메일 인증 필수 + 비동기 처리 (202) |
+| 주문 취소 | `OrderViewSet.cancel` | 배송 전만 + 포인트/재고 복구 |
 
 ### 1.4.2 결제 (Payments) `shopping/views/payment_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 결제 목록 | `PaymentListView` | GET | `/api/payments/` | 상태별 필터 + 페이지네이션 |
-| 결제 상세 | `PaymentDetailView` | GET | `/api/payments/{id}/` | 본인 결제만 |
-| 결제 요청 | `PaymentRequestView` | POST | `/api/payments/request/` | 토스페이먼츠 결제창 호출 전 |
-| 결제 승인 | `PaymentConfirmView` | POST | `/api/payments/confirm/` | 비동기 처리 (202) |
-| 결제 취소 | `PaymentCancelView` | POST | `/api/payments/cancel/` | 포인트 환불/차감 처리 |
-| 결제 상태 | `PaymentStatusView` | GET | `/api/payments/{id}/status/` | 폴링용 |
-| 결제 실패 | `PaymentFailView` | POST | `/api/payments/fail/` | 결제창 실패/취소 처리 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `PaymentViewSet.logs`, `PaymentViewSet.confirm_async`는 별도 ViewSet이 아닌 개별 APIView로 구현됨
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 결제 목록 | `PaymentListView` | 상태별 필터 + 페이지네이션 |
+| 결제 상세 | `PaymentDetailView` | 본인 결제만 |
+| 결제 요청 | `PaymentRequestView` | 토스페이먼츠 결제창 호출 전 |
+| 결제 승인 | `PaymentConfirmView` | 비동기 처리 (202) |
+| 결제 취소 | `PaymentCancelView` | 포인트 환불/차감 처리 |
+| 결제 상태 | `PaymentStatusView` | 폴링용 |
+| 결제 실패 | `PaymentFailView` | 결제창 실패/취소 처리 |
 
 ### 1.4.3 교환/환불 (Returns) `shopping/views/return_views.py`
 
 **고객용 API:**
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 반품 목록 | `ReturnViewSet.list` | GET | `/api/returns/` | 상태/유형 필터 |
-| 반품 상세 | `ReturnViewSet.retrieve` | GET | `/api/returns/{id}/` | 주문/상품 정보 포함 |
-| 반품 신청 | `ReturnViewSet.create` | POST | `/api/returns/` | 환불/교환 신청 |
-| 송장번호 입력 | `ReturnViewSet.partial_update` | PATCH | `/api/returns/{id}/` | 승인 후 입력 가능 |
-| 신청 취소 | `ReturnViewSet.destroy` | DELETE | `/api/returns/{id}/` | requested 상태만 |
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 반품 목록 | `ReturnViewSet.list` | 상태/유형 필터 |
+| 반품 상세 | `ReturnViewSet.retrieve` | 주문/상품 정보 포함 |
+| 반품 신청 | `ReturnViewSet.create` | 환불/교환 신청 |
+| 송장번호 입력 | `ReturnViewSet.partial_update` | 승인 후 입력 가능 |
+| 신청 취소 | `ReturnViewSet.destroy` | requested 상태만 |
 
 **판매자용 API:**
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 반품 목록 | `SellerReturnViewSet.list` | GET | `/api/seller/returns/` | 본인 상품 반품만 |
-| 반품 상세 | `SellerReturnViewSet.retrieve` | GET | `/api/seller/returns/{id}/` | 신청자 정보 포함 |
-| 반품 승인 | `SellerReturnViewSet.approve` | POST | `/api/seller/returns/{id}/approve/` | 반품 안내 발송 |
-| 반품 거부 | `SellerReturnViewSet.reject` | POST | `/api/seller/returns/{id}/reject/` | 사유 필수 |
-| 도착 확인 | `SellerReturnViewSet.confirm_receive` | POST | `/api/seller/returns/{id}/confirm-receive/` | 도착 확인 |
-| 완료 처리 | `SellerReturnViewSet.complete` | POST | `/api/seller/returns/{id}/complete/` | 환불/교환 완료 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `ReturnViewSet.update_tracking`은 `partial_update`로 통합됨
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 반품 목록 | `SellerReturnViewSet.list` | 본인 상품 반품만 |
+| 반품 상세 | `SellerReturnViewSet.retrieve` | 신청자 정보 포함 |
+| 반품 승인 | `SellerReturnViewSet.approve` | 반품 안내 발송 |
+| 반품 거부 | `SellerReturnViewSet.reject` | 사유 필수 |
+| 도착 확인 | `SellerReturnViewSet.confirm_receive` | 도착 확인 |
+| 완료 처리 | `SellerReturnViewSet.complete` | 환불/교환 완료 |
 
 ---
 
@@ -218,29 +227,25 @@
 
 ### 1.5.1 포인트 (Points) `shopping/views/point_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 내 포인트 | `MyPointView` | GET | `/api/points/my/` | 현재 포인트 + 최근 5건 |
-| 포인트 이력 | `PointHistoryListView` | GET | `/api/points/history/` | 필터/페이지네이션 |
-| 사용 가능 확인 | `PointCheckView` | POST | `/api/points/check/` | 주문 금액별 확인 |
-| 만료 예정 | `ExpiringPointsView` | GET | `/api/points/expiring/` | 월별 만료 요약 |
-| 포인트 통계 | `point_statistics` | GET | `/api/points/statistics/` | 종합 통계 |
-| 포인트 사용 | `PointUseView` | POST | `/api/points/use/` | FIFO 방식 차감 |
-| 취소 처리 | `PointCancelView` | POST | `/api/points/cancel/` | 환불/회수 처리 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `PointViewSet.list`, `PointViewSet.my_points`, `PointViewSet.summary`, `PointViewSet.expiring_soon`은 개별 APIView로 구현됨
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 내 포인트 | `MyPointView` | 현재 포인트 + 최근 5건 |
+| 포인트 이력 | `PointHistoryListView` | 필터/페이지네이션 |
+| 사용 가능 확인 | `PointCheckView` | 주문 금액별 확인 |
+| 만료 예정 | `ExpiringPointsView` | 월별 만료 요약 |
+| 포인트 통계 | `point_statistics` | 종합 통계 |
+| 포인트 사용 | `PointUseView` | FIFO 방식 차감 |
+| 취소 처리 | `PointCancelView` | 환불/회수 처리 |
 
 ### 1.5.2 알림 (Notifications) `shopping/views/notification_views.py`
 
-| 기능 | View/Function | 메서드 | 엔드포인트 | 설명 |
-|-----|--------------|--------|-----------|------|
-| 알림 목록 | `NotificationViewSet.list` | GET | `/api/notifications/` | 전체 알림 |
-| 알림 상세 | `NotificationViewSet.retrieve` | GET | `/api/notifications/{id}/` | 조회 시 자동 읽음 |
-| 읽지 않은 알림 | `NotificationViewSet.unread` | GET | `/api/notifications/unread/` | 개수 + 최근 5개 |
-| 읽음 처리 | `NotificationViewSet.mark_read` | POST | `/api/notifications/mark_read/` | 선택/전체 처리 |
-| 읽은 알림 삭제 | `NotificationViewSet.clear` | DELETE | `/api/notifications/clear/` | 읽은 알림만 |
-
-> ⚠️ **검증 필요**: 기존 문서의 `NotificationViewSet.destroy`, `NotificationViewSet.mark_all_read`, `NotificationViewSet.unread_count`는 다른 액션으로 통합됨
+| 기능 | View/Function | 설명 |
+|-----|--------------|------|
+| 알림 목록 | `NotificationViewSet.list` | 전체 알림 |
+| 알림 상세 | `NotificationViewSet.retrieve` | 조회 시 자동 읽음 |
+| 읽지 않은 알림 | `NotificationViewSet.unread` | 개수 + 최근 5개 |
+| 읽음 처리 | `NotificationViewSet.mark_read` | 선택/전체 처리 |
+| 읽은 알림 삭제 | `NotificationViewSet.clear` | 읽은 알림만 |
 
 ---
 
@@ -691,12 +696,16 @@
 | `withdraw_user()` | 사용자 탈퇴 처리 |
 | `process_social_login()` | 소셜 로그인 처리 |
 
+> **Data Classes**: `LoginResult`, `WithdrawResult`, `SocialLoginResult`
+
 **TokenService** `shopping/services/token_service.py`
 
 | 메서드 | 설명 |
 |--------|------|
 | `validate_and_refresh_token()` | 토큰 검증 및 갱신 |
 | `blacklist_token()` | 토큰 블랙리스트 등록 |
+
+> **Data Classes**: `TokenRefreshResult`
 
 **EmailVerificationService** `shopping/services/email_verification_service.py`
 
@@ -709,12 +718,16 @@
 | `invalidate_tokens()` | 토큰 무효화 |
 | `get_active_token()` | 활성 토큰 조회 |
 
+> **Data Classes**: `SendEmailResult`, `VerificationStatus`
+
 **PasswordResetService** `shopping/services/password_reset_service.py`
 
 | 메서드 | 설명 |
 |--------|------|
 | `request_password_reset()` | 비밀번호 재설정 요청 |
 | `confirm_password_reset()` | 비밀번호 재설정 확인 |
+
+> **Data Classes**: `PasswordResetRequestResult`, `PasswordResetConfirmResult`
 
 **SocialAuthService** `shopping/services/social_auth_service.py`
 
@@ -727,6 +740,8 @@
 | `get_user_info()` | 사용자 정보 조회 |
 | `normalize_user_info()` | 사용자 정보 정규화 |
 | `process_oauth_callback()` | OAuth 콜백 처리 |
+
+> **Data Classes**: `OAuthTokens`, `NormalizedUserInfo`
 
 ---
 
@@ -764,6 +779,8 @@
 | `merge_anonymous_cart()` | 익명 장바구니 병합 |
 | `cleanup_unavailable_items()` | 구매 불가 아이템 정리 |
 
+> **Data Classes**: `StockIssue`, `PriceChange`, `BulkAddResult`
+
 **WishlistService** `shopping/services/wishlist_service.py`
 
 | 메서드 | 설명 |
@@ -777,6 +794,8 @@
 | `get_list()` | 찜 목록 조회 |
 | `get_stats()` | 찜 통계 조회 |
 | `move_to_cart()` | 장바구니로 이동 |
+
+> **Data Classes**: `ToggleResult`, `BulkAddResult`, `WishlistStats`, `MoveToCartResult`, `WishlistFilter`
 
 ---
 
@@ -850,6 +869,8 @@
 | `get_recent_histories()` | 최근 이력 조회 |
 | `build_filter_from_request()` | 요청에서 필터 생성 |
 
+> **Data Classes**: `PointHistoryFilter`, `PaginatedResult`, `HistorySummary`, `MonthlyExpiringSummary`, `PointStatistics`
+
 **NotificationService** `shopping/services/notification_service.py`
 
 | 메서드 | 설명 |
@@ -864,6 +885,8 @@
 | `create()` | 알림 생성 |
 | `bulk_create()` | 알림 일괄 생성 |
 | `get_unread_count()` | 읽지 않은 알림 개수 조회 |
+
+> **Data Classes**: `UnreadResult`, `MarkReadResult`, `ClearResult`
 
 ---
 
@@ -1123,7 +1146,9 @@
 |--------|------|
 | `expire_points_task` | 포인트 만료 처리 |
 | `send_expiry_notification_task` | 만료 예정 알림 발송 |
+| `send_email_notification` | 이메일 알림 발송 (포인트 관련 등) |
 | `add_points_after_payment` | 결제 후 포인트 적립 |
+| `process_single_user_points` | 특정 사용자 포인트 만료 개별 처리 |
 | `cleanup_old_point_histories` | 오래된 포인트 이력 정리 |
 
 ---
@@ -1144,13 +1169,16 @@
 | 클래스/함수 | 설명 |
 |------------|------|
 | `TossPaymentClient` | 토스페이먼츠 API 클라이언트 |
+| `TossPaymentClient.__init__()` | 클라이언트 초기화 |
 | `TossPaymentClient.confirm_payment()` | 결제 승인 요청 |
 | `TossPaymentClient.cancel_payment()` | 결제 취소 요청 |
 | `TossPaymentClient.get_payment()` | 결제 정보 조회 |
 | `TossPaymentClient.verify_webhook()` | 웹훅 서명 검증 |
 | `TossPaymentClient.create_billing_key()` | 빌링키 생성 |
 | `TossPaymentError` | 토스 결제 에러 클래스 |
-| `get_error_message()` | 에러 메시지 조회 |
+| `TossPaymentError.__init__()` | 에러 초기화 (code, message, status_code) |
+| `TossPaymentError.to_dict()` | 에러를 딕셔너리로 변환 |
+| `get_error_message()` | 에러 코드별 메시지 조회 |
 
 **spectacular_hooks.py**
 
@@ -1166,13 +1194,13 @@
 
 ### 3.5.1 권한 `shopping/permissions.py`
 
-| 클래스 | 설명 |
-|--------|------|
-| `IsSeller` | 판매자 권한 확인 |
-| `IsSellerAndOwner` | 판매자이면서 소유자 권한 |
-| `IsSellerAndProductOwner` | 판매자이면서 상품 소유자 권한 |
-| `IsSellerOrReadOnly` | 판매자이거나 읽기 전용 |
-| `IsOrderOwnerOrAdmin` | 주문 소유자이거나 관리자 |
+| 클래스 | 메서드 | 설명 |
+|--------|--------|------|
+| `IsSeller` | `has_permission()` | 판매자 권한 확인 |
+| `IsSellerAndOwner` | `has_permission()`, `has_object_permission()` | 판매자이면서 소유자 권한 |
+| `IsSellerAndProductOwner` | `has_permission()`, `has_permission_for_product()` | 판매자이면서 상품 소유자 권한 |
+| `IsSellerOrReadOnly` | `has_permission()` | 판매자이거나 읽기 전용 |
+| `IsOrderOwnerOrAdmin` | `has_object_permission()` | 주문 소유자이거나 관리자 |
 
 ### 3.5.2 Rate Limiting `shopping/throttles.py`
 
@@ -1197,28 +1225,60 @@
 
 ## 3.6 Admin 관리자 `shopping/admin.py`
 
+### 3.6.1 Admin 클래스
+
 | Admin 클래스 | 모델 | 특징 |
 |-------------|------|------|
-| `UserAdmin` | User | 사용자 관리 |
-| `CategoryAdmin` | Category | DraggableMPTTAdmin (드래그앤드롭) |
-| `ProductAdmin` | Product | ProductImageInline 포함 |
-| `ProductImageInline` | ProductImage | 상품 이미지 인라인 |
-| `ProductReviewAdmin` | ProductReview | 리뷰 관리 |
-| `OrderAdmin` | Order | OrderItemInline 포함 |
-| `OrderItemInline` | OrderItem | 주문 상품 인라인 |
-| `CartAdmin` | Cart | CartItemInline 포함 |
-| `CartItemAdmin` | CartItem | 장바구니 아이템 관리 |
-| `PaymentAdmin` | Payment | PaymentLogInline 포함 |
-| `PaymentLogAdmin` | PaymentLog | 결제 로그 관리 |
-| `PointHistoryAdmin` | PointHistory | 포인트 이력 관리 |
+| `UserAdmin` | User | 사용자 관리, SellerProfileInline 포함 |
+| `CategoryAdmin` | Category | DraggableMPTTAdmin (드래그앤드롭 계층 구조) |
+| `ProductAdmin` | Product | ProductImageInline, ProductReviewInline 포함 |
+| `ProductReviewAdmin` | ProductReview | 리뷰 전체 관리, 평점별 필터링 |
+| `OrderAdmin` | Order | OrderItemInline 포함, 상태 변경 액션 |
+| `CartAdmin` | Cart | 장바구니 관리, CartItemInline 포함 |
+| `PaymentAdmin` | Payment | 결제 관리, 색상별 상태 표시 |
+| `PaymentLogAdmin` | PaymentLog | 결제 로그 관리 (읽기 전용) |
+| `PointHistoryAdmin` | PointHistory | 포인트 이력 관리 (삭제/추가 불가) |
 | `EmailVerificationTokenAdmin` | EmailVerificationToken | 인증 토큰 관리 |
-| `EmailLogAdmin` | EmailLog | 이메일 로그 관리 |
-| `NotificationAdmin` | Notification | 알림 관리 |
+| `EmailLogAdmin` | EmailLog | 이메일 로그 관리, 통계 표시 |
+| `NotificationAdmin` | Notification | 알림 관리 (추가 불가) |
 | `ProductQuestionAdmin` | ProductQuestion | ProductAnswerInline 포함 |
-| `ProductAnswerAdmin` | ProductAnswer | 답변 관리 |
-| `ReturnAdmin` | Return | ReturnItemInline 포함 |
-| `ReturnItemAdmin` | ReturnItem | 반품 상품 관리 |
+| `ProductAnswerAdmin` | ProductAnswer | 답변 개별 관리 |
+| `ReturnAdmin` | Return | ReturnItemInline 포함, 승인/거부 액션 |
+| `ReturnItemAdmin` | ReturnItem | 반품 상품 개별 관리 (추가 불가) |
 | `SellerProfileAdmin` | SellerProfile | 판매자 프로필 관리 |
+
+### 3.6.2 Inline 클래스
+
+| Inline 클래스 | 연결 Admin | 설명 |
+|--------------|-----------|------|
+| `SellerProfileInline` | UserAdmin | 판매자 프로필 (판매자인 경우에만 표시) |
+| `ProductImageInline` | ProductAdmin | 상품 이미지 편집 |
+| `ProductReviewInline` | ProductAdmin | 상품 리뷰 조회 (읽기 전용) |
+| `OrderItemInline` | OrderAdmin | 주문 상품 조회 (삭제 불가) |
+| `CartItemInline` | CartAdmin | 장바구니 아이템 편집 |
+| `ProductAnswerInline` | ProductQuestionAdmin | 문의 답변 편집 |
+| `ReturnItemInline` | ReturnAdmin | 반품 상품 조회 (삭제 불가) |
+
+### 3.6.3 Admin 액션
+
+| Admin 클래스 | 액션 | 설명 |
+|-------------|------|------|
+| `OrderAdmin` | `mark_as_paid` | 선택된 주문을 결제완료로 변경 |
+| `OrderAdmin` | `mark_as_shipped` | 선택된 주문을 배송중으로 변경 |
+| `OrderAdmin` | `mark_as_delivered` | 선택된 주문을 배송완료로 변경 |
+| `EmailLogAdmin` | `mark_as_sent` | 선택한 이메일을 발송 완료로 표시 |
+| `EmailLogAdmin` | `mark_as_failed` | 선택한 이메일을 발송 실패로 표시 |
+| `ReturnAdmin` | `approve_returns` | 선택된 교환/환불 승인 |
+| `ReturnAdmin` | `reject_returns` | 선택된 교환/환불 거부 |
+| `ReturnAdmin` | `mark_as_received` | 선택된 교환/환불을 반품 도착으로 변경 |
+
+### 3.6.4 Admin 사이트 설정
+
+| 설정 | 값 |
+|------|-----|
+| `site_header` | "쇼핑몰 관리자" |
+| `site_title` | "쇼핑몰 Admin" |
+| `index_title` | "쇼핑몰 관리" |
 
 ---
 
@@ -1226,11 +1286,11 @@
 
 ### 3.7.1 시그널 `shopping/signals.py`
 
-| 시그널 핸들러 | 설명 |
-|--------------|------|
-| `handle_social_login` | 소셜 로그인 처리 |
-| `handle_new_social_account` | 새 소셜 계정 연결 |
-| `generate_order_number` | 주문번호 생성 |
+| 시그널 핸들러 | 데코레이터 | 설명 |
+|--------------|-----------|------|
+| `handle_social_login` | `@receiver(pre_social_login)` | 소셜 로그인 전처리: 이메일 자동 인증 + 기존 인증 토큰 무효화 |
+| `handle_new_social_account` | `@receiver(post_save, sender=SocialAccount)` | 신규 소셜 가입 시: 이메일 자동 인증 + 미사용 토큰 무효화 |
+| `generate_order_number` | `@receiver(post_save, sender=Order)` | 주문 생성 시 주문번호 자동 생성 (YYYYMMDD + 6자리 ID 형식, 예: 202401150000042) |
 
 ### 3.7.2 어댑터 `shopping/adapters.py`
 
@@ -1259,10 +1319,7 @@
 |--------|------|------|
 | `cleanup_expired_tokens` | `--used-days`, `--dry-run` | 만료된 비밀번호 재설정 토큰 정리 |
 | `cleanup_old_carts` | `--anonymous-days`, `--inactive-days`, `--dry-run` | 오래된 장바구니 정리 |
-| `create_load_test_users` | `--count`, `--points`, `--clear` | 부하 테스트용 사용자 생성 |
-| `create_test_data` | `--preset`, `--clear`, `--users`, `--reviews`, `--show-presets` | 테스트용 데이터 생성 |
 | `delete_unverified_users` | `--days`, `--dry-run`, `--verbose` | 미인증 계정 삭제 |
-| `test_point_expiry` | `--create-test-data`, `--expire`, `--notify`, `--use-points`, `--username` | 포인트 만료 기능 테스트 |
 
 ---
 
@@ -1468,9 +1525,15 @@
 | | `.with_points` | 포인트 보유 |
 | | `.with_high_points` | 고액 포인트 |
 | | `.with_membership` | 특정 등급 |
+| | `.old_unverified` | 오래된 미인증 사용자 (정리 대상) |
+| | `.recent_unverified` | 최근 미인증 사용자 (유지 대상) |
+| | `.old_verified` | 오래된 인증 사용자 |
 | `EmailVerificationTokenFactory` | `.valid`, `.expired`, `.used`, `.recent` | 이메일 인증 토큰 |
+| | `.old_used`, `.recent_used` | 오래된/최근 사용 토큰 |
 | `PasswordResetTokenFactory` | `.valid`, `.expired` | 비밀번호 재설정 토큰 |
 | `EmailLogFactory` | `.pending`, `.sent`, `.failed`, `.verified` | 이메일 로그 |
+| | `.old_sent`, `.old_verified`, `.old_pending` | 오래된 로그 (정리 대상) |
+| | `.with_token` | 토큰 연결 로그 |
 | `SocialAppFactory` | `.google`, `.kakao`, `.naver` | 소셜 앱 |
 | `SocialAccountFactory` | `.google`, `.kakao`, `.naver` | 소셜 계정 |
 
@@ -1502,6 +1565,9 @@
 | `PaymentFactory` | - | 기본 결제 |
 | | `.ready`, `.pending`, `.done`, `.done_card` | 상태별 |
 | | `.canceled`, `.failed`, `.aborted` | 취소/실패 |
+| `PaidOrderFactory` | - | 결제 완료 주문 (OrderFactory 상속, earned_points 자동 계산) |
+| `CompletedPaymentFactory` | - | 카드 결제 완료 (PaymentFactory 상속, 카드 정보 기본 설정) |
+| `OrderWithItemsFactory` | `.items` | OrderItem 포함 주문 (OrderFactory 상속) |
 | `CartFactory` | `.active`, `.inactive`, `.with_items` | 장바구니 |
 | `CartItemFactory` | - | 장바구니 아이템 |
 
@@ -1512,9 +1578,12 @@
 | `PointHistoryFactory` | `.earn`, `.use` | 적립/사용 |
 | | `.earn_expiring_soon`, `.earn_expired` | 만료 관련 |
 | | `.with_partial_usage` | 부분 사용 |
+| | `.old_expire`, `.recent_expire` | 오래된/최근 만료 이력 |
+| | `.old_earn` | 오래된 적립 이력 |
 | `ReturnFactory` | `.refund`, `.exchange` | 유형별 |
 | | `.requested`, `.approved`, `.rejected` | 상태별 |
 | | `.shipping`, `.received`, `.completed` | 진행 상태 |
+| | `.with_items`, `.with_shipping_fee` | 아이템/배송비 포함 |
 | `ReturnItemFactory` | - | 반품 상품 |
 
 ### 5.2.6 문의 & 웹훅 Factories
@@ -1633,104 +1702,5 @@
 | `nginx/` | Nginx 설정 |
 | `scripts/` | 배포 스크립트 |
 
----
 
-# 📌 검증 결과 요약
-
-> ✅ 2025-12-04 검증 완료
-
-## 1단계 (Views) 검증 결과
-
-### 확인된 변경사항
-1. **소셜 로그인**: `GoogleLogin`, `KakaoLogin`, `NaverLogin`, `SocialAccountListView`, `SocialAccountDisconnectView` → allauth 기반 `SocialCallbackView`로 통합
-2. **상품**: `ProductViewSet.my_products`, `ProductViewSet.set_primary_image` → 코드에서 확인되지 않음
-3. **장바구니**: `CartItemViewSet.check_price_changes` → `CartViewSet`에 통합됨
-4. **주문**: `OrderViewSet.my_orders`, `OrderViewSet.status` → 별도 action 없음, 기본 list/retrieve 사용
-5. **결제**: `PaymentViewSet` → 개별 APIView로 분리 (`PaymentListView`, `PaymentDetailView`, `PaymentRequestView` 등)
-6. **반품**: `ReturnViewSet.update_tracking` → `partial_update`로 통합
-7. **포인트**: `PointViewSet` → 개별 APIView로 분리
-8. **알림**: `NotificationViewSet` → 개별 action 메서드로 통합 (`mark_as_read`, `clear_read` 등)
-
-## 2단계 (Models) 검증 결과
-
-### ✅ User 모델 (`shopping/models/user.py`)
-**존재하는 메서드/속성:**
-- `get_full_address()`, `get_earn_rate()`, `is_vip` (property)
-- `add_to_wishlist()`, `is_in_wishlist()`, `get_wishlist_count()`, `clear_wishlist()`, `remove_from_wishlist()`
-
-**❌ 존재하지 않음 (문서에서 삭제 완료):**
-- `get_total_orders`, `get_total_spent`, `get_point_balance`
-- `add_points`, `use_points` → PointService에서 처리
-- `update_membership_level`, `check_membership_upgrade`
-- `get_available_coupons_count` → 쿠폰 기능 미구현
-- `withdraw`, `restore` → UserService에서 처리
-
-### ✅ Product 모델 (`shopping/models/product.py`)
-**존재하는 메서드/속성:**
-- `is_on_sale`, `discount_percentage`, `is_in_stock` (property)
-- `can_purchase()`, `stock_status` (property)
-- `get_wishlist_count()`, `is_wished_by()`, `get_wishlist_users()`, `wishlist_count` (property)
-
-**❌ 존재하지 않음 (문서에서 삭제 완료):**
-- `average_rating` → View에서 annotate로 계산
-- `increase_stock`, `decrease_stock` → 직접 stock 필드 조작
-
-### ✅ ProductReview 모델
-**❌ 존재하지 않음 (문서에서 삭제 완료):**
-- `can_edit`, `can_delete`
-
-### ✅ Cart 모델 (`shopping/models/cart.py`) - 검증 완료
-- `Cart`: `get_total_amount()`, `get_total_quantity()`, `clear()`, `deactivate()`, `get_or_create_active_cart()`, `merge_anonymous_cart()`
-- `CartItem`: `subtotal`, `is_price_changed`, `price_difference` (property), `increase_quantity()`, `decrease_quantity()`, `update_quantity()`, `is_available()`
-
-### ✅ Order 모델 (`shopping/models/order.py`) - 검증 완료
-- `Order`: `get_full_shipping_address`, `is_paid`, `can_cancel` (property), `get_total_shipping_fee()`, `payment_method_display` (property)
-- `OrderItem`: `get_subtotal()`
-
-### ✅ Payment 모델 (`shopping/models/payment.py`) - 검증 완료
-- `Payment`: `is_paid`, `can_cancel` (property), `mark_as_paid()`, `mark_as_failed()`, `mark_as_canceled()`, `sanitize_raw_response()`
-- `PaymentLog`: 로그 기록용
-
-### ✅ Point 모델 (`shopping/models/point.py`) - 검증 완료
-- `PointHistoryManager`: `get_total_earned()`, `get_total_used()`, `get_expiring_soon()`, `get_month_statistics()`, `optimized_for_list()`
-- `PointHistory`: `create_history()`, `get_user_balance()`, `get_expiring_points()` (classmethod)
-
-### ✅ Auth 모델 - 검증 완료
-- `EmailVerificationToken`: `generate_verification_code()`, `is_expired()`, `mark_as_used()`, `can_resend()`
-- `EmailLog`: `mark_as_sent()`, `mark_as_failed()`, `mark_as_verified()`
-- `PasswordResetToken`: `generate_token()`, `invalidate_previous_tokens()`, `verify_token()`, `is_expired()`, `mark_as_used()`
-
-### ✅ 기타 모델 - 검증 완료
-- `Notification`: `mark_as_read()`
-- `ProductQuestion`: `can_view()`
-- `ProductAnswer`: 판매자/관리자 검증 로직
-- `Return`: `get_decrypted_account_number()`, `get_masked_account_number()`, `can_request_for_order()`, `approve()`, `reject()`, `confirm_receive()`, `complete_refund()`, `complete_exchange()`
-- `ReturnItem`: `get_subtotal()`
-- `SellerProfile`: User.is_seller=True 제약
-- `WebhookEvent`: 감사 로그 모델
-
-## 3단계 (Services) 검증 결과
-
-### ✅ 모든 서비스 파일 검증 완료 (18개)
-
-| 서비스 | 메서드 수 | 상태 |
-|--------|----------|------|
-| UserService | 6 | ✅ |
-| TokenService | 2 | ✅ |
-| EmailVerificationService | 6 | ✅ |
-| PasswordResetService | 2 | ✅ |
-| SocialAuthService | 7 | ✅ |
-| ProductService | 1 | ✅ |
-| ProductQAService | 1 | ✅ |
-| CartService | 11 | ✅ |
-| WishlistService | 9 | ✅ |
-| OrderService | 3 | ✅ |
-| PaymentService | 4 | ✅ |
-| ShippingService | 2 | ✅ |
-| ReturnService | 9 | ✅ |
-| PointService | 9 | ✅ |
-| PointQueryService | 6 | ✅ |
-| NotificationService | 10 | ✅ |
-| TossWebhookService | 6 | ✅ |
-| base.py | ServiceError + @log_service_call | ✅ |
 
