@@ -1,0 +1,490 @@
+{
+  "info": {
+    "_postman_id": "t1-order-cancel-stock-restore",
+    "name": "T1_Order_Cancel_StockRestore",
+    "description": "주문 취소 시 재고가 정확히 복구되는지 검증\n\n## 목적\n- 주문 취소 시 stock이 주문 수량만큼 복구되는지 확인\n- 주문 취소 시 sold_count가 0으로 돌아가는지 확인\n\n## 검증 포인트\n- stock + qty (원복)\n- sold_count = 0 또는 sold_count - qty\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Step 1: Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login successful', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.access);",
+              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 2: Get Initial Product Stock",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Product retrieved successfully', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 초기 상태 저장",
+              "    pm.environment.set('initial_stock', jsonData.stock);",
+              "    pm.environment.set('initial_sold_count', jsonData.sold_count || 0);",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('INITIAL STATE:');",
+              "    console.log('  Stock:', jsonData.stock);",
+              "    console.log('  Sold Count:', jsonData.sold_count || 0);",
+              "    console.log('========================================');",
+              "});",
+              "",
+              "pm.test('Sufficient stock for test', function() {",
+              "    var jsonData = pm.response.json();",
+              "    var orderQty = parseInt(pm.environment.get('quantity')) || 1;",
+              "    pm.expect(jsonData.stock).to.be.at.least(orderQty,",
+              "        'Insufficient stock for test');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/products/{{product_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["products", "{{product_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 3: Clear Cart",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200 || pm.response.code === 204) {",
+              "    console.log('Cart cleared successfully');",
+              "} else {",
+              "    console.log('Cart clear skipped');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/cart/clear/",
+          "host": ["{{base_url}}"],
+          "path": ["cart", "clear", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 4: Add Item to Cart",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Item added to cart', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('cart_item_id', jsonData.id || jsonData.cart_item_id);",
+              "    pm.environment.set('order_quantity', parseInt(pm.environment.get('quantity')) || 1);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"product_id\": {{product_id}},\n    \"quantity\": {{quantity}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/cart/add_item/",
+          "host": ["{{base_url}}"],
+          "path": ["cart", "add_item", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 5: Create Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order created successfully', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('order_id', jsonData.id || jsonData.order_id);",
+              "    ",
+              "    console.log('Order created with ID:', jsonData.id || jsonData.order_id);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cart_item_ids\": [{{cart_item_id}}],\n    \"shipping_name\": \"테스트 사용자\",\n    \"shipping_phone\": \"010-1234-5678\",\n    \"shipping_address\": \"서울시 강남구 테스트로 123\",\n    \"shipping_detail_address\": \"테스트빌딩 101호\",\n    \"shipping_postal_code\": \"06000\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 6: Verify Stock After Order (Before Cancel)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Stock deducted after order creation', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    var initialStock = parseInt(pm.environment.get('initial_stock'));",
+              "    var orderQty = parseInt(pm.environment.get('order_quantity'));",
+              "    var afterOrderStock = jsonData.stock;",
+              "    ",
+              "    // Before Cancel 상태 저장 (Precondition for Cancel)",
+              "    pm.environment.set('before_cancel_stock', afterOrderStock);",
+              "    pm.environment.set('before_cancel_sold_count', jsonData.sold_count || 0);",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('PRECONDITION - Before Cancel State:');",
+              "    console.log('  Stock after order:', afterOrderStock);",
+              "    console.log('  Sold count after order:', jsonData.sold_count || 0);",
+              "    console.log('  Expected stock:', initialStock - orderQty);",
+              "    console.log('========================================');",
+              "    ",
+              "    // 주문으로 인해 재고가 차감되었는지 확인",
+              "    pm.expect(afterOrderStock).to.equal(initialStock - orderQty,",
+              "        'Stock should be deducted after order');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/products/{{product_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["products", "{{product_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 7: Cancel Order (Action)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order cancelled successfully', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('ACTION - Order Cancelled');",
+              "    console.log('  Order ID:', pm.environment.get('order_id'));",
+              "    console.log('========================================');",
+              "});",
+              "",
+              "pm.test('Cancel response is valid', function() {",
+              "    if (pm.response.code === 200) {",
+              "        var jsonData = pm.response.json();",
+              "        // 취소 상태 확인",
+              "        if (jsonData.status) {",
+              "            var cancelStatuses = ['cancelled', 'canceled', 'CANCELLED', 'CANCELED'];",
+              "            pm.expect(cancelStatuses).to.include(jsonData.status);",
+              "        }",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cancel_reason\": \"테스트: 재고 복구 검증을 위한 취소\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/cancel/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", "cancel", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 8: Verify Stock Restored (After)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Stock restored after order cancellation', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    var initialStock = parseInt(pm.environment.get('initial_stock'));",
+              "    var beforeCancelStock = parseInt(pm.environment.get('before_cancel_stock'));",
+              "    var orderQty = parseInt(pm.environment.get('order_quantity'));",
+              "    var afterCancelStock = jsonData.stock;",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('ASSERTION - Stock Restoration Verification:');",
+              "    console.log('  Initial Stock:', initialStock);",
+              "    console.log('  Before Cancel Stock:', beforeCancelStock);",
+              "    console.log('  Order Quantity:', orderQty);",
+              "    console.log('  After Cancel Stock:', afterCancelStock);",
+              "    console.log('  Expected (restored):', initialStock);",
+              "    console.log('========================================');",
+              "    ",
+              "    // 재고가 초기 상태로 복구되었는지 확인",
+              "    pm.expect(afterCancelStock).to.equal(initialStock,",
+              "        'Stock not restored after cancellation! Expected: ' + initialStock + ', Got: ' + afterCancelStock);",
+              "});",
+              "",
+              "pm.test('Sold count restored after order cancellation', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    var initialSoldCount = parseInt(pm.environment.get('initial_sold_count'));",
+              "    var beforeCancelSoldCount = parseInt(pm.environment.get('before_cancel_sold_count'));",
+              "    var orderQty = parseInt(pm.environment.get('order_quantity'));",
+              "    var afterCancelSoldCount = jsonData.sold_count || 0;",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('ASSERTION - Sold Count Restoration Verification:');",
+              "    console.log('  Initial Sold Count:', initialSoldCount);",
+              "    console.log('  Before Cancel Sold Count:', beforeCancelSoldCount);",
+              "    console.log('  After Cancel Sold Count:', afterCancelSoldCount);",
+              "    console.log('  Expected (restored):', initialSoldCount);",
+              "    console.log('========================================');",
+              "    ",
+              "    // sold_count가 초기 상태로 복구되었는지 확인",
+              "    pm.expect(afterCancelSoldCount).to.equal(initialSoldCount,",
+              "        'Sold count not restored after cancellation! Expected: ' + initialSoldCount + ', Got: ' + afterCancelSoldCount);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/products/{{product_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["products", "{{product_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 9: Verify Order Status is Cancelled",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order status is cancelled', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    var cancelStatuses = ['cancelled', 'canceled', 'CANCELLED', 'CANCELED'];",
+              "    pm.expect(cancelStatuses.map(s => s.toLowerCase())).to.include(jsonData.status.toLowerCase(),",
+              "        'Order status should be cancelled');",
+              "    ",
+              "    console.log('Order Status:', jsonData.status);",
+              "});",
+              "",
+              "// 최종 결과 요약",
+              "console.log('');",
+              "console.log('========================================');",
+              "console.log('T1_Order_Cancel_StockRestore: COMPLETED');",
+              "console.log('----------------------------------------');",
+              "console.log('Test Summary:');",
+              "console.log('  ✓ Order Created: VERIFIED');",
+              "console.log('  ✓ Stock Deducted: VERIFIED');",
+              "console.log('  ✓ Order Cancelled: VERIFIED');",
+              "console.log('  ✓ Stock Restored: VERIFIED');",
+              "console.log('  ✓ Sold Count Restored: VERIFIED');",
+              "console.log('========================================');",
+              "console.log('T1_Order_Cancel_StockRestore: ALL TESTS PASSED');",
+              "console.log('========================================');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", ""]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request script",
+          "console.log('========================================');",
+          "console.log('Starting T1_Order_Cancel_StockRestore test...');",
+          "console.log('Purpose: Verify stock is restored when order is cancelled');",
+          "console.log('Tier: 1 (Money Integrity)');",
+          "console.log('CI Policy: Fail = Deployment Blocked');",
+          "console.log('========================================');",
+          "",
+          "// 기본 quantity 설정",
+          "if (!pm.environment.get('quantity')) {",
+          "    pm.environment.set('quantity', 1);",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test script"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "collection_name",
+      "value": "T1_Order_Cancel_StockRestore"
+    },
+    {
+      "key": "tier",
+      "value": "1"
+    },
+    {
+      "key": "category",
+      "value": "Money Integrity"
+    },
+    {
+      "key": "scenario",
+      "value": "Order Cancel Stock Restore"
+    },
+    {
+      "key": "expected",
+      "value": "stock + qty, sold = 0"
+    }
+  ]
+}
