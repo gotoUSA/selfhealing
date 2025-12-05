@@ -226,8 +226,10 @@ def retry_failed_emails_task(self: Task) -> dict[str, Any]:
 @shared_task(
     bind=True,
     max_retries=3,
-    default_retry_delay=60,
-    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
 def send_email_task(
     self: Task,
@@ -310,12 +312,22 @@ def send_email_task(
             "recipients": recipient_list,
         }
 
+    except SMTPException as e:
+        # SMTP 오류는 재시도 가치 있음
+        logger.error(f"❌ SMTP 오류: {recipient_list} - {str(e)}")
+
+        # 이메일 로그 실패 처리
+        if "email_log" in locals() and email_log:
+            email_log.mark_as_failed(str(e))
+
+        raise self.retry(exc=e)
+
     except Exception as e:
+        # 그 외 오류는 재시도 안 함 (Fail-Fast)
         logger.error(f"❌ 이메일 발송 실패: {recipient_list} - {str(e)}")
 
         # 이메일 로그 실패 처리
         if "email_log" in locals() and email_log:
             email_log.mark_as_failed(str(e))
 
-        # Celery 재시도
-        raise self.retry(exc=e, countdown=60)
+        raise
