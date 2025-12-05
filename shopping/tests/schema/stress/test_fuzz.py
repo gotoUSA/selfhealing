@@ -861,9 +861,7 @@ class TestOrdersFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"주문 상세 조회에서 서버 에러 발생!\n"
-            f"order_id={repr(order_id)}\n"
-            f"상태 코드: {response.status_code}"
+            f"주문 상세 조회에서 서버 에러 발생!\n" f"order_id={repr(order_id)}\n" f"상태 코드: {response.status_code}"
         )
 
     @given(
@@ -878,8 +876,7 @@ class TestOrdersFuzz:
         phases=[Phase.generate],
     )
     def test_order_create_shipping_info_fuzz(
-        self, client, auth_headers, schema_test_product, user,
-        shipping_address, shipping_name, shipping_phone
+        self, client, auth_headers, schema_test_product, user, shipping_address, shipping_name, shipping_phone
     ):
         """
         주문 생성 API 배송 정보 퍼징
@@ -903,11 +900,7 @@ class TestOrdersFuzz:
         from shopping.models.cart import Cart, CartItem
 
         cart, _ = Cart.objects.get_or_create(user=user, is_active=True)
-        CartItem.objects.get_or_create(
-            cart=cart,
-            product=schema_test_product,
-            defaults={"quantity": 1}
-        )
+        CartItem.objects.get_or_create(cart=cart, product=schema_test_product, defaults={"quantity": 1})
 
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {
@@ -941,9 +934,7 @@ class TestOrdersFuzz:
         deadline=None,
         phases=[Phase.generate],
     )
-    def test_order_create_payment_method_fuzz(
-        self, client, auth_headers, schema_test_product, user, payment_method
-    ):
+    def test_order_create_payment_method_fuzz(self, client, auth_headers, schema_test_product, user, payment_method):
         """
         주문 생성 API 결제 방법 퍼징
 
@@ -962,11 +953,7 @@ class TestOrdersFuzz:
         from shopping.models.cart import Cart, CartItem
 
         cart, _ = Cart.objects.get_or_create(user=user, is_active=True)
-        CartItem.objects.get_or_create(
-            cart=cart,
-            product=schema_test_product,
-            defaults={"quantity": 1}
-        )
+        CartItem.objects.get_or_create(cart=cart, product=schema_test_product, defaults={"quantity": 1})
 
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {
@@ -987,9 +974,7 @@ class TestOrdersFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"주문 생성에서 서버 에러 발생!\n"
-            f"payment_method={repr(payment_method)}\n"
-            f"상태 코드: {response.status_code}"
+            f"주문 생성에서 서버 에러 발생!\n" f"payment_method={repr(payment_method)}\n" f"상태 코드: {response.status_code}"
         )
 
     @given(used_points=st.integers(min_value=-10000, max_value=10000000))
@@ -999,9 +984,7 @@ class TestOrdersFuzz:
         deadline=None,
         phases=[Phase.generate],
     )
-    def test_order_create_points_fuzz(
-        self, client, auth_headers, schema_test_product, user, used_points
-    ):
+    def test_order_create_points_fuzz(self, client, auth_headers, schema_test_product, user, used_points):
         """
         주문 생성 API 포인트 사용 퍼징
 
@@ -1020,11 +1003,7 @@ class TestOrdersFuzz:
         from shopping.models.cart import Cart, CartItem
 
         cart, _ = Cart.objects.get_or_create(user=user, is_active=True)
-        CartItem.objects.get_or_create(
-            cart=cart,
-            product=schema_test_product,
-            defaults={"quantity": 1}
-        )
+        CartItem.objects.get_or_create(cart=cart, product=schema_test_product, defaults={"quantity": 1})
 
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {
@@ -1046,9 +1025,7 @@ class TestOrdersFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"주문 생성에서 서버 에러 발생!\n"
-            f"used_points={used_points}\n"
-            f"상태 코드: {response.status_code}"
+            f"주문 생성에서 서버 에러 발생!\n" f"used_points={used_points}\n" f"상태 코드: {response.status_code}"
         )
 
         # 음수 포인트는 거부되어야 함
@@ -1120,9 +1097,7 @@ class TestPaymentsFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"결제 상세 조회에서 서버 에러 발생!\n"
-            f"payment_id={repr(payment_id)}\n"
-            f"상태 코드: {response.status_code}"
+            f"결제 상세 조회에서 서버 에러 발생!\n" f"payment_id={repr(payment_id)}\n" f"상태 코드: {response.status_code}"
         )
         # 유효하지 않은 ID는 400 또는 404여야 함
         if not (isinstance(payment_id, int) and payment_id > 0):
@@ -1180,9 +1155,7 @@ class TestPaymentsFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"결제 목록 조회에서 서버 에러 발생!\n"
-            f"params={params}\n"
-            f"상태 코드: {response.status_code}"
+            f"결제 목록 조회에서 서버 에러 발생!\n" f"params={params}\n" f"상태 코드: {response.status_code}"
         )
 
     @given(amount=amount_strategy)
@@ -1227,9 +1200,7 @@ class TestPaymentsFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"결제 준비에서 서버 에러 발생!\n"
-            f"amount={repr(amount)}\n"
-            f"상태 코드: {response.status_code}"
+            f"결제 준비에서 서버 에러 발생!\n" f"amount={repr(amount)}\n" f"상태 코드: {response.status_code}"
         )
 
         # 음수/0 금액은 거부되어야 함
@@ -1295,9 +1266,7 @@ class TestReviewsFuzz:
         deadline=None,
         phases=[Phase.generate],
     )
-    def test_review_create_fuzz(
-        self, client, auth_headers, schema_test_product, rating, content
-    ):
+    def test_review_create_fuzz(self, client, auth_headers, schema_test_product, rating, content):
         """
         리뷰 작성 API 퍼징
 

@@ -280,11 +280,7 @@ class TestPaymentSensitiveInfoExposure:
         for match in matches:
             # 마스킹되지 않은 카드번호가 있으면 실패
             if "*" not in match:
-                pytest.fail(
-                    f"카드 번호 노출!\n"
-                    f"match={match}\n"
-                    f"response={content[:500]}"
-                )
+                pytest.fail(f"카드 번호 노출!\n" f"match={match}\n" f"response={content[:500]}")
 
     def test_payment_error_no_cvv_exposure(self, client, auth_headers, schema_test_order):
         """
@@ -329,10 +325,7 @@ class TestPaymentSensitiveInfoExposure:
 
             for pattern in dangerous_patterns:
                 assert pattern not in content, (
-                    f"CVV 관련 정보 노출!\n"
-                    f"pattern={pattern}\n"
-                    f"data={data}\n"
-                    f"response={content[:500]}"
+                    f"CVV 관련 정보 노출!\n" f"pattern={pattern}\n" f"data={data}\n" f"response={content[:500]}"
                 )
 
     def test_payment_response_masked_card_number(self, client, auth_headers, schema_test_payment):
@@ -372,11 +365,7 @@ class TestPaymentSensitiveInfoExposure:
                 # 카드번호 형식인지 확인 (숫자와 구분자로만 이루어진 12자리 이상)
                 digits = re.sub(r"\D", "", card_number)
                 if len(digits) >= 12:
-                    pytest.fail(
-                        f"마스킹되지 않은 카드번호 발견!\n"
-                        f"card_number={card_number}\n"
-                        f"response={content[:500]}"
-                    )
+                    pytest.fail(f"마스킹되지 않은 카드번호 발견!\n" f"card_number={card_number}\n" f"response={content[:500]}")
 
         # 추가 검증: 전체 16자리 카드번호 패턴 (마스킹 없이)
         # 예: 1234-5678-9012-3456 또는 1234567890123456
@@ -389,9 +378,7 @@ class TestPaymentSensitiveInfoExposure:
             match = re.search(pattern, content)
             if match:
                 pytest.fail(
-                    f"마스킹되지 않은 전체 카드번호 발견!\n"
-                    f"card_number={match.group(1)}\n"
-                    f"response={content[:500]}"
+                    f"마스킹되지 않은 전체 카드번호 발견!\n" f"card_number={match.group(1)}\n" f"response={content[:500]}"
                 )
 
     def test_payment_error_no_secret_key_exposure(self, client, auth_headers):
@@ -441,11 +428,7 @@ class TestPaymentSensitiveInfoExposure:
         ]
 
         for pattern in secret_patterns:
-            assert pattern not in content, (
-                f"API 키/시크릿 노출!\n"
-                f"pattern={pattern}\n"
-                f"response={content[:500]}"
-            )
+            assert pattern not in content, f"API 키/시크릿 노출!\n" f"pattern={pattern}\n" f"response={content[:500]}"
 
     def test_payment_webhook_no_sensitive_data_logging(self, client):
         """
@@ -475,20 +458,13 @@ class TestPaymentSensitiveInfoExposure:
 
             # Assert - 5xx 에러 없음
             assert response.status_code < 500, (
-                f"웹훅에서 서버 에러 발생!\n"
-                f"payload={payload}\n"
-                f"status_code={response.status_code}"
+                f"웹훅에서 서버 에러 발생!\n" f"payload={payload}\n" f"status_code={response.status_code}"
             )
 
             # Assert - 민감 정보 미노출
             content = response.content.decode("utf-8", errors="ignore").lower()
-            sensitive_in_response = any(
-                p in content for p in ["secret", "password", "key=", "token="]
-            )
-            assert not sensitive_in_response, (
-                f"웹훅 응답에 민감정보 포함!\n"
-                f"response={content[:500]}"
-            )
+            sensitive_in_response = any(p in content for p in ["secret", "password", "key=", "token="])
+            assert not sensitive_in_response, f"웹훅 응답에 민감정보 포함!\n" f"response={content[:500]}"
 
     def test_refund_error_no_account_exposure(self, client, auth_headers, schema_test_payment):
         """
@@ -524,9 +500,4 @@ class TestPaymentSensitiveInfoExposure:
         for match in matches:
             # ID 같은 짧은 숫자는 허용, 계좌번호로 의심되는 긴 숫자는 확인
             if len(match) >= 12:
-                pytest.fail(
-                    f"계좌번호로 의심되는 긴 숫자 노출!\n"
-                    f"match={match}\n"
-                    f"response={content[:500]}"
-                )
-
+                pytest.fail(f"계좌번호로 의심되는 긴 숫자 노출!\n" f"match={match}\n" f"response={content[:500]}")

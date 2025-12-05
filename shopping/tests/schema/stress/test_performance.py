@@ -940,3 +940,257 @@ class TestPaginationPerformance:
 
         # Assert: 성공 응답
         assert stats["all_success"], "요청 실패!"
+
+
+# =============================================================================
+# 검색 복합 조건 성능 테스트
+# =============================================================================
+
+
+@pytest.mark.performance
+@pytest.mark.django_db(transaction=True)
+class TestComplexSearchPerformance:
+    """
+    🔍 검색 복합 조건 성능 테스트
+
+    여러 필터 조건을 조합한 검색 쿼리의 성능을 검증합니다.
+    실제 사용자 시나리오에서 발생할 수 있는 복합 쿼리를 테스트합니다.
+
+    📋 테스트 시나리오:
+    - 카테고리 + 가격 범위 + 정렬
+    - 검색어 + 재고 여부 + 정렬
+    - 모든 필터 조합
+
+    ✅ 검증 포인트:
+    - 복합 필터 응답 시간 < 800ms
+    - 필터 조합에 따른 성능 저하 최소화
+    - 모든 필터 조합에서 5xx 에러 없음
+    """
+
+    @pytest.fixture
+    def complex_search_data(self, db):
+        """복합 검색 테스트용 데이터 생성"""
+        # 여러 카테고리 생성
+        categories = [
+            CategoryFactory(name=f"카테고리_{i}") for i in range(3)
+        ]
+        seller = UserFactory(username=f"search_seller_{time.time()}", is_seller=True)
+
+        products = []
+        for i in range(50):
+            products.append(
+                ProductFactory(
+                    name=f"테스트상품_{i}",
+                    category=categories[i % 3],
+                    seller=seller,
+                    stock=i * 10,  # 일부는 재고 0
+                    price=Decimal(str(10000 + i * 1000)),
+                    is_active=True,
+                )
+            )
+
+        return {"products": products, "categories": categories}
+
+    def test_category_and_price_filter_performance(self, complex_search_data):
+        """
+        카테고리 + 가격 범위 필터 성능 테스트
+
+        카테고리와 가격 범위를 동시에 적용한 검색의
+        응답 시간을 측정합니다.
+
+        🔍 검증 포인트:
+        - 평균 응답 시간 < 800ms
+        - 필터 결과 정확성
+        """
+        client = APIClient()
+        category = complex_search_data["categories"][0]
+        threshold = 800  # 800ms
+
+        url = f"{reverse('product-list')}?category={category.id}&min_price=15000&max_price=40000"
+
+        # 워밍업
+        client.get(url)
+
+        # 5회 측정
+        stats = measure_multiple_times(client, "get", url, iterations=5)
+
+        # Assert: 평균 응답 시간 < 임계값
+        assert stats["mean"] < threshold, (
+            f"카테고리+가격 필터 응답 시간 초과!\n"
+            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+        )
+
+        # Assert: 모든 요청 성공
+        assert stats["all_success"], "일부 요청 실패!"
+
+    def test_search_with_ordering_performance(self, complex_search_data):
+        """
+        검색어 + 정렬 조합 성능 테스트
+
+        검색어와 여러 정렬 옵션을 조합한 쿼리의
+        성능을 측정합니다.
+
+        🔍 검증 포인트:
+        - 각 정렬 옵션별 응답 시간 < 800ms
+        - 정렬 변경에 따른 성능 차이 확인
+        """
+        client = APIClient()
+        threshold = 800  # 800ms
+
+        orderings = [
+            ("price", "가격 오름차순"),
+            ("-price", "가격 내림차순"),
+            ("-created_at", "최신순"),
+            ("name", "이름순"),
+        ]
+
+        for ordering, description in orderings:
+            url = f"{reverse('product-list')}?search=테스트&ordering={ordering}"
+
+            # 워밍업
+            client.get(url)
+
+            # 3회 측정
+            stats = measure_multiple_times(client, "get", url, iterations=3)
+
+            # Assert: 평균 응답 시간 < 임계값
+            assert stats["mean"] < threshold, (
+                f"{description} 정렬 응답 시간 초과!\n"
+                f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            )
+
+    def test_all_filters_combined_performance(self, complex_search_data):
+        """
+        모든 필터 조합 성능 테스트
+
+        search, category, min_price, max_price, ordering을
+        모두 조합한 복잡한 쿼리의 성능을 측정합니다.
+
+        🔍 검증 포인트:
+        - 평균 응답 시간 < 1000ms
+        - 5xx 에러 없음
+        - 필터 조합에 따른 쿼리 효율성
+        """
+        client = APIClient()
+        category = complex_search_data["categories"][0]
+        threshold = 1000  # 1초 (복합 쿼리이므로 여유있게)
+
+        url = (
+            f"{reverse('product-list')}?"
+            f"search=테스트&"
+            f"category={category.id}&"
+            f"min_price=10000&"
+            f"max_price=50000&"
+            f"ordering=-price"
+        )
+
+        # 워밍업
+        client.get(url)
+
+        # 5회 측정
+        stats = measure_multiple_times(client, "get", url, iterations=5)
+
+        # Assert: 평균 응답 시간 < 임계값
+        assert stats["mean"] < threshold, (
+            f"전체 필터 조합 응답 시간 초과!\n"
+            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+        )
+
+        # Assert: 모든 요청 성공
+        assert stats["all_success"], "일부 요청 실패!"
+
+    def test_filter_with_pagination_performance(self, complex_search_data):
+        """
+        필터 + 페이지네이션 조합 성능 테스트
+
+        필터가 적용된 상태에서 여러 페이지를 순차 조회할 때의
+        성능을 측정합니다.
+
+        🔍 검증 포인트:
+        - 각 페이지 응답 시간 < 800ms
+        - 페이지 번호 증가에 따른 성능 저하 확인
+        """
+        client = APIClient()
+        threshold = 800
+
+        pages_times = []
+
+        for page in [1, 2, 3]:
+            url = (
+                f"{reverse('product-list')}?"
+                f"min_price=10000&"
+                f"max_price=40000&"
+                f"page={page}&"
+                f"page_size=10"
+            )
+
+            stats = measure_multiple_times(client, "get", url, iterations=3)
+            pages_times.append((page, stats["mean"]))
+
+            # Assert: 각 페이지 응답 시간 < 임계값
+            assert stats["mean"] < threshold, (
+                f"페이지 {page} 응답 시간 초과!\n"
+                f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            )
+
+        # 페이지 간 성능 차이 확인 (마지막 페이지가 첫 페이지보다 3배 이상 느리면 안됨)
+        first_page_time = pages_times[0][1]
+        last_page_time = pages_times[-1][1]
+
+        if first_page_time > 0:
+            ratio = last_page_time / first_page_time
+            assert ratio < 3, (
+                f"페이지 간 성능 차이 과다!\n"
+                f"첫 페이지: {first_page_time:.2f}ms\n"
+                f"마지막 페이지: {last_page_time:.2f}ms\n"
+                f"비율: {ratio:.2f}x"
+            )
+
+    @pytest.mark.slow
+    def test_complex_search_with_many_products(self, db):
+        """
+        대용량 데이터에서 복합 검색 성능 테스트 (@slow)
+
+        200개 이상의 상품에서 복합 필터를 적용했을 때의
+        성능을 측정합니다.
+
+        🔍 검증 포인트:
+        - 응답 시간 < 1500ms
+        - 데이터 양 증가에 따른 성능 저하 허용 범위 확인
+        """
+        # 대용량 데이터 생성
+        category = CategoryFactory()
+        seller = UserFactory(username=f"bulk_seller_{time.time()}", is_seller=True)
+
+        for i in range(200):
+            ProductFactory(
+                name=f"대량테스트_{i}",
+                category=category,
+                seller=seller,
+                stock=100,
+                price=Decimal(str(5000 + i * 100)),
+                is_active=True,
+            )
+
+        client = APIClient()
+        threshold = 1500  # 1.5초
+
+        url = (
+            f"{reverse('product-list')}?"
+            f"search=대량&"
+            f"category={category.id}&"
+            f"min_price=10000&"
+            f"ordering=-price"
+        )
+
+        # 워밍업
+        client.get(url)
+
+        # 3회 측정
+        stats = measure_multiple_times(client, "get", url, iterations=3)
+
+        # Assert: 평균 응답 시간 < 임계값
+        assert stats["mean"] < threshold, (
+            f"대용량 복합 검색 응답 시간 초과!\n"
+            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+        )

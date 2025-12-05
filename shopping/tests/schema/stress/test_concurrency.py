@@ -1080,17 +1080,13 @@ class TestConcurrentPointOperations:
 
         # Assert: 성공 주문 수가 가능한 범위 내
         max_possible_orders = initial_points // points_to_use
-        assert success_count <= max_possible_orders, (
-            f"예상보다 많은 주문 성공: {success_count} > {max_possible_orders}"
-        )
+        assert success_count <= max_possible_orders, f"예상보다 많은 주문 성공: {success_count} > {max_possible_orders}"
 
         # ✅ 회계 무결성 검증
         # 사용된 포인트 = 초기 포인트 - 현재 포인트
         used_total = initial_points - user.points
         expected_used = success_count * points_to_use
-        assert used_total <= expected_used, (
-            f"포인트 사용 계산 오류: 실제 사용({used_total}) > 예상 사용({expected_used})"
-        )
+        assert used_total <= expected_used, f"포인트 사용 계산 오류: 실제 사용({used_total}) > 예상 사용({expected_used})"
 
     def test_concurrent_point_earning(self, db, point_test_setup):
         """
@@ -1108,10 +1104,7 @@ class TestConcurrentPointOperations:
         from shopping.tests.factories import OrderFactory
 
         num_users = 10
-        users = [
-            UserFactory(username=f"earn_user_{i}_{time.time()}", points=0)
-            for i in range(num_users)
-        ]
+        users = [UserFactory(username=f"earn_user_{i}_{time.time()}", points=0) for i in range(num_users)]
 
         # 각 사용자에게 결제 완료 주문 생성 (포인트 적립)
         earned_points = 500
@@ -1135,11 +1128,7 @@ class TestConcurrentPointOperations:
 
         # 동시 요청 실행
         args_list = [(u,) for u in users]
-        results = run_concurrent_requests(
-            lambda u: create_paid_order_and_earn(u),
-            args_list,
-            max_workers=num_users
-        )
+        results = run_concurrent_requests(lambda u: create_paid_order_and_earn(u), args_list, max_workers=num_users)
 
         # 결과 분석
         success_count = sum(1 for r in results if r.get("success"))
@@ -1150,9 +1139,9 @@ class TestConcurrentPointOperations:
         # Assert: 각 사용자 포인트 확인
         for user in users:
             user.refresh_from_db()
-            assert user.points == earned_points, (
-                f"사용자 {user.id} 포인트 불일치: expected={earned_points}, actual={user.points}"
-            )
+            assert (
+                user.points == earned_points
+            ), f"사용자 {user.id} 포인트 불일치: expected={earned_points}, actual={user.points}"
 
     @pytest.mark.slow
     def test_concurrent_point_use_and_earn(self, db, point_test_setup):
@@ -1186,11 +1175,12 @@ class TestConcurrentPointOperations:
 
                 with transaction.atomic():
                     from shopping.models.user import User
+
                     # select_for_update로 락 획득
                     locked_user = User.objects.select_for_update().get(id=user_obj.id)
                     if locked_user.points >= points_to_use:
-                        locked_user.points = F('points') - points_to_use
-                        locked_user.save(update_fields=['points'])
+                        locked_user.points = F("points") - points_to_use
+                        locked_user.save(update_fields=["points"])
                         return {"success": True, "operation": "use", "amount": points_to_use}
                     else:
                         return {"success": False, "operation": "use", "error": "insufficient"}
@@ -1207,10 +1197,11 @@ class TestConcurrentPointOperations:
 
                 with transaction.atomic():
                     from shopping.models.user import User
+
                     # select_for_update로 락 획득
                     locked_user = User.objects.select_for_update().get(id=user_obj.id)
-                    locked_user.points = F('points') + points_to_earn
-                    locked_user.save(update_fields=['points'])
+                    locked_user.points = F("points") + points_to_earn
+                    locked_user.save(update_fields=["points"])
                     return {"success": True, "operation": "earn", "amount": points_to_earn}
             except Exception as e:
                 return {"success": False, "operation": "earn", "error": str(e)}
@@ -1221,16 +1212,8 @@ class TestConcurrentPointOperations:
         use_args = [(user,) for _ in range(5)]
         earn_args = [(user,) for _ in range(5)]
 
-        use_results = run_concurrent_requests(
-            lambda u: use_points_operation(u),
-            use_args,
-            max_workers=5
-        )
-        earn_results = run_concurrent_requests(
-            lambda u: earn_points_operation(u),
-            earn_args,
-            max_workers=5
-        )
+        use_results = run_concurrent_requests(lambda u: use_points_operation(u), use_args, max_workers=5)
+        earn_results = run_concurrent_requests(lambda u: earn_points_operation(u), earn_args, max_workers=5)
 
         # 결과 분석
         use_success = sum(1 for r in use_results if r.get("success"))
@@ -1307,10 +1290,7 @@ class TestConcurrentOrderCreation:
         product = order_test_setup["product"]
         num_users = 10
 
-        users = [
-            UserFactory(username=f"order_user_{i}_{time.time()}")
-            for i in range(num_users)
-        ]
+        users = [UserFactory(username=f"order_user_{i}_{time.time()}") for i in range(num_users)]
 
         def create_order(user, product_id):
             """주문 생성"""
@@ -1361,7 +1341,5 @@ class TestConcurrentOrderCreation:
         # Assert: 주문번호 고유성
         unique_order_numbers = set(order_numbers)
         assert len(unique_order_numbers) == len(order_numbers), (
-            f"주문번호 중복 발생! "
-            f"(전체: {len(order_numbers)}, 고유: {len(unique_order_numbers)})"
+            f"주문번호 중복 발생! " f"(전체: {len(order_numbers)}, 고유: {len(unique_order_numbers)})"
         )
-
