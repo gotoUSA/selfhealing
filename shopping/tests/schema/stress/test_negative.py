@@ -291,215 +291,6 @@ class TestInvalidInputs:
 
 
 # ==========================================
-# 보안 입력 테스트
-# ==========================================
-
-
-@pytest.mark.negative
-@pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
-class TestSecurityInputs:
-    """
-    🔐 보안 관련 입력 테스트
-
-    SQL Injection, XSS, Path Traversal 등 보안 공격 시도에 대해
-    API가 적절히 방어하는지 검증합니다.
-
-    📋 테스트 시나리오:
-    - SQL Injection 시도
-    - XSS (Cross-Site Scripting) 시도
-    - Path Traversal 시도
-    - Command Injection 시도
-
-    ⚠️ 주의: 이 테스트는 실제 공격 페이로드를 사용합니다.
-    프로덕션 환경에서는 실행하지 마세요.
-    """
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            # SQL Injection payloads
-            "1; DROP TABLE products;--",
-            "1' OR '1'='1",
-            "1 UNION SELECT * FROM users",
-            "1'; DELETE FROM users WHERE '1'='1",
-            "1 OR 1=1--",
-            "admin'--",
-            "1; SELECT * FROM information_schema.tables;--",
-            # Blind SQL Injection
-            "1' AND SLEEP(5)--",
-            "1' AND (SELECT COUNT(*) FROM users) > 0--",
-        ],
-        ids=[
-            "drop_table",
-            "or_1_1",
-            "union_select",
-            "delete_users",
-            "or_1_1_comment",
-            "admin_comment",
-            "info_schema",
-            "blind_sleep",
-            "blind_count",
-        ],
-    )
-    def test_sql_injection_attempt(self, client, payload):
-        """
-        SQL 인젝션 시도 테스트
-
-        다양한 SQL Injection 페이로드를 검색 파라미터에 주입하여
-        실제 SQL 쿼리로 실행되지 않는지 확인합니다.
-
-        🔍 검증 포인트:
-        - 5xx 에러 발생하지 않음 (SQL 에러 미발생)
-        - 정상적인 빈 결과 또는 에러 응답 반환
-        - SQL 쿼리가 실행되지 않음
-
-        Args:
-            payload: SQL Injection 페이로드
-        """
-        # Arrange - payload is provided by parametrize
-
-        # Act - 검색 파라미터로 주입
-        response = client.get(f"/api/products/?search={payload}")
-
-        # Assert - SQL 에러로 인한 500 없음
-        assert response.status_code < 500, (
-            f"SQL Injection으로 서버 에러 발생!\n" f"payload={payload}\n" f"status_code={response.status_code}"
-        )
-
-        # Assert - 정상 응답
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_400_BAD_REQUEST,
-        ], f"예상치 못한 응답: {response.status_code}"
-
-    @pytest.mark.parametrize(
-        "xss_payload",
-        [
-            "<script>alert('xss')</script>",
-            "<img src=x onerror=alert('xss')>",
-            "javascript:alert('xss')",
-            "<svg onload=alert('xss')>",
-            "<body onload=alert('xss')>",
-            "'\"><script>alert('xss')</script>",
-            "<iframe src='javascript:alert(1)'>",
-        ],
-        ids=[
-            "script_tag",
-            "img_onerror",
-            "javascript_uri",
-            "svg_onload",
-            "body_onload",
-            "quote_escape",
-            "iframe_js",
-        ],
-    )
-    def test_xss_attempt_in_search(self, client, xss_payload):
-        """
-        XSS 시도 테스트 (검색 파라미터)
-
-        XSS 페이로드를 검색 파라미터에 주입하여
-        응답에서 이스케이프 처리되는지 확인합니다.
-
-        🔍 검증 포인트:
-        - 서버 에러 발생하지 않음
-        - 응답에 스크립트 태그가 그대로 포함되지 않음
-        """
-        # Arrange - xss_payload is provided by parametrize
-
-        # Act
-        response = client.get(f"/api/products/?search={xss_payload}")
-
-        # Assert - 5xx 에러 없음
-        assert response.status_code < 500, f"XSS 페이로드로 서버 에러 발생!\n" f"payload={xss_payload}"
-
-        # Assert - XSS 페이로드가 그대로 반영되지 않음
-        # JSON 응답이므로 HTML 이스케이프가 덜 중요하지만 확인
-        if response.status_code == status.HTTP_200_OK:
-            content = response.content.decode("utf-8", errors="ignore")
-            # 스크립트 태그가 그대로 포함되면 위험
-            assert "<script>alert" not in content.lower(), f"XSS 페이로드가 응답에 포함됨!\n" f"payload={xss_payload}"
-
-    def test_xss_attempt_in_post_data(self, client, auth_headers, schema_test_product):
-        """
-        XSS 시도 테스트 (POST 데이터)
-
-        상품 문의 등 사용자 입력을 받는 API에 XSS 페이로드를 주입하여
-        저장 및 반환 시 이스케이프 처리되는지 확인합니다.
-
-        🔍 검증 포인트:
-        - 저장 시 에러 발생하지 않음
-        - 반환 시 스크립트가 실행 가능한 형태로 포함되지 않음
-        """
-        # Arrange
-        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
-        xss_payloads = [
-            "<script>alert('xss')</script>",
-            "<img src=x onerror=alert(1)>",
-        ]
-
-        for payload in xss_payloads:
-            data = {"content": payload}
-
-            # Act - 상품 문의 작성 시도
-            response = client.post(
-                f"/api/products/{schema_test_product.id}/questions/",
-                data=json.dumps(data),
-                content_type="application/json",
-                **headers,
-            )
-
-            # Assert - 5xx 에러 없음
-            assert response.status_code < 500, f"XSS 페이로드로 서버 에러 발생!\n" f"payload={payload}"
-
-            # 성공적으로 저장된 경우, 반환값 확인
-            if response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]:
-                content = response.content.decode("utf-8", errors="ignore")
-                # 실행 가능한 스크립트 태그가 그대로 포함되면 안 됨
-                assert "<script>alert" not in content, f"XSS 페이로드가 응답에 포함됨!"
-
-    @pytest.mark.parametrize(
-        "path_payload",
-        [
-            "../../../etc/passwd",
-            "..\\..\\..\\windows\\system32\\config\\sam",
-            "....//....//....//etc/passwd",
-            "%2e%2e%2f%2e%2e%2f%2e%2e%2f",
-            "..%252f..%252f..%252f",
-        ],
-        ids=[
-            "unix_path",
-            "windows_path",
-            "double_slash",
-            "url_encoded",
-            "double_encoded",
-        ],
-    )
-    def test_path_traversal_attempt(self, client, path_payload):
-        """
-        Path Traversal 시도 테스트
-
-        파일 시스템 경로 조작 시도에 대해
-        적절히 차단되는지 확인합니다.
-
-        🔍 검증 포인트:
-        - 404 또는 400 반환 (파일 내용 노출 안 됨)
-        - 5xx 에러 발생하지 않음
-        """
-        # Arrange - path_payload is provided by parametrize
-
-        # Act - 상품 ID 위치에 Path Traversal 시도
-        response = client.get(f"/api/products/{path_payload}/")
-
-        # Assert
-        assert response.status_code < 500, f"Path Traversal로 서버 에러 발생!\n" f"payload={path_payload}"
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_404_NOT_FOUND,
-        ], f"예상치 못한 응답: {response.status_code}"
-
-
-# ==========================================
 # 경계값 테스트
 # ==========================================
 
@@ -904,4 +695,88 @@ class TestAuthorizationEdgeCases:
             status.HTTP_404_NOT_FOUND,
         ], (
             f"다른 사용자의 장바구니 아이템 수정 가능!\n" f"status_code={response.status_code}"
+        )
+
+    def test_expired_token(self, client):
+        """
+        만료된 토큰 테스트
+
+        만료된 JWT 토큰으로 요청 시 401이 반환되어야 합니다.
+
+        🔍 검증 포인트:
+        - 토큰 만료 검증
+        - 401 Unauthorized 반환
+        - 적절한 에러 메시지
+        """
+        # Arrange - 만료된 토큰 생성
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        from django.conf import settings
+
+        now = datetime.now(timezone.utc)
+
+        # 만료된 토큰 페이로드 생성
+        expired_payload = {
+            "user_id": 1,
+            "exp": now - timedelta(hours=1),  # 1시간 전 만료
+            "iat": now - timedelta(hours=2),
+            "token_type": "access",
+        }
+
+        # 실제 시크릿 키로 서명 (또는 테스트용 키)
+        try:
+            secret_key = settings.SIMPLE_JWT.get("SIGNING_KEY", settings.SECRET_KEY)
+        except AttributeError:
+            secret_key = settings.SECRET_KEY
+
+        expired_token = jwt.encode(expired_payload, secret_key, algorithm="HS256")
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {expired_token}"}
+
+        # Act
+        response = client.get("/api/orders/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, (
+            f"만료된 토큰이 허용됨!\n" f"status_code={response.status_code}"
+        )
+
+    def test_token_with_invalid_user_id(self, client):
+        """
+        존재하지 않는 사용자 ID를 가진 토큰 테스트
+
+        유효한 형식이지만 존재하지 않는 사용자 ID를 가진
+        토큰으로 요청 시 401이 반환되어야 합니다.
+
+        🔍 검증 포인트:
+        - 사용자 존재 여부 검증
+        - 401 Unauthorized 반환
+        """
+        # Arrange - 존재하지 않는 사용자 ID로 토큰 생성
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        from django.conf import settings
+
+        now = datetime.now(timezone.utc)
+
+        payload = {
+            "user_id": 99999999,  # 존재하지 않는 사용자
+            "exp": now + timedelta(hours=1),
+            "iat": now,
+            "token_type": "access",
+        }
+
+        try:
+            secret_key = settings.SIMPLE_JWT.get("SIGNING_KEY", settings.SECRET_KEY)
+        except AttributeError:
+            secret_key = settings.SECRET_KEY
+
+        invalid_user_token = jwt.encode(payload, secret_key, algorithm="HS256")
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {invalid_user_token}"}
+
+        # Act
+        response = client.get("/api/orders/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, (
+            f"존재하지 않는 사용자 토큰이 허용됨!\n" f"status_code={response.status_code}"
         )

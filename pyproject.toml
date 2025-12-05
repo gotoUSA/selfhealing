@@ -76,6 +76,7 @@ markers = [
     "stateful: Stateful API 워크플로우 테스트 (상태 전이 검증)",
     "fuzz: Fuzz 테스트 - Hypothesis/Schemathesis 기반 무작위 입력 검증",
     "negative: Negative 테스트 - 잘못된 입력에 대한 적절한 에러 처리 검증",
+    "security: Security 테스트 - SQL Injection, XSS, SSTI 등 보안 공격 방어 검증",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)
