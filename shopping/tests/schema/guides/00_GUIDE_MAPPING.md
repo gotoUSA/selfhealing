@@ -41,6 +41,9 @@
 | [01_SUCCESS_RESPONSE_SCHEMA](01_SUCCESS_RESPONSE_SCHEMA.md) | 성공 응답 필드/타입 검증 | `validation/` | `test_field_validation.py` | Must |
 | | | `validation/` | `test_full_schema_validation.py` | Must |
 | | | `validation/` | `test_response_structure_validation.py` | Must |
+| | Strict 모드 스키마 검증 | `validation/` | `test_strict_validation.py` | Should |
+| | OpenAPI 스키마 자동 검증 | `validation/` | `test_schema_discovery.py` | Should |
+| | Schemathesis 네이티브 검증 | `validation/` | `test_schemathesis_native.py` | Should |
 | | | `contract/` | `test_public_endpoints.py` | Must |
 | [02_ERROR_RESPONSE_SCHEMA](02_ERROR_RESPONSE_SCHEMA.md) | 에러 응답 구조 일관성 | `validation/` | `test_sensitive_info_validation.py` | Must |
 | | | `contract/` | `test_error_responses.py` | Must |
@@ -70,7 +73,7 @@
 
 ### 🔐 Security Tests (확장)
 
-> 💡 **Note**: OWASP Category는 보안 레퍼런스 기준일 뿐입니다.  
+> 💡 **Note**: OWASP Category는 보안 레퍼런스 기준일 뿐입니다.
 > 개발자는 해당 분류를 상세히 알 필요 없이, 본 테스트를 작성하거나 유지보수하면 됩니다.
 
 | 보안 유형 | 폴더 | 테스트 파일 | OWASP 분류 |
@@ -127,7 +130,7 @@
 | 동시 요청 | 성공률 | > 99% | 10 concurrent |
 | DB 쿼리 | 쿼리 수 제한 | N+1 금지 | - |
 
-> 📏 **측정 기준 표준화**: iterations 및 샘플 수는 테스트 코드 상단 또는 `constants.py`에 정의하고 문서화한다.  
+> 📏 **측정 기준 표준화**: iterations 및 샘플 수는 테스트 코드 상단 또는 `constants.py`에 정의하고 문서화한다.
 > 팀별 기준이 다를 경우 반드시 PR description에 명시할 것.
 
 ---
@@ -281,4 +284,5 @@ shopping/tests/schema/
 | 1.1 | 2025-12-05 | Trigger 컬럼 추가, Must/Should/Conditional 표준화, OWASP 부담 완화 문구, Stateful Workflow 용어 통일, 성능 측정 기준 명시 |
 | 1.2 | 2025-12-05 | Test Waiver 섹션 추가 |
 | 2.0 | 2025-12-05 | Waiver → Tier 시스템으로 전환 (3 Tier + Tier 0 Prototype), 승격 규칙 추가 |
+| 2.1 | 2025-12-05 | validation/ 폴더 추가 파일 매핑 (test_strict_validation.py, test_schema_discovery.py, test_schemathesis_native.py) |
 

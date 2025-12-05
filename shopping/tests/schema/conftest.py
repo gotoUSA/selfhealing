@@ -64,6 +64,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from shopping.models.cart import Cart, CartItem
 from shopping.models.order import Order, OrderItem
+from shopping.models.payment import Payment
 from shopping.models.product import Category, Product
 
 
@@ -222,6 +223,21 @@ def schema_test_order(db, user, schema_test_product):
         price=schema_test_product.price,
     )
     return order
+
+
+@pytest.fixture
+def schema_test_payment(db, schema_test_order):
+    """스키마 테스트용 결제"""
+    return Payment.objects.create(
+        order=schema_test_order,
+        toss_order_id=f"TOSS_{schema_test_order.order_number}",
+        amount=schema_test_order.final_amount,
+        status="done",
+        method="카드",
+        card_company="삼성카드",
+        card_number="1234-****-****-5678",
+        payment_key="test_payment_key_12345",
+    )
 
 
 # ==========================================
@@ -681,6 +697,124 @@ def assert_cart_schema(cart: dict, *, context: str = "") -> None:
         raise SchemaValidationError(
             f"{prefix}'items' 타입 불일치", field="items", expected="list", actual=type(cart["items"]).__name__
         )
+
+
+def assert_payment_schema(payment: dict, *, strict: bool = False, context: str = "") -> None:
+    """
+    💳 결제 응답 스키마 검증
+
+    결제 API 응답의 필드/타입을 검증합니다.
+
+    Args:
+        payment: 결제 데이터 dict
+        strict: True이면 추가 필드 금지
+        context: 에러 메시지에 포함할 컨텍스트
+
+    Required fields (실제 API 응답 기준):
+        - id: int
+        - order: int
+        - amount: str (Decimal → string 직렬화)
+        - status: str
+        - created_at: str (ISO 8601)
+
+    Optional fields (실제 API 응답 기준):
+        - order_number: str
+        - payment_key: str (nullable)
+        - order_id: int (order.id와 동일)
+        - method: str
+        - card_company: str
+        - card_number: str (마스킹됨)
+        - installment_plan_months: int
+        - status_display: str (한글 표시)
+        - approved_at: str | None
+        - receipt_url: str
+        - is_canceled: bool
+        - canceled_amount: str (Decimal → string)
+        - cancel_reason: str
+        - canceled_at: str | None
+        - updated_at: str (ISO 8601)
+        - used_points: int
+        - earned_points: int
+
+    Raises:
+        SchemaValidationError: 스키마 불일치 시
+
+    Example:
+        >>> response = client.get("/api/payments/1/")
+        >>> assert_payment_schema(response.json(), context="/api/payments/1/")
+    """
+    prefix = f"[{context}] " if context else ""
+
+    if not isinstance(payment, dict):
+        raise SchemaValidationError(
+            f"{prefix}결제 데이터가 dict가 아님", field="root", expected="dict", actual=type(payment).__name__
+        )
+
+    # 필수 필드 정의 (실제 API 응답 기준)
+    required_fields = {
+        "id": (int,),
+        "order": (int,),
+        "amount": (str,),  # Decimal → str 직렬화
+        "status": (str,),
+        "created_at": (str,),
+    }
+
+    for field, allowed_types in required_fields.items():
+        if field not in payment:
+            raise SchemaValidationError(
+                f"{prefix}필수 필드 '{field}' 누락", field=field, expected="present", actual="missing"
+            )
+
+        if not isinstance(payment[field], allowed_types):
+            raise SchemaValidationError(
+                f"{prefix}'{field}' 타입 불일치",
+                field=field,
+                expected=str(allowed_types),
+                actual=type(payment[field]).__name__,
+            )
+
+    # 선택적 필드 타입 검증 (실제 API 응답 기준)
+    optional_fields = {
+        "order_number": (str,),
+        "payment_key": (str, type(None)),
+        "order_id": (int,),  # order.id (int)
+        "method": (str,),
+        "card_company": (str,),
+        "card_number": (str,),
+        "installment_plan_months": (int,),
+        "status_display": (str,),
+        "approved_at": (str, type(None)),
+        "receipt_url": (str,),
+        "is_canceled": (bool,),
+        "canceled_amount": (str,),  # Decimal → str 직렬화
+        "cancel_reason": (str,),
+        "canceled_at": (str, type(None)),
+        "updated_at": (str,),
+        "used_points": (int,),
+        "earned_points": (int,),
+    }
+
+    for field, allowed_types in optional_fields.items():
+        if field in payment and payment[field] is not None:
+            if not isinstance(payment[field], allowed_types):
+                raise SchemaValidationError(
+                    f"{prefix}'{field}' 타입 불일치",
+                    field=field,
+                    expected=str(allowed_types),
+                    actual=type(payment[field]).__name__,
+                )
+
+    # Strict mode: 알 수 없는 필드 검사
+    if strict:
+        allowed_fields = set(required_fields.keys()) | set(optional_fields.keys())
+        extra_fields = set(payment.keys()) - allowed_fields
+        if extra_fields:
+            raise SchemaValidationError(
+                f"{prefix}예상치 못한 필드 발견: {extra_fields}",
+                field="additionalProperties",
+                expected="no extra fields",
+                actual=list(extra_fields),
+            )
 
 
 def assert_user_schema(user: dict, *, context: str = "") -> None:

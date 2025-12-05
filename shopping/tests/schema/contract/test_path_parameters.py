@@ -7,6 +7,7 @@ from rest_framework import status
 from ..conftest import (
     assert_error_response,
     assert_order_schema,
+    assert_payment_schema,
     assert_product_schema,
 )
 
@@ -173,6 +174,32 @@ class TestPathParameterEdgeCases:
 
         # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_payment_detail_valid_id(self, client, auth_headers, schema_test_payment):
+        """✅ 유효한 결제 ID (인증됨) → 200 + 스키마 검증"""
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        payment_id = schema_test_payment.id
+
+        # Act
+        response = client.get(f"/api/payments/{payment_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert_payment_schema(data, context=f"/api/payments/{payment_id}/")
+        assert data["id"] == payment_id
+
+    def test_payment_detail_unauthorized(self, client, schema_test_payment):
+        """🔒 인증 없이 결제 상세 접근 → 401"""
+        # Arrange
+        payment_id = schema_test_payment.id
+
+        # Act
+        response = client.get(f"/api/payments/{payment_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.parametrize(
         "invalid_id,description",

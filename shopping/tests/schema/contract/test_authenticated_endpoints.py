@@ -9,6 +9,7 @@ from ..conftest import (
     assert_error_response,
     assert_list_response,
     assert_order_schema,
+    assert_payment_schema,
     assert_user_schema,
 )
 
@@ -175,6 +176,21 @@ class TestAuthenticatedEndpointsContract:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert_list_response(data, context="/api/payments/")
+
+    def test_payments_detail_contract(self, openapi_schema, client, auth_headers, schema_test_payment):
+        """💳 결제 상세 API Contract 검증"""
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        payment_id = schema_test_payment.id
+
+        # Act
+        response = client.get(f"/api/payments/{payment_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert_payment_schema(data, context=f"/api/payments/{payment_id}/")
+        assert data["id"] == payment_id
 
     def test_returns_list_contract(self, openapi_schema, client, auth_headers):
         """↩️ 교환/환불 목록 API Contract 검증"""
