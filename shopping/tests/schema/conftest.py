@@ -761,9 +761,7 @@ def assert_payment_schema(payment: dict, *, strict: bool = False, context: str =
 
     for field, allowed_types in required_fields.items():
         if field not in payment:
-            raise SchemaValidationError(
-                f"{prefix}필수 필드 '{field}' 누락", field=field, expected="present", actual="missing"
-            )
+            raise SchemaValidationError(f"{prefix}필수 필드 '{field}' 누락", field=field, expected="present", actual="missing")
 
         if not isinstance(payment[field], allowed_types):
             raise SchemaValidationError(
