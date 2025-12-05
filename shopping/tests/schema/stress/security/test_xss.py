@@ -166,9 +166,7 @@ class TestStoredXSS:
             )
 
             # Assert - 저장 시 서버 에러 없음
-            assert create_response.status_code < 500, (
-                f"XSS 저장 시 서버 에러!\npayload={payload}"
-            )
+            assert create_response.status_code < 500, f"XSS 저장 시 서버 에러!\npayload={payload}"
 
             # Step 2: 저장이 성공했다면 조회하여 확인
             if create_response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]:
@@ -198,8 +196,7 @@ class TestStoredXSS:
                         # JSON으로 인코딩되면 < 는 \u003c 등으로 변환될 수 있음
                         # 원본 그대로 포함되면 안 됨
                         assert pattern.lower() not in content.lower() or "\\u" in content, (
-                            f"위험한 패턴이 이스케이프 없이 응답에 포함됨!\n"
-                            f"pattern={pattern}\npayload={payload}"
+                            f"위험한 패턴이 이스케이프 없이 응답에 포함됨!\n" f"pattern={pattern}\npayload={payload}"
                         )
 
     def test_stored_xss_in_product_review(self, client, auth_headers, schema_test_product, user):
@@ -232,9 +229,7 @@ class TestStoredXSS:
         )
 
         # Assert - 저장 시 서버 에러 없음
-        assert create_response.status_code < 500, (
-            f"리뷰 XSS 저장 시 서버 에러!\nstatus_code={create_response.status_code}"
-        )
+        assert create_response.status_code < 500, f"리뷰 XSS 저장 시 서버 에러!\nstatus_code={create_response.status_code}"
 
         # Step 2: 상품 상세 조회하여 리뷰 확인
         detail_response = client.get(f"/api/products/{schema_test_product.id}/")
@@ -245,9 +240,7 @@ class TestStoredXSS:
             content = detail_response.content.decode("utf-8", errors="ignore")
 
             # 실행 가능한 스크립트 태그가 그대로 포함되면 안 됨
-            assert "<script>alert" not in content, (
-                "리뷰의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
-            )
+            assert "<script>alert" not in content, "리뷰의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
 
     def test_stored_xss_in_username_reflection(self, client, db):
         """
@@ -276,10 +269,12 @@ class TestStoredXSS:
             # 로그인하여 토큰 획득
             login_response = client.post(
                 "/api/auth/login/",
-                data=json.dumps({
-                    "username": user.username,
-                    "password": "testpass123",
-                }),
+                data=json.dumps(
+                    {
+                        "username": user.username,
+                        "password": "testpass123",
+                    }
+                ),
                 content_type="application/json",
             )
 
@@ -295,9 +290,7 @@ class TestStoredXSS:
                     content = profile_response.content.decode("utf-8", errors="ignore")
 
                     # 스크립트 태그가 그대로 포함되면 안 됨
-                    assert "<script>alert" not in content, (
-                        "프로필의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
-                    )
+                    assert "<script>alert" not in content, "프로필의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
 
         except Exception:
             # 사용자 생성 실패는 정상 (검증이 동작한 것)
@@ -319,10 +312,12 @@ class TestStoredXSS:
         # 장바구니에 상품 추가
         cart_response = client.post(
             "/api/cart/add_item/",
-            data=json.dumps({
-                "product_id": schema_test_product.id,
-                "quantity": 1,
-            }),
+            data=json.dumps(
+                {
+                    "product_id": schema_test_product.id,
+                    "quantity": 1,
+                }
+            ),
             content_type="application/json",
             **headers,
         )
@@ -351,8 +346,7 @@ class TestStoredXSS:
 
         # Assert - 주문 생성 시 서버 에러 없음
         assert create_response.status_code < 500, (
-            f"XSS 배송정보로 주문 생성 시 서버 에러!\n"
-            f"status_code={create_response.status_code}"
+            f"XSS 배송정보로 주문 생성 시 서버 에러!\n" f"status_code={create_response.status_code}"
         )
 
         # 주문이 생성되었다면 조회하여 확인
@@ -364,9 +358,5 @@ class TestStoredXSS:
                 content = list_response.content.decode("utf-8", errors="ignore")
 
                 # 위험한 패턴 체크
-                assert "<script>alert" not in content, (
-                    "주문의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
-                )
-                assert "onerror=alert" not in content, (
-                    "주문의 이벤트 핸들러가 이스케이프 없이 응답에 포함됨!"
-                )
+                assert "<script>alert" not in content, "주문의 XSS 페이로드가 이스케이프 없이 응답에 포함됨!"
+                assert "onerror=alert" not in content, "주문의 이벤트 핸들러가 이스케이프 없이 응답에 포함됨!"

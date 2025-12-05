@@ -971,9 +971,7 @@ class TestComplexSearchPerformance:
     def complex_search_data(self, db):
         """복합 검색 테스트용 데이터 생성"""
         # 여러 카테고리 생성
-        categories = [
-            CategoryFactory(name=f"카테고리_{i}") for i in range(3)
-        ]
+        categories = [CategoryFactory(name=f"카테고리_{i}") for i in range(3)]
         seller = UserFactory(username=f"search_seller_{time.time()}", is_seller=True)
 
         products = []
@@ -1016,8 +1014,7 @@ class TestComplexSearchPerformance:
 
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"카테고리+가격 필터 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"카테고리+가격 필터 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
 
         # Assert: 모든 요청 성공
@@ -1055,8 +1052,7 @@ class TestComplexSearchPerformance:
 
             # Assert: 평균 응답 시간 < 임계값
             assert stats["mean"] < threshold, (
-                f"{description} 정렬 응답 시간 초과!\n"
-                f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+                f"{description} 정렬 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
             )
 
     def test_all_filters_combined_performance(self, complex_search_data):
@@ -1092,8 +1088,7 @@ class TestComplexSearchPerformance:
 
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"전체 필터 조합 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"전체 필터 조합 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
 
         # Assert: 모든 요청 성공
@@ -1116,21 +1111,14 @@ class TestComplexSearchPerformance:
         pages_times = []
 
         for page in [1, 2, 3]:
-            url = (
-                f"{reverse('product-list')}?"
-                f"min_price=10000&"
-                f"max_price=40000&"
-                f"page={page}&"
-                f"page_size=10"
-            )
+            url = f"{reverse('product-list')}?" f"min_price=10000&" f"max_price=40000&" f"page={page}&" f"page_size=10"
 
             stats = measure_multiple_times(client, "get", url, iterations=3)
             pages_times.append((page, stats["mean"]))
 
             # Assert: 각 페이지 응답 시간 < 임계값
             assert stats["mean"] < threshold, (
-                f"페이지 {page} 응답 시간 초과!\n"
-                f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+                f"페이지 {page} 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
             )
 
         # 페이지 간 성능 차이 확인 (마지막 페이지가 첫 페이지보다 3배 이상 느리면 안됨)
@@ -1175,13 +1163,7 @@ class TestComplexSearchPerformance:
         client = APIClient()
         threshold = 1500  # 1.5초
 
-        url = (
-            f"{reverse('product-list')}?"
-            f"search=대량&"
-            f"category={category.id}&"
-            f"min_price=10000&"
-            f"ordering=-price"
-        )
+        url = f"{reverse('product-list')}?" f"search=대량&" f"category={category.id}&" f"min_price=10000&" f"ordering=-price"
 
         # 워밍업
         client.get(url)
@@ -1191,6 +1173,5 @@ class TestComplexSearchPerformance:
 
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"대용량 복합 검색 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"대용량 복합 검색 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )

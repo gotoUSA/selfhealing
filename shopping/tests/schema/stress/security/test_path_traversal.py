@@ -104,10 +104,10 @@ class TestFileUploadPathTraversal:
         """테스트용 이미지 파일 생성"""
         # 간단한 1x1 PNG 이미지 바이트
         png_bytes = (
-            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
-            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
-            b'\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00'
-            b'\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+            b"\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00"
+            b"\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
         )
         file_obj = io.BytesIO(png_bytes)
         file_obj.name = filename
@@ -118,9 +118,7 @@ class TestFileUploadPathTraversal:
         PATH_TRAVERSAL_FILENAMES,
         ids=[item[1] for item in PATH_TRAVERSAL_FILENAMES],
     )
-    def test_image_upload_path_traversal(
-        self, client, auth_headers, schema_test_product, malicious_filename, test_id
-    ):
+    def test_image_upload_path_traversal(self, client, auth_headers, schema_test_product, malicious_filename, test_id):
         """
         이미지 업로드 시 Path Traversal 시도 테스트
 
@@ -152,9 +150,7 @@ class TestFileUploadPathTraversal:
 
         # Assert - 서버 에러 없음
         assert response.status_code < 500, (
-            f"Path Traversal 파일명으로 서버 에러!\n"
-            f"filename={malicious_filename}\n"
-            f"status_code={response.status_code}"
+            f"Path Traversal 파일명으로 서버 에러!\n" f"filename={malicious_filename}\n" f"status_code={response.status_code}"
         )
 
         # 만약 성공했다면 저장된 경로 확인
@@ -168,9 +164,7 @@ class TestFileUploadPathTraversal:
             dangerous_patterns = ["../", "..\\", "/etc/", "C:\\", "\\windows\\"]
             for pattern in dangerous_patterns:
                 assert pattern not in saved_path, (
-                    f"위험한 경로 패턴이 저장된 파일명에 포함됨!\n"
-                    f"pattern={pattern}\n"
-                    f"saved_path={saved_path}"
+                    f"위험한 경로 패턴이 저장된 파일명에 포함됨!\n" f"pattern={pattern}\n" f"saved_path={saved_path}"
                 )
 
     def test_file_upload_with_directory_structure(self, client, auth_headers, schema_test_product):
@@ -204,9 +198,7 @@ class TestFileUploadPathTraversal:
 
             # Assert - 서버 에러 없음
             assert response.status_code < 500, (
-                f"디렉토리 경로 파일명으로 서버 에러!\n"
-                f"filename={filename}\n"
-                f"status_code={response.status_code}"
+                f"디렉토리 경로 파일명으로 서버 에러!\n" f"filename={filename}\n" f"status_code={response.status_code}"
             )
 
     def test_file_upload_with_special_characters(self, client, auth_headers, schema_test_product):
@@ -244,9 +236,7 @@ class TestFileUploadPathTraversal:
 
             # Assert - 서버 에러 없음
             assert response.status_code < 500, (
-                f"특수문자 파일명으로 서버 에러!\n"
-                f"filename={repr(filename)}\n"
-                f"status_code={response.status_code}"
+                f"특수문자 파일명으로 서버 에러!\n" f"filename={repr(filename)}\n" f"status_code={response.status_code}"
             )
 
     def test_file_extension_bypass_attempts(self, client, auth_headers, schema_test_product):
@@ -299,8 +289,7 @@ class TestFileUploadPathTraversal:
                 dangerous_extensions = [".php", ".exe", ".sh", ".phtml", ".asp", ".aspx", ".jsp"]
                 for ext in dangerous_extensions:
                     assert not saved_path.lower().endswith(ext), (
-                        f"위험한 확장자가 실행 가능한 형태로 저장됨!\n"
-                        f"saved_path={saved_path}"
+                        f"위험한 확장자가 실행 가능한 형태로 저장됨!\n" f"saved_path={saved_path}"
                     )
 
     def test_media_path_traversal_via_url(self, client, schema_test_product):
@@ -325,18 +314,11 @@ class TestFileUploadPathTraversal:
             response = client.get(url)
 
             # Assert - 서버 에러 없음
-            assert response.status_code < 500, (
-                f"미디어 URL Path Traversal로 서버 에러!\n"
-                f"url={url}"
-            )
+            assert response.status_code < 500, f"미디어 URL Path Traversal로 서버 에러!\n" f"url={url}"
 
             # 민감한 파일 내용이 노출되면 안 됨
             if response.status_code == status.HTTP_200_OK:
                 content = response.content.decode("utf-8", errors="ignore")
                 sensitive_patterns = ["root:", "daemon:", "bin/bash", "[extensions]"]
                 for pattern in sensitive_patterns:
-                    assert pattern not in content, (
-                        f"민감한 파일 내용 노출!\n"
-                        f"url={url}\n"
-                        f"pattern={pattern}"
-                    )
+                    assert pattern not in content, f"민감한 파일 내용 노출!\n" f"url={url}\n" f"pattern={pattern}"
