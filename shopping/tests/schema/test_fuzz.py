@@ -290,9 +290,7 @@ class TestProductsFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"정렬에서 서버 에러 발생!\n"
-            f"ordering={repr(ordering)}\n"
-            f"상태 코드: {response.status_code}"
+            f"정렬에서 서버 에러 발생!\n" f"ordering={repr(ordering)}\n" f"상태 코드: {response.status_code}"
         )
 
     @given(product_id=product_id_strategy)
@@ -329,9 +327,7 @@ class TestProductsFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"상품 상세 조회에서 서버 에러 발생!\n"
-            f"product_id={repr(product_id)}\n"
-            f"상태 코드: {response.status_code}"
+            f"상품 상세 조회에서 서버 에러 발생!\n" f"product_id={repr(product_id)}\n" f"상태 코드: {response.status_code}"
         )
         # 유효하지 않은 ID는 400 또는 404여야 함
         if not (isinstance(product_id, int) and product_id > 0):
@@ -339,9 +335,7 @@ class TestProductsFuzz:
                 status.HTTP_400_BAD_REQUEST,
                 status.HTTP_404_NOT_FOUND,
                 status.HTTP_200_OK,
-            ], (
-                f"유효하지 않은 ID에 대해 예상치 못한 응답: {response.status_code}"
-            )
+            ], f"유효하지 않은 ID에 대해 예상치 못한 응답: {response.status_code}"
 
 
 # ==========================================
@@ -455,9 +449,7 @@ class TestCartFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"장바구니 수량 변경에서 서버 에러 발생!\n"
-            f"quantity={repr(quantity)}\n"
-            f"상태 코드: {response.status_code}"
+            f"장바구니 수량 변경에서 서버 에러 발생!\n" f"quantity={repr(quantity)}\n" f"상태 코드: {response.status_code}"
         )
 
 
@@ -551,16 +543,16 @@ class TestAuthFuzz:
             status.HTTP_401_UNAUTHORIZED,
             status.HTTP_403_FORBIDDEN,
             status.HTTP_429_TOO_MANY_REQUESTS,
-        ], (
-            f"예상치 못한 응답 코드: {response.status_code}"
-        )
+        ], f"예상치 못한 응답 코드: {response.status_code}"
 
     @given(
         refresh_token=st.one_of(
             st.text(min_size=0, max_size=500),  # 무작위 문자열
             st.just(""),  # 빈 토큰
             st.just("invalid.token.here"),  # 잘못된 형식
-            st.just("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"),  # 서명이 다른 JWT
+            st.just(
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+            ),  # 서명이 다른 JWT
         )
     )
     @hypothesis_settings(
@@ -645,9 +637,7 @@ class TestCategoriesFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"카테고리 상세에서 서버 에러 발생!\n"
-            f"category_id={repr(category_id)}\n"
-            f"상태 코드: {response.status_code}"
+            f"카테고리 상세에서 서버 에러 발생!\n" f"category_id={repr(category_id)}\n" f"상태 코드: {response.status_code}"
         )
 
 
@@ -771,9 +761,7 @@ class TestFullApiFuzz:
 
         # Assert
         assert response.status_code < 500, (
-            f"복합 파라미터에서 서버 에러 발생!\n"
-            f"params={params}\n"
-            f"상태 코드: {response.status_code}"
+            f"복합 파라미터에서 서버 에러 발생!\n" f"params={params}\n" f"상태 코드: {response.status_code}"
         )
 
 

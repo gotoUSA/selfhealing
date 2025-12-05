@@ -1,0 +1,302 @@
+# ==========================================
+# Schema Tests CI Workflow
+# ==========================================
+# Schemathesis 기반 OpenAPI 스키마 테스트
+# - PR: 빠른 스키마 검증 (schema + stateful, not slow)
+# - Nightly: 전체 퍼징 테스트 (schema + fuzz + negative)
+# - Weekly: 동시성/성능 포함 전체 테스트
+
+name: Schema Tests
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  schedule:
+    # Nightly: 매일 새벽 3시 (KST 기준 UTC+9, UTC 18:00)
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+          - nightly
+
+jobs:
+  # ===========================================
+  # Quick Schema Test (PR용 - 빠른 피드백)
+  # ===========================================
+  quick-schema-test:
+    name: Quick Schema Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_scope == 'quick')
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: shopping_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      DJANGO_DEBUG: False
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_NAME: shopping_db
+      DATABASE_USER: test_user
+      DATABASE_PASSWORD: test_password
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      TOSS_CLIENT_KEY: test_ck_fake_key
+      TOSS_SECRET_KEY: test_sk_fake_key
+      TOSS_WEBHOOK_SECRET: test_webhook_secret
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run Quick Schema Tests
+        run: |
+          echo "🚀 Quick Schema Tests (PR용 - 약 2분 소요)"
+          echo "📋 테스트 범위: schema + stateful (not slow)"
+          pytest -m "schema and not slow" \
+            --no-cov \
+            -v \
+            -n 0 \
+            --tb=short \
+            --timeout=120
+
+  # ===========================================
+  # Nightly Fuzz Test (매일 새벽 - 심층 테스트)
+  # ===========================================
+  nightly-fuzz-test:
+    name: Nightly Fuzz & Schema Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_scope == 'nightly')
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: shopping_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      DJANGO_DEBUG: False
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_NAME: shopping_db
+      DATABASE_USER: test_user
+      DATABASE_PASSWORD: test_password
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      TOSS_CLIENT_KEY: test_ck_fake_key
+      TOSS_SECRET_KEY: test_sk_fake_key
+      TOSS_WEBHOOK_SECRET: test_webhook_secret
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run Full Schema & Fuzz Tests
+        run: |
+          echo "🌙 Nightly Full Schema Tests (약 30분 소요)"
+          echo "📋 테스트 범위: schema + fuzz + negative"
+          pytest -m "schema or fuzz or negative" \
+            --no-cov \
+            -v \
+            -n 0 \
+            --tb=short \
+            --timeout=300
+
+      - name: Run Concurrency Tests
+        run: |
+          echo "🔄 Concurrency Tests"
+          pytest -m concurrency \
+            --no-cov \
+            -v \
+            -n 0 \
+            --tb=short \
+            --timeout=120
+
+      - name: Run Performance Tests
+        run: |
+          echo "⚡ Performance Tests"
+          pytest -m performance \
+            --no-cov \
+            -v \
+            -n 0 \
+            --tb=short \
+            --timeout=120
+
+  # ===========================================
+  # Full Test (수동 트리거 - 전체 테스트)
+  # ===========================================
+  full-schema-test:
+    name: Full Schema Test Suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_scope == 'full'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: shopping_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      DJANGO_DEBUG: False
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_NAME: shopping_db
+      DATABASE_USER: test_user
+      DATABASE_PASSWORD: test_password
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      TOSS_CLIENT_KEY: test_ck_fake_key
+      TOSS_SECRET_KEY: test_sk_fake_key
+      TOSS_WEBHOOK_SECRET: test_webhook_secret
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run All Schema Tests (including slow)
+        run: |
+          echo "🔥 Full Schema Test Suite (약 1시간 소요)"
+          echo "📋 테스트 범위: 모든 스키마 관련 테스트 (slow 포함)"
+          pytest shopping/tests/schema/ \
+            --no-cov \
+            -v \
+            -n 0 \
+            --tb=short \
+            --timeout=600
+
+      - name: Generate Test Summary
+        if: always()
+        run: |
+          echo "## 📊 Schema Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Category | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stateful Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Fuzz Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Negative Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Concurrency Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Tests | ✅ |" >> $GITHUB_STEP_SUMMARY

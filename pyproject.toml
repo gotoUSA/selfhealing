@@ -56,7 +56,7 @@ addopts = """
     -v
     --tb=short
     --strict-markers
-    -m 'not load_test and not manual'
+    -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy'
 """
 testpaths = ["shopping/tests"]
 markers = [

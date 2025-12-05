@@ -168,8 +168,7 @@ class TestInvalidInputs:
 
         # Assert - 예상 코드 중 하나
         assert response.status_code in expected_codes, (
-            f"예상치 못한 응답 코드: {response.status_code}\n"
-            f"expected: {expected_codes}"
+            f"예상치 못한 응답 코드: {response.status_code}\n" f"expected: {expected_codes}"
         )
 
     def test_missing_required_fields_cart_add(self, client, auth_headers):
@@ -243,10 +242,7 @@ class TestInvalidInputs:
             )
 
             # Assert - 5xx 에러 없음
-            assert response.status_code < 500, (
-                f"{description}에서 서버 에러 발생!\n"
-                f"status_code={response.status_code}"
-            )
+            assert response.status_code < 500, f"{description}에서 서버 에러 발생!\n" f"status_code={response.status_code}"
 
             # Assert - 잘못된 수량은 거부되어야 함
             # 단, 매우 큰 수량은 재고 체크 후 통과할 수 있음
@@ -254,9 +250,7 @@ class TestInvalidInputs:
                 assert response.status_code in [
                     status.HTTP_400_BAD_REQUEST,
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
-                ], (
-                    f"{description}이 허용됨: {response.status_code}"
-                )
+                ], f"{description}이 허용됨: {response.status_code}"
 
     @pytest.mark.parametrize(
         "invalid_data,description",
@@ -288,17 +282,12 @@ class TestInvalidInputs:
         )
 
         # Assert
-        assert response.status_code < 500, (
-            f"{description}에서 서버 에러 발생!\n"
-            f"data={invalid_data}"
-        )
+        assert response.status_code < 500, f"{description}에서 서버 에러 발생!\n" f"data={invalid_data}"
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_401_UNAUTHORIZED,
             status.HTTP_403_FORBIDDEN,
-        ], (
-            f"{description}: 예상치 못한 응답 {response.status_code}"
-        )
+        ], f"{description}: 예상치 못한 응답 {response.status_code}"
 
 
 # ==========================================
@@ -373,18 +362,14 @@ class TestSecurityInputs:
 
         # Assert - SQL 에러로 인한 500 없음
         assert response.status_code < 500, (
-            f"SQL Injection으로 서버 에러 발생!\n"
-            f"payload={payload}\n"
-            f"status_code={response.status_code}"
+            f"SQL Injection으로 서버 에러 발생!\n" f"payload={payload}\n" f"status_code={response.status_code}"
         )
 
         # Assert - 정상 응답
         assert response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
-        ], (
-            f"예상치 못한 응답: {response.status_code}"
-        )
+        ], f"예상치 못한 응답: {response.status_code}"
 
     @pytest.mark.parametrize(
         "xss_payload",
@@ -422,20 +407,14 @@ class TestSecurityInputs:
         response = client.get(f"/api/products/?search={xss_payload}")
 
         # Assert - 5xx 에러 없음
-        assert response.status_code < 500, (
-            f"XSS 페이로드로 서버 에러 발생!\n"
-            f"payload={xss_payload}"
-        )
+        assert response.status_code < 500, f"XSS 페이로드로 서버 에러 발생!\n" f"payload={xss_payload}"
 
         # Assert - XSS 페이로드가 그대로 반영되지 않음
         # JSON 응답이므로 HTML 이스케이프가 덜 중요하지만 확인
         if response.status_code == status.HTTP_200_OK:
             content = response.content.decode("utf-8", errors="ignore")
             # 스크립트 태그가 그대로 포함되면 위험
-            assert "<script>alert" not in content.lower(), (
-                f"XSS 페이로드가 응답에 포함됨!\n"
-                f"payload={xss_payload}"
-            )
+            assert "<script>alert" not in content.lower(), f"XSS 페이로드가 응답에 포함됨!\n" f"payload={xss_payload}"
 
     def test_xss_attempt_in_post_data(self, client, auth_headers, schema_test_product):
         """
@@ -467,18 +446,13 @@ class TestSecurityInputs:
             )
 
             # Assert - 5xx 에러 없음
-            assert response.status_code < 500, (
-                f"XSS 페이로드로 서버 에러 발생!\n"
-                f"payload={payload}"
-            )
+            assert response.status_code < 500, f"XSS 페이로드로 서버 에러 발생!\n" f"payload={payload}"
 
             # 성공적으로 저장된 경우, 반환값 확인
             if response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]:
                 content = response.content.decode("utf-8", errors="ignore")
                 # 실행 가능한 스크립트 태그가 그대로 포함되면 안 됨
-                assert "<script>alert" not in content, (
-                    f"XSS 페이로드가 응답에 포함됨!"
-                )
+                assert "<script>alert" not in content, f"XSS 페이로드가 응답에 포함됨!"
 
     @pytest.mark.parametrize(
         "path_payload",
@@ -512,16 +486,11 @@ class TestSecurityInputs:
         response = client.get(f"/api/products/{path_payload}/")
 
         # Assert
-        assert response.status_code < 500, (
-            f"Path Traversal로 서버 에러 발생!\n"
-            f"payload={path_payload}"
-        )
+        assert response.status_code < 500, f"Path Traversal로 서버 에러 발생!\n" f"payload={path_payload}"
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_404_NOT_FOUND,
-        ], (
-            f"예상치 못한 응답: {response.status_code}"
-        )
+        ], f"예상치 못한 응답: {response.status_code}"
 
 
 # ==========================================
@@ -583,16 +552,12 @@ class TestBoundaryValues:
         response = client.get("/api/products/", page_param)
 
         # Assert - 5xx 에러 없음
-        assert response.status_code < 500, (
-            f"페이지네이션 경계값에서 서버 에러 발생!\n"
-            f"params={page_param}"
-        )
+        assert response.status_code < 500, f"페이지네이션 경계값에서 서버 에러 발생!\n" f"params={page_param}"
 
         # Assert - 예상 코드 중 하나
         # 일부 프레임워크는 잘못된 페이지를 무시하고 첫 페이지 반환
         assert response.status_code in expected_codes + [status.HTTP_200_OK], (
-            f"예상치 못한 응답: {response.status_code}\n"
-            f"expected: {expected_codes}"
+            f"예상치 못한 응답: {response.status_code}\n" f"expected: {expected_codes}"
         )
 
     def test_very_long_search_query(self, client, schema_test_product):
@@ -618,19 +583,14 @@ class TestBoundaryValues:
             response = client.get(f"/api/products/?search={query}")
 
             # Assert - 5xx 에러 없음
-            assert response.status_code < 500, (
-                f"긴 검색어에서 서버 에러 발생!\n"
-                f"query_length={len(query)}"
-            )
+            assert response.status_code < 500, f"긴 검색어에서 서버 에러 발생!\n" f"query_length={len(query)}"
 
             # 정상 또는 URI 너무 긴 에러
             assert response.status_code in [
                 status.HTTP_200_OK,
                 status.HTTP_400_BAD_REQUEST,
                 status.HTTP_414_URI_TOO_LONG,
-            ], (
-                f"예상치 못한 응답: {response.status_code}"
-            )
+            ], f"예상치 못한 응답: {response.status_code}"
 
     def test_special_characters_in_search(self, client, schema_test_product):
         """
@@ -660,10 +620,7 @@ class TestBoundaryValues:
             response = client.get(f"/api/products/?search={query}")
 
             # Assert
-            assert response.status_code < 500, (
-                f"특수 문자에서 서버 에러 발생!\n"
-                f"query={repr(query)}"
-            )
+            assert response.status_code < 500, f"특수 문자에서 서버 에러 발생!\n" f"query={repr(query)}"
 
 
 # ==========================================
@@ -720,8 +677,7 @@ class TestMalformedRequests:
 
             # Assert
             assert response.status_code == status.HTTP_400_BAD_REQUEST, (
-                f"잘못된 JSON이 허용됨: {response.status_code}\n"
-                f"malformed={repr(malformed)}"
+                f"잘못된 JSON이 허용됨: {response.status_code}\n" f"malformed={repr(malformed)}"
             )
 
     def test_wrong_content_type(self, client, auth_headers, schema_test_product):
@@ -754,10 +710,7 @@ class TestMalformedRequests:
             )
 
             # Assert - 5xx 에러 없음
-            assert response.status_code < 500, (
-                f"잘못된 Content-Type에서 서버 에러 발생!\n"
-                f"content_type={content_type}"
-            )
+            assert response.status_code < 500, f"잘못된 Content-Type에서 서버 에러 발생!\n" f"content_type={content_type}"
 
     def test_extra_unexpected_fields(self, client, auth_headers, schema_test_product):
         """
@@ -789,10 +742,7 @@ class TestMalformedRequests:
         )
 
         # Assert - 5xx 에러 없음 (추가 필드로 인한 서버 오류 없음)
-        assert response.status_code < 500, (
-            f"추가 필드로 인해 서버 에러 발생!\n"
-            f"data={data}"
-        )
+        assert response.status_code < 500, f"추가 필드로 인해 서버 에러 발생!\n" f"data={data}"
 
 
 # ==========================================
@@ -826,7 +776,10 @@ class TestAuthorizationEdgeCases:
             ("Bearer invalid.token.here", 401),  # 잘못된 토큰
             ("invalid_token_no_bearer", 401),  # Bearer 접두사 누락
             ("Basic dXNlcjpwYXNz", 401),  # Basic 인증 (지원 안 함)
-            ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", 401),  # 서명 불일치
+            (
+                "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+                401,
+            ),  # 서명 불일치
         ],
         ids=[
             "empty_header",
@@ -864,9 +817,7 @@ class TestAuthorizationEdgeCases:
 
         # Assert
         assert response.status_code == expected_code, (
-            f"예상치 못한 응답: {response.status_code}\n"
-            f"auth_header={repr(auth_header)}\n"
-            f"expected={expected_code}"
+            f"예상치 못한 응답: {response.status_code}\n" f"auth_header={repr(auth_header)}\n" f"expected={expected_code}"
         )
 
     def test_access_other_user_order(self, client, auth_headers, schema_test_order, seller_user):
@@ -900,8 +851,7 @@ class TestAuthorizationEdgeCases:
             status.HTTP_403_FORBIDDEN,
             status.HTTP_404_NOT_FOUND,
         ], (
-            f"다른 사용자의 주문에 접근 가능!\n"
-            f"status_code={response.status_code}"
+            f"다른 사용자의 주문에 접근 가능!\n" f"status_code={response.status_code}"
         )
 
     def test_access_other_user_cart(self, client, schema_test_cart, seller_user):
@@ -939,6 +889,5 @@ class TestAuthorizationEdgeCases:
             status.HTTP_403_FORBIDDEN,
             status.HTTP_404_NOT_FOUND,
         ], (
-            f"다른 사용자의 장바구니 아이템 수정 가능!\n"
-            f"status_code={response.status_code}"
+            f"다른 사용자의 장바구니 아이템 수정 가능!\n" f"status_code={response.status_code}"
         )
