@@ -512,13 +512,19 @@ class TestBoundaryValues:
     - 페이지네이션 경계값 (0, -1, 매우 큰 수)
     - 문자열 길이 제한 (매우 긴 문자열)
     - 숫자 범위 (최소값, 최대값)
+
+    ⚠️ 검증 철학:
+    - Negative 테스트의 목적은 "서버가 죽지 않고 적절히 거부하는가"
+    - 따라서 400/404 등 여러 상태 코드를 허용하는 경우가 있음
+    - 예: DRF PageNumberPagination은 잘못된 page에 404 반환
+    - 핵심: 5xx 서버 에러만 아니면 정상 처리로 간주
     """
 
     @pytest.mark.parametrize(
         "page_param,expected_codes",
         [
-            ({"page": 0}, [400]),  # 0 페이지
-            ({"page": -1}, [400]),  # 음수 페이지
+            ({"page": 0}, [400, 404]),  # 0 페이지 - DRF는 404 반환
+            ({"page": -1}, [400, 404]),  # 음수 페이지 - DRF는 404 반환
             ({"page": 999999}, [200, 404]),  # 매우 큰 페이지 (빈 결과)
             ({"page_size": 0}, [400]),  # 0 페이지 크기
             ({"page_size": -1}, [400]),  # 음수 페이지 크기
@@ -589,7 +595,7 @@ class TestBoundaryValues:
             assert response.status_code in [
                 status.HTTP_200_OK,
                 status.HTTP_400_BAD_REQUEST,
-                status.HTTP_414_URI_TOO_LONG,
+                status.HTTP_414_REQUEST_URI_TOO_LONG,
             ], f"예상치 못한 응답: {response.status_code}"
 
     def test_special_characters_in_search(self, client, schema_test_product):

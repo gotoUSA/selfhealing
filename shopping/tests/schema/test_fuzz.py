@@ -414,7 +414,7 @@ class TestCartFuzz:
         deadline=None,
         phases=[Phase.generate],
     )
-    def test_cart_item_update_quantity_fuzz(self, client, auth_headers, schema_test_cart, quantity):
+    def test_cart_item_update_quantity_fuzz(self, client, auth_headers, schema_test_product, user, quantity):
         """
         장바구니 아이템 수량 변경 퍼징
 
@@ -430,13 +430,13 @@ class TestCartFuzz:
         Args:
             quantity: Hypothesis가 생성한 무작위 수량
         """
-        # Arrange
-        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
-        cart_items = schema_test_cart.items.all()
-        if not cart_items.exists():
-            pytest.skip("장바구니에 아이템이 없습니다")
+        # Arrange - 각 Hypothesis iteration마다 새 cart/item 생성
+        from shopping.models.cart import Cart, CartItem
 
-        cart_item = cart_items.first()
+        cart, _ = Cart.objects.get_or_create(user=user, is_active=True)
+        cart_item, _ = CartItem.objects.get_or_create(cart=cart, product=schema_test_product, defaults={"quantity": 1})
+
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"quantity": quantity}
 
         # Act

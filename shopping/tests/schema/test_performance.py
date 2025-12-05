@@ -170,27 +170,23 @@ from shopping.tests.factories import (
 # 테스트 환경과 프로덕션 환경의 차이를 고려하여 여유 있게 설정
 RESPONSE_TIME_THRESHOLDS = {
     # 공개 API - 빠른 응답 기대
-    "/api/products/": 500,           # 상품 목록 (페이지네이션)
-    "/api/products/{id}/": 200,      # 상품 상세
-    "/api/categories/": 300,         # 카테고리 목록 (트리 구조)
-    "/api/categories/{id}/": 200,    # 카테고리 상세
-    
+    "/api/products/": 500,  # 상품 목록 (페이지네이션)
+    "/api/products/{id}/": 200,  # 상품 상세
+    "/api/categories/": 300,  # 카테고리 목록 (트리 구조)
+    "/api/categories/{id}/": 200,  # 카테고리 상세
     # 인증 API - 빠른 응답 필수
-    "/api/auth/login/": 500,         # 로그인 (JWT 생성)
-    "/api/auth/token/refresh/": 300, # 토큰 갱신
+    "/api/auth/login/": 500,  # 로그인 (JWT 생성)
+    "/api/auth/token/refresh/": 300,  # 토큰 갱신
     "/api/auth/token/verify/": 200,  # 토큰 검증
-    
     # 장바구니 API - 보통 응답
-    "/api/cart/": 400,               # 장바구니 조회
-    "/api/cart/summary/": 300,       # 장바구니 요약
-    "/api/cart/add_item/": 500,      # 장바구니 추가
-    
+    "/api/cart/": 400,  # 장바구니 조회
+    "/api/cart/summary/": 300,  # 장바구니 요약
+    "/api/cart/add_item/": 500,  # 장바구니 추가
     # 주문 API - 보통~느린 응답
-    "/api/orders/": 600,             # 주문 목록
-    "/api/orders/{id}/": 400,        # 주문 상세
-    
+    "/api/orders/": 600,  # 주문 목록
+    "/api/orders/{id}/": 400,  # 주문 상세
     # 집계/통계 API - 느린 응답 허용
-    "/api/products/popular/": 800,   # 인기 상품
+    "/api/products/popular/": 800,  # 인기 상품
     "/api/products/best_rating/": 800,  # 평점순 상품
 }
 
@@ -224,12 +220,12 @@ def measure_response_time(client, method: str, url: str, **kwargs) -> dict:
         assert result["elapsed_ms"] < 500
     """
     start_time = time.perf_counter()
-    
+
     request_method = getattr(client, method.lower())
     response = request_method(url, **kwargs)
-    
+
     elapsed_ms = (time.perf_counter() - start_time) * 1000
-    
+
     return {
         "elapsed_ms": elapsed_ms,
         "status_code": response.status_code,
@@ -267,13 +263,13 @@ def measure_multiple_times(client, method: str, url: str, iterations: int = 5, *
     """
     times = []
     all_success = True
-    
+
     for _ in range(iterations):
         result = measure_response_time(client, method, url, **kwargs)
         times.append(result["elapsed_ms"])
         if not result["success"]:
             all_success = False
-    
+
     return {
         "mean": statistics.mean(times),
         "median": statistics.median(times),
@@ -369,13 +365,13 @@ class TestPublicApiResponseTime:
         """
         client = APIClient()
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/products/", 500)
-        
+
         # 워밍업 요청
         client.get(reverse("product-list"))
-        
+
         # 5회 측정
         stats = measure_multiple_times(client, "get", reverse("product-list"), iterations=5)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
             f"상품 목록 API 응답 시간 초과!\n"
@@ -383,7 +379,7 @@ class TestPublicApiResponseTime:
             f"중앙값: {stats['median']:.2f}ms\n"
             f"범위: {stats['min']:.2f}ms ~ {stats['max']:.2f}ms"
         )
-        
+
         # Assert: 모든 요청 성공
         assert stats["all_success"], "일부 요청 실패!"
 
@@ -400,21 +396,20 @@ class TestPublicApiResponseTime:
         client = APIClient()
         product = test_products["products"][0]
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/products/{id}/", 200)
-        
+
         url = reverse("product-detail", kwargs={"pk": product.id})
-        
+
         # 워밍업 요청
         client.get(url)
-        
+
         # 5회 측정
         stats = measure_multiple_times(client, "get", url, iterations=5)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"상품 상세 API 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"상품 상세 API 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
-        
+
         # Assert: 모든 요청 성공
         assert stats["all_success"], "일부 요청 실패!"
 
@@ -430,19 +425,18 @@ class TestPublicApiResponseTime:
         """
         client = APIClient()
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/categories/", 300)
-        
+
         # 워밍업 요청
         client.get(reverse("category-list"))
-        
+
         # 5회 측정
         stats = measure_multiple_times(client, "get", reverse("category-list"), iterations=5)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"카테고리 목록 API 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"카테고리 목록 API 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
-        
+
         # Assert: 모든 요청 성공
         assert stats["all_success"], "일부 요청 실패!"
 
@@ -462,17 +456,16 @@ class TestPublicApiResponseTime:
         """
         client = APIClient()
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/products/popular/", 800)
-        
+
         # 워밍업 요청
         client.get(reverse("product-popular"))
-        
+
         # 3회 측정 (집계 쿼리는 느리므로 횟수 줄임)
         stats = measure_multiple_times(client, "get", reverse("product-popular"), iterations=3)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"인기 상품 API 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"인기 상품 API 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
 
 
@@ -522,31 +515,25 @@ class TestAuthApiResponseTime:
         """
         client = APIClient()
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/auth/login/", 500)
-        
+
         login_data = {
             "username": test_user.username,
             "password": "testpass123",
         }
-        
+
         # 워밍업 요청
         client.post(reverse("auth-login"), login_data, format="json")
-        
+
         # 5회 측정
         times = []
         for _ in range(5):
-            result = measure_response_time(
-                client, "post", reverse("auth-login"),
-                data=login_data, format="json"
-            )
+            result = measure_response_time(client, "post", reverse("auth-login"), data=login_data, format="json")
             times.append(result["elapsed_ms"])
-        
+
         mean_time = statistics.mean(times)
-        
+
         # Assert: 평균 응답 시간 < 임계값
-        assert mean_time < threshold, (
-            f"로그인 API 응답 시간 초과!\n"
-            f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
-        )
+        assert mean_time < threshold, f"로그인 API 응답 시간 초과!\n" f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
 
     def test_token_refresh_response_time(self, test_user):
         """
@@ -564,50 +551,46 @@ class TestAuthApiResponseTime:
         """
         client = APIClient()
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/auth/token/refresh/", 300)
-        
+
         # 로그인하여 refresh 토큰 획득
         login_response = client.post(
             reverse("auth-login"),
             {"username": test_user.username, "password": "testpass123"},
             format="json",
         )
-        
+
         # 1. JSON body에서 시도
         data = login_response.json()
         refresh_token = data.get("refresh") or data.get("token", {}).get("refresh")
-        
+
         # 2. HTTP Only Cookie에서 시도 (보안 설계상 여기에 있음)
         if not refresh_token:
             refresh_token = login_response.cookies.get("refresh_token")
             if refresh_token:
                 refresh_token = refresh_token.value
-        
+
         if not refresh_token:
             pytest.skip("Refresh 토큰 없음 (JSON body, Cookie 모두 확인) - 테스트 스킵")
-        
+
         # 워밍업 요청
         client.post(
             reverse("token-refresh"),
             {"refresh": refresh_token},
             format="json",
         )
-        
+
         # 5회 측정
         times = []
         for _ in range(5):
             result = measure_response_time(
-                client, "post", reverse("token-refresh"),
-                data={"refresh": refresh_token}, format="json"
+                client, "post", reverse("token-refresh"), data={"refresh": refresh_token}, format="json"
             )
             times.append(result["elapsed_ms"])
-        
+
         mean_time = statistics.mean(times)
-        
+
         # Assert: 평균 응답 시간 < 임계값
-        assert mean_time < threshold, (
-            f"토큰 갱신 API 응답 시간 초과!\n"
-            f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
-        )
+        assert mean_time < threshold, f"토큰 갱신 API 응답 시간 초과!\n" f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
 
 
 # =============================================================================
@@ -640,18 +623,18 @@ class TestAuthenticatedApiResponseTime:
         """인증된 APIClient 반환"""
         user = UserFactory(username=f"perf_auth_user_{time.time()}")
         client = APIClient()
-        
+
         # 로그인
         response = client.post(
             reverse("auth-login"),
             {"username": user.username, "password": "testpass123"},
             format="json",
         )
-        
+
         data = response.json()
         token = data.get("access") or data.get("token", {}).get("access")
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-        
+
         return {"client": client, "user": user, "token": token}
 
     @pytest.fixture
@@ -660,7 +643,7 @@ class TestAuthenticatedApiResponseTime:
         user = auth_client["user"]
         category = CategoryFactory()
         seller = UserFactory(username=f"cart_seller_{time.time()}", is_seller=True)
-        
+
         products = [
             ProductFactory(
                 category=category,
@@ -670,12 +653,12 @@ class TestAuthenticatedApiResponseTime:
             )
             for _ in range(5)
         ]
-        
+
         # 장바구니 생성
         cart = CartFactory(user=user, is_active=True)
         for product in products[:3]:
             CartItemFactory(cart=cart, product=product, quantity=2)
-        
+
         return {
             "cart": cart,
             "products": products,
@@ -694,19 +677,18 @@ class TestAuthenticatedApiResponseTime:
         """
         client = auth_client["client"]
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/cart/", 400)
-        
+
         # 워밍업 요청
         client.get(reverse("cart-detail"))
-        
+
         # 5회 측정
         stats = measure_multiple_times(client, "get", reverse("cart-detail"), iterations=5)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"장바구니 조회 API 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"장바구니 조회 API 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
-        
+
         # Assert: 모든 요청 성공
         assert stats["all_success"], "일부 요청 실패!"
 
@@ -723,25 +705,19 @@ class TestAuthenticatedApiResponseTime:
         client = auth_client["client"]
         product = test_cart_data["products"][-1]  # 장바구니에 없는 상품
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/cart/add_item/", 500)
-        
+
         add_data = {"product_id": product.id, "quantity": 1}
-        
+
         # 5회 측정 (매번 다른 상품으로 테스트하기 어려우므로 동일 상품에 추가)
         times = []
         for _ in range(5):
-            result = measure_response_time(
-                client, "post", reverse("cart-add-item"),
-                data=add_data, format="json"
-            )
+            result = measure_response_time(client, "post", reverse("cart-add-item"), data=add_data, format="json")
             times.append(result["elapsed_ms"])
-        
+
         mean_time = statistics.mean(times)
-        
+
         # Assert: 평균 응답 시간 < 임계값
-        assert mean_time < threshold, (
-            f"장바구니 추가 API 응답 시간 초과!\n"
-            f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
-        )
+        assert mean_time < threshold, f"장바구니 추가 API 응답 시간 초과!\n" f"평균: {mean_time:.2f}ms (임계값: {threshold}ms)"
 
     @pytest.mark.slow
     def test_order_list_response_time(self, auth_client, db):
@@ -757,25 +733,24 @@ class TestAuthenticatedApiResponseTime:
         client = auth_client["client"]
         user = auth_client["user"]
         threshold = RESPONSE_TIME_THRESHOLDS.get("/api/orders/", 600)
-        
+
         # 테스트용 주문 생성
         category = CategoryFactory()
         seller = UserFactory(username=f"order_seller_{time.time()}", is_seller=True)
         product = ProductFactory(category=category, seller=seller, is_active=True)
-        
+
         for i in range(5):
             OrderFactory(user=user)
-        
+
         # 워밍업 요청
         client.get(reverse("order-list"))
-        
+
         # 5회 측정
         stats = measure_multiple_times(client, "get", reverse("order-list"), iterations=5)
-        
+
         # Assert: 평균 응답 시간 < 임계값
         assert stats["mean"] < threshold, (
-            f"주문 목록 API 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"주문 목록 API 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
 
 
@@ -813,7 +788,7 @@ class TestDatabaseQueryPerformance:
         """쿼리 테스트용 데이터 생성"""
         category = CategoryFactory()
         seller = UserFactory(username=f"query_seller_{time.time()}", is_seller=True)
-        
+
         products = [
             ProductFactory(
                 category=category,
@@ -823,14 +798,10 @@ class TestDatabaseQueryPerformance:
             )
             for _ in range(20)
         ]
-        
+
         return {"products": products, "category": category}
 
-    @pytest.mark.skipif(
-        not settings.DEBUG,
-        reason="DEBUG=True에서만 쿼리 카운팅 가능"
-    )
-    def test_product_list_query_count(self, test_data, django_assert_num_queries):
+    def test_product_list_query_count(self, test_data):
         """
         상품 목록 쿼리 수 테스트
 
@@ -844,29 +815,31 @@ class TestDatabaseQueryPerformance:
         1. 상품 목록 (with category, seller)
         2. 카운트 (페이지네이션)
         3-5. 추가 정보 (평점, 리뷰 수 등)
+
+        Note:
+        - DEBUG=False일 때는 connection.queries가 비어있으므로 쿼리 수 검증 생략
+        - 대신 응답 성공 여부만 확인
         """
         client = APIClient()
-        
+
         # 첫 요청으로 캐시 워밍업
         client.get(reverse("product-list"))
-        
-        # 쿼리 수 측정
+
+        # 쿼리 수 측정 (DEBUG=True일 때만)
         reset_queries()
         response = client.get(reverse("product-list"))
-        query_count = len(connection.queries)
-        
-        # Assert: 쿼리 수 < 15개 (여유 있게)
-        assert query_count < 15, (
-            f"상품 목록 쿼리 수 과다!\n"
-            f"실제: {query_count}개\n"
-            f"쿼리 목록:\n" + "\n".join(
-                f"  {i+1}. {q['sql'][:100]}..." 
-                for i, q in enumerate(connection.queries)
-            )
-        )
-        
-        # Assert: 성공 응답
+
+        # Assert: 성공 응답 (항상 검증)
         assert response.status_code == status.HTTP_200_OK
+
+        # Assert: 쿼리 수 검증 (DEBUG=True일 때만)
+        if settings.DEBUG:
+            query_count = len(connection.queries)
+            assert query_count < 15, (
+                f"상품 목록 쿼리 수 과다!\n"
+                f"실제: {query_count}개\n"
+                f"쿼리 목록:\n" + "\n".join(f"  {i+1}. {q['sql'][:100]}..." for i, q in enumerate(connection.queries))
+            )
 
 
 # =============================================================================
@@ -894,7 +867,7 @@ class TestPaginationPerformance:
         """대용량 테스트 데이터 생성 (100개 상품)"""
         category = CategoryFactory()
         seller = UserFactory(username=f"large_seller_{time.time()}", is_seller=True)
-        
+
         products = [
             ProductFactory(
                 category=category,
@@ -905,7 +878,7 @@ class TestPaginationPerformance:
             )
             for i in range(100)
         ]
-        
+
         return {"products": products, "category": category}
 
     def test_first_page_vs_last_page(self, large_dataset):
@@ -924,19 +897,13 @@ class TestPaginationPerformance:
             매우 큰 데이터셋에서는 커서 기반 페이지네이션 권장
         """
         client = APIClient()
-        
+
         # 첫 페이지 측정
-        first_page_stats = measure_multiple_times(
-            client, "get", reverse("product-list"),
-            iterations=3
-        )
-        
+        first_page_stats = measure_multiple_times(client, "get", reverse("product-list"), iterations=3)
+
         # 마지막 페이지 측정 (100개 / 10개 = 10페이지)
-        last_page_stats = measure_multiple_times(
-            client, "get", f"{reverse('product-list')}?page=10",
-            iterations=3
-        )
-        
+        last_page_stats = measure_multiple_times(client, "get", f"{reverse('product-list')}?page=10", iterations=3)
+
         # Assert: 마지막 페이지가 첫 페이지보다 2배 이상 느리지 않음
         ratio = last_page_stats["mean"] / first_page_stats["mean"]
         assert ratio < 3, (
@@ -959,21 +926,17 @@ class TestPaginationPerformance:
         """
         client = APIClient()
         threshold = 1000  # 1초
-        
+
         # 워밍업
         client.get(f"{reverse('product-list')}?page_size=50")
-        
+
         # 측정
-        stats = measure_multiple_times(
-            client, "get", f"{reverse('product-list')}?page_size=50",
-            iterations=3
-        )
-        
+        stats = measure_multiple_times(client, "get", f"{reverse('product-list')}?page_size=50", iterations=3)
+
         # Assert: 응답 시간 < 1초
         assert stats["mean"] < threshold, (
-            f"큰 page_size 응답 시간 초과!\n"
-            f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
+            f"큰 page_size 응답 시간 초과!\n" f"평균: {stats['mean']:.2f}ms (임계값: {threshold}ms)"
         )
-        
+
         # Assert: 성공 응답
         assert stats["all_success"], "요청 실패!"

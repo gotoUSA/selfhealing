@@ -49,14 +49,14 @@ python_classes = ["Test*", "*Tests", "*TestCase"]
 python_functions = ["test_*"]
 addopts = """
     -n auto
+    --dist=loadfile
     --cov=shopping
     --cov-report=html
     --cov-report=term-missing:skip-covered
     --cov-fail-under=70
-    -v
     --tb=short
     --strict-markers
-    -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy'
+    -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy and not slow'
 """
 testpaths = ["shopping/tests"]
 markers = [

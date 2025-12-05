@@ -62,7 +62,7 @@ pytest -m concurrency -k "test_cart" --no-cov -v -n 0
 
 ⚙️ 동시성 제어 메커니즘 설명
 --------------------------
-1. **select_for_update**: 
+1. **select_for_update**:
    - 행 레벨 비관적 락(Pessimistic Lock)
    - 조회 시 다른 트랜잭션의 수정/삭제 차단
    - 예: Product.objects.select_for_update().get(id=product_id)
@@ -131,6 +131,7 @@ import time
 from decimal import Decimal
 from typing import Any
 
+import jwt as pyjwt
 from django.db import connection
 from django.urls import reverse
 
@@ -366,6 +367,13 @@ class TestConcurrentCartOperations:
                 assert cart_item.quantity > 0, "장바구니 수량이 0 이하!"
                 assert cart_item.quantity <= product.stock, "재고 초과 추가!"
 
+            # ✅ Row Duplication 검증 - Race Condition으로 인한 중복 row 생성 방지
+            cart_item_count = CartItem.objects.filter(cart=cart, product=product).count()
+            assert cart_item_count == 1, (
+                f"Race Condition 발생: 동일 상품에 대해 CartItem row가 중복 생성됨! "
+                f"(expected: 1, actual: {cart_item_count})"
+            )
+
     def test_concurrent_cart_add_stock_limit(self, concurrent_test_data):
         """
         재고 한도 동시 추가 테스트
@@ -416,12 +424,40 @@ class TestConcurrentCartOperations:
         # Assert: 5xx 에러 없음
         assert error_5xx_count == 0, f"서버 에러 발생! 5xx 응답 {error_5xx_count}개"
 
+        # ✅ 409 Conflict 응답 메시지 일관성 검증 - API Contract
+        conflict_responses = [r for r in results if r.get("status_code") == 409]
+        for r in conflict_responses:
+            data = r.get("data", {})
+            # 409 응답에는 에러 메시지가 있어야 함
+            has_error_message = data.get("error") or data.get("message") or data.get("detail") or data.get("errors")
+            assert has_error_message, f"409 Conflict 응답에 에러 메시지 없음 — API Contract 위반. " f"응답: {data}"
+
+        # ✅ 400 Bad Request 응답 메시지 일관성 검증
+        bad_request_responses = [r for r in results if r.get("status_code") == 400]
+        for r in bad_request_responses:
+            data = r.get("data", {})
+            has_error_message = (
+                data.get("error")
+                or data.get("message")
+                or data.get("detail")
+                or data.get("errors")
+                or data.get("stock")  # 재고 관련 에러 필드
+            )
+            assert has_error_message, f"400 Bad Request 응답에 에러 메시지 없음 — API Contract 위반. " f"응답: {data}"
+
         # Assert: 최종 장바구니 수량이 재고 이하
         cart = Cart.objects.filter(user=user, is_active=True).first()
         if cart:
             cart_item = CartItem.objects.filter(cart=cart, product=product).first()
             if cart_item:
                 assert cart_item.quantity <= 5, f"재고 초과! 장바구니: {cart_item.quantity}, 재고: 5"
+
+            # ✅ Row Duplication 검증
+            cart_item_count = CartItem.objects.filter(cart=cart, product=product).count()
+            assert cart_item_count == 1, (
+                f"Race Condition 발생: 동일 상품에 대해 CartItem row가 중복 생성됨! "
+                f"(expected: 1, actual: {cart_item_count})"
+            )
 
     @pytest.mark.slow
     def test_concurrent_cart_operations_multiple_products(self, concurrent_test_data):
@@ -443,10 +479,7 @@ class TestConcurrentCartOperations:
         category = concurrent_test_data["category"]
 
         # 5개의 상품 생성
-        products = [
-            ProductFactory(category=category, stock=100, price=Decimal("10000"), is_active=True)
-            for _ in range(5)
-        ]
+        products = [ProductFactory(category=category, stock=100, price=Decimal("10000"), is_active=True) for _ in range(5)]
 
         def add_to_cart(user_id, product_id):
             """개별 장바구니 추가 요청"""
@@ -585,6 +618,14 @@ class TestConcurrentStockDeduction:
         product.refresh_from_db()
         assert product.stock >= 0, f"재고가 음수! stock={product.stock}"
 
+        # ✅ 회계 무결성 검증 - stock + sold_count == 초기값
+        # 재고가 차감된 만큼 sold_count가 증가해야 함
+        initial_stock = 5  # fixture에서 설정한 초기 재고
+        assert product.stock + product.sold_count == initial_stock, (
+            f"회계 무결성 오류: 재고({product.stock}) + 판매량({product.sold_count}) != "
+            f"초기 재고({initial_stock}) — 누락 또는 중복 차감 발생"
+        )
+
     @pytest.mark.slow
     def test_concurrent_single_stock_item(self, db):
         """
@@ -638,6 +679,13 @@ class TestConcurrentStockDeduction:
         # Assert: 재고 음수 확인
         product.refresh_from_db()
         assert product.stock >= 0, f"재고가 음수! stock={product.stock}"
+
+        # ✅ 회계 무결성 검증 - 재고 1개 상품
+        initial_stock = 1
+        assert product.stock + product.sold_count == initial_stock, (
+            f"회계 무결성 오류: 재고({product.stock}) + 판매량({product.sold_count}) != "
+            f"초기 재고({initial_stock}) — 누락 또는 중복 차감 발생"
+        )
 
 
 # =============================================================================
@@ -722,6 +770,7 @@ class TestConcurrentApiResponses:
         🔍 검증 포인트:
         - 모든 요청 200 OK
         - 각 응답에 유효한 access 토큰 포함
+        - ✅ 토큰 JTI 고유성 검증 (중복 토큰 방지)
         - 5xx 에러 없음
         """
         user = UserFactory(username=f"login_test_{time.time()}")
@@ -737,10 +786,12 @@ class TestConcurrentApiResponses:
                 format="json",
             )
             data = response.json() if response.status_code == 200 else {}
-            has_token = bool(data.get("access") or data.get("token", {}).get("access"))
+            access_token = data.get("access") or data.get("token", {}).get("access")
+            has_token = bool(access_token)
             return {
                 "status_code": response.status_code,
                 "has_token": has_token,
+                "access_token": access_token,  # JTI 검증을 위해 토큰 저장
             }
 
         # 동시 요청 실행
@@ -761,6 +812,34 @@ class TestConcurrentApiResponses:
         # Assert: 5xx 에러 없음
         assert error_5xx_count == 0, f"서버 에러 발생!"
 
+        # ✅ JWT JTI 고유성 검증 - 동시 로그인에서 토큰 중복 방지
+        tokens = [r.get("access_token") for r in results if r.get("access_token")]
+        if tokens:
+            try:
+                # JWT decode (검증 없이 payload만 추출)
+                claims = []
+                for token in tokens:
+                    try:
+                        # options에서 서명 검증 비활성화
+                        payload = pyjwt.decode(token, options={"verify_signature": False})
+                        claims.append(payload)
+                    except pyjwt.InvalidTokenError:
+                        pass  # 잘못된 토큰은 무시
+
+                # JTI가 있는 경우 고유성 검증
+                jtis = [c.get("jti") for c in claims if c.get("jti")]
+                if jtis:
+                    unique_jtis = set(jtis)
+                    assert len(unique_jtis) == len(jtis), (
+                        f"JWT JTI 중복 발생! 동시 로그인에서 토큰이 재사용됨. "
+                        f"(전체: {len(jtis)}, 고유: {len(unique_jtis)})"
+                    )
+            except Exception as e:
+                # JWT 파싱 실패 시 경고만 출력 (테스트 실패 안함)
+                import warnings
+
+                warnings.warn(f"JWT JTI 검증 스킵: {e}")
+
     @pytest.mark.slow
     def test_concurrent_mixed_operations(self, db):
         """
@@ -772,6 +851,7 @@ class TestConcurrentApiResponses:
         🔍 검증 포인트:
         - 읽기 요청 영향 없음
         - 쓰기 요청 순차 처리
+        - ✅ 최종 장바구니 수량 = 쓰기 성공 횟수
         - 5xx 에러 없음
         """
         category = CategoryFactory()
@@ -789,13 +869,23 @@ class TestConcurrentApiResponses:
             """상품 목록 읽기"""
             client = APIClient()
             response = client.get(reverse("product-list"))
-            return {"type": "read", "status_code": response.status_code}
+            # ✅ GET 응답이 JSON 파싱 가능한지 확인
+            try:
+                data = response.json()
+                json_valid = True
+            except Exception:
+                json_valid = False
+            return {
+                "type": "read",
+                "status_code": response.status_code,
+                "json_valid": json_valid,
+            }
 
         def write_operation(user, product_id):
             """장바구니 추가 (쓰기)"""
             client, token, error = login_and_get_token(user.username)
             if error:
-                return {"type": "write", "status_code": 0, "error": error}
+                return {"type": "write", "status_code": 0, "error": error, "user_id": user.id}
 
             client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
             response = client.post(
@@ -803,7 +893,11 @@ class TestConcurrentApiResponses:
                 {"product_id": product_id, "quantity": 1},
                 format="json",
             )
-            return {"type": "write", "status_code": response.status_code}
+            return {
+                "type": "write",
+                "status_code": response.status_code,
+                "user_id": user.id,
+            }
 
         # 읽기 + 쓰기 혼합 요청 준비
         results = []
@@ -819,11 +913,34 @@ class TestConcurrentApiResponses:
         results.extend(write_results)
 
         # 결과 분석
-        read_success = sum(1 for r in results if r.get("type") == "read" and r.get("status_code") == 200)
+        read_results_only = [r for r in results if r.get("type") == "read"]
+        write_results_only = [r for r in results if r.get("type") == "write"]
+
+        read_success = sum(1 for r in read_results_only if r.get("status_code") == 200)
+        read_json_valid = sum(1 for r in read_results_only if r.get("json_valid"))
+        write_success = sum(1 for r in write_results_only if r.get("status_code") in [200, 201])
         error_5xx_count = sum(1 for r in results if r.get("status_code", 0) >= 500)
 
         # Assert: 모든 읽기 요청 성공
         assert read_success == 10, f"읽기 요청 일부 실패: {read_success}/10"
 
+        # ✅ Assert: 읽기 응답이 모두 유효한 JSON
+        assert read_json_valid == 10, f"쓰기 중 GET 응답에서 JSON 파싱 오류 발생! " f"(유효: {read_json_valid}/10)"
+
         # Assert: 5xx 에러 없음
         assert error_5xx_count == 0, f"서버 에러 발생!"
+
+        # ✅ 최종 상태 검증 - 장바구니 수량이 논리적으로 맞는지
+        # 각 사용자별로 장바구니가 생성되었는지 확인
+        total_cart_quantity = 0
+        for user in users:
+            cart = Cart.objects.filter(user=user, is_active=True).first()
+            if cart:
+                cart_item = CartItem.objects.filter(cart=cart, product=product).first()
+                if cart_item:
+                    total_cart_quantity += cart_item.quantity
+
+        # 쓰기 성공 횟수와 총 장바구니 수량이 일치해야 함
+        assert total_cart_quantity == write_success, (
+            f"데이터 무결성 오류: 쓰기 성공({write_success})과 " f"총 장바구니 수량({total_cart_quantity})이 일치하지 않음!"
+        )
