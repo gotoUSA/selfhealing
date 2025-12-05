@@ -367,8 +367,7 @@ class TestCartFieldValidation:
         # Assert - 필수 필드 존재
         data = response.json()
         # 장바구니 응답 구조에 따라 조정
-        assert "items" in data or "cart_items" in data or isinstance(data, list), \
-            "장바구니 아이템 필드 누락"
+        assert "items" in data or "cart_items" in data or isinstance(data, list), "장바구니 아이템 필드 누락"
 
     def test_cart_item_required_fields(self, client, auth_headers, schema_test_cart):
         """
