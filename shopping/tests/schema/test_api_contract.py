@@ -68,6 +68,7 @@ import json
 import pytest
 import schemathesis
 from hypothesis import settings as hypothesis_settings, Verbosity
+from rest_framework import status
 
 from .conftest import (
     EXCLUDED_ENDPOINTS,
@@ -169,45 +170,70 @@ class TestPublicEndpoints:
 
     def test_products_list(self, openapi_schema, client, schema_test_product):
         """상품 목록 API 스키마 검증"""
-        # low_stock은 인증 필요하므로 제외
+        # Arrange
         public_product_paths = ["/api/products/", "/api/products/popular/", "/api/products/best_rating/"]
         operations = get_operations_by_path(openapi_schema, "/api/products/", "GET")
+
         for op in operations:
             if op.path not in public_product_paths:
                 continue  # 인증 필요한 엔드포인트 스킵
+
+            # Act
             response = client.get(op.path)
-            # 200 성공 확인
-            assert response.status_code == 200, f"{op.path} returned {response.status_code}"
-            # 응답이 JSON인지 확인
+
+            # Assert
+            assert response.status_code == status.HTTP_200_OK, f"{op.path} returned {response.status_code}"
             data = response.json()
             assert "results" in data or isinstance(data, list), f"{op.path} 응답 형식 오류"
 
     def test_categories_list(self, openapi_schema, client, schema_test_category):
         """카테고리 목록 API 스키마 검증"""
+        # Arrange
         operations = get_operations_by_path(openapi_schema, "/api/categories/", "GET")
+
         for op in operations:
+            # Act
             response = client.get(op.path)
-            assert response.status_code == 200, f"{op.path} returned {response.status_code}"
+
+            # Assert
+            assert response.status_code == status.HTTP_200_OK, f"{op.path} returned {response.status_code}"
 
     def test_products_detail(self, openapi_schema, client, schema_test_product):
         """상품 상세 API 스키마 검증"""
-        response = client.get(f"/api/products/{schema_test_product.id}/")
-        assert response.status_code == 200
+        # Arrange
+        product_id = schema_test_product.id
+
+        # Act
+        response = client.get(f"/api/products/{product_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["id"] == schema_test_product.id
+        assert data["id"] == product_id
         assert data["name"] == schema_test_product.name
 
     def test_categories_detail(self, openapi_schema, client, schema_test_category):
         """카테고리 상세 API 스키마 검증"""
-        response = client.get(f"/api/categories/{schema_test_category.id}/")
-        assert response.status_code == 200
+        # Arrange
+        category_id = schema_test_category.id
+
+        # Act
+        response = client.get(f"/api/categories/{category_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["id"] == schema_test_category.id
+        assert data["id"] == category_id
 
     def test_categories_tree(self, openapi_schema, client, schema_test_category):
         """카테고리 트리 API 스키마 검증"""
+        # Arrange - none needed
+
+        # Act
         response = client.get("/api/categories/tree/")
-        assert response.status_code == 200
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
 
 # ==========================================
@@ -235,97 +261,197 @@ class TestAuthenticatedEndpoints:
 
     def test_cart_retrieve(self, openapi_schema, client, auth_headers, schema_test_cart):
         """장바구니 조회 API 스키마 검증"""
-        response = client.get("/api/cart/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200, f"/api/cart/ returned {response.status_code}"
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/cart/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK, f"/api/cart/ returned {response.status_code}"
         data = response.json()
         assert "items" in data or "id" in data
 
     def test_cart_summary(self, openapi_schema, client, auth_headers, schema_test_cart):
         """장바구니 요약 API 스키마 검증"""
-        response = client.get("/api/cart/summary/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/cart/summary/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_cart_items(self, openapi_schema, client, auth_headers, schema_test_cart):
         """장바구니 아이템 목록 API 스키마 검증"""
-        response = client.get("/api/cart/items/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/cart/items/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_orders_list(self, openapi_schema, client, auth_headers, schema_test_order):
         """주문 목록 API 스키마 검증"""
-        response = client.get("/api/orders/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/orders/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_orders_detail(self, openapi_schema, client, auth_headers, schema_test_order):
         """주문 상세 API 스키마 검증"""
-        response = client.get(
-            f"/api/orders/{schema_test_order.id}/",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
-        )
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        order_id = schema_test_order.id
+
+        # Act
+        response = client.get(f"/api/orders/{order_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["id"] == schema_test_order.id
+        assert data["id"] == order_id
 
     def test_wishlist_list(self, openapi_schema, client, auth_headers):
         """위시리스트 목록 API 스키마 검증"""
-        response = client.get("/api/wishlist/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/wishlist/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_wishlist_stats(self, openapi_schema, client, auth_headers):
         """위시리스트 통계 API 스키마 검증"""
-        response = client.get("/api/wishlist/stats/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/wishlist/stats/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_notifications_list(self, openapi_schema, client, auth_headers):
         """알림 목록 API 스키마 검증"""
-        response = client.get("/api/notifications/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/notifications/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_notifications_unread(self, openapi_schema, client, auth_headers):
         """읽지 않은 알림 API 스키마 검증"""
-        response = client.get("/api/notifications/unread/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/notifications/unread/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_my_questions(self, openapi_schema, client, auth_headers):
         """내 문의 목록 API 스키마 검증"""
-        response = client.get("/api/my/questions/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/my/questions/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_payments_list(self, openapi_schema, client, auth_headers):
         """결제 목록 API 스키마 검증"""
-        response = client.get("/api/payments/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/payments/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_returns_list(self, openapi_schema, client, auth_headers):
         """교환/환불 목록 API 스키마 검증"""
-        response = client.get("/api/returns/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/returns/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_user_profile(self, openapi_schema, client, auth_headers):
         """사용자 프로필 API 스키마 검증"""
-        response = client.get("/api/users/profile/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/users/profile/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "username" in data
 
     def test_points_my(self, openapi_schema, client, auth_headers):
         """내 포인트 조회 API 스키마 검증"""
-        response = client.get("/api/points/my/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/points/my/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_points_history(self, openapi_schema, client, auth_headers):
         """포인트 내역 API 스키마 검증"""
-        response = client.get("/api/points/history/", **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/points/history/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_products_low_stock(self, openapi_schema, client, seller_auth_headers, schema_test_product):
         """재고 부족 상품 API 스키마 검증 (판매자 권한 필요)"""
-        response = client.get("/api/products/low_stock/", **{"HTTP_AUTHORIZATION": seller_auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": seller_auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/products/low_stock/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_seller_returns_list(self, openapi_schema, client, seller_auth_headers):
         """판매자 반품 목록 API 스키마 검증 (판매자 인증 필요)"""
-        response = client.get("/api/seller/returns/", **{"HTTP_AUTHORIZATION": seller_auth_headers["Authorization"]})
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": seller_auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/seller/returns/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
 
 # ==========================================
@@ -350,61 +476,102 @@ class TestPathParameterEndpoints:
 
     def test_product_detail_with_valid_id(self, client, schema_test_product):
         """유효한 상품 ID로 상세 조회"""
-        response = client.get(f"/api/products/{schema_test_product.id}/")
-        assert response.status_code == 200
+        # Arrange
+        product_id = schema_test_product.id
+
+        # Act
+        response = client.get(f"/api/products/{product_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["id"] == schema_test_product.id
+        assert data["id"] == product_id
 
     def test_product_detail_with_invalid_id(self, client):
         """유효하지 않은 상품 ID로 404 반환 확인"""
-        response = client.get("/api/products/99999999/")
-        assert response.status_code == 404
+        # Arrange
+        invalid_id = 99999999
+
+        # Act
+        response = client.get(f"/api/products/{invalid_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_category_detail_with_valid_id(self, client, schema_test_category):
         """유효한 카테고리 ID로 상세 조회"""
-        response = client.get(f"/api/categories/{schema_test_category.id}/")
-        assert response.status_code == 200
+        # Arrange
+        category_id = schema_test_category.id
+
+        # Act
+        response = client.get(f"/api/categories/{category_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_order_detail_with_valid_id(self, client, auth_headers, schema_test_order):
         """유효한 주문 ID로 상세 조회"""
-        response = client.get(
-            f"/api/orders/{schema_test_order.id}/",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
-        )
-        assert response.status_code == 200
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        order_id = schema_test_order.id
+
+        # Act
+        response = client.get(f"/api/orders/{order_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
 
     def test_order_detail_unauthorized(self, client, schema_test_order):
         """인증 없이 주문 상세 접근 시 401"""
-        response = client.get(f"/api/orders/{schema_test_order.id}/")
-        assert response.status_code == 401
+        # Arrange
+        order_id = schema_test_order.id
+
+        # Act
+        response = client.get(f"/api/orders/{order_id}/")
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_cart_item_detail(self, client, auth_headers, schema_test_cart):
         """장바구니 아이템 조회"""
-        # 장바구니의 첫 번째 아이템 가져오기
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         cart_item = schema_test_cart.items.first()
+
         if cart_item:
-            response = client.get(
-                f"/api/cart/items/{cart_item.id}/",
-                **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
-            )
-            # PATCH/DELETE만 지원할 수 있으므로 404나 405도 허용
-            assert response.status_code in [200, 404, 405]
+            # Act
+            response = client.get(f"/api/cart/items/{cart_item.id}/", **headers)
+
+            # Assert - PATCH/DELETE만 지원할 수 있으므로 404나 405도 허용
+            assert response.status_code in [
+                status.HTTP_200_OK,
+                status.HTTP_404_NOT_FOUND,
+                status.HTTP_405_METHOD_NOT_ALLOWED,
+            ]
 
     def test_notification_detail(self, client, auth_headers):
         """알림 상세 조회 (존재하지 않는 ID)"""
-        response = client.get(
-            "/api/notifications/99999999/",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
-        )
-        assert response.status_code == 404
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        invalid_id = 99999999
+
+        # Act
+        response = client.get(f"/api/notifications/{invalid_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_payment_detail(self, client, auth_headers):
         """결제 상세 조회 (존재하지 않는 ID)"""
-        response = client.get(
-            "/api/payments/99999999/",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
-        )
-        assert response.status_code == 404
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        invalid_id = 99999999
+
+        # Act
+        response = client.get(f"/api/payments/{invalid_id}/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 # ==========================================
@@ -439,8 +606,14 @@ class TestAuthenticationRequired:
     )
     def test_unauthenticated_access_returns_401(self, client, endpoint):
         """인증 없이 접근 시 401 응답"""
+        # Arrange - endpoint is parameterized
+
+        # Act
         response = client.get(endpoint)
-        assert response.status_code == 401, f"{endpoint} should return 401, got {response.status_code}"
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, \
+            f"{endpoint} should return 401, got {response.status_code}"
 
 
 # ==========================================
@@ -465,45 +638,70 @@ class TestPostEndpoints:
 
     def test_cart_add_item(self, client, auth_headers, schema_test_product):
         """장바구니 상품 추가 API 스키마 검증"""
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {"product_id": schema_test_product.id, "quantity": 1}
+
+        # Act
         response = client.post(
             "/api/cart/add_item/",
-            data={"product_id": schema_test_product.id, "quantity": 1},
+            data=data,
             content_type="application/json",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
+            **headers,
         )
-        # 201 Created 또는 200 OK
-        assert response.status_code in [200, 201], f"cart add_item returned {response.status_code}"
+
+        # Assert - 201 Created 또는 200 OK
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], \
+            f"cart add_item returned {response.status_code}"
 
     def test_wishlist_toggle(self, client, auth_headers, schema_test_product):
         """위시리스트 토글 API 스키마 검증"""
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {"product_id": schema_test_product.id}
+
+        # Act
         response = client.post(
             "/api/wishlist/toggle/",
-            data={"product_id": schema_test_product.id},
+            data=data,
             content_type="application/json",
-            **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]},
+            **headers,
         )
-        assert response.status_code in [200, 201]
+
+        # Assert
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
 
     def test_auth_login(self, client, user):
         """로그인 API 스키마 검증"""
+        # Arrange
+        data = {"username": "testuser", "password": "testpass123"}
+
+        # Act
         response = client.post(
             "/api/auth/login/",
-            data={"username": "testuser", "password": "testpass123"},
+            data=data,
             content_type="application/json",
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert "token" in data
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = response.json()
+        assert "token" in response_data
 
     def test_auth_register_validation(self, client):
         """회원가입 API 유효성 검증 (중복 사용자)"""
-        # 유효하지 않은 데이터로 400 응답 확인
+        # Arrange - 유효하지 않은 데이터
+        data = {"username": "", "password": "short"}
+
+        # Act
         response = client.post(
             "/api/auth/register/",
-            data={"username": "", "password": "short"},
+            data=data,
             content_type="application/json",
         )
-        assert response.status_code == 400
+
+        # Assert
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 # ==========================================
@@ -538,8 +736,11 @@ class TestFullSchemaValidation:
 
     def test_all_get_endpoints_no_5xx(self, openapi_schema, client, auth_headers, schema_test_product, schema_test_order):
         """모든 GET 엔드포인트에서 5xx 에러가 발생하지 않는지 검증"""
+        # Arrange
         failed_endpoints = []
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
 
+        # Act
         for result in openapi_schema.get_all_operations():
             # Schemathesis 4.x Result 처리
             if hasattr(result, "ok"):
@@ -563,20 +764,24 @@ class TestFullSchemaValidation:
             if is_public_endpoint(op.path):
                 response = client.get(op.path)
             else:
-                response = client.get(op.path, **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
+                response = client.get(op.path, **headers)
 
             # 5xx 에러 수집
-            if response.status_code >= 500:
+            if response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
                 failed_endpoints.append(f"{op.path}: {response.status_code}")
 
+        # Assert
         assert not failed_endpoints, f"5xx 에러 발생 엔드포인트: {failed_endpoints}"
 
     def test_all_endpoints_return_valid_json(
         self, openapi_schema, client, auth_headers, schema_test_product, schema_test_order
     ):
         """GET 엔드포인트가 유효한 JSON을 반환하는지 검증"""
+        # Arrange
         invalid_json_endpoints = []
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
 
+        # Act
         for result in openapi_schema.get_all_operations():
             if hasattr(result, "ok"):
                 op = result.ok()
@@ -595,15 +800,16 @@ class TestFullSchemaValidation:
             if is_public_endpoint(op.path):
                 response = client.get(op.path)
             else:
-                response = client.get(op.path, **{"HTTP_AUTHORIZATION": auth_headers["Authorization"]})
+                response = client.get(op.path, **headers)
 
             # 성공 응답에서 JSON 파싱 시도
-            if 200 <= response.status_code < 300:
+            if status.HTTP_200_OK <= response.status_code < status.HTTP_300_MULTIPLE_CHOICES:
                 try:
                     response.json()
                 except (ValueError, TypeError):
                     invalid_json_endpoints.append(op.path)
 
+        # Assert
         assert not invalid_json_endpoints, f"유효하지 않은 JSON 반환: {invalid_json_endpoints}"
 
 
@@ -631,16 +837,26 @@ class TestSchemaDiscovery:
 
     def test_schema_is_valid(self, openapi_schema):
         """OpenAPI 스키마가 유효한지 확인"""
-        # 스키마가 로드되었는지 확인
+        # Arrange - none needed
+
+        # Act - schema is already loaded via fixture
+
+        # Assert
         assert openapi_schema is not None
 
     def test_schema_has_paths(self, openapi_schema):
         """스키마에 경로가 정의되어 있는지 확인"""
+        # Arrange - none needed
+
+        # Act
         operations = list(openapi_schema.get_all_operations())
+
+        # Assert
         assert len(operations) > 0, "스키마에 정의된 엔드포인트가 없습니다"
 
     def test_critical_endpoints_exist(self, openapi_schema):
         """핵심 엔드포인트가 스키마에 정의되어 있는지 확인"""
+        # Arrange
         critical_paths = [
             "/api/products/",
             "/api/categories/",
@@ -650,6 +866,7 @@ class TestSchemaDiscovery:
             "/api/auth/register/",
         ]
 
+        # Act
         all_paths = set()
         for result in openapi_schema.get_all_operations():
             if hasattr(result, "ok"):
@@ -658,5 +875,6 @@ class TestSchemaDiscovery:
                 op = result
             all_paths.add(op.path)
 
+        # Assert
         missing_paths = [p for p in critical_paths if p not in all_paths]
         assert not missing_paths, f"누락된 핵심 엔드포인트: {missing_paths}"

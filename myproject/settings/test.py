@@ -19,15 +19,23 @@ DEBUG = True
 # Database (PostgreSQL - Test with optimized connection settings)
 # ==========================================================================
 
-# 테스트 환경에서는 Docker 네트워크(db)가 아닌 localhost 사용
-# .env의 DATABASE_HOST=db 설정을 오버라이드
+
+# Docker 컨테이너 내부 감지: /.dockerenv 파일이 존재하거나 DATABASE_HOST가 'db'인 경우
+def _is_running_in_docker():
+    """Docker 컨테이너 내부에서 실행 중인지 확인"""
+    return os.path.exists("/.dockerenv") or os.getenv("DATABASE_HOST") == "db"
+
+
+# Docker 내부에서는 'db' 호스트 사용, 외부에서는 'localhost' 사용
+_db_host = "db" if _is_running_in_docker() else "localhost"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("TEST_DATABASE_NAME", "shopping_db"),
         "USER": os.getenv("TEST_DATABASE_USER", "shopping_user"),
         "PASSWORD": os.getenv("TEST_DATABASE_PASSWORD", "shopping_pass"),
-        "HOST": "localhost",  # Docker 외부에서 실행하므로 localhost 고정
+        "HOST": os.getenv("TEST_DATABASE_HOST", _db_host),
         "PORT": os.getenv("TEST_DATABASE_PORT", "5432"),
         # 테스트에서는 연결 즉시 닫기 (동시성 테스트에서 "too many clients" 방지)
         "CONN_MAX_AGE": 0,

@@ -15,7 +15,7 @@
 |-------|------|--------|
 | Phase 1: 기본 설정 | ✅ 완료 | 2025-12-05 |
 | Phase 2: Contract 테스트 | ✅ 완료 | 2025-12-05 |
-| Phase 3: Stateful 테스트 | 🔲 예정 | - |
+| Phase 3: Stateful 테스트 | ✅ 완료 | 2025-12-05 |
 | Phase 4: CI 통합 | 🔲 예정 | - |
 | Phase 5: 고급 활용 | 🔲 선택 | - |
 
@@ -112,20 +112,93 @@ pytest -m "schema and not slow" --no-cov -v
 
 ---
 
-## 📌 Phase 3: Stateful 테스트 (3-5일)
+## 📌 Phase 3: Stateful 테스트 (3-5일) ✅ 완료
 
-### 3.1 링크 기반 워크플로우 테스트
-```python
-# 예: 회원가입 → 로그인 → 상품 조회 → 장바구니 추가 → 주문
-@schema.parametrize()
-@settings(stateful_step_count=5)
-def test_user_purchase_flow(case):
-    ...
+### 3.1 구현된 테스트 파일 ✅
+```
+shopping/tests/schema/
+├── conftest.py           # 공통 fixture
+├── test_api_contract.py  # Phase 2: Contract 테스트
+└── test_stateful_workflow.py  # Phase 3: Stateful 워크플로우 테스트
 ```
 
-### 3.2 State Machine 정의
-- 사용자 상태: 비인증 → 인증됨 → 장바구니 있음 → 주문 완료
-- 상품 상태: 재고 있음 → 품절
+### 3.2 State Machine 정의 ✅
+```python
+class UserState(Enum):
+    ANONYMOUS = auto()       # 비인증 상태
+    AUTHENTICATED = auto()   # 로그인 완료
+    HAS_CART = auto()        # 장바구니에 상품 있음
+    HAS_ORDER = auto()       # 주문 완료
+
+class ProductState(Enum):
+    IN_STOCK = auto()        # 재고 있음
+    LOW_STOCK = auto()       # 재고 부족
+    OUT_OF_STOCK = auto()    # 품절
+```
+
+### 3.3 구현된 테스트 클래스 (총 14개 테스트)
+
+#### TestUserPurchaseFlow (사용자 구매 플로우)
+- `test_complete_purchase_flow` - 완전한 구매 플로우
+  - Anonymous → 회원가입 → 로그인 → 장바구니 추가 → 주문 조회
+- `test_anonymous_cannot_access_protected_endpoints` - 비인증 접근 제한
+- `test_authenticated_can_access_protected_endpoints` - 인증된 접근 확인
+
+#### TestWishlistFlow (위시리스트 플로우)
+- `test_wishlist_toggle_flow` - 위시리스트 토글 플로우
+- `test_wishlist_to_cart_flow` - 위시리스트 → 장바구니 이동
+
+#### TestProductBrowsingFlow (상품 탐색 플로우)
+- `test_category_to_product_flow` - 카테고리 → 상품 탐색
+- `test_product_search_and_filter_flow` - 검색 및 필터링
+
+#### TestCartManagementFlow (장바구니 관리)
+- `test_cart_item_lifecycle` - 장바구니 아이템 생명주기
+- `test_cart_bulk_operations` - 대량 작업
+
+#### TestNotificationFlow (알림 플로우)
+- `test_notification_read_flow` - 알림 조회 및 읽음 처리
+
+#### TestPointsFlow (포인트 플로우)
+- `test_points_inquiry_flow` - 포인트 조회
+
+#### TestStateMachineTransitions (상태 전이 검증)
+- `test_user_state_transitions` - 상태 전이 검증
+- `test_invalid_state_transition_blocked` - 잘못된 상태 전이 차단
+
+#### TestComplexWorkflows (복잡한 워크플로우, @slow)
+- `test_full_shopping_experience` - 완전한 쇼핑 경험 시뮬레이션
+
+### 3.4 테스트 실행 방법
+```bash
+# Stateful 테스트만 실행
+pytest -m stateful --no-cov -v -n 0
+
+# 스키마 + Stateful 테스트 모두 실행
+pytest -m "schema or stateful" --no-cov -v -n 0
+
+# slow 테스트 제외
+pytest -m "stateful and not slow" --no-cov -v
+```
+
+### 3.5 상태 전이 다이어그램
+```
+┌─────────────┐    회원가입/로그인    ┌───────────────┐
+│  ANONYMOUS  │ ────────────────────> │ AUTHENTICATED │
+└─────────────┘                       └───────────────┘
+                                              │
+                                              │ 장바구니 추가
+                                              ▼
+                                      ┌───────────────┐
+                                      │   HAS_CART    │
+                                      └───────────────┘
+                                              │
+                                              │ 주문 생성
+                                              ▼
+                                      ┌───────────────┐
+                                      │   HAS_ORDER   │
+                                      └───────────────┘
+```
 
 ---
 
@@ -210,13 +283,13 @@ schemathesis run http://localhost:8000/api/schema/ \
 
 ## 📅 권장 일정
 
-| 단계 | 기간 | 산출물 |
-|------|------|--------|
-| Phase 1 | 1일 | 기본 설정, 패키지 설치 |
-| Phase 2 | 2-3일 | 기본 Contract 테스트 통과 |
-| Phase 3 | 3-5일 | Stateful 워크플로우 테스트 |
-| Phase 4 | 1-2일 | CI 통합 완료 |
-| **총계** | **7-11일** | |
+| 단계 | 기간 | 산출물 | 상태 |
+|------|------|--------|------|
+| Phase 1 | 1일 | 기본 설정, 패키지 설치 | ✅ 완료 |
+| Phase 2 | 2-3일 | 기본 Contract 테스트 통과 | ✅ 완료 |
+| Phase 3 | 3-5일 | Stateful 워크플로우 테스트 | ✅ 완료 |
+| Phase 4 | 1-2일 | CI 통합 완료 | 🔲 예정 |
+| **총계** | **7-11일** | | **3단계 완료** |
 
 ---
 
@@ -230,3 +303,24 @@ schemathesis run http://localhost:8000/api/schema/ \
 3. **간단한 GET 엔드포인트부터 테스트** (예: 상품 목록)
 4. **인증 필요 엔드포인트 추가**
 5. **점진적으로 범위 확장**
+
+---
+
+## 📁 생성된 파일 요약
+
+```
+shopping/tests/schema/
+├── __init__.py
+├── conftest.py              # Phase 1: 인증 fixture, 제외 엔드포인트 설정
+├── test_api_contract.py     # Phase 2: API Contract 테스트 (45+ 테스트)
+└── test_stateful_workflow.py # Phase 3: Stateful 워크플로우 테스트 (14 테스트)
+```
+
+### 테스트 마커
+```toml
+# pyproject.toml
+markers = [
+    "schema: OpenAPI 스키마 기반 계약 테스트 (Schemathesis)",
+    "stateful: Stateful API 워크플로우 테스트 (상태 전이 검증)",
+]
+```
