@@ -125,17 +125,19 @@ class UserState(Enum):
     AUTHENTICATED → HAS_CART: 장바구니에 상품 추가
     HAS_CART → HAS_ORDER: 주문 생성
     """
-    ANONYMOUS = auto()       # 비인증 상태
-    AUTHENTICATED = auto()   # 로그인 완료
-    HAS_CART = auto()        # 장바구니에 상품 있음
-    HAS_ORDER = auto()       # 주문 완료
+
+    ANONYMOUS = auto()  # 비인증 상태
+    AUTHENTICATED = auto()  # 로그인 완료
+    HAS_CART = auto()  # 장바구니에 상품 있음
+    HAS_ORDER = auto()  # 주문 완료
 
 
 class ProductState(Enum):
     """상품 상태 정의"""
-    IN_STOCK = auto()        # 재고 있음
-    LOW_STOCK = auto()       # 재고 부족
-    OUT_OF_STOCK = auto()    # 품절
+
+    IN_STOCK = auto()  # 재고 있음
+    LOW_STOCK = auto()  # 재고 부족
+    OUT_OF_STOCK = auto()  # 품절
 
 
 # ==========================================
@@ -233,8 +235,7 @@ class TestUserPurchaseFlow:
         )
 
         # Assert
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], \
-            f"회원가입 실패: {response.content}"
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], f"회원가입 실패: {response.content}"
         register_response = response.json()
 
         # Arrange - 로그인 데이터
@@ -295,8 +296,7 @@ class TestUserPurchaseFlow:
         )
 
         # Assert
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], \
-            f"장바구니 추가 실패: {response.content}"
+        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], f"장바구니 추가 실패: {response.content}"
 
         # Act - 장바구니 조회 - 추가한 상품이 있는지 확인
         response = client.get("/api/cart/", **auth_header)
@@ -351,12 +351,12 @@ class TestUserPurchaseFlow:
         """
         # Arrange
         protected_endpoints = [
-            "/api/orders/",        # 주문 목록
-            "/api/wishlist/",      # 위시리스트
-            "/api/notifications/", # 알림
-            "/api/payments/",      # 결제 내역
-            "/api/points/my/",     # 내 포인트
-            "/api/users/profile/", # 사용자 프로필
+            "/api/orders/",  # 주문 목록
+            "/api/wishlist/",  # 위시리스트
+            "/api/notifications/",  # 알림
+            "/api/payments/",  # 결제 내역
+            "/api/points/my/",  # 내 포인트
+            "/api/users/profile/",  # 사용자 프로필
         ]
 
         for endpoint in protected_endpoints:
@@ -364,8 +364,9 @@ class TestUserPurchaseFlow:
             response = client.get(endpoint)
 
             # Assert
-            assert response.status_code == status.HTTP_401_UNAUTHORIZED, \
-                f"{endpoint}는 인증 필요하지만 {response.status_code} 반환"
+            assert (
+                response.status_code == status.HTTP_401_UNAUTHORIZED
+            ), f"{endpoint}는 인증 필요하지만 {response.status_code} 반환"
 
     def test_authenticated_can_access_protected_endpoints(self, client, auth_headers):
         """
@@ -389,8 +390,7 @@ class TestUserPurchaseFlow:
             response = client.get(endpoint, **headers)
 
             # Assert
-            assert response.status_code == status.HTTP_200_OK, \
-                f"{endpoint}에서 인증된 사용자가 {response.status_code} 받음"
+            assert response.status_code == status.HTTP_200_OK, f"{endpoint}에서 인증된 사용자가 {response.status_code} 받음"
 
 
 @pytest.mark.stateful
@@ -753,10 +753,7 @@ class TestCartManagementFlow:
         """장바구니 대량 작업 테스트"""
         # Arrange
         auth_header = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
-        category = Category.objects.first() or Category.objects.create(
-            name="Bulk Test Category",
-            slug="bulk-test-category"
-        )
+        category = Category.objects.first() or Category.objects.create(name="Bulk Test Category", slug="bulk-test-category")
         product2 = Product.objects.create(
             name="Bulk Test Product 2",
             slug="bulk-test-product-2",
@@ -1010,8 +1007,12 @@ class TestStateMachineTransitions:
         assert response.status_code == status.HTTP_200_OK
         summary = response.json()
         # 아이템 개수 또는 총액이 0보다 큼
-        assert summary.get("item_count", 0) > 0 or summary.get("total_amount", 0) > 0 or \
-               summary.get("total", 0) > 0 or summary.get("total_items", 0) > 0
+        assert (
+            summary.get("item_count", 0) > 0
+            or summary.get("total_amount", 0) > 0
+            or summary.get("total", 0) > 0
+            or summary.get("total_items", 0) > 0
+        )
 
         # =========================================
         # 상태 검증: HAS_CART 상태에서의 API 접근
@@ -1060,8 +1061,9 @@ class TestStateMachineTransitions:
 
             # Assert - /api/cart/는 세션 기반이므로 제외
             if "/api/cart/" not in endpoint:
-                assert response.status_code == status.HTTP_401_UNAUTHORIZED, \
-                    f"Anonymous에서 {endpoint}가 {response.status_code} 반환"
+                assert (
+                    response.status_code == status.HTTP_401_UNAUTHORIZED
+                ), f"Anonymous에서 {endpoint}가 {response.status_code} 반환"
 
 
 # ==========================================
@@ -1098,7 +1100,7 @@ class TestComplexWorkflows:
         """
         🛒 완전한 쇼핑 경험 시뮬레이션
 
-        새 사용자가 가입 → 상품 탐색 → 장바구니 추가 → 결제(선택) 
+        새 사용자가 가입 → 상품 탐색 → 장바구니 추가 → 결제(선택)
         까지의 전체 플로우를 테스트합니다.
 
         📋 시나리오:
@@ -1158,10 +1160,12 @@ class TestComplexWorkflows:
         # Act - 로그인
         login_response = client.post(
             "/api/auth/login/",
-            data=json.dumps({
-                "username": f"fulltest_{unique_id}",
-                "password": "SecurePass123!",
-            }),
+            data=json.dumps(
+                {
+                    "username": f"fulltest_{unique_id}",
+                    "password": "SecurePass123!",
+                }
+            ),
             content_type="application/json",
         )
 

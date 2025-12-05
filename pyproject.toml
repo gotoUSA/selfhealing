@@ -74,6 +74,8 @@ markers = [
     "heavy: 고부하 스트레스 테스트 (CI에서 선택적 제외)",
     "schema: OpenAPI 스키마 기반 계약 테스트 (Schemathesis)",
     "stateful: Stateful API 워크플로우 테스트 (상태 전이 검증)",
+    "fuzz: Fuzz 테스트 - Hypothesis/Schemathesis 기반 무작위 입력 검증",
+    "negative: Negative 테스트 - 잘못된 입력에 대한 적절한 에러 처리 검증",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)

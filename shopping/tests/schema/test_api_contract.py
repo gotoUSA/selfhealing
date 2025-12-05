@@ -612,8 +612,9 @@ class TestAuthenticationRequired:
         response = client.get(endpoint)
 
         # Assert
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED, \
-            f"{endpoint} should return 401, got {response.status_code}"
+        assert (
+            response.status_code == status.HTTP_401_UNAUTHORIZED
+        ), f"{endpoint} should return 401, got {response.status_code}"
 
 
 # ==========================================
@@ -651,8 +652,10 @@ class TestPostEndpoints:
         )
 
         # Assert - 201 Created 또는 200 OK
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED], \
-            f"cart add_item returned {response.status_code}"
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+        ], f"cart add_item returned {response.status_code}"
 
     def test_wishlist_toggle(self, client, auth_headers, schema_test_product):
         """위시리스트 토글 API 스키마 검증"""
