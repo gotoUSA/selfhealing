@@ -110,7 +110,7 @@ from hypothesis import HealthCheck, Phase
 from hypothesis import settings as hypothesis_settings
 from rest_framework import status
 
-from .conftest import (
+from ..conftest import (
     EXCLUDED_ENDPOINTS,
     PUBLIC_ENDPOINTS,
     SELLER_ENDPOINTS,

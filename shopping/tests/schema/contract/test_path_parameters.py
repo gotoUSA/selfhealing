@@ -4,7 +4,7 @@
 import pytest
 from rest_framework import status
 
-from .conftest import (
+from ..conftest import (
     assert_error_response,
     assert_order_schema,
     assert_product_schema,

@@ -4,7 +4,7 @@
 import pytest
 from rest_framework import status
 
-from .conftest import is_excluded_endpoint, is_public_endpoint
+from ..conftest import is_excluded_endpoint, is_public_endpoint
 
 
 @pytest.mark.schema

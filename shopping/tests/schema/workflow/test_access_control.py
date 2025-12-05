@@ -4,7 +4,7 @@
 import pytest
 from rest_framework import status
 
-from .conftest import assert_error_response, assert_list_response
+from ..conftest import assert_error_response, assert_list_response
 
 
 @pytest.mark.schema

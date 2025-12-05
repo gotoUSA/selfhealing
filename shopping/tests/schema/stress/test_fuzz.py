@@ -100,7 +100,7 @@ from hypothesis import given, settings as hypothesis_settings, Phase, HealthChec
 from hypothesis import strategies as st
 from rest_framework import status
 
-from .conftest import (
+from ..conftest import (
     EXCLUDED_ENDPOINTS,
     is_excluded_endpoint,
     is_public_endpoint,

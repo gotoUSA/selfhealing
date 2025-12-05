@@ -7,7 +7,7 @@ import uuid
 import pytest
 from rest_framework import status
 
-from .conftest import assert_error_response
+from ..conftest import assert_error_response
 
 
 @pytest.mark.schema
