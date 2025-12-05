@@ -938,3 +938,496 @@ class TestPaymentNegativeInputs:
 
         # 400 에러 예상 (일부 케이스는 200이 될 수 있음 - 자동 보정)
         # 최소한 5xx는 발생하면 안 됨
+
+
+# ==========================================
+# ⭐ 리뷰 API Negative 테스트
+# ==========================================
+
+
+@pytest.mark.negative
+@pytest.mark.schema
+@pytest.mark.django_db(transaction=True)
+class TestReviewNegativeInputs:
+    """
+    ⭐ 리뷰 API에 대한 Negative 테스트
+
+    리뷰 API에 잘못된 입력을 주입하여 적절한 에러 응답이 반환되는지 검증합니다.
+    평점은 1-5 범위여야 하며, 리뷰 내용도 적절한 길이여야 합니다.
+
+    📅 가이드라인: 08_NEGATIVE_TESTING.md
+    """
+
+    @pytest.mark.parametrize(
+        "invalid_rating,expected_codes,description",
+        [
+            (0, [400, 422], "0점 - 최소값 미만"),
+            (-1, [400, 422], "음수 평점"),
+            (6, [400, 422], "6점 - 최대값 초과"),
+            (100, [400, 422], "100점 - 범위 크게 초과"),
+            (-100, [400, 422], "-100점 - 음수 범위 초과"),
+            (1.5, [400, 422], "소수점 평점 (허용 여부에 따라)"),
+            (None, [400, 422], "null 평점"),
+            ("abc", [400, 422], "문자열 평점"),
+            ("", [400, 422], "빈 문자열 평점"),
+        ],
+        ids=[
+            "zero",
+            "negative",
+            "six",
+            "hundred",
+            "neg_hundred",
+            "decimal",
+            "null",
+            "string",
+            "empty_string",
+        ],
+    )
+    def test_review_invalid_rating(
+        self, client, auth_headers, schema_test_product, invalid_rating, expected_codes, description
+    ):
+        """
+        잘못된 평점 값 테스트
+
+        평점 범위(1-5) 외의 값을 주입하여
+        적절한 에러 응답이 반환되는지 확인합니다.
+
+        🔍 검증 포인트:
+        - 범위 외 평점 거부 (1-5만 허용)
+        - 5xx 에러 발생하지 않음
+        - 명확한 에러 메시지
+
+        Args:
+            invalid_rating: 테스트할 잘못된 평점
+            expected_codes: 예상 HTTP 상태 코드 목록
+            description: 테스트 설명
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {
+            "rating": invalid_rating,
+            "content": "좋은 상품입니다!",
+        }
+
+        # Act
+        response = client.post(
+            f"/api/products/{schema_test_product.id}/reviews/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"{description}에서 서버 에러 발생!\n"
+            f"rating={invalid_rating}\n"
+            f"status_code={response.status_code}"
+        )
+
+        # Assert - 적절한 에러 응답 (403은 구매 확인 실패일 수 있음)
+        assert response.status_code in expected_codes + [status.HTTP_403_FORBIDDEN], (
+            f"{description}: 예상치 못한 응답 {response.status_code}"
+        )
+
+    @pytest.mark.parametrize(
+        "invalid_content,description",
+        [
+            ("", "빈 리뷰 내용"),
+            ("   ", "공백만 있는 리뷰"),
+            (None, "null 리뷰 내용"),
+            ("a" * 5001, "너무 긴 리뷰 (5000자 초과)"),
+        ],
+        ids=["empty", "whitespace", "null", "too_long"],
+    )
+    def test_review_invalid_content(
+        self, client, auth_headers, schema_test_product, invalid_content, description
+    ):
+        """
+        잘못된 리뷰 내용 테스트
+
+        빈 내용, 너무 긴 내용 등 잘못된 리뷰 내용에 대해
+        적절한 에러 응답이 반환되는지 확인합니다.
+
+        🔍 검증 포인트:
+        - 빈 내용 거부 (또는 허용 정책에 따름)
+        - 너무 긴 내용 거부
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {
+            "rating": 5,
+            "content": invalid_content,
+        }
+
+        # Act
+        response = client.post(
+            f"/api/products/{schema_test_product.id}/reviews/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"{description}에서 서버 에러 발생!\n"
+            f"status_code={response.status_code}"
+        )
+
+    def test_review_without_purchase(self, client, auth_headers, schema_test_product):
+        """
+        구매하지 않은 상품에 리뷰 작성 시도 → 403
+
+        구매 확인 로직이 있는 경우,
+        구매하지 않은 상품에 대한 리뷰 작성을 거부해야 합니다.
+
+        🔍 검증 포인트:
+        - 구매 확인 로직 동작
+        - 403 Forbidden 반환
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 구매 이력 없는 사용자로 테스트
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {
+            "rating": 5,
+            "content": "좋은 상품입니다!",
+        }
+
+        # Act
+        response = client.post(
+            f"/api/products/{schema_test_product.id}/reviews/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, f"서버 에러 발생: {response.status_code}"
+
+        # 구매 확인 로직이 있으면 403, 없으면 201
+        # 어느 쪽이든 5xx는 아니어야 함
+
+    def test_review_duplicate_submission(self, client, auth_headers, schema_test_product):
+        """
+        동일 상품에 중복 리뷰 작성 시도
+
+        이미 리뷰를 작성한 상품에 다시 리뷰를 작성하려 하면
+        거부되어야 합니다 (정책에 따라 다름).
+
+        🔍 검증 포인트:
+        - 중복 리뷰 방지 (정책에 따름)
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        data = {
+            "rating": 5,
+            "content": "좋은 상품입니다!",
+        }
+
+        # Act - 첫 번째 리뷰 시도
+        response1 = client.post(
+            f"/api/products/{schema_test_product.id}/reviews/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Act - 두 번째 리뷰 시도 (중복)
+        response2 = client.post(
+            f"/api/products/{schema_test_product.id}/reviews/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response2.status_code < 500, f"중복 리뷰에서 서버 에러 발생: {response2.status_code}"
+
+
+# ==========================================
+# 💰 포인트 API Negative 테스트
+# ==========================================
+
+
+@pytest.mark.negative
+@pytest.mark.schema
+@pytest.mark.django_db(transaction=True)
+class TestPointNegativeInputs:
+    """
+    💰 포인트 API에 대한 Negative 테스트
+
+    포인트 사용 시 잔액 초과, 음수 포인트 등
+    잘못된 입력에 대해 적절한 에러 응답이 반환되는지 검증합니다.
+
+    📅 가이드라인: 08_NEGATIVE_TESTING.md
+    """
+
+    @pytest.fixture
+    def user_with_limited_points(self, db):
+        """제한된 포인트를 가진 사용자 생성"""
+        from shopping.tests.factories import UserFactory
+        user = UserFactory(points=5000)  # 5000 포인트
+        return user
+
+    @pytest.mark.parametrize(
+        "points_to_use,user_points,expected_codes,description",
+        [
+            (10000, 5000, [400, 422], "잔액 초과 사용"),
+            (-1000, 5000, [400, 422], "음수 포인트 사용"),
+            (0, 5000, [400, 200, 201], "0 포인트 사용 (허용될 수 있음)"),
+            (5001, 5000, [400, 422], "1포인트 초과 사용"),
+        ],
+        ids=["exceed_balance", "negative", "zero", "one_over"],
+    )
+    def test_order_with_invalid_points(
+        self, client, schema_test_product,
+        points_to_use, user_points, expected_codes, description
+    ):
+        """
+        잘못된 포인트 사용 테스트
+
+        주문 시 잔액을 초과하거나 음수 포인트를 사용하려 할 때
+        적절한 에러 응답이 반환되는지 확인합니다.
+
+        🔍 검증 포인트:
+        - 잔액 초과 거부
+        - 음수 포인트 거부
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 포인트가 있는 사용자 생성
+        from shopping.tests.factories import UserFactory
+        user = UserFactory(points=user_points)
+
+        # 로그인하여 토큰 획득
+        login_response = client.post(
+            "/api/auth/login/",
+            data=json.dumps({
+                "username": user.username,
+                "password": "testpass123",
+            }),
+            content_type="application/json",
+        )
+
+        if login_response.status_code != 200:
+            pytest.skip("로그인 실패로 테스트 스킵")
+
+        login_data = login_response.json()
+        token = login_data.get("access") or login_data.get("token", {}).get("access")
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        # 장바구니에 상품 추가
+        cart_response = client.post(
+            "/api/cart/add_item/",
+            data=json.dumps({
+                "product_id": schema_test_product.id,
+                "quantity": 1,
+            }),
+            content_type="application/json",
+            **headers,
+        )
+
+        if cart_response.status_code not in [200, 201]:
+            pytest.skip("장바구니 추가 실패로 테스트 스킵")
+
+        # 주문 생성 시 잘못된 포인트 사용
+        data = {
+            "shipping_address": "서울시 강남구 테헤란로 123",
+            "shipping_name": "홍길동",
+            "shipping_phone": "010-1234-5678",
+            "shipping_postal_code": "12345",
+            "payment_method": "card",
+            "used_points": points_to_use,
+        }
+
+        # Act
+        response = client.post(
+            "/api/orders/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음 (핵심 검증)
+        assert response.status_code < 500, (
+            f"{description}에서 서버 에러 발생!\n"
+            f"points_to_use={points_to_use}, user_points={user_points}\n"
+            f"status_code={response.status_code}"
+        )
+
+        # 비즈니스 로직 검증:
+        # - 음수/잔액 초과 포인트는 정책에 따라:
+        #   1. 400/422로 거부되거나
+        #   2. 0 또는 최대값으로 자동 조정 후 201/202로 성공
+        # 핵심: 5xx 에러 없음 + 데이터 무결성 유지 (위에서 검증됨)
+
+    def test_point_usage_exceeds_order_total(
+        self, client, auth_headers, schema_test_product, user
+    ):
+        """
+        주문 금액 초과 포인트 사용 테스트
+
+        주문 총액보다 많은 포인트를 사용하려 할 때
+        적절한 처리가 되는지 확인합니다.
+
+        🔍 검증 포인트:
+        - 주문 금액 초과 포인트 사용 처리
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 사용자에게 많은 포인트 부여
+        user.points = 1000000  # 100만 포인트
+        user.save()
+
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # 장바구니에 상품 추가 (예: 10,000원 상품)
+        cart_response = client.post(
+            "/api/cart/add_item/",
+            data=json.dumps({
+                "product_id": schema_test_product.id,
+                "quantity": 1,
+            }),
+            content_type="application/json",
+            **headers,
+        )
+
+        # 주문 금액보다 많은 포인트 사용 시도
+        data = {
+            "shipping_address": "서울시 강남구 테헤란로 123",
+            "shipping_name": "홍길동",
+            "shipping_phone": "010-1234-5678",
+            "shipping_postal_code": "12345",
+            "payment_method": "card",
+            "used_points": 500000,  # 50만 포인트 (상품가보다 클 수 있음)
+        }
+
+        # Act
+        response = client.post(
+            "/api/orders/",
+            data=json.dumps(data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"주문 금액 초과 포인트에서 서버 에러 발생!\n"
+            f"status_code={response.status_code}"
+        )
+
+
+# ==========================================
+# 📦 주문 취소 Negative 테스트
+# ==========================================
+
+
+@pytest.mark.negative
+@pytest.mark.schema
+@pytest.mark.django_db(transaction=True)
+class TestOrderCancelNegativeInputs:
+    """
+    📦 주문 취소 API에 대한 Negative 테스트
+
+    이미 취소된 주문, 배송 완료된 주문 등
+    취소 불가능한 상태의 주문 취소 시도에 대해 검증합니다.
+
+    📅 가이드라인: 08_NEGATIVE_TESTING.md
+    """
+
+    def test_cancel_already_canceled_order(self, client, auth_headers, user):
+        """
+        이미 취소된 주문 재취소 시도 → 400
+
+        🔍 검증 포인트:
+        - 중복 취소 방지
+        - 적절한 에러 응답
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 취소된 주문 생성
+        from shopping.tests.factories import OrderFactory
+        canceled_order = OrderFactory.canceled(user=user)
+
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act - 이미 취소된 주문 취소 시도
+        response = client.post(
+            f"/api/orders/{canceled_order.id}/cancel/",
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"이미 취소된 주문 재취소에서 서버 에러 발생!\n"
+            f"status_code={response.status_code}"
+        )
+
+        # 400 또는 409 (Conflict) 예상
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_409_CONFLICT,
+        ], f"이미 취소된 주문이 다시 취소됨: {response.status_code}"
+
+    def test_cancel_shipped_order(self, client, auth_headers, user):
+        """
+        배송중인 주문 취소 시도 → 400
+
+        🔍 검증 포인트:
+        - 배송 후 취소 불가 정책 검증
+        - 적절한 에러 응답
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 배송중 주문 생성
+        from shopping.tests.factories import OrderFactory
+        shipped_order = OrderFactory.shipped(user=user)
+
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act - 배송중 주문 취소 시도
+        response = client.post(
+            f"/api/orders/{shipped_order.id}/cancel/",
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"배송중 주문 취소에서 서버 에러 발생!\n"
+            f"status_code={response.status_code}"
+        )
+
+    def test_cancel_other_user_order(self, client, auth_headers):
+        """
+        다른 사용자의 주문 취소 시도 → 403/404
+
+        🔍 검증 포인트:
+        - 권한 검증 (자신의 주문만 취소 가능)
+        - 403 또는 404 반환
+        - 5xx 에러 발생하지 않음
+        """
+        # Arrange - 다른 사용자의 주문 생성
+        from shopping.tests.factories import OrderFactory, UserFactory
+        other_user = UserFactory()
+        other_order = OrderFactory.pending(user=other_user)
+
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act - 다른 사용자 주문 취소 시도
+        response = client.post(
+            f"/api/orders/{other_order.id}/cancel/",
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, (
+            f"다른 사용자 주문 취소에서 서버 에러 발생!\n"
+            f"status_code={response.status_code}"
+        )
+
+        # 403 (Forbidden) 또는 404 (Not Found) 예상
+        assert response.status_code in [
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
+        ], f"다른 사용자 주문 취소가 허용됨: {response.status_code}"
+

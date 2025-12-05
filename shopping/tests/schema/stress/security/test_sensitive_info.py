@@ -195,3 +195,338 @@ class TestSensitiveInfoExposure:
                             f"payload={payload}\n"
                             f"response={content[:500]}"
                         )
+
+
+# ==========================================
+# 💳 결제 민감정보 노출 방지 테스트
+# ==========================================
+
+
+@pytest.mark.security
+@pytest.mark.negative
+@pytest.mark.schema
+@pytest.mark.django_db(transaction=True)
+class TestPaymentSensitiveInfoExposure:
+    """
+    💳 결제 민감정보 노출 방지 테스트
+
+    결제 실패 또는 에러 상황에서 카드 정보, CVV, 계좌번호 등
+    민감한 결제 정보가 노출되지 않는지 검증합니다.
+
+    📋 테스트 시나리오:
+    - 결제 실패 시 카드 전체 번호 미노출
+    - 에러 응답에 CVV/CVC 미포함
+    - 계좌번호 마스킹 처리 확인
+
+    📅 가이드라인: 02_ERROR_RESPONSE_SCHEMA.md (민감정보 보호)
+    """
+
+    # 결제 관련 민감 정보 패턴
+    PAYMENT_SENSITIVE_PATTERNS = [
+        # 카드번호 패턴 (4자리-4자리-4자리-4자리)
+        r"\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}",
+        # CVV/CVC (3-4자리)
+        r"cvv|cvc|security.?code",
+        # 계좌번호 (10자리 이상 연속 숫자)
+        r"\d{10,}",
+        # 카드 유효기간
+        r"(0[1-9]|1[0-2])/?([0-9]{2}|[0-9]{4})",
+    ]
+
+    # 허용되는 마스킹 패턴
+    ALLOWED_MASKED_PATTERNS = [
+        r"\d{4}\*{4,}",  # 앞 4자리만 표시
+        r"\*{4,}\d{4}",  # 뒤 4자리만 표시
+        r"\d{4}\*+\d{4}",  # 앞뒤 4자리만 표시
+    ]
+
+    def test_payment_failure_no_card_number(self, client, auth_headers, schema_test_order):
+        """
+        결제 실패 시 카드 전체 번호 미노출 테스트
+
+        결제가 실패했을 때 에러 응답에
+        카드 번호 전체가 포함되지 않아야 합니다.
+
+        🔍 검증 포인트:
+        - 16자리 카드번호 미노출
+        - 마스킹된 카드번호만 허용 (1234****5678)
+        """
+        import re
+
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # 잘못된 결제 정보로 결제 시도
+        invalid_payment_data = {
+            "order_id": schema_test_order.id,
+            "amount": -1000,  # 잘못된 금액
+            "payment_method": "card",
+        }
+
+        # Act
+        response = client.post(
+            "/api/payments/prepare/",
+            data=json.dumps(invalid_payment_data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 응답 내용 확인
+        content = response.content.decode("utf-8", errors="ignore")
+
+        # 카드번호 전체 노출 확인 (16자리 연속 숫자)
+        card_number_pattern = r"\d{15,16}"
+        matches = re.findall(card_number_pattern, content)
+        for match in matches:
+            # 마스킹되지 않은 카드번호가 있으면 실패
+            if "*" not in match:
+                pytest.fail(
+                    f"카드 번호 노출!\n"
+                    f"match={match}\n"
+                    f"response={content[:500]}"
+                )
+
+    def test_payment_error_no_cvv_exposure(self, client, auth_headers, schema_test_order):
+        """
+        결제 에러 시 CVV/CVC 미노출 테스트
+
+        결제 관련 에러 발생 시
+        CVV/CVC 값이 응답에 포함되지 않아야 합니다.
+
+        🔍 검증 포인트:
+        - CVV/CVC 값 미노출
+        - 보안 코드 관련 필드명도 가급적 미노출
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # 결제 관련 다양한 에러 유도
+        test_cases = [
+            {"order_id": 99999999, "amount": 10000},  # 존재하지 않는 주문
+            {"order_id": schema_test_order.id, "amount": -1},  # 음수 금액
+            {"order_id": "invalid", "amount": 10000},  # 잘못된 주문 ID
+        ]
+
+        for data in test_cases:
+            # Act
+            response = client.post(
+                "/api/payments/prepare/",
+                data=json.dumps(data),
+                content_type="application/json",
+                **headers,
+            )
+
+            # Assert - 응답에 CVV 관련 정보 미포함
+            content = response.content.decode("utf-8", errors="ignore").lower()
+
+            dangerous_patterns = [
+                "cvv",
+                "cvc",
+                "security_code",
+                "securitycode",
+                "card_verification",
+            ]
+
+            for pattern in dangerous_patterns:
+                assert pattern not in content, (
+                    f"CVV 관련 정보 노출!\n"
+                    f"pattern={pattern}\n"
+                    f"data={data}\n"
+                    f"response={content[:500]}"
+                )
+
+    def test_payment_response_masked_card_number(self, client, auth_headers, schema_test_payment):
+        """
+        결제 응답에서 카드번호 마스킹 확인
+
+        결제 정보 조회 시 카드번호가 마스킹되어 있는지 확인합니다.
+
+        🔍 검증 포인트:
+        - 카드번호 마스킹 (예: 1234****5678)
+        - 전체 번호 미노출
+        """
+        import re
+
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act - 결제 상세 조회
+        response = client.get(
+            f"/api/payments/{schema_test_payment.id}/",
+            **headers,
+        )
+
+        if response.status_code != 200:
+            pytest.skip("결제 조회 실패로 테스트 스킵")
+
+        # Assert - 응답에서 카드번호 확인
+        content = response.content.decode("utf-8", errors="ignore")
+
+        # JSON 파싱하여 card_number 필드 직접 확인
+        data = response.json()
+        card_number = data.get("card_number", "")
+
+        if card_number:
+            # 카드번호에 '*'가 포함되어 있어야 마스킹됨
+            if "*" not in card_number:
+                # 카드번호 형식인지 확인 (숫자와 구분자로만 이루어진 12자리 이상)
+                digits = re.sub(r"\D", "", card_number)
+                if len(digits) >= 12:
+                    pytest.fail(
+                        f"마스킹되지 않은 카드번호 발견!\n"
+                        f"card_number={card_number}\n"
+                        f"response={content[:500]}"
+                    )
+
+        # 추가 검증: 전체 16자리 카드번호 패턴 (마스킹 없이)
+        # 예: 1234-5678-9012-3456 또는 1234567890123456
+        full_card_patterns = [
+            r'"card_number"\s*:\s*"(\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})"',
+            r'"card_number"\s*:\s*"(\d{16})"',
+        ]
+
+        for pattern in full_card_patterns:
+            match = re.search(pattern, content)
+            if match:
+                pytest.fail(
+                    f"마스킹되지 않은 전체 카드번호 발견!\n"
+                    f"card_number={match.group(1)}\n"
+                    f"response={content[:500]}"
+                )
+
+    def test_payment_error_no_secret_key_exposure(self, client, auth_headers):
+        """
+        결제 에러 시 API 키/시크릿 미노출 테스트
+
+        결제 API 호출 중 에러 발생 시
+        Toss API 키나 시크릿 키가 노출되지 않아야 합니다.
+
+        🔍 검증 포인트:
+        - API Key 미노출
+        - Secret Key 미노출
+        - 인증 토큰 미노출
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # 다양한 에러 유발 요청
+        error_data = {
+            "order_id": 99999999,
+            "amount": 10000,
+        }
+
+        # Act
+        response = client.post(
+            "/api/payments/prepare/",
+            data=json.dumps(error_data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert
+        content = response.content.decode("utf-8", errors="ignore").lower()
+
+        # 민감한 키워드 확인
+        secret_patterns = [
+            "secret_key",
+            "secretkey",
+            "api_key",
+            "apikey",
+            "toss_secret",
+            "client_secret",
+            "private_key",
+            "sk_live_",  # Toss 라이브 시크릿 키 패턴
+            "sk_test_",  # Toss 테스트 시크릿 키 패턴
+            "authorization: basic",  # 인코딩된 API 키
+        ]
+
+        for pattern in secret_patterns:
+            assert pattern not in content, (
+                f"API 키/시크릿 노출!\n"
+                f"pattern={pattern}\n"
+                f"response={content[:500]}"
+            )
+
+    def test_payment_webhook_no_sensitive_data_logging(self, client):
+        """
+        결제 웹훅에서 민감정보 로깅 미발생 확인
+
+        결제 웹훅 처리 중 에러가 발생해도
+        민감 정보가 로그에 기록되지 않아야 합니다.
+
+        🔍 검증 포인트:
+        - 웹훅 에러 응답에 민감정보 미포함
+        - 5xx 에러 없음
+        """
+        # Arrange - 잘못된 웹훅 페이로드
+        invalid_webhooks = [
+            {},  # 빈 페이로드
+            {"event": "invalid"},  # 잘못된 이벤트
+            {"paymentKey": "test", "orderId": "invalid"},  # 잘못된 주문
+        ]
+
+        for payload in invalid_webhooks:
+            # Act
+            response = client.post(
+                "/api/payments/webhook/",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
+
+            # Assert - 5xx 에러 없음
+            assert response.status_code < 500, (
+                f"웹훅에서 서버 에러 발생!\n"
+                f"payload={payload}\n"
+                f"status_code={response.status_code}"
+            )
+
+            # Assert - 민감 정보 미노출
+            content = response.content.decode("utf-8", errors="ignore").lower()
+            sensitive_in_response = any(
+                p in content for p in ["secret", "password", "key=", "token="]
+            )
+            assert not sensitive_in_response, (
+                f"웹훅 응답에 민감정보 포함!\n"
+                f"response={content[:500]}"
+            )
+
+    def test_refund_error_no_account_exposure(self, client, auth_headers, schema_test_payment):
+        """
+        환불 에러 시 계좌정보 미노출 테스트
+
+        환불 처리 중 에러 발생 시
+        고객 계좌 정보가 노출되지 않아야 합니다.
+
+        🔍 검증 포인트:
+        - 계좌번호 미노출 또는 마스킹
+        - 은행 내부 코드 미노출
+        """
+        import re
+
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act - 환불 시도 (잘못된 요청)
+        response = client.post(
+            f"/api/payments/{schema_test_payment.id}/refund/",
+            data=json.dumps({"reason": "test"}),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert
+        content = response.content.decode("utf-8", errors="ignore")
+
+        # 10자리 이상 연속 숫자 (계좌번호 가능성)
+        account_pattern = r"\d{10,}"
+        matches = re.findall(account_pattern, content)
+
+        for match in matches:
+            # ID 같은 짧은 숫자는 허용, 계좌번호로 의심되는 긴 숫자는 확인
+            if len(match) >= 12:
+                pytest.fail(
+                    f"계좌번호로 의심되는 긴 숫자 노출!\n"
+                    f"match={match}\n"
+                    f"response={content[:500]}"
+                )
+
