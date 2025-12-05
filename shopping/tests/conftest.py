@@ -29,6 +29,7 @@ def pytest_configure(config):
             except OSError:
                 pass
 
+
 from decimal import Decimal
 
 from django.conf import settings

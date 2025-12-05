@@ -27,12 +27,17 @@ class TestStrictSchemaValidation:
 
     def test_product_detail_strict_schema(self, client, schema_test_product):
         """
-        🛍️ 상품 상세 Strict 스키마 검증
+        🛒 상품 상세 Strict 스키마 검증
 
         응답에 예상치 못한 필드가 없는지 검증합니다.
         """
-        response = client.get(f"/api/products/{schema_test_product.id}/")
+        # Arrange
+        product_id = schema_test_product.id
 
+        # Act
+        response = client.get(f"/api/products/{product_id}/")
+
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
@@ -47,12 +52,16 @@ class TestStrictSchemaValidation:
 
     def test_products_list_items_schema(self, client, schema_test_product):
         """
-        🛍️ 상품 목록 각 아이템 스키마 검증
+        🛒 상품 목록 각 아이템 스키마 검증
 
         목록의 각 상품이 올바른 스키마를 따르는지 검증합니다.
         """
+        # Arrange - none needed for public API
+
+        # Act
         response = client.get("/api/products/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 

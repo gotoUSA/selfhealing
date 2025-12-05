@@ -42,9 +42,12 @@ class TestQueryParameterEdgeCases:
 
         잘못된 page 값에도 5xx 에러 없이 처리되어야 합니다.
         """
+        # Arrange - page_value is provided by parametrize
+
+        # Act
         response = client.get(f"/api/products/?page={page_value}")
 
-        # 5xx 에러 없음
+        # Assert - 5xx 에러 없음
         assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
 
         # 400 또는 200 (빈 결과) 또는 404 (페이지 없음)
@@ -72,9 +75,12 @@ class TestQueryParameterEdgeCases:
 
         악성 검색어에도 5xx 에러 없이 처리되어야 합니다.
         """
+        # Arrange - search_value is provided by parametrize
+
+        # Act
         response = client.get(f"/api/products/?search={search_value}")
 
-        # 5xx 에러 없음
+        # Assert - 5xx 에러 없음
         assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
 
         # 정상 응답
@@ -104,9 +110,12 @@ class TestQueryParameterEdgeCases:
 
         잘못된 ordering 값에도 5xx 에러 없이 처리되어야 합니다.
         """
+        # Arrange - ordering_value is provided by parametrize
+
+        # Act
         response = client.get(f"/api/products/?ordering={ordering_value}")
 
-        # 5xx 에러 없음
+        # Assert - 5xx 에러 없음
         assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
 
     def test_products_combined_query_params(self, client, schema_test_product):
@@ -115,8 +124,12 @@ class TestQueryParameterEdgeCases:
 
         여러 쿼리 파라미터를 동시에 사용할 때 정상 동작하는지 검증합니다.
         """
+        # Arrange - none needed for public API
+
+        # Act
         response = client.get("/api/products/?page=1&search=test&ordering=-price")
 
+        # Assert
         assert response.status_code < 500, "서버 에러 발생"
         assert response.status_code == status.HTTP_200_OK
 
@@ -127,6 +140,10 @@ class TestQueryParameterEdgeCases:
         """
         📂 카테고리 필터 파라미터 테스트
         """
+        # Arrange - none needed for public API
+
+        # Act
         response = client.get("/api/categories/?parent=null")
 
+        # Assert
         assert response.status_code < 500, "서버 에러 발생"

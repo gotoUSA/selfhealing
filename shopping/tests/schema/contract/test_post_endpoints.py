@@ -34,9 +34,11 @@ class TestPostEndpointsContract:
 
     def test_cart_add_item_success(self, client, auth_headers, schema_test_product):
         """🛒 장바구니 상품 추가 성공"""
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"product_id": schema_test_product.id, "quantity": 1}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
@@ -44,6 +46,7 @@ class TestPostEndpointsContract:
             **headers,
         )
 
+        # Assert
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
         response_data = response.json()
         assert isinstance(response_data, dict), "응답이 dict가 아님"
@@ -53,9 +56,11 @@ class TestPostEndpointsContract:
 
     def test_wishlist_toggle_success(self, client, auth_headers, schema_test_product):
         """❤️ 위시리스트 토글 성공"""
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"product_id": schema_test_product.id}
 
+        # Act
         response = client.post(
             "/api/wishlist/toggle/",
             data=json.dumps(data),
@@ -63,6 +68,7 @@ class TestPostEndpointsContract:
             **headers,
         )
 
+        # Assert
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
         response_data = response.json()
         assert isinstance(response_data, dict), "응답이 dict가 아님"
@@ -73,14 +79,17 @@ class TestPostEndpointsContract:
 
     def test_auth_login_success(self, client, user):
         """🔐 로그인 성공"""
+        # Arrange
         data = {"username": "testuser", "password": "testpass123"}
 
+        # Act
         response = client.post(
             "/api/auth/login/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         response_data = response.json()
         # 로그인 응답 스키마 검증
@@ -101,14 +110,17 @@ class TestPostEndpointsContract:
 
     def test_auth_login_failure_contract(self, client, user):
         """🔐 로그인 실패 - 에러 응답 Contract"""
+        # Arrange
         data = {"username": "testuser", "password": "wrongpassword"}
 
+        # Act
         response = client.post(
             "/api/auth/login/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED]
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/login/ (failure)")
@@ -142,41 +154,49 @@ class TestPostEndpointsContract:
 
     def test_auth_register_failure_contract(self, client):
         """📝 회원가입 실패 - 에러 응답 Contract"""
+        # Arrange
         data = {"username": "", "password": "short"}
 
+        # Act
         response = client.post(
             "/api/auth/register/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/register/ (failure)")
 
     def test_cart_add_unauthenticated(self, client, schema_test_product):
         """🛒 장바구니 추가 - 인증 없음 → 401"""
+        # Arrange
         data = {"product_id": schema_test_product.id, "quantity": 1}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
-        # 인증 없으면 401 또는 세션 기반이면 다른 응답
+        # Assert - 인증 없으면 401 또는 세션 기반이면 다른 응답
         assert response.status_code < 500, "서버 에러 발생"
 
     def test_wishlist_toggle_unauthenticated(self, client, schema_test_product):
         """❤️ 위시리스트 토글 - 인증 없음 → 401"""
+        # Arrange
         data = {"product_id": schema_test_product.id}
 
+        # Act
         response = client.post(
             "/api/wishlist/toggle/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -202,6 +222,7 @@ class TestPostFailureContracts:
 
         이미 존재하는 username으로 가입 시도 시 에러가 반환되어야 합니다.
         """
+        # Arrange
         data = {
             "username": "testuser",  # 이미 존재하는 사용자명
             "email": "newemail@test.com",
@@ -209,12 +230,14 @@ class TestPostFailureContracts:
             "password2": "securePassword123!",
         }
 
+        # Act
         response = client.post(
             "/api/auth/register/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/register/ (duplicate)")
@@ -232,6 +255,7 @@ class TestPostFailureContracts:
         """
         import uuid
 
+        # Arrange
         unique_username = f"newuser_{uuid.uuid4().hex[:8]}"
         data = {
             "username": unique_username,
@@ -240,12 +264,14 @@ class TestPostFailureContracts:
             "password2": "differentPassword456!",  # 불일치
         }
 
+        # Act
         response = client.post(
             "/api/auth/register/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/register/ (mismatch)")
@@ -258,6 +284,7 @@ class TestPostFailureContracts:
         """
         from shopping.models.product import Product
 
+        # Arrange
         out_of_stock_product = Product.objects.create(
             name="재고없는 상품",
             slug="out-of-stock-product",
@@ -272,6 +299,7 @@ class TestPostFailureContracts:
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"product_id": out_of_stock_product.id, "quantity": 1}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
@@ -279,7 +307,7 @@ class TestPostFailureContracts:
             **headers,
         )
 
-        # 재고 부족은 400
+        # Assert - 재고 부족은 400
         assert response.status_code == status.HTTP_400_BAD_REQUEST, f"재고 없는 상품 추가 시 {response.status_code}"
         error_data = response.json()
         assert_error_response(error_data, context="/api/cart/add_item/ (out of stock)")
@@ -290,10 +318,12 @@ class TestPostFailureContracts:
 
         재고보다 많은 수량을 추가하려 할 때 에러가 반환되어야 합니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         # schema_test_product의 stock은 100
         data = {"product_id": schema_test_product.id, "quantity": 999999}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
@@ -301,7 +331,7 @@ class TestPostFailureContracts:
             **headers,
         )
 
-        # 재고 초과는 400
+        # Assert - 재고 초과는 400
         assert response.status_code == status.HTTP_400_BAD_REQUEST, f"재고 초과 시 {response.status_code}"
 
     def test_cart_add_invalid_product_type(self, client, auth_headers):
@@ -310,9 +340,11 @@ class TestPostFailureContracts:
 
         product_id에 문자열을 전달할 때 에러가 반환되어야 합니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"product_id": "not_a_number", "quantity": 1}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
@@ -320,6 +352,7 @@ class TestPostFailureContracts:
             **headers,
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/cart/add_item/ (invalid type)")
@@ -330,6 +363,7 @@ class TestPostFailureContracts:
 
         장바구니가 비어있을 때 주문을 생성하면 에러가 반환되어야 합니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {
             "shipping_name": "테스트",
@@ -338,6 +372,7 @@ class TestPostFailureContracts:
             "shipping_address": "서울시",
         }
 
+        # Act
         response = client.post(
             "/api/orders/",
             data=json.dumps(data),
@@ -345,5 +380,5 @@ class TestPostFailureContracts:
             **headers,
         )
 
-        # 빈 장바구니는 400
+        # Assert - 빈 장바구니는 400
         assert response.status_code == status.HTTP_400_BAD_REQUEST, f"빈 장바구니 주문 시 {response.status_code}"

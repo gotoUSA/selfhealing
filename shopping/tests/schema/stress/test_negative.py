@@ -357,6 +357,8 @@ class TestSecurityInputs:
         Args:
             payload: SQL Injection 페이로드
         """
+        # Arrange - payload is provided by parametrize
+
         # Act - 검색 파라미터로 주입
         response = client.get(f"/api/products/?search={payload}")
 
@@ -403,6 +405,8 @@ class TestSecurityInputs:
         - 서버 에러 발생하지 않음
         - 응답에 스크립트 태그가 그대로 포함되지 않음
         """
+        # Arrange - xss_payload is provided by parametrize
+
         # Act
         response = client.get(f"/api/products/?search={xss_payload}")
 
@@ -482,6 +486,8 @@ class TestSecurityInputs:
         - 404 또는 400 반환 (파일 내용 노출 안 됨)
         - 5xx 에러 발생하지 않음
         """
+        # Arrange - path_payload is provided by parametrize
+
         # Act - 상품 ID 위치에 Path Traversal 시도
         response = client.get(f"/api/products/{path_payload}/")
 
@@ -554,6 +560,8 @@ class TestBoundaryValues:
             page_param: 테스트할 페이지 파라미터
             expected_codes: 예상 HTTP 상태 코드 목록
         """
+        # Arrange - page_param is provided by parametrize
+
         # Act
         response = client.get("/api/products/", page_param)
 

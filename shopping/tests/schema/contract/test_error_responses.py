@@ -38,14 +38,17 @@ class TestErrorResponseContracts:
 
         에러 응답이 올바른 형식인지 검증합니다.
         """
+        # Arrange
         data = {"username": "testuser", "password": "wrongpassword123"}
 
+        # Act
         response = client.post(
             "/api/auth/login/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED]
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/login/ (invalid password)")
@@ -83,14 +86,17 @@ class TestErrorResponseContracts:
 
         필수 필드 누락, 짧은 비밀번호 등에 대한 에러 응답을 검증합니다.
         """
+        # Arrange
         data = {"username": "", "password": "short"}
 
+        # Act
         response = client.post(
             "/api/auth/register/",
             data=json.dumps(data),
             content_type="application/json",
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/auth/register/ (invalid)")
@@ -151,9 +157,11 @@ class TestErrorResponseContracts:
 
         없는 상품 ID로 추가 시도 시 에러 응답을 검증합니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {"product_id": 99999999, "quantity": 1}
 
+        # Act
         response = client.post(
             "/api/cart/add_item/",
             data=json.dumps(data),
@@ -161,6 +169,7 @@ class TestErrorResponseContracts:
             **headers,
         )
 
+        # Assert
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_404_NOT_FOUND,
@@ -186,8 +195,12 @@ class TestErrorResponseContracts:
         인증이 필요한 엔드포인트에 토큰 없이 접근 시
         401 응답과 올바른 에러 형식을 검증합니다.
         """
+        # Arrange - endpoint is provided by parametrize
+
+        # Act
         response = client.get(endpoint)
 
+        # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"{endpoint}: 401이 아닌 {response.status_code}"
         error_data = response.json()
         assert_error_response(error_data, context=f"{endpoint} (unauthenticated)")
@@ -196,9 +209,11 @@ class TestErrorResponseContracts:
         """
         ❤️ 위시리스트 토글 실패 - product_id 누락
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         data = {}
 
+        # Act
         response = client.post(
             "/api/wishlist/toggle/",
             data=json.dumps(data),
@@ -206,6 +221,7 @@ class TestErrorResponseContracts:
             **headers,
         )
 
+        # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/wishlist/toggle/ (missing product)")

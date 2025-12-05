@@ -34,7 +34,7 @@ class TestAccessControlContracts:
         """
         from shopping.models.order import Order
 
-        # seller_user의 주문 생성
+        # Arrange - seller_user의 주문 생성
         other_order = Order.objects.create(
             user=seller_user,
             status="pending",
@@ -48,9 +48,11 @@ class TestAccessControlContracts:
         )
 
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
         response = client.get(f"/api/orders/{other_order.id}/", **headers)
 
-        # 타인 주문은 403 (Forbidden) 또는 404 (Not Found - 보안상 숨김)
+        # Assert - 타인 주문은 403 (Forbidden) 또는 404 (Not Found - 보안상 숨김)
         assert response.status_code in [
             status.HTTP_403_FORBIDDEN,
             status.HTTP_404_NOT_FOUND,
@@ -70,10 +72,13 @@ class TestAccessControlContracts:
 
         두 가지 모두 보안적으로 적절한 구현입니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
         response = client.get("/api/seller/returns/", **headers)
 
-        # 403 또는 200 (빈 결과) 모두 허용
+        # Assert - 403 또는 200 (빈 결과) 모두 허용
         # - 403: 판매자가 아니므로 접근 거부
         # - 200 + 빈 리스트: 소유권 기반 필터링으로 빈 결과 반환
         assert response.status_code in [
@@ -100,6 +105,7 @@ class TestAccessControlContracts:
         """
         from shopping.models.product import Product
 
+        # Arrange
         inactive_product = Product.objects.create(
             name="비활성 상품",
             slug="inactive-product",
@@ -111,7 +117,8 @@ class TestAccessControlContracts:
             is_active=False,  # 비활성
         )
 
+        # Act
         response = client.get(f"/api/products/{inactive_product.id}/")
 
-        # 비활성 상품은 404
+        # Assert - 비활성 상품은 404
         assert response.status_code == status.HTTP_404_NOT_FOUND

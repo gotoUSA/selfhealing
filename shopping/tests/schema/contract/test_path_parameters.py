@@ -36,10 +36,13 @@ class TestPathParameterEdgeCases:
 
     def test_product_detail_valid_id(self, client, schema_test_product):
         """✅ 유효한 상품 ID → 200 + 스키마 검증"""
+        # Arrange
         product_id = schema_test_product.id
 
+        # Act
         response = client.get(f"/api/products/{product_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert_product_schema(data, context=f"/api/products/{product_id}/")
@@ -47,10 +50,13 @@ class TestPathParameterEdgeCases:
 
     def test_product_detail_nonexistent_id(self, client):
         """❌ 존재하지 않는 상품 ID → 404 + 에러 응답 검증"""
+        # Arrange
         invalid_id = 99999999
 
+        # Act
         response = client.get(f"/api/products/{invalid_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
         assert_error_response(data, context=f"/api/products/{invalid_id}/")
@@ -76,9 +82,12 @@ class TestPathParameterEdgeCases:
 
         🔍 핵심: 5xx 에러 발생하지 않아야 함
         """
+        # Arrange - invalid_id is provided by parametrize
+
+        # Act
         response = client.get(f"/api/products/{invalid_id}/")
 
-        # 5xx 에러 없음
+        # Assert - 5xx 에러 없음
         assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
 
         # 400 또는 404
@@ -89,31 +98,40 @@ class TestPathParameterEdgeCases:
 
     def test_order_detail_unauthorized(self, client, schema_test_order):
         """🔒 인증 없이 주문 상세 접근 → 401"""
+        # Arrange
         order_id = schema_test_order.id
 
+        # Act
         response = client.get(f"/api/orders/{order_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         data = response.json()
         assert_error_response(data, context=f"/api/orders/{order_id}/ (unauthorized)")
 
     def test_order_detail_valid_id(self, client, auth_headers, schema_test_order):
         """✅ 유효한 주문 ID (인증됨) → 200"""
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         order_id = schema_test_order.id
 
+        # Act
         response = client.get(f"/api/orders/{order_id}/", **headers)
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert_order_schema(data, context=f"/api/orders/{order_id}/")
 
     def test_category_detail_valid_id(self, client, schema_test_category):
         """✅ 유효한 카테고리 ID → 200"""
+        # Arrange
         category_id = schema_test_category.id
 
+        # Act
         response = client.get(f"/api/categories/{category_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "id" in data
@@ -121,16 +139,22 @@ class TestPathParameterEdgeCases:
 
     def test_notification_nonexistent_id(self, client, auth_headers):
         """❌ 존재하지 않는 알림 ID → 404"""
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
 
+        # Act
         response = client.get("/api/notifications/99999999/", **headers)
 
+        # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_payment_nonexistent_id(self, client, auth_headers):
         """❌ 존재하지 않는 결제 ID → 404"""
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
 
+        # Act
         response = client.get("/api/payments/99999999/", **headers)
 
+        # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND

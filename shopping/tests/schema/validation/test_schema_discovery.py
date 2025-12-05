@@ -238,15 +238,24 @@ class TestSchemaDiscovery:
 
     def test_schema_is_valid(self, openapi_schema):
         """✅ OpenAPI 스키마가 유효한지 확인"""
+        # Arrange - openapi_schema is provided by fixture
+
+        # Act & Assert
         assert openapi_schema is not None, "스키마가 로드되지 않음"
 
     def test_schema_has_paths(self, openapi_schema):
         """✅ 스키마에 경로가 정의되어 있는지 확인"""
+        # Arrange - openapi_schema is provided by fixture
+
+        # Act
         operations = list(openapi_schema.get_all_operations())
+
+        # Assert
         assert len(operations) > 0, "스키마에 정의된 엔드포인트가 없습니다"
 
     def test_critical_endpoints_exist(self, openapi_schema):
         """✅ 핵심 엔드포인트가 스키마에 정의되어 있는지 확인"""
+        # Arrange
         critical_paths = [
             "/api/products/",
             "/api/categories/",
@@ -256,6 +265,7 @@ class TestSchemaDiscovery:
             "/api/auth/register/",
         ]
 
+        # Act
         all_paths = set()
         for result in openapi_schema.get_all_operations():
             if hasattr(result, "ok"):
@@ -264,5 +274,6 @@ class TestSchemaDiscovery:
                 op = result
             all_paths.add(op.path)
 
+        # Assert
         missing_paths = [p for p in critical_paths if p not in all_paths]
         assert not missing_paths, f"누락된 핵심 엔드포인트: {missing_paths}"

@@ -90,11 +90,14 @@ class TestPublicEndpointsContract:
                 assert "name" in category, f"{op.path}: 'name' 필드 누락"
 
     def test_products_detail_contract(self, openapi_schema, client, schema_test_product):
-        """🛍️ 상품 상세 API Contract 검증"""
+        """🛒 상품 상세 API Contract 검증"""
+        # Arrange
         product_id = schema_test_product.id
 
+        # Act
         response = client.get(f"/api/products/{product_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -104,10 +107,13 @@ class TestPublicEndpointsContract:
 
     def test_categories_detail_contract(self, openapi_schema, client, schema_test_category):
         """📂 카테고리 상세 API Contract 검증"""
+        # Arrange
         category_id = schema_test_category.id
 
+        # Act
         response = client.get(f"/api/categories/{category_id}/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -117,8 +123,12 @@ class TestPublicEndpointsContract:
 
     def test_categories_tree_contract(self, openapi_schema, client, schema_test_category):
         """🌳 카테고리 트리 API Contract 검증"""
+        # Arrange - none needed for public API
+
+        # Act
         response = client.get("/api/categories/tree/")
 
+        # Assert
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()

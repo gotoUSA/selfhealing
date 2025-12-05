@@ -35,22 +35,23 @@ class TestSchemathesisNativeValidation:
         인증이 필요 없는 엔드포인트에서 응답이 스키마와
         정확히 일치하는지 Schemathesis로 검증합니다.
         """
+        # Arrange
         public_paths = ["/api/products/", "/api/categories/"]
         validation_errors = []
 
         for path in public_paths:
+            # Act
             response = client.get(path)
 
+            # Assert
             if response.status_code == status.HTTP_200_OK:
-                # 응답이 유효한 JSON인지 확인
                 try:
                     data = response.json()
-                    # 기본 구조 검증
                     if isinstance(data, dict):
                         if "results" in data:
                             assert isinstance(data["results"], list)
                     elif isinstance(data, list):
-                        pass  # 리스트 응답도 허용
+                        pass
                     else:
                         validation_errors.append(f"{path}: 예상치 못한 응답 타입")
                 except json.JSONDecodeError:
@@ -67,6 +68,7 @@ class TestSchemathesisNativeValidation:
         JWT 인증이 필요한 엔드포인트에서 응답이 스키마와
         정확히 일치하는지 검증합니다.
         """
+        # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         authenticated_paths = [
             "/api/cart/",
@@ -77,12 +79,13 @@ class TestSchemathesisNativeValidation:
         validation_errors = []
 
         for path in authenticated_paths:
+            # Act
             response = client.get(path, **headers)
 
+            # Assert
             if response.status_code == status.HTTP_200_OK:
                 try:
                     data = response.json()
-                    # 응답이 dict 또는 list인지 확인
                     if not isinstance(data, (dict, list)):
                         validation_errors.append(f"{path}: 응답이 dict/list가 아님")
                 except json.JSONDecodeError:
@@ -96,17 +99,18 @@ class TestSchemathesisNativeValidation:
 
         4xx 에러 응답도 일관된 스키마를 따르는지 검증합니다.
         """
-        # 인증 없이 보호된 엔드포인트 접근
+        # Arrange - 인증 없이 보호된 엔드포인트 접근
         protected_paths = ["/api/orders/", "/api/wishlist/"]
         validation_errors = []
 
         for path in protected_paths:
+            # Act
             response = client.get(path)
 
+            # Assert
             if response.status_code == status.HTTP_401_UNAUTHORIZED:
                 try:
                     data = response.json()
-                    # DRF 표준 에러 형식 확인
                     if not isinstance(data, dict):
                         validation_errors.append(f"{path}: 에러 응답이 dict가 아님")
                     elif not data:
