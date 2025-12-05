@@ -36,7 +36,7 @@ API가 정상 동작할 때 반환하는 응답이:
 # 예시: 상품 응답 필수 필드
 PRODUCT_REQUIRED_FIELDS = ["id", "name", "price"]
 
-# 예시: 주문 응답 필수 필드  
+# 예시: 주문 응답 필수 필드
 ORDER_REQUIRED_FIELDS = ["id", "status", "total_amount", "created_at"]
 
 # 예시: 사용자 응답 필수 필드
@@ -76,7 +76,7 @@ shopping/tests/schema/contract/
 # conftest.py에서 제공하는 fixture들
 @pytest.fixture
 def client():                    # Django Test Client
-@pytest.fixture  
+@pytest.fixture
 def auth_headers():              # JWT 인증 헤더 (일반 사용자)
 @pytest.fixture
 def seller_auth_headers():       # JWT 인증 헤더 (판매자)
@@ -96,55 +96,55 @@ def schema_test_cart():          # 테스트용 장바구니
 class TestNewEndpointContract:
     """
     🆕 새 엔드포인트 Contract 테스트
-    
+
     [엔드포인트 설명]
-    
+
     📋 검증 대상:
     - GET /api/new-endpoint/
     - GET /api/new-endpoint/{id}/
-    
+
     ✅ 검증 항목:
     - 200 OK 응답
     - 응답 구조 (dict/list/paginated)
     - 필수 필드 존재 및 타입 일치
     """
-    
+
     def test_new_endpoint_list_contract(self, client, auth_headers):
         """📋 새 엔드포인트 목록 API Contract 검증"""
         # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
-        
+
         # Act
         response = client.get("/api/new-endpoint/", **headers)
-        
+
         # Assert - 상태 코드
         assert response.status_code == status.HTTP_200_OK
-        
+
         # Assert - 응답 구조
         data = response.json()
         assert_list_response(data, context="/api/new-endpoint/")
-        
+
         # Assert - 각 아이템 스키마 (처음 3개만)
         results = data.get("results", data)  # paginated 또는 list
         for item in results[:3]:
             assert_new_endpoint_schema(item, context="/api/new-endpoint/ item")
-    
+
     def test_new_endpoint_detail_contract(self, client, auth_headers, test_data):
         """🔍 새 엔드포인트 상세 API Contract 검증"""
         # Arrange
         headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
         item_id = test_data.id
-        
+
         # Act
         response = client.get(f"/api/new-endpoint/{item_id}/", **headers)
-        
+
         # Assert - 상태 코드
         assert response.status_code == status.HTTP_200_OK
-        
+
         # Assert - 응답 구조 및 스키마
         data = response.json()
         assert_new_endpoint_schema(data, context=f"/api/new-endpoint/{item_id}/")
-        
+
         # Assert - ID 일치 확인
         assert data["id"] == item_id
 ```
@@ -155,17 +155,17 @@ class TestNewEndpointContract:
 def assert_new_endpoint_schema(data: dict, strict: bool = False, context: str = ""):
     """
     새 엔드포인트 응답 스키마 검증
-    
+
     Args:
         data: 검증할 응답 데이터
         strict: True이면 추가 필드 불허
         context: 에러 메시지에 표시할 컨텍스트
-    
+
     Raises:
         SchemaValidationError: 스키마 불일치 시
     """
     required_fields = ["id", "name", "status"]  # 필수 필드 정의
-    
+
     field_types = {
         "id": int,
         "name": str,
@@ -173,22 +173,22 @@ def assert_new_endpoint_schema(data: dict, strict: bool = False, context: str = 
         "created_at": str,
         "updated_at": str,
     }
-    
+
     allowed_fields = set(field_types.keys()) | {"extra_field1", "extra_field2"}
-    
+
     # 기본 검증
     assert isinstance(data, dict), f"{context}: 응답이 dict가 아님"
-    
+
     # 필수 필드 검증
     for field in required_fields:
         assert field in data, f"{context}: '{field}' 필드 누락"
-    
+
     # 타입 검증
     for field, expected_type in field_types.items():
         if field in data and data[field] is not None:
             assert isinstance(data[field], expected_type), \
                 f"{context}: '{field}' 타입 불일치 (expected: {expected_type}, got: {type(data[field])})"
-    
+
     # strict 모드: 추가 필드 불허
     if strict:
         extra_fields = set(data.keys()) - allowed_fields
@@ -207,10 +207,10 @@ def test_product_detail_contract(self, client, schema_test_product):
     """🛒 상품 상세 API Contract 검증"""
     # Arrange
     product_id = schema_test_product.id
-    
+
     # Act
     response = client.get(f"/api/products/{product_id}/")
-    
+
     # Assert
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -225,17 +225,17 @@ def test_orders_list_contract(self, client, auth_headers, schema_test_order):
     """📦 주문 목록 API Contract 검증"""
     # Arrange
     headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
-    
+
     # Act
     response = client.get("/api/orders/", **headers)
-    
+
     # Assert - 상태 코드
     assert response.status_code == status.HTTP_200_OK
-    
+
     # Assert - 페이지네이션 구조
     data = response.json()
     results = assert_list_response(data, context="/api/orders/")
-    
+
     # Assert - 각 주문 스키마
     for order in results[:3]:
         assert_order_schema(order, context="/api/orders/ item")
@@ -249,7 +249,7 @@ def test_cart_add_item_success(self, client, auth_headers, schema_test_product):
     # Arrange
     headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
     data = {"product_id": schema_test_product.id, "quantity": 1}
-    
+
     # Act
     response = client.post(
         "/api/cart/add_item/",
@@ -257,17 +257,17 @@ def test_cart_add_item_success(self, client, auth_headers, schema_test_product):
         content_type="application/json",
         **headers,
     )
-    
+
     # Assert - 상태 코드 (200 또는 201)
     assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
-    
+
     # Assert - 응답 구조
     response_data = response.json()
     assert isinstance(response_data, dict), "응답이 dict가 아님"
-    
+
     # Assert - 성공 응답에 필요한 정보 포함
     has_valid_response = any(
-        key in response_data 
+        key in response_data
         for key in ["message", "cart", "item", "id", "items", "product"]
     )
     assert has_valid_response, f"장바구니 추가 응답에 데이터 없음: {response_data}"

@@ -37,13 +37,13 @@ class TestUserPurchaseFlow:
 
     def test_complete_purchase_flow(self, client, schema_test_product):
         """완전한 구매 플로우: 비회원→회원→장바구니"""
-        
+
         # ============================================
         # Step 1: 비회원 상품 조회
         # ============================================
         # Act
         response = client.get(f"/api/products/{schema_test_product.id}/")
-        
+
         # Assert
         assert response.status_code == status.HTTP_200_OK
 
@@ -122,7 +122,7 @@ class TestUserPurchaseFlow:
 ```python
 def test_state_transitions(self, client, schema_test_product):
     """🔄 상태 전이 검증: ANONYMOUS → AUTHENTICATED → HAS_CART"""
-    
+
     # State: ANONYMOUS
     # 보호된 API 접근 불가
     response = client.get("/api/orders/")
@@ -151,14 +151,14 @@ def test_state_transitions(self, client, schema_test_product):
 ```python
 def test_invalid_state_transition_blocked(self, client):
     """🚫 잘못된 상태 전이 차단"""
-    
+
     # ANONYMOUS 상태에서 장바구니 추가 시도
     response = client.post(
         "/api/wishlist/toggle/",
         data=json.dumps({"product_id": 1}),
         content_type="application/json",
     )
-    
+
     # Assert - 인증 필요
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 ```
@@ -174,7 +174,7 @@ def test_invalid_state_transition_blocked(self, client):
 class TestWorkflowName:
     """
     📋 워크플로우 설명
-    
+
     🔄 상태 전이:
     State1 → [Event] → State2 → [Event] → State3
     """
@@ -217,7 +217,7 @@ username = f"test_{unique_id}"  # 충돌 방지
 ```python
 # 응답 구조에 따라 다름
 token = (
-    response.json().get("access") or 
+    response.json().get("access") or
     response.json().get("token", {}).get("access")
 )
 ```

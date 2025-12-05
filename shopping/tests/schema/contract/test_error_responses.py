@@ -225,3 +225,179 @@ class TestErrorResponseContracts:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = response.json()
         assert_error_response(error_data, context="/api/wishlist/toggle/ (missing product)")
+
+
+@pytest.mark.schema
+@pytest.mark.django_db
+class TestSensitiveDataExposure:
+    """
+    🔐 민감 정보 노출 방지 테스트
+
+    가이드 02_ERROR_RESPONSE_SCHEMA.md 기준으로 작성된 테스트입니다.
+
+    📋 테스트 시나리오:
+    - 에러 응답에 스택 트레이스 미포함
+    - 에러 응답에 내부 경로 미포함
+    - 에러 응답에 DB 정보 미포함
+
+    ✅ 핵심 검증:
+    - 민감한 키워드 미노출
+    - 일관된 에러 형식 유지
+    """
+
+    # 민감 정보로 간주되는 키워드
+    # 주의: 일반 에러 메시지에 포함될 수 있는 단어는 제외 (예: "line 1 column 2")
+    SENSITIVE_KEYWORDS = [
+        "Traceback",
+        "traceback",
+        'File "',
+        "/usr/local/",
+        "/home/",
+        "/code/",
+        "psycopg2",
+        "django.db",
+        "SECRET_KEY",
+        "password=",
+        "DATABASE_URL",
+        "POSTGRES",
+        "Exception:",
+        '.py"',
+        "raise ",
+        "at 0x",  # 메모리 주소
+        "Traceback (most recent call last)",
+    ]
+
+    def _check_no_sensitive_data(self, response_text: str, context: str):
+        """응답에 민감 정보가 없는지 확인"""
+        for keyword in self.SENSITIVE_KEYWORDS:
+            assert keyword not in response_text, f"{context}: 민감 정보 노출 - '{keyword}' 발견"
+
+    def test_404_no_sensitive_data(self, client):
+        """
+        🔍 404 에러에 민감 정보 미포함
+
+        존재하지 않는 리소스 접근 시 스택 트레이스 등이 노출되지 않아야 합니다.
+        """
+        # Arrange
+        endpoints = [
+            "/api/products/99999999/",
+            "/api/categories/99999999/",
+            "/api/nonexistent/endpoint/",
+        ]
+
+        for endpoint in endpoints:
+            # Act
+            response = client.get(endpoint)
+
+            # Assert - 민감 정보 없음
+            response_text = response.content.decode("utf-8", errors="ignore")
+            self._check_no_sensitive_data(response_text, endpoint)
+
+    def test_400_no_sensitive_data(self, client, auth_headers):
+        """
+        🔍 400 에러에 민감 정보 미포함
+
+        잘못된 요청 시 내부 정보가 노출되지 않아야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        invalid_data = {"invalid_field": "value", "another": [1, 2, 3]}
+
+        # Act
+        response = client.post(
+            "/api/cart/add_item/",
+            data=json.dumps(invalid_data),
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert - 민감 정보 없음
+        response_text = response.content.decode("utf-8", errors="ignore")
+        self._check_no_sensitive_data(response_text, "/api/cart/add_item/ (invalid)")
+
+    def test_401_no_sensitive_data(self, client):
+        """
+        🔍 401 에러에 민감 정보 미포함
+
+        인증 실패 시 시스템 정보가 노출되지 않아야 합니다.
+        주의: /api/cart/는 비회원도 세션 장바구니로 접근 가능하므로 제외
+        """
+        # Arrange - /api/cart/는 비회원 세션 장바구니 허용으로 제외
+        endpoints = [
+            "/api/orders/",
+            "/api/wishlist/",
+            "/api/payments/",
+        ]
+
+        for endpoint in endpoints:
+            # Act
+            response = client.get(endpoint)
+
+            # Assert
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"{endpoint}: 401이 아닌 {response.status_code}"
+            response_text = response.content.decode("utf-8", errors="ignore")
+            self._check_no_sensitive_data(response_text, f"{endpoint} (401)")
+
+    def test_malformed_json_no_sensitive_data(self, client, auth_headers):
+        """
+        🔍 잘못된 JSON 요청에 민감 정보 미포함
+
+        파싱 에러 시에도 내부 정보가 노출되지 않아야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        malformed_json = "{invalid json content"
+
+        # Act
+        response = client.post(
+            "/api/cart/add_item/",
+            data=malformed_json,
+            content_type="application/json",
+            **headers,
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        response_text = response.content.decode("utf-8", errors="ignore")
+        self._check_no_sensitive_data(response_text, "/api/cart/add_item/ (malformed JSON)")
+
+    def test_error_response_consistent_format(self, client, auth_headers):
+        """
+        📋 에러 응답 형식 일관성 검증
+
+        다양한 에러 상황에서 응답 형식이 일관되어야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+        error_scenarios = [
+            # (endpoint, method, data, description)
+            ("/api/cart/add_item/", "post", {}, "필수 필드 누락"),
+            ("/api/wishlist/toggle/", "post", {}, "product_id 누락"),
+        ]
+
+        for endpoint, method, data, description in error_scenarios:
+            # Act
+            if method == "post":
+                response = client.post(
+                    endpoint,
+                    data=json.dumps(data),
+                    content_type="application/json",
+                    **headers,
+                )
+            else:
+                response = client.get(endpoint, **headers)
+
+            # Assert - 400 에러
+            assert response.status_code == status.HTTP_400_BAD_REQUEST, f"{description}: {response.status_code}"
+
+            # Assert - 응답이 dict
+            error_data = response.json()
+            assert isinstance(error_data, dict), f"{description}: 에러 응답이 dict가 아님"
+
+            # Assert - 최소한 하나의 에러 정보 포함
+            has_error_info = any(
+                key in error_data
+                for key in ["detail", "error", "errors", "message", "non_field_errors"]
+                + list(error_data.keys())  # 필드별 에러도 허용
+            )
+            assert has_error_info or len(error_data) > 0, f"{description}: 에러 정보 없음"

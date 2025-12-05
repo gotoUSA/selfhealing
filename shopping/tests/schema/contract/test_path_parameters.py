@@ -70,8 +70,23 @@ class TestPathParameterEdgeCases:
             ("1.5", "float ID"),
             ("null", "null 문자열"),
             ("1; DROP TABLE--", "SQL Injection"),
+            ("../../../etc/passwd", "Path Traversal"),
+            ("%00", "Null Byte Injection"),
+            ("1 OR 1=1", "SQL Injection OR"),
+            ("1' AND '1'='1", "SQL Injection Quote"),
         ],
-        ids=["negative", "zero", "string", "float", "null_str", "sql_injection"],
+        ids=[
+            "negative",
+            "zero",
+            "string",
+            "float",
+            "null_str",
+            "sql_injection",
+            "path_traversal",
+            "null_byte",
+            "sql_or",
+            "sql_quote",
+        ],
     )
     def test_product_detail_invalid_id_format(self, client, invalid_id, description):
         """
@@ -158,3 +173,63 @@ class TestPathParameterEdgeCases:
 
         # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    @pytest.mark.parametrize(
+        "invalid_id,description",
+        [
+            ("../../../etc/passwd", "Path Traversal"),
+            ("....//....//etc/passwd", "Path Traversal 변형"),
+            ("%2e%2e%2f%2e%2e%2f", "URL 인코딩된 Path Traversal"),
+            ("..\\..\\..\\windows\\system32", "Windows Path Traversal"),
+        ],
+        ids=["path_traversal", "path_traversal_variant", "url_encoded", "windows_path"],
+    )
+    def test_path_traversal_attacks(self, client, invalid_id, description):
+        """
+        🛡️ Path Traversal 공격 시도 → 400 or 404 (5xx 절대 X)
+
+        경로 탐색 공격 시도가 적절히 차단되는지 검증합니다.
+        서버 에러(5xx)가 발생하면 안 됩니다.
+        """
+        # Arrange - invalid_id is provided by parametrize
+
+        # Act
+        response = client.get(f"/api/products/{invalid_id}/")
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
+
+        # 400 또는 404 (정상적인 거부)
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_404_NOT_FOUND,
+        ], f"{description}: 예상치 못한 응답 {response.status_code}"
+
+    @pytest.mark.parametrize(
+        "endpoint_template,description",
+        [
+            ("/api/products/{}/", "상품 상세"),
+            ("/api/categories/{}/", "카테고리 상세"),
+        ],
+    )
+    def test_multiple_endpoints_path_traversal(self, client, endpoint_template, description):
+        """
+        🛡️ 여러 엔드포인트에 Path Traversal 시도
+
+        여러 엔드포인트에서 일관되게 Path Traversal을 차단하는지 검증합니다.
+        """
+        # Arrange
+        malicious_inputs = [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\system32",
+            "%2e%2e%2fetc%2fpasswd",
+        ]
+
+        for malicious_id in malicious_inputs:
+            endpoint = endpoint_template.format(malicious_id)
+
+            # Act
+            response = client.get(endpoint)
+
+            # Assert - 5xx 에러 없음
+            assert response.status_code < 500, f"{description} - {malicious_id}에서 서버 에러 발생"

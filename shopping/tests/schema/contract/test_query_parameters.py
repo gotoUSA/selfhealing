@@ -147,3 +147,90 @@ class TestQueryParameterEdgeCases:
 
         # Assert
         assert response.status_code < 500, "서버 에러 발생"
+
+    @pytest.mark.parametrize(
+        "page_size_value,description",
+        [
+            ("-1", "음수 page_size"),
+            ("0", "0 page_size"),
+            ("10000", "매우 큰 page_size"),
+            ("abc", "문자열 page_size"),
+            ("1.5", "float page_size"),
+        ],
+        ids=["negative", "zero", "huge", "string", "float"],
+    )
+    def test_products_list_invalid_page_size(self, client, schema_test_product, page_size_value, description):
+        """
+        📄 상품 목록 - 잘못된 page_size 파라미터
+
+        잘못된 page_size 값에도 5xx 에러 없이 처리되어야 합니다.
+        """
+        # Arrange - page_size_value is provided by parametrize
+
+        # Act
+        response = client.get(f"/api/products/?page_size={page_size_value}")
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, f"{description}에서 서버 에러 발생: {response.status_code}"
+
+        # 400 또는 200 허용
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        ], f"{description}: 예상치 못한 응답 {response.status_code}"
+
+    def test_page_size_boundary_values(self, client, schema_test_product):
+        """
+        📄 page_size 경계값 테스트
+
+        page_size의 경계값(최소/최대)에서 올바르게 동작하는지 검증합니다.
+        """
+        # Arrange
+        boundary_values = [
+            (1, "최소값"),
+            (10, "기본값"),
+            (100, "큰 값"),
+        ]
+
+        for page_size, description in boundary_values:
+            # Act
+            response = client.get(f"/api/products/?page_size={page_size}")
+
+            # Assert
+            assert response.status_code < 500, f"{description}에서 서버 에러: {response.status_code}"
+
+            if response.status_code == status.HTTP_200_OK:
+                data = response.json()
+                # 페이지네이션 응답이면 results 확인
+                if isinstance(data, dict) and "results" in data:
+                    assert len(data["results"]) <= page_size, f"{description}: 결과가 page_size보다 많음"
+
+    @pytest.mark.parametrize(
+        "filter_param,description",
+        [
+            ("category=99999999", "존재하지 않는 카테고리"),
+            ("min_price=-100", "음수 최소 가격"),
+            ("max_price=abc", "문자열 최대 가격"),
+            ("is_active=invalid", "잘못된 boolean"),
+        ],
+        ids=["nonexistent_category", "negative_price", "string_price", "invalid_bool"],
+    )
+    def test_products_filter_edge_cases(self, client, schema_test_product, filter_param, description):
+        """
+        🔍 상품 필터 파라미터 Edge Case
+
+        잘못된 필터 값에도 5xx 에러 없이 처리되어야 합니다.
+        """
+        # Arrange - filter_param is provided by parametrize
+
+        # Act
+        response = client.get(f"/api/products/?{filter_param}")
+
+        # Assert - 5xx 에러 없음
+        assert response.status_code < 500, f"{description}에서 서버 에러: {response.status_code}"
+
+        # 200 또는 400 허용
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+        ], f"{description}: 예상치 못한 응답 {response.status_code}"

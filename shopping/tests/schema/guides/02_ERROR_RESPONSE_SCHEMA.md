@@ -80,7 +80,7 @@ def test_cart_add_missing_fields(self, client, auth_headers):
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST, \
             f"{description}: 400이 아닌 {response.status_code}"
-        
+
         error_data = response.json()
         assert_error_response(error_data, context=f"/api/cart/add_item/ ({description})")
 ```
@@ -103,7 +103,7 @@ def test_unauthenticated_access_401(self, client, endpoint):
     # Assert
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, \
         f"{endpoint}: 401이 아닌 {response.status_code}"
-    
+
     error_data = response.json()
     assert_error_response(error_data, context=f"{endpoint} (unauthenticated)")
 ```
@@ -124,7 +124,7 @@ def test_access_other_user_order(self, client, auth_headers, other_user_order):
         status.HTTP_403_FORBIDDEN,
         status.HTTP_404_NOT_FOUND,
     ]
-    
+
     error_data = response.json()
     assert_error_response(error_data, context="타인 주문 접근")
 ```
@@ -142,7 +142,7 @@ def test_product_detail_nonexistent_id(self, client):
 
     # Assert
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    
+
     data = response.json()
     assert_error_response(data, context=f"/api/products/{invalid_id}/")
 ```
@@ -166,7 +166,7 @@ def test_cart_add_out_of_stock(self, client, auth_headers, out_of_stock_product)
 
     # Assert
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    
+
     error_data = response.json()
     assert_error_response(error_data, context="/api/cart/add_item/ (out of stock)")
 ```
@@ -181,16 +181,16 @@ def test_cart_add_out_of_stock(self, client, auth_headers, out_of_stock_product)
 def assert_error_response(data: dict, context: str = ""):
     """
     에러 응답 스키마 검증
-    
+
     DRF의 다양한 에러 응답 형식을 모두 허용합니다.
-    
+
     Args:
         data: 에러 응답 데이터
         context: 에러 메시지에 표시할 컨텍스트
     """
     assert isinstance(data, dict), f"{context}: 에러 응답이 dict가 아님"
     assert len(data) > 0, f"{context}: 에러 응답이 비어있음"
-    
+
     # DRF 표준 에러 필드들 중 하나는 있어야 함
     valid_error_keys = [
         "detail",           # 단일 에러 메시지
@@ -199,15 +199,15 @@ def assert_error_response(data: dict, context: str = ""):
         "message",          # 커스텀 메시지
         "errors",           # 중첩 에러
     ]
-    
+
     # 필드별 에러도 허용 (username, password, product_id 등)
     has_error_info = (
         any(key in data for key in valid_error_keys) or
         any(isinstance(v, list) for v in data.values())  # 필드별 에러 리스트
     )
-    
+
     assert has_error_info, f"{context}: 에러 정보 없음. 응답: {data}"
-    
+
     # 민감 정보 미노출 확인
     response_str = str(data).lower()
     assert "traceback" not in response_str, f"{context}: 스택 트레이스 노출!"

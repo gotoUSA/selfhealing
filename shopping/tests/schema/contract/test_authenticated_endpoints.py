@@ -6,6 +6,7 @@ from rest_framework import status
 
 from ..conftest import (
     assert_cart_schema,
+    assert_error_response,
     assert_list_response,
     assert_order_schema,
     assert_user_schema,
@@ -230,3 +231,136 @@ class TestAuthenticatedEndpointsContract:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert_list_response(data, context="/api/seller/returns/")
+
+
+@pytest.mark.schema
+@pytest.mark.django_db
+class TestAuthenticationEdgeCases:
+    """
+    🔒 인증 Edge Case 테스트
+
+    가이드 05_AUTHENTICATION.md 기준으로 작성된 테스트입니다.
+
+    📋 테스트 시나리오:
+    - 잘못된 토큰 형식 → 401
+    - 만료/손상된 토큰 → 401
+    - 역할 기반 접근 제어 → 403 또는 빈 결과
+
+    ✅ 핵심 검증:
+    - 잘못된 인증은 항상 401 반환
+    - 권한 없는 접근은 403 또는 필터링
+    """
+
+    @pytest.mark.parametrize(
+        "auth_header,description",
+        [
+            ("", "빈 헤더"),
+            ("Bearer", "토큰 누락"),
+            ("Bearer ", "빈 토큰"),
+            ("Bearer invalid.token.here", "잘못된 토큰"),
+            ("invalid_token_no_bearer", "Bearer 접두사 누락"),
+            ("Basic dXNlcjpwYXNz", "Basic 인증 시도"),
+            ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature", "손상된 JWT"),
+        ],
+        ids=["empty", "bearer_only", "bearer_empty", "invalid", "no_bearer", "basic_auth", "corrupted_jwt"],
+    )
+    def test_invalid_auth_headers_401(self, client, auth_header, description):
+        """
+        🔒 잘못된 인증 헤더 → 401
+
+        다양한 형태의 잘못된 인증 헤더가
+        모두 401 Unauthorized를 반환하는지 검증합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_header} if auth_header else {}
+
+        # Act
+        response = client.get("/api/orders/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"{description}: 401이 아닌 {response.status_code}"
+
+        # 에러 응답 구조 검증
+        error_data = response.json()
+        assert_error_response(error_data, context=f"/api/orders/ ({description})")
+
+    def test_invalid_token_multiple_endpoints(self, client):
+        """
+        🔒 잘못된 토큰으로 여러 보호된 엔드포인트 접근 → 모두 401
+
+        여러 보호된 엔드포인트에서 일관되게 401을 반환하는지 검증합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": "Bearer invalid.token.here"}
+        protected_endpoints = [
+            "/api/orders/",
+            "/api/wishlist/",
+            "/api/cart/",
+            "/api/notifications/",
+            "/api/payments/",
+            "/api/points/my/",
+            "/api/users/profile/",
+        ]
+
+        for endpoint in protected_endpoints:
+            # Act
+            response = client.get(endpoint, **headers)
+
+            # Assert
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"{endpoint}: 401이 아닌 {response.status_code}"
+
+    def test_regular_user_access_seller_api(self, client, auth_headers):
+        """
+        👤 일반 사용자 → 판매자 전용 API 접근
+
+        일반 사용자가 판매자 API에 접근할 때
+        403 (권한 거부) 또는 200 (빈 결과)를 반환해야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/seller/returns/", **headers)
+
+        # Assert - 403 또는 200(빈 결과) 허용
+        assert response.status_code in [
+            status.HTTP_200_OK,  # 소유권 기반 필터링 (빈 결과)
+            status.HTTP_403_FORBIDDEN,  # 역할 기반 거부
+        ], f"예상치 못한 응답: {response.status_code}"
+
+    def test_seller_access_seller_api_success(self, client, seller_auth_headers):
+        """
+        🏪 판매자 → 판매자 API 접근 성공
+
+        판매자 권한으로 판매자 API에 접근할 때
+        200 OK를 반환해야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": seller_auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/seller/returns/", **headers)
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert_list_response(data, context="/api/seller/returns/ (seller)")
+
+    def test_regular_user_access_low_stock(self, client, auth_headers):
+        """
+        👤 일반 사용자 → 재고 부족 API 접근
+
+        재고 부족 상품 조회는 판매자용 API입니다.
+        일반 사용자는 403 또는 빈 결과를 받아야 합니다.
+        """
+        # Arrange
+        headers = {"HTTP_AUTHORIZATION": auth_headers["Authorization"]}
+
+        # Act
+        response = client.get("/api/products/low_stock/", **headers)
+
+        # Assert
+        assert response.status_code in [
+            status.HTTP_200_OK,  # 빈 결과
+            status.HTTP_403_FORBIDDEN,  # 권한 거부
+        ], f"예상치 못한 응답: {response.status_code}"
