@@ -3,6 +3,7 @@
 import time
 
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
 from django.db import transaction
 from django.db.models import F
@@ -10,6 +11,8 @@ from django.db.models import F
 from ..constants import (
     LOCK_CONTENTION_CRITICAL_THRESHOLD,
     LOCK_CONTENTION_WARNING_THRESHOLD,
+    TOSS_NON_RETRYABLE_ERRORS,
+    TOSS_RETRYABLE_ERRORS,
 )
 from ..models.cart import Cart
 from ..models.order import Order
@@ -21,13 +24,18 @@ logger = get_task_logger(__name__)
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.payment_tasks.call_toss_confirm_api",
     queue="external_api",
     max_retries=3,
-    default_retry_delay=5,
-    time_limit=10,  # 10초 타임아웃
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    time_limit=30,
+    soft_time_limit=25,
+    acks_late=True,
 )
-def call_toss_confirm_api(payment_key: str, order_id: int, amount: int) -> dict:
+def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int) -> dict:
     """
     Toss 결제 승인 API 호출 (외부 API만 호출, DB 작업 없음)
 
@@ -55,6 +63,24 @@ def call_toss_confirm_api(payment_key: str, order_id: int, amount: int) -> dict:
         logger.info(f"Toss API 호출 성공: order_id={order_id}")
         return payment_data
 
+    except SoftTimeLimitExceeded:
+        # 타임아웃: 정리 작업 수행
+        logger.error(f"Toss API 호출 타임아웃: order_id={order_id}")
+        try:
+            payment = Payment.objects.get(order_id=order_id)
+            payment.status = "timeout"
+            payment.save(update_fields=["status"])
+
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="error",
+                message="결제 처리 시간 초과",
+                data={"error_code": "TIMEOUT", "order_id": order_id},
+            )
+        except Exception as log_error:
+            logger.error(f"타임아웃 로그 기록 실패: {str(log_error)}")
+        raise
+
     except TossPaymentError as e:
         logger.error(f"Toss API 호출 실패: order_id={order_id}, error={e.message}")
 
@@ -74,21 +100,39 @@ def call_toss_confirm_api(payment_key: str, order_id: int, amount: int) -> dict:
         except Exception as log_error:
             logger.error(f"에러 로그 기록 실패: {str(log_error)}")
 
-        # 재시도 (네트워크 오류 등)
-        if e.code in ["NETWORK_ERROR", "TIMEOUT"]:
-            raise call_toss_confirm_api.retry(exc=e)
+        # 1. 재시도 불가능한 오류는 즉시 실패
+        if e.code in TOSS_NON_RETRYABLE_ERRORS:
+            logger.error(f"재시도 불가능한 오류: {e.code} - {e.message}")
+            raise
 
-        # 재시도 불가능한 오류는 그대로 raise
+        # 2. 명시적 재시도 가능 오류 (NETWORK_ERROR, TIMEOUT 등)
+        if e.code in TOSS_RETRYABLE_ERRORS:
+            logger.warning(f"재시도 가능 오류, 재시도: {e.code}")
+            raise self.retry(exc=e)
+
+        # 3. HTTP 5xx 오류는 재시도
+        if hasattr(e, "status_code") and e.status_code >= 500:
+            logger.warning(f"서버 오류, 재시도: {e.code}")
+            raise self.retry(exc=e)
+
+        # 4. 그 외 4xx 오류는 재시도 안 함
+        logger.error(f"클라이언트 오류, 재시도 안 함: {e.code}")
         raise
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.payment_tasks.finalize_payment_confirm",
     queue="payment_critical",
     max_retries=5,
-    default_retry_delay=10,
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    time_limit=60,
+    soft_time_limit=55,
+    acks_late=True,
 )
-def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int) -> dict:
+def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id: int) -> dict:
     """
     Toss API 결과를 받아 결제 최종 처리
     - Payment 상태 업데이트
@@ -193,4 +237,4 @@ def finalize_payment_confirm(toss_response: dict, payment_id: int, user_id: int)
         logger.error(f"결제 최종 처리 실패: payment_id={payment_id}, error={str(e)}")
 
         # 재시도
-        raise finalize_payment_confirm.retry(exc=e)
+        raise self.retry(exc=e)

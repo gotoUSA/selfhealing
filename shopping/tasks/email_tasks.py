@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from smtplib import SMTPException
 from typing import Any
 
 from celery import Task, shared_task
@@ -18,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 @shared_task(
     bind=True,
-    max_retries=3,  # 최대 3번 재시도
-    default_retry_delay=60,  # 실패 시 60초 후 재시도
-    autoretry_for=(Exception,),  # 모든 예외에 대해 자동 재시도
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
 def send_verification_email_task(self: Task, user_id: int, token_id: int, is_resend: bool = False) -> dict[str, Any]:
     """
@@ -117,6 +120,7 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
         }
 
     except User.DoesNotExist:
+        # 재시도 불가 - 사용자가 없으면 재시도해도 동일
         logger.error(f"❌ 사용자를 찾을 수 없습니다: user_id={user_id}")
         return {
             "success": False,
@@ -124,11 +128,21 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
         }
 
     except EmailVerificationToken.DoesNotExist:
+        # 재시도 불가 - 토큰이 없으면 재시도해도 동일
         logger.error(f"❌ 토큰을 찾을 수 없습니다: token_id={token_id}")
         return {
             "success": False,
             "message": "토큰을 찾을 수 없습니다.",
         }
+
+    except SMTPException as e:
+        # SMTP 오류 - 네트워크/서버 문제, 재시도 가치 있음
+        logger.error(f"❌ SMTP 오류: {user.email if 'user' in locals() else 'unknown'} - {str(e)}")
+
+        if "email_log" in locals():
+            email_log.mark_as_failed(str(e))
+
+        raise self.retry(exc=e)
 
     except Exception as e:
         logger.error(f"❌ 이메일 발송 실패: {user.email if 'user' in locals() else 'unknown'} - {str(e)}")
@@ -137,8 +151,8 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
         if "email_log" in locals():
             email_log.mark_as_failed(str(e))
 
-        # Celery 재시도 (max_retries까지)
-        raise self.retry(exc=e, countdown=60)
+        # 알 수 없는 오류는 재시도 안 함 (Fail-Fast)
+        raise
 
 
 @shared_task(bind=True)

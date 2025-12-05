@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import traceback
 from datetime import timedelta
+from smtplib import SMTPException
 from typing import Any
 
 from celery import shared_task
@@ -14,11 +15,15 @@ logger = get_task_logger(__name__)
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.expire_points_task",
     max_retries=3,
-    default_retry_delay=60,  # 1분 후 재시도
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
-def expire_points_task() -> dict[str, Any]:
+def expire_points_task(self) -> dict[str, Any]:
     """
     포인트 만료 처리 태스크
     매일 새벽 2시에 실행됨
@@ -48,15 +53,19 @@ def expire_points_task() -> dict[str, Any]:
         logger.error(f"포인트 만료 처리 실패: {str(e)}\n{traceback.format_exc()}")
 
         # 재시도
-        raise expire_points_task.retry(exc=e)
+        raise self.retry(exc=e)
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.send_expiry_notification_task",
     max_retries=3,
-    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
-def send_expiry_notification_task() -> dict[str, Any]:
+def send_expiry_notification_task(self) -> dict[str, Any]:
     """
     포인트 만료 예정 알림 발송 태스크
     매일 오전 10시에 실행됨
@@ -84,16 +93,20 @@ def send_expiry_notification_task() -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"포인트 만료 알림 발송 실패: {str(e)}\n{traceback.format_exc()}")
-        raise send_expiry_notification_task.retry(exc=e)
+        raise self.retry(exc=e)
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.send_email_notification",
     queue="notifications",
     max_retries=5,
-    default_retry_delay=120,  # 2분 후 재시도
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
-def send_email_notification(email: str, subject: str, message: str, html_message: str | None = None) -> bool:
+def send_email_notification(self, email: str, subject: str, message: str, html_message: str | None = None) -> bool:
     """
     이메일 알림 발송 태스크
 
@@ -119,21 +132,29 @@ def send_email_notification(email: str, subject: str, message: str, html_message
         logger.info(f"이메일 발송 성공: {email} - {subject}")
         return True
 
-    except Exception as e:
-        logger.error(f"이메일 발송 실패: {email} - {str(e)}")
+    except SMTPException as e:
+        # SMTP 오류는 재시도 가치 있음
+        logger.error(f"SMTP 오류: {email} - {str(e)}")
+        raise self.retry(exc=e)
 
-        # 재시도
-        raise send_email_notification.retry(exc=e)
+    except Exception as e:
+        # 그 외 오류는 재시도 안 함
+        logger.error(f"이메일 발송 실패: {email} - {str(e)}")
+        raise
 
 
 @shared_task(
+    bind=True,
     name="shopping.tasks.add_points_after_payment",
     queue="points",
     priority=5,  # 낮은 우선순위
     max_retries=5,
-    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=180,
+    retry_jitter=True,
+    acks_late=True,
 )
-def add_points_after_payment(user_id: int, order_id: int) -> dict[str, Any]:
+def add_points_after_payment(self, user_id: int, order_id: int) -> dict[str, Any]:
     """
     결제 완료 후 포인트 적립 처리 (비동기)
 
@@ -226,6 +247,7 @@ def add_points_after_payment(user_id: int, order_id: int) -> dict[str, Any]:
         }
 
     except (User.DoesNotExist, Order.DoesNotExist) as e:
+        # 재시도 불가 - 데이터가 없으면 재시도해도 동일
         logger.error(f"포인트 적립 실패 - 데이터 없음: {str(e)}")
         return {
             "status": "failed",
@@ -238,7 +260,7 @@ def add_points_after_payment(user_id: int, order_id: int) -> dict[str, Any]:
         logger.error(f"포인트 적립 처리 실패: user_id={user_id}, order_id={order_id}, error={str(e)}")
 
         # 재시도
-        raise add_points_after_payment.retry(exc=e)
+        raise self.retry(exc=e)
 
 
 @shared_task(name="shopping.tasks.process_single_user_points", queue="points")
