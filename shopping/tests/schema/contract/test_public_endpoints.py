@@ -13,7 +13,7 @@ from ..conftest import (
 
 
 @pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestPublicEndpointsContract:
     """
     🌐 인증이 필요 없는 공개 엔드포인트 Contract 테스트

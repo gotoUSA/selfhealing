@@ -8,7 +8,7 @@ from rest_framework import status
 
 
 @pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestSchemathesisNativeValidation:
     """
     🔬 Schemathesis 네이티브 스키마 검증

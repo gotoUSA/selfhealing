@@ -6,7 +6,7 @@ from rest_framework import status
 
 
 @pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestQueryParameterEdgeCases:
     """
     🔍 Query Parameter Edge Case 테스트

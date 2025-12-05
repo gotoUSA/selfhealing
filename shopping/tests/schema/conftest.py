@@ -476,7 +476,13 @@ def assert_product_schema(product: dict, *, strict: bool = False, context: str =
     if strict:
         allowed_fields = set(required_fields.keys()) | set(optional_fields.keys())
         # 일반적으로 허용되는 추가 필드들
-        allowed_fields.update(["url", "images", "reviews", "average_rating", "review_count", "category_name"])
+        allowed_fields.update([
+            "url", "images", "reviews", "average_rating", "review_count", "category_name",
+            # 상품 상세 API에서 반환되는 추가 필드들
+            "seller_level", "seller_id", "category_parent_name", "category_id",
+            "seller_product_count", "stock_status", "is_in_stock", "seller_username",
+            "recent_reviews", "category_slug",
+        ])
         extra_fields = set(product.keys()) - allowed_fields
         if extra_fields:
             raise SchemaValidationError(

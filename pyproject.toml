@@ -49,7 +49,7 @@ python_classes = ["Test*", "*Tests", "*TestCase"]
 python_functions = ["test_*"]
 addopts = """
     -n auto
-    --dist=loadfile
+    --dist=loadscope
     --cov=shopping
     --cov-report=html
     --cov-report=term-missing:skip-covered
@@ -112,6 +112,10 @@ branch = true
 # Parallel testing support (pytest-xdist)
 parallel = true
 concurrency = ["thread", "multiprocessing"]
+# 데이터 파일 경로를 명시적으로 설정
+data_file = ".coverage"
+# 병렬 실행 시 기존 데이터 유지하지 않음 (매번 새로 측정)
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [

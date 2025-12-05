@@ -12,7 +12,7 @@ from ..conftest import (
 
 
 @pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestPathParameterEdgeCases:
     """
     🔗 Path Parameter Edge Case 테스트

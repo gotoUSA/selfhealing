@@ -9,7 +9,7 @@ from ..conftest import is_excluded_endpoint, is_public_endpoint
 
 @pytest.mark.schema
 @pytest.mark.slow
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestFullSchemaValidation:
     """
     🔥 전체 API 스키마 검증 (Smoke Test)

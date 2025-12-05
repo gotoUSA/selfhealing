@@ -12,7 +12,7 @@ from ..conftest import (
 
 
 @pytest.mark.schema
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 class TestStrictSchemaValidation:
     """
     🔬 Strict 모드 스키마 검증 테스트

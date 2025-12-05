@@ -1,3 +1,4 @@
+import glob
 import os
 import sys
 
@@ -10,6 +11,23 @@ if sys.platform == "win32":
     os.environ.setdefault("PGCLIENTENCODING", "UTF8")
     # Python 표준 출력 인코딩 설정
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+
+# ==========================================
+# 커버리지 데이터 자동 정리 (병렬 테스트 안정성)
+# ==========================================
+def pytest_configure(config):
+    """테스트 세션 시작 전 이전 커버리지 데이터 정리."""
+    # xdist worker가 아닌 master에서만 실행
+    if not hasattr(config, "workerinput"):
+        # 프로젝트 루트에서 .coverage 파일들 삭제
+        root_dir = config.rootdir
+        coverage_files = glob.glob(str(root_dir / ".coverage*"))
+        for f in coverage_files:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
 
 from decimal import Decimal
 
