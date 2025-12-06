@@ -66,22 +66,22 @@ Before State Save → API Call → After State Compare
 
 | Tier | 성격 | 목적 | CI 정책 |
 |------|------|------|---------|
-| Tier 1 | Money Integrity | 금전적 손실 방지 | **실패 = 중단** |
-| Tier 2 | Security/Idempotency | 오용·재요청 보호 | **실패 = 중단** |
-| Tier 3 | User Journey | UX/Flow 검증 | **실패 = 경고만** |
+| Tier 1 | money integrity | 금전적 손실 방지 | **실패 = 중단** |
+| Tier 2 | security/idempotency | 오용·재요청 보호 | **실패 = 중단** |
+| Tier 3 | user Journey | UX/Flow 검증 | **실패 = 경고만** |
 
 ---
 
 ## 6. 파일명 규칙 (Naming Convention)
 
 ```
-[Tier]_[Category]_[Scenario]_[Expected].json
+[tier]_[category]_[scenario]_[expected].json
 ```
 
 **예시:**
-- `T1_Payment_FailRollback_StockRestore.json`
-- `T2_Idempotent_Payment_DuplicateKey.json`
-- `T3_Journey_Signup_Verify_Order.json`
+- `t1_payment_failRollback_stockrestore.json`
+- `t2_idempotent_payment_duplicatekey.json`
+- `t3_journey_signup_verify_order.json`
 
 ---
 
@@ -99,21 +99,21 @@ Before State Save → API Call → After State Compare
 
 ## 8. 🔥 최종 테스트 목록 (Total: 15개)
 
-### 🔴 TIER 1 – MONEY INTEGRITY (7개)
+### 🔴 tier 1 – money intergrity (7개)
 
 > **"돈이 틀리면 배포 중단"**
 
 | 파일명 | 시나리오 | 검증 포인트 |
 |--------|----------|-------------|
-| `T1_Payment_FailRollback_StockRestore.json` | 결제 실패 시 롤백 | stock/point 원복 |
-| `T1_Order_Create_StockDeduct.json` | 주문 생성 시 재고 차감 | stock - qty, sold + qty |
-| `T1_Order_Cancel_StockRestore.json` | 주문 취소 시 재고 복구 | stock + qty, sold = 0 |
-| `T1_Payment_Cancel_PointRefund.json` | 사용 포인트 환불 | user.points += used_points |
-| `T1_Payment_Cancel_EarnedDeduct.json` | 적립 포인트 회수 | user.points -= earned_points |
-| `T1_Payment_Amount_Mismatch.json` | 요청 금액 불일치 차단 | req.amount != final_amount → 거부 |
-| `T1_Cart_PriceChanged_OrderBlock.json` | 카트 가격과 현재 가격 불일치 | 가격 재검증 후 주문 차단 |
+| `t1_payment_failrollback_stockrestore.json` | 결제 실패 시 롤백 | stock/point 원복 |
+| `t1_order_create_stockdeduct.json` | 주문 생성 시 재고 차감 | stock - qty, sold + qty |
+| `t1_order_cancel_stockrestore.json` | 주문 취소 시 재고 복구 | stock + qty, sold = 0 |
+| `t1_payment_cancel_pointrefund.json` | 사용 포인트 환불 | user.points += used_points |
+| `t1_payment_cancel_earneddeduct.json` | 적립 포인트 회수 | user.points -= earned_points |
+| `t1_payment_amount_mismatch.json` | 요청 금액 불일치 차단 | req.amount != final_amount → 거부 |
+| `t1_cart_priceChanged_orderblock.json` | 카트 가격과 현재 가격 불일치 | 가격 재검증 후 주문 차단 |
 
-#### 예시: T1_Payment_FailRollback_StockRestore.json
+#### 예시: t1_payment_failrollback_stockrestore.json
 
 ```javascript
 // Precondition
@@ -140,19 +140,19 @@ pm.test("Points unchanged after failure", function() {
 
 ---
 
-### 🟡 TIER 2 – SECURITY & IDEMPOTENCY (5개)
+### 🟡 tier 2 – security & idempotency (5개)
 
 > **"권한/중복은 보안 사고 — 배포 중단"**
 
 | 파일명 | 시나리오 | 검증 포인트 |
 |--------|----------|-------------|
-| `T2_Idempotent_Payment_DuplicateKey.json` | Idempotency Key 기반 중복 결제 방지 | 2회 요청 → 1회 처리 |
-| `T2_Auth_ExpiredToken_Reject.json` | 만료된 Token 거부 | exp < now → 401 |
-| `T2_Auth_InvalidToken_Reject.json` | 위조 Token 거부 | signature mismatch → 401 |
-| `T2_Order_OtherUser_Forbidden.json` | 타인 주문 조회 차단 | owner != request.user → 403/404 |
-| `T2_Webhook_ReplayAttack.json` | 동일 webhook 재수신 무시 | event.id 중복 → 무시 |
+| `t2_idempotent_payment_duplicateKey.json` | Idempotency Key 기반 중복 결제 방지 | 2회 요청 → 1회 처리 |
+| `t2_auth_expiredtoken_reject.json` | 만료된 Token 거부 | exp < now → 401 |
+| `t2_auth_invalidtoken_reject.json` | 위조 Token 거부 | signature mismatch → 401 |
+| `t2_order_otherUser_forbidden.json` | 타인 주문 조회 차단 | owner != request.user → 403/404 |
+| `t2_webhook_replayattack.json` | 동일 webhook 재수신 무시 | event.id 중복 → 무시 |
 
-#### 예시: T2_Idempotent_Payment_DuplicateKey.json
+#### 예시: t2_idempotent_payment_duplicateKey.json
 
 ```javascript
 // Precondition
@@ -182,17 +182,17 @@ pm.test("Only one payment created", function() {
 
 ---
 
-### 🟢 TIER 3 – USER JOURNEY FLOW (3개)
+### 🟢 tier 3 – user journey flow (3개)
 
 > **"운영 흐름 증명 — 실패 시 경고만"**
 
 | 파일명 | 시나리오 | Steps |
 |--------|----------|-------|
-| `T3_Journey_Signup_Verify_Order.json` | 회원가입 → 인증 → 주문 | register → verify → cart → order → pay |
-| `T3_Journey_Purchase_Cancel_Reorder.json` | 구매 → 취소 → 재구매 | pay → cancel → reorder 가능 |
-| `T3_Journey_Point_Lifecycle.json` | 포인트 적립 → 사용 → 환불 | pay(earn) → order(use) → cancel(refund) |
+| `t3_journey_signup_verify_order.json` | 회원가입 → 인증 → 주문 | register → verify → cart → order → pay |
+| `t3_journey_purchase_cancel_reorder.json` | 구매 → 취소 → 재구매 | pay → cancel → reorder 가능 |
+| `t3_journey_point_lifecycle.json` | 포인트 적립 → 사용 → 환불 | pay(earn) → order(use) → cancel(refund) |
 
-#### 예시: T3_Journey_Purchase_Cancel_Reorder.json
+#### 예시: t3_journey_purchase_cancel_reorder.json
 
 ```javascript
 // Step 1: 장바구니 추가
@@ -241,7 +241,7 @@ pm.test("Reorder successful", function() {
 ⚠️ TIER 3: 2/3 PASSED (1 WARNING)
 
 CI RESULT: SUCCESS WITH WARNING
-- Journey scenario "T3_Journey_Point_Lifecycle" failed
+- Journey scenario "t3_journey_point_lifecycle" failed
 - No financial inconsistency detected
 - Deployment: PROCEED
 ```
@@ -263,24 +263,24 @@ CI RESULT: SUCCESS WITH WARNING
 ```
 postman/
 ├── collections/
-│   ├── Tier1_MoneyIntegrity/
-│   │   ├── T1_Payment_FailRollback_StockRestore.json
-│   │   ├── T1_Order_Create_StockDeduct.json
-│   │   ├── T1_Order_Cancel_StockRestore.json
-│   │   ├── T1_Payment_Cancel_PointRefund.json
-│   │   ├── T1_Payment_Cancel_EarnedDeduct.json
-│   │   ├── T1_Payment_Amount_Mismatch.json
-│   │   └── T1_Cart_PriceChanged_OrderBlock.json
-│   ├── Tier2_Security/
-│   │   ├── T2_Idempotent_Payment_DuplicateKey.json
-│   │   ├── T2_Auth_ExpiredToken_Reject.json
-│   │   ├── T2_Auth_InvalidToken_Reject.json
-│   │   ├── T2_Order_OtherUser_Forbidden.json
-│   │   └── T2_Webhook_ReplayAttack.json
-│   └── Tier3_Journey/
-│       ├── T3_Journey_Signup_Verify_Order.json
-│       ├── T3_Journey_Purchase_Cancel_Reorder.json
-│       └── T3_Journey_Point_Lifecycle.json
+│   ├── tier1_money_integrity/
+│   │   ├── t1_payment_failrollback_stockrestore.json
+│   │   ├── t1_order_create_stockdeduct.json
+│   │   ├── t1_order_cancel_stockrestore.json
+│   │   ├── t1_payment_cancel_pointrefund.json
+│   │   ├── t1_payment_cancel_earneddeduct.json
+│   │   ├── t1_payment_amount_mismatch.json
+│   │   └── t1_cart_pricechanged_orderblock.json
+│   ├── tier2_security/
+│   │   ├── t2_idempotent_payment_duplicatekey.json
+│   │   ├── t2_auth_expiredtoken_reject.json
+│   │   ├── t2_auth_invalidtoken_reject.json
+│   │   ├── t2_order_otheruser_forbidden.json
+│   │   └── t2_webhook_replayattack.json
+│   └── tier3_journey/
+│       ├── t3_journey_signup_verify_order.json
+│       ├── t3_journey_purchase_cancel_reorder.json
+│       └── t3_journey_point_lifecycle.json
 ├── environments/
 │   ├── local.json
 │   ├── staging.json

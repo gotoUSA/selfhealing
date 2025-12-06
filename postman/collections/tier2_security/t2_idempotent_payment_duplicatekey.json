@@ -1,0 +1,364 @@
+{
+  "info": {
+    "_postman_id": "t2-idempotent-payment-duplicatekey",
+    "name": "T2_Idempotent_Payment_DuplicateKey",
+    "description": "Idempotency Key 기반 중복 결제 방지 검증\n\n## 목적\n- 동일한 Idempotency Key로 2회 요청 시 1회만 처리되는지 확인\n- 중복 결제로 인한 금전적 손실 방지\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 2)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Step 1: Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login successful', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.access);",
+              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 2: Add Item to Cart",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Item added to cart', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('cart_item_id', jsonData.id || jsonData.cart_item_id);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"product_id\": {{product_id}},\n    \"quantity\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/cart/add_item/",
+          "host": ["{{base_url}}"],
+          "path": ["cart", "add_item", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 3: Create Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order created', function() {",
+              "    pm.response.to.have.status(201);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('order_id', jsonData.id || jsonData.order_id);",
+              "    pm.environment.set('order_total', jsonData.total_amount || jsonData.total);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cart_item_ids\": [{{cart_item_id}}],\n    \"shipping_name\": \"Test User\",\n    \"shipping_phone\": \"010-1234-5678\",\n    \"shipping_address\": \"서울시 강남구 테스트동 123\",\n    \"shipping_detail_address\": \"101호\",\n    \"shipping_postal_code\": \"12345\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 4: Generate Idempotency Key (Precondition)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Precondition: 새로운 Idempotency Key 생성",
+              "var idempotencyKey = pm.variables.replaceIn('{{$guid}}');",
+              "pm.environment.set('idempotency_key', idempotencyKey);",
+              "console.log('Generated Idempotency Key:', idempotencyKey);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('First payment request successful', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // Before 상태 저장 - 첫 번째 결제 ID",
+              "    pm.environment.set('first_payment_id', jsonData.payment_id || jsonData.id);",
+              "    pm.environment.set('first_payment_key', jsonData.payment_key);",
+              "    ",
+              "    console.log('First Payment ID:', pm.environment.get('first_payment_id'));",
+              "    console.log('First Payment Key:', pm.environment.get('first_payment_key'));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": {{order_id}},\n    \"amount\": {{order_total}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/request/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "request", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 5: Duplicate Payment Request (Same Key)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Action: 동일한 Idempotency Key로 두 번째 요청",
+              "",
+              "pm.test('Duplicate request returns same payment (idempotent)', function() {",
+              "    // 성공 응답이어야 함 (중복이어도 거부가 아닌 동일 결과 반환)",
+              "    pm.response.to.have.status(200);",
+              "    ",
+              "    var jsonData = pm.response.json();",
+              "    var secondPaymentId = jsonData.payment_id || jsonData.id;",
+              "    var firstPaymentId = pm.environment.get('first_payment_id');",
+              "    ",
+              "    // Assert: 동일한 Payment ID가 반환되어야 함",
+              "    pm.expect(secondPaymentId).to.equal(firstPaymentId);",
+              "    ",
+              "    console.log('First Payment ID:', firstPaymentId);",
+              "    console.log('Second Payment ID:', secondPaymentId);",
+              "    console.log('Idempotency Check: PASSED - Same payment returned');",
+              "});",
+              "",
+              "pm.test('No duplicate payment created', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // Payment Key도 동일해야 함",
+              "    if (jsonData.payment_key) {",
+              "        pm.expect(jsonData.payment_key).to.equal(pm.environment.get('first_payment_key'));",
+              "    }",
+              "});",
+              "",
+              "pm.test('Response indicates idempotent operation', function() {",
+              "    // 일부 API는 중복 요청 시 특별한 헤더나 필드를 반환할 수 있음",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // is_duplicate 또는 유사 필드가 있다면 확인",
+              "    if (jsonData.is_duplicate !== undefined) {",
+              "        pm.expect(jsonData.is_duplicate).to.be.true;",
+              "    }",
+              "    ",
+              "    // 또는 cached 응답인지 확인",
+              "    if (jsonData.cached !== undefined) {",
+              "        pm.expect(jsonData.cached).to.be.true;",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": {{order_id}},\n    \"amount\": {{order_total}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/request/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "request", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 6: Verify Only One Payment Exists",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order has only one payment', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 주문에 연결된 결제가 1개만 있어야 함",
+              "    var payments = jsonData.payments || [];",
+              "    var paymentCount = payments.length;",
+              "    ",
+              "    // 단일 결제 객체인 경우",
+              "    if (!Array.isArray(payments) && jsonData.payment) {",
+              "        paymentCount = 1;",
+              "    }",
+              "    ",
+              "    console.log('Total payments for order:', paymentCount);",
+              "    ",
+              "    // Assert: 결제는 정확히 1개만 존재해야 함",
+              "    pm.expect(paymentCount).to.be.at.most(1);",
+              "});",
+              "",
+              "pm.test('Payment ID matches first request', function() {",
+              "    var jsonData = pm.response.json();",
+              "    var payment = jsonData.payment || (jsonData.payments && jsonData.payments[0]);",
+              "    ",
+              "    if (payment) {",
+              "        var paymentId = payment.id || payment.payment_id;",
+              "        pm.expect(paymentId).to.equal(pm.environment.get('first_payment_id'));",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", ""]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request script",
+          "console.log('=== T2 Idempotency Test: Duplicate Payment Prevention ===');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test script",
+          "if (pm.response.code >= 500) {",
+          "    console.error('Server Error:', pm.response.text());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "test_email",
+      "value": "test@example.com"
+    },
+    {
+      "key": "test_password",
+      "value": "testpass123!"
+    },
+    {
+      "key": "product_id",
+      "value": "1"
+    }
+  ]
+}

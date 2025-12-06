@@ -99,9 +99,21 @@
       "enabled": true
     },
     {
+      "key": "test_username",
+      "value": "test_user1",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "test_password",
       "value": "TestPassword123!",
       "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "use_points",
+      "value": "1000",
+      "type": "default",
       "enabled": true
     }
   ],

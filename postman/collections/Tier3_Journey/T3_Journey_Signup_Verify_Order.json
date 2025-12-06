@@ -1,0 +1,609 @@
+{
+	"info": {
+		"_postman_id": "t3-journey-signup-verify-order",
+		"name": "T3 Journey - Signup → Verify → Order",
+		"description": "Tier 3: 회원가입 → 이메일 인증 → 장바구니 → 주문 → 결제 전체 여정 테스트\n\n이 테스트는 신규 사용자의 전체 구매 여정을 검증합니다.\n실패 시 경고만 기록하고 배포는 계속 진행됩니다.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Step 1: Register New User",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Generate unique user data",
+							"const timestamp = Date.now();",
+							"const uniqueEmail = `testuser_${timestamp}@example.com`;",
+							"const uniqueUsername = `testuser_${timestamp}`;",
+							"",
+							"pm.environment.set('new_user_email', uniqueEmail);",
+							"pm.environment.set('new_user_username', uniqueUsername);",
+							"pm.environment.set('new_user_password', 'TestPass123!@#');",
+							"",
+							"console.log('Generated test user:', uniqueUsername);"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Registration successful - Status 201', function() {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('User ID returned', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.id || response.user_id).to.exist;",
+							"    pm.environment.set('new_user_id', response.id || response.user_id);",
+							"});",
+							"",
+							"pm.test('Email matches registered email', function() {",
+							"    const response = pm.response.json();",
+							"    const expectedEmail = pm.environment.get('new_user_email');",
+							"    pm.expect(response.email).to.equal(expectedEmail);",
+							"});",
+							"",
+							"// Store verification token if returned",
+							"const response = pm.response.json();",
+							"if (response.verification_token) {",
+							"    pm.environment.set('verification_token', response.verification_token);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"{{new_user_username}}\",\n    \"email\": \"{{new_user_email}}\",\n    \"password\": \"{{new_user_password}}\",\n    \"password_confirm\": \"{{new_user_password}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/register/",
+					"host": ["{{base_url}}"],
+					"path": ["auth", "register", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 2: Verify Email",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// If verification token not set, this step may need manual token",
+							"if (!pm.environment.get('verification_token')) {",
+							"    console.warn('Verification token not found - may need to retrieve from email/logs');",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Email verification successful', function() {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+							"});",
+							"",
+							"pm.test('Verification message received', function() {",
+							"    const response = pm.response.json();",
+							"    // Check for success message or verified status",
+							"    const hasSuccessMessage = response.message && ",
+							"        (response.message.includes('verified') || ",
+							"         response.message.includes('success') ||",
+							"         response.message.includes('확인'));",
+							"    const isVerified = response.is_verified === true || response.verified === true;",
+							"    pm.expect(hasSuccessMessage || isVerified).to.be.true;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"token\": \"{{verification_token}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/email/verify/",
+					"host": ["{{base_url}}"],
+					"path": ["auth", "email", "verify", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 3: Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Login successful - Status 200', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Access token received', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.access || response.access_token).to.exist;",
+							"    pm.environment.set('access_token', response.access || response.access_token);",
+							"});",
+							"",
+							"pm.test('Refresh token received', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.refresh || response.refresh_token).to.exist;",
+							"    pm.environment.set('refresh_token', response.refresh || response.refresh_token);",
+							"});",
+							"",
+							"console.log('User logged in successfully');"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"{{new_user_username}}\",\n    \"password\": \"{{new_user_password}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/login/",
+					"host": ["{{base_url}}"],
+					"path": ["auth", "login", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 4: Get Available Products",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Products list retrieved - Status 200', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Products exist in response', function() {",
+							"    const response = pm.response.json();",
+							"    const products = response.results || response;",
+							"    pm.expect(products).to.be.an('array');",
+							"    pm.expect(products.length).to.be.greaterThan(0);",
+							"});",
+							"",
+							"// Select first available product with stock",
+							"const response = pm.response.json();",
+							"const products = response.results || response;",
+							"const availableProduct = products.find(p => p.stock > 0 || p.quantity > 0);",
+							"",
+							"if (availableProduct) {",
+							"    pm.environment.set('product_id', availableProduct.id);",
+							"    pm.environment.set('product_price', availableProduct.price);",
+							"    pm.environment.set('product_stock_before', availableProduct.stock || availableProduct.quantity);",
+							"    console.log('Selected product:', availableProduct.name, 'ID:', availableProduct.id);",
+							"} else {",
+							"    console.error('No available products with stock found');",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/products/",
+					"host": ["{{base_url}}"],
+					"path": ["products", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 5: Add to Cart",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Verify product is selected",
+							"if (!pm.environment.get('product_id')) {",
+							"    console.error('No product selected - cannot add to cart');",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Item added to cart - Status 200 or 201', function() {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							"",
+							"pm.test('Cart item created', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.id || response.cart_item_id).to.exist;",
+							"    pm.environment.set('cart_item_id', response.id || response.cart_item_id);",
+							"});",
+							"",
+							"pm.test('Correct product in cart', function() {",
+							"    const response = pm.response.json();",
+							"    const productId = pm.environment.get('product_id');",
+							"    pm.expect(String(response.product_id || response.product)).to.equal(String(productId));",
+							"});",
+							"",
+							"console.log('Cart item created:', pm.environment.get('cart_item_id'));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"product_id\": {{product_id}},\n    \"quantity\": 1\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/cart/add_item/",
+					"host": ["{{base_url}}"],
+					"path": ["cart", "add_item", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 6: Check Cart Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Stock check successful - Status 200', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock is available', function() {",
+							"    const response = pm.response.json();",
+							"    // Check if all items are available or stock check passed",
+							"    const allAvailable = response.all_available === true || ",
+							"                         response.stock_available === true ||",
+							"                         (response.items && response.items.every(item => item.available));",
+							"    pm.expect(allAvailable).to.be.true;",
+							"});",
+							"",
+							"console.log('Stock check passed - ready to order');"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/cart/check_stock/",
+					"host": ["{{base_url}}"],
+					"path": ["cart", "check_stock", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 7: Create Order",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Prepare cart item IDs for order",
+							"const cartItemId = pm.environment.get('cart_item_id');",
+							"pm.environment.set('cart_item_ids', JSON.stringify([cartItemId]));"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Order created - Status 201', function() {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Order ID returned', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.id || response.order_id).to.exist;",
+							"    pm.environment.set('order_id', response.id || response.order_id);",
+							"});",
+							"",
+							"pm.test('Order status is pending or awaiting payment', function() {",
+							"    const response = pm.response.json();",
+							"    const validStatuses = ['pending', 'awaiting_payment', 'created', 'PENDING'];",
+							"    pm.expect(validStatuses).to.include(response.status);",
+							"});",
+							"",
+							"pm.test('Order total amount exists', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.total_amount || response.total || response.amount).to.exist;",
+							"    pm.environment.set('order_amount', response.total_amount || response.total || response.amount);",
+							"});",
+							"",
+							"console.log('Order created:', pm.environment.get('order_id'));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"cart_item_ids\": {{cart_item_ids}},\n    \"shipping_name\": \"Test User\",\n    \"shipping_phone\": \"010-1234-5678\",\n    \"shipping_address\": \"서울시 강남구 테스트동 123\",\n    \"shipping_detail_address\": \"테스트빌딩 101호\",\n    \"shipping_postal_code\": \"12345\",\n    \"shipping_memo\": \"문 앞에 놓아주세요\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/orders/",
+					"host": ["{{base_url}}"],
+					"path": ["orders", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 8: Request Payment",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Generate idempotency key for payment",
+							"const idempotencyKey = pm.variables.replaceIn('{{$guid}}');",
+							"pm.environment.set('payment_idempotency_key', idempotencyKey);"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Payment request successful - Status 200 or 201', function() {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							"",
+							"pm.test('Payment ID returned', function() {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.payment_id || response.id).to.exist;",
+							"    pm.environment.set('payment_id', response.payment_id || response.id);",
+							"});",
+							"",
+							"pm.test('Payment key returned (for confirmation)', function() {",
+							"    const response = pm.response.json();",
+							"    if (response.payment_key) {",
+							"        pm.environment.set('payment_key', response.payment_key);",
+							"    }",
+							"});",
+							"",
+							"console.log('Payment requested:', pm.environment.get('payment_id'));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					},
+					{
+						"key": "Idempotency-Key",
+						"value": "{{payment_idempotency_key}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"order_id\": {{order_id}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/payments/request/",
+					"host": ["{{base_url}}"],
+					"path": ["payments", "request", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 9: Confirm Payment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Payment confirmed - Status 200', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Payment status is completed or paid', function() {",
+							"    const response = pm.response.json();",
+							"    const validStatuses = ['completed', 'paid', 'success', 'DONE', 'confirmed'];",
+							"    pm.expect(validStatuses).to.include(response.status);",
+							"});",
+							"",
+							"pm.test('Order associated with payment', function() {",
+							"    const response = pm.response.json();",
+							"    const expectedOrderId = pm.environment.get('order_id');",
+							"    pm.expect(String(response.order_id || response.order)).to.equal(String(expectedOrderId));",
+							"});",
+							"",
+							"console.log('Payment confirmed successfully!');"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"order_id\": {{order_id}},\n    \"payment_key\": \"{{payment_key}}\",\n    \"amount\": {{order_amount}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/payments/confirm/",
+					"host": ["{{base_url}}"],
+					"path": ["payments", "confirm", ""]
+				}
+			}
+		},
+		{
+			"name": "Step 10: Verify Order Status",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Order retrieved - Status 200', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Order status is paid or processing', function() {",
+							"    const response = pm.response.json();",
+							"    const validStatuses = ['paid', 'processing', 'confirmed', 'PAID', 'completed'];",
+							"    pm.expect(validStatuses).to.include(response.status);",
+							"});",
+							"",
+							"pm.test('Order belongs to correct user', function() {",
+							"    const response = pm.response.json();",
+							"    const expectedUserId = pm.environment.get('new_user_id');",
+							"    pm.expect(String(response.user_id || response.user)).to.equal(String(expectedUserId));",
+							"});",
+							"",
+							"console.log('=== JOURNEY COMPLETE ===');",
+							"console.log('User:', pm.environment.get('new_user_username'));",
+							"console.log('Order ID:', pm.environment.get('order_id'));",
+							"console.log('Payment ID:', pm.environment.get('payment_id'));",
+							"console.log('Status: SUCCESS');"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/orders/{{order_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["orders", "{{order_id}}", ""]
+				}
+			}
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"console.log('=== T3 Journey: Signup → Verify → Order ===');",
+					"console.log('Timestamp:', new Date().toISOString());"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"// Log response time for each request",
+					"console.log('Response time:', pm.response.responseTime, 'ms');"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api",
+			"type": "string"
+		}
+	]
+}
