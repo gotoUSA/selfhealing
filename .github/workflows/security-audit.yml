@@ -1,0 +1,44 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main, develop, release/**]
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'setup.cfg'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'setup.cfg'
+  schedule:
+    # 매주 월요일 09:00 UTC (한국 시간 18:00)
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: requirements.txt
+          summary: true
+          # 취약점 발견 시 빌드 실패
+          # vulnerability-service: osv
