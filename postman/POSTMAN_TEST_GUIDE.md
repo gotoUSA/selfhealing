@@ -97,6 +97,84 @@ Before State Save → API Call → After State Compare
 
 ---
 
+## 7.1 🐳 Docker에서 테스트 실행하기
+
+### 사전 요구사항
+
+1. **Docker Desktop 실행** (Windows/Mac)
+2. **프로젝트 컨테이너 실행 중**:
+   ```bash
+   docker-compose up -d
+   ```
+
+### 간편 실행 스크립트
+
+프로젝트에 포함된 `scripts/run_postman_tests.sh` 스크립트를 사용하면 Newman Docker로 테스트를 쉽게 실행할 수 있습니다.
+
+#### 사용 가능한 테스트 목록 확인
+
+```bash
+bash scripts/run_postman_tests.sh --list
+```
+
+#### 특정 테스트 실행
+
+```bash
+# 테스트 이름 일부만 입력해도 자동으로 찾아서 실행
+bash scripts/run_postman_tests.sh t1_cart_pricechanged
+bash scripts/run_postman_tests.sh t1_payment_amount
+bash scripts/run_postman_tests.sh t2_auth_expired
+```
+
+#### Tier 1 전체 테스트 실행
+
+```bash
+bash scripts/run_postman_tests.sh tier1
+```
+
+### 직접 Docker 명령어 사용
+
+스크립트 없이 직접 Newman Docker를 실행할 수도 있습니다:
+
+```bash
+# Windows (Git Bash / WSL)
+MSYS_NO_PATHCONV=1 docker run --rm --network myproject_default \
+  -v "$(pwd)/postman:/etc/newman" \
+  postman/newman:alpine run /etc/newman/collections/tier1_money_integrity/t1_cart_pricechanged_orderblock.json \
+  -e /etc/newman/environments/local.json \
+  --env-var "base_url=http://nginx/api"
+
+# Mac/Linux
+docker run --rm --network myproject_default \
+  -v "$(pwd)/postman:/etc/newman" \
+  postman/newman:alpine run /etc/newman/collections/tier1_money_integrity/t1_cart_pricechanged_orderblock.json \
+  -e /etc/newman/environments/local.json \
+  --env-var "base_url=http://nginx/api"
+```
+
+### 주요 옵션 설명
+
+| 옵션 | 설명 |
+|------|------|
+| `--network myproject_default` | Docker Compose 네트워크에 연결 (nginx 컨테이너 접근) |
+| `-v "$(pwd)/postman:/etc/newman"` | postman 폴더를 컨테이너에 마운트 |
+| `--env-var "base_url=http://nginx/api"` | 컨테이너 내부 nginx 주소 사용 |
+
+### 테스트 결과 해석
+
+```
+┌─────────────────────────┬───────────────────┬──────────────────┐
+│                         │          executed │           failed │
+├─────────────────────────┼───────────────────┼──────────────────┤
+│              assertions │                12 │                0 │  ← 모든 assertion 통과!
+└─────────────────────────┴───────────────────┴──────────────────┘
+```
+
+- **Exit Code 0**: 모든 테스트 통과 ✅
+- **Exit Code 1**: 일부 테스트 실패 ❌ (상세 내용은 출력 확인)
+
+---
+
 ## 8. 🔥 최종 테스트 목록 (Total: 15개)
 
 ### 🔴 tier 1 – money intergrity (7개)

@@ -16,9 +16,9 @@
               "pm.test('Login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('access_token', jsonData.access);",
-              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.token.access);",
               "});"
             ],
             "type": "text/javascript"
@@ -35,7 +35,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -219,8 +219,9 @@
               "pm.test('Admin login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('admin_access_token', jsonData.access);",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('admin_access_token', jsonData.token.access);",
               "    ",
               "    console.log('Admin logged in for price change simulation');",
               "});"
@@ -239,7 +240,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{admin_email}}\",\n    \"password\": \"{{admin_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{admin_username}}\",\n    \"password\": \"{{admin_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -599,13 +600,14 @@
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
               "    var originalPrice = parseInt(pm.environment.get('original_price'));",
+              "    var currentPrice = parseInt(jsonData.price);",
               "    ",
-              "    pm.expect(jsonData.price).to.equal(originalPrice);",
+              "    pm.expect(currentPrice).to.equal(originalPrice);",
               "    ",
               "    console.log('========================================');",
               "    console.log('Price Restoration Verified:');",
               "    console.log('  Expected:', originalPrice);",
-              "    console.log('  Actual:', jsonData.price);",
+              "    console.log('  Actual:', currentPrice);",
               "    console.log('========================================');",
               "});"
             ],
