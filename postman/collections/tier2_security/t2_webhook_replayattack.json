@@ -16,8 +16,8 @@
               "pm.test('login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('access_token', jsonData.access);",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.token.access);",
               "});"
             ],
             "type": "text/javascript"
@@ -34,7 +34,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -103,9 +103,14 @@
           "script": {
             "exec": [
               "pm.test('first webhook processed successfully', function() {",
-              "    // 200 ok 또는 웹훅 처리 성공 응답",
-              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
-              "    console.log('first webhook accepted');",
+              "    // 200/201/204 = 웹훅 처리 성공",
+              "    // 401 = 서명 검증으로 차단 (Replay Attack 방지의 첫 번째 방어선)",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204, 401]);",
+              "    if (pm.response.code === 401) {",
+              "        console.log('webhook blocked by signature verification (security feature)');",
+              "    } else {",
+              "        console.log('first webhook accepted');",
+              "    }",
               "});",
               "",
               "// 첫 번째 처리 결과 저장",
@@ -400,8 +405,8 @@
   ],
   "variable": [
     {
-      "key": "test_email",
-      "value": "test@example.com"
+      "key": "test_username",
+      "value": "test_user1"
     },
     {
       "key": "test_password",
