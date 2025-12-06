@@ -90,6 +90,15 @@ app.conf.beat_schedule = {
             "expires": 3600,
         },
     },
+    # 결제 실패 후 미처리된 주문 감지 - 5분마다
+    "detect-orphaned-orders": {
+        "task": "shopping.tasks.payment_tasks.detect_orphaned_orders",
+        "schedule": crontab(minute="*/5"),  # 5분마다
+        "options": {
+            "expires": 300,  # 5분 후 만료
+        },
+        "kwargs": {"threshold_minutes": 10},  # 10분 이상 불일치 상태인 주문만
+    },
     # 테스트용: 5분마다 실행 (개발 환경에서만 사용)
     # 'test-periodic-task': {
     #     'task': 'shopping.tasks.test_periodic_task',

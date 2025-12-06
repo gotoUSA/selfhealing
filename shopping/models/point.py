@@ -109,6 +109,7 @@ class PointHistory(models.Model):
         ("use", "사용"),  # 주문 시 사용
         ("cancel_refund", "취소환불"),  # 주문 취소로 인한 환불
         ("cancel_deduct", "취소차감"),  # 주문 취소로 인한 적립 포인트 차감
+        ("payment_fail_refund", "결제실패환불"),  # 결제 실패로 인한 포인트 환불
         ("expire", "만료"),  # 유효기간 만료
         ("admin_add", "관리자지급"),  # 관리자가 수동으로 지급
         ("admin_deduct", "관리자차감"),  # 관리자가 수동으로 차감

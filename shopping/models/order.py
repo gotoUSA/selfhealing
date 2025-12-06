@@ -27,6 +27,8 @@ class Order(models.Model):
         ("delivered", "배송완료"),  # 고객이 받음
         ("canceled", "주문취소"),  # 주문 취소됨
         ("refunded", "환불완료"),  # 환불 처리됨
+        ("payment_failed", "결제실패"),  # 결제 실패 (자동 롤백됨)
+        ("failed", "주문실패"),  # 주문 처리 실패 (재고 부족 등)
     ]
 
     # 결제 방법 선택지
