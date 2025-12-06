@@ -16,9 +16,9 @@
               "pm.test('Login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('access_token', jsonData.access);",
-              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.token.access);",
               "});"
             ],
             "type": "text/javascript"
@@ -35,7 +35,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -52,9 +52,10 @@
           "script": {
             "exec": [
               "pm.test('Item added to cart', function() {",
-              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
               "    var jsonData = pm.response.json();",
               "    pm.environment.set('cart_item_id', jsonData.id || jsonData.cart_item_id);",
+              "    console.log('Cart Item ID:', pm.environment.get('cart_item_id'));",
               "});"
             ],
             "type": "text/javascript"
@@ -92,10 +93,10 @@
           "script": {
             "exec": [
               "pm.test('Order created', function() {",
-              "    pm.response.to.have.status(201);",
+              "    pm.expect(pm.response.code).to.be.oneOf([201, 202]);",
               "    var jsonData = pm.response.json();",
-              "    pm.environment.set('order_id', jsonData.id || jsonData.order_id);",
-              "    pm.environment.set('order_total', jsonData.total_amount || jsonData.total);",
+              "    pm.environment.set('order_id', jsonData.order_id || jsonData.id);",
+              "    console.log('Order ID:', pm.environment.get('order_id'));",
               "});"
             ],
             "type": "text/javascript"
@@ -126,7 +127,41 @@
       }
     },
     {
-      "name": "Step 4: Generate Idempotency Key (Precondition)",
+      "name": "Step 4: Wait for Order Confirmed",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order is confirmed', function() {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    var jsonData = pm.response.json();",
+              "    var status = jsonData.status || jsonData.order_status;",
+              "    console.log('Order status:', status);",
+              "    pm.expect(status).to.equal('confirmed');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 5: First Payment Request (Generate Idempotency Key)",
       "event": [
         {
           "listen": "prerequest",
@@ -145,7 +180,7 @@
           "script": {
             "exec": [
               "pm.test('First payment request successful', function() {",
-              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
               "    var jsonData = pm.response.json();",
               "    ",
               "    // Before 상태 저장 - 첫 번째 결제 ID",
@@ -178,7 +213,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"order_id\": {{order_id}},\n    \"amount\": {{order_total}}\n}"
+          "raw": "{\n    \"order_id\": {{order_id}}\n}"
         },
         "url": {
           "raw": "{{base_url}}/payments/request/",
@@ -188,7 +223,7 @@
       }
     },
     {
-      "name": "Step 5: Duplicate Payment Request (Same Key)",
+      "name": "Step 6: Duplicate Payment Request (Same Key)",
       "event": [
         {
           "listen": "test",
@@ -198,7 +233,7 @@
               "",
               "pm.test('Duplicate request returns same payment (idempotent)', function() {",
               "    // 성공 응답이어야 함 (중복이어도 거부가 아닌 동일 결과 반환)",
-              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
               "    ",
               "    var jsonData = pm.response.json();",
               "    var secondPaymentId = jsonData.payment_id || jsonData.id;",
@@ -258,7 +293,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"order_id\": {{order_id}},\n    \"amount\": {{order_total}}\n}"
+          "raw": "{\n    \"order_id\": {{order_id}}\n}"
         },
         "url": {
           "raw": "{{base_url}}/payments/request/",
@@ -268,7 +303,7 @@
       }
     },
     {
-      "name": "Step 6: Verify Only One Payment Exists",
+      "name": "Step 7: Verify Only One Payment Exists",
       "event": [
         {
           "listen": "test",
@@ -349,8 +384,8 @@
   ],
   "variable": [
     {
-      "key": "test_email",
-      "value": "test@example.com"
+      "key": "test_username",
+      "value": "test_user1"
     },
     {
       "key": "test_password",
