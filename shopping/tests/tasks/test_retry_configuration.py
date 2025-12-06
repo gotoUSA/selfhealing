@@ -351,8 +351,8 @@ class TestNonRetryableErrors:
 class TestSoftTimeLimitExceeded:
     """SoftTimeLimitExceeded 처리 테스트"""
 
-    def test_timeout_sets_payment_status_to_timeout(self, mocker):
-        """타임아웃 시 Payment 상태가 timeout으로 변경되는지"""
+    def test_timeout_sets_payment_status_to_aborted(self, mocker):
+        """타임아웃 시 롤백 처리 후 Payment 상태가 aborted로 변경되는지"""
         from shopping.tests.factories import (
             OrderFactory,
             PaymentFactory,
@@ -379,12 +379,12 @@ class TestSoftTimeLimitExceeded:
         with pytest.raises(SoftTimeLimitExceeded):
             call_toss_confirm_api("test_key", order.id, int(order.total_amount))
 
-        # Payment 상태 확인
+        # Payment 상태 확인 (롤백 후 aborted)
         payment.refresh_from_db()
-        assert payment.status == "timeout"
+        assert payment.status == "aborted"
 
     def test_timeout_creates_payment_log(self, mocker):
-        """타임아웃 시 PaymentLog가 생성되는지"""
+        """타임아웃 시 PaymentLog가 생성되는지 (error + rollback 로그)"""
         from shopping.tests.factories import (
             OrderFactory,
             PaymentFactory,
@@ -412,11 +412,12 @@ class TestSoftTimeLimitExceeded:
         with pytest.raises(SoftTimeLimitExceeded):
             call_toss_confirm_api("test_key", order.id, int(order.total_amount))
 
-        # PaymentLog 생성 확인
+        # PaymentLog 생성 확인 (error 로그 + rollback 로그 = 2개)
         final_log_count = PaymentLog.objects.filter(payment=payment).count()
-        assert final_log_count == initial_log_count + 1
+        assert final_log_count == initial_log_count + 2
 
-        # 로그 내용 확인
-        log = PaymentLog.objects.filter(payment=payment).order_by("-created_at").first()
-        assert log.log_type == "error"
-        assert "시간 초과" in log.message
+        # 로그 내용 확인 (error 로그와 rollback 로그 모두 존재)
+        logs = PaymentLog.objects.filter(payment=payment).order_by("-created_at")
+        log_types = [log.log_type for log in logs]
+        assert "error" in log_types
+        assert "rollback" in log_types
