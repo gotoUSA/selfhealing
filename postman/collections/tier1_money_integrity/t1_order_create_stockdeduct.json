@@ -13,13 +13,14 @@
           "listen": "test",
           "script": {
             "exec": [
-              "pm.test('Login successful', function() {",
+              "pm.test('Login successful with valid contract', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
               "    pm.expect(jsonData.token).to.exist;",
               "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.expect(typeof jsonData.token.access).to.eql('string');",
+              "    pm.expect(jsonData.token.access.length).to.be.above(10);",
               "    pm.environment.set('access_token', jsonData.token.access);",
-              "    // refresh_token is set via HTTP-only cookie by server",
               "});"
             ],
             "type": "text/javascript"

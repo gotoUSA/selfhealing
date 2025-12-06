@@ -1,7 +1,15 @@
 {
   "id": "production-env",
-  "name": "Production (Read-Only Tests)",
+  "name": "⛔ PRODUCTION - DO NOT RUN TESTS",
+  "_comment": "이 환경에서는 자동화 테스트 실행 금지! 실제 사용자 데이터 오염 위험",
   "values": [
+    {
+      "key": "DANGER_PRODUCTION_ENV",
+      "value": "true",
+      "type": "default",
+      "enabled": true,
+      "description": "이 값이 true이면 테스트 실행 금지"
+    },
     {
       "key": "base_url",
       "value": "https://api.example.com/api",

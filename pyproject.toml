@@ -164,18 +164,22 @@ sort_by_size = true
 # ==========================================
 # mutmut Configuration (Mutation Testing)
 # ==========================================
+# ⚠️ 현재 프로젝트에서는 아직 도입하지 않음
+# 핵심 로직 안정화 후 도입 예정
+# 
 # mutmut은 setup.cfg 또는 pyproject.toml의 [tool.mutmut] 지원
 # 돈 관련 서비스만 대상으로 제한
-[tool.mutmut]
-paths_to_mutate = [
-    "shopping/services/payment_service.py",
-    "shopping/services/point_service.py",
-    "shopping/services/point_query_service.py",
-    "shopping/services/cart_service.py",
-    "shopping/services/order_service.py",
-    "shopping/services/return_service.py",
-    "shopping/services/toss_webhook_service.py",
-]
-tests_dir = "shopping/tests/"
-runner = "python -m pytest -x --tb=short -q"
-dict_synonyms = "Struct,NamedStruct"
+# 
+# [tool.mutmut]
+# paths_to_mutate = [
+#     "shopping/services/payment_service.py",
+#     "shopping/services/point_service.py",
+#     "shopping/services/point_query_service.py",
+#     "shopping/services/cart_service.py",
+#     "shopping/services/order_service.py",
+#     "shopping/services/return_service.py",
+#     "shopping/services/toss_webhook_service.py",
+# ]
+# tests_dir = "shopping/tests/"
+# runner = "python -m pytest -x --tb=short -q"
+# dict_synonyms = "Struct,NamedStruct"
