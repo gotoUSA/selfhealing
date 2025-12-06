@@ -237,8 +237,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         avg_rating = obj.reviews.aggregate(avg=Avg("rating"))["avg"]
         return round(avg_rating, 1) if avg_rating else 0.0
 
-
-
     def get_is_in_stock(self, obj: Product) -> bool:
         """재고 여부"""
         return obj.stock > 0
