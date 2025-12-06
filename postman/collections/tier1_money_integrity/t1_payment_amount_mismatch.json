@@ -16,9 +16,9 @@
               "pm.test('Login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('access_token', jsonData.access);",
-              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.token.access);",
               "});"
             ],
             "type": "text/javascript"
@@ -35,7 +35,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -197,20 +197,20 @@
           "script": {
             "exec": [
               "pm.test('Order created successfully', function() {",
-              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);",
               "    var jsonData = pm.response.json();",
               "    ",
-              "    pm.environment.set('order_id', jsonData.id || jsonData.order_id);",
-              "    pm.environment.set('correct_amount', jsonData.total_amount || jsonData.total);",
+              "    pm.environment.set('order_id', jsonData.order_id || jsonData.id);",
+              "    pm.environment.set('correct_amount', jsonData.final_amount || jsonData.total_amount || jsonData.total);",
               "    ",
               "    // 잘못된 금액 설정 (올바른 금액보다 낮은 금액)",
-              "    var correctAmount = jsonData.total_amount || jsonData.total;",
+              "    var correctAmount = parseInt(jsonData.final_amount || jsonData.total_amount || jsonData.total || 10000);",
               "    var wrongAmount = Math.floor(correctAmount * 0.5);  // 50% 금액",
               "    pm.environment.set('wrong_amount', wrongAmount);",
               "    ",
               "    console.log('========================================');",
               "    console.log('Order Created:');",
-              "    console.log('  Order ID:', jsonData.id || jsonData.order_id);",
+              "    console.log('  Order ID:', jsonData.order_id || jsonData.id);",
               "    console.log('  Correct Amount:', correctAmount);",
               "    console.log('  Wrong Amount (for test):', wrongAmount);",
               "    console.log('========================================');",
@@ -240,6 +240,59 @@
           "raw": "{{base_url}}/orders/",
           "host": ["{{base_url}}"],
           "path": ["orders", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 6.5: Wait and Get Order Details",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// 비동기 처리 완료 대기",
+              "setTimeout(function() {}, 1000);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order details retrieved', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    pm.environment.set('correct_amount', jsonData.final_amount || jsonData.total_amount);",
+              "    var correctAmount = parseInt(jsonData.final_amount || jsonData.total_amount);",
+              "    var wrongAmount = Math.floor(correctAmount * 0.5);",
+              "    pm.environment.set('wrong_amount', wrongAmount);",
+              "    ",
+              "    console.log('========================================');",
+              "    console.log('Order Details:');",
+              "    console.log('  Order ID:', pm.environment.get('order_id'));",
+              "    console.log('  Final Amount:', correctAmount);",
+              "    console.log('  Wrong Amount (for test):', wrongAmount);",
+              "    console.log('========================================');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", ""]
         }
       }
     },
@@ -452,7 +505,8 @@
               "    var jsonData = pm.response.json();",
               "    ",
               "    var orderStatus = (jsonData.status || '').toLowerCase();",
-              "    var paidStatuses = ['paid', 'completed', 'confirmed', 'success'];",
+              "    // confirmed는 '주문확정' 상태로 결제 전 상태임 (결제 완료가 아님)",
+              "    var paidStatuses = ['paid', 'completed', 'success'];",
               "    ",
               "    console.log('========================================');",
               "    console.log('ASSERTION - Order Status Verification:');",

@@ -435,8 +435,8 @@ class OrderService:
                         f"재고 및 판매량 복구: product_id={item.product.pk}, "
                         f"product_name={item.product_name}, quantity={item.quantity}"
                     )
-                elif order.status == "pending":
-                    # pending 상태: 재고만 복구 (sold_count는 아직 증가 안했음)
+                elif order.status in ["pending", "confirmed"]:
+                    # pending/confirmed 상태: 재고만 복구 (sold_count는 아직 증가 안했음)
                     Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
                     logger.info(
                         f"재고 복구: product_id={item.product.pk}, "
