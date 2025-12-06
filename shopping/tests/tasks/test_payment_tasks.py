@@ -40,17 +40,10 @@ class TestPaymentTasksHappyPath:
             "orderId": "ORDER_123",
             "status": "DONE",
         }
-        mocker.patch(
-            "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            return_value=mock_response
-        )
+        mocker.patch("shopping.utils.toss_payment.TossPaymentClient.confirm_payment", return_value=mock_response)
 
         # Act
-        result = call_toss_confirm_api(
-            payment_key="test_key_123",
-            order_id="ORDER_123",
-            amount=10000
-        )
+        result = call_toss_confirm_api(payment_key="test_key_123", order_id="ORDER_123", amount=10000)
 
         # Assert
         assert result == mock_response
@@ -75,11 +68,7 @@ class TestPaymentTasksHappyPath:
         }
 
         # Act
-        result = finalize_payment_confirm(
-            toss_response=toss_response,
-            payment_id=payment.id,
-            user_id=user.id
-        )
+        result = finalize_payment_confirm(toss_response=toss_response, payment_id=payment.id, user_id=user.id)
 
         # Assert
         payment.refresh_from_db()
@@ -95,10 +84,7 @@ class TestPaymentTasksHappyPath:
         payment = PaymentFactory(order=order)
 
         mock_toss_response = {"status": "DONE", "paymentKey": "key123"}
-        mocker.patch(
-            "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            return_value=mock_toss_response
-        )
+        mocker.patch("shopping.utils.toss_payment.TossPaymentClient.confirm_payment", return_value=mock_toss_response)
 
         # Act - eager 모드에서 직접 실행 (CI 환경 호환성)
         from shopping.tasks.payment_tasks import call_toss_confirm_api, finalize_payment_confirm
@@ -127,11 +113,7 @@ class TestPaymentTasksBoundary:
         payment = PaymentFactory(order=order, status="done")
 
         # Act
-        result = finalize_payment_confirm(
-            toss_response={"status": "DONE"},
-            payment_id=payment.id,
-            user_id=user.id
-        )
+        result = finalize_payment_confirm(toss_response={"status": "DONE"}, payment_id=payment.id, user_id=user.id)
 
         # Assert
         assert result["status"] == "already_processed"
@@ -148,15 +130,12 @@ class TestPaymentTasksException:
 
         mock_client = mocker.patch(
             "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            side_effect=TossPaymentError("NETWORK_ERROR", "Network failed")
+            side_effect=TossPaymentError("NETWORK_ERROR", "Network failed"),
         )
 
         # Act & Assert
         with pytest.raises(Exception):  # Celery retry exception
-            call_toss_confirm_api.apply(
-                args=("key", "order", 10000),
-                throw=True
-            )
+            call_toss_confirm_api.apply(args=("key", "order", 10000), throw=True)
 
     def test_payment_not_found(self):
         """존재하지 않는 결제 ID로 최종 처리 시도"""
@@ -165,11 +144,7 @@ class TestPaymentTasksException:
 
         # Act & Assert
         with pytest.raises(Payment.DoesNotExist):
-            finalize_payment_confirm(
-                toss_response={"status": "DONE"},
-                payment_id=non_existent_id,
-                user_id=1
-            )
+            finalize_payment_confirm(toss_response={"status": "DONE"}, payment_id=non_existent_id, user_id=1)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -297,8 +272,10 @@ class TestDetectOrphanedOrders:
     @pytest.fixture
     def user_factory(self):
         """사용자 팩토리"""
+
         def _create_user(**kwargs):
             return UserFactory(**kwargs)
+
         return _create_user
 
     def test_detect_no_orphans(self):
@@ -320,16 +297,15 @@ class TestDetectOrphanedOrders:
         user = user_factory()
         order = OrderFactory(user=user, status="confirmed")
         payment = PaymentFactory(order=order, status="aborted")
-        
+
         # updated_at을 15분 전으로 설정
         old_time = timezone.now() - timedelta(minutes=15)
         from shopping.models.order import Order
+
         Order.objects.filter(pk=order.pk).update(updated_at=old_time)
 
         # rollback 태스크 모킹 (실제 실행 방지)
-        mock_rollback = mocker.patch(
-            "shopping.tasks.payment_tasks.rollback_payment_failure.delay"
-        )
+        mock_rollback = mocker.patch("shopping.tasks.payment_tasks.rollback_payment_failure.delay")
 
         # Act
         result = detect_orphaned_orders(threshold_minutes=10)
@@ -345,19 +321,18 @@ class TestDetectOrphanedOrders:
         # Arrange: 방금 생성된 orphaned order (5분 전)
         from datetime import timedelta
         from django.utils import timezone
-        
+
         user = user_factory()
         order = OrderFactory(user=user, status="confirmed")
         payment = PaymentFactory(order=order, status="aborted")
-        
+
         # updated_at을 5분 전으로 설정 (threshold 10분보다 짧음)
         recent_time = timezone.now() - timedelta(minutes=5)
         from shopping.models.order import Order
+
         Order.objects.filter(pk=order.pk).update(updated_at=recent_time)
 
-        mock_rollback = mocker.patch(
-            "shopping.tasks.payment_tasks.rollback_payment_failure.delay"
-        )
+        mock_rollback = mocker.patch("shopping.tasks.payment_tasks.rollback_payment_failure.delay")
 
         # Act
         result = detect_orphaned_orders(threshold_minutes=10)
@@ -382,10 +357,7 @@ class TestNotifyPaymentFailure:
         """warning 레벨 알림"""
         # Act
         result = notify_payment_failure(
-            order_id=123,
-            failure_type="rollback_triggered",
-            details="테스트 상세 정보",
-            severity="warning"
+            order_id=123, failure_type="rollback_triggered", details="테스트 상세 정보", severity="warning"
         )
 
         # Assert
@@ -398,13 +370,9 @@ class TestNotifyPaymentFailure:
         """critical 레벨 알림"""
         # Act
         result = notify_payment_failure(
-            order_id=456,
-            failure_type="rollback_failed",
-            details="롤백 실패 - 수동 처리 필요",
-            severity="critical"
+            order_id=456, failure_type="rollback_failed", details="롤백 실패 - 수동 처리 필요", severity="critical"
         )
 
         # Assert
         assert result["status"] == "notified"
         assert result["severity"] == "critical"
-

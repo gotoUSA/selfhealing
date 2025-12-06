@@ -307,9 +307,7 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
             stock_restored_count = 0
             for item in order.order_items.select_for_update():
                 if item.product:
-                    Product.objects.filter(pk=item.product.pk).update(
-                        stock=F("stock") + item.quantity
-                    )
+                    Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
                     stock_restored_count += item.quantity
                     logger.info(
                         f"재고 복구: order_id={order_id}, product_id={item.product.pk}, "
@@ -332,9 +330,7 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
                         "fail_reason": fail_reason,
                     },
                 )
-                logger.info(
-                    f"포인트 환불: order_id={order_id}, user_id={order.user.id}, points={points_refunded}"
-                )
+                logger.info(f"포인트 환불: order_id={order_id}, user_id={order.user.id}, points={points_refunded}")
 
             # 4. 주문 상태 변경
             order.status = "payment_failed"
@@ -393,36 +389,34 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
 def detect_orphaned_orders(self, threshold_minutes: int = 10) -> dict:
     """
     불일치 상태의 주문을 감지하고 자동으로 롤백을 트리거합니다.
-    
+
     불일치 상태: Order=confirmed + Payment=aborted
     - 정상적인 경우 rollback_payment_failure가 즉시 처리함
     - 하지만 네트워크 오류, 워커 다운 등으로 롤백이 누락될 수 있음
     - 이 태스크가 주기적으로 이런 "고아 주문"을 감지하여 보상 처리
-    
+
     Args:
         threshold_minutes: 이 시간 이상 불일치 상태가 지속된 주문만 감지
-        
+
     Returns:
         감지 및 처리 결과
     """
     from datetime import timedelta
     from django.utils import timezone
-    
+
     logger.info(f"Orphaned order 감지 시작: threshold={threshold_minutes}분")
-    
+
     threshold_time = timezone.now() - timedelta(minutes=threshold_minutes)
-    
+
     # confirmed + aborted 상태가 threshold_minutes 이상 지속된 주문 찾기
     orphaned_orders = Order.objects.filter(
-        status="confirmed",
-        payment__status="aborted",
-        updated_at__lt=threshold_time
+        status="confirmed", payment__status="aborted", updated_at__lt=threshold_time
     ).select_related("payment")
-    
+
     detected_count = 0
     triggered_count = 0
     errors = []
-    
+
     for order in orphaned_orders:
         detected_count += 1
         try:
@@ -431,28 +425,24 @@ def detect_orphaned_orders(self, threshold_minutes: int = 10) -> dict:
                 f"order_status={order.status}, payment_status={order.payment.status}, "
                 f"updated_at={order.updated_at}"
             )
-            
+
             # 롤백 태스크 트리거
-            rollback_payment_failure.delay(
-                order_id=order.id,
-                reason=f"Orphan detection (stale for >{threshold_minutes}min)"
-            )
+            rollback_payment_failure.delay(order_id=order.id, reason=f"Orphan detection (stale for >{threshold_minutes}min)")
             triggered_count += 1
-            
+
         except Exception as e:
             error_msg = f"order_id={order.id}: {str(e)}"
             errors.append(error_msg)
             logger.error(f"Orphaned order 롤백 트리거 실패: {error_msg}")
-    
+
     # 결과 로깅
     if detected_count > 0:
         logger.warning(
-            f"Orphaned order 감지 완료: "
-            f"detected={detected_count}, triggered={triggered_count}, errors={len(errors)}"
+            f"Orphaned order 감지 완료: " f"detected={detected_count}, triggered={triggered_count}, errors={len(errors)}"
         )
     else:
         logger.info("Orphaned order 없음 - 시스템 정상")
-    
+
     return {
         "status": "completed",
         "detected": detected_count,
@@ -468,33 +458,24 @@ def detect_orphaned_orders(self, threshold_minutes: int = 10) -> dict:
     max_retries=3,
     retry_backoff=True,
 )
-def notify_payment_failure(
-    self, 
-    order_id: int, 
-    failure_type: str, 
-    details: str = "",
-    severity: str = "warning"
-) -> dict:
+def notify_payment_failure(self, order_id: int, failure_type: str, details: str = "", severity: str = "warning") -> dict:
     """
     결제 실패 및 롤백 관련 관리자 알림을 전송합니다.
-    
+
     현재는 로그로 기록하며, 향후 Slack/Email 연동 가능합니다.
-    
+
     Args:
         order_id: 주문 ID
         failure_type: 실패 유형 (rollback_failed, orphan_detected, max_retries_exceeded 등)
         details: 상세 정보
         severity: 심각도 (info, warning, error, critical)
-        
+
     Returns:
         알림 전송 결과
     """
     # 로그 레벨에 따른 로거 선택
-    log_message = (
-        f"[PAYMENT ALERT] type={failure_type}, order_id={order_id}, "
-        f"severity={severity}, details={details}"
-    )
-    
+    log_message = f"[PAYMENT ALERT] type={failure_type}, order_id={order_id}, " f"severity={severity}, details={details}"
+
     if severity == "critical":
         logger.critical(log_message)
     elif severity == "error":
@@ -503,15 +484,15 @@ def notify_payment_failure(
         logger.warning(log_message)
     else:
         logger.info(log_message)
-    
+
     # TODO: Slack 연동 (향후 확장)
     # if settings.SLACK_WEBHOOK_URL:
     #     send_slack_notification(...)
-    
-    # TODO: Email 연동 (향후 확장)  
+
+    # TODO: Email 연동 (향후 확장)
     # if settings.ADMIN_EMAIL:
     #     send_email_notification(...)
-    
+
     return {
         "status": "notified",
         "order_id": order_id,

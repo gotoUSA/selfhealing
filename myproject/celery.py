@@ -22,9 +22,10 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # TESTING 환경에서는 Django settings의 broker 설정을 강제로 적용
 # (app 생성 시점의 환경변수보다 Django settings 우선)
 from django.conf import settings
-if hasattr(settings, 'CELERY_BROKER_URL'):
+
+if hasattr(settings, "CELERY_BROKER_URL"):
     app.conf.broker_url = settings.CELERY_BROKER_URL
-if hasattr(settings, 'CELERY_RESULT_BACKEND'):
+if hasattr(settings, "CELERY_RESULT_BACKEND"):
     app.conf.result_backend = settings.CELERY_RESULT_BACKEND
 
 # 등록된 Django 앱에서 tasks.py 자동 로드
@@ -196,12 +197,11 @@ app.conf.update(
 
 # TESTING 환경에서 broker 설정 최종 강제 적용
 # app.conf.update() 이후에도 환경변수가 덮어쓸 수 있으므로 마지막에 재적용
-if hasattr(settings, 'TESTING') and settings.TESTING:
-    if hasattr(settings, 'CELERY_BROKER_URL'):
+if hasattr(settings, "TESTING") and settings.TESTING:
+    if hasattr(settings, "CELERY_BROKER_URL"):
         app.conf.broker_url = settings.CELERY_BROKER_URL
-    if hasattr(settings, 'CELERY_RESULT_BACKEND'):
+    if hasattr(settings, "CELERY_RESULT_BACKEND"):
         app.conf.result_backend = settings.CELERY_RESULT_BACKEND
-
 
 
 @app.task(bind=True, ignore_result=True)
