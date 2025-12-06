@@ -196,6 +196,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "description",
             "price",
             "stock",
+            "sold_count",
             "is_active",
             "created_at",
             "updated_at",
@@ -218,7 +219,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "stock_status",
             "is_in_stock",
         ]
-        read_only_fields = ["slug", "created_at", "updated_at"]
+        read_only_fields = ["slug", "sold_count", "created_at", "updated_at"]
 
     def get_seller_product_count(self, obj: Product) -> int:
         """판매자의 상품 수를 반환"""

@@ -16,9 +16,10 @@
               "pm.test('Login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
-              "    pm.environment.set('access_token', jsonData.access);",
-              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.environment.set('access_token', jsonData.token.access);",
+              "    // refresh_token is set via HTTP-only cookie by server",
               "});"
             ],
             "type": "text/javascript"
@@ -35,7 +36,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -113,13 +114,21 @@
         }
       ],
       "request": {
-        "method": "DELETE",
+        "method": "POST",
         "header": [
           {
             "key": "Authorization",
             "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
           }
         ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"confirm\": true\n}"
+        },
         "url": {
           "raw": "{{base_url}}/cart/clear/",
           "host": ["{{base_url}}"],
@@ -138,8 +147,8 @@
               "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
               "    var jsonData = pm.response.json();",
               "    ",
-              "    // 카트 아이템 ID 저장",
-              "    var cartItemId = jsonData.id || jsonData.cart_item_id || jsonData.item_id;",
+              "    // 카트 아이템 ID 저장 (item.id 또는 id)",
+              "    var cartItemId = (jsonData.item && jsonData.item.id) || jsonData.id || jsonData.cart_item_id || jsonData.item_id;",
               "    pm.environment.set('cart_item_id', cartItemId);",
               "    ",
               "    // 주문 수량 저장",
@@ -185,18 +194,20 @@
           "script": {
             "exec": [
               "pm.test('Order created successfully', function() {",
-              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    // 202 Accepted = 비동기 하이브리드 처리 (정상)",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);",
               "    var jsonData = pm.response.json();",
               "    ",
-              "    // 주문 정보 저장",
-              "    var orderId = jsonData.id || jsonData.order_id;",
+              "    // 주문 정보 저장 (order_id 필드 우선)",
+              "    var orderId = jsonData.order_id || jsonData.id;",
               "    pm.environment.set('order_id', orderId);",
               "    pm.environment.set('order_total', jsonData.total_amount || jsonData.total || jsonData.amount);",
               "    ",
               "    console.log('========================================');",
               "    console.log('ACTION - Order Created:');",
               "    console.log('  Order ID:', orderId);",
-              "    console.log('  Total Amount:', jsonData.total_amount || jsonData.total);",
+              "    console.log('  Order Number:', jsonData.order_number);",
+              "    console.log('  Status:', jsonData.status);",
               "    console.log('========================================');",
               "});",
               "",
@@ -265,25 +276,24 @@
               "        ' (Before: ' + beforeStock + ', Qty: ' + orderQty + ')');",
               "});",
               "",
-              "pm.test('Sold count correctly increased after order', function() {",
+              "// Note: sold_count는 결제 완료(paid) 시에만 증가함",
+              "// 주문 생성(pending) 단계에서는 재고(stock)만 차감됨",
+              "pm.test('Sold count unchanged at order creation (increases on payment)', function() {",
               "    var jsonData = pm.response.json();",
               "    ",
               "    var beforeSoldCount = parseInt(pm.environment.get('before_sold_count'));",
-              "    var orderQty = parseInt(pm.environment.get('order_quantity'));",
               "    var afterSoldCount = jsonData.sold_count || 0;",
-              "    var expectedSoldCount = beforeSoldCount + orderQty;",
               "    ",
               "    console.log('========================================');",
-              "    console.log('ASSERTION - Sold Count Verification:');",
+              "    console.log('INFO - Sold Count (unchanged at order creation):');",
               "    console.log('  Before Sold Count:', beforeSoldCount);",
-              "    console.log('  Order Quantity:', orderQty);",
-              "    console.log('  Expected After:', expectedSoldCount);",
-              "    console.log('  Actual After:', afterSoldCount);",
+              "    console.log('  After Sold Count:', afterSoldCount);",
+              "    console.log('  Note: sold_count increases only after payment');",
               "    console.log('========================================');",
               "    ",
-              "    pm.expect(afterSoldCount).to.equal(expectedSoldCount,",
-              "        'Sold count mismatch! Expected: ' + expectedSoldCount + ', Got: ' + afterSoldCount +",
-              "        ' (Before: ' + beforeSoldCount + ', Qty: ' + orderQty + ')');",
+              "    // 주문 생성 시점에는 sold_count가 변경되지 않아야 함",
+              "    pm.expect(afterSoldCount).to.equal(beforeSoldCount,",
+              "        'Sold count should not change at order creation! Before: ' + beforeSoldCount + ', After: ' + afterSoldCount);",
               "});"
             ],
             "type": "text/javascript"
