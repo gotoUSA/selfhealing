@@ -273,7 +273,7 @@ class TestOrdersFuzz:
             "shipping_phone": "010-1234-5678",
             "shipping_postal_code": "12345",
             "payment_method": "card",
-            "used_points": used_points,
+            "use_points": used_points,
         }
 
         # Act

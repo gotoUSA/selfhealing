@@ -511,6 +511,7 @@ def assert_product_schema(product: dict, *, strict: bool = False, context: str =
                 "seller_username",
                 "recent_reviews",
                 "category_slug",
+                "sold_count",
             ]
         )
         extra_fields = set(product.keys()) - allowed_fields
