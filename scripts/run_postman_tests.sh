@@ -78,14 +78,14 @@ COLLECTION_PATH="$1"
 if [ -z "$COLLECTION_PATH" ] || [ "$COLLECTION_PATH" == "tier1" ]; then
     # Tier 1 모든 테스트 실행
     echo "Tier 1 (Money Integrity) 테스트 실행 중..."
-    
+
     COLLECTIONS=$(find "$PROJECT_DIR/postman/collections/tier1_money_integrity" -name "*.json" 2>/dev/null)
-    
+
     for collection in $COLLECTIONS; do
         collection_name=$(basename "$collection" .json)
         echo ""
         echo -e "${YELLOW}>>> $collection_name 실행 중...${NC}"
-        
+
         MSYS_NO_PATHCONV=1 docker run --rm --network "$NETWORK" \
             -v "$PROJECT_DIR/postman:/etc/newman" \
             postman/newman:alpine run "/etc/newman/collections/tier1_money_integrity/${collection_name}.json" \
