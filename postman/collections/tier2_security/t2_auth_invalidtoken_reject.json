@@ -16,11 +16,12 @@
               "pm.test('login successful', function() {",
               "    pm.response.to.have.status(200);",
               "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.access).to.exist;",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
               "    ",
               "    // before 상태: 유효한 토큰 저장",
-              "    pm.environment.set('valid_access_token', jsonData.access);",
-              "    pm.environment.set('refresh_token', jsonData.refresh);",
+              "    pm.environment.set('valid_access_token', jsonData.token.access);",
+              "    pm.environment.set('refresh_token', jsonData.token.refresh);",
               "    ",
               "    console.log('valid token obtained for comparison');",
               "});"
@@ -39,7 +40,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/auth/login/",
@@ -77,9 +78,9 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/auth/me/",
+          "raw": "{{base_url}}/users/profile/",
           "host": ["{{base_url}}"],
-          "path": ["auth", "me", ""]
+          "path": ["users", "profile", ""]
         }
       }
     },
@@ -163,9 +164,9 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/auth/me/",
+          "raw": "{{base_url}}/users/profile/",
           "host": ["{{base_url}}"],
-          "path": ["auth", "me", ""]
+          "path": ["users", "profile", ""]
         }
       }
     },
@@ -210,9 +211,9 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/auth/me/",
+          "raw": "{{base_url}}/users/profile/",
           "host": ["{{base_url}}"],
-          "path": ["auth", "me", ""]
+          "path": ["users", "profile", ""]
         }
       }
     },
@@ -279,9 +280,9 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/auth/me/",
+          "raw": "{{base_url}}/users/profile/",
           "host": ["{{base_url}}"],
-          "path": ["auth", "me", ""]
+          "path": ["users", "profile", ""]
         }
       }
     },
