@@ -655,7 +655,7 @@ docker-compose exec web pip-audit --format json
 ## 8. mutmut (Mutation Testing)
 
 > ⚠️ **현재 프로젝트에서는 아직 도입하지 않음** - 핵심 로직 안정화 후 도입 예정
-> 
+>
 > 코드에 의도적 버그를 삽입하여 테스트 품질 검증. **돈 관련 서비스에만 적용.**
 
 ### 언제 도입할 것인가?

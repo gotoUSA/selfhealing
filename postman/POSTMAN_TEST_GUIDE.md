@@ -30,6 +30,18 @@
 
 > **정합성을 위협하지 않는 요소는 자동화 테스트 우선순위 밖에 둔다.**
 
+### Setup 컬렉션 (테스트 데이터 초기화)
+
+| 컬렉션 | 목적 |
+|--------|------|
+| `setup/test_data_setup.json` | 테스트 사용자 생성 및 환경변수 설정 |
+
+**생성되는 테스트 사용자:**
+- `verified_user`: 이메일 인증 완료된 정상 사용자 (Tier 1/3 테스트용)
+- `unverified_user`: 이메일 미인증 사용자 (Tier 2 보안 테스트용)
+
+> ⚠️ **중요**: 모든 테스트 실행 전 `setup` 컬렉션을 먼저 실행해야 합니다.
+
 ---
 
 ## 3. 테스트 원칙 (Principles)
@@ -117,6 +129,13 @@ Before State Save → API Call → After State Compare
 bash scripts/run_postman_tests.sh --list
 ```
 
+#### 테스트 데이터 초기화 (Setup)
+
+```bash
+# 테스트 실행 전 반드시 먼저 실행 - verified/unverified 테스트 사용자 생성
+bash scripts/run_postman_tests.sh setup
+```
+
 #### 특정 테스트 실행
 
 ```bash
@@ -126,10 +145,22 @@ bash scripts/run_postman_tests.sh t1_payment_amount
 bash scripts/run_postman_tests.sh t2_auth_expired
 ```
 
-#### Tier 1 전체 테스트 실행
+#### Tier별 테스트 실행
 
 ```bash
-bash scripts/run_postman_tests.sh tier1
+bash scripts/run_postman_tests.sh tier1    # Tier 1 (Money Integrity)
+bash scripts/run_postman_tests.sh tier2    # Tier 2 (Security)
+bash scripts/run_postman_tests.sh tier3    # Tier 3 (Journey)
+```
+
+#### 전체 테스트 실행
+
+```bash
+# setup + tier1 + tier2 + tier3 순차 실행
+bash scripts/run_postman_tests.sh all
+
+# setup 단계 건너뛰기 (이미 데이터가 있는 경우)
+bash scripts/run_postman_tests.sh all --skip-setup
 ```
 
 ### 직접 Docker 명령어 사용
@@ -175,7 +206,7 @@ docker run --rm --network myproject_default \
 
 ---
 
-## 8. 🔥 최종 테스트 목록 (Total: 15개)
+## 8. 🔥 최종 테스트 목록 (Total: 16개)
 
 ### 🔴 tier 1 – money intergrity (7개)
 
@@ -218,7 +249,7 @@ pm.test("Points unchanged after failure", function() {
 
 ---
 
-### 🟡 tier 2 – security & idempotency (5개)
+### 🟡 tier 2 – security & idempotency (6개)
 
 > **"권한/중복은 보안 사고 — 배포 중단"**
 
@@ -229,6 +260,7 @@ pm.test("Points unchanged after failure", function() {
 | `t2_auth_invalidtoken_reject.json` | 위조 Token 거부 | signature mismatch → 401 |
 | `t2_order_otherUser_forbidden.json` | 타인 주문 조회 차단 | owner != request.user → 403/404 |
 | `t2_webhook_replayattack.json` | 동일 webhook 재수신 무시 | event.id 중복 → 무시 |
+| `t2_unverified_user_blocked.json` | 미인증 사용자 API 접근 차단 | is_verified=false → 401/403 |
 
 #### 예시: t2_idempotent_payment_duplicateKey.json
 
@@ -255,6 +287,29 @@ pm.test("Same payment returned (idempotent)", function() {
 });
 pm.test("Only one payment created", function() {
     // DB에 payment가 1개만 있어야 함
+});
+```
+
+#### 예시: t2_unverified_user_blocked.json
+
+```javascript
+// Precondition
+// Setup Collection에서 생성된 unverified_user 사용
+var unverifiedUsername = pm.environment.get('unverified_username');
+var unverifiedPassword = pm.environment.get('unverified_password');
+
+// Action - 미인증 사용자로 로그인 시도
+POST /api/auth/login/
+Body: { username: unverifiedUsername, password: unverifiedPassword }
+
+// Assert
+pm.test("Unverified user cannot login", function() {
+    pm.expect(pm.response.code).to.be.oneOf([401, 403]);
+});
+pm.test("Error message indicates email verification required", function() {
+    var response = pm.response.json();
+    pm.expect(response.detail || response.message || response.error)
+      .to.include("verify");
 });
 ```
 
@@ -314,8 +369,9 @@ pm.test("Reorder successful", function() {
 ### CI 로그 예시
 
 ```
+✅ SETUP: 1/1 PASSED
 ✅ TIER 1: 7/7 PASSED
-✅ TIER 2: 5/5 PASSED
+✅ TIER 2: 6/6 PASSED
 ⚠️ TIER 3: 2/3 PASSED (1 WARNING)
 
 CI RESULT: SUCCESS WITH WARNING
@@ -341,6 +397,8 @@ CI RESULT: SUCCESS WITH WARNING
 ```
 postman/
 ├── collections/
+│   ├── setup/
+│   │   └── test_data_setup.json           # 테스트 데이터 초기화
 │   ├── tier1_money_integrity/
 │   │   ├── t1_payment_failrollback_stockrestore.json
 │   │   ├── t1_order_create_stockdeduct.json
@@ -354,7 +412,8 @@ postman/
 │   │   ├── t2_auth_expiredtoken_reject.json
 │   │   ├── t2_auth_invalidtoken_reject.json
 │   │   ├── t2_order_otheruser_forbidden.json
-│   │   └── t2_webhook_replayattack.json
+│   │   ├── t2_webhook_replayattack.json
+│   │   └── t2_unverified_user_blocked.json   # NEW: 미인증 사용자 차단
 │   └── tier3_journey/
 │       ├── t3_journey_signup_verify_order.json
 │       ├── t3_journey_purchase_cancel_reorder.json
@@ -363,7 +422,7 @@ postman/
 │   ├── local.json
 │   ├── staging.json
 │   └── production.json
-└── README.md
+└── POSTMAN_TEST_GUIDE.md
 ```
 
 ---
@@ -379,8 +438,15 @@ postman/
   "product_id": "",
   "order_id": "",
   "payment_id": "",
-  "idempotency_key": ""
+  "idempotency_key": "",
+  "verified_username": "",
+  "verified_password": "",
+  "unverified_username": "",
+  "unverified_password": ""
 }
+```
+
+> **참고**: `verified_*` 및 `unverified_*` 변수는 `setup` 컬렉션 실행 시 자동으로 설정됩니다.
 ```
 
 ---

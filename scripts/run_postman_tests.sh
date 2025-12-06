@@ -198,28 +198,28 @@ if [ "$COLLECTION_PATH" == "all" ]; then
     echo -e "${YELLOW}========================================${NC}"
     echo -e "${YELLOW}  전체 테스트 실행 (Setup + Tier 1/2/3)${NC}"
     echo -e "${YELLOW}========================================${NC}"
-    
+
     TOTAL_FAILED=0
-    
+
     # 1. Setup 실행 (--skip-setup 옵션이 없을 때만)
     if [ "$SKIP_SETUP" == "false" ]; then
         run_setup || { echo -e "${RED}Setup 실패 - 테스트 중단${NC}"; exit 1; }
     else
         echo -e "${YELLOW}⏭️  Setup 건너뛰기 (--skip-setup)${NC}"
     fi
-    
+
     # 2. Tier 1 실행 (실패 시 중단)
     echo ""
     $0 tier1 --env=$SELECTED_ENV $VERBOSE || { echo -e "${RED}Tier 1 실패 - 배포 중단${NC}"; exit 1; }
-    
+
     # 3. Tier 2 실행 (실패 시 중단)
     echo ""
     $0 tier2 --env=$SELECTED_ENV $VERBOSE || { echo -e "${RED}Tier 2 실패 - 배포 중단${NC}"; exit 1; }
-    
+
     # 4. Tier 3 실행 (실패해도 경고만)
     echo ""
     $0 tier3 --env=$SELECTED_ENV $VERBOSE || TOTAL_FAILED=1
-    
+
     echo ""
     echo -e "${GREEN}========================================${NC}"
     if [ $TOTAL_FAILED -eq 0 ]; then
@@ -255,7 +255,7 @@ if [ -z "$COLLECTION_PATH" ] || [ "$COLLECTION_PATH" == "tier1" ]; then
             && echo -e "${GREEN}✓ $collection_name 통과${NC}" \
             || { echo -e "${RED}✗ $collection_name 실패${NC}"; FAILED=1; }
     done
-    
+
     if [ $FAILED -eq 1 ]; then
         echo -e "${RED}Tier 1 테스트 실패 - 배포 중단 필요${NC}"
         exit 1
@@ -287,7 +287,7 @@ if [ "$COLLECTION_PATH" == "tier2" ]; then
             && echo -e "${GREEN}✓ $collection_name 통과${NC}" \
             || { echo -e "${RED}✗ $collection_name 실패${NC}"; FAILED=1; }
     done
-    
+
     if [ $FAILED -eq 1 ]; then
         echo -e "${RED}Tier 2 테스트 실패 - 배포 중단 필요${NC}"
         exit 1
@@ -319,7 +319,7 @@ if [ "$COLLECTION_PATH" == "tier3" ]; then
             && echo -e "${GREEN}✓ $collection_name 통과${NC}" \
             || { echo -e "${YELLOW}⚠ $collection_name 실패 (경고)${NC}"; FAILED=1; }
     done
-    
+
     if [ $FAILED -eq 1 ]; then
         echo -e "${YELLOW}Tier 3 일부 실패 - 배포는 가능하나 확인 필요${NC}"
     fi

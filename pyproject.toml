@@ -166,10 +166,10 @@ sort_by_size = true
 # ==========================================
 # ⚠️ 현재 프로젝트에서는 아직 도입하지 않음
 # 핵심 로직 안정화 후 도입 예정
-# 
+#
 # mutmut은 setup.cfg 또는 pyproject.toml의 [tool.mutmut] 지원
 # 돈 관련 서비스만 대상으로 제한
-# 
+#
 # [tool.mutmut]
 # paths_to_mutate = [
 #     "shopping/services/payment_service.py",
