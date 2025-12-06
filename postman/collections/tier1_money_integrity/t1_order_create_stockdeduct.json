@@ -1,7 +1,7 @@
 {
   "info": {
-    "_postman_id": "t1-order-create-stock-deduct",
-    "name": "T1_Order_Create_StockDeduct",
+    "_postman_id": "t1-order-create-stockdeduct",
+    "name": "t1-order-create-stockdeduct",
     "description": "주문 생성 시 재고가 정확히 차감되는지 검증\n\n## 목적\n- 주문 생성 시 stock이 주문 수량만큼 감소하는지 확인\n- 주문 생성 시 sold_count가 주문 수량만큼 증가하는지 확인\n\n## 검증 포인트\n- stock - qty\n- sold + qty\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -359,7 +359,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Order_Create_StockDeduct: COMPLETED');",
+              "console.log('t1-order-create-stockdeduct: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  ✓ Stock Deduction: VERIFIED');",
@@ -402,7 +402,7 @@
               "",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Order_Create_StockDeduct: ALL TESTS PASSED');",
+              "console.log('t1-order-create-stockdeduct: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -441,7 +441,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Order_Create_StockDeduct test...');",
+          "console.log('Starting t1-order-create-stockdeduct test...');",
           "console.log('Purpose: Verify stock is correctly deducted when order is created');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -467,7 +467,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Order_Create_StockDeduct"
+      "value": "t1-order-create-stockdeduct"
     },
     {
       "key": "tier",

@@ -1,7 +1,7 @@
 {
   "info": {
-    "_postman_id": "t1-payment-cancel-earned-deduct",
-    "name": "T1_Payment_Cancel_EarnedDeduct",
+    "_postman_id": "t1-payment-cancel-earneddeduct",
+    "name": "t1-payment-cancel-earneddeduct",
     "description": "결제 취소 시 적립된 포인트가 정확히 회수되는지 검증\n\n## 목적\n- 결제 완료 시 적립된 포인트가 취소 시 회수되는지 확인\n- user.points -= earned_points\n\n## 검증 포인트\n- 취소 후 포인트 = 취소 전 포인트 - 적립된 포인트\n- 적립 포인트가 정확히 차감되어야 함\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -666,7 +666,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Cancel_EarnedDeduct: COMPLETED');",
+              "console.log('t1-payment-cancel-earneddeduct: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  ✓ Payment Created: VERIFIED');",
@@ -674,7 +674,7 @@
               "console.log('  ✓ Payment Cancelled: VERIFIED');",
               "console.log('  ✓ Earned Points Deducted: VERIFIED');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Cancel_EarnedDeduct: ALL TESTS PASSED');",
+              "console.log('t1-payment-cancel-earneddeduct: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -761,7 +761,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Payment_Cancel_EarnedDeduct test...');",
+          "console.log('Starting t1-payment-cancel-earneddeduct test...');",
           "console.log('Purpose: Verify earned points are deducted when payment is cancelled');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -790,7 +790,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Payment_Cancel_EarnedDeduct"
+      "value": "t1-payment-cancel-earneddeduct"
     },
     {
       "key": "tier",

@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "t1-cart-price-changed-order-block",
-    "name": "T1_Cart_PriceChanged_OrderBlock",
+    "name": "t1_cart_pricechanged_orderblock",
     "description": "카트에 담긴 상품 가격과 현재 가격이 불일치할 때 주문이 차단되는지 검증\n\n## 목적\n- 가격 변동 시 고객에게 알리고 주문 차단\n- 예전 가격으로 결제되는 것 방지\n\n## 검증 포인트\n- 카트 가격 != 현재 가격 → 주문 생성 차단 또는 경고\n- 가격 재검증 후 주문 진행\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -650,7 +650,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Cart_PriceChanged_OrderBlock: COMPLETED');",
+              "console.log('t1_cart_pricechanged_orderblock: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  Original Price:', pm.environment.get('original_price'));",
@@ -666,7 +666,7 @@
               "}",
               "console.log('  ✓ Price restored: VERIFIED');",
               "console.log('========================================');",
-              "console.log('T1_Cart_PriceChanged_OrderBlock: ALL TESTS PASSED');",
+              "console.log('t1_cart_pricechanged_orderblock: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -733,7 +733,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Cart_PriceChanged_OrderBlock test...');",
+          "console.log('Starting t1_cart_pricechanged_orderblock test...');",
           "console.log('Purpose: Verify order is blocked or uses current price when cart price differs');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -759,7 +759,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Cart_PriceChanged_OrderBlock"
+      "value": "t1_cart_pricechanged_orderblock"
     },
     {
       "key": "tier",

@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "t1-order-cancel-stock-restore",
-    "name": "T1_Order_Cancel_StockRestore",
+    "name": "t1_order_cancel_stockrestore",
     "description": "주문 취소 시 재고가 정확히 복구되는지 검증\n\n## 목적\n- 주문 취소 시 stock이 주문 수량만큼 복구되는지 확인\n- 주문 취소 시 sold_count가 0으로 돌아가는지 확인\n\n## 검증 포인트\n- stock + qty (원복)\n- sold_count = 0 또는 sold_count - qty\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -402,7 +402,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Order_Cancel_StockRestore: COMPLETED');",
+              "console.log('t1_order_cancel_stockrestore: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  ✓ Order Created: VERIFIED');",
@@ -411,7 +411,7 @@
               "console.log('  ✓ Stock Restored: VERIFIED');",
               "console.log('  ✓ Sold Count Restored: VERIFIED');",
               "console.log('========================================');",
-              "console.log('T1_Order_Cancel_StockRestore: ALL TESTS PASSED');",
+              "console.log('t1_order_cancel_stockrestore: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -442,7 +442,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Order_Cancel_StockRestore test...');",
+          "console.log('Starting t1_order_cancel_stockrestore test...');",
           "console.log('Purpose: Verify stock is restored when order is cancelled');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -468,7 +468,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Order_Cancel_StockRestore"
+      "value": "t1_order_cancel_stockrestore"
     },
     {
       "key": "tier",

@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "t1-payment-amount-mismatch",
-    "name": "T1_Payment_Amount_Mismatch",
+    "name": "t1-payment-amount-mismatch",
     "description": "결제 요청 금액과 실제 주문 금액이 불일치할 때 결제가 거부되는지 검증\n\n## 목적\n- 결제 금액 위변조 시도 차단\n- req.amount != final_amount → 거부\n\n## 검증 포인트\n- 금액 불일치 시 400/422 에러 반환\n- 결제가 처리되지 않아야 함\n- 재고/포인트 변동 없어야 함\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -723,7 +723,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Amount_Mismatch: COMPLETED');",
+              "console.log('t1-payment-amount-mismatch: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  ✓ Lower amount rejected: VERIFIED');",
@@ -734,7 +734,7 @@
               "console.log('  ✓ Points unchanged: VERIFIED');",
               "console.log('  ✓ Order not paid: VERIFIED');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Amount_Mismatch: ALL TESTS PASSED');",
+              "console.log('t1-payment-amount-mismatch: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -803,7 +803,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Payment_Amount_Mismatch test...');",
+          "console.log('Starting t1-payment-amount-mismatch test...');",
           "console.log('Purpose: Verify payment is rejected when amount does not match');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -829,7 +829,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Payment_Amount_Mismatch"
+      "value": "t1-payment-amount-mismatch"
     },
     {
       "key": "tier",

@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "t1-payment-fail-rollback",
-    "name": "T1_Payment_FailRollback_StockRestore",
+    "name": "t1_payment_failrollback_stockrestore",
     "description": "결제 실패 후 주문 취소 시 재고와 포인트가 원래 상태로 롤백되는지 검증\n\n## 목적\n- 결제 실패 후 주문 취소 시 stock이 원복되는지 확인\n- 결제 실패 후 주문 취소 시 sold_count가 증가하지 않음을 확인\n- 포인트가 원복되는지 확인\n\n## 시스템 동작\n- 주문 생성 시 재고 차감 (pending 상태)\n- 결제 confirm 실패 시 자동 롤백 없음\n- 주문 취소 시 재고 롤백\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -398,7 +398,7 @@
               "",
               "// 최종 결과 요약",
               "console.log('========================================');",
-              "console.log('T1_Payment_FailRollback_StockRestore: PASSED');",
+              "console.log('t1_payment_failrollback_stockrestore: PASSED');",
               "console.log('- Payment failure: VERIFIED');",
               "console.log('- Order cancellation: VERIFIED');",
               "console.log('- Stock rollback: VERIFIED');",
@@ -432,7 +432,7 @@
         "type": "text/javascript",
         "exec": [
           "// Collection-level pre-request script",
-          "console.log('Starting T1_Payment_FailRollback_StockRestore test...');"
+          "console.log('Starting t1_payment_failrollback_stockrestore test...');"
         ]
       }
     },
@@ -449,7 +449,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Payment_FailRollback_StockRestore"
+      "value": "t1_payment_failrollback_stockrestore"
     },
     {
       "key": "tier",

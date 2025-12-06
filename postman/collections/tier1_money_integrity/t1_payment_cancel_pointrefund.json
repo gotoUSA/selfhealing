@@ -1,7 +1,7 @@
 {
   "info": {
-    "_postman_id": "t1-payment-cancel-point-refund",
-    "name": "T1_Payment_Cancel_PointRefund",
+    "_postman_id": "t1-payment-cancel-pointrefund",
+    "name": "t1-payment-cancel-pointrefund",
     "description": "결제 취소 시 사용한 포인트가 정확히 환불되는지 검증\n\n## 목적\n- 결제 취소 시 사용한 포인트가 사용자에게 환불되는지 확인\n- user.points += used_points\n\n## 검증 포인트\n- 취소 후 포인트 = 취소 전 포인트 + 사용한 포인트\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -631,7 +631,7 @@
               "// 최종 결과 요약",
               "console.log('');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Cancel_PointRefund: COMPLETED');",
+              "console.log('t1-payment-cancel-pointrefund: COMPLETED');",
               "console.log('----------------------------------------');",
               "console.log('Test Summary:');",
               "console.log('  ✓ Payment Created: VERIFIED');",
@@ -639,7 +639,7 @@
               "console.log('  ✓ Payment Cancelled: VERIFIED');",
               "console.log('  ✓ Points Refunded: VERIFIED');",
               "console.log('========================================');",
-              "console.log('T1_Payment_Cancel_PointRefund: ALL TESTS PASSED');",
+              "console.log('t1-payment-cancel-pointrefund: ALL TESTS PASSED');",
               "console.log('========================================');"
             ],
             "type": "text/javascript"
@@ -670,7 +670,7 @@
         "exec": [
           "// Collection-level pre-request script",
           "console.log('========================================');",
-          "console.log('Starting T1_Payment_Cancel_PointRefund test...');",
+          "console.log('Starting t1-payment-cancel-pointrefund test...');",
           "console.log('Purpose: Verify used points are refunded when payment is cancelled');",
           "console.log('Tier: 1 (Money Integrity)');",
           "console.log('CI Policy: Fail = Deployment Blocked');",
@@ -699,7 +699,7 @@
   "variable": [
     {
       "key": "collection_name",
-      "value": "T1_Payment_Cancel_PointRefund"
+      "value": "t1-payment-cancel-pointrefund"
     },
     {
       "key": "tier",
