@@ -306,6 +306,14 @@
               "    var jsonData = pm.response.json();",
               "    pm.environment.set('payment_id', jsonData.payment_id || jsonData.id);",
               "    pm.environment.set('payment_key', jsonData.payment_key || 'test_payment_key_' + Date.now());",
+              "    ",
+              "    // Payment Request 응답의 amount를 저장 (실제 결제 금액)",
+              "    if (jsonData.amount) {",
+              "        pm.environment.set('order_total', jsonData.amount);",
+              "    }",
+              "    ",
+              "    console.log('Payment ID:', jsonData.payment_id || jsonData.id);",
+              "    console.log('Payment Amount:', jsonData.amount);",
               "});"
             ],
             "type": "text/javascript"
@@ -342,12 +350,15 @@
           "listen": "test",
           "script": {
             "exec": [
-              "pm.test('Payment confirmed', function() {",
+              "pm.test('Payment confirm requested', function() {",
               "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);",
               "    var jsonData = pm.response.json();",
               "    ",
-              "    console.log('Payment confirmed successfully');",
-              "    console.log('Payment ID:', pm.environment.get('payment_id'));",
+              "    console.log('========================================');",
+              "    console.log('Payment Confirm Requested:');",
+              "    console.log('  Payment ID:', pm.environment.get('payment_id'));",
+              "    console.log('  Status:', jsonData.status || 'processing');",
+              "    console.log('========================================');",
               "});"
             ],
             "type": "text/javascript"
@@ -374,6 +385,86 @@
           "raw": "{{base_url}}/payments/confirm/",
           "host": ["{{base_url}}"],
           "path": ["payments", "confirm", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 8a: Wait for Payment Completed",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 폴링 설정",
+              "const maxRetries = 10;",
+              "const retryCount = parseInt(pm.environment.get('payment_poll_retry') || '0');",
+              "",
+              "pm.test('Payment status check', function() {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    var jsonData = pm.response.json();",
+              "    var paymentStatus = jsonData.status;",
+              "    ",
+              "    console.log('Payment Status:', paymentStatus, '(attempt:', retryCount + 1, '/', maxRetries, ')');",
+              "    ",
+              "    // 완료 상태 확인",
+              "    var completedStatuses = ['completed', 'done', 'paid', 'success', 'DONE', 'confirmed'];",
+              "    var isCompleted = completedStatuses.includes(paymentStatus);",
+              "    ",
+              "    if (isCompleted) {",
+              "        // 완료됨 - 폴링 카운터 초기화",
+              "        pm.environment.unset('payment_poll_retry');",
+              "        ",
+              "        console.log('========================================');",
+              "        console.log('Payment Completed:');",
+              "        console.log('  Payment ID:', pm.environment.get('payment_id'));",
+              "        console.log('  Status:', paymentStatus);",
+              "        console.log('========================================');",
+              "    } else if (retryCount < maxRetries - 1) {",
+              "        // 아직 처리 중 - 재시도",
+              "        pm.environment.set('payment_poll_retry', retryCount + 1);",
+              "        console.log('Payment still processing, retrying...');",
+              "        postman.setNextRequest('Step 8a: Wait for Payment Completed');",
+              "    } else {",
+              "        // 최대 재시도 초과",
+              "        pm.environment.unset('payment_poll_retry');",
+              "        pm.expect.fail('Payment did not complete within ' + maxRetries + ' attempts. Last status: ' + paymentStatus);",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// 폴링 간 딜레이 (500ms)",
+              "const retryCount = parseInt(pm.environment.get('payment_poll_retry') || '0');",
+              "if (retryCount > 0) {",
+              "    const delay = 500;",
+              "    const start = Date.now();",
+              "    while (Date.now() - start < delay) {",
+              "        // busy wait for delay",
+              "    }",
+              "}",
+              "console.log('Checking payment status...');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/payments/{{payment_id}}/status/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "{{payment_id}}", "status", ""]
         }
       }
     },
