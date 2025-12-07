@@ -137,7 +137,10 @@ class RaceConditionUser(HttpUser):
         with RaceConditionUser._pool_lock:
             if not RaceConditionUser._shared_order_pool:
                 return
-            order_info = random.choice(RaceConditionUser._shared_order_pool)
+            # randrange로 명시적 인덱스 선택 + defensive copy
+            idx = random.randrange(len(RaceConditionUser._shared_order_pool))
+            shared = RaceConditionUser._shared_order_pool[idx]
+        order_info = shared.copy()  # shallow defensive copy
 
         order_id = order_info["order_id"]
         final_amount = order_info["final_amount"]
@@ -162,10 +165,12 @@ class RaceConditionUser(HttpUser):
         ) as response:
             with _race_lock:
                 if response.status_code in [200, 201]:
+                    prev_success = _race_stats["shared_orders"][order_id]["success"]
                     _race_stats["shared_orders"][order_id]["success"] += 1
 
                     # 같은 주문에 2번 이상 성공하면 심각한 문제!
-                    if _race_stats["shared_orders"][order_id]["success"] > 1:
+                    # 정확한 중복 결제 건수 카운팅 (success=3이면 2건의 중복)
+                    if prev_success >= 1:
                         _race_stats["double_success"] += 1
                         response.failure(f"🚨 CRITICAL: Multiple payments on order {order_id}!")
                     else:
@@ -246,13 +251,26 @@ def on_test_stop(environment, **kwargs):
     print(f"Unique Orders Tested: {len(_race_stats['shared_orders'])}")
     print(f"Double Success (CRITICAL): {_race_stats['double_success']}")
 
-    # 주문별 결과 분석
+    # 주문별 결과 분석 - 정확한 중복 건수 계산
     orders_with_multiple_success = 0
+    total_duplicate_payments = 0
+    failed_orders = []  # 실패한 order 목록 (디버깅용)
+
     for order_id, stats in _race_stats["shared_orders"].items():
         if stats["success"] > 1:
             orders_with_multiple_success += 1
+            # success=3이면 2건의 중복 결제
+            total_duplicate_payments += (stats["success"] - 1)
+            failed_orders.append((order_id, stats["success"]))
 
     print(f"\nOrders with Multiple Payments: {orders_with_multiple_success}")
+    print(f"Total Duplicate Payment Count: {total_duplicate_payments}")
+
+    # 실패한 order ID 목록 출력 (디버깅 및 추적용)
+    if failed_orders:
+        print("\n🚨 Orders with Multiple Success (CRITICAL):")
+        for order_id, success_count in failed_orders:
+            print(f"   - {order_id}: {success_count} successes")
 
     if _race_stats["double_success"] == 0 and orders_with_multiple_success == 0:
         print("\n✅ RACE CONDITION TEST PASSED")
@@ -261,6 +279,8 @@ def on_test_stop(environment, **kwargs):
     else:
         print(f"\n❌ RACE CONDITION TEST FAILED")
         print(f"   🚨 CRITICAL: {_race_stats['double_success']} double payments detected!")
+        print(f"   📊 Affected Orders: {orders_with_multiple_success}")
+        print(f"   💰 Total Duplicate Payments: {total_duplicate_payments}")
         print("   ⚠️  Review distributed lock implementation")
         print("   📋 Action: Check SELECT FOR UPDATE / Redis Lock")
 
