@@ -257,8 +257,7 @@ class TossWebhookService:
                                 sold_count=0,
                             )
                             logger.warning(
-                                f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
-                                f"order_id={order.id}"
+                                f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}"
                             )
                     else:
                         # confirmed: 재고만 복구 (sold_count는 아직 증가하지 않음)

@@ -75,6 +75,10 @@ def process_order_heavy_tasks(
                     )
                     order.save(update_fields=["status", "failure_reason", "updated_at"])
 
+                    # 장바구니 복구
+                    Cart.objects.filter(pk=cart_id).update(is_active=True)
+                    logger.info(f"장바구니 복구: cart_id={cart_id}")
+
                     return {
                         "status": "failed",
                         "reason": "insufficient_stock",
@@ -123,10 +127,12 @@ def process_order_heavy_tasks(
                         )
 
                     order.status = "failed"
-
                     order.failure_reason = f"포인트 사용 실패: {result['message']}"
                     order.save(update_fields=["status", "failure_reason", "updated_at"])
 
+                    # 장바구니 복구
+                    Cart.objects.filter(pk=cart_id).update(is_active=True)
+                    logger.info(f"장바구니 복구: cart_id={cart_id}")
 
                     return {
                         "status": "failed",

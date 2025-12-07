@@ -182,6 +182,34 @@ class TestOrderCancelPipeline:
         with pytest.raises(OrderServiceError, match="취소할 수 없는 주문"):
             OrderService.cancel_order(order)
 
+    def test_cancel_paid_order_sold_count_not_negative(self):
+        """주문 취소 시 sold_count가 음수가 되지 않음"""
+        # Arrange
+        user = UserFactory(is_email_verified=True)
+        category = CategoryFactory()
+        product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
+
+        # paid 주문 생성 (earned_points=0 설정하여 포인트 회수 스킵)
+        order = OrderFactory.paid(user=user, total_amount=Decimal("10000"), earned_points=0)
+        OrderItemFactory(order=order, product=product, quantity=5, price=product.price)
+
+        # sold_count가 quantity보다 적은 비정상 상황 시뮬레이션
+        # (다른 버그나 수동 조작으로 발생할 수 있음)
+        product.stock = 5
+        product.sold_count = 2  # quantity(5)보다 적음
+        product.save()
+
+        # Act
+        OrderService.cancel_order(order)
+
+        # Assert
+        product.refresh_from_db()
+        order.refresh_from_db()
+
+        assert order.status == "canceled"
+        assert product.stock == 10  # 재고 복구
+        assert product.sold_count == 0  # 음수가 아닌 0으로 유지 (Greatest 함수 적용)
+
 
 @pytest.mark.django_db(transaction=True)
 class TestPaymentCancelPipeline:

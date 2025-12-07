@@ -7,6 +7,7 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import F
+from django.db.models.functions import Greatest
 
 from ..constants import (
     LOCK_CONTENTION_CRITICAL_THRESHOLD,
@@ -426,10 +427,10 @@ class OrderService:
         for item in order.order_items.select_for_update():
             if item.product:
                 if order.status == "paid":
-                    # paid 상태: 재고 복구 + sold_count 차감
+                    # paid 상태: 재고 복구 + sold_count 차감 (음수 방지)
                     Product.objects.filter(pk=item.product.pk).update(
                         stock=F("stock") + item.quantity,
-                        sold_count=F("sold_count") - item.quantity,
+                        sold_count=Greatest(F("sold_count") - item.quantity, 0),
                     )
                     logger.info(
                         f"재고 및 판매량 복구: product_id={item.product.pk}, "

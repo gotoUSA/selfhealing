@@ -275,3 +275,54 @@ class TestOrderTasksException:
         # Assert - 재고가 롤백됨
         product.refresh_from_db()
         assert product.stock == initial_stock
+
+    def test_insufficient_stock_restores_cart(self):
+        """재고 부족 시 장바구니가 복구됨"""
+        # Arrange - 재고가 1개인데 2개 주문
+        user = UserFactory()
+        product = ProductFactory(stock=1)
+        cart = CartFactory(user=user, is_active=False)  # 주문 생성시 비활성화됨
+        CartItemFactory(cart=cart, product=product, quantity=2)
+
+        order = OrderFactory.pending(
+            user=user,
+            total_amount=product.price * 2,
+            final_amount=product.price * 2,
+        )
+
+        # Act
+        result = process_order_heavy_tasks(order_id=order.id, cart_id=cart.id, use_points=0)
+
+        # Assert - 실패 응답
+        assert result["status"] == "failed"
+        assert result["reason"] == "insufficient_stock"
+
+        # Assert - 장바구니가 복구됨
+        cart.refresh_from_db()
+        assert cart.is_active is True
+
+    def test_point_deduction_failure_restores_cart(self):
+        """포인트 차감 실패 시 장바구니가 복구됨"""
+        # Arrange - 포인트 부족
+        user = UserFactory.with_points(500)
+        product = ProductFactory(stock=10)
+        cart = CartFactory(user=user, is_active=False)  # 주문 생성시 비활성화됨
+        CartItemFactory(cart=cart, product=product, quantity=2)
+
+        order = OrderFactory.pending(
+            user=user,
+            total_amount=product.price * 2,
+            used_points=1000,  # 보유량보다 많음
+            final_amount=product.price * 2 - 1000,
+        )
+
+        # Act
+        result = process_order_heavy_tasks(order_id=order.id, cart_id=cart.id, use_points=1000)
+
+        # Assert - 실패 응답
+        assert result["status"] == "failed"
+        assert result["reason"] == "point_deduction_failed"
+
+        # Assert - 장바구니가 복구됨
+        cart.refresh_from_db()
+        assert cart.is_active is True
