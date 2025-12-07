@@ -124,14 +124,21 @@ class ProductHelper:
         """상품 목록 조회 (메트릭 기록용)"""
         request_name = f"{self.stage_name} GET /api/products/".strip()
 
-        response = self.client.get(
+        with self.client.get(
             f"{ENDPOINTS['products']}?page={page}",
             name=request_name,
-        )
-
-        if response.status_code == 200:
-            return response.json()
-        return None
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                return response.json()
+            elif response.status_code == 404:
+                # 페이지 범위 초과는 정상 처리 (상품 수가 적은 경우)
+                response.success()
+                return None
+            else:
+                response.failure(f"Unexpected status: {response.status_code}")
+                return None
 
     def browse_categories(self) -> Optional[Dict[str, Any]]:
         """카테고리 목록 조회"""
