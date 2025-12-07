@@ -27,6 +27,7 @@ from shopping.tests.factories import (
 
 class SimulatedCrashError(Exception):
     """테스트용 Crash 시뮬레이션 예외"""
+
     pass
 
 
@@ -71,8 +72,7 @@ class TestL2TransactionCrash:
 
         # 3. 검증: DB에서 다시 조회하면 원래 상태 유지
         payment.refresh_from_db()
-        assert payment.status == original_status, \
-            f"Payment should remain '{original_status}', got '{payment.status}'"
+        assert payment.status == original_status, f"Payment should remain '{original_status}', got '{payment.status}'"
 
         print(f"✓ L2-A PASSED: Payment status rolled back to '{payment.status}'")
 
@@ -108,10 +108,10 @@ class TestL2TransactionCrash:
         payment.refresh_from_db()
         order.refresh_from_db()
 
-        assert payment.status == original_payment_status, \
-            f"Payment status should be '{original_payment_status}', got '{payment.status}'"
-        assert order.status == original_order_status, \
-            f"Order status should be '{original_order_status}', got '{order.status}'"
+        assert (
+            payment.status == original_payment_status
+        ), f"Payment status should be '{original_payment_status}', got '{payment.status}'"
+        assert order.status == original_order_status, f"Order status should be '{original_order_status}', got '{order.status}'"
 
         print(f"✓ L2-A(변형) PASSED: Both Payment and Order rolled back")
 
@@ -153,8 +153,7 @@ class TestL2TransactionCrash:
 
         # 검증: 포인트 롤백
         user.refresh_from_db()
-        assert user.points == original_points, \
-            f"Points should be {original_points}, got {user.points}"
+        assert user.points == original_points, f"Points should be {original_points}, got {user.points}"
 
         print(f"✓ L2-B PASSED: Points rolled back to {user.points}")
 
@@ -197,10 +196,10 @@ class TestL2TransactionCrash:
         user.refresh_from_db()
         final_history_count = PointHistory.objects.filter(user=user).count()
 
-        assert user.points == original_points, \
-            f"Points should be {original_points}, got {user.points}"
-        assert final_history_count == initial_history_count, \
-            f"PointHistory count should be {initial_history_count}, got {final_history_count}"
+        assert user.points == original_points, f"Points should be {original_points}, got {user.points}"
+        assert (
+            final_history_count == initial_history_count
+        ), f"PointHistory count should be {initial_history_count}, got {final_history_count}"
 
         print(f"✓ L2-B(변형) PASSED: Points and PointHistory both rolled back")
 
@@ -230,8 +229,7 @@ class TestL2TransactionCrash:
 
         # 검증: 재고 롤백
         product.refresh_from_db()
-        assert product.stock == original_stock, \
-            f"Stock should be {original_stock}, got {product.stock}"
+        assert product.stock == original_stock, f"Stock should be {original_stock}, got {product.stock}"
 
         print(f"✓ L2-C PASSED: Stock rolled back to {product.stock}")
 
@@ -259,10 +257,10 @@ class TestL2TransactionCrash:
 
         # 검증
         product.refresh_from_db()
-        assert product.stock == original_stock, \
-            f"Stock should be {original_stock}, got {product.stock}"
-        assert product.sold_count == original_sold_count, \
-            f"Sold count should be {original_sold_count}, got {product.sold_count}"
+        assert product.stock == original_stock, f"Stock should be {original_stock}, got {product.stock}"
+        assert (
+            product.sold_count == original_sold_count
+        ), f"Sold count should be {original_sold_count}, got {product.sold_count}"
 
         print(f"✓ L2-C(변형) PASSED: Stock and sold_count both rolled back")
 
@@ -368,14 +366,11 @@ class TestL2TransactionCrash:
         user.refresh_from_db()
         product.refresh_from_db()
 
-        assert user.points == original_points, \
-            f"User points should be {original_points}, got {user.points}"
-        assert product.stock == original_stock, \
-            f"Product stock should be {original_stock}, got {product.stock}"
+        assert user.points == original_points, f"User points should be {original_points}, got {user.points}"
+        assert product.stock == original_stock, f"Product stock should be {original_stock}, got {product.stock}"
 
         # Order와 Payment는 생성되지 않았어야 함
-        assert not Order.objects.filter(user=user, used_points=points_to_use).exists(), \
-            "Order should not exist after rollback"
+        assert not Order.objects.filter(user=user, used_points=points_to_use).exists(), "Order should not exist after rollback"
 
         print("✓ Complete payment flow crash recovery PASSED")
 
@@ -386,7 +381,8 @@ class TestL2TransactionCrashSummary:
 
     def test_summary(self):
         """테스트 완료 시 결과 출력"""
-        print("""
+        print(
+            """
 ============================================================
 L2 TRANSACTION ROLLBACK TEST RESULTS
 ============================================================
@@ -402,4 +398,5 @@ Transaction Rollback Tests (Method 2: Savepoint):
   Complete Flow Crash:        Ready for execution
 
 ============================================================
-""")
+"""
+        )

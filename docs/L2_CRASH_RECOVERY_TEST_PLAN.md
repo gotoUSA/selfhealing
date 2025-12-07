@@ -2,8 +2,8 @@
 
 ## 📋 개요
 
-**목적:** DB 트랜잭션 중간 장애 발생 시에도 데이터 무결성이 유지되는지 검증  
-**수준:** 금융권/PG 수준의 신뢰성 테스트  
+**목적:** DB 트랜잭션 중간 장애 발생 시에도 데이터 무결성이 유지되는지 검증
+**수준:** 금융권/PG 수준의 신뢰성 테스트
 **구현 방식:** 방법 2 (Transaction Savepoint) + 방법 3 (Celery Task Crash Mock)
 
 ---
@@ -44,7 +44,7 @@ class SimulatedCrashError(Exception):
 
 class L2TransactionCrashTest(TransactionTestCase):
     """L2: DB Transaction 중간 Crash 테스트"""
-    
+
     def setUp(self):
         """테스트 데이터 준비"""
         self.user = User.objects.create_user(
@@ -58,11 +58,11 @@ class L2TransactionCrashTest(TransactionTestCase):
             price=Decimal('10000'),
             stock=100
         )
-    
+
     def test_l2a_payment_status_crash_before_done(self):
         """
         L2-A: Payment 상태 업데이트 직전 Crash
-        
+
         Timeline:
         1. Payment 조회 ✓
         2. payment.status = 'done' 설정
@@ -77,7 +77,7 @@ class L2TransactionCrashTest(TransactionTestCase):
             status='pending'
         )
         original_status = payment.status
-        
+
         # 2. 트랜잭션 내에서 crash 시뮬레이션
         try:
             with transaction.atomic():
@@ -86,18 +86,18 @@ class L2TransactionCrashTest(TransactionTestCase):
                 raise SimulatedCrashError("Crash before payment.save()")
         except SimulatedCrashError:
             pass
-        
+
         # 3. 검증: DB에서 다시 조회하면 원래 상태 유지
         payment.refresh_from_db()
         assert payment.status == original_status, \
             f"Payment should remain '{original_status}', got '{payment.status}'"
-        
+
         print(f"✓ L2-A PASSED: Payment status rolled back to '{payment.status}'")
-    
+
     def test_l2b_points_deducted_then_crash(self):
         """
         L2-B: 포인트 차감 후 Order 업데이트 전 Crash
-        
+
         Timeline:
         1. 포인트 50,000 → 40,000 차감 ✓
         2. Order 상태 업데이트 중
@@ -106,30 +106,30 @@ class L2TransactionCrashTest(TransactionTestCase):
         """
         original_points = self.user.points
         deduct_amount = 10000
-        
+
         try:
             with transaction.atomic():
                 # 포인트 차감
                 self.user.points -= deduct_amount
                 self.user.save()
-                
+
                 # Order 생성 중 crash
                 order = Order(user=self.user, total_amount=deduct_amount)
                 raise SimulatedCrashError("Crash during order creation")
         except SimulatedCrashError:
             pass
-        
+
         # 검증: 포인트 롤백
         self.user.refresh_from_db()
         assert self.user.points == original_points, \
             f"Points should be {original_points}, got {self.user.points}"
-        
+
         print(f"✓ L2-B PASSED: Points rolled back to {self.user.points}")
-    
+
     def test_l2c_stock_decreased_then_crash(self):
         """
         L2-C: 재고 차감 후 Payment 완료 전 Crash
-        
+
         Timeline:
         1. 재고 100 → 99 차감 ✓
         2. Payment 완료 처리 중
@@ -137,23 +137,23 @@ class L2TransactionCrashTest(TransactionTestCase):
         4. 검증: 재고가 100으로 복구
         """
         original_stock = self.product.stock
-        
+
         try:
             with transaction.atomic():
                 # 재고 차감
                 self.product.stock -= 1
                 self.product.save()
-                
+
                 # Payment 처리 중 crash
                 raise SimulatedCrashError("Crash during payment processing")
         except SimulatedCrashError:
             pass
-        
+
         # 검증: 재고 롤백
         self.product.refresh_from_db()
         assert self.product.stock == original_stock, \
             f"Stock should be {original_stock}, got {self.product.stock}"
-        
+
         print(f"✓ L2-C PASSED: Stock rolled back to {self.product.stock}")
 ```
 
@@ -173,7 +173,7 @@ from shopping.tasks import process_payment_confirmation
 
 class L2CeleryCrashTest(TransactionTestCase):
     """L2: Celery Worker Crash 시뮬레이션 테스트"""
-    
+
     def setUp(self):
         """테스트 데이터 준비"""
         self.user = User.objects.create_user(
@@ -183,12 +183,12 @@ class L2CeleryCrashTest(TransactionTestCase):
             points=50000,
             is_email_verified=True
         )
-    
+
     @patch('shopping.tasks.process_payment_confirmation.delay')
     def test_l2d_webhook_during_celery_crash(self, mock_task):
         """
         L2-D: Webhook 처리 중 Celery Worker Crash
-        
+
         Timeline:
         1. 결제 승인 요청 → Celery task 시작
         2. ❌ Worker 죽음 (WorkerLostError)
@@ -197,7 +197,7 @@ class L2CeleryCrashTest(TransactionTestCase):
         """
         # 1. Task가 crash 발생시키도록 mock
         mock_task.side_effect = WorkerLostError("Worker crashed!")
-        
+
         # 2. Order/Payment 생성
         order = Order.objects.create(
             user=self.user,
@@ -210,35 +210,35 @@ class L2CeleryCrashTest(TransactionTestCase):
             status='pending',
             payment_key='test_crash_key'
         )
-        
+
         # 3. Task 호출 시도 (crash 발생)
         try:
             mock_task(payment.id, 'test_payment_key', 10000)
         except WorkerLostError:
             pass
-        
+
         # 4. Payment 상태 확인 (여전히 pending)
         payment.refresh_from_db()
         assert payment.status == 'pending', \
             "Payment should remain pending after worker crash"
-        
+
         # 5. Webhook으로 복구 시뮬레이션
         # (실제로는 Webhook handler 호출)
         payment.status = 'done'
         payment.save()
-        
+
         # 6. 최종 상태 검증
         payment.refresh_from_db()
         assert payment.status == 'done', \
             "Payment should be done after webhook recovery"
-        
+
         print("✓ L2-D PASSED: Webhook recovered payment after worker crash")
-    
+
     @patch('shopping.services.payment_service.TossPaymentClient')
     def test_l2e_confirm_task_crash_then_replay(self, mock_toss):
         """
         L2-E: 결제 승인 Task 중간 Crash 후 Replay
-        
+
         Timeline:
         1. confirm_payment task 시작
         2. Toss API 호출 성공
@@ -253,7 +253,7 @@ class L2CeleryCrashTest(TransactionTestCase):
             'orderId': 'order_123',
             'totalAmount': 10000
         }
-        
+
         # 1. 첫 번째 시도에서 crash
         order = Order.objects.create(
             user=self.user,
@@ -266,7 +266,7 @@ class L2CeleryCrashTest(TransactionTestCase):
             status='pending',
             idempotency_key='unique_key_123'
         )
-        
+
         # 2. 첫 번째 처리 (crash 시뮬레이션)
         first_attempt_crashed = False
         try:
@@ -279,25 +279,25 @@ class L2CeleryCrashTest(TransactionTestCase):
                 raise SimulatedCrashError("Crash before DB commit")
         except SimulatedCrashError:
             first_attempt_crashed = True
-        
+
         assert first_attempt_crashed, "First attempt should have crashed"
-        
+
         # 3. 재시도 (정상 처리)
         payment.refresh_from_db()
         if payment.status != 'done':
             payment.status = 'done'
             payment.payment_key = 'toss_key_123'
             payment.save()
-        
+
         # 4. 검증: 단 한 번만 처리됨
         payment_count = Payment.objects.filter(
             order=order,
             status='done'
         ).count()
-        
+
         assert payment_count == 1, \
             f"Should have exactly 1 successful payment, got {payment_count}"
-        
+
         print("✓ L2-E PASSED: Idempotency maintained after crash and replay")
 ```
 
@@ -366,7 +366,7 @@ L2 CRASH RECOVERY TEST RESULTS
 
 Transaction Rollback Tests (Method 2):
   L2-A Payment Crash:     PASSED (status rolled back)
-  L2-B Points Crash:      PASSED (points rolled back)  
+  L2-B Points Crash:      PASSED (points rolled back)
   L2-C Stock Crash:       PASSED (stock rolled back)
 
 Celery Crash Recovery Tests (Method 3):

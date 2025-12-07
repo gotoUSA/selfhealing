@@ -54,12 +54,12 @@ _chaos_stats = {
 def _classify_400_reason(response_json: dict) -> str:
     """
     400 응답의 reason을 분류
-    
+
     업계 표준: 400은 시스템 성공이지만, reason별 통계로 숨겨진 문제 탐지
     """
     if not response_json:
         return "unknown"
-    
+
     # 응답에서 에러 메시지 추출
     error_msg = ""
     if isinstance(response_json, dict):
@@ -69,7 +69,7 @@ def _classify_400_reason(response_json: dict) -> str:
         # non_field_errors 등 DRF 에러 형식도 처리
         if "non_field_errors" in response_json:
             error_msg += str(response_json.get("non_field_errors", [])).lower()
-    
+
     # reason 분류
     if "already" in error_msg or "duplicate" in error_msg or "exists" in error_msg:
         return "duplicate_item"
@@ -314,7 +314,7 @@ def on_test_stop(environment, **kwargs):
             if count > 0:
                 pct = count / total_400 * 100
                 print(f"   - {reason}: {count} ({pct:.1f}%)")
-        
+
         # 위험 징후 감지
         price_mismatch = _chaos_stats["http_400_reasons"].get("price_mismatch", 0)
         if price_mismatch > 0:

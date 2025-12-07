@@ -31,6 +31,7 @@ from shopping.utils.toss_payment import TossPaymentError
 
 class SimulatedCrashError(Exception):
     """테스트용 Crash 시뮬레이션 예외"""
+
     pass
 
 
@@ -65,11 +66,7 @@ class TestL2CeleryCrash:
         )
 
         # 2. Task가 crash 발생시키도록 mock
-        mock_task = mocker.patch.object(
-            call_toss_confirm_api,
-            "delay",
-            side_effect=WorkerLostError("Worker crashed!")
-        )
+        mock_task = mocker.patch.object(call_toss_confirm_api, "delay", side_effect=WorkerLostError("Worker crashed!"))
 
         # 3. Task 호출 시도 (crash 발생)
         worker_crashed = False
@@ -82,8 +79,7 @@ class TestL2CeleryCrash:
 
         # 4. Payment 상태 확인 (여전히 in_progress)
         payment.refresh_from_db()
-        assert payment.status == "in_progress", \
-            "Payment should remain in_progress after worker crash"
+        assert payment.status == "in_progress", "Payment should remain in_progress after worker crash"
 
         # 5. Webhook으로 복구 시뮬레이션
         # (실제로는 Webhook handler가 호출됨)
@@ -96,8 +92,7 @@ class TestL2CeleryCrash:
 
         # 6. 최종 상태 검증
         payment.refresh_from_db()
-        assert payment.status == "done", \
-            "Payment should be done after webhook recovery"
+        assert payment.status == "done", "Payment should be done after webhook recovery"
 
         print("✓ L2-D PASSED: Webhook recovered payment after worker crash")
 
@@ -134,22 +129,17 @@ class TestL2CeleryCrash:
 
         # Act
         with pytest.raises(Exception, match="Worker crashed"):
-            finalize_payment_confirm(
-                TossResponseBuilder.success_response(),
-                payment.id,
-                user.id
-            )
+            finalize_payment_confirm(TossResponseBuilder.success_response(), payment.id, user.id)
 
         # Assert - 트랜잭션 롤백으로 상태 유지
         payment.refresh_from_db()
         product.refresh_from_db()
 
-        assert payment.status == original_status, \
-            f"Payment status should be '{original_status}', got '{payment.status}'"
-        assert product.stock == original_stock, \
-            f"Stock should be {original_stock}, got {product.stock}"
-        assert product.sold_count == original_sold_count, \
-            f"Sold count should be {original_sold_count}, got {product.sold_count}"
+        assert payment.status == original_status, f"Payment status should be '{original_status}', got '{payment.status}'"
+        assert product.stock == original_stock, f"Stock should be {original_stock}, got {product.stock}"
+        assert (
+            product.sold_count == original_sold_count
+        ), f"Sold count should be {original_sold_count}, got {product.sold_count}"
 
         print("✓ L2-D(변형) PASSED: Payment state preserved after worker crash")
 
@@ -210,23 +200,20 @@ class TestL2CeleryCrash:
 
         # Payment 상태 확인 (여전히 in_progress)
         payment.refresh_from_db()
-        assert payment.status == "in_progress", \
-            "Payment should remain in_progress after crash"
+        assert payment.status == "in_progress", "Payment should remain in_progress after crash"
 
         # 2. 재시도 (정상 처리)
         result = finalize_payment_confirm(toss_response, payment.id, user.id)
 
         # 3. 검증: 정상 처리됨
-        assert result["status"] == "success", \
-            f"Second attempt should succeed, got {result['status']}"
+        assert result["status"] == "success", f"Second attempt should succeed, got {result['status']}"
 
         payment.refresh_from_db()
         assert payment.status == "done", "Payment should be done after retry"
 
         # 4. 중복 처리 방지 확인: 세 번째 시도
         result_duplicate = finalize_payment_confirm(toss_response, payment.id, user.id)
-        assert result_duplicate["status"] == "already_processed", \
-            "Third attempt should return already_processed"
+        assert result_duplicate["status"] == "already_processed", "Third attempt should return already_processed"
 
         print("✓ L2-E PASSED: Idempotency maintained after crash and replay")
 
@@ -271,13 +258,11 @@ class TestL2CeleryCrash:
         sold_after_second = product.sold_count
 
         # sold_count가 증가하지 않았는지 확인
-        assert sold_after_second == sold_after_first, \
-            f"Sold count should remain {sold_after_first}, got {sold_after_second}"
+        assert sold_after_second == sold_after_first, f"Sold count should remain {sold_after_first}, got {sold_after_second}"
 
         # Payment 중복 생성 확인
         payment_count = Payment.objects.filter(order=order, status="done").count()
-        assert payment_count == 1, \
-            f"Should have exactly 1 successful payment, got {payment_count}"
+        assert payment_count == 1, f"Should have exactly 1 successful payment, got {payment_count}"
 
         print("✓ L2-E(변형) PASSED: No duplicate payments on retry")
 
@@ -317,8 +302,7 @@ class TestL2CeleryCrash:
         already_processed_count = results.count("already_processed")
 
         assert success_count == 1, f"Should have exactly 1 success, got {success_count}"
-        assert already_processed_count == 4, \
-            f"Should have 4 already_processed, got {already_processed_count}"
+        assert already_processed_count == 4, f"Should have 4 already_processed, got {already_processed_count}"
 
         # 최종 상태 확인
         payment.refresh_from_db()
@@ -355,10 +339,7 @@ class TestL2NetworkErrorRecovery:
         # Toss API가 네트워크 에러 발생시키도록 mock
         mocker.patch(
             "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            side_effect=TossPaymentError(
-                code="NETWORK_ERROR",
-                message="Connection failed"
-            ),
+            side_effect=TossPaymentError(code="NETWORK_ERROR", message="Connection failed"),
         )
 
         # retry 호출 시 Retry 예외 발생시키도록 mock
@@ -374,8 +355,7 @@ class TestL2NetworkErrorRecovery:
 
         # Assert - 네트워크 에러 시 payment가 aborted로 변경되고 retry 시도
         payment.refresh_from_db()
-        assert payment.status == "aborted", \
-            f"Payment should be aborted after network error, got '{payment.status}'"
+        assert payment.status == "aborted", f"Payment should be aborted after network error, got '{payment.status}'"
 
         print("✓ Network error retry PASSED")
 
@@ -413,8 +393,7 @@ class TestL2NetworkErrorRecovery:
 
         # Assert
         payment.refresh_from_db()
-        assert payment.status == "aborted", \
-            f"Payment should be aborted after max retries, got '{payment.status}'"
+        assert payment.status == "aborted", f"Payment should be aborted after max retries, got '{payment.status}'"
 
         print("✓ Max retry exceeded PASSED")
 
@@ -425,7 +404,8 @@ class TestL2CeleryCrashSummary:
 
     def test_summary(self):
         """테스트 완료 시 결과 출력"""
-        print("""
+        print(
+            """
 ============================================================
 L2 CELERY CRASH RECOVERY TEST RESULTS
 ============================================================
@@ -440,4 +420,5 @@ Celery Crash Recovery Tests (Method 3: Celery Mock):
   Max Retry Exceeded:         Ready for execution
 
 ============================================================
-""")
+"""
+        )

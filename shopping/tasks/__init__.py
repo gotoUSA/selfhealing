@@ -12,6 +12,13 @@ from .cleanup_tasks import (
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
 from .order_tasks import process_order_heavy_tasks
 from .payment_tasks import call_toss_confirm_api, finalize_payment_confirm
+from .payment_recovery_tasks import (
+    check_sla_violations,
+    cleanup_expired_dlq,
+    process_dlq_batch,
+    reset_circuit_breaker,
+    retry_failed_payment,
+)
 from .point_tasks import (
     add_points_after_payment,
     cleanup_old_point_histories,
@@ -43,4 +50,10 @@ __all__ = [
     # 결제 태스크
     "call_toss_confirm_api",
     "finalize_payment_confirm",
+    # 결제 복구 태스크 (L3 Self-Healing)
+    "retry_failed_payment",
+    "check_sla_violations",
+    "cleanup_expired_dlq",
+    "process_dlq_batch",
+    "reset_circuit_breaker",
 ]

@@ -260,7 +260,7 @@ def on_test_stop(environment, **kwargs):
         if stats["success"] > 1:
             orders_with_multiple_success += 1
             # success=3이면 2건의 중복 결제
-            total_duplicate_payments += (stats["success"] - 1)
+            total_duplicate_payments += stats["success"] - 1
             failed_orders.append((order_id, stats["success"]))
 
     print(f"\nOrders with Multiple Payments: {orders_with_multiple_success}")
