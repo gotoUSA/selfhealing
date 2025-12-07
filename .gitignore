@@ -46,6 +46,12 @@ htmlcov/
 coverage.xml
 *.cover
 
+# Load test reports
+load_tests/reports/*.html
+load_tests/reports/*.json
+load_tests/reports/*.csv
+!load_tests/reports/.gitkeep
+
 # Migrations (선택사항 - 팀 프로젝트면 포함)
 # */migrations/*.py
 # !*/migrations/__init__.py*.backup

@@ -43,9 +43,9 @@ PASS_THRESHOLD = float(os.environ.get("ROLLBACK_PASS_THRESHOLD", "50.0"))
 # 롤백 검증 통계 - 실패/동시성 분리
 _rollback_stats = {
     "failure_triggered": 0,
-    "rollback_verified": 0,        # 정상: 재고 변화 없음
-    "rollback_failed": 0,          # 버그: 재고가 비정상 증가 (심각)
-    "variance_concurrent": 0,      # 예상됨: 동시 주문으로 재고 감소
+    "rollback_verified": 0,  # 정상: 재고 변화 없음
+    "rollback_failed": 0,  # 버그: 재고가 비정상 증가 (심각)
+    "variance_concurrent": 0,  # 예상됨: 동시 주문으로 재고 감소
     "product_variance": defaultdict(int),  # product_id별 variance 집계
     "details": {
         "verified": [],
@@ -159,16 +159,16 @@ class RollbackUser(HttpUser):
         # === 7. 안정성 검증: 결제 실패 후 재고에 추가 변화 없어야 함 ===
         if stock_after_order is not None and stock_after_payment_fail is not None:
             # 결제 confirm 실패는 재고에 영향을 주지 않아야 함
-            validation = self.stock_validator.validate_rollback(
-                product_id, stock_after_order, stock_after_payment_fail
-            )
+            validation = self.stock_validator.validate_rollback(product_id, stock_after_order, stock_after_payment_fail)
 
             if validation["valid"]:
                 _rollback_stats["rollback_verified"] += 1
-                _rollback_stats["details"]["verified"].append({
-                    "product_id": product_id,
-                    "stock": stock_after_order,
-                })
+                _rollback_stats["details"]["verified"].append(
+                    {
+                        "product_id": product_id,
+                        "stock": stock_after_order,
+                    }
+                )
             else:
                 # 재고 변동 방향에 따라 분류
                 diff = stock_after_payment_fail - stock_after_order
@@ -176,24 +176,28 @@ class RollbackUser(HttpUser):
                 if diff > 0:
                     # 재고 증가 = 시스템 버그 (Critical)
                     _rollback_stats["rollback_failed"] += 1
-                    _rollback_stats["details"]["failed"].append({
-                        "product_id": product_id,
-                        "before": stock_after_order,
-                        "after": stock_after_payment_fail,
-                        "diff": diff,
-                        "reason": "STOCK_INCREASED (BUG)",
-                    })
+                    _rollback_stats["details"]["failed"].append(
+                        {
+                            "product_id": product_id,
+                            "before": stock_after_order,
+                            "after": stock_after_payment_fail,
+                            "diff": diff,
+                            "reason": "STOCK_INCREASED (BUG)",
+                        }
+                    )
                 else:
                     # 재고 감소 = 동시 주문으로 인한 예상된 변동
                     _rollback_stats["variance_concurrent"] += 1
                     _rollback_stats["product_variance"][product_id] += 1
-                    _rollback_stats["details"]["variance"].append({
-                        "product_id": product_id,
-                        "before": stock_after_order,
-                        "after": stock_after_payment_fail,
-                        "diff": diff,
-                        "reason": "CONCURRENT_ORDER (expected)",
-                    })
+                    _rollback_stats["details"]["variance"].append(
+                        {
+                            "product_id": product_id,
+                            "before": stock_after_order,
+                            "after": stock_after_payment_fail,
+                            "diff": diff,
+                            "reason": "CONCURRENT_ORDER (expected)",
+                        }
+                    )
 
     @task(1)
     @tag("rollback", "normal_flow")
@@ -263,14 +267,16 @@ class RollbackUser(HttpUser):
 
             if not validation["valid"]:
                 # 정상 결제인데 재고가 안 줄었으면 문제
-                _rollback_stats["details"]["failed"].append({
-                    "product_id": product_id,
-                    "type": "normal_decrease_failed",
-                    "before": stock_before,
-                    "after": stock_after,
-                    "expected": stock_before - quantity,
-                    "reason": "NORMAL_PAYMENT_NO_DECREASE",
-                })
+                _rollback_stats["details"]["failed"].append(
+                    {
+                        "product_id": product_id,
+                        "type": "normal_decrease_failed",
+                        "before": stock_before,
+                        "after": stock_after,
+                        "expected": stock_before - quantity,
+                        "reason": "NORMAL_PAYMENT_NO_DECREASE",
+                    }
+                )
 
 
 @events.test_stop.add_listener
@@ -282,10 +288,10 @@ def on_test_stop(environment, **kwargs):
     print("🔄 STAGE 5: ROLLBACK VALIDATION TEST RESULTS")
     print("=" * 70)
 
-    triggered = _rollback_stats['failure_triggered']
-    verified = _rollback_stats['rollback_verified']
-    failed = _rollback_stats['rollback_failed']
-    variance = _rollback_stats['variance_concurrent']
+    triggered = _rollback_stats["failure_triggered"]
+    verified = _rollback_stats["rollback_verified"]
+    failed = _rollback_stats["rollback_failed"]
+    variance = _rollback_stats["variance_concurrent"]
 
     print(f"\n📊 SUMMARY")
     print(f"   Failures Triggered:    {triggered}")
@@ -304,11 +310,7 @@ def on_test_stop(environment, **kwargs):
     # Product별 Variance 집계 (Top 5)
     if _rollback_stats["product_variance"]:
         print(f"\n📦 VARIANCE BY PRODUCT (Top 5)")
-        sorted_variance = sorted(
-            _rollback_stats["product_variance"].items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:5]
+        sorted_variance = sorted(_rollback_stats["product_variance"].items(), key=lambda x: x[1], reverse=True)[:5]
         for product_id, count in sorted_variance:
             print(f"   Product {product_id}: {count} variance occurrences")
 
@@ -316,9 +318,11 @@ def on_test_stop(environment, **kwargs):
     if _rollback_stats["details"]["failed"]:
         print(f"\n🚨 CRITICAL FAILURES (Stock Increased - BUG)")
         for detail in _rollback_stats["details"]["failed"][:5]:
-            print(f"   - Product {detail.get('product_id')}: "
-                  f"before={detail.get('before')}, after={detail.get('after')}, "
-                  f"reason={detail.get('reason')}")
+            print(
+                f"   - Product {detail.get('product_id')}: "
+                f"before={detail.get('before')}, after={detail.get('after')}, "
+                f"reason={detail.get('reason')}"
+            )
 
     # 테스트 판정
     print("\n" + "-" * 70)

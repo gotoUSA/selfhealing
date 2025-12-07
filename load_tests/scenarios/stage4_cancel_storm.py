@@ -290,8 +290,7 @@ def on_test_stop(environment, **kwargs):
     confirm_ok = _cancel_stats["confirm_success"] > 0
     cancel_ok = _cancel_stats["cancel_success"] > 0
     cancel_rate_ok = (
-        _cancel_stats["cancel_attempted"] > 0
-        and (_cancel_stats["cancel_success"] / _cancel_stats["cancel_attempted"]) >= 0.3
+        _cancel_stats["cancel_attempted"] > 0 and (_cancel_stats["cancel_success"] / _cancel_stats["cancel_attempted"]) >= 0.3
     )
 
     if confirm_ok and cancel_ok and cancel_rate_ok:

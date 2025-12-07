@@ -76,11 +76,11 @@ python load_tests/runners/run_stage.py --profile all
 ```bash
 # Windows (Git Bash)
 PYTHONUTF8=1 locust -f load_tests/scenarios/stage1_happy_load.py \
-  --host=http://localhost:8000 --users=100 --spawn-rate=20 --run-time=3m
+  --host=http://localhost:8000 --users=1000 --spawn-rate=20 --run-time=3m
 
 # Docker
 docker compose exec web locust -f load_tests/scenarios/stage1_happy_load.py \
-  --host=http://web:8000 --users=100 --spawn-rate=20 --run-time=3m --headless
+  --host=http://web:8000 --users=1000 --spawn-rate=20 --run-time=3m --headless
 ```
 
 ### Web UI 모드

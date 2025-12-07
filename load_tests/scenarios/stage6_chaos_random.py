@@ -36,7 +36,59 @@ _chaos_stats = {
     "success_after_chaos": 0,
     "failure_after_chaos": 0,
     "by_fault_type": {},
+    # 400 응답 reason별 분류 (업계 표준 Chaos Engineering 방식)
+    "http_400_reasons": {
+        "duplicate_item": 0,
+        "out_of_stock": 0,
+        "quantity_limit": 0,
+        "invalid_token": 0,
+        "price_mismatch": 0,
+        "invalid_request": 0,
+        "cart_empty": 0,
+        "order_error": 0,
+        "unknown": 0,
+    },
 }
+
+
+def _classify_400_reason(response_json: dict) -> str:
+    """
+    400 응답의 reason을 분류
+    
+    업계 표준: 400은 시스템 성공이지만, reason별 통계로 숨겨진 문제 탐지
+    """
+    if not response_json:
+        return "unknown"
+    
+    # 응답에서 에러 메시지 추출
+    error_msg = ""
+    if isinstance(response_json, dict):
+        error_msg = str(response_json.get("error", "")).lower()
+        error_msg += str(response_json.get("detail", "")).lower()
+        error_msg += str(response_json.get("message", "")).lower()
+        # non_field_errors 등 DRF 에러 형식도 처리
+        if "non_field_errors" in response_json:
+            error_msg += str(response_json.get("non_field_errors", [])).lower()
+    
+    # reason 분류
+    if "already" in error_msg or "duplicate" in error_msg or "exists" in error_msg:
+        return "duplicate_item"
+    elif "stock" in error_msg or "insufficient" in error_msg or "재고" in error_msg:
+        return "out_of_stock"
+    elif "quantity" in error_msg or "limit" in error_msg or "maximum" in error_msg:
+        return "quantity_limit"
+    elif "token" in error_msg or "auth" in error_msg or "credential" in error_msg:
+        return "invalid_token"
+    elif "price" in error_msg or "amount" in error_msg or "mismatch" in error_msg:
+        return "price_mismatch"
+    elif "cart" in error_msg and ("empty" in error_msg or "no item" in error_msg):
+        return "cart_empty"
+    elif "order" in error_msg:
+        return "order_error"
+    elif "invalid" in error_msg or "required" in error_msg:
+        return "invalid_request"
+    else:
+        return "unknown"
 
 
 class ChaosUser(HttpUser):
@@ -132,10 +184,25 @@ class ChaosUser(HttpUser):
             name=f"{STAGE_NAME} POST /api/cart/add_item/ [CHAOS]",
             catch_response=True,
         ) as response:
+            # 400 에러는 재고 부족, 중복 상품 등 비즈니스 로직 오류로 정상 응답으로 처리
             if response.status_code in [200, 201]:
                 response.success()
                 if fault:
                     _chaos_stats["success_after_chaos"] += 1
+            elif response.status_code == 400:
+                # 400은 성공이지만, reason별 통계 수집 (업계 표준 방식)
+                response.success()
+                try:
+                    reason = _classify_400_reason(response.json())
+                    _chaos_stats["http_400_reasons"][reason] += 1
+                except Exception:
+                    _chaos_stats["http_400_reasons"]["unknown"] += 1
+                if fault:
+                    _chaos_stats["success_after_chaos"] += 1
+            elif response.status_code >= 500:
+                response.failure(f"5xx Error: {response.status_code}")
+                if fault:
+                    _chaos_stats["failure_after_chaos"] += 1
             else:
                 response.failure(f"Status: {response.status_code}")
                 if fault:
@@ -196,8 +263,18 @@ class ChaosUser(HttpUser):
             name=f"{STAGE_NAME} POST /api/payments/confirm/ [CHAOS]",
             catch_response=True,
         ) as response:
-            if response.status_code in [200, 201, 400]:
+            if response.status_code in [200, 201]:
                 response.success()
+                if fault:
+                    _chaos_stats["success_after_chaos"] += 1
+            elif response.status_code == 400:
+                # 400은 성공이지만, reason별 통계 수집 (업계 표준 방식)
+                response.success()
+                try:
+                    reason = _classify_400_reason(response.json())
+                    _chaos_stats["http_400_reasons"][reason] += 1
+                except Exception:
+                    _chaos_stats["http_400_reasons"]["unknown"] += 1
                 if fault:
                     _chaos_stats["success_after_chaos"] += 1
             elif response.status_code >= 500:
@@ -227,6 +304,22 @@ def on_test_stop(environment, **kwargs):
     print("\nFaults by Type:")
     for fault_type, count in _chaos_stats["by_fault_type"].items():
         print(f"  - {fault_type}: {count}")
+
+    # 400 응답 reason별 통계 (업계 표준 Chaos Engineering 분석)
+    total_400 = sum(_chaos_stats["http_400_reasons"].values())
+    if total_400 > 0:
+        print("\n📊 HTTP 400 Response Analysis (Business Logic):")
+        print(f"   Total 400 Responses: {total_400}")
+        for reason, count in _chaos_stats["http_400_reasons"].items():
+            if count > 0:
+                pct = count / total_400 * 100
+                print(f"   - {reason}: {count} ({pct:.1f}%)")
+        
+        # 위험 징후 감지
+        price_mismatch = _chaos_stats["http_400_reasons"].get("price_mismatch", 0)
+        if price_mismatch > 0:
+            print(f"\n   ⚠️  WARNING: {price_mismatch} price mismatch errors detected!")
+            print("      This may indicate race conditions or policy issues.")
 
     if _chaos_stats["chaos_injected"] > 0:
         recovery_rate = _chaos_stats["success_after_chaos"] / _chaos_stats["chaos_injected"] * 100

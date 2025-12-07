@@ -39,16 +39,22 @@ class CartHelper:
         """장바구니에 상품 추가"""
         request_name = f"{self.stage_name} POST /api/cart/add_item/".strip()
 
-        response = self.client.post(
+        with self.client.post(
             ENDPOINTS["cart_add_item"],
             json={
                 "product_id": product_id,
                 "quantity": quantity,
             },
             name=request_name,
-        )
-
-        return response.status_code in [200, 201]
+            catch_response=True,
+        ) as response:
+            # 400 에러는 재고 부족, 중복 상품 등 비즈니스 로직으로 정상 처리
+            if response.status_code in [200, 201, 400]:
+                response.success()
+                return response.status_code in [200, 201]
+            else:
+                response.failure(f"Unexpected status: {response.status_code}")
+                return False
 
     def add_random_items(
         self,
