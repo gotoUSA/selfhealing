@@ -34,6 +34,48 @@ class TossWebhookServiceError(Exception):
     pass
 
 
+def _restore_stock_for_order(order, restore_sold_count: bool = True) -> None:
+    """
+    주문의 재고 복구 헬퍼 함수
+
+    Args:
+        order: 주문 객체
+        restore_sold_count: sold_count도 복구할지 여부
+    """
+    for order_item in order.order_items.all():
+        if not order_item.product:
+            continue
+
+        if restore_sold_count:
+            # 재고 복구 + sold_count 차감
+            updated = Product.objects.filter(
+                pk=order_item.product.pk,
+                sold_count__gte=order_item.quantity,
+            ).update(
+                stock=F("stock") + order_item.quantity,
+                sold_count=F("sold_count") - order_item.quantity,
+            )
+
+            if updated == 0:
+                Product.objects.filter(pk=order_item.product.pk).update(
+                    stock=F("stock") + order_item.quantity,
+                    sold_count=0,
+                )
+                logger.warning(
+                    f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
+                    f"order_id={order.id}"
+                )
+        else:
+            # 재고만 복구 (sold_count는 아직 증가하지 않음)
+            Product.objects.filter(pk=order_item.product.pk).update(
+                stock=F("stock") + order_item.quantity,
+            )
+            logger.info(
+                f"재고 복구: product_id={order_item.product.pk}, "
+                f"quantity={order_item.quantity}, order_id={order.id}"
+            )
+
+
 class TossWebhookService:
     """토스페이먼츠 웹훅 이벤트 처리 서비스"""
 
@@ -238,36 +280,10 @@ class TossWebhookService:
             return
 
         # 재고 복구 (재고가 차감된 상태들)
-        if order.status in ["paid", "preparing", "confirmed"]:
-            for order_item in order.order_items.all():
-                if order_item.product:
-                    if order.status in ["paid", "preparing"]:
-                        # paid/preparing: 재고 복구 + sold_count 차감
-                        updated = Product.objects.filter(
-                            pk=order_item.product.pk,
-                            sold_count__gte=order_item.quantity,
-                        ).update(
-                            stock=F("stock") + order_item.quantity,
-                            sold_count=F("sold_count") - order_item.quantity,
-                        )
-
-                        if updated == 0:
-                            Product.objects.filter(pk=order_item.product.pk).update(
-                                stock=F("stock") + order_item.quantity,
-                                sold_count=0,
-                            )
-                            logger.warning(
-                                f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}"
-                            )
-                    else:
-                        # confirmed: 재고만 복구 (sold_count는 아직 증가하지 않음)
-                        Product.objects.filter(pk=order_item.product.pk).update(
-                            stock=F("stock") + order_item.quantity,
-                        )
-                        logger.info(
-                            f"confirmed 상태 재고 복구: product_id={order_item.product.pk}, "
-                            f"quantity={order_item.quantity}, order_id={order.id}"
-                        )
+        if order.status in ["paid", "preparing"]:
+            _restore_stock_for_order(order, restore_sold_count=True)
+        elif order.status == "confirmed":
+            _restore_stock_for_order(order, restore_sold_count=False)
 
         # 포인트 회수 (상태 변경 전)
         if order.user and order.status in ["paid", "preparing"]:

@@ -87,7 +87,7 @@ class TestSendVerificationEmailTask:
 
         # Assert
         assert result["success"] is False
-        assert "사용자를 찾을 수 없습니다" in result["message"]
+        assert "사용자" in result["message"] and "찾을 수 없습니다" in result["message"]
 
     def test_send_verification_email_token_not_found(self):
         """존재하지 않는 토큰 테스트"""
@@ -102,7 +102,7 @@ class TestSendVerificationEmailTask:
 
         # Assert
         assert result["success"] is False
-        assert "토큰을 찾을 수 없습니다" in result["message"]
+        assert "토큰" in result["message"] and "찾을 수 없습니다" in result["message"]
 
     def test_send_verification_email_smtp_error(self, mocker):
         """SMTP 에러 시 재시도 테스트"""

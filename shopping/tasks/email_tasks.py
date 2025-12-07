@@ -17,6 +17,21 @@ from shopping.models.user import User
 logger = logging.getLogger(__name__)
 
 
+def _handle_email_failure(email_log: EmailLog | None, error: Exception, recipient: str) -> None:
+    """이메일 발송 실패 처리 헬퍼"""
+    if email_log:
+        email_log.mark_as_failed(str(error))
+    logger.error(f"❌ 이메일 발송 실패: {recipient} - {str(error)}")
+
+
+def _is_already_sent(email_log: EmailLog, is_resend: bool, recipient: str) -> bool:
+    """이미 발송된 이메일인지 확인"""
+    if email_log.status == "sent" and not is_resend:
+        logger.info(f"이미 발송된 이메일입니다: {recipient}")
+        return True
+    return False
+
+
 @shared_task(
     bind=True,
     max_retries=3,
@@ -119,34 +134,20 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
             "verification_code": token.verification_code,
         }
 
-    except User.DoesNotExist:
-        # 재시도 불가 - 사용자가 없으면 재시도해도 동일
-        logger.error(f"❌ 사용자를 찾을 수 없습니다: user_id={user_id}")
-        return {
-            "success": False,
-            "message": "사용자를 찾을 수 없습니다.",
-        }
-
-    except EmailVerificationToken.DoesNotExist:
-        # 재시도 불가 - 토큰이 없으면 재시도해도 동일
-        logger.error(f"❌ 토큰을 찾을 수 없습니다: token_id={token_id}")
-        return {
-            "success": False,
-            "message": "토큰을 찾을 수 없습니다.",
-        }
+    except (User.DoesNotExist, EmailVerificationToken.DoesNotExist) as e:
+        # 재시도 불가 - 리소스가 없으면 재시도해도 동일
+        error_type = "사용자" if isinstance(e, User.DoesNotExist) else "토큰"
+        logger.error(f"❌ {error_type}을(를) 찾을 수 없습니다: user_id={user_id}, token_id={token_id}")
+        return {"success": False, "message": f"{error_type}을(를) 찾을 수 없습니다."}
 
     except SMTPException as e:
         # SMTP 오류 - 네트워크/서버 문제, 재시도 가치 있음
-        logger.error(f"❌ SMTP 오류: {user.email if 'user' in locals() else 'unknown'} - {str(e)}")
-
-        if "email_log" in locals():
-            email_log.mark_as_failed(str(e))
-
+        recipient = user.email if "user" in locals() else "unknown"
+        _handle_email_failure(email_log if "email_log" in locals() else None, e, recipient)
         raise self.retry(exc=e)
 
     except Exception as e:
-        logger.error(f"❌ 이메일 발송 실패: {user.email if 'user' in locals() else 'unknown'} - {str(e)}")
-
+        recipient = user.email if "user" in locals() else "unknown"
         # 이메일 로그 실패 처리
         if "email_log" in locals():
             email_log.mark_as_failed(str(e))
@@ -314,20 +315,10 @@ def send_email_task(
 
     except SMTPException as e:
         # SMTP 오류는 재시도 가치 있음
-        logger.error(f"❌ SMTP 오류: {recipient_list} - {str(e)}")
-
-        # 이메일 로그 실패 처리
-        if "email_log" in locals() and email_log:
-            email_log.mark_as_failed(str(e))
-
+        _handle_email_failure(email_log if "email_log" in locals() else None, e, str(recipient_list))
         raise self.retry(exc=e)
 
     except Exception as e:
         # 그 외 오류는 재시도 안 함 (Fail-Fast)
-        logger.error(f"❌ 이메일 발송 실패: {recipient_list} - {str(e)}")
-
-        # 이메일 로그 실패 처리
-        if "email_log" in locals() and email_log:
-            email_log.mark_as_failed(str(e))
-
+        _handle_email_failure(email_log if "email_log" in locals() else None, e, str(recipient_list))
         raise
