@@ -119,34 +119,37 @@ def run_environment_setup(
 ) -> int:
     """
     Run environment setup before load tests (idempotent)
-    
+
     Ensures consistent test environment regardless of previous runs.
     """
     setup_script = SETUP_DIR / "environment.py"
-    
+
     if not setup_script.exists():
         print(f"Error: Setup script not found: {setup_script}")
         return 1
-    
+
     cmd = [
         sys.executable,
         str(setup_script),
         "--full",
-        "--user-count", str(user_count),
-        "--user-points", str(user_points),
-        "--product-preset", product_preset,
+        "--user-count",
+        str(user_count),
+        "--user-points",
+        str(user_points),
+        "--product-preset",
+        product_preset,
     ]
-    
+
     print("\n" + "=" * 60)
     print("🔧 RUNNING ENVIRONMENT SETUP")
     print("=" * 60)
-    
+
     result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
-    
+
     if result.returncode != 0:
         print("\n❌ Environment setup failed!")
         return 1
-    
+
     return 0
 
 
@@ -409,12 +412,7 @@ Examples:
         help="Run environment setup only (no tests)",
     )
 
-    parser.add_argument(
-        "--user-count",
-        type=int,
-        default=1000,
-        help="Number of load test users to create (default: 1000)"
-    )
+    parser.add_argument("--user-count", type=int, default=1000, help="Number of load test users to create (default: 1000)")
 
     parser.add_argument(
         "--user-points",

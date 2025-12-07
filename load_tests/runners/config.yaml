@@ -179,12 +179,12 @@ setup:
     count: 1000          # 생성할 사용자 수
     points: 50000        # 초기 포인트
     clear: true          # 기존 사용자 삭제 후 생성
-  
+
   # 테스트 상품 설정
   products:
     preset: "full"       # minimal, basic, full
     clear: false         # 상품은 기본적으로 유지
-  
+
   # 자동 설정
   auto_migrate: true     # 마이그레이션 자동 실행
   reset_orders: true     # 기존 주문 데이터 정리

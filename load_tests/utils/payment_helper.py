@@ -52,7 +52,16 @@ class PaymentHelper:
         )
 
         if response.status_code in [200, 201, 202]:
-            return response.json()
+            order_data = response.json()
+            order_id = order_data.get("order_id")
+
+            # 주문 생성 응답에 final_amount가 없으면 주문 상세 조회
+            if order_id and not order_data.get("final_amount"):
+                order_detail = self.get_order(order_id)
+                if order_detail:
+                    order_data["final_amount"] = order_detail.get("final_amount")
+
+            return order_data
         return None
 
     def generate_payment_key(self, prefix: str = "test") -> str:
