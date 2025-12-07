@@ -42,6 +42,7 @@ LOAD_TESTS_DIR = RUNNER_DIR.parent
 PROJECT_ROOT = LOAD_TESTS_DIR.parent
 CONFIG_PATH = RUNNER_DIR / "config.yaml"
 REPORTS_DIR = LOAD_TESTS_DIR / "reports"
+SETUP_DIR = LOAD_TESTS_DIR / "setup"
 
 
 def load_config() -> dict:
@@ -109,6 +110,44 @@ def is_running_in_docker() -> bool:
     except (FileNotFoundError, PermissionError):
         pass
     return False
+
+
+def run_environment_setup(
+    user_count: int = 100,
+    user_points: int = 50000,
+    product_preset: str = "full",
+) -> int:
+    """
+    Run environment setup before load tests (idempotent)
+    
+    Ensures consistent test environment regardless of previous runs.
+    """
+    setup_script = SETUP_DIR / "environment.py"
+    
+    if not setup_script.exists():
+        print(f"Error: Setup script not found: {setup_script}")
+        return 1
+    
+    cmd = [
+        sys.executable,
+        str(setup_script),
+        "--full",
+        "--user-count", str(user_count),
+        "--user-points", str(user_points),
+        "--product-preset", product_preset,
+    ]
+    
+    print("\n" + "=" * 60)
+    print("🔧 RUNNING ENVIRONMENT SETUP")
+    print("=" * 60)
+    
+    result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+    
+    if result.returncode != 0:
+        print("\n❌ Environment setup failed!")
+        return 1
+    
+    return 0
 
 
 def run_stage(
@@ -358,6 +397,32 @@ Examples:
         help="Use Docker host (http://web:8000)",
     )
 
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run environment setup before tests (idempotent)",
+    )
+
+    parser.add_argument(
+        "--setup-only",
+        action="store_true",
+        help="Run environment setup only (no tests)",
+    )
+
+    parser.add_argument(
+        "--user-count",
+        type=int,
+        default=1000,
+        help="Number of load test users to create (default: 1000)"
+    )
+
+    parser.add_argument(
+        "--user-points",
+        type=int,
+        default=50000,
+        help="Initial points per user (default: 50000)",
+    )
+
     args = parser.parse_args()
 
     config = load_config()
@@ -366,12 +431,23 @@ Examples:
         list_stages_and_profiles(config)
         return 0
 
+    # Setup only
+    if args.setup_only:
+        return run_environment_setup(args.user_count, args.user_points)
+
     # 호스트 결정
     host = args.host
     if args.docker:
         host = config["defaults"].get("docker_host", "http://web:8000")
 
     headless = not args.web
+
+    # Run setup if requested
+    if args.setup:
+        setup_result = run_environment_setup(args.user_count, args.user_points)
+        if setup_result != 0:
+            print("\n❌ Aborting tests due to setup failure")
+            return setup_result
 
     if args.profile:
         return run_profile(args.profile, config, host, headless)
