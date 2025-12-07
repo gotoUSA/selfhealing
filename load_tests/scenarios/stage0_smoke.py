@@ -33,26 +33,26 @@ STAGE_NAME = "[Stage0]"
 class SmokeUser(HttpUser):
     """
     Smoke Test 사용자
-    
+
     환경 정상 동작 확인용. 실패 시 후속 Stage 중단.
     """
-    
+
     wait_time = between(1, 2)
-    
+
     def on_start(self):
         """테스트 시작 시 초기화"""
         # 메트릭 훅 설정 (최초 1회)
         setup_event_hooks(STAGE_NAME)
-        
+
         # 헬퍼 초기화
         self.login_helper = LoginHelper(self.client, STAGE_NAME)
         self.product_helper = ProductHelper(self.client, STAGE_NAME)
         self.cart_helper = CartHelper(self.client, STAGE_NAME)
         self.payment_helper = PaymentHelper(self.client, STAGE_NAME)
-        
+
         # 상품 캐싱
         self.product_helper.ensure_products_cached()
-        
+
         # 로그인
         self.login_helper.login()
 
@@ -91,7 +91,7 @@ class SmokeUser(HttpUser):
         product_id = self.product_helper.get_random_product_id()
         if not product_id:
             return
-        
+
         with self.client.get(
             f"/api/products/{product_id}/",
             name=f"{STAGE_NAME} GET /api/products/{{id}}/",
@@ -111,29 +111,29 @@ class SmokeUser(HttpUser):
     def verify_full_payment_flow(self):
         """
         완전한 결제 플로우 확인
-        
+
         Smoke 테스트의 핵심: 한 번의 결제가 성공해야 함
         """
         if not self.login_helper.is_logged_in:
             self.login_helper.login()
-        
+
         product_ids = self.product_helper.cached_product_ids
         if not product_ids:
             return
-        
+
         # 1. 장바구니 준비
         self.cart_helper.clear_cart()
-        
+
         product_id = product_ids[0]
         added = self.cart_helper.add_item(product_id, 1)
         if not added:
             return
-        
+
         # 2. 장바구니 확인
         items = self.cart_helper.get_cart_items()
         if not items:
             return
-        
+
         # 3. 주문 생성
         order_data = self.payment_helper.create_order(
             shipping_name="Smoke Test",
@@ -142,19 +142,19 @@ class SmokeUser(HttpUser):
             shipping_address="Smoke Test Address",
             shipping_address_detail="Test",
         )
-        
+
         if not order_data:
             return
-        
+
         order_id = order_data.get("order_id")
         final_amount = order_data.get("final_amount")
-        
+
         if not order_id or not final_amount:
             return
-        
+
         # 4. 결제 승인
         payment_key = self.payment_helper.generate_payment_key("smoke")
-        
+
         with self.client.post(
             "/api/payments/confirm/",
             json={
@@ -179,18 +179,18 @@ def on_test_stop(environment, **kwargs):
     """테스트 종료 시 결과 요약"""
     collector = get_metrics_collector()
     summary = collector.get_summary()
-    
+
     print("\n" + "=" * 60)
     print("🔥 STAGE 0: SMOKE TEST RESULTS")
     print("=" * 60)
-    
+
     total_failure = summary["total_failure"]
     error_rate = summary["overall_error_rate"]
-    
+
     if total_failure == 0 and error_rate == 0:
         print("✅ SMOKE TEST PASSED - All systems operational")
     else:
         print(f"❌ SMOKE TEST FAILED - Errors: {total_failure}, Rate: {error_rate}%")
         print("⚠️  Do not proceed with other stages until smoke test passes!")
-    
+
     print("=" * 60)

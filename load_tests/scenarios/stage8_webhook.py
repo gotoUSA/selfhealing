@@ -50,21 +50,21 @@ WEBHOOK_ENDPOINT = "/api/payments/webhook/toss/"
 class WebhookUser(HttpUser):
     """
     Webhook Reliability Test 사용자
-    
+
     PG Webhook 처리 신뢰성 테스트
     """
-    
+
     wait_time = between(1, 2)
-    
+
     def on_start(self):
         """테스트 시작 시 초기화"""
         setup_event_hooks(STAGE_NAME)
-        
+
         self.login_helper = LoginHelper(self.client, STAGE_NAME)
         self.product_helper = ProductHelper(self.client, STAGE_NAME)
         self.cart_helper = CartHelper(self.client, STAGE_NAME)
         self.payment_helper = PaymentHelper(self.client, STAGE_NAME)
-        
+
         self.product_helper.ensure_products_cached()
         self.login_helper.login()
 
@@ -73,28 +73,28 @@ class WebhookUser(HttpUser):
         product_ids = self.product_helper.cached_product_ids
         if not product_ids:
             return None
-        
+
         # 장바구니 준비
         self.cart_helper.clear_cart()
         self.cart_helper.add_item(random.choice(product_ids), 1)
-        
+
         if not self.cart_helper.has_items():
             return None
-        
+
         # 주문 생성
         order_data = self.payment_helper.create_order()
         if not order_data:
             return None
-        
+
         order_id = order_data.get("order_id")
         final_amount = order_data.get("final_amount")
-        
+
         if not order_id or not final_amount:
             return None
-        
+
         # 결제 승인
         payment_key = self.payment_helper.generate_payment_key("webhook")
-        
+
         response = self.client.post(
             "/api/payments/confirm/",
             json={
@@ -104,12 +104,12 @@ class WebhookUser(HttpUser):
             },
             name=f"{STAGE_NAME} POST /api/payments/confirm/",
         )
-        
+
         if response.status_code not in [200, 201]:
             return None
-        
+
         payment_data = response.json()
-        
+
         return {
             "payment_key": payment_key,
             "order_id": order_id,
@@ -134,27 +134,27 @@ class WebhookUser(HttpUser):
     def test_duplicate_webhook(self):
         """
         Webhook 중복 도착 테스트
-        
+
         같은 Webhook을 3번 전송해도 처리가 한 번만 되어야 함
         """
         global _webhook_stats
-        
+
         if not self.login_helper.ensure_logged_in():
             return
-        
+
         # 결제 완료
         payment_info = self._create_completed_payment()
         if not payment_info:
             return
-        
+
         # Webhook 페이로드
         payload = self._build_webhook_payload(payment_info, "DONE")
-        
+
         # 동일 Webhook 3회 전송
         success_count = 0
         for i in range(3):
             _webhook_stats["webhooks_sent"] += 1
-            
+
             with self.client.post(
                 WEBHOOK_ENDPOINT,
                 json=payload,
@@ -169,9 +169,9 @@ class WebhookUser(HttpUser):
                     response.success()
                 else:
                     response.failure(f"Webhook failed: {response.status_code}")
-            
+
             time.sleep(0.1)
-        
+
         # 첫 번째만 성공해야 함 (또는 모두 성공하되 처리는 1회)
         if success_count >= 1:
             _webhook_stats["duplicate_handled"] += 1
@@ -183,25 +183,25 @@ class WebhookUser(HttpUser):
     def test_webhook_order_reversal(self):
         """
         Webhook 순서 역전 테스트
-        
+
         실패 → 성공 순서로 Webhook이 도착하는 경우
         (네트워크 지연으로 인해 발생 가능)
         """
         global _webhook_stats
-        
+
         if not self.login_helper.ensure_logged_in():
             return
-        
+
         # 결제 완료
         payment_info = self._create_completed_payment()
         if not payment_info:
             return
-        
+
         _webhook_stats["order_reversal_tested"] += 1
-        
+
         # 1. 먼저 실패 Webhook 전송 (실제로는 나중에 온 것)
         fail_payload = self._build_webhook_payload(payment_info, "ABORTED")
-        
+
         with self.client.post(
             WEBHOOK_ENDPOINT,
             json=fail_payload,
@@ -211,12 +211,12 @@ class WebhookUser(HttpUser):
             _webhook_stats["webhooks_sent"] += 1
             # 상태 관계없이 기록
             response.success()
-        
+
         time.sleep(0.2)
-        
+
         # 2. 그 다음 성공 Webhook 전송 (실제로는 먼저 온 것)
         success_payload = self._build_webhook_payload(payment_info, "DONE")
-        
+
         with self.client.post(
             WEBHOOK_ENDPOINT,
             json=success_payload,
@@ -235,27 +235,27 @@ class WebhookUser(HttpUser):
     def test_delayed_webhook(self):
         """
         지연 Webhook 테스트
-        
+
         결제 완료 후 상당한 시간이 지난 후 Webhook 도착
         """
         global _webhook_stats
-        
+
         if not self.login_helper.ensure_logged_in():
             return
-        
+
         # 결제 완료
         payment_info = self._create_completed_payment()
         if not payment_info:
             return
-        
+
         _webhook_stats["delayed_webhook_tested"] += 1
-        
+
         # 지연 시뮬레이션 (실제로는 수 초만 대기)
         time.sleep(random.uniform(2, 5))
-        
+
         # 지연된 Webhook 전송
         payload = self._build_webhook_payload(payment_info, "DONE")
-        
+
         with self.client.post(
             WEBHOOK_ENDPOINT,
             json=payload,
@@ -273,25 +273,25 @@ class WebhookUser(HttpUser):
 def on_test_stop(environment, **kwargs):
     """테스트 종료 시 Webhook 테스트 결과"""
     global _webhook_stats
-    
+
     print("\n" + "=" * 60)
     print("🔔 STAGE 8: WEBHOOK RELIABILITY TEST RESULTS")
     print("=" * 60)
-    
+
     print(f"Total Webhooks Sent: {_webhook_stats['webhooks_sent']}")
     print(f"Duplicate Handled: {_webhook_stats['duplicate_handled']}")
     print(f"Duplicate Failed: {_webhook_stats['duplicate_failed']}")
     print(f"Order Reversal Tested: {_webhook_stats['order_reversal_tested']}")
     print(f"Delayed Webhook Tested: {_webhook_stats['delayed_webhook_tested']}")
-    
+
     total_tests = (
-        _webhook_stats['duplicate_handled'] + 
-        _webhook_stats['duplicate_failed'] +
-        _webhook_stats['order_reversal_tested'] +
-        _webhook_stats['delayed_webhook_tested']
+        _webhook_stats["duplicate_handled"]
+        + _webhook_stats["duplicate_failed"]
+        + _webhook_stats["order_reversal_tested"]
+        + _webhook_stats["delayed_webhook_tested"]
     )
-    
-    if _webhook_stats['duplicate_failed'] == 0:
+
+    if _webhook_stats["duplicate_failed"] == 0:
         print("\n✅ WEBHOOK RELIABILITY TEST PASSED")
         print("   Duplicate webhooks handled correctly")
         print("   Order reversal processed properly")
@@ -299,7 +299,7 @@ def on_test_stop(environment, **kwargs):
         print(f"\n⚠️  WEBHOOK RELIABILITY TEST WARNING")
         print(f"   {_webhook_stats['duplicate_failed']} duplicate handling failures")
         print("   Review webhook idempotency logic")
-    
+
     collector = get_metrics_collector()
     summary = collector.get_summary()
     print(f"\nTotal Requests: {summary['total_requests']}")

@@ -169,6 +169,10 @@ docker compose exec web python manage.py shell -c \
    print(f'테스트 유저: {User.objects.filter(username__startswith=\"load_test_user_\").count()}')"
 ```
 
+```# window
+docker compose exec web python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); print('Test Users:', User.objects.filter(username__startswith=\"load_test_user_\").count())"
+```
+
 ---
 
 ## 📈 결과 분석

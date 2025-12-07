@@ -20,6 +20,8 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -27,7 +29,14 @@ from drf_spectacular.views import (
 )
 
 
+def root_view(request):
+    """루트 경로 - API 문서로 리다이렉트"""
+    return redirect("swagger-ui")
+
+
 urlpatterns = [
+    # 루트 경로 (API 문서로 리다이렉트)
+    path("", root_view, name="root"),
     # 관리자 페이지
     path("admin/", admin.site.urls),
     # shopping 앱 URLs 포함

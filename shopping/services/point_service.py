@@ -271,9 +271,7 @@ class PointService:
 
         return max(0, remaining)
 
-    def _validate_point_usage(
-        self, amount: int, type: str, minimum_use_amount: int = 100
-    ) -> Optional[dict[str, Any]]:
+    def _validate_point_usage(self, amount: int, type: str, minimum_use_amount: int = 100) -> Optional[dict[str, Any]]:
         """
         포인트 사용 유효성 검증
 
@@ -301,9 +299,7 @@ class PointService:
 
         return None
 
-    def _update_earn_metadata(
-        self, point_history: PointHistory, use_amount: int
-    ) -> None:
+    def _update_earn_metadata(self, point_history: PointHistory, use_amount: int) -> None:
         """
         적립 포인트의 메타데이터 업데이트 (사용 기록 추가)
 
@@ -321,17 +317,13 @@ class PointService:
         # usage_history 업데이트
         if "usage_history" not in earn_metadata:
             earn_metadata["usage_history"] = []
-        earn_metadata["usage_history"].append(
-            {"amount": use_amount, "used_at": timezone.now().isoformat()}
-        )
+        earn_metadata["usage_history"].append({"amount": use_amount, "used_at": timezone.now().isoformat()})
 
         # 전체 metadata 재할당 (Django가 변경 감지하도록)
         point_history.metadata = earn_metadata
         point_history.save(update_fields=["metadata"])
 
-    def _log_fifo_performance(
-        self, user_pk: int, amount: int, elapsed: float, details_count: int
-    ) -> None:
+    def _log_fifo_performance(self, user_pk: int, amount: int, elapsed: float, details_count: int) -> None:
         """
         FIFO 포인트 사용 성능 로깅
 
@@ -475,9 +467,7 @@ class PointService:
             "message": f"{amount} 포인트를 사용했습니다.",
         }
 
-    def _consume_points_fifo(
-        self, user: AbstractBaseUser, amount: int, type: str
-    ) -> tuple[list[dict[str, Any]], int]:
+    def _consume_points_fifo(self, user: AbstractBaseUser, amount: int, type: str) -> tuple[list[dict[str, Any]], int]:
         """
         FIFO 방식으로 포인트 이력에서 실제 차감 수행
 
@@ -496,9 +486,7 @@ class PointService:
         if type == "cancel_deduct":
             query = query.filter(expires_at__gt=now)
 
-        available_points = query.exclude(metadata__contains={"expired": True}).order_by(
-            "expires_at", "created_at"
-        )
+        available_points = query.exclude(metadata__contains={"expired": True}).order_by("expires_at", "created_at")
 
         used_details = []
         remaining_to_use = amount

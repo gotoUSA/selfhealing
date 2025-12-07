@@ -37,10 +37,10 @@ class ProductHelper:
     def ensure_products_cached(self, pages: int = 2) -> bool:
         """
         상품 목록 캐싱 (최초 1회만 실행)
-        
+
         Args:
             pages: 조회할 페이지 수
-            
+
         Returns:
             캐싱 성공 여부
         """
@@ -54,20 +54,27 @@ class ProductHelper:
         request_name = f"{self.stage_name} [Setup] Fetch Products".strip()
 
         for page in range(1, pages + 1):
-            response = self.client.get(
+            with self.client.get(
                 f"{ENDPOINTS['products']}?page={page}",
                 name=request_name,
-            )
+                catch_response=True,
+            ) as response:
+                if response.status_code == 200:
+                    data = response.json()
+                    results = data.get("results", [])
 
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get("results", [])
-                
-                for product in results:
-                    product_id = product.get("id")
-                    if product_id and product_id not in ProductHelper._product_ids_cache:
-                        ProductHelper._product_ids_cache.append(product_id)
-                        ProductHelper._products_cache.append(product)
+                    for product in results:
+                        product_id = product.get("id")
+                        if product_id and product_id not in ProductHelper._product_ids_cache:
+                            ProductHelper._product_ids_cache.append(product_id)
+                            ProductHelper._products_cache.append(product)
+                    response.success()
+                elif response.status_code == 404:
+                    # 페이지가 존재하지 않으면 (상품 수가 적으면) 정상 처리
+                    response.success()
+                    break
+                else:
+                    response.failure(f"Unexpected status: {response.status_code}")
 
         ProductHelper._cache_initialized = bool(ProductHelper._product_ids_cache)
         return ProductHelper._cache_initialized
@@ -76,7 +83,7 @@ class ProductHelper:
         """랜덤 상품 ID 반환"""
         if not ProductHelper._product_ids_cache:
             self.ensure_products_cached()
-        
+
         if ProductHelper._product_ids_cache:
             return random.choice(ProductHelper._product_ids_cache)
         return None
@@ -85,13 +92,12 @@ class ProductHelper:
         """랜덤 상품 ID 목록 반환 (중복 가능)"""
         if not ProductHelper._product_ids_cache:
             self.ensure_products_cached()
-        
+
         if not ProductHelper._product_ids_cache:
             return []
-        
+
         return [
-            random.choice(ProductHelper._product_ids_cache)
-            for _ in range(min(count, len(ProductHelper._product_ids_cache)))
+            random.choice(ProductHelper._product_ids_cache) for _ in range(min(count, len(ProductHelper._product_ids_cache)))
         ]
 
     def get_product_detail(self, product_id: int) -> Optional[Dict[str, Any]]:

@@ -79,12 +79,12 @@ class OrderValidator:
     ) -> Dict[str, Any]:
         """
         주문 상태 전이 유효성 검증
-        
+
         Args:
             order_id: 주문 ID
             from_status: 이전 상태
             to_status: 현재 상태
-            
+
         Returns:
             검증 결과 딕셔너리
         """
@@ -102,8 +102,7 @@ class OrderValidator:
 
         if not is_valid:
             result["errors"].append(
-                f"Invalid state transition: {from_status} -> {to_status}. "
-                f"Valid transitions: {valid_next_states}"
+                f"Invalid state transition: {from_status} -> {to_status}. " f"Valid transitions: {valid_next_states}"
             )
 
         return result
@@ -115,11 +114,11 @@ class OrderValidator:
     ) -> Dict[str, Any]:
         """
         주문 아이템 검증
-        
+
         Args:
             order_id: 주문 ID
             expected_items: 예상 아이템 목록 [{"product_id": X, "quantity": Y}, ...]
-            
+
         Returns:
             검증 결과 딕셔너리
         """
@@ -132,7 +131,7 @@ class OrderValidator:
             }
 
         actual_items = order.get("items", order.get("order_items", []))
-        
+
         result = {
             "order_id": order_id,
             "expected_items": expected_items,
@@ -144,31 +143,27 @@ class OrderValidator:
         # 아이템 수 검증
         if len(actual_items) != len(expected_items):
             result["valid"] = False
-            result["errors"].append(
-                f"Item count mismatch: expected={len(expected_items)}, "
-                f"actual={len(actual_items)}"
-            )
+            result["errors"].append(f"Item count mismatch: expected={len(expected_items)}, " f"actual={len(actual_items)}")
 
         # 각 아이템 검증
         for expected in expected_items:
             expected_pid = expected.get("product_id")
             expected_qty = expected.get("quantity")
-            
+
             found = False
             for actual in actual_items:
                 actual_pid = actual.get("product_id", actual.get("product", {}).get("id"))
                 actual_qty = actual.get("quantity")
-                
+
                 if actual_pid == expected_pid:
                     found = True
                     if actual_qty != expected_qty:
                         result["valid"] = False
                         result["errors"].append(
-                            f"Quantity mismatch for product {expected_pid}: "
-                            f"expected={expected_qty}, actual={actual_qty}"
+                            f"Quantity mismatch for product {expected_pid}: " f"expected={expected_qty}, actual={actual_qty}"
                         )
                     break
-            
+
             if not found:
                 result["valid"] = False
                 result["errors"].append(f"Product {expected_pid} not found in order")
@@ -182,11 +177,11 @@ class OrderValidator:
     ) -> Dict[str, Any]:
         """
         주문 금액 검증
-        
+
         Args:
             order_id: 주문 ID
             expected_amount: 예상 금액
-            
+
         Returns:
             검증 결과 딕셔너리
         """
@@ -199,7 +194,7 @@ class OrderValidator:
             }
 
         actual_amount = order.get("final_amount", order.get("total_amount", 0))
-        
+
         result = {
             "order_id": order_id,
             "expected_amount": expected_amount,
@@ -209,9 +204,7 @@ class OrderValidator:
         }
 
         if not result["valid"]:
-            result["errors"].append(
-                f"Amount mismatch: expected={expected_amount}, actual={actual_amount}"
-            )
+            result["errors"].append(f"Amount mismatch: expected={expected_amount}, actual={actual_amount}")
 
         return result
 
@@ -222,16 +215,16 @@ class OrderValidator:
     ) -> Dict[str, Any]:
         """
         현재 주문 상태 검증
-        
+
         Args:
             order_id: 주문 ID
             expected_status: 예상 상태
-            
+
         Returns:
             검증 결과 딕셔너리
         """
         current_status = self.get_order_status(order_id)
-        
+
         if current_status is None:
             return {
                 "order_id": order_id,
@@ -248,8 +241,6 @@ class OrderValidator:
         }
 
         if not result["valid"]:
-            result["errors"].append(
-                f"Status mismatch: expected={expected_status}, actual={current_status}"
-            )
+            result["errors"].append(f"Status mismatch: expected={expected_status}, actual={current_status}")
 
         return result

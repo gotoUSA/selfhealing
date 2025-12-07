@@ -35,10 +35,10 @@ class LoginHelper:
     def login(self, user_index: Optional[int] = None) -> bool:
         """
         테스트 사용자로 로그인
-        
+
         Args:
             user_index: 특정 사용자 인덱스 (None이면 랜덤)
-            
+
         Returns:
             로그인 성공 여부
         """
@@ -49,7 +49,7 @@ class LoginHelper:
             user_index = random.randint(0, TEST_USER_COUNT - 1)
 
         self.username = f"{TEST_USER_PREFIX}{user_index}"
-        
+
         request_name = f"{self.stage_name} POST /api/auth/login/".strip()
 
         response = self.client.post(
@@ -68,11 +68,9 @@ class LoginHelper:
             self.access_token = token_data.get("access")
             self.refresh_token = token_data.get("refresh")
             self.user_id = data.get("user", {}).get("id")
-            
+
             if self.access_token:
-                self.client.headers.update({
-                    "Authorization": f"Bearer {self.access_token}"
-                })
+                self.client.headers.update({"Authorization": f"Bearer {self.access_token}"})
                 self.is_logged_in = True
                 return True
 
@@ -113,9 +111,7 @@ class LoginHelper:
             data = response.json()
             self.access_token = data.get("access")
             if self.access_token:
-                self.client.headers.update({
-                    "Authorization": f"Bearer {self.access_token}"
-                })
+                self.client.headers.update({"Authorization": f"Bearer {self.access_token}"})
                 return True
 
         return False

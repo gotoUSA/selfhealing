@@ -51,23 +51,23 @@ class CartHelper:
         return response.status_code in [200, 201]
 
     def add_random_items(
-        self, 
-        product_ids: List[int], 
-        min_items: int = 1, 
+        self,
+        product_ids: List[int],
+        min_items: int = 1,
         max_items: int = 3,
         min_quantity: int = 1,
         max_quantity: int = 2,
     ) -> int:
         """
         랜덤 상품들을 장바구니에 추가
-        
+
         Args:
             product_ids: 추가할 상품 ID 풀
             min_items: 최소 상품 종류 수
             max_items: 최대 상품 종류 수
             min_quantity: 최소 수량
             max_quantity: 최대 수량
-            
+
         Returns:
             추가된 상품 종류 수
         """
@@ -112,12 +112,29 @@ class CartHelper:
         """장바구니 비우기"""
         request_name = f"{self.stage_name} POST /api/cart/clear/".strip()
 
-        response = self.client.post(
+        with self.client.post(
             ENDPOINTS["cart_clear"],
+            json={"confirm": True},
             name=request_name,
-        )
-
-        return response.status_code in [200, 204]
+            catch_response=True,
+        ) as response:
+            if response.status_code in [200, 204]:
+                response.success()
+                return True
+            elif response.status_code == 400:
+                # 빈 장바구니 clear는 정상 케이스로 처리
+                try:
+                    data = response.json()
+                    if data.get("code") == "CART_EMPTY":
+                        response.success()
+                        return True
+                except Exception:
+                    pass
+                response.failure(f"Cart clear failed: {response.text[:100]}")
+                return False
+            else:
+                response.failure(f"Unexpected status: {response.status_code}")
+                return False
 
     def get_cart_summary(self) -> Optional[Dict[str, Any]]:
         """장바구니 요약 조회"""
@@ -138,14 +155,14 @@ class CartHelper:
         return bool(items)
 
     def prepare_cart_for_order(
-        self, 
+        self,
         product_ids: List[int],
         min_items: int = 1,
         max_items: int = 3,
     ) -> bool:
         """
         주문을 위한 장바구니 준비 (비우고 → 추가)
-        
+
         Returns:
             장바구니 준비 성공 여부
         """
@@ -154,8 +171,8 @@ class CartHelper:
 
         # 상품 추가
         added = self.add_random_items(
-            product_ids, 
-            min_items=min_items, 
+            product_ids,
+            min_items=min_items,
             max_items=max_items,
         )
 

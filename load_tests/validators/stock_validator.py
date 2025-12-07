@@ -52,26 +52,26 @@ class StockValidator:
         self._stock_snapshots.clear()
 
     def validate_no_oversell(
-        self, 
-        product_id: int, 
-        before: int, 
-        sold: int, 
+        self,
+        product_id: int,
+        before: int,
+        sold: int,
         after: int,
     ) -> Dict[str, Any]:
         """
         과잉 판매 검증
-        
+
         Args:
             product_id: 상품 ID
             before: 판매 전 재고
             sold: 판매 수량
             after: 판매 후 재고
-            
+
         Returns:
             검증 결과 딕셔너리
         """
         expected = before - sold
-        
+
         result = {
             "product_id": product_id,
             "before": before,
@@ -88,26 +88,24 @@ class StockValidator:
 
         if after != expected:
             result["valid"] = False
-            result["errors"].append(
-                f"Stock mismatch: expected={expected}, actual={after}"
-            )
+            result["errors"].append(f"Stock mismatch: expected={expected}, actual={after}")
 
         return result
 
     def validate_rollback(
-        self, 
-        product_id: int, 
-        before: int, 
+        self,
+        product_id: int,
+        before: int,
         after: int,
     ) -> Dict[str, Any]:
         """
         롤백 후 재고 복구 검증
-        
+
         Args:
             product_id: 상품 ID
             before: 롤백 전 재고 (원래 재고)
             after: 롤백 후 재고
-            
+
         Returns:
             검증 결과 딕셔너리
         """
@@ -120,9 +118,7 @@ class StockValidator:
         }
 
         if not result["valid"]:
-            result["errors"].append(
-                f"Rollback failed: before={before}, after={after}"
-            )
+            result["errors"].append(f"Rollback failed: before={before}, after={after}")
 
         return result
 
@@ -133,11 +129,11 @@ class StockValidator:
     ) -> Dict[str, Any]:
         """
         스냅샷 대비 재고 변화 검증
-        
+
         Args:
             product_id: 상품 ID
             expected_change: 예상 변화량 (음수: 감소, 양수: 증가)
-            
+
         Returns:
             검증 결과 딕셔너리
         """
@@ -158,7 +154,7 @@ class StockValidator:
             }
 
         expected_after = before + expected_change
-        
+
         result = {
             "product_id": product_id,
             "before": before,
@@ -171,9 +167,6 @@ class StockValidator:
         }
 
         if not result["valid"]:
-            result["errors"].append(
-                f"Stock change mismatch: expected={expected_change}, "
-                f"actual={result['actual_change']}"
-            )
+            result["errors"].append(f"Stock change mismatch: expected={expected_change}, " f"actual={result['actual_change']}")
 
         return result
