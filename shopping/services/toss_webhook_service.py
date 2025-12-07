@@ -237,25 +237,37 @@ class TossWebhookService:
             TossWebhookService.log_webhook_event(order_id, "PAYMENT.CANCELED")
             return
 
-        # 재고 복구 (paid 상태였던 경우만)
-        if order.status in ["paid", "preparing"]:
+        # 재고 복구 (재고가 차감된 상태들)
+        if order.status in ["paid", "preparing", "confirmed"]:
             for order_item in order.order_items.all():
                 if order_item.product:
-                    updated = Product.objects.filter(
-                        pk=order_item.product.pk,
-                        sold_count__gte=order_item.quantity,
-                    ).update(
-                        stock=F("stock") + order_item.quantity,
-                        sold_count=F("sold_count") - order_item.quantity,
-                    )
+                    if order.status in ["paid", "preparing"]:
+                        # paid/preparing: 재고 복구 + sold_count 차감
+                        updated = Product.objects.filter(
+                            pk=order_item.product.pk,
+                            sold_count__gte=order_item.quantity,
+                        ).update(
+                            stock=F("stock") + order_item.quantity,
+                            sold_count=F("sold_count") - order_item.quantity,
+                        )
 
-                    if updated == 0:
+                        if updated == 0:
+                            Product.objects.filter(pk=order_item.product.pk).update(
+                                stock=F("stock") + order_item.quantity,
+                                sold_count=0,
+                            )
+                            logger.warning(
+                                f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, "
+                                f"order_id={order.id}"
+                            )
+                    else:
+                        # confirmed: 재고만 복구 (sold_count는 아직 증가하지 않음)
                         Product.objects.filter(pk=order_item.product.pk).update(
                             stock=F("stock") + order_item.quantity,
-                            sold_count=0,
                         )
-                        logger.warning(
-                            f"sold_count 부족으로 0 설정: product_id={order_item.product.pk}, " f"order_id={order.id}"
+                        logger.info(
+                            f"confirmed 상태 재고 복구: product_id={order_item.product.pk}, "
+                            f"quantity={order_item.quantity}, order_id={order.id}"
                         )
 
         # 포인트 회수 (상태 변경 전)
@@ -292,9 +304,15 @@ class TossWebhookService:
         """
         결제 실패 이벤트 처리
 
+        결제 실패 시 롤백 처리:
+        1. Payment 상태를 aborted로 변경
+        2. 롤백 태스크 트리거 (재고 복구, 포인트 환불)
+
         Args:
             event_data: 토스페이먼츠 웹훅 이벤트 데이터
         """
+        from ..tasks.payment_tasks import rollback_payment_failure
+
         order_id = event_data.get("orderId")
         fail_reason = event_data.get("failReason", "")
 
@@ -316,6 +334,12 @@ class TossWebhookService:
 
         # Payment 실패 처리
         payment.mark_as_failed(fail_reason)
+
+        # 롤백 태스크 트리거 (재고 복구, 포인트 환불)
+        order = payment.order
+        if order.status in ["pending", "confirmed"]:
+            rollback_payment_failure.delay(order.id, fail_reason or "결제 실패 (웹훅)")
+            logger.info(f"Rollback task triggered for order: {order.id}")
 
         # 웹훅 로그
         PaymentLog.objects.create(

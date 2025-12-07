@@ -68,9 +68,9 @@ class TestPaymentFailedWebhook:
         assert self.payment.status == "aborted"
         assert self.payment.fail_reason == "카드 한도 초과"
 
-        # Assert - Order 상태는 변경되지 않음
+        # Assert - Order 상태가 payment_failed로 변경됨 (롤백 태스크 실행)
         self.order.refresh_from_db()
-        assert self.order.status == "pending"
+        assert self.order.status == "payment_failed"
 
         # Assert - PaymentLog 생성 확인
         log = PaymentLog.objects.filter(
@@ -186,10 +186,10 @@ class TestPaymentFailedWebhook:
         assert self.payment.status == "aborted"
         assert self.payment.fail_reason == "가상계좌 발급 실패"
 
-    def test_payment_failed_order_status_unchanged(
+    def test_payment_failed_triggers_rollback(
         self, mock_verify_webhook, webhook_data_builder, webhook_signature
     ):
-        """결제 실패 시 Order 상태는 변경되지 않음"""
+        """결제 실패 시 Order 상태가 payment_failed로 변경되고 롤백 실행됨"""
         # Arrange
         mock_verify_webhook()
 
@@ -216,14 +216,14 @@ class TestPaymentFailedWebhook:
         self.payment.refresh_from_db()
         assert self.payment.status == "aborted"
 
-        # Assert - Order 상태는 그대로 유지 (사용자가 재결제 가능)
+        # Assert - Order 상태가 payment_failed로 변경됨 (롤백 태스크 실행)
         self.order.refresh_from_db()
-        assert self.order.status == "pending"
+        assert self.order.status == "payment_failed"
 
-    def test_payment_failed_no_stock_change(
+    def test_payment_failed_restores_stock(
         self, mock_verify_webhook, webhook_data_builder, webhook_signature
     ):
-        """결제 실패 시 재고는 변경되지 않음"""
+        """결제 실패 시 재고가 복구됨 (롤백 태스크 실행)"""
         # Arrange
         mock_verify_webhook()
 
@@ -247,10 +247,10 @@ class TestPaymentFailedWebhook:
         # Assert
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert - 재고는 변경되지 않음 (결제 전 실패)
+        # Assert - 재고가 복구됨 (롤백 태스크에서 stock 증가)
         self.product.refresh_from_db()
-        assert self.product.stock == initial_stock
-        assert self.product.sold_count == initial_sold_count
+        assert self.product.stock == initial_stock + 1  # 롤백으로 재고 복구
+        assert self.product.sold_count == initial_sold_count  # sold_count는 결제 전이므로 변경 없음
 
     def test_payment_failed_no_point_change(
         self, mock_verify_webhook, webhook_data_builder, webhook_signature
