@@ -322,7 +322,6 @@ class TestPaymentConfirmBoundary:
         user.refresh_from_db()
         assert user.points == 37000  # 50000 - 13000
 
-
         # Assert - 적립 이력 없음
         earn_history = PointHistory.objects.filter(
             user=user,

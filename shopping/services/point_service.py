@@ -271,6 +271,89 @@ class PointService:
 
         return max(0, remaining)
 
+    def _validate_point_usage(
+        self, amount: int, type: str, minimum_use_amount: int = 100
+    ) -> Optional[dict[str, Any]]:
+        """
+        포인트 사용 유효성 검증
+
+        Args:
+            amount: 사용할 포인트
+            type: 포인트 타입
+            minimum_use_amount: 최소 사용 금액
+
+        Returns:
+            에러가 있으면 에러 응답 dict, 없으면 None
+        """
+        if amount <= 0:
+            return {
+                "success": False,
+                "used_details": [],
+                "message": "사용할 포인트는 0보다 커야 합니다.",
+            }
+
+        if type == "use" and amount < minimum_use_amount:
+            return {
+                "success": False,
+                "used_details": [],
+                "message": f"포인트는 최소 {minimum_use_amount}포인트 이상 사용 가능합니다.",
+            }
+
+        return None
+
+    def _update_earn_metadata(
+        self, point_history: PointHistory, use_amount: int
+    ) -> None:
+        """
+        적립 포인트의 메타데이터 업데이트 (사용 기록 추가)
+
+        Args:
+            point_history: 적립 포인트 이력
+            use_amount: 사용할 포인트
+        """
+        # JSONField는 in-place 수정이 save()에서 감지되지 않을 수 있으므로
+        # 전체 dict를 복사하고 재할당해야 함
+        earn_metadata = point_history.metadata.copy() if point_history.metadata else {}
+
+        # used_amount 업데이트
+        earn_metadata["used_amount"] = earn_metadata.get("used_amount", 0) + use_amount
+
+        # usage_history 업데이트
+        if "usage_history" not in earn_metadata:
+            earn_metadata["usage_history"] = []
+        earn_metadata["usage_history"].append(
+            {"amount": use_amount, "used_at": timezone.now().isoformat()}
+        )
+
+        # 전체 metadata 재할당 (Django가 변경 감지하도록)
+        point_history.metadata = earn_metadata
+        point_history.save(update_fields=["metadata"])
+
+    def _log_fifo_performance(
+        self, user_pk: int, amount: int, elapsed: float, details_count: int
+    ) -> None:
+        """
+        FIFO 포인트 사용 성능 로깅
+
+        Args:
+            user_pk: 사용자 PK
+            amount: 사용 포인트
+            elapsed: 경과 시간
+            details_count: 처리된 이력 수
+        """
+        if elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
+            logger.error(
+                f"포인트 FIFO 사용 심각한 지연: user_id={user_pk}, amount={amount}, "
+                f"elapsed={elapsed:.2f}s, histories_processed={details_count}, "
+                f"possible_deadlock=True"
+            )
+        elif elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
+            logger.warning(
+                f"포인트 FIFO 사용 지연: user_id={user_pk}, amount={amount}, "
+                f"elapsed={elapsed:.2f}s, histories_processed={details_count}, "
+                f"possible_lock_contention=True"
+            )
+
     def get_usable_points(self, user: AbstractBaseUser, for_cancel: bool = True) -> int:
         """
         원장(PointHistory) 기준으로 실제 사용 가능한 포인트 계산
@@ -329,24 +412,12 @@ class PointService:
             }
         """
         start_time = time.time()
-
-        # 최소 포인트 사용 정책 (100포인트 미만 사용 불가)
         MINIMUM_USE_AMOUNT = 100
 
-        if amount <= 0:
-            return {
-                "success": False,
-                "used_details": [],
-                "message": "사용할 포인트는 0보다 커야 합니다.",
-            }
-
-        # 최소 사용 금액 검증 (일반 사용일 때만)
-        if type == "use" and amount < MINIMUM_USE_AMOUNT:
-            return {
-                "success": False,
-                "used_details": [],
-                "message": f"포인트는 최소 {MINIMUM_USE_AMOUNT}포인트 이상 사용 가능합니다.",
-            }
+        # 유효성 검증
+        validation_error = self._validate_point_usage(amount, type, MINIMUM_USE_AMOUNT)
+        if validation_error:
+            return validation_error
 
         # 동시성 제어: select_for_update로 락 획득
         lock_start_time = time.time()
@@ -366,65 +437,10 @@ class PointService:
                 "message": "포인트가 부족합니다.",
             }
 
-        # 사용 가능한 포인트 조회
-        # cancel_deduct (취소 회수)의 경우: 만료되지 않은 적립 포인트만
-        # use (일반 사용)의 경우: 모든 적립 포인트 (user.points 잔액 기반)
-        now = timezone.now()
-        query = PointHistory.objects.select_for_update().filter(user=user, type="earn")
+        # FIFO 방식 포인트 차감 수행
+        used_details, remaining_to_use = self._consume_points_fifo(user, amount, type)
 
-        # 취소 회수는 만료되지 않은 포인트만 회수 가능
-        if type == "cancel_deduct":
-            query = query.filter(expires_at__gt=now)
-
-        available_points = query.exclude(metadata__contains={"expired": True}).order_by("expires_at", "created_at")
-
-        used_details = []
-        remaining_to_use = amount
-
-        for point_history in available_points:
-            if remaining_to_use <= 0:
-                break
-
-            # 이 적립 건에서 사용 가능한 포인트
-            available = self.get_remaining_points(point_history)
-
-            if available <= 0:
-                continue
-
-            # 사용할 포인트 계산
-            use_from_this = min(available, remaining_to_use)
-
-            # 메타데이터 업데이트
-            # JSONField는 in-place 수정이 save()에서 감지되지 않을 수 있으므로
-            # 전체 dict를 복사하고 재할당해야 함
-            earn_metadata = point_history.metadata.copy() if point_history.metadata else {}
-
-            # used_amount 업데이트
-            earn_metadata["used_amount"] = earn_metadata.get("used_amount", 0) + use_from_this
-
-            # usage_history 업데이트
-            if "usage_history" not in earn_metadata:
-                earn_metadata["usage_history"] = []
-            earn_metadata["usage_history"].append({"amount": use_from_this, "used_at": timezone.now().isoformat()})
-
-            # 전체 metadata 재할당 (Django가 변경 감지하도록)
-            point_history.metadata = earn_metadata
-            point_history.save(update_fields=["metadata"])
-
-            used_details.append(
-                {
-                    "history_id": point_history.id,
-                    "amount": use_from_this,
-                    "expires_at": point_history.expires_at.isoformat(),
-                }
-            )
-
-            remaining_to_use -= use_from_this
-
-        # FIFO 루프 후 검증 (cancel_deduct만 해당)
-        # 취소 회수 시에는 만료되지 않은 포인트만 대상이므로,
-        # 만료된 포인트가 user.points에 포함되어 있지만 배치 미실행 시 부족할 수 있음
-        # 일반 사용(use)은 user.points 잔액 기반이므로 검증 불필요
+        # FIFO 차감 후 검증 (cancel_deduct만 해당)
         if type == "cancel_deduct" and remaining_to_use > 0:
             return {
                 "success": False,
@@ -434,8 +450,6 @@ class PointService:
 
         # F() 객체로 안전하게 포인트 차감
         User.objects.filter(pk=user.pk).update(points=F("points") - amount)
-
-        # F() 객체로 업데이트 후 최신 값 가져오기
         user.refresh_from_db()
 
         # 사용 이력 생성
@@ -453,26 +467,66 @@ class PointService:
         )
 
         total_elapsed = time.time() - start_time
-
-        # 동시성 모니터링: 전체 처리 시간 체크
-        if total_elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
-            logger.error(
-                f"포인트 FIFO 사용 심각한 지연: user_id={user.pk}, amount={amount}, "
-                f"elapsed={total_elapsed:.2f}s, histories_processed={len(used_details)}, "
-                f"possible_deadlock=True"
-            )
-        elif total_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
-            logger.warning(
-                f"포인트 FIFO 사용 지연: user_id={user.pk}, amount={amount}, "
-                f"elapsed={total_elapsed:.2f}s, histories_processed={len(used_details)}, "
-                f"possible_lock_contention=True"
-            )
+        self._log_fifo_performance(user.pk, amount, total_elapsed, len(used_details))
 
         return {
             "success": True,
             "used_details": used_details,
             "message": f"{amount} 포인트를 사용했습니다.",
         }
+
+    def _consume_points_fifo(
+        self, user: AbstractBaseUser, amount: int, type: str
+    ) -> tuple[list[dict[str, Any]], int]:
+        """
+        FIFO 방식으로 포인트 이력에서 실제 차감 수행
+
+        Args:
+            user: 사용자
+            amount: 사용할 포인트
+            type: 포인트 타입
+
+        Returns:
+            (used_details, remaining_to_use) 튜플
+        """
+        now = timezone.now()
+        query = PointHistory.objects.select_for_update().filter(user=user, type="earn")
+
+        # 취소 회수는 만료되지 않은 포인트만 회수 가능
+        if type == "cancel_deduct":
+            query = query.filter(expires_at__gt=now)
+
+        available_points = query.exclude(metadata__contains={"expired": True}).order_by(
+            "expires_at", "created_at"
+        )
+
+        used_details = []
+        remaining_to_use = amount
+
+        for point_history in available_points:
+            if remaining_to_use <= 0:
+                break
+
+            available = self.get_remaining_points(point_history)
+            if available <= 0:
+                continue
+
+            use_from_this = min(available, remaining_to_use)
+
+            # 메타데이터 업데이트
+            self._update_earn_metadata(point_history, use_from_this)
+
+            used_details.append(
+                {
+                    "history_id": point_history.id,
+                    "amount": use_from_this,
+                    "expires_at": point_history.expires_at.isoformat(),
+                }
+            )
+
+            remaining_to_use -= use_from_this
+
+        return used_details, remaining_to_use
 
     def send_expiry_notifications(self) -> int:
         """

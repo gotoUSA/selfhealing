@@ -211,7 +211,6 @@ class PaymentRequestView(EmailVerificationRequiredMixin, APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class PaymentConfirmView(EmailVerificationRequiredMixin, APIView):
     """
     결제 승인 API

@@ -225,7 +225,6 @@ class TestOrderPaymentIntegration:
         order.refresh_from_db()
         assert order.status == "paid"
 
-
     def test_payment_amount_matches_order_final_amount(
         self,
         authenticated_client,

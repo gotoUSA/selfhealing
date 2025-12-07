@@ -637,15 +637,11 @@ class PaymentService:
 
         # 1. 주문 상태 확인
         if order.status != "confirmed":
-            raise PaymentConfirmError(
-                f"주문 처리가 완료되지 않았습니다. (현재 상태: {order.get_status_display()})"
-            )
+            raise PaymentConfirmError(f"주문 처리가 완료되지 않았습니다. (현재 상태: {order.get_status_display()})")
 
         # 2. 포인트 전액 결제인지 확인
         if order.final_amount != 0:
-            raise PaymentConfirmError(
-                f"포인트 전액 결제가 아닙니다. 결제 금액: {order.final_amount}원"
-            )
+            raise PaymentConfirmError(f"포인트 전액 결제가 아닙니다. 결제 금액: {order.final_amount}원")
 
         # 3. 동시성 제어: Order를 락으로 보호
         order = Order.objects.select_for_update().get(pk=order.pk)
@@ -658,7 +654,7 @@ class PaymentService:
                 "amount": 0,
                 "method": "points",
                 "status": "ready",
-            }
+            },
         )
 
         if payment.is_paid:
@@ -678,8 +674,7 @@ class PaymentService:
                     sold_count=F("sold_count") + order_item.quantity,
                 )
                 logger.info(
-                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, "
-                    f"quantity={order_item.quantity}"
+                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, " f"quantity={order_item.quantity}"
                 )
 
         # 7. 주문 상태 변경
@@ -705,8 +700,7 @@ class PaymentService:
         )
 
         logger.info(
-            f"포인트 전액 결제 완료: payment_id={payment.id}, order_id={order.id}, "
-            f"used_points={order.used_points}"
+            f"포인트 전액 결제 완료: payment_id={payment.id}, order_id={order.id}, " f"used_points={order.used_points}"
         )
 
         return {
@@ -742,31 +736,33 @@ class PaymentService:
 
             # 상품 활성화 상태 확인
             if not product.is_active:
-                issues.append({
-                    "order_item_id": order_item.id,
-                    "product_id": product.id,
-                    "product_name": product.name,
-                    "issue_type": "inactive",
-                    "message": f"'{product.name}' 상품이 판매 중단되었습니다.",
-                    "requested": order_item.quantity,
-                    "available": 0,
-                })
+                issues.append(
+                    {
+                        "order_item_id": order_item.id,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "issue_type": "inactive",
+                        "message": f"'{product.name}' 상품이 판매 중단되었습니다.",
+                        "requested": order_item.quantity,
+                        "available": 0,
+                    }
+                )
             # 재고 확인 (주문 생성 시 이미 차감되었으므로 현재 재고가 음수가 아닌지 확인)
             elif product.stock < 0:
-                issues.append({
-                    "order_item_id": order_item.id,
-                    "product_id": product.id,
-                    "product_name": product.name,
-                    "issue_type": "oversold",
-                    "message": f"'{product.name}' 상품의 재고가 부족합니다.",
-                    "requested": order_item.quantity,
-                    "available": max(0, product.stock + order_item.quantity),
-                })
+                issues.append(
+                    {
+                        "order_item_id": order_item.id,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "issue_type": "oversold",
+                        "message": f"'{product.name}' 상품의 재고가 부족합니다.",
+                        "requested": order_item.quantity,
+                        "available": max(0, product.stock + order_item.quantity),
+                    }
+                )
 
         if issues:
-            logger.warning(
-                f"주문 재고 검증 실패: order_id={order.id}, issues={len(issues)}"
-            )
+            logger.warning(f"주문 재고 검증 실패: order_id={order.id}, issues={len(issues)}")
             return {
                 "is_valid": False,
                 "issues": issues,
@@ -778,4 +774,3 @@ class PaymentService:
             "issues": [],
             "message": "모든 상품의 재고가 확인되었습니다.",
         }
-

@@ -133,7 +133,6 @@ class TestPaymentValidationNormalCase:
         assert payment.amount == Decimal("0")
         assert payment.status == "done"
 
-
     def test_partial_points_usage(
         self,
         authenticated_client,
@@ -389,7 +388,6 @@ class TestPaymentValidationBoundary:
         assert order.final_amount == Decimal("0")  # 10000 + 3000 - 13000
         assert payment.amount == Decimal("0")
         assert payment.status == "done"
-
 
 
 @pytest.mark.django_db
