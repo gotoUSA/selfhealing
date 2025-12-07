@@ -70,6 +70,38 @@ class PaymentHelper:
         random_suffix = random.randint(1, 999999)
         return f"{prefix}_{timestamp}_{random_suffix}"
 
+    def request_payment(
+        self,
+        order_id: int,
+        payment_method: str = "카드",
+    ) -> Tuple[int, Optional[Dict[str, Any]]]:
+        """
+        결제 요청 (Payment 객체 생성)
+
+        토스페이먼츠 결제창을 열기 전에 호출해야 합니다.
+        이 단계에서 Payment 객체가 생성됩니다.
+
+        Args:
+            order_id: 주문 ID
+            payment_method: 결제 수단 (기본: 카드)
+
+        Returns:
+            (status_code, response_data) 튜플
+            성공 시 response_data에 payment_id, amount 등이 포함됨
+        """
+        request_name = f"{self.stage_name} POST /api/payments/request/".strip()
+
+        response = self.client.post(
+            ENDPOINTS["payment_request"],
+            json={
+                "order_id": order_id,
+                "payment_method": payment_method,
+            },
+            name=request_name,
+        )
+
+        return response.status_code, self._safe_json(response)
+
     def confirm_payment(
         self,
         payment_key: str,
