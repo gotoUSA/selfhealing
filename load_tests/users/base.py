@@ -100,7 +100,8 @@ class BaseUser(HttpUser):
         ) as response:
             if response.status_code == 200:
                 data = response.json()
-                self.access_token = data.get("access")
+                # 로그인 응답: {"token": {"access": "..."}, "user": {...}}
+                self.access_token = data.get("token", {}).get("access")
                 self.user_id = data.get("user", {}).get("id")
 
                 # Authorization 헤더 설정

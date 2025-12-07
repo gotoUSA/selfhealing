@@ -1,0 +1,172 @@
+# Load Test Runner Configuration
+# ===============================
+# Stage별 테스트 설정 및 실행 프로파일 정의
+
+stages:
+  stage0_smoke:
+    file: scenarios/stage0_smoke.py
+    users: 5
+    spawn_rate: 5
+    duration: "30s"
+    tags: ["smoke", "baseline"]
+    required: true  # 실패 시 후속 Stage 중단
+    description: "환경/로그인/기본 플로우 정상 확인"
+
+  stage1_happy:
+    file: scenarios/stage1_happy_load.py
+    users: 100
+    spawn_rate: 20
+    duration: "3m"
+    tags: ["load", "performance"]
+    description: "정상 성능 측정 (Baseline)"
+
+  stage2_idempotent:
+    file: scenarios/stage2_idempotent.py
+    users: 30
+    spawn_rate: 10
+    duration: "2m"
+    tags: ["idempotency", "critical"]
+    description: "중복 결제 방지 검증"
+
+  stage3_latency:
+    file: scenarios/stage3_latency.py
+    users: 50
+    spawn_rate: 10
+    duration: "3m"
+    tags: ["chaos", "latency"]
+    env:
+      CHAOS_ENABLED: "true"
+      CHAOS_LATENCY_MIN_MS: "500"
+      CHAOS_LATENCY_MAX_MS: "3000"
+    description: "PG 지연/timeout 시뮬레이션"
+
+  stage4_cancel:
+    file: scenarios/stage4_cancel_storm.py
+    users: 50
+    spawn_rate: 20
+    duration: "2m"
+    tags: ["cancel", "stress"]
+    description: "결제 직후 취소 폭주"
+
+  stage5_rollback:
+    file: scenarios/stage5_rollback.py
+    users: 30
+    spawn_rate: 10
+    duration: "3m"
+    tags: ["rollback", "validation"]
+    description: "재고/포인트 복구 검증"
+
+  stage6_chaos:
+    file: scenarios/stage6_chaos_random.py
+    users: 100
+    spawn_rate: 20
+    duration: "5m"
+    tags: ["chaos", "random"]
+    env:
+      CHAOS_ENABLED: "true"
+      CHAOS_PROBABILITY: "0.10"
+    description: "3~15% 랜덤 실패"
+
+  stage7_race:
+    file: scenarios/stage7_race_conflict.py
+    users: 50
+    spawn_rate: 50  # 빠른 spawn으로 동시성 극대화
+    duration: "2m"
+    tags: ["race", "concurrency"]
+    description: "동일 order 동시 결제"
+
+  stage8_webhook:
+    file: scenarios/stage8_webhook.py
+    users: 30
+    spawn_rate: 10
+    duration: "3m"
+    tags: ["webhook", "reliability"]
+    description: "Webhook 중복/순서역전/지연"
+
+  stage9_soak:
+    file: scenarios/stage9_soak.py
+    users: 100
+    spawn_rate: 10
+    duration: "30m"
+    tags: ["soak", "endurance"]
+    optional: true  # CI에서는 스킵 가능
+    description: "메모리 누수, 커넥션 풀 고갈 탐지"
+
+# 실행 프로파일
+profiles:
+  smoke:
+    stages:
+      - stage0_smoke
+    description: "기본 환경 확인만"
+
+  quick:
+    stages:
+      - stage0_smoke
+      - stage1_happy
+      - stage2_idempotent
+    description: "빠른 검증 (약 5분)"
+
+  standard:
+    stages:
+      - stage0_smoke
+      - stage1_happy
+      - stage2_idempotent
+      - stage3_latency
+      - stage4_cancel
+      - stage5_rollback
+    description: "표준 테스트 (약 15분)"
+
+  full:
+    stages:
+      - stage0_smoke
+      - stage1_happy
+      - stage2_idempotent
+      - stage3_latency
+      - stage4_cancel
+      - stage5_rollback
+      - stage6_chaos
+      - stage7_race
+    description: "전체 테스트 (Soak 제외, 약 25분)"
+
+  chaos:
+    stages:
+      - stage6_chaos
+      - stage7_race
+    description: "카오스 테스트만"
+
+  critical:
+    stages:
+      - stage0_smoke
+      - stage2_idempotent
+      - stage5_rollback
+      - stage7_race
+    description: "데이터 무결성 테스트만"
+
+  all:
+    stages:
+      - stage0_smoke
+      - stage1_happy
+      - stage2_idempotent
+      - stage3_latency
+      - stage4_cancel
+      - stage5_rollback
+      - stage6_chaos
+      - stage7_race
+      - stage8_webhook
+      - stage9_soak
+    description: "전체 테스트 (Soak 포함)"
+
+# 공통 설정
+defaults:
+  host: "http://localhost:8000"
+  docker_host: "http://web:8000"
+  html_report: true
+  csv_report: false
+  report_dir: "reports"
+  headless: true
+
+# 스케일링 테스트 설정
+scaling:
+  stage1_happy:
+    user_levels: [50, 100, 200, 300]
+    duration_per_level: "2m"

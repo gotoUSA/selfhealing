@@ -72,12 +72,12 @@ class BuyerUser(BaseUser):
 
         # 2. 장바구니 추가
         with self.client.post(
-            ENDPOINTS["cart_items"],
+            ENDPOINTS["cart_add_item"],
             json={
                 "product_id": product_id,
                 "quantity": random.randint(1, 2),
             },
-            name="POST /api/cart-items/",
+            name="POST /api/cart/add_item/",
             catch_response=True,
         ) as response:
             if response.status_code not in [200, 201]:
@@ -90,7 +90,7 @@ class BuyerUser(BaseUser):
             return
 
         # 3. 장바구니 확인
-        with self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/", catch_response=True) as response:
+        with self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart/items/", catch_response=True) as response:
             if response.status_code != 200:
                 response.failure(f"Get cart failed: {response.status_code}")
                 return

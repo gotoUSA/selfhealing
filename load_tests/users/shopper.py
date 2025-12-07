@@ -65,12 +65,12 @@ class ShopperUser(BaseUser):
         )
 
         self.client.post(
-            ENDPOINTS["cart_items"],
+            ENDPOINTS["cart_add_item"],
             json={
                 "product_id": product_id,
                 "quantity": random.randint(1, 3),
             },
-            name="POST /api/cart-items/",
+            name="POST /api/cart/add_item/",
         )
 
     @task(3)
@@ -82,7 +82,7 @@ class ShopperUser(BaseUser):
 
         self.client.get(
             ENDPOINTS["cart_items"],
-            name="GET /api/cart-items/",
+            name="GET /api/cart/items/",
         )
 
     @task(2)
@@ -92,7 +92,7 @@ class ShopperUser(BaseUser):
         if not self.ensure_logged_in():
             return
 
-        with self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/", catch_response=True) as response:
+        with self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart/items/", catch_response=True) as response:
             if response.status_code != 200:
                 response.failure(f"Failed to get cart: {response.status_code}")
                 return
@@ -109,15 +109,14 @@ class ShopperUser(BaseUser):
             if not item_id:
                 return
 
-            # 50% 삭제, 50% 수량 변경
             if random.random() < 0.5:
                 self.client.delete(
                     ENDPOINTS["cart_item_detail"].format(id=item_id),
-                    name="DELETE /api/cart-items/{id}/",
+                    name="DELETE /api/cart/items/{id}/",
                 )
             else:
-                self.client.put(
+                self.client.patch(
                     ENDPOINTS["cart_item_detail"].format(id=item_id),
                     json={"quantity": random.randint(1, 5)},
-                    name="PUT /api/cart-items/{id}/",
+                    name="PATCH /api/cart/items/{id}/",
                 )

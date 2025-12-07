@@ -134,7 +134,9 @@ class ConcurrentOrderUser(HttpUser):
         )
 
         if response.status_code == 200:
-            self.access_token = response.json().get("access")
+            data = response.json()
+            # 로그인 응답: {"token": {"access": "..."}, "user": {...}}
+            self.access_token = data.get("token", {}).get("access")
             self.client.headers.update({"Authorization": f"Bearer {self.access_token}"})
             self.is_logged_in = True
 
@@ -158,12 +160,12 @@ class ConcurrentOrderUser(HttpUser):
 
         # 1. 장바구니에 추가
         cart_response = self.client.post(
-            ENDPOINTS["cart_items"],
+            ENDPOINTS["cart_add_item"],
             json={
                 "product_id": target_product_id,
                 "quantity": 1,  # 재고 테스트를 위해 1개씩
             },
-            name="POST /api/cart-items/ [race]",
+            name="POST /api/cart/add_item/ [race]",
         )
 
         if cart_response.status_code not in [200, 201]:
@@ -172,7 +174,7 @@ class ConcurrentOrderUser(HttpUser):
         # 2. 장바구니 확인
         check_response = self.client.get(
             ENDPOINTS["cart_items"],
-            name="GET /api/cart-items/ [race]",
+            name="GET /api/cart/items/ [race]",
         )
 
         if check_response.status_code != 200 or not check_response.json():

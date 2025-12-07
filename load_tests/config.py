@@ -15,7 +15,9 @@ HOST = os.getenv("LOCUST_HOST", "http://localhost:8000")
 # =============================================================================
 # 테스트 사용자 설정
 # =============================================================================
-# 테스트 유저 범위 (load_test_user_0 ~ load_test_user_999)
+# 테스트 유저 범위 (load_test_user_0 ~ load_test_user_99)
+# 주의: 실제 생성된 유저 수에 맞게 설정해야 함
+# 유저 생성: python manage.py create_load_test_users --count=100
 TEST_USER_COUNT = 1000
 TEST_USER_PREFIX = "load_test_user_"
 TEST_USER_PASSWORD = "testpass123"
@@ -43,18 +45,30 @@ WAIT_TIME_MAX = 5
 ENDPOINTS = {
     # 인증
     "login": "/api/auth/login/",
+    "logout": "/api/auth/logout/",
+    "token_refresh": "/api/auth/token/refresh/",
     # 상품
     "products": "/api/products/",
     "product_detail": "/api/products/{id}/",
     "categories": "/api/categories/",
-    # 장바구니
-    "cart_items": "/api/cart-items/",
-    "cart_item_detail": "/api/cart-items/{id}/",
+    # 장바구니 (새로운 API 구조)
+    "cart": "/api/cart/",
+    "cart_add_item": "/api/cart/add_item/",
+    "cart_items": "/api/cart/items/",
+    "cart_item_detail": "/api/cart/items/{id}/",
+    "cart_clear": "/api/cart/clear/",
+    "cart_summary": "/api/cart/summary/",
+    # 레거시 장바구니 (CartItemViewSet - 아직 존재함)
+    "cart_items_legacy": "/api/cart-items/",
     # 주문
     "orders": "/api/orders/",
     "order_detail": "/api/orders/{id}/",
     # 결제
+    "payment_request": "/api/payments/request/",
     "payment_confirm": "/api/payments/confirm/",
+    "payment_cancel": "/api/payments/cancel/",
+    "payment_list": "/api/payments/",
+    "payment_detail": "/api/payments/{id}/",
 }
 
 # =============================================================================

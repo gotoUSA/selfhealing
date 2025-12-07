@@ -1,5 +1,5 @@
 """
-레 스트레스 테스트 (Payment Stress Test)
+결제 스트레스 테스트 (Payment Stress Test)
 
 목적: 결제 API의 성능과 안정성 검증
 - PG 연동 응답시간
@@ -92,7 +92,9 @@ class PaymentStressUser(HttpUser):
         )
 
         if response.status_code == 200:
-            self.access_token = response.json().get("access")
+            data = response.json()
+            # 로그인 응답: {"token": {"access": "..."}, "user": {...}}
+            self.access_token = data.get("token", {}).get("access")
             self.client.headers.update({"Authorization": f"Bearer {self.access_token}"})
             self.is_logged_in = True
 
@@ -107,20 +109,20 @@ class PaymentStressUser(HttpUser):
             return
 
         # 1. 장바구니 비우기 (깨끗한 상태에서 시작)
-        self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/")
+        self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart/items/")
 
         # 2. 여러 상품 장바구니 추가 (1~3개)
         num_items = random.randint(1, 3)
         for _ in range(num_items):
             product_id = random.choice(PaymentStressUser._product_ids_cache)
             self.client.post(
-                ENDPOINTS["cart_items"],
+                ENDPOINTS["cart_add_item"],
                 json={"product_id": product_id, "quantity": random.randint(1, 2)},
-                name="POST /api/cart-items/",
+                name="POST /api/cart/add_item/",
             )
 
         # 3. 장바구니 확인
-        cart_response = self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/")
+        cart_response = self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart/items/")
         if cart_response.status_code != 200 or not cart_response.json():
             return
 
@@ -185,12 +187,12 @@ class PaymentStressUser(HttpUser):
         # 장바구니 → 주문 생성
         product_id = random.choice(PaymentStressUser._product_ids_cache)
         self.client.post(
-            ENDPOINTS["cart_items"],
+            ENDPOINTS["cart_add_item"],
             json={"product_id": product_id, "quantity": 1},
-            name="POST /api/cart-items/",
+            name="POST /api/cart/add_item/",
         )
 
-        cart_response = self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart-items/")
+        cart_response = self.client.get(ENDPOINTS["cart_items"], name="GET /api/cart/items/")
         if cart_response.status_code != 200 or not cart_response.json():
             return
 
