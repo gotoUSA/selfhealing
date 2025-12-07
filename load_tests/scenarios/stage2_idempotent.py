@@ -218,6 +218,103 @@ class IdempotencyUser(HttpUser):
             else:
                 response.success()  # 기타 에러는 허용
 
+    @task(1)
+    @tag("idempotency", "payload-tampering")
+    def test_payload_tampering(self):
+        """
+        Payload 변조 테스트 (공격 시나리오)
+
+        같은 payment_key로 금액을 변조하여 요청하는 경우
+        - 1st: 정상 금액으로 결제 시도
+        - 2nd: 같은 key + 다른 금액 → 반드시 거부되어야 함
+
+        이 테스트가 실패하면 금액 조작 공격에 취약함
+        """
+        global _duplicate_payment_success_count
+
+        if not self.login_helper.ensure_logged_in():
+            return
+
+        product_ids = self.product_helper.cached_product_ids
+        if not product_ids:
+            return
+
+        # 장바구니 준비
+        self.cart_helper.clear_cart()
+        product_id = random.choice(product_ids)
+        self.cart_helper.add_item(product_id, 1)
+
+        if not self.cart_helper.has_items():
+            return
+
+        # 주문 생성
+        order_data = self.payment_helper.create_order(
+            shipping_name="Tampering Test",
+            shipping_phone="010-0000-0000",
+            shipping_postal_code="00000",
+            shipping_address="Test",
+            shipping_address_detail="Test",
+        )
+
+        if not order_data:
+            return
+
+        order_id = order_data.get("order_id")
+        final_amount = order_data.get("final_amount")
+
+        if not order_id or not final_amount:
+            return
+
+        payment_key = f"tamper_{int(time.time() * 1000)}_{random.randint(1, 999999)}"
+        original_amount = int(final_amount)
+        # 금액 변조: 1원 ~ 1000원 차감
+        tampered_amount = max(1, original_amount - random.randint(1, 1000))
+
+        # === 첫 번째 요청: 정상 금액 ===
+        with self.client.post(
+            "/api/payments/confirm/",
+            json={
+                "payment_key": payment_key,
+                "order_id": order_id,
+                "amount": original_amount,
+            },
+            name=f"{STAGE_NAME} POST /api/payments/confirm/ [TAMPER-1st]",
+            catch_response=True,
+        ) as response:
+            if response.status_code in [200, 201]:
+                response.success()
+            elif response.status_code == 400:
+                # 비즈니스 에러 - 변조 테스트 불가
+                response.success()
+                return
+            else:
+                response.failure(f"First payment failed: {response.status_code}")
+                return
+
+        # === 두 번째 요청: 같은 key + 변조된 금액 ===
+        with self.client.post(
+            "/api/payments/confirm/",
+            json={
+                "payment_key": payment_key,
+                "order_id": order_id,
+                "amount": tampered_amount,  # 변조된 금액
+            },
+            name=f"{STAGE_NAME} POST /api/payments/confirm/ [TAMPER-AMT]",
+            catch_response=True,
+        ) as response:
+            if response.status_code in [400, 409]:
+                # 정상: 변조된 요청 거부됨
+                response.success()
+            elif response.status_code in [200, 201]:
+                # ❌ 심각: 변조된 금액이 통과됨 (공격 성공)
+                _duplicate_payment_success_count += 1
+                response.failure(
+                    f"🚨 CRITICAL: Tampered amount accepted! "
+                    f"key={payment_key}, original={original_amount}, tampered={tampered_amount}"
+                )
+            else:
+                response.failure(f"Unexpected status: {response.status_code}")
+
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
