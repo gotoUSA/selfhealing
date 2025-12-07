@@ -63,20 +63,20 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "performance: marks tests as performance tests",
-    "load_test: 부하 테스트 관련 (CI에서 기본 제외)",
-    "manual: 수동/디버깅용 테스트 (CI에서 기본 제외)",
-    "concurrency: 동시성 테스트 (race condition 검증)",
-    "auth_race: 인증 관련 race condition 테스트",
-    "payment_race: 결제 관련 race condition 테스트",
-    "order_race: 주문 관련 race condition 테스트",
-    "point_race: 포인트 관련 race condition 테스트",
-    "return_race: 반품 관련 race condition 테스트",
-    "heavy: 고부하 스트레스 테스트 (CI에서 선택적 제외)",
-    "schema: OpenAPI 스키마 기반 계약 테스트 (Schemathesis)",
-    "stateful: Stateful API 워크플로우 테스트 (상태 전이 검증)",
-    "fuzz: Fuzz 테스트 - Hypothesis/Schemathesis 기반 무작위 입력 검증",
-    "negative: Negative 테스트 - 잘못된 입력에 대한 적절한 에러 처리 검증",
-    "security: Security 테스트 - SQL Injection, XSS, SSTI 등 보안 공격 방어 검증",
+    "load_test: load test related (excluded by default in CI)",
+    "manual: manual/debugging tests (excluded by default in CI)",
+    "concurrency: concurrency tests (race condition verification)",
+    "auth_race: authentication related race condition tests",
+    "payment_race: payment related race condition tests",
+    "order_race: order related race condition tests",
+    "point_race: point related race condition tests",
+    "return_race: return related race condition tests",
+    "heavy: high-load stress tests (optionally excluded in CI)",
+    "schema: OpenAPI schema-based contract tests (Schemathesis)",
+    "stateful: Stateful API workflow tests (state transition verification)",
+    "fuzz: Fuzz tests - Hypothesis/Schemathesis based random input verification",
+    "negative: Negative tests - proper error handling for invalid inputs",
+    "security: Security tests - SQL Injection, XSS, SSTI attack defense verification",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)
@@ -86,8 +86,8 @@ filterwarnings = [
     "ignore:.*_after_postgeneration will stop saving the instance.*:DeprecationWarning:factory.django",
 ]
 
-# pytest-env: 테스트 실행 전 환경 변수 설정
-# Windows에서 PostgreSQL cp949 인코딩 문제 해결
+# pytest-env: Set environment variables before test execution
+# Resolves PostgreSQL cp949 encoding issue on Windows
 [tool.pytest_env]
 PGCLIENTENCODING = "UTF8"
 PYTHONIOENCODING = "utf-8"
@@ -113,9 +113,9 @@ branch = true
 # Parallel testing support (pytest-xdist)
 parallel = true
 concurrency = ["thread", "multiprocessing"]
-# 데이터 파일 경로를 명시적으로 설정
+# Explicitly set data file path
 data_file = ".coverage"
-# 병렬 실행 시 기존 데이터 유지하지 않음 (매번 새로 측정)
+# Do not retain existing data during parallel execution (measure fresh each time)
 relative_files = true
 
 [tool.coverage.report]
@@ -142,14 +142,14 @@ directory = "htmlcov"
 # ==========================================
 [tool.radon]
 exclude = "*/migrations/*,*/tests/*,*/__pycache__/*,*/venv/*"
-cc_min = "C"  # 복잡도 C 이상만 표시 (A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F=41+)
+cc_min = "C"  # Show complexity C or above (A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F=41+)
 
 # ==========================================
 # bandit Configuration (Security Analysis)
 # ==========================================
 [tool.bandit]
 exclude_dirs = ["tests", "migrations", "venv", "env", "htmlcov", "load_tests"]
-skips = ["B101", "B311"]  # B101: assert 사용, B311: random (보안용 아닌 경우)
+skips = ["B101", "B311"]  # B101: assert usage, B311: random (non-security use)
 targets = ["shopping"]
 
 # ==========================================
@@ -164,11 +164,11 @@ sort_by_size = true
 # ==========================================
 # mutmut Configuration (Mutation Testing)
 # ==========================================
-# ⚠️ 현재 프로젝트에서는 아직 도입하지 않음
-# 핵심 로직 안정화 후 도입 예정
+# Not yet introduced in this project
+# Will be introduced after core logic stabilization
 #
-# mutmut은 setup.cfg 또는 pyproject.toml의 [tool.mutmut] 지원
-# 돈 관련 서비스만 대상으로 제한
+# mutmut supports setup.cfg or [tool.mutmut] in pyproject.toml
+# Limited to money-related services only
 #
 # [tool.mutmut]
 # paths_to_mutate = [
