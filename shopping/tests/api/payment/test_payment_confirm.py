@@ -279,7 +279,7 @@ class TestPaymentConfirmBoundary:
         shipping_data,
         mocker,
     ):
-        """포인트 전액 결제 - 적립 없음"""
+        """포인트 전액 결제 - 적립 없음 (포인트 전용 엔드포인트 사용)"""
         # Arrange
         user.points = 50000
         user.save()
@@ -298,46 +298,30 @@ class TestPaymentConfirmBoundary:
         order = Order.objects.filter(user=user).order_by("-created_at").first()
         assert order.final_amount == 0
 
-        # Payment 생성
+        # Payment 요청 - 포인트 전액 결제 안내 응답
         payment_request_response = authenticated_client.post(
             "/api/payments/request/",
             {"order_id": order.id},
             format="json",
         )
-        assert payment_request_response.status_code == status.HTTP_201_CREATED
+        assert payment_request_response.status_code == status.HTTP_200_OK
+        assert payment_request_response.data["requires_points_only"] is True
 
-        payment = Payment.objects.get(order=order)
-
-        toss_response = TossResponseBuilder.success_response(
-            payment_key=payment.payment_key,
-            order_id=order.id,
-            amount=0,
-        )
-
-        mocker.patch(
-            "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            return_value=toss_response,
-        )
-
-        request_data = {
-            "order_id": order.id,
-            "payment_key": "test_key",
-            "amount": 0,
-        }
-
-        # Act
-        response = authenticated_client.post(
-            "/api/payments/confirm/",
-            request_data,
+        # 포인트 전용 결제 엔드포인트 호출
+        points_only_response = authenticated_client.post(
+            "/api/payments/points-only/",
+            {"order_id": order.id},
             format="json",
         )
 
-        # Assert
-        assert response.status_code == status.HTTP_202_ACCEPTED
+        # Assert - 결제 완료
+        assert points_only_response.status_code == status.HTTP_200_OK
+        assert points_only_response.data["points_used"] == 13000
 
-        # Assert - 포인트 적립 없음
+        # Assert - 포인트 적립 없음 (포인트 전액 결제이므로)
         user.refresh_from_db()
         assert user.points == 37000  # 50000 - 13000
+
 
         # Assert - 적립 이력 없음
         earn_history = PointHistory.objects.filter(

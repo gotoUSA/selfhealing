@@ -129,6 +129,7 @@ class PaymentRequestView(EmailVerificationRequiredMixin, APIView):
         description="""처리 내용:
 - 결제 정보를 생성하고 반환한다.
 - 토스페이먼츠 결제창을 열기 위한 정보를 제공한다.
+- 포인트 전액 결제(final_amount=0)인 경우 별도 안내를 반환한다.
 - 이메일 인증된 사용자만 요청 가능하다.""",
         tags=["Payments"],
     )
@@ -142,6 +143,33 @@ class PaymentRequestView(EmailVerificationRequiredMixin, APIView):
         serializer = PaymentRequestSerializer(data=request.data, context={"request": request})
 
         if serializer.is_valid():
+            order = serializer.order
+
+            # 재고 사전 검증 (Race Condition 방지)
+            stock_result = PaymentService.verify_order_stock(order)
+            if not stock_result["is_valid"]:
+                return Response(
+                    {
+                        "error": "재고 문제가 발생했습니다.",
+                        "message": stock_result["message"],
+                        "stock_issues": stock_result["issues"],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # 포인트 전액 결제 체크 (final_amount = 0)
+            if order.final_amount == 0:
+                return Response(
+                    {
+                        "requires_points_only": True,
+                        "order_id": order.id,
+                        "order_number": order.order_number,
+                        "used_points": order.used_points,
+                        "message": "포인트 전액 결제입니다. /api/payments/points-only/ 엔드포인트를 사용해주세요.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
             # Payment 생성
             payment = serializer.save()
 
@@ -181,6 +209,7 @@ class PaymentRequestView(EmailVerificationRequiredMixin, APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class PaymentConfirmView(EmailVerificationRequiredMixin, APIView):
@@ -501,6 +530,182 @@ class PaymentFailView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class PointsOnlyPaymentResponseSerializer(drf_serializers.Serializer):
+    """포인트 전액 결제 응답"""
+
+    message = drf_serializers.CharField()
+    payment_id = drf_serializers.IntegerField()
+    order_id = drf_serializers.IntegerField()
+    order_number = drf_serializers.CharField()
+    points_used = drf_serializers.IntegerField()
+
+
+class PointsOnlyPaymentRequestSerializer(drf_serializers.Serializer):
+    """포인트 전액 결제 요청"""
+
+    order_id = drf_serializers.IntegerField(help_text="주문 ID")
+
+
+class PointsOnlyPaymentView(EmailVerificationRequiredMixin, APIView):
+    """
+    포인트 전액 결제 API
+
+    final_amount가 0원인 경우 (포인트로 전액 결제)
+    Toss API 호출 없이 바로 결제를 완료합니다.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentConfirmRateThrottle]
+
+    @extend_schema(
+        request=PointsOnlyPaymentRequestSerializer,
+        responses={
+            200: PointsOnlyPaymentResponseSerializer,
+            400: PaymentErrorResponseSerializer,
+            403: PaymentErrorResponseSerializer,
+        },
+        summary="포인트 전액 결제를 처리한다.",
+        description="""처리 내용:
+- 포인트로 전액 결제되는 주문을 처리한다.
+- Toss API 호출 없이 바로 결제 완료 처리한다.
+- 이메일 인증된 사용자만 요청 가능하다.""",
+        tags=["Payments"],
+    )
+    def post(self, request):
+        """포인트 전액 결제 처리"""
+        # 이메일 인증 체크
+        verification_error = self.check_email_verification(request, "결제를")
+        if verification_error:
+            return verification_error
+
+        order_id = request.data.get("order_id")
+        if not order_id:
+            return Response(
+                {"error": "order_id가 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # 관리자는 모든 주문 접근 가능
+            if request.user.is_staff or request.user.is_superuser:
+                order = Order.objects.get(id=order_id)
+            else:
+                order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response(
+                {"error": "주문을 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # 포인트 전액 결제인지 확인
+        if order.final_amount != 0:
+            return Response(
+                {
+                    "error": "포인트 전액 결제가 아닙니다.",
+                    "message": f"결제 금액이 {order.final_amount}원입니다. 일반 결제를 진행해주세요.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 재고 사전 검증
+        stock_result = PaymentService.verify_order_stock(order)
+        if not stock_result["is_valid"]:
+            return Response(
+                {
+                    "error": "재고 문제가 발생했습니다.",
+                    "message": stock_result["message"],
+                    "stock_issues": stock_result["issues"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = PaymentService.complete_points_only_payment(
+                order=order,
+                user=request.user,
+            )
+
+            return Response(
+                {
+                    "message": result["message"],
+                    "payment_id": result["payment"].id,
+                    "order_id": result["order"].id,
+                    "order_number": result["order"].order_number,
+                    "points_used": result["points_used"],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except PaymentConfirmError as e:
+            logger.warning(f"포인트 전액 결제 실패: order_id={order_id}, error={str(e)}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as e:
+            logger.error(f"포인트 전액 결제 중 오류: order_id={order_id}, error={str(e)}")
+            return Response(
+                {
+                    "error": "결제 처리 중 오류가 발생했습니다.",
+                    "message": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class StockVerificationResponseSerializer(drf_serializers.Serializer):
+    """재고 검증 응답"""
+
+    is_valid = drf_serializers.BooleanField()
+    issues = drf_serializers.ListField(required=False)
+    message = drf_serializers.CharField()
+
+
+class StockVerificationView(EmailVerificationRequiredMixin, APIView):
+    """
+    주문 재고 사전 검증 API
+
+    결제 전에 주문 상품들의 재고를 확인합니다.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name="order_id", type=int, description="주문 ID", required=True),
+        ],
+        responses={
+            200: StockVerificationResponseSerializer,
+            404: PaymentErrorResponseSerializer,
+        },
+        summary="주문 상품의 재고를 사전 검증한다.",
+        description="""처리 내용:
+- 결제 전 주문 상품들의 재고를 확인한다.
+- 품절, 판매 중단, 재고 부족 상품을 반환한다.""",
+        tags=["Payments"],
+    )
+    def get(self, request):
+        """주문 재고 사전 검증"""
+        order_id = request.query_params.get("order_id")
+        if not order_id:
+            return Response(
+                {"error": "order_id가 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response(
+                {"error": "주문을 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        result = PaymentService.verify_order_stock(order)
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class PaymentDetailView(APIView):

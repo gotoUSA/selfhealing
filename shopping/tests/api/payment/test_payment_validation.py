@@ -86,7 +86,7 @@ class TestPaymentValidationNormalCase:
         shipping_data,
         mocker,
     ):
-        """포인트 전액 결제 (final_amount = 0원)"""
+        """포인트 전액 결제 (final_amount = 0원) - 포인트 전용 엔드포인트 사용"""
         # Arrange - 충분한 포인트 지급
         user.points = 50000
         user.save()
@@ -106,7 +106,7 @@ class TestPaymentValidationNormalCase:
         assert order is not None
         assert order.final_amount == 0
 
-        # Payment 생성
+        # Payment 요청 - 포인트 전액 결제 안내 응답
         request_data = {"order_id": order.id}
         payment_response = authenticated_client.post(
             "/api/payments/request/",
@@ -114,36 +114,25 @@ class TestPaymentValidationNormalCase:
             format="json",
         )
 
-        # Act & Assert - 0원 결제 허용
-        assert payment_response.status_code == status.HTTP_201_CREATED
-        payment = Payment.objects.get(order=order)
-        assert payment.amount == Decimal("0")
+        # Act & Assert - 포인트 전액 결제 안내
+        assert payment_response.status_code == status.HTTP_200_OK
+        assert payment_response.data["requires_points_only"] is True
 
-        # Confirm 테스트
-        toss_response = TossResponseBuilder.success_response(
-            order_id=order.id,
-            amount=0,
-        )
-
-        mocker.patch(
-            "shopping.utils.toss_payment.TossPaymentClient.confirm_payment",
-            return_value=toss_response,
-        )
-
-        confirm_data = {
-            "order_id": order.id,
-            "payment_key": "test_key",
-            "amount": 0,
-        }
-
-        confirm_response = authenticated_client.post(
-            "/api/payments/confirm/",
-            confirm_data,
+        # 포인트 전용 결제 엔드포인트 호출
+        points_only_response = authenticated_client.post(
+            "/api/payments/points-only/",
+            {"order_id": order.id},
             format="json",
         )
 
-        assert confirm_response.status_code == status.HTTP_202_ACCEPTED
-        assert confirm_response.data["status"] == "processing"
+        # Assert - 결제 완료
+        assert points_only_response.status_code == status.HTTP_200_OK
+        assert points_only_response.data["points_used"] == 13000
+
+        payment = Payment.objects.get(order=order)
+        assert payment.amount == Decimal("0")
+        assert payment.status == "done"
+
 
     def test_partial_points_usage(
         self,
@@ -351,7 +340,7 @@ class TestPaymentValidationBoundary:
         add_to_cart_helper,
         shipping_data,
     ):
-        """포인트로 정확히 0원 만들기 (total_amount = used_points)"""
+        """포인트로 정확히 0원 만들기 (total_amount = used_points) - 포인트 전용 엔드포인트 사용"""
         # Arrange
         user.points = 13000
         user.save()
@@ -379,8 +368,19 @@ class TestPaymentValidationBoundary:
             format="json",
         )
 
-        # Assert - 정확히 0원
-        assert response.status_code == status.HTTP_201_CREATED
+        # Assert - 포인트 전액 결제 안내
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["requires_points_only"] is True
+
+        # 포인트 전용 결제 엔드포인트 호출
+        points_only_response = authenticated_client.post(
+            "/api/payments/points-only/",
+            {"order_id": order.id},
+            format="json",
+        )
+
+        # Assert - 결제 완료
+        assert points_only_response.status_code == status.HTTP_200_OK
         payment = Payment.objects.get(order=order)
 
         assert order.total_amount == Decimal("10000")  # 상품 금액만
@@ -388,6 +388,8 @@ class TestPaymentValidationBoundary:
         assert order.used_points == 13000
         assert order.final_amount == Decimal("0")  # 10000 + 3000 - 13000
         assert payment.amount == Decimal("0")
+        assert payment.status == "done"
+
 
 
 @pytest.mark.django_db

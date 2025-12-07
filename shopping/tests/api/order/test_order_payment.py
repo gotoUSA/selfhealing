@@ -170,7 +170,7 @@ class TestOrderPaymentIntegration:
         add_to_cart_helper,
         shipping_data,
     ):
-        """전액 포인트 결제 (final_amount=0) - 결제 승인 스킵"""
+        """전액 포인트 결제 (final_amount=0) - 포인트 전액 결제 엔드포인트 사용"""
         # Arrange
         product.price = Decimal("10000")
         product.save()
@@ -192,17 +192,39 @@ class TestOrderPaymentIntegration:
         user_with_high_points.refresh_from_db()
         assert user_with_high_points.points == 37000  # 50000 - 13000
 
-        # Act - 결제 요청 시도 (전액 포인트는 결제 불필요)
+        # Act - 결제 요청 시도 (전액 포인트는 별도 엔드포인트 안내)
         payment_request_response = authenticated_client.post(
             "/api/payments/request/",
             {"order_id": order.id},
             format="json",
         )
 
-        # Assert - Payment 생성됨 (amount=0)
-        assert payment_request_response.status_code == status.HTTP_201_CREATED
+        # Assert - 포인트 전액 결제 안내 응답
+        assert payment_request_response.status_code == status.HTTP_200_OK
+        assert payment_request_response.data["requires_points_only"] is True
+        assert payment_request_response.data["order_id"] == order.id
+
+        # Act - 포인트 전액 결제 엔드포인트 호출
+        points_only_response = authenticated_client.post(
+            "/api/payments/points-only/",
+            {"order_id": order.id},
+            format="json",
+        )
+
+        # Assert - 결제 완료
+        assert points_only_response.status_code == status.HTTP_200_OK
+        assert points_only_response.data["points_used"] == 13000
+
+        # Assert - Payment 생성 및 완료 확인
         payment = Payment.objects.get(order=order)
         assert payment.amount == Decimal("0")
+        assert payment.status == "done"
+        assert payment.method == "points"
+
+        # Assert - Order 상태 변경 확인
+        order.refresh_from_db()
+        assert order.status == "paid"
+
 
     def test_payment_amount_matches_order_final_amount(
         self,

@@ -611,3 +611,171 @@ class PaymentService:
                 pass  # 로그 실패는 무시
 
             raise
+
+    @staticmethod
+    @transaction.atomic
+    def complete_points_only_payment(order: Order, user) -> dict[str, Any]:
+        """
+        포인트 전액 결제 처리
+
+        final_amount가 0원인 경우 Toss API 호출 없이 바로 결제 완료 처리합니다.
+
+        Args:
+            order: 주문 객체
+            user: 요청한 사용자
+
+        Returns:
+            결제 완료 정보
+
+        Raises:
+            PaymentConfirmError: 결제 처리 실패
+        """
+        logger.info(
+            f"포인트 전액 결제 시작: order_id={order.id}, order_number={order.order_number}, "
+            f"used_points={order.used_points}, user_id={user.id}"
+        )
+
+        # 1. 주문 상태 확인
+        if order.status != "confirmed":
+            raise PaymentConfirmError(
+                f"주문 처리가 완료되지 않았습니다. (현재 상태: {order.get_status_display()})"
+            )
+
+        # 2. 포인트 전액 결제인지 확인
+        if order.final_amount != 0:
+            raise PaymentConfirmError(
+                f"포인트 전액 결제가 아닙니다. 결제 금액: {order.final_amount}원"
+            )
+
+        # 3. 동시성 제어: Order를 락으로 보호
+        order = Order.objects.select_for_update().get(pk=order.pk)
+
+        # 4. Payment 생성 또는 조회
+        payment, created = Payment.objects.get_or_create(
+            order=order,
+            defaults={
+                "toss_order_id": f"POINTS-{order.id}",
+                "amount": 0,
+                "method": "points",
+                "status": "ready",
+            }
+        )
+
+        if payment.is_paid:
+            raise PaymentConfirmError("이미 완료된 결제입니다.")
+
+        # 5. Payment 상태 업데이트 (포인트 전액 결제)
+        payment.status = "done"
+        payment.method = "points"
+        payment.save(update_fields=["status", "method", "updated_at"])
+
+        # 6. 판매량 증가
+        logger.info(f"판매량 증가 시작: order_id={order.id}")
+        for order_item in order.order_items.all():
+            if order_item.product:
+                product = Product.objects.select_for_update().get(pk=order_item.product.pk)
+                Product.objects.filter(pk=product.pk).update(
+                    sold_count=F("sold_count") + order_item.quantity,
+                )
+                logger.info(
+                    f"판매량 증가: product_id={product.pk}, product_name={product.name}, "
+                    f"quantity={order_item.quantity}"
+                )
+
+        # 7. 주문 상태 변경
+        order.status = "paid"
+        order.payment_method = "points"
+        order.save(update_fields=["status", "payment_method", "updated_at"])
+        logger.info(f"주문 상태 변경: order_id={order.id}, status=paid")
+
+        # 8. 장바구니 비활성화
+        Cart.objects.filter(user=user, is_active=True).update(is_active=False)
+        logger.info(f"장바구니 비활성화 완료: user_id={user.id}")
+
+        # 9. 포인트 전액 결제 로그
+        PaymentLog.objects.create(
+            payment=payment,
+            log_type="approve",
+            message=f"포인트 {order.used_points}점으로 전액 결제 완료",
+            data={
+                "used_points": order.used_points,
+                "order_id": order.id,
+                "order_number": order.order_number,
+            },
+        )
+
+        logger.info(
+            f"포인트 전액 결제 완료: payment_id={payment.id}, order_id={order.id}, "
+            f"used_points={order.used_points}"
+        )
+
+        return {
+            "payment": payment,
+            "order": order,
+            "points_used": order.used_points,
+            "message": "포인트 전액 결제가 완료되었습니다.",
+        }
+
+    @staticmethod
+    def verify_order_stock(order: Order) -> dict[str, Any]:
+        """
+        주문의 재고 사전 검증
+
+        결제 요청 전에 주문 상품들의 재고를 확인합니다.
+
+        Args:
+            order: 주문 객체
+
+        Returns:
+            dict: {
+                'is_valid': bool,
+                'issues': list[dict],
+                'message': str
+            }
+        """
+        issues = []
+
+        for order_item in order.order_items.select_related("product"):
+            product = order_item.product
+            if not product:
+                continue
+
+            # 상품 활성화 상태 확인
+            if not product.is_active:
+                issues.append({
+                    "order_item_id": order_item.id,
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "issue_type": "inactive",
+                    "message": f"'{product.name}' 상품이 판매 중단되었습니다.",
+                    "requested": order_item.quantity,
+                    "available": 0,
+                })
+            # 재고 확인 (주문 생성 시 이미 차감되었으므로 현재 재고가 음수가 아닌지 확인)
+            elif product.stock < 0:
+                issues.append({
+                    "order_item_id": order_item.id,
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "issue_type": "oversold",
+                    "message": f"'{product.name}' 상품의 재고가 부족합니다.",
+                    "requested": order_item.quantity,
+                    "available": max(0, product.stock + order_item.quantity),
+                })
+
+        if issues:
+            logger.warning(
+                f"주문 재고 검증 실패: order_id={order.id}, issues={len(issues)}"
+            )
+            return {
+                "is_valid": False,
+                "issues": issues,
+                "message": "일부 상품의 재고에 문제가 있습니다.",
+            }
+
+        return {
+            "is_valid": True,
+            "issues": [],
+            "message": "모든 상품의 재고가 확인되었습니다.",
+        }
+

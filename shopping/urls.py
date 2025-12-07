@@ -47,6 +47,8 @@ from shopping.views.payment_views import (
     PaymentListView,
     PaymentRequestView,
     PaymentStatusView,
+    PointsOnlyPaymentView,
+    StockVerificationView,
     payment_fail,
     payment_success,
     payment_test_page,
@@ -329,6 +331,10 @@ urlpatterns = [
     path("payments/confirm/", PaymentConfirmView.as_view(), name="payment-confirm"),
     path("payments/cancel/", PaymentCancelView.as_view(), name="payment-cancel"),
     path("payments/fail/", PaymentFailView.as_view(), name="payment-fail"),  # API View로 변경
+    # 포인트 전액 결제
+    path("payments/points-only/", PointsOnlyPaymentView.as_view(), name="payment-points-only"),
+    # 재고 사전 검증
+    path("payments/verify-stock/", StockVerificationView.as_view(), name="payment-verify-stock"),
     # 결제 조회
     path("payments/", PaymentListView.as_view(), name="payment-list"),
     path("payments/<int:payment_id>/", PaymentDetailView.as_view(), name="payment-detail"),

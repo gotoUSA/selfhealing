@@ -303,8 +303,8 @@ if payment.amount == 0:
 | 2 | handle_payment_canceled confirmed 미처리 | 🟡 Medium | `toss_webhook_service.py` | ⬜ 미완료 |
 | 3 | sold_count 음수 방지 미적용 | 🟡 Medium | `order_service.py` | ✅ 완료 (2025-12-07) |
 | 4 | 주문 실패 시 장바구니 복구 누락 | 🟡 Medium | `order_tasks.py` | ✅ 완료 (2025-12-07) |
-| 5 | 포인트 전액 결제 처리 | 🟢 Low | `payment_serializers.py` | ⬜ 미완료 |
-| 6 | 장바구니-재고 Race Condition 알림 | 🟢 Low | 여러 파일 | ⬜ 미완료 |
+| 5 | 포인트 전액 결제 처리 | 🟢 Low | `payment_service.py`, `payment_views.py` | ✅ 완료 (2025-12-07) |
+| 6 | 장바구니-재고 Race Condition 알림 | 🟢 Low | `payment_service.py`, `payment_views.py` | ✅ 완료 (2025-12-07) |
 
 ---
 
