@@ -244,9 +244,7 @@ class TestFailedOperation:
             status=FailedOperation.Status.PENDING,
         )
         # Manually set created_at to 2 hours ago (payment SLA is 1 hour)
-        FailedOperation.objects.filter(id=failed_op.id).update(
-            created_at=timezone.now() - timedelta(hours=2)
-        )
+        FailedOperation.objects.filter(id=failed_op.id).update(created_at=timezone.now() - timedelta(hours=2))
         failed_op.refresh_from_db()
 
         assert failed_op.is_sla_breached is True

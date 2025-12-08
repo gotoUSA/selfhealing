@@ -119,9 +119,7 @@ class BackoffCalculator:
         # Ensure minimum delay
         return max(self.config.min_delay, delay)
 
-    def get_delays_sequence(
-        self, max_attempts: int, with_jitter: bool = False
-    ) -> list[int]:
+    def get_delays_sequence(self, max_attempts: int, with_jitter: bool = False) -> list[int]:
         """
         Get the sequence of delays for multiple attempts.
 
@@ -132,10 +130,7 @@ class BackoffCalculator:
         Returns:
             List of delay values in seconds
         """
-        return [
-            self.calculate(attempt, with_jitter)
-            for attempt in range(1, max_attempts + 1)
-        ]
+        return [self.calculate(attempt, with_jitter) for attempt in range(1, max_attempts + 1)]
 
 
 def calculate_backoff(

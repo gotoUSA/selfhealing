@@ -1,7 +1,7 @@
 # L3 Self-Healing Reliability Layer — Architecture
 
-> **Version**: 1.0  
-> **Last Updated**: 2025-12-08  
+> **Version**: 1.1
+> **Last Updated**: 2025-12-08
 > **Status**: Production Ready
 
 ---
@@ -19,7 +19,8 @@
 9. [Decision Table](#9-decision-table)
 10. [Circuit Breaker Policy](#10-circuit-breaker-policy)
 11. [Failure Classification](#11-failure-classification)
-12. [AI Integration Roadmap](#12-ai-integration-roadmap)
+12. [DLQ & Replay Service Architecture](#12-dlq--replay-service-architecture)
+13. [AI Integration Roadmap](#13-ai-integration-roadmap)
 
 ---
 
@@ -27,7 +28,7 @@
 
 ### What is L3 Self-Healing?
 
-Most systems treat failures as **unpredictable incidents** requiring human reaction.  
+Most systems treat failures as **unpredictable incidents** requiring human reaction.
 The **Self-Healing Reliability Layer** provides a structured, automated, AI-compatible failure recovery plane.
 
 This layer:
@@ -73,7 +74,7 @@ L3 operates as the **top layer** of our reliability stack:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Important**: L3 **assumes L1 and L2 are working correctly**.  
+**Important**: L3 **assumes L1 and L2 are working correctly**.
 Self-Healing does not fix bugs — it recovers from **technical failures**.
 
 ---
@@ -119,10 +120,10 @@ Failure → Classify → Auto-retry OR DLQ → Structured review → Resolved
 
 ### What Self-Healing Does NOT Do
 
-❌ Fix business logic validation failures  
-❌ Bypass security policies  
-❌ Auto-recover without idempotency guarantees  
-❌ Execute without audit trail  
+❌ Fix business logic validation failures
+❌ Bypass security policies
+❌ Auto-recover without idempotency guarantees
+❌ Execute without audit trail
 
 ---
 
@@ -204,13 +205,19 @@ Every failure follows a predictable state machine:
            │        (DLQ)            │
            └───────────┬─────────────┘
                        │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-   ┌───────────┐ ┌───────────┐ ┌───────────┐
-   │  REPLAYED │ │ RESOLVED  │ │ REJECTED  │
-   │(Re-queued)│ │ (Manual   │ │(Permanent │
-   │           │ │  Fix)     │ │ Archive)  │
-   └─────┬─────┘ └───────────┘ └───────────┘
+          ┌────────────┼────────────┬────────────┐
+          ▼            ▼            ▼            ▼
+   ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌────────────┐
+   │  REPLAYED │ │ RESOLVED  │ │ REJECTED  │ │ REQUIRES   │
+   │(Re-queued)│ │ (Manual   │ │(Permanent │ │ _REVIEW    │
+   │           │ │  Fix)     │ │ Archive)  │ │(Escalated) │
+   └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └────────────┘
+         │             │             │
+         │             ▼             ▼
+         │      ┌───────────────────────┐
+         │      │      ARCHIVED         │
+         │      │   (Soft-Deleted)      │
+         │      └───────────────────────┘
          │
          └──► Back to RETRYING (max 2 replays)
 ```
@@ -222,8 +229,10 @@ Every failure follows a predictable state machine:
 | `NEW` | Just failed, awaiting classification | Classify → route |
 | `RETRYING` | Auto-retry in progress with backoff | Success or exhaust retries |
 | `PENDING_REVIEW` | In DLQ, awaiting human review | Replay, Resolve, or Reject |
+| `REQUIRES_REVIEW` | Escalated after 3+ failures or handler crash | Senior review required |
 | `RESOLVED` | Successfully recovered | Archive after retention |
 | `REJECTED` | Permanently unrecoverable | Archive for audit |
+| `ARCHIVED` | Soft-deleted, retained for audit | No action (read-only) |
 | `SECURITY_INCIDENT` | Security violation detected | Security team handles |
 
 ---
@@ -258,21 +267,21 @@ With Idempotency:
 # Example: Payment retry with idempotency
 def process_payment_with_retry(order_id: int, amount: Decimal) -> PaymentResult:
     idempotency_key = f"payment:{order_id}:{amount}"
-    
+
     # Check if already processed
     existing = Payment.objects.filter(
         order_id=order_id,
         amount=amount,
         status__in=['done', 'in_progress']
     ).first()
-    
+
     if existing:
         return PaymentResult(
             success=True,
             payment=existing,
             was_duplicate=True
         )
-    
+
     # Proceed with new payment
     return execute_payment(order_id, amount, idempotency_key)
 ```
@@ -497,7 +506,7 @@ Understanding failure types determines the correct response:
 - Amount manipulation attempt
 - Unauthorized access attempts
 
-**Response**: 
+**Response**:
 1. Block immediately
 2. Create `SecurityIncident` record
 3. Invalidate related sessions/tokens
@@ -506,7 +515,140 @@ Understanding failure types determines the correct response:
 
 ---
 
-## 12. AI Integration Roadmap
+## 12. DLQ & Replay Service Architecture
+
+### Service Layer Design
+
+The DLQ and Replay services provide a clean separation of concerns:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         DLQ Service Layer                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐      │
+│  │   DLQService    │    │  ReplayService  │    │ Domain Handlers │      │
+│  │                 │    │                 │    │                 │      │
+│  │ • store_failure │    │ • replay_single │    │ • Payment       │      │
+│  │ • get_pending   │    │ • replay_batch  │    │ • Point         │      │
+│  │ • get_stats     │    │ • validate      │    │ • Webhook       │      │
+│  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘      │
+│           │                      │                      │               │
+│           └──────────────────────┴──────────────────────┘               │
+│                                  │                                       │
+│                          Celery Tasks Layer                              │
+│           ┌──────────────────────┴──────────────────────┐               │
+│           │ • replay_single_dlq_entry                   │               │
+│           │ • replay_batch_by_failure_type              │               │
+│           │ • replay_on_circuit_breaker_close           │               │
+│           │ • cleanup_resolved_dlq_entries              │               │
+│           └─────────────────────────────────────────────┘               │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### DLQService
+
+Central service for DLQ storage operations:
+
+```python
+from shopping.services.self_healing.dlq_service import DLQService, store_to_dlq
+
+# Store a failure with forensic context
+entry = DLQService.store_failure(
+    domain="payment",
+    failure_type="PG_TIMEOUT",
+    error_code="TIMEOUT_001",
+    error_message="Connection timeout after 30s",
+    order=order,
+    payment=payment,
+    snapshot_data={"amount": 50000, "method": "card"},
+    request_data=original_request,
+    response_data=pg_response,
+)
+
+# Query pending entries
+pending = DLQService.get_pending_entries(domain="payment")
+replayable = DLQService.get_replayable_entries(limit=100)
+sla_breached = DLQService.get_sla_breached_entries()
+```
+
+### ReplayService
+
+Orchestrates replay operations with domain-specific handlers:
+
+```python
+from shopping.services.self_healing.replay_service import ReplayService
+
+# Replay single entry
+result = ReplayService.replay_single(dlq_entry_id=123, operator_id=admin.id)
+
+# Batch replay by failure type
+results = ReplayService.replay_batch_by_failure_type(
+    failure_type="PG_TIMEOUT",
+    limit=50
+)
+
+# Batch replay by domain
+results = ReplayService.replay_batch_by_domain(
+    domain="payment",
+    limit=100
+)
+```
+
+### Domain Replay Handlers
+
+Each domain has a specialized handler implementing the replay logic:
+
+| Handler | Domain | Key Validations |
+|---------|--------|-----------------|
+| `PaymentReplayHandler` | payment | Payment status, order status, security flags |
+| `PointReplayHandler` | point | User existence, duplicate check |
+| `WebhookReplayHandler` | webhook | Event deduplication, signature re-verify |
+
+### REQUIRES_REVIEW Escalation
+
+Entries are escalated to `REQUIRES_REVIEW` status when:
+
+1. **Repeated failures**: 3+ consecutive replay failures
+2. **Handler crash**: Replay handler throws unexpected exception
+3. **Manual escalation**: Operator marks for senior review
+
+```python
+# Auto-escalation after 3 failures
+if entry.retry_count >= 3:
+    entry.status = FailedOperation.Status.REQUIRES_REVIEW
+
+# Handler crash detection
+try:
+    result = handler.replay(entry)
+except Exception as e:
+    entry.mark_as_requires_review(
+        note=f"Handler crashed: {type(e).__name__}: {str(e)}"
+    )
+```
+
+### Soft-Delete Pattern
+
+Resolved entries are never hard-deleted. Instead, they are archived:
+
+```python
+# Cleanup task uses soft-delete
+def cleanup_resolved_dlq_entries():
+    entries = FailedOperation.objects.filter(
+        status=FailedOperation.Status.RESOLVED,
+        resolved_at__lt=cutoff_date
+    )
+    for entry in entries:
+        entry.mark_as_archived()  # Sets status=ARCHIVED, not delete()
+```
+
+**Benefits**:
+- Audit trail preserved for compliance
+- Forensic data available for pattern analysis
+- No orphaned references
+
+---
+
+## 13. AI Integration Roadmap
 
 ### Why Self-Healing Enables AI
 

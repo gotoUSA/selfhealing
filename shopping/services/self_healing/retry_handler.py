@@ -65,12 +65,8 @@ class RetryConfig:
     backoff_base: int = 4
     backoff_max: int = 180
     jitter_percent: int = 25
-    retryable_exceptions: tuple[type[Exception], ...] = field(
-        default_factory=lambda: (Exception,)
-    )
-    non_retryable_exceptions: tuple[type[Exception], ...] = field(
-        default_factory=tuple
-    )
+    retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
+    non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     enable_dlq: bool = True
     domain: str = "default"
 
@@ -90,15 +86,9 @@ class RetryConfig:
         domain_config = self_healing.get("DOMAIN_CONFIG", {}).get(domain, {})
 
         return cls(
-            max_attempts=domain_config.get(
-                "max_attempts", retry_config.get("MAX_ATTEMPTS", 3)
-            ),
-            backoff_base=domain_config.get(
-                "backoff_base", retry_config.get("BACKOFF_BASE", 4)
-            ),
-            backoff_max=domain_config.get(
-                "backoff_max", retry_config.get("BACKOFF_MAX", 180)
-            ),
+            max_attempts=domain_config.get("max_attempts", retry_config.get("MAX_ATTEMPTS", 3)),
+            backoff_base=domain_config.get("backoff_base", retry_config.get("BACKOFF_BASE", 4)),
+            backoff_max=domain_config.get("backoff_max", retry_config.get("BACKOFF_MAX", 180)),
             jitter_percent=retry_config.get("JITTER_PERCENT", 25),
             enable_dlq=self_healing.get("DLQ", {}).get("ENABLED", True),
             domain=domain,
@@ -231,9 +221,7 @@ class RetryHandler:
 
             try:
                 result = func(*args, **kwargs)
-                logger.debug(
-                    f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}"
-                )
+                logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
                 return RetryResult(
                     success=True,
                     action=RetryAction.SUCCESS,
@@ -252,15 +240,12 @@ class RetryHandler:
                     }
                 )
 
-                logger.warning(
-                    f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}"
-                )
+                logger.warning(f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}")
 
                 if self.should_retry(e, attempt):
                     delay = self.get_next_delay(attempt)
                     logger.info(
-                        f"[RetryHandler] Will retry in {delay}s "
-                        f"(attempt {attempt + 1}/{self.config.max_attempts})"
+                        f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{self.config.max_attempts})"
                     )
                     # For synchronous execution, we don't actually sleep
                     # The caller (usually Celery) handles the delay
@@ -270,8 +255,7 @@ class RetryHandler:
 
         # Max retries exceeded or non-retryable error
         logger.error(
-            f"[RetryHandler] Max retries exceeded ({attempt}/{self.config.max_attempts}), "
-            f"last error: {last_error}"
+            f"[RetryHandler] Max retries exceeded ({attempt}/{self.config.max_attempts}), " f"last error: {last_error}"
         )
 
         # Move to DLQ if enabled

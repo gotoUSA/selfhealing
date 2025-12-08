@@ -9,6 +9,13 @@ from .cleanup_tasks import (
     cleanup_used_tokens_task,
     delete_unverified_users_task,
 )
+from .dlq_replay_tasks import (
+    cleanup_resolved_dlq_entries,
+    replay_batch_by_domain,
+    replay_batch_by_failure_type,
+    replay_on_circuit_breaker_close,
+    replay_single_dlq_entry,
+)
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
 from .order_tasks import process_order_heavy_tasks
 from .payment_tasks import call_toss_confirm_api, finalize_payment_confirm
@@ -56,4 +63,10 @@ __all__ = [
     "cleanup_expired_dlq",
     "process_dlq_batch",
     "reset_circuit_breaker",
+    # DLQ Replay 태스크 (L3 Self-Healing Phase 3)
+    "replay_single_dlq_entry",
+    "replay_batch_by_failure_type",
+    "replay_batch_by_domain",
+    "replay_on_circuit_breaker_close",
+    "cleanup_resolved_dlq_entries",
 ]

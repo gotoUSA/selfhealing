@@ -1,6 +1,6 @@
 # L3 Self-Healing Reliability Layer — Operations Guide
 
-> **Version**: 1.0
+> **Version**: 1.1
 > **Last Updated**: 2025-12-08
 > **Status**: Production Ready
 > **Prerequisite**: Read [L3 Architecture](./L3_SELF_HEALING_ARCHITECTURE.md) first
@@ -20,6 +20,8 @@
 9. [Operational Runbooks](#9-operational-runbooks)
 10. [Configuration Reference](#10-configuration-reference)
 11. [Implementation Checklist](#11-implementation-checklist)
+12. [REQUIRES_REVIEW Escalation Policy](#12-requires_review-escalation-policy)
+13. [Data Retention & Soft-Delete Policy](#13-data-retention--soft-delete-policy)
 
 ---
 
@@ -112,8 +114,10 @@ class FailedOperation(models.Model):
         PENDING = 'pending', 'Pending Review'
         REVIEWING = 'reviewing', 'Under Review'
         REPLAYED = 'replayed', 'Replay Queued'
+        REQUIRES_REVIEW = 'requires_review', 'Requires Human Review'  # NEW
         RESOLVED = 'resolved', 'Resolved'
         REJECTED = 'rejected', 'Rejected (Unrecoverable)'
+        ARCHIVED = 'archived', 'Archived'  # NEW: Soft-delete
         EXPIRED = 'expired', 'Retention Expired'
 
     # Classification
@@ -1086,11 +1090,13 @@ SLACK_ALERTS_WEBHOOK=https://hooks.slack.com/services/xxx
 
 ### Phase 3: Recovery Features (Week 3-4)
 
-- [ ] Implement manual replay from Admin
-- [ ] Implement batch replay task
-- [ ] Add SLA checking scheduled task
-- [ ] Implement notification channels
-- [ ] Write chaos tests
+- [x] Implement DLQ Service (storage with forensic context)
+- [x] Implement Replay Service (single, batch, conditional)
+- [x] Implement domain-specific replay handlers (Payment, Point, Webhook)
+- [x] Add REQUIRES_REVIEW escalation on repeated failures
+- [x] Implement soft-delete (ARCHIVED status instead of hard delete)
+- [x] Add Celery tasks for replay operations
+- [x] Write integration tests for DLQ + Replay
 
 ### Phase 4: Circuit Breaker (Week 4-5)
 
@@ -1114,6 +1120,136 @@ SLACK_ALERTS_WEBHOOK=https://hooks.slack.com/services/xxx
 - [ ] Add security incident notifications
 - [ ] Review and harden all sensitive paths
 - [ ] Conduct security review
+
+---
+
+## 12. REQUIRES_REVIEW Escalation Policy
+
+### Purpose
+
+Distinguish between transient failures and issues requiring human investigation.
+Repeated replay failures indicate potential data inconsistency or business logic conflicts.
+
+### Escalation Rules
+
+| Retry Failures | Status | Action |
+|----------------|--------|--------|
+| 1-2 | `PENDING` | Automatic retry eligible |
+| 3+ | `REQUIRES_REVIEW` | Human investigation required |
+| Handler crash | `REQUIRES_REVIEW` | Immediate escalation |
+| 48h+ in REQUIRES_REVIEW | Consider `ARCHIVED` | SLA breach |
+
+### State Transitions
+
+```
+                    ┌────────────────┐
+                    │    PENDING     │
+                    └───────┬────────┘
+                            │
+            ┌───────────────┼───────────────┐
+            │               │               │
+            ▼               ▼               ▼
+    ┌──────────────┐  ┌──────────┐  ┌────────────────┐
+    │   REPLAYED   │  │ REJECTED │  │ REQUIRES_REVIEW│
+    └──────┬───────┘  └──────────┘  └───────┬────────┘
+           │                                │
+    ┌──────┴──────┐                         │
+    │             │                         │
+    ▼             ▼                         ▼
+┌──────────┐ ┌──────────┐            ┌──────────────┐
+│ RESOLVED │ │ PENDING  │            │   RESOLVED   │
+│          │ │(retry<3) │            │ (manual fix) │
+└──────────┘ └──────────┘            └──────────────┘
+```
+
+### Handler Exception Handling
+
+```python
+try:
+    result = handler.replay(failed_op)
+except Exception as e:
+    # Escalate to REQUIRES_REVIEW with forensic data
+    failed_op.mark_as_requires_review(
+        note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}"
+    )
+    failed_op.metadata["handler_exception"] = {
+        "type": type(e).__name__,
+        "message": str(e)[:500],
+        "occurred_at": timezone.now().isoformat(),
+    }
+```
+
+---
+
+## 13. Data Retention & Soft-Delete Policy
+
+### Purpose
+
+**Never hard delete** DLQ entries for compliance with:
+- Financial audit requirements
+- Payment/Point transaction trails
+- Fraud investigation needs
+- Legal dispute resolution
+
+### Retention Tiers
+
+| Age | Status | Storage |
+|-----|--------|---------|
+| 0-30 days | Active statuses | Hot (normal queries) |
+| 30-180 days | ARCHIVED | Warm (excluded from normal queries) |
+| 180 days+ | ARCHIVED | Cold (consider separate archive table) |
+| 5+ years | Legal hold | Per compliance requirements |
+
+### Soft-Delete Implementation
+
+```python
+def mark_as_archived(self, note: str = "") -> None:
+    """
+    Soft-delete by marking as ARCHIVED (not hard delete).
+
+    Archived entries are:
+    - Excluded from normal pending/replayable queries
+    - Retained for audit and compliance
+    - Queryable when explicitly filtered
+    """
+    self.status = self.Status.ARCHIVED
+    self.resolution_type = self.ResolutionType.ARCHIVED
+    self.resolved_at = timezone.now()
+    if note:
+        self.resolution_note = note
+    self.save()
+```
+
+### Cleanup Task (Soft-Delete)
+
+```python
+@shared_task
+def cleanup_resolved_dlq_entries(days_old: int = 30) -> dict:
+    """
+    Archive old entries (NOT delete).
+
+    - Mark expired pending entries as EXPIRED
+    - Mark old resolved/rejected as ARCHIVED
+    - Never hard delete for compliance
+    """
+    # ... implementation uses mark_as_archived() instead of delete()
+```
+
+### Query Patterns
+
+```python
+# Normal operations - excludes archived
+pending = FailedOperation.objects.filter(status=Status.PENDING)
+
+# Audit query - includes archived
+all_payment_failures = FailedOperation.objects.filter(
+    domain='payment',
+    created_at__gte=audit_start_date,
+)
+
+# Archived only
+archived = FailedOperation.objects.filter(status=Status.ARCHIVED)
+```
 
 ---
 

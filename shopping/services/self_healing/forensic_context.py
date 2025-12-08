@@ -139,9 +139,7 @@ class ForensicContext:
             # External System
             "external_request_id": self.external_request_id,
             "external_response_code": self.external_response_code,
-            "external_response_body": self.external_response_body[:5000]
-            if self.external_response_body
-            else "",
+            "external_response_body": self.external_response_body[:5000] if self.external_response_body else "",
             # Extra
             **self.extra,
         }
@@ -260,9 +258,7 @@ class ForensicContextBuilder:
         if hasattr(request, "META"):
             self._context.client_ip = self._get_client_ip(request)
             self._context.user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
-            self._context.session_id = (
-                request.session.session_key if hasattr(request, "session") else ""
-            )
+            self._context.session_id = request.session.session_key if hasattr(request, "session") else ""
         return self
 
     def with_task(

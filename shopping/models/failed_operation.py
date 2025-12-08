@@ -29,6 +29,7 @@ class FailedOperation(models.Model):
 
     class Domain(models.TextChoices):
         """Domain classification for failed operations"""
+
         PAYMENT = "payment", "Payment"
         POINT = "point", "Point"
         INVENTORY = "inventory", "Inventory"
@@ -37,22 +38,29 @@ class FailedOperation(models.Model):
 
     class Status(models.TextChoices):
         """State machine for DLQ item lifecycle"""
+
         PENDING = "pending", "Pending Review"
         REVIEWING = "reviewing", "Under Review"
         REPLAYED = "replayed", "Replay Queued"
+        REQUIRES_REVIEW = "requires_review", "Requires Human Review"
         RESOLVED = "resolved", "Resolved"
         REJECTED = "rejected", "Rejected (Unrecoverable)"
+        ARCHIVED = "archived", "Archived"
         EXPIRED = "expired", "Retention Expired"
 
     class ResolutionType(models.TextChoices):
         """How the failure was resolved"""
+
         AUTO_REPLAY = "auto_replay", "Automatic Replay"
         MANUAL_FIX = "manual_fix", "Manual Fix"
         REJECTED = "rejected", "Rejected"
         EXPIRED = "expired", "Expired"
+        INTERNAL_ERROR = "internal_error", "Internal Error"
+        ARCHIVED = "archived", "Archived"
 
     class RecommendedAction(models.TextChoices):
         """Suggested action for operators"""
+
         REPLAY = "replay", "Replay Operation"
         MANUAL_CHECK = "manual_check", "Manual Verification"
         ESCALATE = "escalate", "Escalate to Senior"
@@ -337,16 +345,12 @@ class FailedOperation(models.Model):
             ValueError: If maximum replay attempts (2) exceeded
         """
         if self.retry_count >= self.max_retries:
-            raise ValueError(
-                f"Maximum replay attempts ({self.max_retries}) exceeded"
-            )
+            raise ValueError(f"Maximum replay attempts ({self.max_retries}) exceeded")
 
         self.status = self.Status.REPLAYED
         self.retry_count += 1
         self.last_retry_at = timezone.now()
-        self.save(
-            update_fields=["status", "retry_count", "last_retry_at", "updated_at"]
-        )
+        self.save(update_fields=["status", "retry_count", "last_retry_at", "updated_at"])
 
     def mark_as_reviewing(self, reviewer: "User | None" = None) -> None:
         """
@@ -364,23 +368,67 @@ class FailedOperation(models.Model):
     def revert_to_pending(self, note: str = "") -> None:
         """
         Revert from REPLAYED back to PENDING after replay failure.
+        If retry_count reaches threshold, escalate to REQUIRES_REVIEW.
+
+        Escalation Rule:
+        - 1-2 failures: stays PENDING
+        - 3+ failures: escalates to REQUIRES_REVIEW
 
         Args:
             note: Additional error information
         """
-        self.status = self.Status.PENDING
+        # Escalate to REQUIRES_REVIEW if too many failures
+        if self.retry_count >= 3:
+            self.status = self.Status.REQUIRES_REVIEW
+            self.recommended_action = self.RecommendedAction.ESCALATE
+        else:
+            self.status = self.Status.PENDING
+
         if note:
             self.error_message = f"{self.error_message}\n[Replay failed] {note}".strip()
-        self.save(update_fields=["status", "error_message", "updated_at"])
+        self.save(update_fields=["status", "error_message", "recommended_action", "updated_at"])
+
+    def mark_as_requires_review(self, note: str = "") -> None:
+        """
+        Mark this DLQ entry as requiring human investigation.
+
+        Used when:
+        - Multiple replay failures indicate non-transient issue
+        - Handler encounters unexpected exception
+        - Data inconsistency detected
+
+        Args:
+            note: Reason for escalation
+        """
+        self.status = self.Status.REQUIRES_REVIEW
+        self.recommended_action = self.RecommendedAction.ESCALATE
+        if note:
+            self.error_message = f"{self.error_message}\n[Escalated] {note}".strip()
+        self.save(update_fields=["status", "error_message", "recommended_action", "updated_at"])
+
+    def mark_as_archived(self, note: str = "") -> None:
+        """
+        Soft-delete by marking as archived (not hard delete).
+
+        Used for long-term retention of resolved/rejected entries.
+        Archived entries are excluded from normal queries but retained for audit.
+
+        Args:
+            note: Archive reason
+        """
+        self.status = self.Status.ARCHIVED
+        self.resolution_type = self.ResolutionType.ARCHIVED
+        self.resolved_at = timezone.now()
+        if note:
+            self.resolution_note = note
+        self.save(update_fields=["status", "resolution_type", "resolved_at", "resolution_note", "updated_at"])
 
     def mark_as_expired(self) -> None:
         """Mark this DLQ entry as expired (retention period passed)."""
         self.status = self.Status.EXPIRED
         self.resolution_type = self.ResolutionType.EXPIRED
         self.resolved_at = timezone.now()
-        self.save(
-            update_fields=["status", "resolution_type", "resolved_at", "updated_at"]
-        )
+        self.save(update_fields=["status", "resolution_type", "resolved_at", "updated_at"])
 
     # ========================================
     # Query Helpers
@@ -388,10 +436,7 @@ class FailedOperation(models.Model):
     @property
     def is_replayable(self) -> bool:
         """Check if this entry can be replayed."""
-        return (
-            self.status == self.Status.PENDING
-            and self.retry_count < self.max_retries
-        )
+        return self.status == self.Status.PENDING and self.retry_count < self.max_retries
 
     @property
     def age_seconds(self) -> float:
@@ -419,10 +464,7 @@ class FailedOperation(models.Model):
         }
 
         threshold = sla_thresholds.get(self.domain, timedelta(hours=24))
-        return (
-            self.status == self.Status.PENDING
-            and (timezone.now() - self.created_at) > threshold
-        )
+        return self.status == self.Status.PENDING and (timezone.now() - self.created_at) > threshold
 
     # ========================================
     # Factory Methods

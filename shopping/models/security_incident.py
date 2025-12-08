@@ -28,6 +28,7 @@ class SecurityIncident(models.Model):
 
     class IncidentType(models.TextChoices):
         """Types of security incidents"""
+
         WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
         PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
         TOKEN_FORGED = "token_forged", "Token Forged"
@@ -39,12 +40,14 @@ class SecurityIncident(models.Model):
 
     class Severity(models.TextChoices):
         """Severity levels for incidents"""
+
         CRITICAL = "critical", "Critical"
         HIGH = "high", "High"
         MEDIUM = "medium", "Medium"
 
     class Status(models.TextChoices):
         """Investigation status"""
+
         OPEN = "open", "Open"
         INVESTIGATING = "investigating", "Investigating"
         RESOLVED = "resolved", "Resolved"
@@ -237,9 +240,7 @@ class SecurityIncident(models.Model):
             notes: Investigation findings
             is_false_positive: Whether this was a false alarm
         """
-        self.status = (
-            self.Status.FALSE_POSITIVE if is_false_positive else self.Status.RESOLVED
-        )
+        self.status = self.Status.FALSE_POSITIVE if is_false_positive else self.Status.RESOLVED
         self.investigated_by = investigator
         self.investigation_notes = notes
         self.resolved_at = timezone.now()

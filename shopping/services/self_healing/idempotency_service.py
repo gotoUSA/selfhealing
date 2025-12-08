@@ -89,9 +89,7 @@ class IdempotencyKey:
         )
 
     @classmethod
-    def for_payment_confirm(
-        cls, payment_key: str, order_id: int, amount: int
-    ) -> "IdempotencyKey":
+    def for_payment_confirm(cls, payment_key: str, order_id: int, amount: int) -> "IdempotencyKey":
         """
         Create an idempotency key for payment confirmation.
 
@@ -303,9 +301,7 @@ class IdempotencyService:
         if cached_payment_id:
             try:
                 payment = Payment.objects.get(pk=cached_payment_id, status="done")
-                logger.info(
-                    f"[Idempotency] Duplicate confirm detected (cache): {key.key}"
-                )
+                logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
                 return IdempotencyResult(
                     is_duplicate=True,
                     existing_record=payment,
