@@ -650,17 +650,27 @@ Understanding failure types determines the correct response:
 **Response**: Retry with backoff, DLQ if exhausted, alert ops.
 
 #### Security Violations (Never Self-Heal)
-- Webhook signature invalid
-- Token tampering detected
-- Amount manipulation attempt
-- Unauthorized access attempts
+- Webhook signature invalid (`WEBHOOK_SIGNATURE_INVALID`)
+- Token tampering detected (`TOKEN_FORGED`)
+- Amount manipulation attempt (`PAYMENT_AMOUNT_TAMPERED`)
+- Unauthorized access attempts (`UNAUTHORIZED_ACCESS`)
+- Replay attacks (`REPLAY_ATTACK`)
+- SQL/XSS injection attempts (`INJECTION_ATTEMPT`)
+- Rate limit abuse (`RATE_LIMIT_ABUSE`)
+- Suspicious activity patterns (`SUSPICIOUS_ACTIVITY`)
 
-**Response**:
-1. Block immediately
-2. Create `SecurityIncident` record
-3. Invalidate related sessions/tokens
-4. Alert security team (Slack + Email + SMS)
-5. Consider account suspension
+**Response** (handled by `SecurityViolationService`):
+1. Block immediately - never auto-retry
+2. Create `SecurityIncident` record with forensic context
+3. Take protective action based on violation type:
+   - Session invalidation (TOKEN_FORGED)
+   - Temporary IP ban (RATE_LIMIT_ABUSE)
+   - Order freeze (PAYMENT_AMOUNT_TAMPERED)
+4. Trigger multi-channel notification via `SecurityNotificationService`:
+   - CRITICAL: Slack + Email + SMS + PagerDuty
+   - HIGH: Slack + Email
+   - MEDIUM: Slack only
+5. Log for security audit trail
 
 ---
 

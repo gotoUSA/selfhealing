@@ -432,6 +432,18 @@ def format_failure_message(failed_op: FailedOperation) -> str:
 """
 ```
 
+### Implementation Reference
+
+The notification service is implemented in:
+- `shopping/services/self_healing/security_notification_service.py`
+
+Key features:
+- Multi-channel support (Slack, Email, SMS, PagerDuty)
+- Severity-based routing
+- Message truncation for API limits (Slack 3000 char limit)
+- Graceful degradation on channel failures
+- Dry-run mode for testing
+
 ---
 
 ## 5. Security Violation Handling
@@ -442,13 +454,26 @@ Security violations are **immediately blocked** and routed to the security team.
 
 ### Security Violation Types
 
-| Type | Detection | Immediate Action |
-|------|-----------|------------------|
-| `WEBHOOK_SIGNATURE_INVALID` | HMAC mismatch | Block, log source IP |
-| `PAYMENT_AMOUNT_TAMPERED` | Request != Response | Block, freeze order |
-| `TOKEN_FORGED` | Invalid signature | Invalidate all sessions |
-| `UNAUTHORIZED_ACCESS` | Role/permission violation | Log, block |
-| `RATE_LIMIT_ABUSE` | Excessive requests | Temporary ban |
+| Type | Severity | Detection | Immediate Action |
+|------|----------|-----------|------------------|
+| `WEBHOOK_SIGNATURE_INVALID` | CRITICAL | HMAC mismatch | Block, log source IP |
+| `PAYMENT_AMOUNT_TAMPERED` | CRITICAL | Request != Response | Block, freeze order |
+| `TOKEN_FORGED` | CRITICAL | Invalid signature | Invalidate all sessions |
+| `REPLAY_ATTACK` | CRITICAL | Duplicate request ID | Block, log attempt |
+| `UNAUTHORIZED_ACCESS` | HIGH | Role/permission violation | Log, block |
+| `INJECTION_ATTEMPT` | HIGH | Malicious input detected | Block, log attempt |
+| `RATE_LIMIT_ABUSE` | MEDIUM | Excessive requests | Temporary IP ban (1hr) |
+| `SUSPICIOUS_ACTIVITY` | MEDIUM | Unusual pattern detected | Log for review |
+
+### Implementation Reference
+
+**Services:**
+- `shopping/services/self_healing/security_violation_service.py` - Violation handling
+- `shopping/services/self_healing/security_notification_service.py` - Multi-channel notifications
+
+**Tests:**
+- `shopping/tests/unit/services/test_security_violation_service.py` (34 tests)
+- `shopping/tests/unit/services/test_security_notification_service.py` (33 tests)
 
 ### Security Incident Model
 
