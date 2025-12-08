@@ -23,7 +23,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch, MagicMock, PropertyMock
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generator
 
 import pytest
 from django.conf import settings
@@ -165,7 +165,7 @@ class FailureInjector:
 
 
 @pytest.fixture
-def failure_injector() -> FailureInjector:
+def failure_injector() -> Generator[FailureInjector, None, None]:
     """Provide a failure injector instance."""
     injector = FailureInjector()
     yield injector
@@ -384,7 +384,7 @@ class CascadingFailureHandler:
 
 
 @pytest.fixture
-def cascading_handler(failure_injector) -> CascadingFailureHandler:
+def cascading_handler(failure_injector: FailureInjector) -> Generator[CascadingFailureHandler, None, None]:
     """Provide a cascading failure handler."""
     handler = CascadingFailureHandler(failure_injector)
     yield handler
