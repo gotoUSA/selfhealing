@@ -102,9 +102,7 @@ class TenantAwareCircuitBreakerService:
             return f"{service_name}:{tenant_id}"
         return service_name
 
-    def get_or_create_state(
-        self, service_name: str, tenant_id: str | None = None
-    ) -> CircuitBreakerState:
+    def get_or_create_state(self, service_name: str, tenant_id: str | None = None) -> CircuitBreakerState:
         """Get or create circuit breaker state for tenant-specific service."""
         key = self._get_service_key(service_name, tenant_id)
         state, _ = CircuitBreakerState.objects.get_or_create(
@@ -221,9 +219,7 @@ class MockCostTracker:
         self.call_count = 0
         self.call_history.clear()
 
-    def would_exceed_threshold(
-        self, transaction_amount: Decimal, threshold_percent: Decimal
-    ) -> bool:
+    def would_exceed_threshold(self, transaction_amount: Decimal, threshold_percent: Decimal) -> bool:
         """Check if next call would exceed cost threshold."""
         threshold = transaction_amount * threshold_percent / Decimal("100")
         # Check if NEXT call would exceed (not current + next)
@@ -314,13 +310,15 @@ class MockMetricsCollector:
         """Increment a counter metric."""
         key = self._key(name, labels)
         self._counters[key] = self._counters.get(key, 0) + value
-        self._events.append({
-            "type": "counter",
-            "name": name,
-            "value": value,
-            "labels": labels or {},
-            "timestamp": timezone.now(),
-        })
+        self._events.append(
+            {
+                "type": "counter",
+                "name": name,
+                "value": value,
+                "labels": labels or {},
+                "timestamp": timezone.now(),
+            }
+        )
 
     def observe(self, name: str, value: float, labels: dict | None = None) -> None:
         """Observe a histogram/summary value."""
@@ -328,25 +326,29 @@ class MockMetricsCollector:
         if key not in self._histograms:
             self._histograms[key] = []
         self._histograms[key].append(value)
-        self._events.append({
-            "type": "histogram",
-            "name": name,
-            "value": value,
-            "labels": labels or {},
-            "timestamp": timezone.now(),
-        })
+        self._events.append(
+            {
+                "type": "histogram",
+                "name": name,
+                "value": value,
+                "labels": labels or {},
+                "timestamp": timezone.now(),
+            }
+        )
 
     def gauge(self, name: str, value: float, labels: dict | None = None) -> None:
         """Set a gauge metric."""
         key = self._key(name, labels)
         self._gauges[key] = value
-        self._events.append({
-            "type": "gauge",
-            "name": name,
-            "value": value,
-            "labels": labels or {},
-            "timestamp": timezone.now(),
-        })
+        self._events.append(
+            {
+                "type": "gauge",
+                "name": name,
+                "value": value,
+                "labels": labels or {},
+                "timestamp": timezone.now(),
+            }
+        )
 
     def get_value(self, name: str, labels: dict | None = None) -> float:
         """Get current counter value."""

@@ -228,6 +228,7 @@ class TestDLQAuditTrail:
 
         # Simulate replay action
         from .conftest import AuditEntry
+
         replay_audit = AuditEntry(
             action_type="replay_action",
             dlq_id=dlq_entry.id,
@@ -362,6 +363,7 @@ class TestDLQAuditTrail:
 
         # Log audit
         from .conftest import AuditEntry
+
         resolution_audit = AuditEntry(
             action_type="dlq_resolution",
             dlq_id=dlq_entry.id,
@@ -588,6 +590,7 @@ class TestEscalationAudit:
 
         # Log escalation
         from .conftest import AuditEntry
+
         escalation_audit = AuditEntry(
             action_type="escalation",
             control_reason="REQUIRES_REVIEW: Handler crashed during recovery",
@@ -709,52 +712,57 @@ class TestAuditTrailCompleteness:
         trace_id = str(uuid.uuid4())
 
         # Stage 1: Initial failure
-        audit_log_repository.log(AuditEntry(
-            action_type="payment_failure",
-            metadata={
-                "trace_id": trace_id,
-                "stage": "initial_failure",
-                "error_code": "PG_TIMEOUT",
-            },
-        ))
+        audit_log_repository.log(
+            AuditEntry(
+                action_type="payment_failure",
+                metadata={
+                    "trace_id": trace_id,
+                    "stage": "initial_failure",
+                    "error_code": "PG_TIMEOUT",
+                },
+            )
+        )
 
         # Stage 2: Retry attempt
-        audit_log_repository.log(AuditEntry(
-            action_type="retry_decision",
-            metadata={
-                "trace_id": trace_id,
-                "stage": "retry",
-                "attempt": 1,
-            },
-        ))
+        audit_log_repository.log(
+            AuditEntry(
+                action_type="retry_decision",
+                metadata={
+                    "trace_id": trace_id,
+                    "stage": "retry",
+                    "attempt": 1,
+                },
+            )
+        )
 
         # Stage 3: DLQ entry
-        audit_log_repository.log(AuditEntry(
-            action_type="dlq_entry",
-            metadata={
-                "trace_id": trace_id,
-                "stage": "dlq",
-                "failure_type": "max_retries_exceeded",
-            },
-        ))
+        audit_log_repository.log(
+            AuditEntry(
+                action_type="dlq_entry",
+                metadata={
+                    "trace_id": trace_id,
+                    "stage": "dlq",
+                    "failure_type": "max_retries_exceeded",
+                },
+            )
+        )
 
         # Stage 4: Resolution
-        audit_log_repository.log(AuditEntry(
-            action_type="dlq_resolution",
-            controlled_by=admin_user.id,
-            metadata={
-                "trace_id": trace_id,
-                "stage": "resolution",
-                "outcome": "resolved",
-            },
-        ))
+        audit_log_repository.log(
+            AuditEntry(
+                action_type="dlq_resolution",
+                controlled_by=admin_user.id,
+                metadata={
+                    "trace_id": trace_id,
+                    "stage": "resolution",
+                    "outcome": "resolved",
+                },
+            )
+        )
 
         # Assert: Complete trail exists
         all_entries = audit_log_repository.get_all()
-        trace_entries = [
-            e for e in all_entries
-            if e.metadata.get("trace_id") == trace_id
-        ]
+        trace_entries = [e for e in all_entries if e.metadata.get("trace_id") == trace_id]
 
         assert len(trace_entries) == 4, "Should have 4 audit entries for complete trail"
 

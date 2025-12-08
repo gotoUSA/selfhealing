@@ -168,23 +168,13 @@ class SecurityThresholds:
         security_sh = self_healing.get("SECURITY", {})
 
         return cls(
-            rate_limit_window_seconds=security_config.get(
-                "RATE_LIMIT_WINDOW", security_sh.get("RATE_LIMIT_WINDOW", 60)
-            ),
-            rate_limit_max_requests=security_config.get(
-                "RATE_LIMIT_MAX", security_sh.get("RATE_LIMIT_MAX", 100)
-            ),
-            temporary_ban_hours=security_config.get(
-                "TEMP_BAN_HOURS", security_sh.get("TEMP_BAN_HOURS", 1)
-            ),
-            permanent_ban_threshold=security_config.get(
-                "PERM_BAN_THRESHOLD", security_sh.get("PERM_BAN_THRESHOLD", 5)
-            ),
+            rate_limit_window_seconds=security_config.get("RATE_LIMIT_WINDOW", security_sh.get("RATE_LIMIT_WINDOW", 60)),
+            rate_limit_max_requests=security_config.get("RATE_LIMIT_MAX", security_sh.get("RATE_LIMIT_MAX", 100)),
+            temporary_ban_hours=security_config.get("TEMP_BAN_HOURS", security_sh.get("TEMP_BAN_HOURS", 1)),
+            permanent_ban_threshold=security_config.get("PERM_BAN_THRESHOLD", security_sh.get("PERM_BAN_THRESHOLD", 5)),
             suspicious_ip_cache_timeout=security_sh.get("SUSPICIOUS_IP_CACHE_TIMEOUT", 86400),
             injection_ban_hours=security_sh.get("INJECTION_BAN_HOURS", 24),
-            failed_login_threshold=security_config.get(
-                "FAILED_LOGIN_THRESHOLD", security_sh.get("FAILED_LOGIN_THRESHOLD", 5)
-            ),
+            failed_login_threshold=security_config.get("FAILED_LOGIN_THRESHOLD", security_sh.get("FAILED_LOGIN_THRESHOLD", 5)),
         )
 
 

@@ -81,9 +81,7 @@ class TestCostAwareRecovery:
         # Assert
         assert result["action"] == "moved_to_dlq"
         assert result["reason"] == "cost_prohibitive"
-        assert high_cost_tracker.total_cost == Decimal("1000"), (
-            f"Expected cost 1000, got {high_cost_tracker.total_cost}"
-        )
+        assert high_cost_tracker.total_cost == Decimal("1000"), f"Expected cost 1000, got {high_cost_tracker.total_cost}"
         assert result["audit"]["cost_estimate"] == "1000"
         assert result["audit"]["threshold"] == "1000"  # 10% of 10000
 
@@ -319,9 +317,7 @@ class TestCostAwareRecovery:
         # Verify cumulative progression
         for i, record in enumerate(cost_tracker.call_history, 1):
             expected_cumulative = Decimal(str(i * 100))
-            assert record.cumulative == expected_cumulative, (
-                f"Call {i} should have cumulative {expected_cumulative}"
-            )
+            assert record.cumulative == expected_cumulative, f"Call {i} should have cumulative {expected_cumulative}"
 
     def test_cost_analysis_report(self, cost_tracker):
         """
@@ -379,10 +375,13 @@ class TestCostThresholdEdgeCases:
         cost_tracker.cost_per_call = Decimal("50")
 
         # Zero transaction means any cost exceeds threshold
-        assert cost_tracker.would_exceed_threshold(
-            transaction_amount=Decimal("0"),
-            threshold_percent=Decimal("10"),
-        ) is True
+        assert (
+            cost_tracker.would_exceed_threshold(
+                transaction_amount=Decimal("0"),
+                threshold_percent=Decimal("10"),
+            )
+            is True
+        )
 
     def test_exact_threshold_boundary(self, cost_tracker):
         """
@@ -405,15 +404,11 @@ class TestCostThresholdEdgeCases:
 
         # First call: total=50, threshold=100 -> allowed
         cost_tracker.record_call("retry_1")
-        assert cost_tracker.would_exceed_threshold(
-            transaction, threshold_percent
-        ) is False
+        assert cost_tracker.would_exceed_threshold(transaction, threshold_percent) is False
 
         # Second call: total=100, threshold=100 -> next would exceed
         cost_tracker.record_call("retry_2")
-        assert cost_tracker.would_exceed_threshold(
-            transaction, threshold_percent
-        ) is True
+        assert cost_tracker.would_exceed_threshold(transaction, threshold_percent) is True
 
     def test_fractional_cost_calculations(self, cost_tracker):
         """

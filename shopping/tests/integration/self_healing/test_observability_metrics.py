@@ -87,10 +87,7 @@ class TestObservabilityMetrics:
             labels={"tenant_id": tenant_id, "error_code": "PG_TIMEOUT"},
         )
 
-        assert final_value == initial_value + 5, (
-            f"Expected counter to increment by 5, "
-            f"got {final_value - initial_value}"
-        )
+        assert final_value == initial_value + 5, f"Expected counter to increment by 5, " f"got {final_value - initial_value}"
 
     def test_circuit_breaker_state_change_emitted(
         self,
@@ -315,9 +312,7 @@ class TestObservabilityMetrics:
         alert_threshold = 5.0
         alert_should_fire = failure_rate > alert_threshold
 
-        assert alert_should_fire is True, (
-            f"Alert should fire at {failure_rate}% (threshold: {alert_threshold}%)"
-        )
+        assert alert_should_fire is True, f"Alert should fire at {failure_rate}% (threshold: {alert_threshold}%)"
         assert failure_rate == 6.0
 
     def test_trace_id_propagates_through_flow(self, mock_metrics):
@@ -465,9 +460,7 @@ class TestMetricsAggregation:
                 "payment_failures_total",
                 labels={"error_code": error_code},
             )
-            assert actual == expected_count, (
-                f"Expected {expected_count} for {error_code}, got {actual}"
-            )
+            assert actual == expected_count, f"Expected {expected_count} for {error_code}, got {actual}"
 
     def test_histogram_percentile_calculation(self, mock_metrics):
         """
@@ -485,11 +478,11 @@ class TestMetricsAggregation:
 
         # Generate realistic latency distribution
         latencies = (
-            [0.1] * 50 +  # 50 fast requests
-            [1.0] * 30 +  # 30 medium requests
-            [5.0] * 15 +  # 15 slow requests
-            [10.0] * 4 +  # 4 very slow
-            [30.0] * 1    # 1 outlier
+            [0.1] * 50  # 50 fast requests
+            + [1.0] * 30  # 30 medium requests
+            + [5.0] * 15  # 15 slow requests
+            + [10.0] * 4  # 4 very slow
+            + [30.0] * 1  # 1 outlier
         )
 
         for latency in latencies:
@@ -588,9 +581,7 @@ class TestMetricsEventOrdering:
         timestamps = [e["timestamp"] for e in events]
 
         for i in range(1, len(timestamps)):
-            assert timestamps[i] >= timestamps[i-1], (
-                f"Timestamp {i} should be >= timestamp {i-1}"
-            )
+            assert timestamps[i] >= timestamps[i - 1], f"Timestamp {i} should be >= timestamp {i-1}"
 
     def test_event_history_completeness(self, mock_metrics):
         """

@@ -150,6 +150,7 @@ class ForensicContext:
         if not body:
             return ""
         from shopping.services.self_healing.config import get_forensic_settings
+
         max_length = get_forensic_settings().response_body_max_length
         return body[:max_length]
 
@@ -170,6 +171,7 @@ class ForensicContext:
             backoff_seconds: Seconds waited before this attempt
         """
         from shopping.services.self_healing.config import get_forensic_settings
+
         max_length = get_forensic_settings().error_message_max_length
         self.retry_history.append(
             RetryAttempt(
@@ -268,6 +270,7 @@ class ForensicContextBuilder:
         """
         if hasattr(request, "META"):
             from shopping.services.self_healing.config import get_forensic_settings
+
             max_length = get_forensic_settings().user_agent_max_length
             self._context.client_ip = self._get_client_ip(request)
             self._context.user_agent = request.META.get("HTTP_USER_AGENT", "")[:max_length]
@@ -311,6 +314,7 @@ class ForensicContextBuilder:
             response_body: Response body (will be truncated)
         """
         from shopping.services.self_healing.config import get_forensic_settings
+
         max_length = get_forensic_settings().response_body_max_length
         self._context.external_request_id = request_id
         self._context.external_response_code = response_code

@@ -77,13 +77,11 @@ class TestMultiTenancyCircuitBreakerIsolation:
         )
 
         # Assert
-        assert circuit_breaker_service.should_allow(
-            service_name, tenant_id=tenant_a.id
-        ) is False, "Tenant A should be blocked"
+        assert circuit_breaker_service.should_allow(service_name, tenant_id=tenant_a.id) is False, "Tenant A should be blocked"
 
-        assert circuit_breaker_service.should_allow(
-            service_name, tenant_id=tenant_b.id
-        ) is True, "Tenant B should NOT be affected by Tenant A's CB state"
+        assert (
+            circuit_breaker_service.should_allow(service_name, tenant_id=tenant_b.id) is True
+        ), "Tenant B should NOT be affected by Tenant A's CB state"
 
     def test_tenant_b_circuit_open_does_not_affect_tenant_a(
         self,
@@ -118,13 +116,11 @@ class TestMultiTenancyCircuitBreakerIsolation:
         )
 
         # Assert
-        assert circuit_breaker_service.should_allow(
-            service_name, tenant_id=tenant_b.id
-        ) is False, "Tenant B should be blocked"
+        assert circuit_breaker_service.should_allow(service_name, tenant_id=tenant_b.id) is False, "Tenant B should be blocked"
 
-        assert circuit_breaker_service.should_allow(
-            service_name, tenant_id=tenant_a.id
-        ) is True, "Tenant A should NOT be affected by Tenant B's CB state"
+        assert (
+            circuit_breaker_service.should_allow(service_name, tenant_id=tenant_a.id) is True
+        ), "Tenant A should NOT be affected by Tenant B's CB state"
 
     def test_both_tenants_can_have_different_states(
         self,
@@ -250,12 +246,8 @@ class TestMultiTenancyDLQIsolation:
         )
 
         # Query for Tenant A's DLQ entries
-        tenant_a_entries = FailedPayment.objects.filter(
-            metadata__tenant_id=tenant_a.id
-        )
-        tenant_b_entries = FailedPayment.objects.filter(
-            metadata__tenant_id=tenant_b.id
-        )
+        tenant_a_entries = FailedPayment.objects.filter(metadata__tenant_id=tenant_a.id)
+        tenant_b_entries = FailedPayment.objects.filter(metadata__tenant_id=tenant_b.id)
 
         assert tenant_a_entries.count() == 1, "Tenant A should have 1 DLQ entry"
         assert tenant_b_entries.count() == 1, "Tenant B should have 1 DLQ entry"
@@ -267,9 +259,7 @@ class TestMultiTenancyDLQIsolation:
         assert dlq_a.id not in [e.id for e in tenant_b_entries]
         assert dlq_b.id not in [e.id for e in tenant_a_entries]
 
-    def test_tenant_cannot_resolve_other_tenant_dlq(
-        self, tenant_a, tenant_b, db
-    ):
+    def test_tenant_cannot_resolve_other_tenant_dlq(self, tenant_a, tenant_b, db):
         """
         Purpose:
             Verify tenant admins cannot resolve other tenant's DLQ entries.
@@ -321,9 +311,7 @@ class TestMultiTenancySLAPolicies:
     Validates that each tenant's SLA configuration is respected.
     """
 
-    def test_tenant_specific_sla_policies_enforced(
-        self, tenant_a, tenant_b, recovery_handler
-    ):
+    def test_tenant_specific_sla_policies_enforced(self, tenant_a, tenant_b, recovery_handler):
         """
         Purpose:
             Verify each tenant's SLA timeout is independently enforced.
@@ -397,9 +385,7 @@ class TestMultiTenancyMetrics:
     Validates that metrics are properly labeled with tenant_id.
     """
 
-    def test_tenant_metrics_aggregated_separately(
-        self, tenant_a, tenant_b, recovery_handler, mock_metrics
-    ):
+    def test_tenant_metrics_aggregated_separately(self, tenant_a, tenant_b, recovery_handler, mock_metrics):
         """
         Purpose:
             Verify metrics are labeled with correct tenant_id.
@@ -457,16 +443,10 @@ class TestMultiTenancyMetrics:
         assert tenant_b_pg_timeout == 1, "Tenant B should have 1 PG_TIMEOUT"
 
         # Verify tenant label presence
-        assert mock_metrics.has_label(
-            "payment_failures_total", "tenant_id", tenant_a.id
-        ), "Metrics should have Tenant A label"
-        assert mock_metrics.has_label(
-            "payment_failures_total", "tenant_id", tenant_b.id
-        ), "Metrics should have Tenant B label"
+        assert mock_metrics.has_label("payment_failures_total", "tenant_id", tenant_a.id), "Metrics should have Tenant A label"
+        assert mock_metrics.has_label("payment_failures_total", "tenant_id", tenant_b.id), "Metrics should have Tenant B label"
 
-    def test_circuit_breaker_state_change_metric_per_tenant(
-        self, tenant_a, tenant_b, circuit_breaker_service, mock_metrics
-    ):
+    def test_circuit_breaker_state_change_metric_per_tenant(self, tenant_a, tenant_b, circuit_breaker_service, mock_metrics):
         """
         Purpose:
             Verify CB state change metrics are per-tenant.
@@ -584,9 +564,7 @@ class TestMultiTenancyAuthorization:
         state_key = f"{service_name}:{tenant_a.id}"
 
         # Verify Tenant B admin is different from the controller
-        assert state_a.controlled_by != tenant_b.admin_user, (
-            "Tenant B admin should not be the controller"
-        )
+        assert state_a.controlled_by != tenant_b.admin_user, "Tenant B admin should not be the controller"
 
         # Log the unauthorized attempt for audit
         audit_log_repository.log_circuit_breaker_action(
