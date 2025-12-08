@@ -40,8 +40,7 @@ class TestRetryConfigDefaults:
         """
         config = RetryConfig()
         assert config.max_attempts == 3, (
-            "Policy Violation: Default max attempts must be 3. "
-            "Check RETRY_MAX_ATTEMPTS configuration."
+            "Policy Violation: Default max attempts must be 3. " "Check RETRY_MAX_ATTEMPTS configuration."
         )
 
     def test_default_backoff_base_is_4(self):
@@ -54,8 +53,7 @@ class TestRetryConfigDefaults:
         """
         config = RetryConfig()
         assert config.backoff_base == 4, (
-            "Policy Violation: Default backoff base must be 4. "
-            "Check RETRY_BACKOFF_BASE configuration."
+            "Policy Violation: Default backoff base must be 4. " "Check RETRY_BACKOFF_BASE configuration."
         )
 
     def test_default_backoff_max_is_180(self):
@@ -68,8 +66,7 @@ class TestRetryConfigDefaults:
         """
         config = RetryConfig()
         assert config.backoff_max == 180, (
-            "Policy Violation: Default backoff max must be 180 seconds. "
-            "Check RETRY_BACKOFF_MAX configuration."
+            "Policy Violation: Default backoff max must be 180 seconds. " "Check RETRY_BACKOFF_MAX configuration."
         )
 
     def test_default_dlq_enabled(self):
@@ -82,8 +79,7 @@ class TestRetryConfigDefaults:
         """
         config = RetryConfig()
         assert config.enable_dlq is True, (
-            "Policy Violation: DLQ must be enabled by default. "
-            "DLQ captures exhausted retries for manual review."
+            "Policy Violation: DLQ must be enabled by default. " "DLQ captures exhausted retries for manual review."
         )
 
 
@@ -114,10 +110,7 @@ class TestRetryDecisionWithinAttempts:
 
         result = handler.should_retry(Exception("test"), attempt=1)
 
-        assert result is True, (
-            "First attempt should allow retry. "
-            "2 more attempts remain with max_attempts=3."
-        )
+        assert result is True, "First attempt should allow retry. " "2 more attempts remain with max_attempts=3."
 
     def test_should_retry_on_second_attempt(self):
         """
@@ -129,10 +122,7 @@ class TestRetryDecisionWithinAttempts:
 
         result = handler.should_retry(Exception("test"), attempt=2)
 
-        assert result is True, (
-            "Second attempt should allow retry. "
-            "1 more attempt remains with max_attempts=3."
-        )
+        assert result is True, "Second attempt should allow retry. " "1 more attempt remains with max_attempts=3."
 
     def test_should_not_retry_at_max_attempts(self):
         """
@@ -152,10 +142,7 @@ class TestRetryDecisionWithinAttempts:
 
         result = handler.should_retry(Exception("test"), attempt=3)
 
-        assert result is False, (
-            "Retry should be blocked at max_attempts. "
-            "No more retries allowed after attempt 3."
-        )
+        assert result is False, "Retry should be blocked at max_attempts. " "No more retries allowed after attempt 3."
 
     def test_should_not_retry_beyond_max_attempts(self):
         """
@@ -167,9 +154,7 @@ class TestRetryDecisionWithinAttempts:
 
         result = handler.should_retry(Exception("test"), attempt=4)
 
-        assert result is False, (
-            "Retry should be blocked beyond max_attempts."
-        )
+        assert result is False, "Retry should be blocked beyond max_attempts."
 
 
 @pytest.mark.tier1
@@ -207,8 +192,7 @@ class TestRetryDecisionExceptionTypes:
         result = handler.should_retry(PermanentError("permanent"), attempt=1)
 
         assert result is False, (
-            "Non-retryable exception should block retry immediately. "
-            "PermanentError is configured as non-retryable."
+            "Non-retryable exception should block retry immediately. " "PermanentError is configured as non-retryable."
         )
 
     def test_retryable_exception_allows_retry(self):
@@ -228,10 +212,7 @@ class TestRetryDecisionExceptionTypes:
 
         result = handler.should_retry(TransientError("transient"), attempt=1)
 
-        assert result is True, (
-            "Retryable exception should allow retry. "
-            "TransientError is configured as retryable."
-        )
+        assert result is True, "Retryable exception should allow retry. " "TransientError is configured as retryable."
 
     def test_generic_exception_is_retryable_by_default(self):
         """
@@ -243,9 +224,7 @@ class TestRetryDecisionExceptionTypes:
         """
         config = RetryConfig()
 
-        assert Exception in config.retryable_exceptions, (
-            "Base Exception should be in default retryable_exceptions."
-        )
+        assert Exception in config.retryable_exceptions, "Base Exception should be in default retryable_exceptions."
 
 
 @pytest.mark.tier1
@@ -396,9 +375,7 @@ class TestRetryHandlerDelayCalculation:
         # 4^3 = 64, should be capped at 50
         delay = handler.get_next_delay(3)
 
-        assert delay == 50, (
-            f"Max delay not enforced: expected 50, got {delay}."
-        )
+        assert delay == 50, f"Max delay not enforced: expected 50, got {delay}."
 
 
 @pytest.mark.tier1
@@ -416,12 +393,12 @@ class TestRetryDecisionTable:
     @pytest.mark.parametrize(
         "attempt,max_attempts,is_retryable,expected",
         [
-            (1, 3, True, True),   # First attempt, retryable
-            (2, 3, True, True),   # Second attempt, retryable
+            (1, 3, True, True),  # First attempt, retryable
+            (2, 3, True, True),  # Second attempt, retryable
             (3, 3, True, False),  # At max, retryable but exhausted
-            (1, 3, False, False), # First attempt, non-retryable
+            (1, 3, False, False),  # First attempt, non-retryable
             (1, 1, True, False),  # Single attempt, already at max
-            (0, 3, True, True),   # Edge: attempt 0 treated as < max
+            (0, 3, True, True),  # Edge: attempt 0 treated as < max
         ],
     )
     def test_decision_table(self, attempt, max_attempts, is_retryable, expected):

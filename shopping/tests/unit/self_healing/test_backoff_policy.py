@@ -43,10 +43,7 @@ class TestBackoffPolicyDefaults:
             R-015: Retry storm prevention
         """
         config = BackoffConfig()
-        assert config.base == 4, (
-            "Policy Violation: Default backoff base must be 4. "
-            "Check RETRY_BACKOFF_BASE configuration."
-        )
+        assert config.base == 4, "Policy Violation: Default backoff base must be 4. " "Check RETRY_BACKOFF_BASE configuration."
 
     def test_default_max_delay_is_180(self):
         """
@@ -58,8 +55,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.max_delay == 180, (
-            "Policy Violation: Default max delay must be 180 seconds. "
-            "Check RETRY_BACKOFF_MAX configuration."
+            "Policy Violation: Default max delay must be 180 seconds. " "Check RETRY_BACKOFF_MAX configuration."
         )
 
     def test_default_jitter_is_25_percent(self):
@@ -72,8 +68,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.jitter_percent == 25, (
-            "Policy Violation: Default jitter must be 25%. "
-            "Jitter prevents thundering herd problem."
+            "Policy Violation: Default jitter must be 25%. " "Jitter prevents thundering herd problem."
         )
 
     def test_default_min_delay_is_1(self):
@@ -86,8 +81,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.min_delay == 1, (
-            "Policy Violation: Minimum delay must be at least 1 second. "
-            "Zero or negative delays risk retry loops."
+            "Policy Violation: Minimum delay must be at least 1 second. " "Zero or negative delays risk retry loops."
         )
 
 
@@ -121,8 +115,7 @@ class TestBackoffPolicyCalculation:
         delays = [calc.calculate(i, with_jitter=False) for i in range(1, 4)]
 
         assert delays == [4, 16, 64], (
-            f"Exponential progression failed: expected [4, 16, 64], got {delays}. "
-            "Formula should be: base^attempt."
+            f"Exponential progression failed: expected [4, 16, 64], got {delays}. " "Formula should be: base^attempt."
         )
 
     def test_max_delay_caps_large_values(self):
@@ -166,8 +159,7 @@ class TestBackoffPolicyCalculation:
         delay = calc.calculate(0, with_jitter=False)
 
         assert delay == 1, (
-            f"Min delay not enforced for attempt 0: expected 1, got {delay}. "
-            "Edge case handling must return min_delay."
+            f"Min delay not enforced for attempt 0: expected 1, got {delay}. " "Edge case handling must return min_delay."
         )
 
     def test_min_delay_enforced_for_negative_attempt(self):
@@ -183,9 +175,7 @@ class TestBackoffPolicyCalculation:
 
         delay = calc.calculate(-1, with_jitter=False)
 
-        assert delay == 2, (
-            f"Min delay not enforced for negative attempt: expected 2, got {delay}."
-        )
+        assert delay == 2, f"Min delay not enforced for negative attempt: expected 2, got {delay}."
 
 
 @pytest.mark.tier1
@@ -260,8 +250,7 @@ class TestBackoffPolicyJitter:
         delays = [calc.calculate(2, with_jitter=True) for _ in range(100)]
 
         assert all(d == 16 for d in delays), (
-            "Zero jitter should produce deterministic results. "
-            f"Got varying values: {set(delays)}"
+            "Zero jitter should produce deterministic results. " f"Got varying values: {set(delays)}"
         )
 
 
@@ -284,9 +273,7 @@ class TestBackoffPolicySequence:
 
         sequence = calc.get_delays_sequence(5, with_jitter=False)
 
-        assert len(sequence) == 5, (
-            f"Sequence length mismatch: expected 5, got {len(sequence)}."
-        )
+        assert len(sequence) == 5, f"Sequence length mismatch: expected 5, got {len(sequence)}."
 
     def test_sequence_values_are_correct(self):
         """
@@ -299,9 +286,7 @@ class TestBackoffPolicySequence:
         sequence = calc.get_delays_sequence(5, with_jitter=False)
         expected = [2, 4, 8, 16, 32]  # 2^1, 2^2, 2^3, 2^4, 2^5
 
-        assert sequence == expected, (
-            f"Sequence values incorrect: expected {expected}, got {sequence}."
-        )
+        assert sequence == expected, f"Sequence values incorrect: expected {expected}, got {sequence}."
 
     def test_sequence_applies_max_cap(self):
         """
@@ -315,9 +300,7 @@ class TestBackoffPolicySequence:
         sequence = calc.get_delays_sequence(4, with_jitter=False)
         expected = [4, 16, 50, 50]
 
-        assert sequence == expected, (
-            f"Max cap not applied in sequence: expected {expected}, got {sequence}."
-        )
+        assert sequence == expected, f"Max cap not applied in sequence: expected {expected}, got {sequence}."
 
 
 @pytest.mark.tier1
@@ -341,9 +324,7 @@ class TestBackoffPolicyConvenienceFunction:
             jitter_percent=0,
         )
 
-        assert result == 16, (
-            f"Convenience function failed: expected 16, got {result}."
-        )
+        assert result == 16, f"Convenience function failed: expected 16, got {result}."
 
     def test_calculate_backoff_with_different_base(self):
         """
@@ -357,9 +338,7 @@ class TestBackoffPolicyConvenienceFunction:
             jitter_percent=0,
         )
 
-        assert result == 8, (  # 2^3 = 8
-            f"Custom base calculation failed: expected 8, got {result}."
-        )
+        assert result == 8, f"Custom base calculation failed: expected 8, got {result}."  # 2^3 = 8
 
 
 @pytest.mark.tier1
@@ -382,9 +361,7 @@ class TestBackoffPolicyEdgeCases:
         # Attempt 100 would be 4^100 without capping
         delay = calc.calculate(100, with_jitter=False)
 
-        assert delay == 180, (
-            f"Large attempt not capped: expected 180, got {delay}."
-        )
+        assert delay == 180, f"Large attempt not capped: expected 180, got {delay}."
 
     def test_base_of_1_produces_constant_delay(self):
         """
@@ -397,9 +374,7 @@ class TestBackoffPolicyEdgeCases:
         # 1^n = 1 for all n
         delays = calc.get_delays_sequence(3, with_jitter=False)
 
-        assert delays == [1, 1, 1], (
-            f"Base=1 should produce constant delays: expected [1, 1, 1], got {delays}."
-        )
+        assert delays == [1, 1, 1], f"Base=1 should produce constant delays: expected [1, 1, 1], got {delays}."
 
     def test_min_delay_override_respects_floor(self):
         """
@@ -412,6 +387,4 @@ class TestBackoffPolicyEdgeCases:
         # 1^1 = 1, but min_delay=5 should override
         delay = calc.calculate(1, with_jitter=False)
 
-        assert delay == 5, (
-            f"Min delay override failed: expected 5, got {delay}."
-        )
+        assert delay == 5, f"Min delay override failed: expected 5, got {delay}."

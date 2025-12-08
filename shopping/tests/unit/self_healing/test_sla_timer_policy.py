@@ -41,8 +41,7 @@ class TestSLAThresholdDefaults:
         """
         thresholds = SLAThresholds()
         assert thresholds.payment_hours == 1, (
-            "Policy Violation: Payment SLA must be 1 hour (strictest). "
-            "Payment failures have immediate revenue impact."
+            "Policy Violation: Payment SLA must be 1 hour (strictest). " "Payment failures have immediate revenue impact."
         )
 
     def test_point_sla_is_4_hours(self):
@@ -55,8 +54,7 @@ class TestSLAThresholdDefaults:
         """
         thresholds = SLAThresholds()
         assert thresholds.point_hours == 4, (
-            "Policy Violation: Point SLA must be 4 hours. "
-            "Check SLA.POINT_HOURS configuration."
+            "Policy Violation: Point SLA must be 4 hours. " "Check SLA.POINT_HOURS configuration."
         )
 
     def test_inventory_sla_is_2_hours(self):
@@ -69,8 +67,7 @@ class TestSLAThresholdDefaults:
         """
         thresholds = SLAThresholds()
         assert thresholds.inventory_hours == 2, (
-            "Policy Violation: Inventory SLA must be 2 hours. "
-            "Check SLA.INVENTORY_HOURS configuration."
+            "Policy Violation: Inventory SLA must be 2 hours. " "Check SLA.INVENTORY_HOURS configuration."
         )
 
     def test_webhook_sla_is_8_hours(self):
@@ -83,8 +80,7 @@ class TestSLAThresholdDefaults:
         """
         thresholds = SLAThresholds()
         assert thresholds.webhook_hours == 8, (
-            "Policy Violation: Webhook SLA must be 8 hours. "
-            "Check SLA.WEBHOOK_HOURS configuration."
+            "Policy Violation: Webhook SLA must be 8 hours. " "Check SLA.WEBHOOK_HOURS configuration."
         )
 
     def test_notification_sla_is_24_hours(self):
@@ -97,8 +93,7 @@ class TestSLAThresholdDefaults:
         """
         thresholds = SLAThresholds()
         assert thresholds.notification_hours == 24, (
-            "Policy Violation: Notification SLA must be 24 hours. "
-            "Notifications are non-blocking, lower priority."
+            "Policy Violation: Notification SLA must be 24 hours. " "Notifications are non-blocking, lower priority."
         )
 
     def test_default_sla_is_24_hours(self):
@@ -110,9 +105,7 @@ class TestSLAThresholdDefaults:
             - default_hours = 24
         """
         thresholds = SLAThresholds()
-        assert thresholds.default_hours == 24, (
-            "Policy Violation: Default SLA must be 24 hours for unknown domains."
-        )
+        assert thresholds.default_hours == 24, "Policy Violation: Default SLA must be 24 hours for unknown domains."
 
 
 @pytest.mark.tier1
@@ -135,9 +128,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("payment")
 
-        assert isinstance(result, timedelta), (
-            f"Expected timedelta, got {type(result).__name__}."
-        )
+        assert isinstance(result, timedelta), f"Expected timedelta, got {type(result).__name__}."
 
     def test_get_threshold_payment(self):
         """
@@ -147,9 +138,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("payment")
 
-        assert result == timedelta(hours=1), (
-            f"Payment threshold incorrect: expected 1 hour, got {result}."
-        )
+        assert result == timedelta(hours=1), f"Payment threshold incorrect: expected 1 hour, got {result}."
 
     def test_get_threshold_point(self):
         """
@@ -159,9 +148,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("point")
 
-        assert result == timedelta(hours=4), (
-            f"Point threshold incorrect: expected 4 hours, got {result}."
-        )
+        assert result == timedelta(hours=4), f"Point threshold incorrect: expected 4 hours, got {result}."
 
     def test_get_threshold_inventory(self):
         """
@@ -171,9 +158,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("inventory")
 
-        assert result == timedelta(hours=2), (
-            f"Inventory threshold incorrect: expected 2 hours, got {result}."
-        )
+        assert result == timedelta(hours=2), f"Inventory threshold incorrect: expected 2 hours, got {result}."
 
     def test_get_threshold_webhook(self):
         """
@@ -183,9 +168,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("webhook")
 
-        assert result == timedelta(hours=8), (
-            f"Webhook threshold incorrect: expected 8 hours, got {result}."
-        )
+        assert result == timedelta(hours=8), f"Webhook threshold incorrect: expected 8 hours, got {result}."
 
     def test_get_threshold_notification(self):
         """
@@ -195,9 +178,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("notification")
 
-        assert result == timedelta(hours=24), (
-            f"Notification threshold incorrect: expected 24 hours, got {result}."
-        )
+        assert result == timedelta(hours=24), f"Notification threshold incorrect: expected 24 hours, got {result}."
 
     def test_get_threshold_unknown_domain_returns_default(self):
         """
@@ -214,9 +195,7 @@ class TestSLAThresholdRetrieval:
         thresholds = SLAThresholds()
         result = thresholds.get_threshold("foobar")
 
-        assert result == timedelta(hours=24), (
-            f"Unknown domain should return default: expected 24 hours, got {result}."
-        )
+        assert result == timedelta(hours=24), f"Unknown domain should return default: expected 24 hours, got {result}."
 
     def test_get_threshold_case_insensitive(self):
         """
@@ -247,9 +226,7 @@ class TestSLAThresholdAllDomains:
         thresholds = SLAThresholds()
         result = thresholds.get_all_thresholds()
 
-        assert isinstance(result, dict), (
-            f"Expected dict, got {type(result).__name__}."
-        )
+        assert isinstance(result, dict), f"Expected dict, got {type(result).__name__}."
 
     def test_get_all_thresholds_contains_all_domains(self):
         """
@@ -276,9 +253,7 @@ class TestSLAThresholdAllDomains:
         result = thresholds.get_all_thresholds()
 
         for domain, td in result.items():
-            assert isinstance(td, timedelta), (
-                f"Domain '{domain}' has non-timedelta value: {type(td).__name__}."
-            )
+            assert isinstance(td, timedelta), f"Domain '{domain}' has non-timedelta value: {type(td).__name__}."
 
     def test_get_all_thresholds_values_match_individual(self):
         """
@@ -290,10 +265,7 @@ class TestSLAThresholdAllDomains:
 
         for domain, expected in all_thresholds.items():
             individual = thresholds.get_threshold(domain)
-            assert individual == expected, (
-                f"Mismatch for domain '{domain}': "
-                f"bulk={expected}, individual={individual}."
-            )
+            assert individual == expected, f"Mismatch for domain '{domain}': " f"bulk={expected}, individual={individual}."
 
 
 @pytest.mark.tier1
@@ -320,10 +292,7 @@ class TestSLAThresholdPriority:
 
         for domain, sla in all_thresholds.items():
             if domain != "payment":
-                assert payment_sla < sla, (
-                    f"Payment SLA ({payment_sla}) should be stricter than "
-                    f"{domain} SLA ({sla})."
-                )
+                assert payment_sla < sla, f"Payment SLA ({payment_sla}) should be stricter than " f"{domain} SLA ({sla})."
 
     def test_sla_ordering_matches_business_criticality(self):
         """
@@ -351,9 +320,7 @@ class TestSLAThresholdPriority:
         for domain, expected_hours in expected_order:
             actual = all_thresholds[domain]
             expected = timedelta(hours=expected_hours)
-            assert actual == expected, (
-                f"Domain '{domain}' SLA mismatch: expected {expected}, got {actual}."
-            )
+            assert actual == expected, f"Domain '{domain}' SLA mismatch: expected {expected}, got {actual}."
 
 
 @pytest.mark.tier1
@@ -392,6 +359,4 @@ class TestSLAThresholdImmutability:
         except Exception:
             pass  # Expected
 
-        assert thresholds.payment_hours == original_payment, (
-            "SLA threshold was modified despite being frozen."
-        )
+        assert thresholds.payment_hours == original_payment, "SLA threshold was modified despite being frozen."

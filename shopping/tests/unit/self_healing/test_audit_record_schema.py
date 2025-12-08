@@ -63,8 +63,7 @@ class TestAuditRecordRequiredFields:
 
         missing = required_fields - set(audit_record.keys())
         assert len(missing) == 0, (
-            f"Audit Trail Incomplete: Required fields missing: {missing}. "
-            "This is a compliance violation (NIST AU-3)."
+            f"Audit Trail Incomplete: Required fields missing: {missing}. " "This is a compliance violation (NIST AU-3)."
         )
 
     def test_dlq_entry_required_fields(self):
@@ -96,9 +95,7 @@ class TestAuditRecordRequiredFields:
         }
 
         missing = required_fields - set(audit_record.keys())
-        assert len(missing) == 0, (
-            f"DLQ Audit Incomplete: Required fields missing: {missing}."
-        )
+        assert len(missing) == 0, f"DLQ Audit Incomplete: Required fields missing: {missing}."
 
     def test_replay_action_required_fields(self):
         """
@@ -126,9 +123,7 @@ class TestAuditRecordRequiredFields:
         }
 
         missing = required_fields - set(audit_record.keys())
-        assert len(missing) == 0, (
-            f"Replay Audit Incomplete: Required fields missing: {missing}."
-        )
+        assert len(missing) == 0, f"Replay Audit Incomplete: Required fields missing: {missing}."
 
     def test_cost_decision_required_fields(self):
         """
@@ -159,9 +154,7 @@ class TestAuditRecordRequiredFields:
         }
 
         missing = required_fields - set(audit_record.keys())
-        assert len(missing) == 0, (
-            f"Cost Decision Audit Incomplete: Required fields missing: {missing}."
-        )
+        assert len(missing) == 0, f"Cost Decision Audit Incomplete: Required fields missing: {missing}."
 
     def test_sla_abort_required_fields(self):
         """
@@ -189,9 +182,7 @@ class TestAuditRecordRequiredFields:
         }
 
         missing = required_fields - set(audit_record.keys())
-        assert len(missing) == 0, (
-            f"SLA Abort Audit Incomplete: Required fields missing: {missing}."
-        )
+        assert len(missing) == 0, f"SLA Abort Audit Incomplete: Required fields missing: {missing}."
 
     def test_escalation_required_fields(self):
         """
@@ -220,9 +211,7 @@ class TestAuditRecordRequiredFields:
         }
 
         missing = required_fields - set(audit_record.keys())
-        assert len(missing) == 0, (
-            f"Escalation Audit Incomplete: Required fields missing: {missing}."
-        )
+        assert len(missing) == 0, f"Escalation Audit Incomplete: Required fields missing: {missing}."
 
 
 @pytest.mark.tier1
@@ -246,8 +235,7 @@ class TestAuditTimestampPrecision:
 
         # Should have timezone info
         assert timestamp.tzinfo is not None, (
-            "Audit timestamps must include timezone information. "
-            "Use timezone.now() instead of datetime.now()."
+            "Audit timestamps must include timezone information. " "Use timezone.now() instead of datetime.now()."
         )
 
     def test_timestamp_has_millisecond_precision(self):
@@ -261,9 +249,7 @@ class TestAuditTimestampPrecision:
         timestamp = timezone.now()
 
         # microsecond field should exist (allows ms+ precision)
-        assert hasattr(timestamp, "microsecond"), (
-            "Audit timestamps must support millisecond precision."
-        )
+        assert hasattr(timestamp, "microsecond"), "Audit timestamps must support millisecond precision."
 
     def test_timestamp_format_is_iso8601(self):
         """
@@ -274,9 +260,7 @@ class TestAuditTimestampPrecision:
         iso_str = timestamp.isoformat()
 
         # Should contain T separator
-        assert "T" in iso_str, (
-            f"Timestamp '{iso_str}' should be ISO 8601 format."
-        )
+        assert "T" in iso_str, f"Timestamp '{iso_str}' should be ISO 8601 format."
 
         # Should be parseable
         try:
@@ -300,9 +284,7 @@ class TestAuditFieldTypes:
             Verify controlled_by field is string type.
         """
         controlled_by = "user_123"
-        assert isinstance(controlled_by, str), (
-            "controlled_by must be string type."
-        )
+        assert isinstance(controlled_by, str), "controlled_by must be string type."
 
     def test_decision_is_valid_enum_value(self):
         """
@@ -312,9 +294,7 @@ class TestAuditFieldTypes:
         valid_decisions = {"retry", "dlq", "abort", "success"}
         decision = "retry"
 
-        assert decision in valid_decisions, (
-            f"Decision '{decision}' must be one of {valid_decisions}."
-        )
+        assert decision in valid_decisions, f"Decision '{decision}' must be one of {valid_decisions}."
 
     def test_forensic_context_is_dict(self):
         """
@@ -322,9 +302,7 @@ class TestAuditFieldTypes:
             Verify forensic_context is dictionary type.
         """
         context = {"order_id": 123, "amount": 50000}
-        assert isinstance(context, dict), (
-            "forensic_context must be dictionary type."
-        )
+        assert isinstance(context, dict), "forensic_context must be dictionary type."
 
     def test_failure_history_is_list(self):
         """
@@ -335,9 +313,7 @@ class TestAuditFieldTypes:
             {"attempt": 1, "error": "TIMEOUT"},
             {"attempt": 2, "error": "TIMEOUT"},
         ]
-        assert isinstance(history, list), (
-            "failure_history must be list type."
-        )
+        assert isinstance(history, list), "failure_history must be list type."
 
     def test_dlq_id_is_integer(self):
         """
@@ -345,9 +321,7 @@ class TestAuditFieldTypes:
             Verify dlq_id is integer type.
         """
         dlq_id = 12345
-        assert isinstance(dlq_id, int), (
-            "dlq_id must be integer type."
-        )
+        assert isinstance(dlq_id, int), "dlq_id must be integer type."
 
 
 @pytest.mark.tier1
@@ -388,13 +362,11 @@ class TestAuditSchemaValidation:
             assert field in record, f"Missing field: {field}"
             if isinstance(expected_type, tuple):
                 assert isinstance(record[field], expected_type), (
-                    f"Field '{field}' has wrong type: expected {expected_type}, "
-                    f"got {type(record[field])}."
+                    f"Field '{field}' has wrong type: expected {expected_type}, " f"got {type(record[field])}."
                 )
             else:
                 assert isinstance(record[field], expected_type), (
-                    f"Field '{field}' has wrong type: expected {expected_type}, "
-                    f"got {type(record[field])}."
+                    f"Field '{field}' has wrong type: expected {expected_type}, " f"got {type(record[field])}."
                 )
 
     def test_dlq_entry_schema_complete(self):
@@ -433,9 +405,7 @@ class TestAuditRecordStateTransitions:
         valid_states = {"open", "closed", "half_open"}
 
         for state in ["closed", "open"]:
-            assert state in valid_states, (
-                f"Invalid CB state: {state}. Must be one of {valid_states}."
-            )
+            assert state in valid_states, f"Invalid CB state: {state}. Must be one of {valid_states}."
 
     def test_state_transition_is_valid_change(self):
         """
@@ -447,9 +417,7 @@ class TestAuditRecordStateTransitions:
 
         # Transition should be different (or same for no-op)
         # This test validates the concept
-        assert isinstance(previous, str) and isinstance(new, str), (
-            "State values must be strings."
-        )
+        assert isinstance(previous, str) and isinstance(new, str), "State values must be strings."
 
     def test_outcome_valid_values(self):
         """
@@ -459,9 +427,7 @@ class TestAuditRecordStateTransitions:
         valid_outcomes = {"success", "failure", "partial", "pending"}
         outcome = "success"
 
-        assert outcome in valid_outcomes, (
-            f"Invalid outcome: {outcome}. Must be one of {valid_outcomes}."
-        )
+        assert outcome in valid_outcomes, f"Invalid outcome: {outcome}. Must be one of {valid_outcomes}."
 
 
 @pytest.mark.tier1
@@ -489,8 +455,7 @@ class TestAuditRetentionPolicy:
         dlq_settings = get_dlq_settings()
 
         assert dlq_settings.retention_days == 30, (
-            f"DLQ retention should be 30 days, got {dlq_settings.retention_days}. "
-            "Check DLQ_RETENTION_DAYS configuration."
+            f"DLQ retention should be 30 days, got {dlq_settings.retention_days}. " "Check DLQ_RETENTION_DAYS configuration."
         )
 
     def test_retention_allows_compliance_audit(self):
@@ -508,6 +473,5 @@ class TestAuditRetentionPolicy:
         min_retention = 30  # SOC 2 minimum
 
         assert dlq_settings.retention_days >= min_retention, (
-            f"Retention period ({dlq_settings.retention_days} days) "
-            f"below compliance minimum ({min_retention} days)."
+            f"Retention period ({dlq_settings.retention_days} days) " f"below compliance minimum ({min_retention} days)."
         )

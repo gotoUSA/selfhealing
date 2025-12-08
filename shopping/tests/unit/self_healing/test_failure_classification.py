@@ -34,8 +34,7 @@ class TestRetryableErrorClassification:
             R-015: Transient failures should retry
         """
         assert "TIMEOUT" in TOSS_RETRYABLE_ERRORS, (
-            "Policy Violation: TIMEOUT must be retryable. "
-            "Network timeouts are typically transient."
+            "Policy Violation: TIMEOUT must be retryable. " "Network timeouts are typically transient."
         )
 
     def test_network_error_is_retryable(self):
@@ -43,9 +42,7 @@ class TestRetryableErrorClassification:
         Purpose:
             Verify NETWORK_ERROR is retryable.
         """
-        assert "NETWORK_ERROR" in TOSS_RETRYABLE_ERRORS, (
-            "Policy Violation: NETWORK_ERROR must be retryable."
-        )
+        assert "NETWORK_ERROR" in TOSS_RETRYABLE_ERRORS, "Policy Violation: NETWORK_ERROR must be retryable."
 
     def test_internal_system_error_is_retryable(self):
         """
@@ -56,8 +53,7 @@ class TestRetryableErrorClassification:
             - Server-side errors (5xx equivalent) are retryable
         """
         assert "FAILED_INTERNAL_SYSTEM_PROCESSING" in TOSS_RETRYABLE_ERRORS, (
-            "Policy Violation: FAILED_INTERNAL_SYSTEM_PROCESSING must be retryable. "
-            "Server errors are typically transient."
+            "Policy Violation: FAILED_INTERNAL_SYSTEM_PROCESSING must be retryable. " "Server errors are typically transient."
         )
 
     def test_common_error_is_retryable(self):
@@ -65,18 +61,14 @@ class TestRetryableErrorClassification:
         Purpose:
             Verify generic COMMON_ERROR is retryable.
         """
-        assert "COMMON_ERROR" in TOSS_RETRYABLE_ERRORS, (
-            "Policy Violation: COMMON_ERROR must be retryable."
-        )
+        assert "COMMON_ERROR" in TOSS_RETRYABLE_ERRORS, "Policy Violation: COMMON_ERROR must be retryable."
 
     def test_retryable_set_not_empty(self):
         """
         Purpose:
             Verify retryable error set is not empty.
         """
-        assert len(TOSS_RETRYABLE_ERRORS) > 0, (
-            "TOSS_RETRYABLE_ERRORS should not be empty."
-        )
+        assert len(TOSS_RETRYABLE_ERRORS) > 0, "TOSS_RETRYABLE_ERRORS should not be empty."
 
 
 @pytest.mark.tier1
@@ -109,9 +101,9 @@ class TestNonRetryableErrorClassification:
         Purpose:
             Verify expired card errors are not retryable.
         """
-        assert "INVALID_CARD_EXPIRATION" in TOSS_NON_RETRYABLE_ERRORS, (
-            "Policy Violation: INVALID_CARD_EXPIRATION must NOT be retryable."
-        )
+        assert (
+            "INVALID_CARD_EXPIRATION" in TOSS_NON_RETRYABLE_ERRORS
+        ), "Policy Violation: INVALID_CARD_EXPIRATION must NOT be retryable."
 
     def test_already_processed_is_not_retryable(self):
         """
@@ -125,8 +117,7 @@ class TestNonRetryableErrorClassification:
             R-011: Prevent duplicate payments
         """
         assert "ALREADY_PROCESSED_PAYMENT" in TOSS_NON_RETRYABLE_ERRORS, (
-            "Policy Violation: ALREADY_PROCESSED_PAYMENT must NOT be retryable. "
-            "Retrying would risk duplicate processing."
+            "Policy Violation: ALREADY_PROCESSED_PAYMENT must NOT be retryable. " "Retrying would risk duplicate processing."
         )
 
     def test_already_canceled_is_not_retryable(self):
@@ -134,18 +125,16 @@ class TestNonRetryableErrorClassification:
         Purpose:
             Verify already canceled errors are not retryable.
         """
-        assert "ALREADY_CANCELED_PAYMENT" in TOSS_NON_RETRYABLE_ERRORS, (
-            "Policy Violation: ALREADY_CANCELED_PAYMENT must NOT be retryable."
-        )
+        assert (
+            "ALREADY_CANCELED_PAYMENT" in TOSS_NON_RETRYABLE_ERRORS
+        ), "Policy Violation: ALREADY_CANCELED_PAYMENT must NOT be retryable."
 
     def test_non_retryable_set_not_empty(self):
         """
         Purpose:
             Verify non-retryable error set is not empty.
         """
-        assert len(TOSS_NON_RETRYABLE_ERRORS) > 0, (
-            "TOSS_NON_RETRYABLE_ERRORS should not be empty."
-        )
+        assert len(TOSS_NON_RETRYABLE_ERRORS) > 0, "TOSS_NON_RETRYABLE_ERRORS should not be empty."
 
 
 @pytest.mark.tier1
@@ -177,12 +166,12 @@ class TestErrorSetMutualExclusivity:
         Purpose:
             Verify error constants are proper set types.
         """
-        assert isinstance(TOSS_RETRYABLE_ERRORS, (set, frozenset)), (
-            f"TOSS_RETRYABLE_ERRORS should be set, got {type(TOSS_RETRYABLE_ERRORS)}."
-        )
-        assert isinstance(TOSS_NON_RETRYABLE_ERRORS, (set, frozenset)), (
-            f"TOSS_NON_RETRYABLE_ERRORS should be set, got {type(TOSS_NON_RETRYABLE_ERRORS)}."
-        )
+        assert isinstance(
+            TOSS_RETRYABLE_ERRORS, (set, frozenset)
+        ), f"TOSS_RETRYABLE_ERRORS should be set, got {type(TOSS_RETRYABLE_ERRORS)}."
+        assert isinstance(
+            TOSS_NON_RETRYABLE_ERRORS, (set, frozenset)
+        ), f"TOSS_NON_RETRYABLE_ERRORS should be set, got {type(TOSS_NON_RETRYABLE_ERRORS)}."
 
 
 @pytest.mark.tier1
@@ -206,9 +195,7 @@ class TestErrorClassificationCompleteness:
             in_non_retryable = pattern in TOSS_NON_RETRYABLE_ERRORS
 
             # Either classified or pattern doesn't exist
-            assert in_retryable or in_non_retryable or True, (
-                f"Timeout pattern '{pattern}' should be classified."
-            )
+            assert in_retryable or in_non_retryable or True, f"Timeout pattern '{pattern}' should be classified."
 
     def test_user_error_patterns_covered(self):
         """
@@ -223,9 +210,7 @@ class TestErrorClassificationCompleteness:
 
         for error in user_errors:
             if error in TOSS_NON_RETRYABLE_ERRORS:
-                assert error not in TOSS_RETRYABLE_ERRORS, (
-                    f"User error '{error}' should only be in non-retryable set."
-                )
+                assert error not in TOSS_RETRYABLE_ERRORS, f"User error '{error}' should only be in non-retryable set."
 
 
 @pytest.mark.tier1
@@ -250,9 +235,7 @@ class TestErrorClassificationDecisionTable:
             ("ALREADY_CANCELED_PAYMENT", False),
         ],
     )
-    def test_error_classification_decision_table(
-        self, error_code, should_be_retryable
-    ):
+    def test_error_classification_decision_table(self, error_code, should_be_retryable):
         """
         Purpose:
             Verify each error code is correctly classified.
@@ -274,17 +257,15 @@ class TestErrorClassificationDecisionTable:
                 f"Error '{error_code}' should be in TOSS_RETRYABLE_ERRORS. "
                 "This is a transient error that should be retried."
             )
-            assert error_code not in TOSS_NON_RETRYABLE_ERRORS, (
-                f"Error '{error_code}' should NOT be in TOSS_NON_RETRYABLE_ERRORS."
-            )
+            assert (
+                error_code not in TOSS_NON_RETRYABLE_ERRORS
+            ), f"Error '{error_code}' should NOT be in TOSS_NON_RETRYABLE_ERRORS."
         else:
             assert error_code in TOSS_NON_RETRYABLE_ERRORS, (
                 f"Error '{error_code}' should be in TOSS_NON_RETRYABLE_ERRORS. "
                 "This is a permanent error that should not be retried."
             )
-            assert error_code not in TOSS_RETRYABLE_ERRORS, (
-                f"Error '{error_code}' should NOT be in TOSS_RETRYABLE_ERRORS."
-            )
+            assert error_code not in TOSS_RETRYABLE_ERRORS, f"Error '{error_code}' should NOT be in TOSS_RETRYABLE_ERRORS."
 
 
 @pytest.mark.tier1
@@ -322,9 +303,5 @@ class TestErrorClassificationUtility:
         """
         unknown = "FOOBAR_ERROR_12345"
 
-        assert unknown not in TOSS_RETRYABLE_ERRORS, (
-            "Unknown error should not be in retryable set."
-        )
-        assert unknown not in TOSS_NON_RETRYABLE_ERRORS, (
-            "Unknown error should not be in non-retryable set."
-        )
+        assert unknown not in TOSS_RETRYABLE_ERRORS, "Unknown error should not be in retryable set."
+        assert unknown not in TOSS_NON_RETRYABLE_ERRORS, "Unknown error should not be in non-retryable set."
