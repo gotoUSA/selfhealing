@@ -66,66 +66,82 @@ class FailureInjector:
     def inject_pg_timeout(self) -> None:
         """Enable PG timeout injection."""
         self.pg_timeout_enabled = True
-        self.injection_history.append({
-            "type": "pg_timeout",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "pg_timeout",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_db_connection_error(self) -> None:
         """Enable DB connection error injection."""
         self.db_connection_error_enabled = True
-        self.injection_history.append({
-            "type": "db_connection_error",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "db_connection_error",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_db_connection_error_on_write(self) -> None:
         """Enable DB connection error on write operations."""
         self.db_write_error_enabled = True
-        self.injection_history.append({
-            "type": "db_write_error",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "db_write_error",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_redis_down(self) -> None:
         """Enable Redis down injection."""
         self.redis_down_enabled = True
-        self.injection_history.append({
-            "type": "redis_down",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "redis_down",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_celery_broker_down(self) -> None:
         """Enable Celery broker down injection."""
         self.celery_broker_down_enabled = True
-        self.injection_history.append({
-            "type": "celery_broker_down",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "celery_broker_down",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_smtp_down(self) -> None:
         """Enable SMTP down injection."""
         self.smtp_down_enabled = True
-        self.injection_history.append({
-            "type": "smtp_down",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "smtp_down",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_inventory_service_down(self) -> None:
         """Enable inventory service down injection."""
         self.inventory_service_down_enabled = True
-        self.injection_history.append({
-            "type": "inventory_service_down",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "inventory_service_down",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def inject_dlq_full(self) -> None:
         """Enable DLQ full injection."""
         self.dlq_full_enabled = True
-        self.injection_history.append({
-            "type": "dlq_full",
-            "timestamp": timezone.now().isoformat(),
-        })
+        self.injection_history.append(
+            {
+                "type": "dlq_full",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
     def reset(self) -> None:
         """Reset all injections."""
@@ -143,11 +159,7 @@ class FailureInjector:
     def get_injection_summary(self) -> dict:
         """Get summary of all injections."""
         return {
-            "active_failures": [
-                k.replace("_enabled", "")
-                for k, v in self.__dict__.items()
-                if k.endswith("_enabled") and v
-            ],
+            "active_failures": [k.replace("_enabled", "") for k, v in self.__dict__.items() if k.endswith("_enabled") and v],
             "history": self.injection_history,
         }
 
@@ -221,8 +233,7 @@ class CascadingFailureHandler:
             }
 
             fallback_path = os.path.join(
-                self._fallback_dir,
-                f"fallback_payment_{payment.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.json"
+                self._fallback_dir, f"fallback_payment_{payment.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.json"
             )
 
             with open(fallback_path, "w") as f:
@@ -236,10 +247,7 @@ class CascadingFailureHandler:
             # Redis down - use synchronous fallback queue
             result["secondary_error"] = "REDIS_DOWN"
             result["action"] = "sync_fallback_queue"
-            result["recovery_instructions"] = (
-                "Using synchronous fallback queue. "
-                "Restore Redis and process pending items."
-            )
+            result["recovery_instructions"] = "Using synchronous fallback queue. " "Restore Redis and process pending items."
 
         elif self.failure_injector.celery_broker_down_enabled:
             # Celery broker down - persist to file
@@ -254,19 +262,13 @@ class CascadingFailureHandler:
                 "timestamp": timezone.now().isoformat(),
             }
 
-            fallback_path = os.path.join(
-                self._fallback_dir,
-                f"celery_fallback_{payment.id}.json"
-            )
+            fallback_path = os.path.join(self._fallback_dir, f"celery_fallback_{payment.id}.json")
 
             with open(fallback_path, "w") as f:
                 json.dump(fallback_data, f, indent=2)
 
             result["fallback_path"] = fallback_path
-            result["recovery_instructions"] = (
-                "Celery broker unavailable. "
-                "Task persisted to file for manual recovery."
-            )
+            result["recovery_instructions"] = "Celery broker unavailable. " "Task persisted to file for manual recovery."
 
         elif self.failure_injector.dlq_full_enabled:
             # DLQ is full - escalate to REQUIRES_REVIEW
@@ -307,8 +309,7 @@ class CascadingFailureHandler:
             result["state"] = "default_allow"
             result["degraded_mode"] = True
             result["recovery_instructions"] = (
-                "Circuit breaker state update failed. "
-                "Defaulting to ALLOW to prevent service disruption."
+                "Circuit breaker state update failed. " "Defaulting to ALLOW to prevent service disruption."
             )
         else:
             result["action"] = "state_updated"
@@ -339,9 +340,7 @@ class CascadingFailureHandler:
             result["blocking"] = False
             result["queued_for_retry"] = True
             result["recovery_instructions"] = (
-                "SMTP unavailable. "
-                "Notification queued for async retry. "
-                "Payment processing continues."
+                "SMTP unavailable. " "Notification queued for async retry. " "Payment processing continues."
             )
         else:
             result["action"] = "sent"
@@ -369,9 +368,7 @@ class CascadingFailureHandler:
             result["compensating_transaction_queued"] = True
             result["pending_items"] = items
             result["recovery_instructions"] = (
-                "Inventory service unavailable. "
-                "Compensating transaction queued. "
-                "Will retry when service is restored."
+                "Inventory service unavailable. " "Compensating transaction queued. " "Will retry when service is restored."
             )
         else:
             result["action"] = "rollback_complete"
@@ -381,6 +378,7 @@ class CascadingFailureHandler:
     def cleanup(self):
         """Clean up temporary files."""
         import shutil
+
         if os.path.exists(self._fallback_dir):
             shutil.rmtree(self._fallback_dir)
 
@@ -511,6 +509,7 @@ class TestCascadingPGTimeoutDBConnectionLost:
 
         # Verify timestamp is parseable
         from datetime import datetime
+
         timestamp = fallback_data["timestamp"]
         assert datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
 

@@ -146,13 +146,15 @@ class E2EPaymentFlowSimulator:
                 attempt.action_taken = "dlq"
 
             context.attempts.append(attempt)
-            context.audit_trail.append({
-                "event": "payment_attempt_failed",
-                "attempt": attempt.attempt_number,
-                "error_code": error_code,
-                "action": attempt.action_taken,
-                "timestamp": timezone.now().isoformat(),
-            })
+            context.audit_trail.append(
+                {
+                    "event": "payment_attempt_failed",
+                    "attempt": attempt.attempt_number,
+                    "error_code": error_code,
+                    "action": attempt.action_taken,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
             return {
                 "success": False,
@@ -168,11 +170,13 @@ class E2EPaymentFlowSimulator:
             context.attempts.append(attempt)
             context.final_status = "completed"
 
-            context.audit_trail.append({
-                "event": "payment_succeeded",
-                "attempt": attempt.attempt_number,
-                "timestamp": timezone.now().isoformat(),
-            })
+            context.audit_trail.append(
+                {
+                    "event": "payment_succeeded",
+                    "attempt": attempt.attempt_number,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
             return {
                 "success": True,
@@ -201,12 +205,14 @@ class E2EPaymentFlowSimulator:
         context.dlq_entry_id = dlq_entry.id
         context.final_status = "in_dlq"
 
-        context.audit_trail.append({
-            "event": "moved_to_dlq",
-            "dlq_id": dlq_entry.id,
-            "retry_count": len(context.attempts),
-            "timestamp": timezone.now().isoformat(),
-        })
+        context.audit_trail.append(
+            {
+                "event": "moved_to_dlq",
+                "dlq_id": dlq_entry.id,
+                "retry_count": len(context.attempts),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
         return dlq_entry
 
@@ -229,12 +235,14 @@ class E2EPaymentFlowSimulator:
             replay_attempt["error"] = "Replay failed"
             context.replay_attempts.append(replay_attempt)
 
-            context.audit_trail.append({
-                "event": "replay_failed",
-                "dlq_id": dlq_entry.id,
-                "replayed_by": admin.username,
-                "timestamp": timezone.now().isoformat(),
-            })
+            context.audit_trail.append(
+                {
+                    "event": "replay_failed",
+                    "dlq_id": dlq_entry.id,
+                    "replayed_by": admin.username,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
             return {
                 "success": False,
@@ -253,12 +261,14 @@ class E2EPaymentFlowSimulator:
         dlq_entry.resolution_note = "Successfully replayed by admin"
         dlq_entry.save()
 
-        context.audit_trail.append({
-            "event": "replay_succeeded",
-            "dlq_id": dlq_entry.id,
-            "replayed_by": admin.username,
-            "timestamp": timezone.now().isoformat(),
-        })
+        context.audit_trail.append(
+            {
+                "event": "replay_succeeded",
+                "dlq_id": dlq_entry.id,
+                "replayed_by": admin.username,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
         return {
             "success": True,
@@ -401,7 +411,7 @@ class TestE2EFailureRetrySuccess:
             )
 
         # Assert: Check delays
-        assert context.attempts[0].delay_applied == 4   # 4^1
+        assert context.attempts[0].delay_applied == 4  # 4^1
         assert context.attempts[1].delay_applied == 16  # 4^2
         assert context.attempts[2].delay_applied == 64  # 4^3
 
