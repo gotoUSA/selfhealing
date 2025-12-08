@@ -3,10 +3,10 @@ L3 Self-Healing Services
 
 This module provides self-healing capabilities for the shopping application.
 Includes retry logic, backoff calculation, idempotency checking, DLQ management,
-replay functionality, and circuit breaker management.
+replay functionality, circuit breaker management, and observability metrics.
 
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md (§7, §8)
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §9)
+Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §7, §9)
 """
 
 from .retry_handler import (
@@ -55,6 +55,27 @@ from .circuit_breaker_service import (
     force_open_circuit,
     force_close_circuit,
 )
+from .metrics import (
+    # Constants
+    DOMAINS,
+    # Recording functions
+    record_dlq_item_created,
+    record_retry_attempt,
+    record_recovery_time,
+    record_sla_breach,
+    record_circuit_breaker_state_change,
+    record_circuit_breaker_open_duration,
+    record_replay_attempt,
+    # Gauge update functions
+    update_dlq_pending_gauges,
+    update_dlq_status_gauges,
+    update_circuit_breaker_gauges,
+    update_retry_success_rates,
+    collect_all_metrics,
+    # Context managers/decorators
+    track_recovery_time,
+    track_replay,
+)
 
 __all__ = [
     # Retry
@@ -96,4 +117,20 @@ __all__ = [
     "should_allow_request",
     "force_open_circuit",
     "force_close_circuit",
+    # Metrics (Phase 5 Observability)
+    "DOMAINS",
+    "record_dlq_item_created",
+    "record_retry_attempt",
+    "record_recovery_time",
+    "record_sla_breach",
+    "record_circuit_breaker_state_change",
+    "record_circuit_breaker_open_duration",
+    "record_replay_attempt",
+    "update_dlq_pending_gauges",
+    "update_dlq_status_gauges",
+    "update_circuit_breaker_gauges",
+    "update_retry_success_rates",
+    "collect_all_metrics",
+    "track_recovery_time",
+    "track_replay",
 ]

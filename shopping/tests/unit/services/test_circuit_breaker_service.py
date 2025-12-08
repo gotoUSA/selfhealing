@@ -650,14 +650,14 @@ class TestManualOverrideTTL:
         from datetime import timedelta
 
         now = timezone.now()
-        
+
         self.service.force_open(
             service_name="test_ttl_service",
             reason="TTL test",
         )
-        
+
         state = CircuitBreakerState.objects.get(service_name="test_ttl_service")
-        
+
         assert state.manually_controlled is True
         assert state.manual_override_expires_at is not None
         # TTL should be approximately 90 minutes from now
@@ -671,7 +671,7 @@ class TestManualOverrideTTL:
             Verify overrides past TTL are expired and transitioned to half-open.
         """
         from datetime import timedelta
-        
+
         # Create circuit with expired TTL
         CircuitBreakerState.objects.create(
             service_name="expired_ttl_service",
@@ -680,11 +680,11 @@ class TestManualOverrideTTL:
             manual_override_expires_at=timezone.now() - timedelta(minutes=10),
             control_reason="Test override",
         )
-        
+
         expired = self.service.check_and_expire_manual_overrides()
-        
+
         assert "expired_ttl_service" in expired
-        
+
         state = CircuitBreakerState.objects.get(service_name="expired_ttl_service")
         assert state.state == "half_open"
         assert state.manually_controlled is False
@@ -697,7 +697,7 @@ class TestManualOverrideTTL:
             Verify overrides with valid TTL are not expired.
         """
         from datetime import timedelta
-        
+
         # Create circuit with future TTL
         CircuitBreakerState.objects.create(
             service_name="valid_ttl_service",
@@ -706,11 +706,11 @@ class TestManualOverrideTTL:
             manual_override_expires_at=timezone.now() + timedelta(minutes=60),
             control_reason="Test override",
         )
-        
+
         expired = self.service.check_and_expire_manual_overrides()
-        
+
         assert "valid_ttl_service" not in expired
-        
+
         state = CircuitBreakerState.objects.get(service_name="valid_ttl_service")
         assert state.state == "open"
         assert state.manually_controlled is True
@@ -721,7 +721,7 @@ class TestManualOverrideTTL:
             Verify extend_manual_override correctly extends the TTL.
         """
         from datetime import timedelta
-        
+
         initial_expiry = timezone.now() + timedelta(minutes=30)
         CircuitBreakerState.objects.create(
             service_name="extend_ttl_service",
@@ -730,15 +730,15 @@ class TestManualOverrideTTL:
             manual_override_expires_at=initial_expiry,
             control_reason="Initial reason",
         )
-        
+
         result = self.service.extend_manual_override(
             service_name="extend_ttl_service",
             additional_minutes=60,
             reason="Need more time",
         )
-        
+
         assert result.success is True
-        
+
         state = CircuitBreakerState.objects.get(service_name="extend_ttl_service")
         expected_min = initial_expiry + timedelta(minutes=59)
         expected_max = initial_expiry + timedelta(minutes=61)
@@ -755,12 +755,12 @@ class TestManualOverrideTTL:
             state="open",
             manually_controlled=False,
         )
-        
+
         result = self.service.extend_manual_override(
             service_name="auto_service",
             additional_minutes=60,
         )
-        
+
         assert result.success is False
         assert "not under manual control" in result.error
 
@@ -770,18 +770,17 @@ class TestManualOverrideTTL:
             Verify reset clears the manual override TTL.
         """
         from datetime import timedelta
-        
+
         CircuitBreakerState.objects.create(
             service_name="reset_ttl_service",
             state="open",
             manually_controlled=True,
             manual_override_expires_at=timezone.now() + timedelta(minutes=60),
         )
-        
+
         self.service.reset(service_name="reset_ttl_service", reason="Test reset")
-        
+
         state = CircuitBreakerState.objects.get(service_name="reset_ttl_service")
         assert state.state == "closed"
         assert state.manually_controlled is False
         assert state.manual_override_expires_at is None
-

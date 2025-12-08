@@ -1,0 +1,223 @@
+# L3 Self-Healing System Alerting Rules
+# Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
+#
+# Deploy this file to your Prometheus server's rules directory
+# Typical location: /etc/prometheus/rules/self_healing_alerts.yml
+
+groups:
+  - name: self_healing_dlq
+    rules:
+      # DLQ Pending Warning
+      - alert: DLQPendingHigh
+        expr: sum(dlq_pending_count) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "DLQ pending count is high"
+          description: "Total DLQ pending items: {{ $value }}. Check for system issues or external service outages."
+          runbook_url: "https://docs.internal/runbooks/dlq-pending-high"
+
+      # DLQ Pending Critical
+      - alert: DLQPendingCritical
+        expr: sum(dlq_pending_count) > 50
+        for: 5m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "DLQ pending count is critical"
+          description: "Total DLQ pending items: {{ $value }}. Immediate investigation required."
+          runbook_url: "https://docs.internal/runbooks/dlq-pending-critical"
+
+      # DLQ Growth Rate High
+      - alert: DLQGrowthRateHigh
+        expr: sum(rate(dlq_created_total[5m])) * 60 > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "DLQ growth rate is high"
+          description: "DLQ items being created at {{ $value | printf \"%.1f\" }} items/minute. Possible ongoing incident."
+          runbook_url: "https://docs.internal/runbooks/dlq-growth-high"
+
+      # DLQ Pending by Domain
+      - alert: DLQPendingByDomainHigh
+        expr: dlq_pending_count > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "DLQ pending high for domain {{ $labels.domain }}"
+          description: "Domain {{ $labels.domain }} has {{ $value }} pending DLQ items."
+          runbook_url: "https://docs.internal/runbooks/dlq-domain-pending"
+
+  - name: self_healing_retry
+    rules:
+      # Retry Success Rate Low
+      - alert: RetrySuccessRateLow
+        expr: retry_success_rate < 70
+        for: 15m
+        labels:
+          severity: warning
+          team: dev
+        annotations:
+          summary: "Retry success rate is low for {{ $labels.domain }}"
+          description: "Domain {{ $labels.domain }} has {{ $value | printf \"%.1f\" }}% retry success rate. Review failure types."
+          runbook_url: "https://docs.internal/runbooks/retry-success-low"
+
+      # Retry Success Rate Critical
+      - alert: RetrySuccessRateCritical
+        expr: retry_success_rate < 50
+        for: 10m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Retry success rate is critically low for {{ $labels.domain }}"
+          description: "Domain {{ $labels.domain }} has only {{ $value | printf \"%.1f\" }}% retry success rate. Immediate investigation needed."
+          runbook_url: "https://docs.internal/runbooks/retry-success-critical"
+
+      # High Retry Attempts
+      - alert: RetryAttemptsHigh
+        expr: histogram_quantile(0.95, sum(rate(retry_attempts_total_bucket[1h])) by (le, domain)) > 4
+        for: 30m
+        labels:
+          severity: warning
+          team: dev
+        annotations:
+          summary: "High retry attempts for {{ $labels.domain }}"
+          description: "95th percentile retry attempts for {{ $labels.domain }} is {{ $value | printf \"%.1f\" }}. Consider reviewing backoff policy."
+          runbook_url: "https://docs.internal/runbooks/retry-attempts-high"
+
+  - name: self_healing_recovery
+    rules:
+      # SLA Breach Detected
+      - alert: SLABreachDetected
+        expr: increase(sla_breach_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "SLA breach detected for {{ $labels.domain }}"
+          description: "{{ $value }} SLA breaches in the last hour for domain {{ $labels.domain }}."
+          runbook_url: "https://docs.internal/runbooks/sla-breach"
+
+      # Recovery Time Slow
+      - alert: RecoveryTimeSlow
+        expr: histogram_quantile(0.95, sum(rate(recovery_time_seconds_bucket[1h])) by (le)) > 1800
+        for: 15m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Recovery time P95 is slow"
+          description: "95th percentile recovery time is {{ $value | humanizeDuration }}. Target is 30 minutes."
+          runbook_url: "https://docs.internal/runbooks/recovery-slow"
+
+      # Recovery Time Critical
+      - alert: RecoveryTimeCritical
+        expr: histogram_quantile(0.95, sum(rate(recovery_time_seconds_bucket[1h])) by (le)) > 3600
+        for: 15m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Recovery time P95 is critically slow"
+          description: "95th percentile recovery time is {{ $value | humanizeDuration }}. Immediate investigation needed."
+          runbook_url: "https://docs.internal/runbooks/recovery-critical"
+
+      # Human Review Queue Long
+      - alert: HumanReviewQueueLong
+        expr: histogram_quantile(0.95, sum(rate(human_review_queue_time_seconds_bucket[1h])) by (le)) > 3600
+        for: 30m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Human review queue time is high"
+          description: "Items waiting {{ $value | humanizeDuration }} for human review. Check reviewer availability."
+          runbook_url: "https://docs.internal/runbooks/review-queue-long"
+
+  - name: self_healing_circuit_breaker
+    rules:
+      # Circuit Breaker Open
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Circuit breaker is OPEN for {{ $labels.service }}"
+          description: "Circuit breaker for {{ $labels.service }} is blocking all requests. Check external service status."
+          runbook_url: "https://docs.internal/runbooks/circuit-breaker-open"
+
+      # Circuit Breaker Open Extended
+      - alert: CircuitBreakerOpenExtended
+        expr: circuit_breaker_state == 1
+        for: 10m
+        labels:
+          severity: critical
+          team: ops
+          escalate: "true"
+        annotations:
+          summary: "Circuit breaker open for extended period: {{ $labels.service }}"
+          description: "Circuit breaker for {{ $labels.service }} has been open for more than 10 minutes. Escalate to on-call."
+          runbook_url: "https://docs.internal/runbooks/circuit-breaker-extended"
+
+      # Circuit Breaker Half-Open
+      - alert: CircuitBreakerHalfOpen
+        expr: circuit_breaker_state == 2
+        for: 5m
+        labels:
+          severity: info
+          team: ops
+        annotations:
+          summary: "Circuit breaker in HALF-OPEN state: {{ $labels.service }}"
+          description: "Circuit breaker for {{ $labels.service }} is testing recovery. Monitor for state change."
+          runbook_url: "https://docs.internal/runbooks/circuit-breaker-halfopen"
+
+      # Frequent Circuit Breaker Transitions
+      - alert: CircuitBreakerFlapping
+        expr: increase(circuit_breaker_transitions_total[30m]) > 4
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Circuit breaker flapping: {{ $labels.service }}"
+          description: "{{ $value }} state transitions in 30 minutes for {{ $labels.service }}. External service may be unstable."
+          runbook_url: "https://docs.internal/runbooks/circuit-breaker-flapping"
+
+  - name: self_healing_replay
+    rules:
+      # Replay Failure Rate High
+      - alert: ReplayFailureRateHigh
+        expr: |
+          sum(rate(replay_outcomes_total{outcome="failure"}[1h])) 
+          / sum(rate(replay_outcomes_total[1h])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          team: dev
+        annotations:
+          summary: "Replay failure rate is high"
+          description: "More than 50% of replay attempts are failing. Review DLQ entries for patterns."
+          runbook_url: "https://docs.internal/runbooks/replay-failure-high"
+
+      # Replay Attempts Spike
+      - alert: ReplayAttemptsSpike
+        expr: sum(rate(replay_attempts_total[5m])) * 60 > 10
+        for: 5m
+        labels:
+          severity: info
+          team: ops
+        annotations:
+          summary: "Replay attempts spike detected"
+          description: "{{ $value | printf \"%.1f\" }} replay attempts per minute. May indicate batch replay or recovery in progress."
+          runbook_url: "https://docs.internal/runbooks/replay-spike"

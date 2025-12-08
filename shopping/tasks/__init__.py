@@ -34,6 +34,15 @@ from .point_tasks import (
     send_email_notification,
     send_expiry_notification_task,
 )
+from .self_healing_tasks import (
+    check_and_report_sla_breaches,
+    check_circuit_breaker_recovery,
+    collect_self_healing_metrics,
+    conditional_replay_on_circuit_close,
+    expire_manual_overrides,
+    force_close_circuit_breaker,
+    force_open_circuit_breaker,
+)
 
 __all__ = [
     # 이메일 태스크
@@ -69,4 +78,12 @@ __all__ = [
     "replay_batch_by_domain",
     "replay_on_circuit_breaker_close",
     "cleanup_resolved_dlq_entries",
+    # Self-Healing Tasks (L3 Phase 4-5)
+    "conditional_replay_on_circuit_close",
+    "check_circuit_breaker_recovery",
+    "force_open_circuit_breaker",
+    "force_close_circuit_breaker",
+    "expire_manual_overrides",
+    "collect_self_healing_metrics",
+    "check_and_report_sla_breaches",
 ]

@@ -299,9 +299,7 @@ class CircuitBreakerService:
         from shopping.models.failed_payment import CircuitBreakerState
 
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(
-                service_name=service_name
-            )
+            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
             previous_state = state.state
         except CircuitBreakerState.DoesNotExist:
             # Create new state in OPEN with TTL
@@ -317,9 +315,7 @@ class CircuitBreakerService:
                 controlled_by=controlled_by,
                 control_reason=reason,
             )
-            logger.info(
-                f"[CircuitBreaker] Created and opened circuit for '{service_name}': {reason} (TTL: {ttl_minutes}m)"
-            )
+            logger.info(f"[CircuitBreaker] Created and opened circuit for '{service_name}': {reason} (TTL: {ttl_minutes}m)")
             return CircuitBreakerResult.succeeded(
                 service_name=service_name,
                 previous_state=CircuitState.CLOSED,
@@ -328,9 +324,7 @@ class CircuitBreakerService:
             )
 
         if state.state == CircuitState.OPEN:
-            logger.info(
-                f"[CircuitBreaker] Circuit '{service_name}' already open"
-            )
+            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already open")
             return CircuitBreakerResult.succeeded(
                 service_name=service_name,
                 previous_state=CircuitState.OPEN,
@@ -341,8 +335,7 @@ class CircuitBreakerService:
         state.force_open(controlled_by=controlled_by, reason=reason)
 
         logger.warning(
-            f"[CircuitBreaker] Force opened circuit for '{service_name}': "
-            f"{previous_state} -> open | Reason: {reason}"
+            f"[CircuitBreaker] Force opened circuit for '{service_name}': " f"{previous_state} -> open | Reason: {reason}"
         )
 
         return CircuitBreakerResult.succeeded(
@@ -378,23 +371,17 @@ class CircuitBreakerService:
         from shopping.models.failed_payment import CircuitBreakerState
 
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(
-                service_name=service_name
-            )
+            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
             previous_state = state.state
         except CircuitBreakerState.DoesNotExist:
-            logger.info(
-                f"[CircuitBreaker] No circuit breaker exists for '{service_name}'"
-            )
+            logger.info(f"[CircuitBreaker] No circuit breaker exists for '{service_name}'")
             return CircuitBreakerResult.failed(
                 service_name=service_name,
                 error=f"Circuit breaker for '{service_name}' does not exist",
             )
 
         if state.state == CircuitState.CLOSED:
-            logger.info(
-                f"[CircuitBreaker] Circuit '{service_name}' already closed"
-            )
+            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
             return CircuitBreakerResult.succeeded(
                 service_name=service_name,
                 previous_state=CircuitState.CLOSED,
@@ -405,8 +392,7 @@ class CircuitBreakerService:
         state.force_close(controlled_by=controlled_by, reason=reason)
 
         logger.info(
-            f"[CircuitBreaker] Force closed circuit for '{service_name}': "
-            f"{previous_state} -> closed | Reason: {reason}"
+            f"[CircuitBreaker] Force closed circuit for '{service_name}': " f"{previous_state} -> closed | Reason: {reason}"
         )
 
         result = CircuitBreakerResult.succeeded(
@@ -441,21 +427,13 @@ class CircuitBreakerService:
 
             task = conditional_replay_on_circuit_close.delay(service_name=service_name)
 
-            logger.info(
-                f"[CircuitBreaker] Triggered conditional replay for '{service_name}': "
-                f"task_id={task.id}"
-            )
+            logger.info(f"[CircuitBreaker] Triggered conditional replay for '{service_name}': " f"task_id={task.id}")
         except ImportError:
             # Task not yet defined, log warning
-            logger.warning(
-                f"[CircuitBreaker] Cannot trigger replay for '{service_name}': "
-                "Celery task not available"
-            )
+            logger.warning(f"[CircuitBreaker] Cannot trigger replay for '{service_name}': " "Celery task not available")
         except Exception as e:
             # Non-critical error, log but don't fail
-            logger.error(
-                f"[CircuitBreaker] Failed to trigger replay for '{service_name}': {e}"
-            )
+            logger.error(f"[CircuitBreaker] Failed to trigger replay for '{service_name}': {e}")
 
     # =========================================================================
     # Failure/Success Recording (for automatic mode)
@@ -478,10 +456,7 @@ class CircuitBreakerService:
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(
-                f"[CircuitBreaker] Skipping failure recording for '{service_name}': "
-                "manually controlled"
-            )
+            logger.debug(f"[CircuitBreaker] Skipping failure recording for '{service_name}': " "manually controlled")
             return
 
         # Increment failure count
@@ -493,10 +468,7 @@ class CircuitBreakerService:
         if state.failure_count >= self.config.failure_threshold and state.state == CircuitState.CLOSED:
             state.state = CircuitState.OPEN
             state.opened_at = timezone.now()
-            logger.warning(
-                f"[CircuitBreaker] Circuit auto-opened for '{service_name}' "
-                f"(failures: {state.failure_count})"
-            )
+            logger.warning(f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {state.failure_count})")
 
         state.save()
 
@@ -517,10 +489,7 @@ class CircuitBreakerService:
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(
-                f"[CircuitBreaker] Skipping success recording for '{service_name}': "
-                "manually controlled"
-            )
+            logger.debug(f"[CircuitBreaker] Skipping success recording for '{service_name}': " "manually controlled")
             return
 
         previous_state = state.state
@@ -545,8 +514,7 @@ class CircuitBreakerService:
 
         if circuit_closed:
             logger.info(
-                f"[CircuitBreaker] Circuit auto-closed for '{service_name}' "
-                f"(successes: {self.config.success_threshold})"
+                f"[CircuitBreaker] Circuit auto-closed for '{service_name}' " f"(successes: {self.config.success_threshold})"
             )
             # Trigger conditional replay on auto-close
             self._trigger_conditional_replay(service_name)
@@ -578,9 +546,7 @@ class CircuitBreakerService:
         from shopping.models.failed_payment import CircuitBreakerState
 
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(
-                service_name=service_name
-            )
+            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
             previous_state = state.state
         except CircuitBreakerState.DoesNotExist:
             return CircuitBreakerResult.failed(
@@ -601,10 +567,7 @@ class CircuitBreakerService:
         state.control_reason = reason
         state.save()
 
-        logger.info(
-            f"[CircuitBreaker] Reset circuit for '{service_name}': "
-            f"{previous_state} -> closed | Reason: {reason}"
-        )
+        logger.info(f"[CircuitBreaker] Reset circuit for '{service_name}': " f"{previous_state} -> closed | Reason: {reason}")
 
         return CircuitBreakerResult.succeeded(
             service_name=service_name,
@@ -700,10 +663,7 @@ class CircuitBreakerService:
             state.control_reason = f"{state.control_reason} | Extended: {reason}"
         state.save()
 
-        logger.info(
-            f"[CircuitBreaker] Extended manual override for '{service_name}' "
-            f"by {additional_minutes} minutes"
-        )
+        logger.info(f"[CircuitBreaker] Extended manual override for '{service_name}' " f"by {additional_minutes} minutes")
 
         return CircuitBreakerResult.succeeded(
             service_name=service_name,

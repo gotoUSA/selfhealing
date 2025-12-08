@@ -1090,7 +1090,7 @@ class TestReplayEscalationOnCircuitClose:
     - Failed replays are escalated to REQUIRES_REVIEW when escalate_failures=True
     - Escalation includes proper notes explaining the failure
     - No escalation when escalate_failures=False
-    
+
     Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §10 (Governance Policy)
     """
 
@@ -1109,23 +1109,19 @@ class TestReplayEscalationOnCircuitClose:
         )
         return entry
 
-    def test_replay_on_circuit_close_escalates_failed_replays(
-        self, replay_service, pg_timeout_entry
-    ):
+    def test_replay_on_circuit_close_escalates_failed_replays(self, replay_service, pg_timeout_entry):
         """
         Purpose:
             Verify failed replays are escalated to REQUIRES_REVIEW
             when circuit closes with escalate_failures=True (default).
-        
+
         Context:
             When operator force_closes a circuit, they expect pending items
             to be resolved. If replay fails, it needs human attention.
         """
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
             # Simulate replay failure
-            mock_replay.return_value = ReplayResult.failed(
-                pg_timeout_entry.id, "PG still failing"
-            )
+            mock_replay.return_value = ReplayResult.failed(pg_timeout_entry.id, "PG still failing")
 
             result = replay_service.replay_on_circuit_close(
                 service_name="toss_payment",
@@ -1141,17 +1137,13 @@ class TestReplayEscalationOnCircuitClose:
         assert pg_timeout_entry.status == FailedOperation.Status.REQUIRES_REVIEW
         assert "circuit close" in pg_timeout_entry.resolution_note.lower()
 
-    def test_replay_on_circuit_close_no_escalation_when_disabled(
-        self, replay_service, pg_timeout_entry
-    ):
+    def test_replay_on_circuit_close_no_escalation_when_disabled(self, replay_service, pg_timeout_entry):
         """
         Purpose:
             Verify no escalation when escalate_failures=False.
         """
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
-            mock_replay.return_value = ReplayResult.failed(
-                pg_timeout_entry.id, "PG still failing"
-            )
+            mock_replay.return_value = ReplayResult.failed(pg_timeout_entry.id, "PG still failing")
 
             result = replay_service.replay_on_circuit_close(
                 service_name="toss_payment",
@@ -1163,17 +1155,13 @@ class TestReplayEscalationOnCircuitClose:
         pg_timeout_entry.refresh_from_db()
         assert pg_timeout_entry.status == FailedOperation.Status.PENDING
 
-    def test_replay_on_circuit_close_successful_replays_not_affected(
-        self, replay_service, pg_timeout_entry
-    ):
+    def test_replay_on_circuit_close_successful_replays_not_affected(self, replay_service, pg_timeout_entry):
         """
         Purpose:
             Verify successful replays are marked RESOLVED, not escalated.
         """
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
-            mock_replay.return_value = ReplayResult.succeeded(
-                pg_timeout_entry.id, "Replay successful"
-            )
+            mock_replay.return_value = ReplayResult.succeeded(pg_timeout_entry.id, "Replay successful")
 
             result = replay_service.replay_on_circuit_close(
                 service_name="toss_payment",
@@ -1188,17 +1176,13 @@ class TestReplayEscalationOnCircuitClose:
         pg_timeout_entry.refresh_from_db()
         assert pg_timeout_entry.status == FailedOperation.Status.RESOLVED
 
-    def test_escalation_note_includes_service_name(
-        self, replay_service, pg_timeout_entry
-    ):
+    def test_escalation_note_includes_service_name(self, replay_service, pg_timeout_entry):
         """
         Purpose:
             Verify escalation note includes the service name for context.
         """
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
-            mock_replay.return_value = ReplayResult.failed(
-                pg_timeout_entry.id, "Connection refused"
-            )
+            mock_replay.return_value = ReplayResult.failed(pg_timeout_entry.id, "Connection refused")
 
             replay_service.replay_on_circuit_close(
                 service_name="toss_payment",
@@ -1209,13 +1193,11 @@ class TestReplayEscalationOnCircuitClose:
         pg_timeout_entry.refresh_from_db()
         assert "toss_payment" in pg_timeout_entry.resolution_note
 
-    def test_replay_failure_after_circuit_close_does_not_reopen_circuit(
-        self, replay_service, pg_timeout_entry
-    ):
+    def test_replay_failure_after_circuit_close_does_not_reopen_circuit(self, replay_service, pg_timeout_entry):
         """
         Purpose:
             Verify that replay failure does NOT cause circuit to reopen.
-            
+
         Context:
             When operator force_closes a circuit, they expect it to stay closed.
             Failed replays should be escalated to REQUIRES_REVIEW, NOT cause
@@ -1224,18 +1206,13 @@ class TestReplayEscalationOnCircuitClose:
         from shopping.models.failed_payment import CircuitBreakerState
 
         # Create a circuit in CLOSED state (operator just closed it)
-        state, _ = CircuitBreakerState.objects.get_or_create(
-            service_name="toss_payment",
-            defaults={"state": "closed"}
-        )
+        state, _ = CircuitBreakerState.objects.get_or_create(service_name="toss_payment", defaults={"state": "closed"})
         state.state = "closed"
         state.save()
 
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
             # Simulate replay failure
-            mock_replay.return_value = ReplayResult.failed(
-                pg_timeout_entry.id, "PG still failing after close"
-            )
+            mock_replay.return_value = ReplayResult.failed(pg_timeout_entry.id, "PG still failing after close")
 
             result = replay_service.replay_on_circuit_close(
                 service_name="toss_payment",
@@ -1256,12 +1233,12 @@ class TestReplayEscalationOnCircuitClose:
         Purpose:
             Verify that security-related failure types create SecurityIncident
             when replay is attempted.
-            
+
         Context:
             Security violations (SECURITY_SIGNATURE_INVALID, etc.) should NEVER
             be auto-replayed. Any attempt to replay them should be blocked and
             a SecurityIncident should be created for audit trail.
-            
+
         Reference:
             docs/L3_SELF_HEALING_OPERATIONS.md Section 5 - Security Incident Handling
         """
@@ -1309,4 +1286,3 @@ class TestReplayEscalationOnCircuitClose:
             FailedOperation.Status.REJECTED,
             FailedOperation.Status.PENDING,  # might stay pending if handler just returns failure
         )
-

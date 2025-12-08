@@ -650,6 +650,46 @@ snapshot_data = {
 | `circuit_breaker.open_duration_seconds` | How long CB has been open | > 300 (5min) | Circuit |
 | `sla.breach_count` | Items exceeding review SLA | > 0 | SLA |
 | `human_review.queue_time_seconds` | Time items wait for review | > 3600 (1hr) | Review |
+| `replay_outcomes_total` | Replay success/failure counts | > 50% failure | Replay |
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `shopping/services/self_healing/metrics.py` | Prometheus metrics definitions and recording functions |
+| `scripts/grafana/dashboards/self_healing_dashboard.json` | Grafana dashboard configuration |
+| `scripts/prometheus/self_healing_alerts.yml` | Prometheus alerting rules |
+| `shopping/management/commands/generate_self_healing_alerts.py` | Alert YAML generator from code |
+
+### DOMAINS Constant
+
+All domain values are centralized in a single constant to prevent drift:
+
+```python
+# shopping/services/self_healing/metrics.py
+DOMAINS: list[str] = [
+    "payment",
+    "point",
+    "inventory",
+    "webhook",
+    "notification",
+]
+```
+
+### Alert Generation
+
+Alerting rules are defined in code (`ALERTING_RULES` dict) and can be generated to YAML:
+
+```bash
+# Generate Prometheus alert rules from code
+python manage.py generate_self_healing_alerts
+
+# Validate existing file matches code
+python manage.py generate_self_healing_alerts --validate
+
+# Preview without writing
+python manage.py generate_self_healing_alerts --dry-run
+```
 
 ### Prometheus Metrics Example
 
@@ -701,31 +741,55 @@ circuit_breaker_state = Gauge(
 
 ### Grafana Dashboard Panels
 
+The full dashboard is implemented in `scripts/grafana/dashboards/self_healing_dashboard.json`.
+
+**Dashboard Sections:**
+
+| Section | Panels | Description |
+|---------|--------|-------------|
+| **DLQ Overview** | Total Pending, Domain Breakdown, Items Added/Processed, Time in Queue | Dead Letter Queue monitoring |
+| **Retry & Recovery** | Retry Attempts, Retry Success Rate, Recovery Time P95 | Retry pattern effectiveness |
+| **Circuit Breaker** | Status by Service | Service protection status |
+| **Replay** | Success Rate, Replayed Items | Replay operation metrics |
+| **Human Review** | Queue Depth, Pending Items, Approval/Rejection Counts | Manual intervention tracking |
+
+**Key Panel Queries:**
+
 ```yaml
-# Dashboard Configuration
-panels:
-  - title: "DLQ Pending Items"
-    type: gauge
-    query: dlq_pending_count
-    thresholds:
-      - value: 0
-        color: green
-      - value: 5
-        color: yellow
-      - value: 10
-        color: red
+# DLQ Panels
+- title: "Total DLQ Pending"
+  query: sum(dlq_pending_count)
+  thresholds: [0→green, 5→yellow, 10→red]
 
-  - title: "Retry Success Rate"
-    type: graph
-    query: rate(retry_success_total[5m]) / rate(retry_attempts_total[5m])
+- title: "DLQ by Domain"
+  query: dlq_pending_count
 
-  - title: "Recovery Time (P95)"
-    type: stat
-    query: histogram_quantile(0.95, recovery_time_seconds)
+# Retry Panels
+- title: "Retry Success Rate"
+  query: rate(retry_success_total[5m]) / rate(retry_attempts_total[5m])
 
-  - title: "Circuit Breaker Status"
-    type: table
-    query: circuit_breaker_state
+- title: "Recovery Time (P95)"
+  query: histogram_quantile(0.95, rate(recovery_time_seconds_bucket[5m]))
+
+# Circuit Breaker
+- title: "Circuit Breaker Status"
+  query: circuit_breaker_state
+  mapping: [0→closed, 1→open, 2→half-open]
+
+# Human Review (NEW)
+- title: "Human Review Queue Depth"
+  query: sum(human_review_pending)
+
+- title: "Approval vs Rejection"
+  query: sum(rate(human_review_approved_total[1h]))
+         sum(rate(human_review_rejected_total[1h]))
+```
+
+**Deployment:**
+
+```bash
+# Copy dashboard to Grafana provisioning directory
+cp scripts/grafana/dashboards/self_healing_dashboard.json /etc/grafana/provisioning/dashboards/
 ```
 
 ---
@@ -1108,9 +1172,10 @@ SLACK_ALERTS_WEBHOOK=https://hooks.slack.com/services/xxx
 
 ### Phase 5: Observability (Week 5-6)
 
-- [ ] Add Prometheus metrics
-- [ ] Create Grafana dashboards
-- [ ] Set up alerting rules
+- [x] Add Prometheus metrics (`shopping/services/self_healing/metrics.py`)
+- [x] Create Grafana dashboards (`scripts/grafana/dashboards/self_healing_dashboard.json`)
+- [x] Set up alerting rules (`scripts/prometheus/self_healing_alerts.yml`)
+- [x] Add alert generator command (`python manage.py generate_self_healing_alerts`)
 - [ ] Document runbooks
 - [ ] Conduct chaos engineering session
 

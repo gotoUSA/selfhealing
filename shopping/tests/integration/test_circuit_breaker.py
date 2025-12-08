@@ -307,9 +307,7 @@ class TestCircuitBreakerWithDLQ:
             )
 
         # Verify entries exist
-        initial_pending = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING
-        ).count()
+        initial_pending = FailedOperation.objects.filter(status=FailedOperation.Status.PENDING).count()
         assert initial_pending == 2
 
         # Close circuit (replay would be triggered via Celery in production)
@@ -497,9 +495,7 @@ class TestCircuitBreakerPersistence:
         service_name = "persistent_service"
 
         # First service instance
-        service1 = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service1 = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         service1.force_open(
             service_name=service_name,
             reason="Test persistence",
@@ -509,9 +505,7 @@ class TestCircuitBreakerPersistence:
         assert service1.get_state(service_name) == "open"
 
         # Simulate restart with new service instance
-        service2 = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service2 = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
 
         # State should be preserved
         assert service2.get_state(service_name) == "open"
@@ -529,9 +523,7 @@ class TestCircuitBreakerPersistence:
             2. Modify one circuit
             3. Verify others are unaffected
         """
-        service = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
 
         circuits = ["payment_1", "payment_2", "notification"]
 

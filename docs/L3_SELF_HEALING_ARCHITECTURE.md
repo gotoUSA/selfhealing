@@ -487,7 +487,7 @@ Automatic CB opening will be considered when:
 def replay_on_circuit_close(service_name: str, escalate_failures: bool = True):
     """
     Replay backlogged DLQ entries when circuit closes.
-    
+
     Args:
         service_name: Target service name
         escalate_failures: If True, escalate replay failures to REQUIRES_REVIEW
@@ -496,7 +496,7 @@ def replay_on_circuit_close(service_name: str, escalate_failures: bool = True):
         context__service=service_name,
         status="PENDING"
     )
-    
+
     for entry in pending_entries:
         try:
             replay_single(entry.id)
@@ -566,7 +566,7 @@ SELF_HEALING = {
         "RECOVERY_TIMEOUT_SECONDS": 60,
         "SUCCESS_THRESHOLD": 2,
         "HALF_OPEN_REQUEST_LIMIT": 3,
-        
+
         # Governance: TTL & SLA
         "MANUAL_OVERRIDE_TTL_MINUTES": 90,      # Prevent indefinite blocking
         "MAX_PENDING_DURATION_HOURS": 72,        # PENDING state SLA
@@ -583,18 +583,18 @@ SELF_HEALING = {
 def expire_manual_overrides(self):
     """
     Runs every 5 minutes to release expired Manual Overrides.
-    
+
     Returns:
         dict: Processing result {"expired_count": N, "services": [...]}
     """
     cb_service = CircuitBreakerService()
     expired = cb_service.check_and_expire_manual_overrides()
-    
+
     if expired:
         # Alert: Notify operators of auto-release
         for service in expired:
             notify_ops(f"Circuit Breaker for {service} expired - auto-closed")
-    
+
     return {"expired_count": len(expired), "services": expired}
 ```
 

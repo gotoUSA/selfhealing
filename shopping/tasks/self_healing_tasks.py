@@ -39,10 +39,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     """
     from shopping.services.self_healing.replay_service import get_replay_service
 
-    logger.info(
-        f"[Circuit Recovery] Starting conditional replay for '{service_name}', "
-        f"max_items={max_items}"
-    )
+    logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
     try:
         service = get_replay_service()
@@ -134,8 +131,7 @@ def check_circuit_breaker_recovery(self) -> dict:
 
                 transitioned.append(circuit.service_name)
                 logger.info(
-                    f"[Circuit Check] Transitioned '{circuit.service_name}' "
-                    f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                    f"[Circuit Check] Transitioned '{circuit.service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
                 )
 
         return {
@@ -184,9 +180,7 @@ def force_open_circuit_breaker(
         get_circuit_breaker_service,
     )
 
-    logger.warning(
-        f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}"
-    )
+    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
 
     try:
         controlled_by = None
@@ -204,9 +198,7 @@ def force_open_circuit_breaker(
         )
 
         if result.success:
-            logger.warning(
-                f"[Circuit Breaker] Successfully opened circuit for '{service_name}'"
-            )
+            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
             return {
                 "success": True,
                 "service_name": service_name,
@@ -264,9 +256,7 @@ def force_close_circuit_breaker(
         get_circuit_breaker_service,
     )
 
-    logger.info(
-        f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}"
-    )
+    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
 
     try:
         controlled_by = None
@@ -285,9 +275,7 @@ def force_close_circuit_breaker(
         )
 
         if result.success:
-            logger.info(
-                f"[Circuit Breaker] Successfully closed circuit for '{service_name}'"
-            )
+            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
             return {
                 "success": True,
                 "service_name": service_name,
@@ -347,9 +335,7 @@ def expire_manual_overrides(self) -> dict:
         expired = service.check_and_expire_manual_overrides()
 
         if expired:
-            logger.warning(
-                f"[Circuit Breaker] Expired manual overrides: {expired}"
-            )
+            logger.warning(f"[Circuit Breaker] Expired manual overrides: {expired}")
 
         return {
             "success": True,
@@ -359,6 +345,124 @@ def expire_manual_overrides(self) -> dict:
 
     except Exception as e:
         logger.error(f"[Circuit Breaker] Error expiring overrides: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+# =============================================================================
+# Observability Tasks (Phase 5)
+# =============================================================================
+
+
+@shared_task(
+    bind=True,
+    name="shopping.tasks.self_healing_tasks.collect_self_healing_metrics",
+    queue="monitoring",
+    max_retries=1,
+    time_limit=60,
+    soft_time_limit=55,
+)
+def collect_self_healing_metrics(self) -> dict:
+    """
+    Periodic task to collect and update self-healing Prometheus metrics.
+
+    Updates gauge metrics that require database queries:
+    - DLQ pending counts by domain
+    - DLQ items by status
+    - Circuit breaker states
+    - Retry success rates
+
+    This task should be scheduled to run every minute.
+
+    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
+
+    Returns:
+        Dictionary with collected metric values
+    """
+    from shopping.services.self_healing.metrics import collect_all_metrics
+
+    logger.debug("[Metrics] Collecting self-healing metrics")
+
+    try:
+        metrics = collect_all_metrics()
+
+        logger.debug(
+            f"[Metrics] Collection complete: "
+            f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}"
+        )
+
+        return {
+            "success": True,
+            **metrics,
+        }
+
+    except Exception as e:
+        logger.error(f"[Metrics] Failed to collect metrics: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@shared_task(
+    bind=True,
+    name="shopping.tasks.self_healing_tasks.check_and_report_sla_breaches",
+    queue="monitoring",
+    max_retries=1,
+    time_limit=120,
+    soft_time_limit=110,
+)
+def check_and_report_sla_breaches(self) -> dict:
+    """
+    Periodic task to check for SLA breaches and record metrics.
+
+    SLA thresholds by domain:
+    - payment: 1 hour
+    - point: 4 hours
+    - inventory: 2 hours
+    - webhook: 8 hours
+    - notification: 24 hours
+
+    This task should be scheduled to run every 5 minutes.
+
+    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §3 (Recovery SLA)
+
+    Returns:
+        Dictionary with SLA breach information
+    """
+    from shopping.services.self_healing.dlq_service import get_dlq_service
+    from shopping.services.self_healing.metrics import record_sla_breach
+
+    logger.debug("[SLA Check] Checking for SLA breaches")
+
+    try:
+        dlq_service = get_dlq_service()
+        breached_entries = dlq_service.get_sla_breached_entries()
+
+        breaches_by_domain: dict[str, int] = {}
+
+        for entry in breached_entries:
+            domain = entry.domain
+            breaches_by_domain[domain] = breaches_by_domain.get(domain, 0) + 1
+            record_sla_breach(domain)
+
+        total_breaches = sum(breaches_by_domain.values())
+
+        if total_breaches > 0:
+            logger.warning(f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}")
+        else:
+            logger.debug("[SLA Check] No SLA breaches found")
+
+        return {
+            "success": True,
+            "total_breaches": total_breaches,
+            "breaches_by_domain": breaches_by_domain,
+        }
+
+    except Exception as e:
+        logger.error(f"[SLA Check] Failed: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e),
