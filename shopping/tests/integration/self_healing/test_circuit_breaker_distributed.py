@@ -73,9 +73,7 @@ class TestCircuitBreakerDistributed:
         service_name = "distributed_test_payment"
 
         # Simulate Worker A - creates and opens circuit
-        service_a = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_a = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         result = service_a.force_open(
             service_name=service_name,
             reason="Worker A detected PG failure",
@@ -85,9 +83,7 @@ class TestCircuitBreakerDistributed:
 
         # Simulate Worker B - new instance, no shared memory
         # This is key: creating a NEW service instance simulates a different worker
-        service_b = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_b = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
 
         # Worker B should see the open circuit (no caching)
         assert service_b.should_allow(service_name) is False
@@ -111,9 +107,7 @@ class TestCircuitBreakerDistributed:
         service_name = "distributed_close_test"
 
         # Worker A opens circuit
-        service_a = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_a = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         service_a.force_open(
             service_name=service_name,
             reason="Initial open",
@@ -121,9 +115,7 @@ class TestCircuitBreakerDistributed:
         )
 
         # Worker B sees OPEN
-        service_b = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_b = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         assert service_b.get_state(service_name) == CircuitState.OPEN
 
         # Worker A closes circuit
@@ -155,10 +147,7 @@ class TestCircuitBreakerDistributed:
         service_name = "multi_worker_test"
 
         # Create multiple service instances
-        workers = [
-            CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
-            for _ in range(5)
-        ]
+        workers = [CircuitBreakerService(config=CircuitBreakerConfig(enabled=True)) for _ in range(5)]
 
         # Worker 0 opens circuit
         workers[0].force_open(
@@ -195,9 +184,7 @@ class TestCircuitBreakerDistributed:
         service_name = "new_worker_test"
 
         # Worker A opens circuit
-        service_a = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_a = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         service_a.force_open(
             service_name=service_name,
             reason="Test open before restart",
@@ -208,9 +195,7 @@ class TestCircuitBreakerDistributed:
         del service_a
 
         # New Worker C starts fresh
-        service_c = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_c = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
 
         # Worker C should see the open circuit from database
         assert service_c.get_state(service_name) == CircuitState.OPEN
@@ -233,9 +218,7 @@ class TestCircuitBreakerDistributed:
         service_name = "concurrent_query_test"
 
         # Setup: Open circuit
-        setup_service = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        setup_service = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         setup_service.force_open(
             service_name=service_name,
             reason="Setup for concurrent test",
@@ -245,9 +228,7 @@ class TestCircuitBreakerDistributed:
         # Create workers and query rapidly
         results = []
         for _ in range(10):
-            worker = CircuitBreakerService(
-                config=CircuitBreakerConfig(enabled=True)
-            )
+            worker = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
             state = worker.get_state(service_name)
             allowed = worker.should_allow(service_name)
             results.append((state, allowed))
@@ -278,9 +259,7 @@ class TestCircuitBreakerDistributed:
         service_name = "db_source_of_truth_test"
 
         # Open via service
-        service = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         service.force_open(
             service_name=service_name,
             reason="Initial open",
@@ -298,9 +277,7 @@ class TestCircuitBreakerDistributed:
 
         # Service should see the database change immediately
         # Create new service instance to ensure no instance caching
-        fresh_service = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        fresh_service = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         assert fresh_service.get_state(service_name) == CircuitState.CLOSED
         assert fresh_service.should_allow(service_name) is True
 
@@ -320,9 +297,7 @@ class TestCircuitBreakerDistributed:
         service_name = "half_open_sync_test"
 
         # Worker A opens circuit
-        service_a = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True, recovery_timeout=0)
-        )
+        service_a = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True, recovery_timeout=0))
         service_a.force_open(
             service_name=service_name,
             reason="Test open",
@@ -336,9 +311,7 @@ class TestCircuitBreakerDistributed:
         db_state.save()
 
         # Worker B should see HALF_OPEN
-        service_b = CircuitBreakerService(
-            config=CircuitBreakerConfig(enabled=True)
-        )
+        service_b = CircuitBreakerService(config=CircuitBreakerConfig(enabled=True))
         assert service_b.get_state(service_name) == CircuitState.HALF_OPEN
 
         # HALF_OPEN should allow requests (for testing recovery)

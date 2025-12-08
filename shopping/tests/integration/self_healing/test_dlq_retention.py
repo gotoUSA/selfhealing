@@ -82,9 +82,7 @@ class TestDLQRetentionPolicy:
         entry.mark_as_resolved(note="Fixed by PG system recovery")
 
         # Backdate to simulate 60 days passing
-        FailedOperation.objects.filter(id=entry.id).update(
-            created_at=timezone.now() - timedelta(days=60)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(created_at=timezone.now() - timedelta(days=60))
         entry.refresh_from_db()
 
         # Record initial count
@@ -106,9 +104,7 @@ class TestDLQRetentionPolicy:
         assert final_total == initial_total
 
         # Verify excluded from pending queries
-        pending = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING
-        )
+        pending = FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
         assert entry not in pending
 
         # Verify included in all queries (audit trail preserved)
@@ -140,9 +136,7 @@ class TestDLQRetentionPolicy:
         )
 
         # Backdate expires_at to simulate past expiration
-        FailedOperation.objects.filter(id=entry.id).update(
-            expires_at=timezone.now() - timedelta(days=1)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(expires_at=timezone.now() - timedelta(days=1))
         entry.refresh_from_db()
 
         # Verify entry is still pending
@@ -240,9 +234,7 @@ class TestDLQRetentionPolicy:
 
         # Resolve and backdate
         entry.mark_as_resolved(note="PG recovered")
-        FailedOperation.objects.filter(id=entry.id).update(
-            created_at=timezone.now() - timedelta(days=60)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(created_at=timezone.now() - timedelta(days=60))
 
         # Run cleanup
         cleanup_resolved_dlq_entries(days_old=30)
@@ -290,9 +282,7 @@ class TestDLQRetentionPolicy:
         entry.mark_as_rejected(note="Amount mismatch cannot be auto-recovered")
 
         # Backdate
-        FailedOperation.objects.filter(id=entry.id).update(
-            created_at=timezone.now() - timedelta(days=60)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(created_at=timezone.now() - timedelta(days=60))
 
         # Run cleanup
         result = cleanup_resolved_dlq_entries(days_old=30)

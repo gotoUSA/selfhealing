@@ -83,9 +83,7 @@ class TestForensicSnapshotReplay:
             "captured_at": timezone.now().isoformat(),
         }
 
-    def test_snapshot_enables_complete_operation_replay(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_enables_complete_operation_replay(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify DLQ snapshot contains all data needed to replay operation
@@ -143,9 +141,7 @@ class TestForensicSnapshotReplay:
         # Handler should be able to make decision based on entry data
         assert isinstance(can_replay, bool)
 
-    def test_snapshot_preserves_complete_order_context(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_preserves_complete_order_context(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify order-related data is fully captured in snapshot.
@@ -175,9 +171,7 @@ class TestForensicSnapshotReplay:
         assert entry.snapshot_data["order_status"] == "confirmed"
         assert "order_number" in entry.snapshot_data
 
-    def test_snapshot_preserves_complete_payment_context(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_preserves_complete_payment_context(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify payment-related data is fully captured in snapshot.
@@ -209,9 +203,7 @@ class TestForensicSnapshotReplay:
         assert entry.snapshot_data["amount"] == "50000"
         assert entry.snapshot_data["payment_status"] == "in_progress"
 
-    def test_snapshot_preserves_complete_user_context(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_preserves_complete_user_context(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify user-related data is fully captured in snapshot.
@@ -241,9 +233,7 @@ class TestForensicSnapshotReplay:
         assert entry.snapshot_data["user_email"] == sample_user.email
         assert entry.snapshot_data["user_points"] == 10000
 
-    def test_snapshot_enables_replay_without_fk_access(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_enables_replay_without_fk_access(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify replay handler can work with snapshot even if FK is nullified.
@@ -285,21 +275,13 @@ class TestForensicSnapshotReplay:
         assert reloaded_entry.snapshot_data["user_id"] is not None
 
         # Handler should be able to get data from snapshot
-        payment_id = (
-            reloaded_entry.payment_id
-            or reloaded_entry.snapshot_data.get("payment_id")
-        )
-        order_id = (
-            reloaded_entry.order_id
-            or reloaded_entry.snapshot_data.get("order_id")
-        )
+        payment_id = reloaded_entry.payment_id or reloaded_entry.snapshot_data.get("payment_id")
+        order_id = reloaded_entry.order_id or reloaded_entry.snapshot_data.get("order_id")
 
         assert payment_id is not None
         assert order_id is not None
 
-    def test_snapshot_includes_timestamp_for_audit(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_includes_timestamp_for_audit(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify snapshot includes capture timestamp for audit.
@@ -334,9 +316,7 @@ class TestForensicSnapshotReplay:
         parsed = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
         assert parsed is not None
 
-    def test_snapshot_sufficient_for_payment_replay_decision(
-        self, sample_order, sample_payment, sample_user
-    ):
+    def test_snapshot_sufficient_for_payment_replay_decision(self, sample_order, sample_payment, sample_user):
         """
         Purpose:
             Verify snapshot data is sufficient for PaymentReplayHandler.can_replay().

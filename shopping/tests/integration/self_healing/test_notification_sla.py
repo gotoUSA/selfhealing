@@ -73,9 +73,7 @@ class TestNotificationSLAPolicy:
         )
 
         # Backdate to exceed 24-hour SLA (set to 30 hours ago)
-        FailedOperation.objects.filter(id=entry.id).update(
-            created_at=timezone.now() - timedelta(hours=30)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(created_at=timezone.now() - timedelta(hours=30))
         entry.refresh_from_db()
 
         # Verify SLA is breached
@@ -126,9 +124,7 @@ class TestNotificationSLAPolicy:
         )
 
         # Backdate beyond SLA (notification SLA is 24 hours)
-        FailedOperation.objects.filter(id=entry.id).update(
-            created_at=timezone.now() - timedelta(hours=36)
-        )
+        FailedOperation.objects.filter(id=entry.id).update(created_at=timezone.now() - timedelta(hours=36))
         entry.refresh_from_db()
 
         # Verify is_sla_breached property
@@ -169,9 +165,7 @@ class TestNotificationSLAPolicy:
         )
 
         # Backdate 2 hours (exceeds 1-hour payment SLA)
-        FailedOperation.objects.filter(id=payment_entry.id).update(
-            created_at=timezone.now() - timedelta(hours=2)
-        )
+        FailedOperation.objects.filter(id=payment_entry.id).update(created_at=timezone.now() - timedelta(hours=2))
         payment_entry.refresh_from_db()
 
         # Create notification domain failure at same time
@@ -183,9 +177,7 @@ class TestNotificationSLAPolicy:
         )
 
         # Backdate 2 hours (does NOT exceed 24-hour notification SLA)
-        FailedOperation.objects.filter(id=notification_entry.id).update(
-            created_at=timezone.now() - timedelta(hours=2)
-        )
+        FailedOperation.objects.filter(id=notification_entry.id).update(created_at=timezone.now() - timedelta(hours=2))
         notification_entry.refresh_from_db()
 
         # Payment should breach SLA (1 hour threshold)
