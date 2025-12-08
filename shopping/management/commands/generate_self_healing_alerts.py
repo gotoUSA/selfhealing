@@ -128,10 +128,12 @@ class Command(BaseCommand):
         prometheus_groups = []
         for group_name, rules in groups.items():
             if rules:  # Only include non-empty groups
-                prometheus_groups.append({
-                    "name": group_name,
-                    "rules": rules,
-                })
+                prometheus_groups.append(
+                    {
+                        "name": group_name,
+                        "rules": rules,
+                    }
+                )
 
         output = {
             "groups": prometheus_groups,
@@ -146,7 +148,9 @@ class Command(BaseCommand):
 # Domains: {domains}
 # Generated rules: {count}
 
-""".format(domains=", ".join(DOMAINS), count=len(ALERTING_RULES))
+""".format(
+            domains=", ".join(DOMAINS), count=len(ALERTING_RULES)
+        )
 
         yaml_output = yaml.dump(output, default_flow_style=False, sort_keys=False, allow_unicode=True)
 

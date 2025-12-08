@@ -76,6 +76,23 @@ from .metrics import (
     track_recovery_time,
     track_replay,
 )
+from .security_violation_service import (
+    SecurityViolationService,
+    SecurityViolationResult,
+    SecurityConfig,
+    ViolationType,
+    SEVERITY_BY_VIOLATION_TYPE,
+    get_security_violation_service,
+    handle_security_violation,
+)
+from .security_notification_service import (
+    SecurityNotificationService,
+    SecurityNotificationResult,
+    NotificationConfig,
+    NotificationChannel,
+    get_security_notification_service,
+    notify_security_incident,
+)
 
 __all__ = [
     # Retry
@@ -133,4 +150,19 @@ __all__ = [
     "collect_all_metrics",
     "track_recovery_time",
     "track_replay",
+    # Security Violation Service (Phase 6)
+    "SecurityViolationService",
+    "SecurityViolationResult",
+    "SecurityConfig",
+    "ViolationType",
+    "SEVERITY_BY_VIOLATION_TYPE",
+    "get_security_violation_service",
+    "handle_security_violation",
+    # Security Notification Service (Phase 6)
+    "SecurityNotificationService",
+    "SecurityNotificationResult",
+    "NotificationConfig",
+    "NotificationChannel",
+    "get_security_notification_service",
+    "notify_security_incident",
 ]

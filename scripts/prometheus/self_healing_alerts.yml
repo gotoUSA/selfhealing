@@ -199,7 +199,7 @@ groups:
       # Replay Failure Rate High
       - alert: ReplayFailureRateHigh
         expr: |
-          sum(rate(replay_outcomes_total{outcome="failure"}[1h])) 
+          sum(rate(replay_outcomes_total{outcome="failure"}[1h]))
           / sum(rate(replay_outcomes_total[1h])) > 0.5
         for: 15m
         labels:

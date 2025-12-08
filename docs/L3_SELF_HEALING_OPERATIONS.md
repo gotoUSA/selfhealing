@@ -1176,14 +1176,14 @@ SLACK_ALERTS_WEBHOOK=https://hooks.slack.com/services/xxx
 - [x] Create Grafana dashboards (`scripts/grafana/dashboards/self_healing_dashboard.json`)
 - [x] Set up alerting rules (`scripts/prometheus/self_healing_alerts.yml`)
 - [x] Add alert generator command (`python manage.py generate_self_healing_alerts`)
-- [ ] Document runbooks
+- [x] Document runbooks (Section 9 of this document)
 - [ ] Conduct chaos engineering session
 
 ### Phase 6: Security Hardening (Week 6)
 
-- [ ] Implement security violation handling
-- [ ] Add security incident notifications
-- [ ] Review and harden all sensitive paths
+- [x] Implement security violation handling (`shopping/services/self_healing/security_violation_service.py`)
+- [x] Add security incident notifications (`shopping/services/self_healing/security_notification_service.py`)
+- [x] Review and harden all sensitive paths (IP banning, session invalidation)
 - [ ] Conduct security review
 
 ---

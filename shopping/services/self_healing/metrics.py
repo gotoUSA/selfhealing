@@ -367,9 +367,7 @@ def update_dlq_status_gauges() -> dict[str, int]:
 
         from shopping.models.failed_operation import FailedOperation
 
-        by_status = dict(
-            FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
-        )
+        by_status = dict(FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
 
         for status, count in by_status.items():
             dlq_by_status_gauge.labels(status=status).set(count)

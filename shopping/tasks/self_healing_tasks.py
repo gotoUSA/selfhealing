@@ -388,10 +388,7 @@ def collect_self_healing_metrics(self) -> dict:
     try:
         metrics = collect_all_metrics()
 
-        logger.debug(
-            f"[Metrics] Collection complete: "
-            f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}"
-        )
+        logger.debug(f"[Metrics] Collection complete: " f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}")
 
         return {
             "success": True,
