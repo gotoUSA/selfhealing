@@ -338,6 +338,23 @@ class CircuitBreakerState(models.Model):
         verbose_name="제어 사유",
     )
 
+    # Manual override expiration (TTL)
+    # Prevents indefinite manual blocks - auto-expires after configured duration
+    manual_override_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="수동 제어 만료 시각",
+        help_text="Manual override automatically expires after this time",
+    )
+
+    # Half-open request counter for governance
+    # Limits how many test requests are allowed in half-open state
+    half_open_request_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Half-Open 요청 횟수",
+        help_text="Number of requests allowed through in half-open state",
+    )
+
     # 시간 정보
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -422,22 +439,88 @@ class CircuitBreakerState(models.Model):
         # half_open 상태: 제한된 요청 허용
         return True
 
-    def force_open(self, controlled_by=None, reason: str = "") -> None:
-        """수동으로 Open 상태로 전환 (PG 장애 감지 시)"""
+    def force_open(
+        self,
+        controlled_by=None,
+        reason: str = "",
+        ttl_minutes: int = 90,
+    ) -> None:
+        """
+        Manually transition to OPEN state (block all requests).
+
+        Manual override = "Code Freeze for Recovery System"
+        - Automatic failure/success recording is bypassed
+        - AI/retry logic recommendations are ignored
+        - Replay mode becomes manual-only
+        - Override expires automatically after TTL to prevent forgotten blocks
+
+        Args:
+            controlled_by: User who initiated the override
+            reason: Reason for the manual override
+            ttl_minutes: Time-to-live in minutes (default 90, max recommended 180)
+        """
+        from datetime import timedelta
+
         self.state = "open"
         self.opened_at = timezone.now()
         self.manually_controlled = True
         self.controlled_by = controlled_by
         self.control_reason = reason
+        # Set TTL - manual overrides should never be indefinite
+        self.manual_override_expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
         self.save()
 
     def force_close(self, controlled_by=None, reason: str = "") -> None:
-        """수동으로 Close 상태로 전환 (PG 복구 확인 시)"""
+        """
+        Manually transition to CLOSED state (allow all requests).
+
+        Clears manual override and resets all counters.
+        If triggered with replay, failures are routed to REQUIRES_REVIEW.
+        """
         self.state = "closed"
         self.failure_count = 0
         self.success_count = 0
+        self.half_open_request_count = 0
         self.opened_at = None
         self.manually_controlled = True
         self.controlled_by = controlled_by
         self.control_reason = reason
+        # Clear TTL on close
+        self.manual_override_expires_at = None
+        self.save()
+
+    def is_manual_override_expired(self) -> bool:
+        """
+        Check if manual override has expired.
+
+        Returns:
+            True if manual override TTL has passed, False otherwise
+        """
+        if not self.manually_controlled:
+            return False
+        if not self.manual_override_expires_at:
+            return False
+        return timezone.now() >= self.manual_override_expires_at
+
+    def expire_manual_override(self) -> None:
+        """
+        Expire the manual override and transition based on current state.
+
+        When a manual override expires:
+        - If OPEN: transition to HALF_OPEN for gradual recovery
+        - Clear the manually_controlled flag
+        - Log the expiration for audit
+        """
+        if not self.is_manual_override_expired():
+            return
+
+        # If manually opened, transition to half-open for testing
+        if self.state == "open":
+            self.state = "half_open"
+            self.success_count = 0
+            self.half_open_request_count = 0
+
+        self.manually_controlled = False
+        self.manual_override_expires_at = None
+        self.control_reason = f"{self.control_reason} [EXPIRED]"
         self.save()

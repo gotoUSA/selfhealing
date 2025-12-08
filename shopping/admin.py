@@ -16,6 +16,8 @@ from .models.notification import Notification
 from .models.payment import Payment, PaymentLog
 from .models.point import PointHistory
 from .models.product_qa import ProductAnswer, ProductQuestion
+from .models.failed_payment import CircuitBreakerState
+from .models.failed_operation import FailedOperation
 
 # ==========================================
 # 소셜 로그인 Admin 설정
@@ -1460,7 +1462,432 @@ class SellerProfileAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related("user")
 
 
-# Admin 사이트 설정
+# ==========================================
+# Circuit Breaker Admin
+# ==========================================
+@admin.register(CircuitBreakerState)
+class CircuitBreakerStateAdmin(admin.ModelAdmin):
+    """
+    Circuit Breaker State Admin
+
+    Provides operational controls for managing external service circuit breakers.
+    Supports force open/close operations with audit logging.
+    """
+
+    list_display = [
+        "service_name",
+        "state_display",
+        "failure_count",
+        "success_count",
+        "manually_controlled_display",
+        "controlled_by",
+        "opened_at",
+        "updated_at",
+    ]
+
+    list_filter = [
+        "state",
+        "manually_controlled",
+        "created_at",
+    ]
+
+    search_fields = [
+        "service_name",
+        "control_reason",
+    ]
+
+    readonly_fields = [
+        "failure_count",
+        "success_count",
+        "last_failure_at",
+        "opened_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    actions = [
+        "force_open_selected",
+        "force_close_selected",
+        "force_close_with_replay",
+        "reset_selected",
+    ]
+
+    fieldsets = (
+        (
+            "Service Information",
+            {
+                "fields": ("service_name", "state"),
+            },
+        ),
+        (
+            "Counters",
+            {
+                "fields": ("failure_count", "success_count", "last_failure_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Manual Control",
+            {
+                "fields": ("manually_controlled", "controlled_by", "control_reason"),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": ("opened_at", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    def state_display(self, obj):
+        """Display state with color indicator"""
+        colors = {
+            "closed": "green",
+            "open": "red",
+            "half_open": "orange",
+        }
+        color = colors.get(obj.state, "gray")
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_state_display(),
+        )
+
+    state_display.short_description = "State"
+    state_display.admin_order_field = "state"
+
+    def manually_controlled_display(self, obj):
+        """Display manual control status"""
+        if obj.manually_controlled:
+            return format_html('<span style="color: blue;">✓ Manual</span>')
+        return format_html('<span style="color: gray;">Auto</span>')
+
+    manually_controlled_display.short_description = "Control"
+
+    @admin.action(description="Force OPEN selected circuits (block requests)")
+    def force_open_selected(self, request, queryset):
+        """Force open selected circuit breakers"""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
+        service = get_circuit_breaker_service()
+        count = 0
+
+        for circuit in queryset:
+            result = service.force_open(
+                service_name=circuit.service_name,
+                reason=f"Admin action by {request.user.username}",
+                controlled_by=request.user,
+            )
+            if result.success:
+                count += 1
+
+        self.message_user(
+            request,
+            f"Successfully opened {count} circuit breaker(s).",
+        )
+
+    @admin.action(description="Force CLOSE selected circuits (allow requests)")
+    def force_close_selected(self, request, queryset):
+        """Force close selected circuit breakers without replay"""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
+        service = get_circuit_breaker_service()
+        count = 0
+
+        for circuit in queryset:
+            result = service.force_close(
+                service_name=circuit.service_name,
+                reason=f"Admin action by {request.user.username}",
+                controlled_by=request.user,
+                trigger_replay=False,
+            )
+            if result.success:
+                count += 1
+
+        self.message_user(
+            request,
+            f"Successfully closed {count} circuit breaker(s).",
+        )
+
+    @admin.action(description="Force CLOSE with DLQ replay")
+    def force_close_with_replay(self, request, queryset):
+        """Force close selected circuit breakers and trigger DLQ replay"""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
+        service = get_circuit_breaker_service()
+        count = 0
+
+        for circuit in queryset:
+            result = service.force_close(
+                service_name=circuit.service_name,
+                reason=f"Admin action with replay by {request.user.username}",
+                controlled_by=request.user,
+                trigger_replay=True,
+            )
+            if result.success:
+                count += 1
+
+        self.message_user(
+            request,
+            f"Successfully closed {count} circuit breaker(s) with DLQ replay triggered.",
+        )
+
+    @admin.action(description="Reset selected circuits to initial state")
+    def reset_selected(self, request, queryset):
+        """Reset selected circuit breakers"""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
+        service = get_circuit_breaker_service()
+        count = 0
+
+        for circuit in queryset:
+            result = service.reset(
+                service_name=circuit.service_name,
+                reason=f"Admin reset by {request.user.username}",
+                controlled_by=request.user,
+            )
+            if result.success:
+                count += 1
+
+        self.message_user(
+            request,
+            f"Successfully reset {count} circuit breaker(s).",
+        )
+
+
+# ==========================================
+# Failed Operation (DLQ) Admin
+# ==========================================
+@admin.register(FailedOperation)
+class FailedOperationAdmin(admin.ModelAdmin):
+    """
+    Failed Operation (DLQ) Admin
+
+    Provides review and replay capabilities for dead letter queue entries.
+    """
+
+    list_display = [
+        "id",
+        "domain",
+        "failure_type",
+        "status_display",
+        "order_link",
+        "user_link",
+        "retry_count",
+        "created_at",
+        "resolved_at",
+    ]
+
+    list_filter = [
+        "domain",
+        "status",
+        "failure_type",
+        "created_at",
+        "resolved_at",
+    ]
+
+    search_fields = [
+        "failure_type",
+        "error_code",
+        "error_message",
+        "order__id",
+        "user__username",
+        "user__email",
+    ]
+
+    readonly_fields = [
+        "domain",
+        "failure_type",
+        "order",
+        "payment",
+        "user",
+        "snapshot_data",
+        "error_code",
+        "error_message",
+        "retry_count",
+        "max_retries",
+        "last_retry_at",
+        "request_data",
+        "response_data",
+        "metadata",
+        "next_action_hint",
+        "recommended_action",
+        "created_at",
+        "updated_at",
+        "expires_at",
+    ]
+
+    actions = [
+        "replay_selected",
+        "mark_as_resolved",
+        "mark_as_rejected",
+        "mark_as_requires_review",
+    ]
+
+    fieldsets = (
+        (
+            "Classification",
+            {
+                "fields": ("domain", "failure_type", "status"),
+            },
+        ),
+        (
+            "References",
+            {
+                "fields": ("order", "payment", "user"),
+            },
+        ),
+        (
+            "Error Details",
+            {
+                "fields": ("error_code", "error_message", "next_action_hint", "recommended_action"),
+            },
+        ),
+        (
+            "Retry Information",
+            {
+                "fields": ("retry_count", "max_retries", "last_retry_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Resolution",
+            {
+                "fields": ("resolved_at", "resolved_by", "resolution_type", "resolution_note"),
+            },
+        ),
+        (
+            "Forensic Data",
+            {
+                "fields": ("snapshot_data", "request_data", "response_data", "metadata"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": ("created_at", "updated_at", "expires_at"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    def status_display(self, obj):
+        """Display status with color indicator"""
+        colors = {
+            "pending": "orange",
+            "reviewing": "blue",
+            "replayed": "purple",
+            "requires_review": "red",
+            "resolved": "green",
+            "rejected": "gray",
+            "archived": "lightgray",
+            "expired": "lightgray",
+        }
+        color = colors.get(obj.status, "black")
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display(),
+        )
+
+    status_display.short_description = "Status"
+    status_display.admin_order_field = "status"
+
+    def order_link(self, obj):
+        """Link to related order"""
+        if obj.order:
+            url = reverse("admin:shopping_order_change", args=[obj.order.id])
+            return format_html('<a href="{}">{}</a>', url, f"Order #{obj.order.id}")
+        return "-"
+
+    order_link.short_description = "Order"
+
+    def user_link(self, obj):
+        """Link to related user"""
+        if obj.user:
+            url = reverse("admin:shopping_user_change", args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "-"
+
+    user_link.short_description = "User"
+
+    @admin.action(description="Replay selected DLQ entries")
+    def replay_selected(self, request, queryset):
+        """Replay selected DLQ entries"""
+        from shopping.services.self_healing.replay_service import get_replay_service
+
+        service = get_replay_service()
+        success_count = 0
+        fail_count = 0
+
+        for entry in queryset.filter(status__in=["pending", "requires_review"]):
+            if entry.retry_count >= entry.max_retries:
+                fail_count += 1
+                continue
+
+            result = service.replay_single(entry.id)
+            if result.success:
+                success_count += 1
+            else:
+                fail_count += 1
+
+        self.message_user(
+            request,
+            f"Replay complete: {success_count} succeeded, {fail_count} failed.",
+        )
+
+    @admin.action(description="Mark as RESOLVED")
+    def mark_as_resolved(self, request, queryset):
+        """Mark selected entries as resolved"""
+        count = 0
+        for entry in queryset:
+            entry.mark_as_resolved(
+                resolved_by=request.user,
+                note=f"Manually resolved by {request.user.username}",
+                resolution_type="manual_fix",
+            )
+            count += 1
+
+        self.message_user(request, f"Marked {count} entries as resolved.")
+
+    @admin.action(description="Mark as REJECTED (unrecoverable)")
+    def mark_as_rejected(self, request, queryset):
+        """Mark selected entries as rejected"""
+        count = 0
+        for entry in queryset:
+            entry.mark_as_rejected(
+                resolved_by=request.user,
+                note=f"Rejected by {request.user.username}",
+            )
+            count += 1
+
+        self.message_user(request, f"Marked {count} entries as rejected.")
+
+    @admin.action(description="Mark as REQUIRES_REVIEW")
+    def mark_as_requires_review(self, request, queryset):
+        """Mark selected entries as requiring review"""
+        count = 0
+        for entry in queryset:
+            entry.mark_as_requires_review(
+                note=f"Escalated by {request.user.username}",
+            )
+            count += 1
+
+        self.message_user(request, f"Marked {count} entries as requiring review.")
+
+
+# Admin Site Configuration
 admin.site.site_header = "쇼핑몰 관리자"
 admin.site.site_title = "쇼핑몰 Admin"
 admin.site.index_title = "쇼핑몰 관리"

@@ -95,10 +95,7 @@ def replay_batch_by_failure_type(
     """
     from shopping.services.self_healing.replay_service import get_replay_service
 
-    logger.info(
-        f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, "
-        f"max_items={max_items}"
-    )
+    logger.info(f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, " f"max_items={max_items}")
 
     try:
         service = get_replay_service()
@@ -156,10 +153,7 @@ def replay_batch_by_domain(
     """
     from shopping.services.self_healing.replay_service import get_replay_service
 
-    logger.info(
-        f"[DLQ Batch Replay] Starting batch replay for domain={domain}, "
-        f"max_items={max_items}"
-    )
+    logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, " f"max_items={max_items}")
 
     try:
         service = get_replay_service()
@@ -218,8 +212,7 @@ def replay_on_circuit_breaker_close(
     from shopping.services.self_healing.replay_service import get_replay_service
 
     logger.info(
-        f"[DLQ Circuit Recovery] Circuit breaker closed for {service_name}, "
-        f"attempting replay of up to {max_items} items"
+        f"[DLQ Circuit Recovery] Circuit breaker closed for {service_name}, " f"attempting replay of up to {max_items} items"
     )
 
     try:
@@ -230,8 +223,7 @@ def replay_on_circuit_breaker_close(
         )
 
         logger.info(
-            f"[DLQ Circuit Recovery] Completed for {service_name}: "
-            f"total={result.total}, success={result.success_count}"
+            f"[DLQ Circuit Recovery] Completed for {service_name}: " f"total={result.total}, success={result.success_count}"
         )
 
         return {
@@ -316,9 +308,7 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
         for entry in old_entries:
             entry.mark_as_archived(note=f"Auto-archived after {days_old} days retention")
 
-        logger.info(
-            f"[DLQ Cleanup] Completed: expired={expired_count}, archived={archived_count}"
-        )
+        logger.info(f"[DLQ Cleanup] Completed: expired={expired_count}, archived={archived_count}")
 
         return {
             "success": True,

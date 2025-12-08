@@ -156,10 +156,7 @@ class PaymentReplayHandler(ReplayHandler):
             order_id = failed_op.order_id or failed_op.snapshot_data.get("order_id")
 
             if not payment_id or not order_id:
-                return ReplayResult.failed(
-                    failed_op.id,
-                    "Missing payment_id or order_id for replay"
-                )
+                return ReplayResult.failed(failed_op.id, "Missing payment_id or order_id for replay")
 
             # Schedule retry through recovery handler
             task_id = recovery_handler.schedule_retry(
@@ -168,11 +165,7 @@ class PaymentReplayHandler(ReplayHandler):
                 attempt=0,  # Fresh attempt
             )
 
-            return ReplayResult.succeeded(
-                failed_op.id,
-                f"Replay scheduled with task_id={task_id}",
-                data={"task_id": task_id}
-            )
+            return ReplayResult.succeeded(failed_op.id, f"Replay scheduled with task_id={task_id}", data={"task_id": task_id})
 
         except Exception as e:
             logger.error(f"[PaymentReplayHandler] Replay failed: {e}")
@@ -216,15 +209,9 @@ class PointReplayHandler(ReplayHandler):
                     amount=amount,
                     reason=f"[DLQ Replay] {reason_text}",
                 )
-                return ReplayResult.succeeded(
-                    failed_op.id,
-                    f"Added {amount} points to user {user.id}"
-                )
+                return ReplayResult.succeeded(failed_op.id, f"Added {amount} points to user {user.id}")
             else:
-                return ReplayResult.failed(
-                    failed_op.id,
-                    "Invalid point amount in snapshot"
-                )
+                return ReplayResult.failed(failed_op.id, "Invalid point amount in snapshot")
 
         except Exception as e:
             logger.error(f"[PointReplayHandler] Replay failed: {e}")
@@ -261,10 +248,7 @@ class WebhookReplayHandler(ReplayHandler):
             amount = request_data.get("amount")
 
             if not all([payment_key, order_id, amount]):
-                return ReplayResult.failed(
-                    failed_op.id,
-                    "Missing required fields in request_data"
-                )
+                return ReplayResult.failed(failed_op.id, "Missing required fields in request_data")
 
             # Queue the webhook processing task
             task = call_toss_confirm_api.delay(
@@ -274,9 +258,7 @@ class WebhookReplayHandler(ReplayHandler):
             )
 
             return ReplayResult.succeeded(
-                failed_op.id,
-                f"Webhook replay scheduled with task_id={task.id}",
-                data={"task_id": task.id}
+                failed_op.id, f"Webhook replay scheduled with task_id={task.id}", data={"task_id": task.id}
             )
 
         except Exception as e:
@@ -300,10 +282,7 @@ class DefaultReplayHandler(ReplayHandler):
 
     def replay(self, failed_op: "FailedOperation") -> ReplayResult:
         """Default replay is not supported."""
-        return ReplayResult.failed(
-            failed_op.id,
-            f"No replay handler implemented for domain '{self.domain}'"
-        )
+        return ReplayResult.failed(failed_op.id, f"No replay handler implemented for domain '{self.domain}'")
 
 
 # =============================================================================
@@ -418,9 +397,7 @@ class ReplayService:
         except Exception as e:
             # Handler raised an unexpected exception - escalate to REQUIRES_REVIEW
             logger.error(f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}", exc_info=True)
-            failed_op.mark_as_requires_review(
-                note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}"
-            )
+            failed_op.mark_as_requires_review(note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}")
             # Store exception details in metadata for forensics
             failed_op.metadata["handler_exception"] = {
                 "type": type(e).__name__,
@@ -512,6 +489,7 @@ class ReplayService:
         self,
         service_name: str,
         max_items: int = 50,
+        escalate_failures: bool = True,
     ) -> BatchReplayResult:
         """
         Replay entries when circuit breaker closes.
@@ -519,9 +497,15 @@ class ReplayService:
         This is triggered when an external service recovers.
         Only replays entries related to the recovered service.
 
+        IMPORTANT: When triggered by force_close with trigger_replay=True,
+        any replay failures are escalated to REQUIRES_REVIEW status.
+        This is because operator-initiated recovery implies the operator
+        intended to resolve these items, so failures need explicit attention.
+
         Args:
             service_name: Name of the service that recovered
             max_items: Maximum number of items to replay
+            escalate_failures: If True, mark failed replays as REQUIRES_REVIEW
 
         Returns:
             BatchReplayResult with summary
@@ -563,9 +547,26 @@ class ReplayService:
             else:
                 batch_result.failed_count += 1
 
+                # Escalate failures to REQUIRES_REVIEW when triggered by forced close
+                # This ensures operator attention for operator-initiated recoveries
+                if escalate_failures:
+                    try:
+                        failed_entry = FailedOperation.objects.get(id=entry.id)
+                        if failed_entry.status == FailedOperation.Status.PENDING:
+                            failed_entry.mark_as_requires_review(
+                                note=f"Conditional replay failed after circuit close for {service_name}: {result.error}"
+                            )
+                            logger.warning(
+                                f"[ReplayService] Escalated DLQ {entry.id} to REQUIRES_REVIEW "
+                                f"after conditional replay failure"
+                            )
+                    except FailedOperation.DoesNotExist:
+                        pass
+
         logger.info(
             f"[ReplayService] Circuit close replay for {service_name}: "
-            f"total={batch_result.total}, success={batch_result.success_count}"
+            f"total={batch_result.total}, success={batch_result.success_count}, "
+            f"failed={batch_result.failed_count} (escalated={batch_result.failed_count if escalate_failures else 0})"
         )
 
         return batch_result

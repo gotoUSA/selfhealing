@@ -1100,11 +1100,11 @@ SLACK_ALERTS_WEBHOOK=https://hooks.slack.com/services/xxx
 
 ### Phase 4: Circuit Breaker (Week 4-5)
 
-- [ ] Create `CircuitBreakerState` model
-- [ ] Implement toggle-based CB
-- [ ] Add admin controls for force open/close
-- [ ] Add conditional replay on CB close
-- [ ] Write CB integration tests
+- [x] Create `CircuitBreakerState` model
+- [x] Implement toggle-based CB
+- [x] Add admin controls for force open/close
+- [x] Add conditional replay on CB close
+- [x] Write CB integration tests
 
 ### Phase 5: Observability (Week 5-6)
 

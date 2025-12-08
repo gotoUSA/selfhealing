@@ -461,6 +461,155 @@ Automatic CB opening will be considered when:
 
 ---
 
+### Manual Control Semantics: "Code Freeze for Recovery System"
+
+**Core Concept**: `force_open` is not just "request blocking" - it's an operator command that **pauses the entire recovery system**.
+
+#### What force_open Means
+
+| Action | Description | Reason |
+|--------|-------------|--------|
+| Block new requests | Payment requests immediately return failure | Prevent additional failures during outage |
+| **Pause Replay** | DLQ replay is suspended | Retries will also fail if external system is down |
+| **Stop Auto-Recovery** | Automatic recovery logic disabled | Operator is controlling the situation |
+| Pause Pending → DLQ transition | In-progress operations remain as-is | Decide after situation assessment |
+
+#### What force_close Means
+
+| Action | Description | Reason |
+|--------|-------------|--------|
+| Allow new requests | Resume normal payment processing | Outage recovery complete |
+| **Execute Conditional Replay** | Automatically replay DLQ entries | Process backlogged operations |
+| **Escalate failures to REQUIRES_REVIEW** | Failed replays need human attention | Failure after forced close = needs investigation |
+
+```python
+# Conditional Replay on Circuit Close
+def replay_on_circuit_close(service_name: str, escalate_failures: bool = True):
+    """
+    Replay backlogged DLQ entries when circuit closes.
+    
+    Args:
+        service_name: Target service name
+        escalate_failures: If True, escalate replay failures to REQUIRES_REVIEW
+    """
+    pending_entries = FailedOperation.objects.filter(
+        context__service=service_name,
+        status="PENDING"
+    )
+    
+    for entry in pending_entries:
+        try:
+            replay_single(entry.id)
+            entry.status = "RESOLVED"
+        except Exception as e:
+            if escalate_failures:
+                # Failure after forced close = needs human review
+                entry.status = "REQUIRES_REVIEW"
+                entry.resolution_notes = f"Conditional replay failed after circuit close: {e}"
+            else:
+                # Normal retry failure handling
+                entry.retry_count += 1
+        entry.save()
+```
+
+#### Critical Behavior Guarantees
+
+The following behaviors are **guaranteed** and have integration tests:
+
+| Scenario | Guaranteed Behavior | Test Reference |
+|----------|---------------------|----------------|
+| Replay failure after force_close | Circuit stays **CLOSED** (no auto-reopen) | `test_replay_failure_after_circuit_close_does_not_reopen_circuit` |
+| Replay failure with escalate_failures=True | Entry moves to **REQUIRES_REVIEW** | `test_replay_on_circuit_close_escalates_failed_replays` |
+| Security violation replay attempt | Replay **blocked**, never auto-retry | `test_security_violation_during_replay_creates_incident` |
+| Successful replay | Entry moves to **RESOLVED** | `test_replay_on_circuit_close_successful_replays_not_affected` |
+
+**Why these guarantees matter:**
+- **No auto-reopen**: Operators expect force_close to persist. If replays fail, that's a DLQ problem, not a circuit breaker problem.
+- **Escalation**: Failed replays after operator intervention need human review, not more automation.
+- **Security isolation**: Security violations go to SecurityIncident table, never DLQ auto-replay.
+
+---
+
+### Governance Policy: Manual Override TTL & SLA
+
+**Principle**: Manual operator intervention has an **explicit TTL** to prevent indefinite blocking.
+
+#### TTL (Time-To-Live) Policy
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `manual_override_ttl_minutes` | 90 min | Auto-expiration time after force_open |
+| `half_open_request_limit` | 3 | Test requests allowed in Half-Open state |
+| `max_pending_duration_hours` | 72 hours | Maximum PENDING state duration |
+| `max_retry_lifetime_hours` | 168 hours | Total retry lifetime (7 days) |
+
+#### TTL Workflow
+
+```
+Operator: force_open("toss_payment", ttl_minutes=90)
+    ↓
+[Circuit OPEN - All requests blocked]
+    ↓
++90 minutes elapsed
+    ↓
+[Periodic Task detects expiration]
+    ↓
+Auto-transition to CLOSED state + Alert sent
+```
+
+```python
+# Governance Configuration
+SELF_HEALING = {
+    "CIRCUIT_BREAKER": {
+        "ENABLED": True,
+        "FAILURE_THRESHOLD": 5,
+        "RECOVERY_TIMEOUT_SECONDS": 60,
+        "SUCCESS_THRESHOLD": 2,
+        "HALF_OPEN_REQUEST_LIMIT": 3,
+        
+        # Governance: TTL & SLA
+        "MANUAL_OVERRIDE_TTL_MINUTES": 90,      # Prevent indefinite blocking
+        "MAX_PENDING_DURATION_HOURS": 72,        # PENDING state SLA
+        "MAX_RETRY_LIFETIME_HOURS": 168,         # Total lifetime SLA (7 days)
+    }
+}
+```
+
+#### Periodic Task: TTL Expiration Check
+
+```python
+@shared_task(name="expire_manual_overrides")
+@app.task(bind=True)
+def expire_manual_overrides(self):
+    """
+    Runs every 5 minutes to release expired Manual Overrides.
+    
+    Returns:
+        dict: Processing result {"expired_count": N, "services": [...]}
+    """
+    cb_service = CircuitBreakerService()
+    expired = cb_service.check_and_expire_manual_overrides()
+    
+    if expired:
+        # Alert: Notify operators of auto-release
+        for service in expired:
+            notify_ops(f"Circuit Breaker for {service} expired - auto-closed")
+    
+    return {"expired_count": len(expired), "services": expired}
+```
+
+#### SLA Checklist
+
+| SLA Item | Threshold | Action on Violation |
+|----------|-----------|---------------------|
+| Manual Override Duration | > 90 min | Auto-release + Alert |
+| PENDING State Duration | > 72 hours | Transition to REQUIRES_REVIEW + Alert |
+| Total Retry Lifetime | > 7 days | Auto-archive + Report |
+| DLQ Backlog | > 1000 entries | Critical Alert |
+| Replay Failure Rate | > 50% | Circuit Review Alert |
+
+---
+
 ## 11. Failure Classification
 
 ### Three Categories of Failures

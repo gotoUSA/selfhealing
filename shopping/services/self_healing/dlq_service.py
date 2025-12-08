@@ -185,10 +185,7 @@ class DLQService:
                 retention_days=self.config.retention_days,
             )
 
-            logger.info(
-                f"[DLQService] Created DLQ entry: id={failed_op.id}, "
-                f"domain={domain}, failure_type={failure_type}"
-            )
+            logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
 
             return DLQEntryResult.created(failed_op.id)
 
@@ -436,11 +433,7 @@ class DLQService:
 
         from shopping.models.failed_operation import FailedOperation
 
-        by_status = dict(
-            FailedOperation.objects.values("status")
-            .annotate(count=Count("id"))
-            .values_list("status", "count")
-        )
+        by_status = dict(FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
 
         by_domain = dict(
             FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)

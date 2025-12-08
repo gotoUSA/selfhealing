@@ -3,10 +3,10 @@ L3 Self-Healing Services
 
 This module provides self-healing capabilities for the shopping application.
 Includes retry logic, backoff calculation, idempotency checking, DLQ management,
-and replay functionality.
+replay functionality, and circuit breaker management.
 
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md (§7, §8)
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2)
+Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §9)
 """
 
 from .retry_handler import (
@@ -45,6 +45,16 @@ from .replay_service import (
     replay_failed_operation,
     batch_replay_by_failure_type,
 )
+from .circuit_breaker_service import (
+    CircuitBreakerService,
+    CircuitBreakerConfig,
+    CircuitBreakerResult,
+    CircuitState,
+    get_circuit_breaker_service,
+    should_allow_request,
+    force_open_circuit,
+    force_close_circuit,
+)
 
 __all__ = [
     # Retry
@@ -77,4 +87,13 @@ __all__ = [
     "get_replay_service",
     "replay_failed_operation",
     "batch_replay_by_failure_type",
+    # Circuit Breaker Service
+    "CircuitBreakerService",
+    "CircuitBreakerConfig",
+    "CircuitBreakerResult",
+    "CircuitState",
+    "get_circuit_breaker_service",
+    "should_allow_request",
+    "force_open_circuit",
+    "force_close_circuit",
 ]

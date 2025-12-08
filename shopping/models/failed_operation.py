@@ -404,7 +404,12 @@ class FailedOperation(models.Model):
         self.recommended_action = self.RecommendedAction.ESCALATE
         if note:
             self.error_message = f"{self.error_message}\n[Escalated] {note}".strip()
-        self.save(update_fields=["status", "error_message", "recommended_action", "updated_at"])
+            # Also update resolution_note for operational visibility
+            if self.resolution_note:
+                self.resolution_note = f"{self.resolution_note} | [Escalated] {note}"
+            else:
+                self.resolution_note = f"[Escalated] {note}"
+        self.save(update_fields=["status", "error_message", "recommended_action", "resolution_note", "updated_at"])
 
     def mark_as_archived(self, note: str = "") -> None:
         """
