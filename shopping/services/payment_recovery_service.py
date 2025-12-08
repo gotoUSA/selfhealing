@@ -138,7 +138,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         max_delay = self.config.get("RETRY_BACKOFF_MAX", 180)
 
         # 지수 백오프: base^attempt (4, 16, 64, ...)
-        delay = base ** attempt
+        delay = base**attempt
 
         # 최대값 제한
         delay = min(delay, max_delay)
@@ -146,6 +146,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         # Jitter 추가 (±25%)
         if self.config.get("RETRY_JITTER", True):
             import random
+
             jitter = delay * 0.25 * (random.random() * 2 - 1)
             delay = int(delay + jitter)
 
@@ -401,8 +402,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         elapsed = (timezone.now() - created_at).total_seconds()
 
         logger.error(
-            f"SLA 타임아웃 abort: payment_id={payment_id}, order_id={order_id}, "
-            f"elapsed={elapsed:.1f}s, sla={sla_timeout}s"
+            f"SLA 타임아웃 abort: payment_id={payment_id}, order_id={order_id}, " f"elapsed={elapsed:.1f}s, sla={sla_timeout}s"
         )
 
         # DLQ로 이동
@@ -421,6 +421,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
 
         # 롤백 태스크 트리거
         from ..tasks.payment_tasks import rollback_payment_failure
+
         rollback_payment_failure.delay(order_id, f"SLA 타임아웃 ({elapsed:.1f}s)")
 
         return {

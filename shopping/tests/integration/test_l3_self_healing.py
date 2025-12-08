@@ -63,11 +63,15 @@ class TestL3RetryBackoff:
         3. attempt=3 → 약 64초 (max 180 제한)
         """
         # Jitter 없이 기본값 확인
-        with patch.object(recovery_handler, "config", {
-            "RETRY_BACKOFF_BASE": 4,
-            "RETRY_BACKOFF_MAX": 180,
-            "RETRY_JITTER": False,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "RETRY_BACKOFF_BASE": 4,
+                "RETRY_BACKOFF_MAX": 180,
+                "RETRY_JITTER": False,
+            },
+        ):
             delay_1 = recovery_handler.get_backoff_delay(1)
             delay_2 = recovery_handler.get_backoff_delay(2)
             delay_3 = recovery_handler.get_backoff_delay(3)
@@ -84,11 +88,15 @@ class TestL3RetryBackoff:
 
         attempt가 커져도 RETRY_BACKOFF_MAX를 초과하지 않음
         """
-        with patch.object(recovery_handler, "config", {
-            "RETRY_BACKOFF_BASE": 4,
-            "RETRY_BACKOFF_MAX": 180,
-            "RETRY_JITTER": False,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "RETRY_BACKOFF_BASE": 4,
+                "RETRY_BACKOFF_MAX": 180,
+                "RETRY_JITTER": False,
+            },
+        ):
             delay_10 = recovery_handler.get_backoff_delay(10)
 
         # 4^10 = 1,048,576 이지만 max 180으로 제한
@@ -102,11 +110,15 @@ class TestL3RetryBackoff:
 
         동일 attempt에서도 Jitter로 인해 ±25% 범위 내에서 변동
         """
-        with patch.object(recovery_handler, "config", {
-            "RETRY_BACKOFF_BASE": 4,
-            "RETRY_BACKOFF_MAX": 180,
-            "RETRY_JITTER": True,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "RETRY_BACKOFF_BASE": 4,
+                "RETRY_BACKOFF_MAX": 180,
+                "RETRY_JITTER": True,
+            },
+        ):
             delays = [recovery_handler.get_backoff_delay(2) for _ in range(100)]
 
         # 기본값 16초에서 ±25% = 12~20초 범위
@@ -349,10 +361,14 @@ class TestL3SLATimeout:
         # 5분 전에 생성된 결제
         created_at = timezone.now() - timedelta(minutes=6)
 
-        with patch.object(recovery_handler, "config", {
-            "SLA_TIMEOUT_SECONDS": 300,  # 5분
-            "SLA_ABORT_ENABLED": True,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "SLA_TIMEOUT_SECONDS": 300,  # 5분
+                "SLA_ABORT_ENABLED": True,
+            },
+        ):
             is_timeout = recovery_handler.check_sla_timeout(created_at)
 
         assert is_timeout is True, "Should detect SLA timeout"
@@ -368,10 +384,14 @@ class TestL3SLATimeout:
         # 3분 전에 생성된 결제
         created_at = timezone.now() - timedelta(minutes=3)
 
-        with patch.object(recovery_handler, "config", {
-            "SLA_TIMEOUT_SECONDS": 300,  # 5분
-            "SLA_ABORT_ENABLED": True,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "SLA_TIMEOUT_SECONDS": 300,  # 5분
+                "SLA_ABORT_ENABLED": True,
+            },
+        ):
             is_timeout = recovery_handler.check_sla_timeout(created_at)
 
         assert is_timeout is False, "Should not detect timeout within SLA"
@@ -386,10 +406,14 @@ class TestL3SLATimeout:
         """
         created_at = timezone.now() - timedelta(hours=1)  # 1시간 전
 
-        with patch.object(recovery_handler, "config", {
-            "SLA_TIMEOUT_SECONDS": 300,
-            "SLA_ABORT_ENABLED": False,  # 비활성화
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "SLA_TIMEOUT_SECONDS": 300,
+                "SLA_ABORT_ENABLED": False,  # 비활성화
+            },
+        ):
             is_timeout = recovery_handler.check_sla_timeout(created_at)
 
         assert is_timeout is False, "Should not detect timeout when disabled"
@@ -422,17 +446,19 @@ class TestL3SLATimeout:
         created_at = timezone.now() - timedelta(minutes=6)
 
         # rollback_payment_failure mock
-        mock_rollback = mocker.patch(
-            "shopping.tasks.payment_tasks.rollback_payment_failure.delay"
-        )
+        mock_rollback = mocker.patch("shopping.tasks.payment_tasks.rollback_payment_failure.delay")
         mocker.patch.object(recovery_handler, "_notify_dlq_entry")
 
-        with patch.object(recovery_handler, "config", {
-            "SLA_TIMEOUT_SECONDS": 300,
-            "SLA_ABORT_ENABLED": True,
-            "DLQ_RETENTION_DAYS": 30,
-            "NOTIFY_ON_DLQ": False,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "SLA_TIMEOUT_SECONDS": 300,
+                "SLA_ABORT_ENABLED": True,
+                "DLQ_RETENTION_DAYS": 30,
+                "NOTIFY_ON_DLQ": False,
+            },
+        ):
             result = recovery_handler.abort_for_sla(
                 payment_id=payment.id,
                 order_id=order.id,
@@ -473,9 +499,13 @@ class TestL3CircuitBreaker:
 
         CIRCUIT_BREAKER_ENABLED=False면 항상 요청 허용
         """
-        with patch.object(recovery_handler, "config", {
-            "CIRCUIT_BREAKER_ENABLED": False,
-        }):
+        with patch.object(
+            recovery_handler,
+            "config",
+            {
+                "CIRCUIT_BREAKER_ENABLED": False,
+            },
+        ):
             allowed = recovery_handler.check_circuit_breaker()
 
         assert allowed is True, "Should allow request when circuit breaker is disabled"

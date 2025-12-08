@@ -27,7 +27,9 @@ PAYMENT_RECOVERY = {
     "CIRCUIT_BREAKER_ENABLED": os.environ.get("PAYMENT_CIRCUIT_BREAKER_ENABLED", "false").lower() == "true",
     "CIRCUIT_BREAKER_FAILURE_THRESHOLD": int(os.environ.get("PAYMENT_CB_FAILURE_THRESHOLD", 5)),  # 연속 5회 실패 시 차단
     "CIRCUIT_BREAKER_RECOVERY_TIMEOUT": int(os.environ.get("PAYMENT_CB_RECOVERY_TIMEOUT", 60)),  # 60초 후 Half-Open
-    "CIRCUIT_BREAKER_SUCCESS_THRESHOLD": int(os.environ.get("PAYMENT_CB_SUCCESS_THRESHOLD", 2)),  # Half-Open에서 2회 성공 시 Close
+    "CIRCUIT_BREAKER_SUCCESS_THRESHOLD": int(
+        os.environ.get("PAYMENT_CB_SUCCESS_THRESHOLD", 2)
+    ),  # Half-Open에서 2회 성공 시 Close
     # Dead Letter Queue 정책
     "DLQ_ENABLED": os.environ.get("PAYMENT_DLQ_ENABLED", "true").lower() == "true",
     "DLQ_RETENTION_DAYS": int(os.environ.get("PAYMENT_DLQ_RETENTION_DAYS", 30)),  # 30일 보관

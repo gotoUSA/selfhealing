@@ -245,21 +245,21 @@ PAYMENT_RECOVERY = {
     "RETRY_BACKOFF_BASE": int(os.environ.get("PAYMENT_RETRY_BACKOFF_BASE", 4)),
     "RETRY_BACKOFF_MAX": int(os.environ.get("PAYMENT_RETRY_BACKOFF_MAX", 180)),
     "RETRY_JITTER": os.environ.get("PAYMENT_RETRY_JITTER", "true").lower() == "true",
-    
+
     # SLA 정책
     "SLA_TIMEOUT_SECONDS": int(os.environ.get("PAYMENT_SLA_TIMEOUT", 300)),
     "SLA_ABORT_ENABLED": os.environ.get("PAYMENT_SLA_ABORT_ENABLED", "true").lower() == "true",
-    
+
     # Circuit Breaker (Toggle 기반)
     "CIRCUIT_BREAKER_ENABLED": os.environ.get("PAYMENT_CIRCUIT_BREAKER_ENABLED", "false").lower() == "true",
     "CIRCUIT_BREAKER_FAILURE_THRESHOLD": int(os.environ.get("PAYMENT_CB_FAILURE_THRESHOLD", 5)),
     "CIRCUIT_BREAKER_RECOVERY_TIMEOUT": int(os.environ.get("PAYMENT_CB_RECOVERY_TIMEOUT", 60)),
     "CIRCUIT_BREAKER_SUCCESS_THRESHOLD": int(os.environ.get("PAYMENT_CB_SUCCESS_THRESHOLD", 2)),
-    
+
     # Dead Letter Queue 정책
     "DLQ_ENABLED": os.environ.get("PAYMENT_DLQ_ENABLED", "true").lower() == "true",
     "DLQ_RETENTION_DAYS": int(os.environ.get("PAYMENT_DLQ_RETENTION_DAYS", 30)),
-    
+
     # 알림 정책
     "NOTIFY_ON_DLQ": os.environ.get("PAYMENT_NOTIFY_ON_DLQ", "true").lower() == "true",
     "NOTIFY_ON_CIRCUIT_OPEN": os.environ.get("PAYMENT_NOTIFY_ON_CIRCUIT_OPEN", "true").lower() == "true",
@@ -292,7 +292,7 @@ class FailedPayment(models.Model):
     """
     Dead Letter Queue: 복구 불가능한 결제 추적
     """
-    
+
     # 실패 유형
     FAILURE_TYPE_CHOICES = [
         ("max_retries_exceeded", "최대 재시도 횟수 초과"),
@@ -302,7 +302,7 @@ class FailedPayment(models.Model):
         ("manual_abort", "수동 중단"),
         ("unknown", "알 수 없는 오류"),
     ]
-    
+
     # 처리 상태
     STATUS_CHOICES = [
         ("pending", "검토 대기"),
@@ -311,41 +311,41 @@ class FailedPayment(models.Model):
         ("rejected", "복구 불가"),
         ("expired", "보관 기간 만료"),
     ]
-    
+
     # 원본 참조
     payment = models.ForeignKey("Payment", null=True, ...)
     order = models.ForeignKey("Order", null=True, ...)
     user = models.ForeignKey("User", null=True, ...)
-    
+
     # 스냅샷 데이터
     payment_key = models.CharField(max_length=200, blank=True)
     toss_order_id = models.CharField(max_length=100, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=0)
-    
+
     # 실패 정보
     failure_type = models.CharField(max_length=30, choices=FAILURE_TYPE_CHOICES)
     error_code = models.CharField(max_length=100, blank=True)
     error_message = models.TextField(blank=True)
     retry_count = models.PositiveIntegerField(default=0)
-    
+
     # 처리 상태
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     resolved_at = models.DateTimeField(null=True)
     resolved_by = models.ForeignKey("User", null=True, related_name="resolved_failed_payments")
     resolution_note = models.TextField(blank=True)
-    
+
     # 디버깅 데이터
     request_data = models.JSONField(default=dict)
     response_data = models.JSONField(default=dict)
     metadata = models.JSONField(default=dict)
-    
+
     # 보관 만료
     expires_at = models.DateTimeField(null=True)
-    
+
     # 헬퍼 메서드
     def mark_as_resolved(self, resolved_by, note=""): ...
     def mark_as_rejected(self, resolved_by, note=""): ...
-    
+
     @classmethod
     def create_from_payment_failure(cls, payment, order, user, ...): ...
 ```
@@ -357,25 +357,25 @@ class CircuitBreakerState(models.Model):
     """
     Circuit Breaker 상태 저장
     """
-    
+
     STATE_CHOICES = [
         ("closed", "정상 (Closed)"),
         ("open", "차단 (Open)"),
         ("half_open", "테스트 중 (Half-Open)"),
     ]
-    
+
     service_name = models.CharField(max_length=50, unique=True)
     state = models.CharField(max_length=20, choices=STATE_CHOICES, default="closed")
     failure_count = models.PositiveIntegerField(default=0)
     success_count = models.PositiveIntegerField(default=0)
     last_failure_at = models.DateTimeField(null=True)
     opened_at = models.DateTimeField(null=True)
-    
+
     # 수동 제어
     manually_controlled = models.BooleanField(default=False)
     controlled_by = models.ForeignKey("User", null=True)
     control_reason = models.TextField(blank=True)
-    
+
     # 헬퍼 메서드
     def record_failure(self): ...
     def record_success(self): ...
@@ -398,19 +398,19 @@ class PaymentRecoveryHandler(ABC):
     결제 복구 핸들러 추상 클래스
     추후 Kafka/RabbitMQ 기반으로 교체 시 이 인터페이스를 구현
     """
-    
+
     @abstractmethod
     def handle_failure(self, payment_id, order_id, error_code, error_message, retry_count, ...): ...
-    
+
     @abstractmethod
     def schedule_retry(self, payment_id, order_id, attempt, delay_seconds=None): ...
-    
+
     @abstractmethod
     def move_to_dlq(self, payment_id, order_id, failure_type, error_code, ...): ...
-    
+
     @abstractmethod
     def check_circuit_breaker(self, service_name="toss_payment") -> bool: ...
-    
+
     @abstractmethod
     def check_sla_timeout(self, created_at) -> bool: ...
 ```
@@ -422,19 +422,19 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
     """
     Celery 기반 결제 복구 구현체
     """
-    
+
     def get_backoff_delay(self, attempt: int) -> int:
         """지수 백오프 지연 시간 계산 (Jitter 포함)"""
         base = self.config.get("RETRY_BACKOFF_BASE", 4)
         max_delay = self.config.get("RETRY_BACKOFF_MAX", 180)
         delay = min(base ** attempt, max_delay)
-        
+
         if self.config.get("RETRY_JITTER", True):
             jitter = delay * 0.25 * (random.random() * 2 - 1)
             delay = int(delay + jitter)
-        
+
         return max(1, delay)
-    
+
     def handle_failure(self, ...):
         """
         1. 재시도 불가능한 오류 → DLQ
@@ -442,7 +442,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         3. 그 외 → 재시도 스케줄링
         """
         ...
-    
+
     def schedule_retry(self, payment_id, order_id, attempt, delay_seconds=None):
         """Celery 태스크로 재시도 스케줄링"""
         from ..tasks.payment_recovery_tasks import retry_failed_payment
@@ -451,7 +451,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
             countdown=delay_seconds or self.get_backoff_delay(attempt),
         )
         return result.id
-    
+
     def abort_for_sla(self, payment_id, order_id, created_at):
         """SLA 타임아웃 abort + 롤백 트리거"""
         ...
@@ -489,7 +489,7 @@ def get_payment_recovery_handler() -> PaymentRecoveryHandler:
 def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int):
     """
     실패한 결제 재시도
-    
+
     1. Circuit Breaker 확인
     2. SLA 타임아웃 확인
     3. 이미 완료된 결제 확인
@@ -542,7 +542,7 @@ except TossPaymentError as e:
         error_message=e.message,
         retry_count=current_retry_count,
     )
-    
+
     if result["action"] == "retry_scheduled":
         logger.info(f"재시도 예약됨: task_id={result['task_id']}")
     elif result["action"] == "moved_to_dlq":
@@ -661,7 +661,7 @@ docker-compose run --rm web pytest shopping/tests/integration/test_l3_self_heali
 ```python
 class KafkaPaymentRecovery(PaymentRecoveryHandler):
     """Kafka 기반 구현체"""
-    
+
     def schedule_retry(self, payment_id, order_id, attempt, delay_seconds=None):
         # Kafka에 메시지 발행 (delay 토픽 활용)
         producer.send(
@@ -674,7 +674,7 @@ class KafkaPaymentRecovery(PaymentRecoveryHandler):
                 "scheduled_at": time.time() + delay_seconds,
             },
         )
-    
+
     def move_to_dlq(self, ...):
         # Kafka DLQ 토픽에 발행
         producer.send(topic="payment.dlq", ...)

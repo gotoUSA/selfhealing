@@ -131,6 +131,7 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
 
             # finalize 태스크 트리거
             from .payment_tasks import finalize_payment_confirm
+
             finalize_payment_confirm.delay(payment_data, payment_id, payment.order.user_id)
 
             return {
@@ -238,9 +239,7 @@ def check_sla_violations(self, threshold_minutes: int | None = None) -> dict:
             logger.error(f"SLA abort 처리 실패: {error_msg}")
 
     if detected_count > 0:
-        logger.warning(
-            f"SLA 위반 감지 완료: detected={detected_count}, aborted={aborted_count}, errors={len(errors)}"
-        )
+        logger.warning(f"SLA 위반 감지 완료: detected={detected_count}, aborted={aborted_count}, errors={len(errors)}")
     else:
         logger.info("SLA 위반 결제 없음")
 
@@ -374,10 +373,7 @@ def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = N
             record.status = "pending"
             record.save(update_fields=["status"])
 
-    logger.info(
-        f"DLQ 배치 처리 완료: processed={processed}, retried={retried}, "
-        f"rejected={rejected}, errors={len(errors)}"
-    )
+    logger.info(f"DLQ 배치 처리 완료: processed={processed}, retried={retried}, " f"rejected={rejected}, errors={len(errors)}")
 
     return {
         "status": "completed",
