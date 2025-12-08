@@ -166,9 +166,7 @@ class EmailLogAdmin(admin.ModelAdmin):
     @admin.action(description="Mark selected emails as SENT")
     def mark_as_sent(self, request, queryset):
         """Mark pending emails as sent."""
-        updated = queryset.filter(status="pending").update(
-            status="sent", sent_at=timezone.now()
-        )
+        updated = queryset.filter(status="pending").update(status="sent", sent_at=timezone.now())
         self.message_user(request, f"{updated} email(s) marked as sent.")
 
     @admin.action(description="Mark selected emails as FAILED")
@@ -183,9 +181,7 @@ class EmailLogAdmin(admin.ModelAdmin):
 
         # Today's statistics
         today = timezone.now().date()
-        today_logs = EmailLog.objects.filter(
-            created_at__date=today, email_type="verification"
-        )
+        today_logs = EmailLog.objects.filter(created_at__date=today, email_type="verification")
 
         # Total statistics
         total_logs = EmailLog.objects.filter(email_type="verification")

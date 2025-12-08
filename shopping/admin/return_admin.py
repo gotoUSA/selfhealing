@@ -230,9 +230,7 @@ class ReturnAdmin(admin.ModelAdmin):
                 return_obj.approve()
                 count += 1
             except ValueError as e:
-                self.message_user(
-                    request, f"{return_obj.return_number}: {str(e)}", level="error"
-                )
+                self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")
 
         self.message_user(request, f"{count} return(s) approved.")
 
@@ -245,9 +243,7 @@ class ReturnAdmin(admin.ModelAdmin):
                 return_obj.reject("Batch rejected by admin")
                 count += 1
             except ValueError as e:
-                self.message_user(
-                    request, f"{return_obj.return_number}: {str(e)}", level="error"
-                )
+                self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")
 
         self.message_user(request, f"{count} return(s) rejected.")
 
@@ -260,9 +256,7 @@ class ReturnAdmin(admin.ModelAdmin):
                 return_obj.confirm_receive()
                 count += 1
             except ValueError as e:
-                self.message_user(
-                    request, f"{return_obj.return_number}: {str(e)}", level="error"
-                )
+                self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")
 
         self.message_user(request, f"{count} return(s) marked as received.")
 

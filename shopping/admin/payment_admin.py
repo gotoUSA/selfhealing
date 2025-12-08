@@ -162,9 +162,7 @@ class PaymentAdmin(admin.ModelAdmin):
     def receipt_url_link(self, obj):
         """Display receipt link."""
         if obj.receipt_url:
-            return format_html(
-                '<a href="{}" target="_blank">View Receipt</a>', obj.receipt_url
-            )
+            return format_html('<a href="{}" target="_blank">View Receipt</a>', obj.receipt_url)
         return "-"
 
     receipt_url_link.short_description = "Receipt"

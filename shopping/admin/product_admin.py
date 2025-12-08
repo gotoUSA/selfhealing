@@ -79,9 +79,7 @@ class CategoryAdmin(DraggableMPTTAdmin):
 
     def related_products_cumulative_count(self, obj):
         """Count products in this category and all descendants."""
-        return Product.objects.filter(
-            category__in=obj.get_descendants(include_self=True)
-        ).count()
+        return Product.objects.filter(category__in=obj.get_descendants(include_self=True)).count()
 
     related_products_cumulative_count.short_description = "Total Products"
 

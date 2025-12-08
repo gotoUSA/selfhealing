@@ -34,8 +34,7 @@ class DisplayFormattingMixin:
         colors = color_map or default_colors
         color = colors.get(status, "gray")
         return format_html(
-            '<span style="background:{}; padding:2px 8px; '
-            'border-radius:4px; color:white;">{}</span>',
+            '<span style="background:{}; padding:2px 8px; ' 'border-radius:4px; color:white;">{}</span>',
             color,
             status,
         )

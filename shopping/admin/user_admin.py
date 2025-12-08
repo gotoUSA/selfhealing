@@ -160,11 +160,7 @@ class UserAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """Optimize queryset with prefetch."""
-        return (
-            super()
-            .get_queryset(request)
-            .prefetch_related("wishlist_products", "seller_profile")
-        )
+        return super().get_queryset(request).prefetch_related("wishlist_products", "seller_profile")
 
 
 @admin.register(SellerProfile)
