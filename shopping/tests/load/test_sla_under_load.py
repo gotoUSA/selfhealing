@@ -149,11 +149,13 @@ class TestSLAUnderLoad:
             else:
                 sla_tracker.record(duration * 1000)
 
-            timers.append({
-                "duration": duration,
-                "breached": timer.triggered,
-                "precision_error": timer.precision_error if timer.triggered else 0,
-            })
+            timers.append(
+                {
+                    "duration": duration,
+                    "breached": timer.triggered,
+                    "precision_error": timer.precision_error if timer.triggered else 0,
+                }
+            )
 
         # Assert
         if precision_errors:
@@ -164,17 +166,13 @@ class TestSLAUnderLoad:
 
             # Precision error can be up to (max_duration - sla) = 8 - 5 = 3s
             # Use 4.0s threshold to account for edge cases
-            assert p99_error < 4.0, (
-                f"P99 precision error ({p99_error:.3f}s) exceeds ±4s threshold"
-            )
+            assert p99_error < 4.0, f"P99 precision error ({p99_error:.3f}s) exceeds ±4s threshold"
 
         # Verify breach detection accuracy
         expected_breaches = sum(1 for t in timers if t["duration"] >= sla_seconds)
         actual_breaches = sum(1 for t in timers if t["breached"])
 
-        assert expected_breaches == actual_breaches, (
-            f"Expected {expected_breaches} breaches, detected {actual_breaches}"
-        )
+        assert expected_breaches == actual_breaches, f"Expected {expected_breaches} breaches, detected {actual_breaches}"
 
     def test_sla_001_compliance_under_sustained_load(
         self,
@@ -221,10 +219,12 @@ class TestSLAUnderLoad:
 
             with lock:
                 within_sla = sla_tracker.record(duration_ms)
-                results.append({
-                    "duration_ms": duration_ms,
-                    "within_sla": within_sla,
-                })
+                results.append(
+                    {
+                        "duration_ms": duration_ms,
+                        "within_sla": within_sla,
+                    }
+                )
 
             return True
 
@@ -235,8 +235,7 @@ class TestSLAUnderLoad:
         stats = sla_tracker.get_stats()
 
         assert stats["compliance_rate"] >= target_compliance, (
-            f"Compliance rate ({stats['compliance_rate']:.2%}) "
-            f"below target ({target_compliance:.0%})"
+            f"Compliance rate ({stats['compliance_rate']:.2%}) " f"below target ({target_compliance:.0%})"
         )
 
         assert exec_result.success_rate == 1.0, "All operations should complete"
@@ -264,14 +263,14 @@ class TestSLAUnderLoad:
         sla_tracker.sla_threshold_ms = 1000  # 1 second
 
         test_cases = [
-            (500, False),    # Within SLA
-            (800, False),    # Within SLA
-            (1000, False),   # At threshold (within)
-            (1001, True),    # Just over threshold
-            (1500, True),    # Over threshold
-            (2000, True),    # Way over threshold
-            (100, False),    # Fast operation
-            (999, False),    # Just under threshold
+            (500, False),  # Within SLA
+            (800, False),  # Within SLA
+            (1000, False),  # At threshold (within)
+            (1001, True),  # Just over threshold
+            (1500, True),  # Over threshold
+            (2000, True),  # Way over threshold
+            (100, False),  # Fast operation
+            (999, False),  # Just under threshold
         ]
 
         expected_breaches = sum(1 for _, is_breach in test_cases if is_breach)
@@ -282,16 +281,15 @@ class TestSLAUnderLoad:
             actual_breach = not result  # record returns True if within SLA
 
             assert actual_breach == expected_breach, (
-                f"Duration {duration_ms}ms: expected breach={expected_breach}, "
-                f"got breach={actual_breach}"
+                f"Duration {duration_ms}ms: expected breach={expected_breach}, " f"got breach={actual_breach}"
             )
 
         # Assert
         stats = sla_tracker.get_stats()
 
-        assert stats["breach_count"] == expected_breaches, (
-            f"Expected {expected_breaches} breaches, got {stats['breach_count']}"
-        )
+        assert (
+            stats["breach_count"] == expected_breaches
+        ), f"Expected {expected_breaches} breaches, got {stats['breach_count']}"
 
     def test_sla_003_percentile_tracking(self, sla_tracker):
         """
@@ -329,19 +327,13 @@ class TestSLAUnderLoad:
 
         # Assert
         # P50 should be in normal range (100-500)
-        assert 100 <= stats["p50_ms"] <= 600, (
-            f"P50 ({stats['p50_ms']:.0f}ms) outside expected range"
-        )
+        assert 100 <= stats["p50_ms"] <= 600, f"P50 ({stats['p50_ms']:.0f}ms) outside expected range"
 
         # P95 should be in higher range
-        assert 400 <= stats["p95_ms"] <= 1000, (
-            f"P95 ({stats['p95_ms']:.0f}ms) outside expected range"
-        )
+        assert 400 <= stats["p95_ms"] <= 1000, f"P95 ({stats['p95_ms']:.0f}ms) outside expected range"
 
         # P99 should be in tail
-        assert 800 <= stats["p99_ms"] <= 1500, (
-            f"P99 ({stats['p99_ms']:.0f}ms) outside expected range"
-        )
+        assert 800 <= stats["p99_ms"] <= 1500, f"P99 ({stats['p99_ms']:.0f}ms) outside expected range"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -400,15 +392,13 @@ class TestSLARecovery:
         # Breach count should be: 5 + 30 + 2 = 37
         expected_breaches = 37
         assert final_stats["breach_count"] == expected_breaches, (
-            f"Expected {expected_breaches} total breaches, "
-            f"got {final_stats['breach_count']}"
+            f"Expected {expected_breaches} total breaches, " f"got {final_stats['breach_count']}"
         )
 
         # Overall compliance should be (300-37)/300 = 87.67%
         expected_compliance = (300 - expected_breaches) / 300
         assert abs(final_stats["compliance_rate"] - expected_compliance) < 0.01, (
-            f"Expected compliance ~{expected_compliance:.2%}, "
-            f"got {final_stats['compliance_rate']:.2%}"
+            f"Expected compliance ~{expected_compliance:.2%}, " f"got {final_stats['compliance_rate']:.2%}"
         )
 
     def test_sla_alert_threshold(self, sla_tracker):
@@ -433,11 +423,13 @@ class TestSLARecovery:
         def check_alert():
             """Check if alert should trigger."""
             if sla_tracker.compliance_rate < alert_threshold:
-                alerts_triggered.append({
-                    "compliance": sla_tracker.compliance_rate,
-                    "breach_count": sla_tracker.breach_count,
-                    "timestamp": timezone.now(),
-                })
+                alerts_triggered.append(
+                    {
+                        "compliance": sla_tracker.compliance_rate,
+                        "breach_count": sla_tracker.breach_count,
+                        "timestamp": timezone.now(),
+                    }
+                )
 
         # Act: Gradually decrease compliance
         for i in range(100):
@@ -457,9 +449,7 @@ class TestSLARecovery:
         assert stats["compliance_rate"] == 0.90
 
         # Alert should have triggered
-        assert len(alerts_triggered) > 0, (
-            "Alert should trigger when compliance drops below 95%"
-        )
+        assert len(alerts_triggered) > 0, "Alert should trigger when compliance drops below 95%"
 
         # First alert should be around operation 96 (when compliance first drops below 95%)
         first_alert = alerts_triggered[0]

@@ -213,17 +213,21 @@ class SLATracker:
 
         Returns True if within SLA, False if breached.
         """
-        self.measurements.append({
-            "duration_ms": duration_ms,
-            "timestamp": timezone.now(),
-        })
+        self.measurements.append(
+            {
+                "duration_ms": duration_ms,
+                "timestamp": timezone.now(),
+            }
+        )
 
         if duration_ms > self.sla_threshold_ms:
-            self.breaches.append({
-                "duration_ms": duration_ms,
-                "exceeded_by_ms": duration_ms - self.sla_threshold_ms,
-                "timestamp": timezone.now(),
-            })
+            self.breaches.append(
+                {
+                    "duration_ms": duration_ms,
+                    "exceeded_by_ms": duration_ms - self.sla_threshold_ms,
+                    "timestamp": timezone.now(),
+                }
+            )
             return False
         return True
 

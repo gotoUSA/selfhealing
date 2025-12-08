@@ -56,11 +56,13 @@ class QueueSimulator:
         """
         if len(self.items) >= self.max_size:
             self.overflow_count += 1
-            self.overflow_events.append({
-                "timestamp": timezone.now(),
-                "item": item,
-                "queue_size": len(self.items),
-            })
+            self.overflow_events.append(
+                {
+                    "timestamp": timezone.now(),
+                    "item": item,
+                    "queue_size": len(self.items),
+                }
+            )
             return False
         self.items.append(item)
         return True
@@ -145,20 +147,16 @@ class TestResourceExhaustion:
                 queued_requests.append(i)
 
         # Assert
-        assert len(successful_requests) == 50, (
-            f"Expected 50 successful connections, got {len(successful_requests)}"
-        )
+        assert len(successful_requests) == 50, f"Expected 50 successful connections, got {len(successful_requests)}"
 
-        assert len(queued_requests) == 20, (
-            f"Expected 20 queued requests, got {len(queued_requests)}"
-        )
+        assert len(queued_requests) == 20, f"Expected 20 queued requests, got {len(queued_requests)}"
 
         assert resource_simulator.is_exhausted, "Pool should be exhausted"
 
         # Verify exhaustion events recorded
-        assert len(resource_simulator.exhaustion_events) == 20, (
-            f"Expected 20 exhaustion events, got {len(resource_simulator.exhaustion_events)}"
-        )
+        assert (
+            len(resource_simulator.exhaustion_events) == 20
+        ), f"Expected 20 exhaustion events, got {len(resource_simulator.exhaustion_events)}"
 
     def test_exhaust_002_redis_connection_exhaustion(self, resource_simulator):
         """
@@ -188,26 +186,26 @@ class TestResourceExhaustion:
         # Act: Exhaust Redis connections
         for i in range(30):
             if resource_simulator.acquire_connection():
-                redis_ops_succeeded.append({
-                    "id": i,
-                    "type": "redis",
-                })
+                redis_ops_succeeded.append(
+                    {
+                        "id": i,
+                        "type": "redis",
+                    }
+                )
             else:
                 # Fallback to memory cache
-                fallback_ops.append({
-                    "id": i,
-                    "type": "memory_fallback",
-                    "degraded": True,
-                })
+                fallback_ops.append(
+                    {
+                        "id": i,
+                        "type": "memory_fallback",
+                        "degraded": True,
+                    }
+                )
 
         # Assert
-        assert len(redis_ops_succeeded) == 20, (
-            f"Expected 20 Redis ops, got {len(redis_ops_succeeded)}"
-        )
+        assert len(redis_ops_succeeded) == 20, f"Expected 20 Redis ops, got {len(redis_ops_succeeded)}"
 
-        assert len(fallback_ops) == 10, (
-            f"Expected 10 fallback ops, got {len(fallback_ops)}"
-        )
+        assert len(fallback_ops) == 10, f"Expected 10 fallback ops, got {len(fallback_ops)}"
 
         # Verify all operations completed (either way)
         total_ops = len(redis_ops_succeeded) + len(fallback_ops)
@@ -244,25 +242,25 @@ class TestResourceExhaustion:
 
             if current_usage_percent >= memory_threshold_percent and not cleanup_triggered:
                 cleanup_triggered = True
-                cleanup_actions.append({
-                    "action": "emergency_cleanup",
-                    "usage_at_trigger": current_usage_percent,
-                    "timestamp": timezone.now(),
-                })
+                cleanup_actions.append(
+                    {
+                        "action": "emergency_cleanup",
+                        "usage_at_trigger": current_usage_percent,
+                        "timestamp": timezone.now(),
+                    }
+                )
                 # Simulate cleanup reducing usage significantly
                 current_usage_percent = 60  # Reset to safe level
 
         # Assert
         assert cleanup_triggered, "Emergency cleanup should have triggered"
 
-        assert len(cleanup_actions) == 1, (
-            f"Expected 1 cleanup action, got {len(cleanup_actions)}"
-        )
+        assert len(cleanup_actions) == 1, f"Expected 1 cleanup action, got {len(cleanup_actions)}"
 
         # Verify cleanup was effective
-        assert current_usage_percent < memory_threshold_percent, (
-            f"Memory should be below threshold after cleanup, got {current_usage_percent}%"
-        )
+        assert (
+            current_usage_percent < memory_threshold_percent
+        ), f"Memory should be below threshold after cleanup, got {current_usage_percent}%"
 
     def test_exhaust_004_queue_capacity_overflow(self):
         """
@@ -304,18 +302,12 @@ class TestResourceExhaustion:
                 overflow_items.append(100 + i)
 
         # Assert
-        assert len(overflow_items) == 20, (
-            f"Expected 20 overflow items, got {len(overflow_items)}"
-        )
+        assert len(overflow_items) == 20, f"Expected 20 overflow items, got {len(overflow_items)}"
 
-        assert queue.overflow_count == 20, (
-            f"Expected overflow_count=20, got {queue.overflow_count}"
-        )
+        assert queue.overflow_count == 20, f"Expected overflow_count=20, got {queue.overflow_count}"
 
         # Verify overflow events recorded (for monitoring)
-        assert len(queue.overflow_events) == 20, (
-            "All overflow events should be recorded for audit"
-        )
+        assert len(queue.overflow_events) == 20, "All overflow events should be recorded for audit"
 
     def test_exhaust_005_concurrent_request_overload(self, resource_simulator):
         """
@@ -351,18 +343,12 @@ class TestResourceExhaustion:
                 results["queued"].append(i)
 
         # Assert
-        assert len(results["success"]) == 50, (
-            f"Expected 50 successful, got {len(results['success'])}"
-        )
+        assert len(results["success"]) == 50, f"Expected 50 successful, got {len(results['success'])}"
 
-        assert len(results["queued"]) == 50, (
-            f"Expected 50 queued, got {len(results['queued'])}"
-        )
+        assert len(results["queued"]) == 50, f"Expected 50 queued, got {len(results['queued'])}"
 
         total = len(results["success"]) + len(results["queued"])
-        assert total == concurrent_count, (
-            f"All {concurrent_count} requests should be accounted for"
-        )
+        assert total == concurrent_count, f"All {concurrent_count} requests should be accounted for"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -473,12 +459,14 @@ class TestResourceRecovery:
         # Act: Gradual approach to exhaustion
         for i in range(120):
             success = resource_simulator.acquire_connection()
-            metrics_log.append({
-                "attempt": i,
-                "success": success,
-                "current": resource_simulator.current_connections,
-                "exhausted": resource_simulator.is_exhausted,
-            })
+            metrics_log.append(
+                {
+                    "attempt": i,
+                    "success": success,
+                    "current": resource_simulator.current_connections,
+                    "exhausted": resource_simulator.is_exhausted,
+                }
+            )
 
             if i == 50:  # Midpoint checkpoint
                 assert resource_simulator.current_connections == 51
@@ -488,16 +476,10 @@ class TestResourceRecovery:
         successful_acquisitions = [m for m in metrics_log if m["success"]]
         failed_acquisitions = [m for m in metrics_log if not m["success"]]
 
-        assert len(successful_acquisitions) == 100, (
-            f"Expected 100 successful, got {len(successful_acquisitions)}"
-        )
+        assert len(successful_acquisitions) == 100, f"Expected 100 successful, got {len(successful_acquisitions)}"
 
-        assert len(failed_acquisitions) == 20, (
-            f"Expected 20 failed, got {len(failed_acquisitions)}"
-        )
+        assert len(failed_acquisitions) == 20, f"Expected 20 failed, got {len(failed_acquisitions)}"
 
         # Verify exhaustion started at correct point
         first_failure = failed_acquisitions[0]
-        assert first_failure["attempt"] == 100, (
-            f"First failure should be at attempt 100, got {first_failure['attempt']}"
-        )
+        assert first_failure["attempt"] == 100, f"First failure should be at attempt 100, got {first_failure['attempt']}"

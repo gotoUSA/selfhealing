@@ -151,26 +151,18 @@ class TestQueueBuildup:
         # Assert: Verify queue state
         stats = load_test_queue.get_stats()
 
-        assert stats["current_size"] == target_size, (
-            f"Queue should have {target_size} entries, got {stats['current_size']}"
-        )
+        assert stats["current_size"] == target_size, f"Queue should have {target_size} entries, got {stats['current_size']}"
 
-        assert stats["peak_size"] == target_size, (
-            f"Peak size should be {target_size}"
-        )
+        assert stats["peak_size"] == target_size, f"Peak size should be {target_size}"
 
-        assert stats["overflow_count"] == 0, (
-            "No overflows should occur within capacity"
-        )
+        assert stats["overflow_count"] == 0, "No overflows should occur within capacity"
 
         # Verify we can drain all entries
         drained_count = 0
         while load_test_queue.dequeue() is not None:
             drained_count += 1
 
-        assert drained_count == target_size, (
-            f"Should drain {target_size} entries, got {drained_count}"
-        )
+        assert drained_count == target_size, f"Should drain {target_size} entries, got {drained_count}"
 
         assert load_test_queue.size == 0, "Queue should be empty after drain"
 
@@ -198,10 +190,12 @@ class TestQueueBuildup:
         max_time_seconds = 300  # 5 minutes
 
         for i in range(entry_count):
-            load_test_queue.enqueue({
-                "id": i,
-                "status": "pending",
-            })
+            load_test_queue.enqueue(
+                {
+                    "id": i,
+                    "status": "pending",
+                }
+            )
 
         replayed = []
         start_time = time.time()
@@ -220,13 +214,9 @@ class TestQueueBuildup:
         elapsed = time.time() - start_time
 
         # Assert
-        assert len(replayed) == entry_count, (
-            f"Expected {entry_count} replayed, got {len(replayed)}"
-        )
+        assert len(replayed) == entry_count, f"Expected {entry_count} replayed, got {len(replayed)}"
 
-        assert elapsed < max_time_seconds, (
-            f"Replay took {elapsed:.1f}s, exceeds {max_time_seconds}s limit"
-        )
+        assert elapsed < max_time_seconds, f"Replay took {elapsed:.1f}s, exceeds {max_time_seconds}s limit"
 
         # Verify all entries processed
         all_replayed = all(e["status"] == "replayed" for e in replayed)
@@ -265,18 +255,12 @@ class TestQueueBuildup:
             overflow_results.append(result)
 
         # Assert
-        assert all(r is False for r in overflow_results), (
-            "All overflow attempts should return False"
-        )
+        assert all(r is False for r in overflow_results), "All overflow attempts should return False"
 
         stats = load_test_queue.get_stats()
-        assert stats["overflow_count"] == 20, (
-            f"Expected 20 overflows, got {stats['overflow_count']}"
-        )
+        assert stats["overflow_count"] == 20, f"Expected 20 overflows, got {stats['overflow_count']}"
 
-        assert stats["current_size"] == 100, (
-            f"Queue size should remain at 100, got {stats['current_size']}"
-        )
+        assert stats["current_size"] == 100, f"Queue size should remain at 100, got {stats['current_size']}"
 
     def test_queue_002_priority_processing(self):
         """
@@ -392,9 +376,7 @@ class TestQueuePerformance:
         # Latency at 90% should not be more than 5x worse
         if avg_50 > 0:
             degradation = avg_90 / avg_50
-            assert degradation < 5, (
-                f"Latency degradation ({degradation:.1f}x) too high"
-            )
+            assert degradation < 5, f"Latency degradation ({degradation:.1f}x) too high"
 
     def test_concurrent_enqueue_dequeue(
         self,
@@ -486,10 +468,8 @@ class TestQueuePerformance:
         elapsed = time.time() - start
 
         # Assert
-        drain_rate = drained / elapsed if elapsed > 0 else float('inf')
+        drain_rate = drained / elapsed if elapsed > 0 else float("inf")
 
         assert drained == entry_count, f"Expected {entry_count} drained, got {drained}"
 
-        assert drain_rate > 1000, (
-            f"Drain rate ({drain_rate:.0f}/s) below minimum (1000/s)"
-        )
+        assert drain_rate > 1000, f"Drain rate ({drain_rate:.0f}/s) below minimum (1000/s)"

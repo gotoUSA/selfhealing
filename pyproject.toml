@@ -78,6 +78,18 @@ markers = [
     "negative: Negative tests - proper error handling for invalid inputs",
     "security: Security tests - SQL Injection, XSS, SSTI attack defense verification",
     "chaos: Chaos engineering tests - fault injection and recovery verification",
+    # Self-Healing Test Tiers (Reference: docs/testing/SELF_HEALING_TEST_MATRICES.md)
+    "tier1: Fast unit tests for PR validation (< 2 min, no external deps)",
+    "tier2: Integration tests for merge to main (< 10 min, requires DB/Redis)",
+    "tier3_chaos: Chaos engineering tests for nightly runs (< 30 min)",
+    "tier4_load: Load and stress tests for releases (< 2 hours, dedicated runner)",
+    # Self-Healing Domain Markers
+    "tenant_aware: Multi-tenancy isolation tests (R-001)",
+    "cost_sensitive: Cost-aware recovery tests (R-002)",
+    "requires_redis: Tests requiring Redis connection",
+    "requires_celery: Tests requiring Celery worker",
+    "requires_db: Tests requiring database connection",
+    "flaky: Tests with known flakiness (quarantined from CI)",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)

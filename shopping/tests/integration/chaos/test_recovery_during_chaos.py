@@ -98,9 +98,7 @@ class TestRecoveryDuringChaos:
 
         # Verify CB is open
         state = self.cb_service.get_state(service_name)
-        assert state == CircuitState.OPEN, (
-            f"CB should be OPEN after failures, got {state}"
-        )
+        assert state == CircuitState.OPEN, f"CB should be OPEN after failures, got {state}"
 
         # Act: Simulate recovery timeout by updating opened_at
         # This triggers the automatic transition to half-open
@@ -113,9 +111,7 @@ class TestRecoveryDuringChaos:
 
         # Verify half-open state
         state = self.cb_service.get_state(service_name)
-        assert state == CircuitState.HALF_OPEN, (
-            f"CB should be HALF_OPEN after timeout, got {state}"
-        )
+        assert state == CircuitState.HALF_OPEN, f"CB should be HALF_OPEN after timeout, got {state}"
 
         # Record successful requests to close CB
         for _ in range(2):  # success_threshold = 2
@@ -123,9 +119,7 @@ class TestRecoveryDuringChaos:
 
         # Assert: CB should be closed
         state = self.cb_service.get_state(service_name)
-        assert state == CircuitState.CLOSED, (
-            f"CB should be CLOSED after successful requests, got {state}"
-        )
+        assert state == CircuitState.CLOSED, f"CB should be CLOSED after successful requests, got {state}"
 
     def test_chaos_r002_partial_recovery_handling(self, failure_injector):
         """
@@ -155,9 +149,9 @@ class TestRecoveryDuringChaos:
 
         # Simulate half-open by updating model directly
         from shopping.models import CircuitBreakerState
+
         cb_model, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={"state": "half_open", "failure_count": 0}
+            service_name=service_name, defaults={"state": "half_open", "failure_count": 0}
         )
         cb_model.state = "half_open"
         cb_model.save()
@@ -174,9 +168,10 @@ class TestRecoveryDuringChaos:
 
         # With alternating pattern, CB should not close
         # (needs consecutive successes to close)
-        assert state in [CircuitState.HALF_OPEN, CircuitState.OPEN], (
-            f"CB should remain HALF_OPEN or OPEN with partial recovery, got {state}"
-        )
+        assert state in [
+            CircuitState.HALF_OPEN,
+            CircuitState.OPEN,
+        ], f"CB should remain HALF_OPEN or OPEN with partial recovery, got {state}"
 
     def test_chaos_r003_full_recovery_during_retries(self, failure_injector):
         """
@@ -250,14 +245,10 @@ class TestRecoveryDuringChaos:
                 resolved_entries.append(entry)
 
         # Assert
-        assert len(resolved_entries) == 3, (
-            f"Expected all 3 entries resolved, got {len(resolved_entries)}"
-        )
+        assert len(resolved_entries) == 3, f"Expected all 3 entries resolved, got {len(resolved_entries)}"
 
         for entry in resolved_entries:
-            assert entry["status"] == "resolved", (
-                f"Entry {entry['id']} should be resolved"
-            )
+            assert entry["status"] == "resolved", f"Entry {entry['id']} should be resolved"
 
     def test_chaos_r005_gradual_recovery_detection(self, failure_injector):
         """
@@ -304,25 +295,25 @@ class TestRecoveryDuringChaos:
                     successes += 1
                     self.cb_service.record_success(service_name)
 
-            phase_stats.append({
-                "configured_rate": rate,
-                "actual_rate": failure_injector.actual_failure_rate,
-                "successes": successes,
-                "failures": failures,
-            })
+            phase_stats.append(
+                {
+                    "configured_rate": rate,
+                    "actual_rate": failure_injector.actual_failure_rate,
+                    "successes": successes,
+                    "failures": failures,
+                }
+            )
 
         # Assert: Verify recovery trend
         # Last phase should have highest success rate
         last_phase = phase_stats[-1]
-        assert last_phase["successes"] == 10, (
-            f"Last phase (0% failure) should have all successes, got {last_phase['successes']}"
-        )
+        assert (
+            last_phase["successes"] == 10
+        ), f"Last phase (0% failure) should have all successes, got {last_phase['successes']}"
 
         # Final CB state should be closed (after many successes)
         final_state = self.cb_service.get_state(service_name)
-        assert final_state == CircuitState.CLOSED, (
-            f"CB should be CLOSED after recovery, got {final_state}"
-        )
+        assert final_state == CircuitState.CLOSED, f"CB should be CLOSED after recovery, got {final_state}"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -368,9 +359,9 @@ class TestRecoveryCoordination:
         # Act: Simulate recovery - set to half_open via model
         failure_injector.failure_rate = 0.0
         from shopping.models import CircuitBreakerState
+
         cb_model, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={"state": "half_open", "failure_count": 0}
+            service_name=service_name, defaults={"state": "half_open", "failure_count": 0}
         )
         cb_model.state = "half_open"
         cb_model.save()
@@ -388,14 +379,10 @@ class TestRecoveryCoordination:
         assert processed == 5, f"Expected 5 processed, got {processed}"
 
         final_state = cb_service.get_state(service_name)
-        assert final_state == CircuitState.CLOSED, (
-            f"CB should be CLOSED after coordinated recovery"
-        )
+        assert final_state == CircuitState.CLOSED, f"CB should be CLOSED after coordinated recovery"
 
         resolved = [e for e in dlq_queue if e["status"] == "resolved"]
-        assert len(resolved) == 5, (
-            f"All DLQ entries should be resolved"
-        )
+        assert len(resolved) == 5, f"All DLQ entries should be resolved"
 
     def test_recovery_prevents_new_dlq_entries(self, failure_injector):
         """
@@ -421,10 +408,12 @@ class TestRecoveryCoordination:
         # Act: Execute operations during recovery
         for i in range(20):
             if failure_injector.should_fail():
-                new_dlq_entries.append({
-                    "id": i,
-                    "timestamp": timezone.now(),
-                })
+                new_dlq_entries.append(
+                    {
+                        "id": i,
+                        "timestamp": timezone.now(),
+                    }
+                )
             else:
                 successful_ops.append(i)
 
@@ -433,11 +422,8 @@ class TestRecoveryCoordination:
 
         # Most operations should succeed
         assert len(successful_ops) > len(new_dlq_entries), (
-            f"Successes ({len(successful_ops)}) should exceed "
-            f"DLQ entries ({len(new_dlq_entries)}) during recovery"
+            f"Successes ({len(successful_ops)}) should exceed " f"DLQ entries ({len(new_dlq_entries)}) during recovery"
         )
 
         # DLQ growth should be minimal
-        assert len(new_dlq_entries) <= 5, (
-            f"Expected minimal DLQ growth (<=5), got {len(new_dlq_entries)}"
-        )
+        assert len(new_dlq_entries) <= 5, f"Expected minimal DLQ growth (<=5), got {len(new_dlq_entries)}"

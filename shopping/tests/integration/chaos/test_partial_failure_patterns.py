@@ -98,11 +98,13 @@ class TestPartialFailurePatterns:
         # Act: Simulate operations
         for i in range(operations):
             if failure_injector.should_fail():
-                failures_captured.append({
-                    "operation_id": i,
-                    "timestamp": timezone.now(),
-                    "reason": "injected_failure",
-                })
+                failures_captured.append(
+                    {
+                        "operation_id": i,
+                        "timestamp": timezone.now(),
+                        "reason": "injected_failure",
+                    }
+                )
             else:
                 successes.append(i)
 
@@ -117,18 +119,13 @@ class TestPartialFailurePatterns:
 
         # Verify all failures are captured
         assert len(failures_captured) == stats["failed_calls"], (
-            f"Captured failures ({len(failures_captured)}) does not match "
-            f"actual failures ({stats['failed_calls']})"
+            f"Captured failures ({len(failures_captured)}) does not match " f"actual failures ({stats['failed_calls']})"
         )
 
         # Verify system continued processing
-        assert stats["total_calls"] == operations, (
-            f"Expected {operations} total operations, got {stats['total_calls']}"
-        )
+        assert stats["total_calls"] == operations, f"Expected {operations} total operations, got {stats['total_calls']}"
 
-    def test_chaos_p002_burst_failures_trigger_circuit_breaker(
-        self, burst_failure_injector
-    ):
+    def test_chaos_p002_burst_failures_trigger_circuit_breaker(self, burst_failure_injector):
         """
         Purpose:
             Test that burst failures trigger Circuit Breaker.
@@ -175,14 +172,10 @@ class TestPartialFailurePatterns:
                     self.cb_service.record_success(service_name)
 
         # Assert
-        assert burst_failure_injector.failed_calls > 0, (
-            "Expected at least one burst of failures"
-        )
+        assert burst_failure_injector.failed_calls > 0, "Expected at least one burst of failures"
 
         # Verify burst pattern occurred
-        assert burst_failure_injector.total_calls == 100, (
-            f"Expected 100 operations, got {burst_failure_injector.total_calls}"
-        )
+        assert burst_failure_injector.total_calls == 100, f"Expected 100 operations, got {burst_failure_injector.total_calls}"
 
     def test_chaos_p003_alternating_pattern_no_cb_trigger(self, failure_injector):
         """
@@ -224,15 +217,11 @@ class TestPartialFailurePatterns:
                 self.cb_service.record_failure(service_name)
 
         # Assert
-        assert max_consecutive < 5, (
-            f"Max consecutive failures ({max_consecutive}) should be below CB threshold (5)"
-        )
+        assert max_consecutive < 5, f"Max consecutive failures ({max_consecutive}) should be below CB threshold (5)"
 
         # CB should remain closed
         state = self.cb_service.get_state(service_name)
-        assert state == CircuitState.CLOSED, (
-            f"CB should remain CLOSED with alternating pattern, got {state}"
-        )
+        assert state == CircuitState.CLOSED, f"CB should remain CLOSED with alternating pattern, got {state}"
 
     def test_chaos_p004_time_based_failure_window(self, failure_injector):
         """
@@ -264,9 +253,9 @@ class TestPartialFailurePatterns:
         normal_ops_after = 0
 
         phases = [
-            ("normal", 20),   # 20 normal operations
+            ("normal", 20),  # 20 normal operations
             ("failure", 15),  # 15 failure operations
-            ("normal", 20),   # 20 normal operations
+            ("normal", 20),  # 20 normal operations
         ]
 
         # Act: Execute phases
@@ -286,15 +275,9 @@ class TestPartialFailurePatterns:
                         normal_ops_after += 1
 
         # Assert
-        assert normal_ops_before == 20, (
-            f"Expected 20 normal ops before window, got {normal_ops_before}"
-        )
-        assert failure_ops == 15, (
-            f"Expected 15 failure ops in window, got {failure_ops}"
-        )
-        assert normal_ops_after == 20, (
-            f"Expected 20 normal ops after window, got {normal_ops_after}"
-        )
+        assert normal_ops_before == 20, f"Expected 20 normal ops before window, got {normal_ops_before}"
+        assert failure_ops == 15, f"Expected 15 failure ops in window, got {failure_ops}"
+        assert normal_ops_after == 20, f"Expected 20 normal ops after window, got {normal_ops_after}"
 
         # Verify window boundaries were detected
         assert failure_window_start is not None, "Failure window start not detected"
@@ -320,11 +303,11 @@ class TestPartialFailurePatterns:
         """
         # Arrange
         failure_types = [
-            ("NETWORK_ERROR", True),         # Retryable
-            ("PG_TIMEOUT", True),            # Retryable
-            ("ALREADY_PROCESSED", False),    # Non-retryable
+            ("NETWORK_ERROR", True),  # Retryable
+            ("PG_TIMEOUT", True),  # Retryable
+            ("ALREADY_PROCESSED", False),  # Non-retryable
             ("INVALID_PAYMENT_KEY", False),  # Non-retryable
-            ("DB_CONNECTION_ERROR", True),   # Retryable
+            ("DB_CONNECTION_ERROR", True),  # Retryable
         ]
 
         retryable_count = 0
@@ -387,12 +370,8 @@ class TestPartialFailureRecovery:
                 success_after_burst += 1
 
         # Assert
-        assert failed_during_burst == 10, (
-            f"Expected 10 failures during burst, got {failed_during_burst}"
-        )
-        assert success_after_burst == 5, (
-            f"Expected 5 successes after burst, got {success_after_burst}"
-        )
+        assert failed_during_burst == 10, f"Expected 10 failures during burst, got {failed_during_burst}"
+        assert success_after_burst == 5, f"Expected 5 successes after burst, got {success_after_burst}"
 
     def test_gradual_failure_rate_reduction(self, failure_injector):
         """
@@ -426,11 +405,13 @@ class TestPartialFailureRecovery:
             for _ in range(count):
                 failure_injector.should_fail()
 
-            phase_results.append({
-                "configured_rate": rate,
-                "actual_rate": failure_injector.actual_failure_rate,
-                "total": failure_injector.total_calls,
-            })
+            phase_results.append(
+                {
+                    "configured_rate": rate,
+                    "actual_rate": failure_injector.actual_failure_rate,
+                    "total": failure_injector.total_calls,
+                }
+            )
 
         # Assert: Verify trend of decreasing failures
         # Note: Due to randomness, we check relative trend
@@ -438,6 +419,4 @@ class TestPartialFailureRecovery:
 
         # With small samples, we just verify operations completed
         for result in phase_results:
-            assert result["total"] == 20, (
-                f"Each phase should have 20 operations"
-            )
+            assert result["total"] == 20, f"Each phase should have 20 operations"

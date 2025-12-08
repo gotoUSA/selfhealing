@@ -97,24 +97,16 @@ class TestConcurrentFailures:
         result = concurrent_executor.execute(create_failure_entry, failures_to_create)
 
         # Assert
-        assert result.successful == failures_to_create, (
-            f"Expected {failures_to_create} successful, got {result.successful}"
-        )
+        assert result.successful == failures_to_create, f"Expected {failures_to_create} successful, got {result.successful}"
 
-        assert len(dlq_entries) == failures_to_create, (
-            f"Expected {failures_to_create} DLQ entries, got {len(dlq_entries)}"
-        )
+        assert len(dlq_entries) == failures_to_create, f"Expected {failures_to_create} DLQ entries, got {len(dlq_entries)}"
 
         # Verify no duplicates (by checking unique payment_ids aren't exact copies)
         # Note: payment_id can be same due to random, but combo should be unique
-        entry_signatures = [
-            f"{e['payment_id']}-{e['thread_id']}" for e in dlq_entries
-        ]
+        entry_signatures = [f"{e['payment_id']}-{e['thread_id']}" for e in dlq_entries]
         # With thread_id, each should be unique
         unique_count = len(set(entry_signatures))
-        assert unique_count == failures_to_create, (
-            f"Expected {failures_to_create} unique entries, got {unique_count}"
-        )
+        assert unique_count == failures_to_create, f"Expected {failures_to_create} unique entries, got {unique_count}"
 
         # Verify all entries have required fields
         for entry in dlq_entries:
@@ -158,17 +150,21 @@ class TestConcurrentFailures:
 
             if should_fail:
                 with lock:
-                    failures.append({
-                        "id": len(failures),
-                        "timestamp": timezone.now(),
-                    })
+                    failures.append(
+                        {
+                            "id": len(failures),
+                            "timestamp": timezone.now(),
+                        }
+                    )
                 return False
             else:
                 with lock:
-                    successes.append({
-                        "id": len(successes),
-                        "timestamp": timezone.now(),
-                    })
+                    successes.append(
+                        {
+                            "id": len(successes),
+                            "timestamp": timezone.now(),
+                        }
+                    )
                 return True
 
         # Act
@@ -177,20 +173,15 @@ class TestConcurrentFailures:
         # Assert
         # With 10% failure rate, expect roughly 10% failures (±5% tolerance)
         actual_failure_rate = len(failures) / total_ops
-        assert 0.05 <= actual_failure_rate <= 0.20, (
-            f"Failure rate {actual_failure_rate:.2%} outside expected range (5-20%)"
-        )
+        assert 0.05 <= actual_failure_rate <= 0.20, f"Failure rate {actual_failure_rate:.2%} outside expected range (5-20%)"
 
         # Total should match
         assert len(successes) + len(failures) == total_ops, (
-            f"Success ({len(successes)}) + Failures ({len(failures)}) "
-            f"should equal {total_ops}"
+            f"Success ({len(successes)}) + Failures ({len(failures)}) " f"should equal {total_ops}"
         )
 
         # Throughput should be reasonable
-        assert result.throughput > 50, (  # At least 50 ops/sec
-            f"Throughput {result.throughput:.1f} ops/s too low"
-        )
+        assert result.throughput > 50, f"Throughput {result.throughput:.1f} ops/s too low"  # At least 50 ops/sec
 
     def test_load_003_dlq_concurrent_writes_no_loss(
         self,
@@ -239,21 +230,17 @@ class TestConcurrentFailures:
         # Assert
         queue_stats = load_test_queue.get_stats()
 
-        assert queue_stats["enqueue_count"] == total_expected, (
-            f"Expected {total_expected} enqueues, got {queue_stats['enqueue_count']}"
-        )
+        assert (
+            queue_stats["enqueue_count"] == total_expected
+        ), f"Expected {total_expected} enqueues, got {queue_stats['enqueue_count']}"
 
-        assert queue_stats["current_size"] == total_expected, (
-            f"Queue size should be {total_expected}, got {queue_stats['current_size']}"
-        )
+        assert (
+            queue_stats["current_size"] == total_expected
+        ), f"Queue size should be {total_expected}, got {queue_stats['current_size']}"
 
-        assert queue_stats["overflow_count"] == 0, (
-            f"No overflows expected, got {queue_stats['overflow_count']}"
-        )
+        assert queue_stats["overflow_count"] == 0, f"No overflows expected, got {queue_stats['overflow_count']}"
 
-        assert queue_stats["peak_size"] == total_expected, (
-            f"Peak size should be {total_expected}"
-        )
+        assert queue_stats["peak_size"] == total_expected, f"Peak size should be {total_expected}"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -285,10 +272,12 @@ class TestConcurrentRecovery:
         """
         # Arrange: Populate queue
         for i in range(100):
-            load_test_queue.enqueue({
-                "id": i,
-                "status": "pending",
-            })
+            load_test_queue.enqueue(
+                {
+                    "id": i,
+                    "status": "pending",
+                }
+            )
 
         replayed = []
         lock = threading.Lock()
@@ -307,21 +296,14 @@ class TestConcurrentRecovery:
         result = concurrent_executor.execute(replay_worker, 150)
 
         # Assert
-        assert len(replayed) == 100, (
-            f"Expected 100 replayed, got {len(replayed)}"
-        )
+        assert len(replayed) == 100, f"Expected 100 replayed, got {len(replayed)}"
 
         # Verify no duplicates
         unique_ids = set(replayed)
-        assert len(unique_ids) == 100, (
-            f"Expected 100 unique IDs, got {len(unique_ids)} "
-            f"(indicates duplicate processing)"
-        )
+        assert len(unique_ids) == 100, f"Expected 100 unique IDs, got {len(unique_ids)} " f"(indicates duplicate processing)"
 
         # Queue should be empty
-        assert load_test_queue.size == 0, (
-            f"Queue should be empty after replay, has {load_test_queue.size}"
-        )
+        assert load_test_queue.size == 0, f"Queue should be empty after replay, has {load_test_queue.size}"
 
     def test_concurrent_circuit_breaker_transitions(
         self,
@@ -417,19 +399,19 @@ class TestLoadStability:
         # Act: Execute multiple batches
         for batch in range(batches):
             result = concurrent_executor.execute(simple_operation, batch_size)
-            batch_results.append({
-                "batch": batch,
-                "throughput": result.throughput,
-                "avg_time": result.avg_execution_time,
-                "success_rate": result.success_rate,
-            })
+            batch_results.append(
+                {
+                    "batch": batch,
+                    "throughput": result.throughput,
+                    "avg_time": result.avg_execution_time,
+                    "success_rate": result.success_rate,
+                }
+            )
 
         # Assert
         # All batches should have 100% success
         for batch_result in batch_results:
-            assert batch_result["success_rate"] == 1.0, (
-                f"Batch {batch_result['batch']} should have 100% success"
-            )
+            assert batch_result["success_rate"] == 1.0, f"Batch {batch_result['batch']} should have 100% success"
 
         # Throughput should not degrade significantly (within 50%)
         first_throughput = batch_results[0]["throughput"]
@@ -437,9 +419,7 @@ class TestLoadStability:
 
         if first_throughput > 0:
             degradation = (first_throughput - last_throughput) / first_throughput
-            assert degradation < 0.5, (
-                f"Throughput degraded by {degradation:.1%}, exceeds 50% threshold"
-            )
+            assert degradation < 0.5, f"Throughput degraded by {degradation:.1%}, exceeds 50% threshold"
 
     def test_burst_load_recovery(
         self,
@@ -460,6 +440,7 @@ class TestLoadStability:
             - Post-burst throughput normal
             - No lingering effects
         """
+
         # Arrange
         def simple_op():
             time.sleep(0.001)
@@ -483,6 +464,5 @@ class TestLoadStability:
         if pre_result.throughput > 0:
             recovery_ratio = post_result.throughput / pre_result.throughput
             assert recovery_ratio > 0.7, (
-                f"Post-burst throughput ({post_result.throughput:.1f}) "
-                f"not recovered (pre: {pre_result.throughput:.1f})"
+                f"Post-burst throughput ({post_result.throughput:.1f}) " f"not recovered (pre: {pre_result.throughput:.1f})"
             )

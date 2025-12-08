@@ -43,10 +43,12 @@ class FailureInjector:
             self.failed_calls += 1
         else:
             self.success_calls += 1
-        self.call_history.append({
-            "timestamp": timezone.now(),
-            "failed": should_fail,
-        })
+        self.call_history.append(
+            {
+                "timestamp": timezone.now(),
+                "failed": should_fail,
+            }
+        )
         return should_fail
 
     def reset(self) -> None:
@@ -151,10 +153,12 @@ class LatencyInjector:
 
         # Track statistics
         self.total_latency_ms += latency
-        self.latency_history.append({
-            "timestamp": timezone.now(),
-            "latency_ms": latency,
-        })
+        self.latency_history.append(
+            {
+                "timestamp": timezone.now(),
+                "latency_ms": latency,
+            }
+        )
 
         # Simulate the delay (in tests, we usually skip actual sleep)
         # time.sleep(latency / 1000)
@@ -196,29 +200,35 @@ class ResourceExhaustionSimulator:
         Returns True if successful, False if pool exhausted.
         """
         if self.current_connections >= self.max_connections:
-            self.exhaustion_events.append({
-                "timestamp": timezone.now(),
-                "current": self.current_connections,
-                "max": self.max_connections,
-            })
+            self.exhaustion_events.append(
+                {
+                    "timestamp": timezone.now(),
+                    "current": self.current_connections,
+                    "max": self.max_connections,
+                }
+            )
             return False
         self.current_connections += 1
-        self.connection_history.append({
-            "action": "acquire",
-            "timestamp": timezone.now(),
-            "current": self.current_connections,
-        })
+        self.connection_history.append(
+            {
+                "action": "acquire",
+                "timestamp": timezone.now(),
+                "current": self.current_connections,
+            }
+        )
         return True
 
     def release_connection(self) -> None:
         """Release a connection back to the pool."""
         if self.current_connections > 0:
             self.current_connections -= 1
-            self.connection_history.append({
-                "action": "release",
-                "timestamp": timezone.now(),
-                "current": self.current_connections,
-            })
+            self.connection_history.append(
+                {
+                    "action": "release",
+                    "timestamp": timezone.now(),
+                    "current": self.current_connections,
+                }
+            )
 
     @property
     def is_exhausted(self) -> bool:

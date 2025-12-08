@@ -225,19 +225,13 @@ class TestUserInvisibleFlows:
         result = simulator.attempt_payment()
 
         # Assert - User perspective
-        assert result["visible_result"] == "success", (
-            "User should see success after retry"
-        )
-        assert result["user_saw_error"] is False, (
-            "User should never see the PG_TIMEOUT error"
-        )
+        assert result["visible_result"] == "success", "User should see success after retry"
+        assert result["user_saw_error"] is False, "User should never see the PG_TIMEOUT error"
         assert simulator.user_state.success_shown is True
         assert simulator.user_state.error_shown is False
 
         # Assert - Internal state
-        assert simulator.internal_state.retry_count == 1, (
-            "Should have 1 retry before success"
-        )
+        assert simulator.internal_state.retry_count == 1, "Should have 1 retry before success"
         assert "PG_TIMEOUT" in simulator.internal_state.error_codes
 
     def test_e2e_u002_circuit_breaker_fallback_pg(self):
@@ -275,9 +269,7 @@ class TestUserInvisibleFlows:
         assert result["user_saw_error"] is False
 
         # Assert - Internal state
-        assert simulator.internal_state.fallback_used is True, (
-            "Fallback PG should have been used"
-        )
+        assert simulator.internal_state.fallback_used is True, "Fallback PG should have been used"
 
     def test_e2e_u003_all_retries_fail_graceful_message(self):
         """
@@ -305,33 +297,27 @@ class TestUserInvisibleFlows:
         # Arrange
         simulator = UserFlowSimulator()
         # All 3 attempts fail
-        simulator.set_failure_sequence([
-            "PG_TIMEOUT",
-            "NETWORK_ERROR",
-            "DB_CONNECTION_ERROR",
-        ])
+        simulator.set_failure_sequence(
+            [
+                "PG_TIMEOUT",
+                "NETWORK_ERROR",
+                "DB_CONNECTION_ERROR",
+            ]
+        )
 
         # Act
         result = simulator.attempt_payment()
 
         # Assert - User perspective
-        assert result["visible_result"] == "processing", (
-            "User should see 'processing' not 'error'"
-        )
-        assert result["user_saw_error"] is False, (
-            "User should never see raw error"
-        )
+        assert result["visible_result"] == "processing", "User should see 'processing' not 'error'"
+        assert result["user_saw_error"] is False, "User should never see raw error"
         assert simulator.user_state.processing_message_shown is True
         assert simulator.user_state.notification_sent is True
         assert "Processing" in simulator.user_state.status_text or "notify" in simulator.user_state.status_text.lower()
 
         # Assert - Internal state
-        assert simulator.internal_state.retry_count == 3, (
-            "All 3 retries should have been attempted"
-        )
-        assert simulator.internal_state.dlq_entry_created is True, (
-            "DLQ entry should be created for manual handling"
-        )
+        assert simulator.internal_state.retry_count == 3, "All 3 retries should have been attempted"
+        assert simulator.internal_state.dlq_entry_created is True, "DLQ entry should be created for manual handling"
         assert len(simulator.internal_state.error_codes) == 3
 
     def test_e2e_u004_order_status_during_dlq_processing(self):
@@ -362,12 +348,8 @@ class TestUserInvisibleFlows:
         status_during_dlq = simulator.check_order_status(order_id=123)
 
         # Assert - During DLQ
-        assert status_during_dlq["status"] == "Processing", (
-            "Status should be 'Processing' not 'Failed'"
-        )
-        assert status_during_dlq["show_spinner"] is True, (
-            "Spinner should indicate ongoing work"
-        )
+        assert status_during_dlq["status"] == "Processing", "Status should be 'Processing' not 'Failed'"
+        assert status_during_dlq["show_spinner"] is True, "Spinner should indicate ongoing work"
         assert "Failed" not in status_during_dlq["message"]
         assert "error" not in status_during_dlq["message"].lower()
 
@@ -443,12 +425,14 @@ class TestUserNotificationFlows:
         notifications_sent = []
 
         def mock_send_notification(user_id: int, message: str, order_id: int) -> None:
-            notifications_sent.append({
-                "user_id": user_id,
-                "message": message,
-                "order_id": order_id,
-                "timestamp": timezone.now(),
-            })
+            notifications_sent.append(
+                {
+                    "user_id": user_id,
+                    "message": message,
+                    "order_id": order_id,
+                    "timestamp": timezone.now(),
+                }
+            )
 
         # Simulate DLQ resolution
         dlq_entry = {
@@ -493,11 +477,13 @@ class TestUserNotificationFlows:
         notifications_sent = []
 
         def mock_send_notification(user_id: int, message: str, order_id: int) -> None:
-            notifications_sent.append({
-                "user_id": user_id,
-                "message": message,
-                "order_id": order_id,
-            })
+            notifications_sent.append(
+                {
+                    "user_id": user_id,
+                    "message": message,
+                    "order_id": order_id,
+                }
+            )
 
         # Act: Permanent failure notification
         mock_send_notification(
@@ -552,9 +538,9 @@ class TestUserExperienceMetrics:
 
         # Assert
         assert result["visible_result"] == "success"
-        assert result["delay"] < sla_max_wait_seconds, (
-            f"User wait time ({result['delay']:.2f}s) should be under SLA ({sla_max_wait_seconds}s)"
-        )
+        assert (
+            result["delay"] < sla_max_wait_seconds
+        ), f"User wait time ({result['delay']:.2f}s) should be under SLA ({sla_max_wait_seconds}s)"
 
     def test_user_invisible_failure_count_tracked(self):
         """
@@ -573,11 +559,13 @@ class TestUserExperienceMetrics:
         """
         # Arrange
         simulator = UserFlowSimulator()
-        simulator.set_failure_sequence([
-            "PG_TIMEOUT",
-            "NETWORK_ERROR",
-            None,  # Success on 3rd attempt
-        ])
+        simulator.set_failure_sequence(
+            [
+                "PG_TIMEOUT",
+                "NETWORK_ERROR",
+                None,  # Success on 3rd attempt
+            ]
+        )
 
         # Act
         result = simulator.attempt_payment()
@@ -587,9 +575,7 @@ class TestUserExperienceMetrics:
 
         # Track invisible failures
         invisible_failure_count = simulator.internal_state.retry_count
-        assert invisible_failure_count == 2, (
-            f"Expected 2 invisible failures, got {invisible_failure_count}"
-        )
+        assert invisible_failure_count == 2, f"Expected 2 invisible failures, got {invisible_failure_count}"
 
         # These failures were never shown to user
         assert result["user_saw_error"] is False

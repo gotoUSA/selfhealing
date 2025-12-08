@@ -90,34 +90,34 @@ class TestSlowDegradation:
             latency = latency_injector.inject_latency()
 
             if latency > sla_threshold_ms:
-                sla_breaches.append({
-                    "operation": i,
-                    "latency_ms": latency,
-                    "exceeded_by": latency - sla_threshold_ms,
-                })
+                sla_breaches.append(
+                    {
+                        "operation": i,
+                        "latency_ms": latency,
+                        "exceeded_by": latency - sla_threshold_ms,
+                    }
+                )
             else:
-                operations_within_sla.append({
-                    "operation": i,
-                    "latency_ms": latency,
-                })
+                operations_within_sla.append(
+                    {
+                        "operation": i,
+                        "latency_ms": latency,
+                    }
+                )
 
         # Assert
-        assert len(sla_breaches) > 0, (
-            "Expected SLA breaches as latency degrades"
-        )
+        assert len(sla_breaches) > 0, "Expected SLA breaches as latency degrades"
 
         # Verify breaches occur in later operations (after degradation)
         if sla_breaches:
             first_breach = sla_breaches[0]["operation"]
             assert first_breach > 5, (
-                f"First SLA breach at operation {first_breach}, "
-                f"expected after initial operations (latency still low)"
+                f"First SLA breach at operation {first_breach}, " f"expected after initial operations (latency still low)"
             )
 
         # Verify average latency increased
         assert latency_injector.average_latency > 1000, (
-            f"Average latency should be above 1000ms after degradation, "
-            f"got {latency_injector.average_latency:.0f}ms"
+            f"Average latency should be above 1000ms after degradation, " f"got {latency_injector.average_latency:.0f}ms"
         )
 
     def test_chaos_s002_memory_pressure_graceful_shedding(self, resource_simulator):
@@ -159,44 +159,44 @@ class TestSlowDegradation:
             for priority in priorities:
                 if current_usage < memory_threshold:
                     # Normal operation
-                    operations_processed.append({
-                        "operation": i,
-                        "priority": priority,
-                        "memory_usage": current_usage,
-                    })
+                    operations_processed.append(
+                        {
+                            "operation": i,
+                            "priority": priority,
+                            "memory_usage": current_usage,
+                        }
+                    )
                 elif priority in ["critical", "high"]:
                     # Critical/high always processed
-                    operations_processed.append({
-                        "operation": i,
-                        "priority": priority,
-                        "memory_usage": current_usage,
-                        "under_pressure": True,
-                    })
+                    operations_processed.append(
+                        {
+                            "operation": i,
+                            "priority": priority,
+                            "memory_usage": current_usage,
+                            "under_pressure": True,
+                        }
+                    )
                 else:
                     # Shed lower priority
-                    operations_shed.append({
-                        "operation": i,
-                        "priority": priority,
-                        "memory_usage": current_usage,
-                    })
+                    operations_shed.append(
+                        {
+                            "operation": i,
+                            "priority": priority,
+                            "memory_usage": current_usage,
+                        }
+                    )
 
         # Assert
         # Verify critical ops always processed
         critical_ops = [op for op in operations_processed if op["priority"] == "critical"]
-        assert len(critical_ops) == 20, (
-            f"All 20 critical operations should be processed, got {len(critical_ops)}"
-        )
+        assert len(critical_ops) == 20, f"All 20 critical operations should be processed, got {len(critical_ops)}"
 
         # Verify shedding occurred under pressure
-        assert len(operations_shed) > 0, (
-            "Expected some low priority operations to be shed"
-        )
+        assert len(operations_shed) > 0, "Expected some low priority operations to be shed"
 
         # Verify shed operations are lower priority
         shed_priorities = {op["priority"] for op in operations_shed}
-        assert "critical" not in shed_priorities, (
-            "Critical operations should never be shed"
-        )
+        assert "critical" not in shed_priorities, "Critical operations should never be shed"
 
     def test_chaos_s003_connection_pool_exhaustion(self, resource_simulator):
         """
@@ -246,25 +246,19 @@ class TestSlowDegradation:
                 recovery_succeeded.append(i)
 
         # Assert
-        assert len(operations_succeeded) == 50, (
-            f"Expected 50 successful operations (pool max), got {len(operations_succeeded)}"
-        )
+        assert (
+            len(operations_succeeded) == 50
+        ), f"Expected 50 successful operations (pool max), got {len(operations_succeeded)}"
 
-        assert len(operations_queued) == 20, (
-            f"Expected 20 queued operations (overflow), got {len(operations_queued)}"
-        )
+        assert len(operations_queued) == 20, f"Expected 20 queued operations (overflow), got {len(operations_queued)}"
 
         assert backpressure_applied, "Backpressure should have been applied"
 
         # Verify recovery after release
-        assert len(recovery_succeeded) == 10, (
-            f"Expected 10 successful ops after release, got {len(recovery_succeeded)}"
-        )
+        assert len(recovery_succeeded) == 10, f"Expected 10 successful ops after release, got {len(recovery_succeeded)}"
 
         # Verify exhaustion events recorded
-        assert len(resource_simulator.exhaustion_events) > 0, (
-            "Exhaustion events should be recorded for monitoring"
-        )
+        assert len(resource_simulator.exhaustion_events) > 0, "Exhaustion events should be recorded for monitoring"
 
     def test_chaos_s004_gradual_timeout_escalation(self, latency_injector):
         """
@@ -301,17 +295,16 @@ class TestSlowDegradation:
 
             if latency > current_timeout:
                 # Escalate timeout (adaptive)
-                new_timeout = min(
-                    int(current_timeout * escalation_factor),
-                    max_timeout_ms
+                new_timeout = min(int(current_timeout * escalation_factor), max_timeout_ms)
+                timeout_events.append(
+                    {
+                        "operation": i,
+                        "latency": latency,
+                        "old_timeout": current_timeout,
+                        "new_timeout": new_timeout,
+                        "hit_max": new_timeout == max_timeout_ms,
+                    }
                 )
-                timeout_events.append({
-                    "operation": i,
-                    "latency": latency,
-                    "old_timeout": current_timeout,
-                    "new_timeout": new_timeout,
-                    "hit_max": new_timeout == max_timeout_ms,
-                })
                 current_timeout = new_timeout
 
         # Assert
@@ -320,16 +313,12 @@ class TestSlowDegradation:
         # Verify timeout increased
         if timeout_events:
             final_timeout = timeout_events[-1]["new_timeout"]
-            assert final_timeout > base_timeout_ms, (
-                f"Timeout should have escalated from {base_timeout_ms} to {final_timeout}"
-            )
+            assert final_timeout > base_timeout_ms, f"Timeout should have escalated from {base_timeout_ms} to {final_timeout}"
 
             # Verify max limit respected
             max_reached = [e for e in timeout_events if e["hit_max"]]
             if max_reached:
-                assert max_reached[0]["new_timeout"] == max_timeout_ms, (
-                    "Max timeout limit should be respected"
-                )
+                assert max_reached[0]["new_timeout"] == max_timeout_ms, "Max timeout limit should be respected"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -364,10 +353,12 @@ class TestSlowDegradationRecovery:
         latency_injector.degradation_rate = 0
 
         for _ in range(5):
-            latency_samples.append({
-                "phase": "degraded",
-                "latency": latency_injector.inject_latency(),
-            })
+            latency_samples.append(
+                {
+                    "phase": "degraded",
+                    "latency": latency_injector.inject_latency(),
+                }
+            )
 
         # Phase 2: Recovery
         latency_injector.min_latency_ms = 100
@@ -375,10 +366,12 @@ class TestSlowDegradationRecovery:
         latency_injector.current_base_latency = 0
 
         for _ in range(5):
-            latency_samples.append({
-                "phase": "recovered",
-                "latency": latency_injector.inject_latency(),
-            })
+            latency_samples.append(
+                {
+                    "phase": "recovered",
+                    "latency": latency_injector.inject_latency(),
+                }
+            )
 
         # Assert
         degraded_samples = [s for s in latency_samples if s["phase"] == "degraded"]
@@ -388,15 +381,12 @@ class TestSlowDegradationRecovery:
         avg_recovered = sum(s["latency"] for s in recovered_samples) / len(recovered_samples)
 
         assert avg_recovered < avg_degraded, (
-            f"Recovered latency ({avg_recovered:.0f}ms) should be less than "
-            f"degraded latency ({avg_degraded:.0f}ms)"
+            f"Recovered latency ({avg_recovered:.0f}ms) should be less than " f"degraded latency ({avg_degraded:.0f}ms)"
         )
 
         # Significant improvement expected
-        improvement_ratio = avg_degraded / avg_recovered if avg_recovered > 0 else float('inf')
-        assert improvement_ratio > 5, (
-            f"Expected >5x improvement, got {improvement_ratio:.1f}x"
-        )
+        improvement_ratio = avg_degraded / avg_recovered if avg_recovered > 0 else float("inf")
+        assert improvement_ratio > 5, f"Expected >5x improvement, got {improvement_ratio:.1f}x"
 
     def test_connection_pool_recovery(self, resource_simulator):
         """
@@ -425,13 +415,11 @@ class TestSlowDegradationRecovery:
             resource_simulator.release_connection()
 
         # Assert: Full recovery
-        assert resource_simulator.current_connections == 0, (
-            f"Expected 0 connections after release, got {resource_simulator.current_connections}"
-        )
+        assert (
+            resource_simulator.current_connections == 0
+        ), f"Expected 0 connections after release, got {resource_simulator.current_connections}"
 
-        assert not resource_simulator.is_exhausted, (
-            "Pool should not be exhausted after full release"
-        )
+        assert not resource_simulator.is_exhausted, "Pool should not be exhausted after full release"
 
         # Verify can acquire again
         acquired = 0
@@ -440,6 +428,5 @@ class TestSlowDegradationRecovery:
                 acquired += 1
 
         assert acquired == resource_simulator.max_connections, (
-            f"Should be able to acquire all {resource_simulator.max_connections} connections, "
-            f"got {acquired}"
+            f"Should be able to acquire all {resource_simulator.max_connections} connections, " f"got {acquired}"
         )
