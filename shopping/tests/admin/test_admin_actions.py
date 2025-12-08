@@ -73,13 +73,17 @@ class TestCircuitBreakerAdminActions:
     def test_force_open_action(self, admin_client, circuit_breaker_state_closed):
         """Test force open circuit breaker action."""
         cb_state = circuit_breaker_state_closed
-        
+
         url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(url, {
-            "action": "force_open_selected",
-            "_selected_action": [cb_state.pk],
-        }, follow=True)
-        
+        response = admin_client.post(
+            url,
+            {
+                "action": "force_open_selected",
+                "_selected_action": [cb_state.pk],
+            },
+            follow=True,
+        )
+
         assert response.status_code == 200
         cb_state.refresh_from_db()
         assert cb_state.state == "open"
@@ -87,13 +91,17 @@ class TestCircuitBreakerAdminActions:
     def test_force_close_action(self, admin_client, circuit_breaker_state_open):
         """Test force close circuit breaker action."""
         cb_state = circuit_breaker_state_open
-        
+
         url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(url, {
-            "action": "force_close_selected",
-            "_selected_action": [cb_state.pk],
-        }, follow=True)
-        
+        response = admin_client.post(
+            url,
+            {
+                "action": "force_close_selected",
+                "_selected_action": [cb_state.pk],
+            },
+            follow=True,
+        )
+
         assert response.status_code == 200
         cb_state.refresh_from_db()
         assert cb_state.state == "closed"
@@ -101,13 +109,17 @@ class TestCircuitBreakerAdminActions:
     def test_reset_circuit_action(self, admin_client, circuit_breaker_state_open):
         """Test reset circuit breaker action."""
         cb_state = circuit_breaker_state_open
-        
+
         url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(url, {
-            "action": "reset_selected",
-            "_selected_action": [cb_state.pk],
-        }, follow=True)
-        
+        response = admin_client.post(
+            url,
+            {
+                "action": "reset_selected",
+                "_selected_action": [cb_state.pk],
+            },
+            follow=True,
+        )
+
         assert response.status_code == 200
         cb_state.refresh_from_db()
         assert cb_state.state == "closed"
@@ -121,13 +133,17 @@ class TestFailedOperationAdminActions:
     def test_mark_as_resolved_action(self, admin_client, failed_operation_pending):
         """Test mark failed operation as resolved action."""
         failed_op = failed_operation_pending
-        
+
         url = reverse("admin:shopping_failedoperation_changelist")
-        response = admin_client.post(url, {
-            "action": "mark_as_resolved",
-            "_selected_action": [failed_op.pk],
-        }, follow=True)
-        
+        response = admin_client.post(
+            url,
+            {
+                "action": "mark_as_resolved",
+                "_selected_action": [failed_op.pk],
+            },
+            follow=True,
+        )
+
         assert response.status_code == 200
         failed_op.refresh_from_db()
         assert failed_op.status == "resolved"
@@ -135,13 +151,17 @@ class TestFailedOperationAdminActions:
     def test_mark_as_rejected_action(self, admin_client, failed_operation_pending):
         """Test mark failed operation as rejected action."""
         failed_op = failed_operation_pending
-        
+
         url = reverse("admin:shopping_failedoperation_changelist")
-        response = admin_client.post(url, {
-            "action": "mark_as_rejected",
-            "_selected_action": [failed_op.pk],
-        }, follow=True)
-        
+        response = admin_client.post(
+            url,
+            {
+                "action": "mark_as_rejected",
+                "_selected_action": [failed_op.pk],
+            },
+            follow=True,
+        )
+
         assert response.status_code == 200
         failed_op.refresh_from_db()
         assert failed_op.status == "rejected"
@@ -155,10 +175,10 @@ class TestAdminActionPermissions:
         """Verify non-admin users cannot access admin changelist."""
         regular_user = UserFactory(is_staff=False)
         client.force_login(regular_user)
-        
+
         url = reverse("admin:shopping_payment_changelist")
         response = client.get(url)
-        
+
         # Should redirect to admin login
         assert response.status_code == 302
         assert "/admin/login/" in response.url
@@ -167,9 +187,9 @@ class TestAdminActionPermissions:
         """Test staff user without specific permissions has limited access."""
         staff_user = UserFactory(is_staff=True, is_superuser=False)
         client.force_login(staff_user)
-        
+
         url = reverse("admin:index")
         response = client.get(url)
-        
+
         # Should be able to access admin index but with limited options
         assert response.status_code == 200

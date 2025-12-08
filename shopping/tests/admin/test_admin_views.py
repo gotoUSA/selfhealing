@@ -47,7 +47,7 @@ class TestUserAdminListView:
         """Test user search functionality."""
         user = UserFactory(username="searchable_user", email="searchable@test.com")
         url = reverse("admin:shopping_user_changelist")
-        
+
         response = admin_client.get(url, {"q": "searchable"})
         assert response.status_code == 200
         assert user.username in str(response.content)
@@ -68,7 +68,7 @@ class TestProductAdminListView:
         category = CategoryFactory()
         product = ProductFactory(name="TestSearchProduct", category=category)
         url = reverse("admin:shopping_product_changelist")
-        
+
         response = admin_client.get(url, {"q": "TestSearchProduct"})
         assert response.status_code == 200
         assert product.name in str(response.content)
@@ -108,7 +108,7 @@ class TestOrderAdminListView:
         user = UserFactory()
         order = OrderFactory(user=user)
         url = reverse("admin:shopping_order_changelist")
-        
+
         response = admin_client.get(url, {"q": order.order_number})
         assert response.status_code == 200
 

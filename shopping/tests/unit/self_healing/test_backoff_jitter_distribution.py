@@ -23,7 +23,7 @@ from shopping.services.self_healing.backoff_calculator import (
 class TestJitterDistribution:
     """
     Statistical tests for jitter randomness.
-    
+
     Gap ID: G-02
     Purpose: Verify jitter produces statistically varied delays.
     """
@@ -54,10 +54,7 @@ class TestJitterDistribution:
 
         # Verify variance exists (not all same value)
         std_dev = statistics.stdev(delays)
-        assert std_dev > 0, (
-            "Jitter should produce variance. "
-            f"All values identical: {delays[0]}"
-        )
+        assert std_dev > 0, "Jitter should produce variance. " f"All values identical: {delays[0]}"
 
         # Verify range (16 ± 25% = 12 to 20)
         base_delay = 16
@@ -66,15 +63,13 @@ class TestJitterDistribution:
 
         out_of_range = [d for d in delays if d < min_expected or d > max_expected]
         assert len(out_of_range) == 0, (
-            f"Jitter out of range: {out_of_range}. "
-            f"Expected all values in [{min_expected}, {max_expected}]"
+            f"Jitter out of range: {out_of_range}. " f"Expected all values in [{min_expected}, {max_expected}]"
         )
 
         # Verify not all identical (should have many unique values)
         unique_values = set(delays)
         assert len(unique_values) > 5, (
-            f"Should have many unique values, got only {len(unique_values)}. "
-            "Jitter should produce good distribution."
+            f"Should have many unique values, got only {len(unique_values)}. " "Jitter should produce good distribution."
         )
 
     def test_jitter_distribution_uniformity(self):
@@ -120,8 +115,7 @@ class TestJitterDistribution:
         min_per_bucket = 50  # 5% minimum to allow for randomness
         for bucket_name, count in buckets.items():
             assert count >= min_per_bucket, (
-                f"Bucket {bucket_name} has only {count} samples. "
-                f"Distribution may be biased. All buckets: {buckets}"
+                f"Bucket {bucket_name} has only {count} samples. " f"Distribution may be biased. All buckets: {buckets}"
             )
 
     def test_jitter_statistical_properties(self):
@@ -149,17 +143,13 @@ class TestJitterDistribution:
 
         # Mean should be close to base delay (within 10% tolerance)
         assert abs(mean - base_delay) < base_delay * 0.10, (
-            f"Mean ({mean:.2f}) should be close to base delay ({base_delay}). "
-            "Jitter distribution may be biased."
+            f"Mean ({mean:.2f}) should be close to base delay ({base_delay}). " "Jitter distribution may be biased."
         )
 
         # Standard deviation should reflect the jitter range
         # For uniform distribution over ±25%, theoretical std_dev ≈ range/√12 ≈ 8/3.46 ≈ 2.3
         # Allow some tolerance for implementation differences
-        assert std_dev > 1.0, (
-            f"Standard deviation ({std_dev:.2f}) too low. "
-            "Jitter should produce meaningful variance."
-        )
+        assert std_dev > 1.0, f"Standard deviation ({std_dev:.2f}) too low. " "Jitter should produce meaningful variance."
 
     def test_jitter_no_pattern_in_consecutive_values(self):
         """
@@ -180,23 +170,20 @@ class TestJitterDistribution:
         delays = [calc.calculate(2, with_jitter=True) for _ in range(50)]
 
         # Check for alternating pattern (diff signs should not all alternate)
-        diffs = [delays[i+1] - delays[i] for i in range(len(delays) - 1)]
-        sign_changes = sum(1 for i in range(len(diffs) - 1) if diffs[i] * diffs[i+1] < 0)
+        diffs = [delays[i + 1] - delays[i] for i in range(len(delays) - 1)]
+        sign_changes = sum(1 for i in range(len(diffs) - 1) if diffs[i] * diffs[i + 1] < 0)
 
         # In a truly random sequence, sign changes should be roughly 50%
         # Not too high (would indicate strict alternation)
         alternation_ratio = sign_changes / (len(diffs) - 1)
         assert alternation_ratio < 0.85, (
-            f"Alternation ratio ({alternation_ratio:.2f}) too high. "
-            "Jitter may be producing alternating pattern."
+            f"Alternation ratio ({alternation_ratio:.2f}) too high. " "Jitter may be producing alternating pattern."
         )
 
         # Check that sequence is not monotonic
         all_increasing = all(d >= 0 for d in diffs)
         all_decreasing = all(d <= 0 for d in diffs)
-        assert not all_increasing and not all_decreasing, (
-            "Sequence should not be monotonic. Jitter should be random."
-        )
+        assert not all_increasing and not all_decreasing, "Sequence should not be monotonic. Jitter should be random."
 
     def test_jitter_across_different_attempts(self):
         """
@@ -216,22 +203,20 @@ class TestJitterDistribution:
         calc = BackoffCalculator(config)
 
         attempt_ranges = {
-            1: (4, 3, 5),     # base, min, max (approximate)
+            1: (4, 3, 5),  # base, min, max (approximate)
             2: (16, 12, 20),
             3: (64, 48, 80),
         }
 
         for attempt, (base, min_exp, max_exp) in attempt_ranges.items():
             delays = [calc.calculate(attempt, with_jitter=True) for _ in range(100)]
-            
+
             mean = statistics.mean(delays)
             min_delay = min(delays)
             max_delay = max(delays)
 
             # Mean should be close to base
-            assert abs(mean - base) < base * 0.15, (
-                f"Attempt {attempt}: Mean ({mean:.2f}) not close to base ({base})"
-            )
+            assert abs(mean - base) < base * 0.15, f"Attempt {attempt}: Mean ({mean:.2f}) not close to base ({base})"
 
             # All delays should be within range (with tolerance)
             assert all(min_exp - 1 <= d <= max_exp + 1 for d in delays), (
@@ -259,8 +244,7 @@ class TestJitterDistribution:
 
         unique_values = set(delays)
         assert len(unique_values) == 1, (
-            f"Zero jitter should produce identical values. "
-            f"Got {len(unique_values)} unique values: {unique_values}"
+            f"Zero jitter should produce identical values. " f"Got {len(unique_values)} unique values: {unique_values}"
         )
         assert delays[0] == 16, f"Expected base delay 16, got {delays[0]}"
 
@@ -291,8 +275,7 @@ class TestJitterDistribution:
 
         # Verify variance increases with jitter percentage
         assert jitter_std_devs[10] < jitter_std_devs[25] < jitter_std_devs[50], (
-            f"Variance should increase with jitter percentage. "
-            f"Got std_devs: {jitter_std_devs}"
+            f"Variance should increase with jitter percentage. " f"Got std_devs: {jitter_std_devs}"
         )
 
     def test_jitter_with_max_delay_cap(self):
@@ -314,11 +297,9 @@ class TestJitterDistribution:
         delays = [calc.calculate(3, with_jitter=True) for _ in range(100)]
 
         mean = statistics.mean(delays)
-        
+
         # Mean should be around max_delay (50)
-        assert abs(mean - 50) < 5, (
-            f"Mean ({mean:.2f}) should be close to max_delay (50) when capped"
-        )
+        assert abs(mean - 50) < 5, f"Mean ({mean:.2f}) should be close to max_delay (50) when capped"
 
         # Range should be 50 ± 25% = 37.5 to 62.5, but capped at 50
         assert all(d <= 63 for d in delays), "Delays should not exceed max + jitter"

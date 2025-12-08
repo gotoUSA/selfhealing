@@ -5,7 +5,7 @@ Tests for G-07: Security violation never stored in DLQ.
 Validates that security violations are isolated from the normal DLQ flow.
 
 Reference: docs/l3_auto_self_healing/testing/L3_TEST_GAP_REPORT.md
-Risk Covered: 
+Risk Covered:
     - R-019: Security events accidentally auto-replayed
     - R-020: Security audit trail compromised
 """
@@ -33,7 +33,7 @@ from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 class TestSecurityDLQSeparation:
     """
     Tests for security violation isolation from DLQ.
-    
+
     Gap ID: G-07
     Purpose: Verify security violations are NEVER stored in FailedOperation (DLQ).
     """
@@ -86,9 +86,7 @@ class TestSecurityDLQSeparation:
         )
 
         # Double-check: no DLQ entry with security failure type
-        security_dlq = FailedOperation.objects.filter(
-            failure_type__icontains="SECURITY"
-        )
+        security_dlq = FailedOperation.objects.filter(failure_type__icontains="SECURITY")
         assert security_dlq.count() == 0
 
     def test_all_critical_security_violations_use_incident_table(self):
@@ -164,9 +162,7 @@ class TestSecurityDLQSeparation:
             )
 
         # Try to find this in DLQ
-        dlq_entries = FailedOperation.objects.filter(
-            failure_type__icontains="UNAUTHORIZED"
-        )
+        dlq_entries = FailedOperation.objects.filter(failure_type__icontains="UNAUTHORIZED")
         assert dlq_entries.count() == 0, "Security violation should not be in DLQ"
 
         # Verify it's in SecurityIncident
@@ -340,6 +336,4 @@ class TestSecurityDLQSeparation:
                 "UNAUTHORIZED_ACCESS",
             ]
         )
-        assert security_in_dlq.count() == 0, (
-            "Security violations should never appear in DLQ table"
-        )
+        assert security_in_dlq.count() == 0, "Security violations should never appear in DLQ table"

@@ -29,7 +29,7 @@ from shopping.tests.factories import UserFactory
 class TestCircuitBreakerTTLExpiration:
     """
     Tests for circuit breaker TTL-based auto-close.
-    
+
     Gap ID: G-03
     Purpose: Verify that manually opened circuits auto-close after TTL expires.
     """

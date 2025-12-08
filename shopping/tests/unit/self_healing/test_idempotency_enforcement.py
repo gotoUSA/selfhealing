@@ -43,7 +43,7 @@ def clear_cache():
 class TestIdempotencyEnforcement:
     """
     Tests for idempotency requirement enforcement.
-    
+
     Gap ID: G-01
     Purpose: Verify that retry operations are blocked when no idempotency key exists.
     """
@@ -228,7 +228,7 @@ class TestIdempotencyEnforcement:
 class TestReplayIdempotencyIntegration:
     """
     Integration tests for replay with idempotency checking.
-    
+
     Purpose:
         Verify that replay operations properly integrate with idempotency checks.
     """

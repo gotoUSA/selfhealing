@@ -29,7 +29,7 @@ from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 class TestRetryCountPersistence:
     """
     Tests for retry count durability.
-    
+
     Gap ID: G-06
     Purpose: Verify retry count survives Celery worker restart.
     """
@@ -92,9 +92,7 @@ class TestRetryCountPersistence:
             service.replay_single(entry_id)
 
         fresh_entry.refresh_from_db()
-        assert fresh_entry.retry_count == 2, (
-            f"Retry count should be 2 after replay, got {fresh_entry.retry_count}"
-        )
+        assert fresh_entry.retry_count == 2, f"Retry count should be 2 after replay, got {fresh_entry.retry_count}"
 
     def test_retry_count_increments_on_each_attempt(self):
         """
@@ -129,17 +127,15 @@ class TestRetryCountPersistence:
         for expected_count in [1, 2]:
             with patch.object(PaymentReplayHandler, "replay") as mock_replay:
                 mock_replay.return_value = ReplayResult.failed(entry.id, "Still failing")
-                
+
                 # Reset status to allow replay
                 entry.status = FailedOperation.Status.PENDING
                 entry.save()
-                
+
                 service.replay_single(entry.id)
 
             entry.refresh_from_db()
-            assert entry.retry_count == expected_count, (
-                f"Expected retry_count={expected_count}, got {entry.retry_count}"
-            )
+            assert entry.retry_count == expected_count, f"Expected retry_count={expected_count}, got {entry.retry_count}"
 
     def test_retry_count_persists_across_service_instances(self):
         """
@@ -302,10 +298,10 @@ class TestRetryCountPersistence:
         for i, service in enumerate(services):
             # Reload entry to get current state
             entry = FailedOperation.objects.get(id=entry_id)
-            
+
             if entry.retry_count >= 2:  # Max replays
                 break
-                
+
             entry.status = FailedOperation.Status.PENDING
             entry.save()
 
