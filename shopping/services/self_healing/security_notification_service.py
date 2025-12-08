@@ -97,9 +97,7 @@ class NotificationConfig:
 
         return cls(
             slack_webhook_url=notifications.get("SLACK_WEBHOOK_URL", ""),
-            slack_critical_channel=notifications.get(
-                "CRITICAL_CHANNEL", "#critical-alerts"
-            ),
+            slack_critical_channel=notifications.get("CRITICAL_CHANNEL", "#critical-alerts"),
             slack_high_channel=notifications.get("HIGH_CHANNEL", "#ops-alerts"),
             slack_medium_channel=notifications.get("MEDIUM_CHANNEL", "#dev-alerts"),
             email_critical_recipients=email_recipients.get("critical", []),
@@ -177,9 +175,7 @@ class SecurityNotificationService:
         """
         self.config = config or NotificationConfig.from_settings()
 
-    def notify_security_incident(
-        self, incident: "SecurityIncident"
-    ) -> SecurityNotificationResult:
+    def notify_security_incident(self, incident: "SecurityIncident") -> SecurityNotificationResult:
         """
         Send notifications for a security incident.
 
@@ -204,40 +200,25 @@ class SecurityNotificationService:
         # Route based on severity
         if severity == "critical":
             # All channels for critical
-            result.add_result(
-                self._send_slack(message, self.config.slack_critical_channel)
-            )
-            result.add_result(
-                self._send_email(message, self.config.email_critical_recipients)
-            )
-            result.add_result(
-                self._send_sms(message, self.config.sms_critical_recipients)
-            )
+            result.add_result(self._send_slack(message, self.config.slack_critical_channel))
+            result.add_result(self._send_email(message, self.config.email_critical_recipients))
+            result.add_result(self._send_sms(message, self.config.sms_critical_recipients))
             if self.config.pagerduty_enabled:
                 result.add_result(self._trigger_pagerduty(incident))
 
         elif severity == "high":
             # Slack + Email for high
-            result.add_result(
-                self._send_slack(message, self.config.slack_high_channel)
-            )
-            result.add_result(
-                self._send_email(message, self.config.email_high_recipients)
-            )
+            result.add_result(self._send_slack(message, self.config.slack_high_channel))
+            result.add_result(self._send_email(message, self.config.email_high_recipients))
 
         else:  # medium and below
             # Slack only for medium
-            result.add_result(
-                self._send_slack(message, self.config.slack_medium_channel)
-            )
+            result.add_result(self._send_slack(message, self.config.slack_medium_channel))
 
         # Log results
         success_count = sum(1 for r in result.results if r.success)
         total_count = len(result.results)
-        logger.info(
-            f"[Security Notification] Incident {incident.id}: "
-            f"{success_count}/{total_count} notifications sent"
-        )
+        logger.info(f"[Security Notification] Incident {incident.id}: " f"{success_count}/{total_count} notifications sent")
 
         return result
 
@@ -259,12 +240,10 @@ class SecurityNotificationService:
         admin_url = self._get_admin_url(incident)
 
         # Truncate fields to prevent API limit issues
-        description = self._truncate_with_ellipsis(
-            incident.description, DESCRIPTION_MAX_LENGTH
+        description = self._truncate_with_ellipsis(incident.description, DESCRIPTION_MAX_LENGTH)
+        action_taken = (
+            self._truncate_with_ellipsis(incident.action_taken, ACTION_TAKEN_MAX_LENGTH) if incident.action_taken else "N/A"
         )
-        action_taken = self._truncate_with_ellipsis(
-            incident.action_taken, ACTION_TAKEN_MAX_LENGTH
-        ) if incident.action_taken else "N/A"
 
         return {
             "title": f"🚨 Security Incident: {incident.incident_type}"[:TITLE_MAX_LENGTH],
@@ -367,9 +346,7 @@ class SecurityNotificationService:
                 error=str(e),
             )
 
-    def _format_slack_message(
-        self, message: dict[str, Any], channel: str
-    ) -> dict[str, Any]:
+    def _format_slack_message(self, message: dict[str, Any], channel: str) -> dict[str, Any]:
         """
         Format message for Slack Block Kit.
 
@@ -425,17 +402,14 @@ class SecurityNotificationService:
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": f"Detected: {message['detected_at']} | "
-                            f"<{message['admin_url']}|View in Admin>",
+                            "text": f"Detected: {message['detected_at']} | " f"<{message['admin_url']}|View in Admin>",
                         }
                     ],
                 },
             ],
         }
 
-    def _send_email(
-        self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    def _send_email(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
         """
         Send an email notification.
 
@@ -523,9 +497,7 @@ View in Admin: {message['admin_url']}
 This is an automated security alert. Do not reply to this email.
         """.strip()
 
-    def _send_sms(
-        self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    def _send_sms(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
         """
         Send SMS notification (critical incidents only).
 
@@ -553,10 +525,7 @@ This is an automated security alert. Do not reply to this email.
 
         try:
             # SMS content must be short
-            sms_body = (
-                f"[SECURITY] {message['type']}: {message['description'][:100]}. "
-                f"IP: {message['source_ip']}"
-            )
+            sms_body = f"[SECURITY] {message['type']}: {message['description'][:100]}. " f"IP: {message['source_ip']}"
 
             # Here you would integrate with your SMS provider (Twilio, AWS SNS, etc.)
             # For now, we log it

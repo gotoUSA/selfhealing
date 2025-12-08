@@ -196,9 +196,7 @@ class SecurityViolationService:
         """
         from shopping.models.security_incident import SecurityIncident
 
-        violation_type_str = (
-            violation_type.value if isinstance(violation_type, ViolationType) else violation_type
-        )
+        violation_type_str = violation_type.value if isinstance(violation_type, ViolationType) else violation_type
 
         try:
             # Extract request information
@@ -206,9 +204,7 @@ class SecurityViolationService:
             user_agent = request.META.get("HTTP_USER_AGENT", "") if request else ""
 
             # Determine severity
-            severity = SEVERITY_BY_VIOLATION_TYPE.get(
-                violation_type_str, Severity.MEDIUM
-            )
+            severity = SEVERITY_BY_VIOLATION_TYPE.get(violation_type_str, Severity.MEDIUM)
 
             # Create incident record
             with transaction.atomic():
@@ -247,9 +243,7 @@ class SecurityViolationService:
             try:
                 self._send_security_notification(incident)
             except Exception as e:
-                logger.error(
-                    f"[Security Violation] Notification failed but incident saved: {e}"
-                )
+                logger.error(f"[Security Violation] Notification failed but incident saved: {e}")
 
             return SecurityViolationResult.handled(
                 incident_id=incident.id,
@@ -298,9 +292,7 @@ class SecurityViolationService:
 
         elif violation_type == ViolationType.RATE_LIMIT_ABUSE.value:
             if source_ip:
-                action_taken = self._temporary_ip_ban(
-                    source_ip, hours=self.config.temporary_ban_hours
-                )
+                action_taken = self._temporary_ip_ban(source_ip, hours=self.config.temporary_ban_hours)
             else:
                 action_taken = "Rate limit abuse detected but no IP"
 
@@ -447,9 +439,7 @@ class SecurityViolationService:
             return x_forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR")
 
-    def _sanitize_request_data(
-        self, raw_data: dict[str, Any] | None
-    ) -> dict[str, Any]:
+    def _sanitize_request_data(self, raw_data: dict[str, Any] | None) -> dict[str, Any]:
         """
         Sanitize request data by removing sensitive fields.
 
@@ -479,10 +469,7 @@ class SecurityViolationService:
 
         def sanitize(data: Any) -> Any:
             if isinstance(data, dict):
-                return {
-                    k: "[REDACTED]" if k.lower() in sensitive_fields else sanitize(v)
-                    for k, v in data.items()
-                }
+                return {k: "[REDACTED]" if k.lower() in sensitive_fields else sanitize(v) for k, v in data.items()}
             elif isinstance(data, list):
                 return [sanitize(item) for item in data]
             return data
@@ -508,9 +495,7 @@ class SecurityViolationService:
 
         except Exception as e:
             # Don't fail the main flow if notification fails
-            logger.error(
-                f"[Security] Failed to send notification for incident {incident.id}: {e}"
-            )
+            logger.error(f"[Security] Failed to send notification for incident {incident.id}: {e}")
 
 
 # =============================================================================

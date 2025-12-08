@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from shopping.models.order import Order
     from shopping.models.payment import Payment
     from shopping.models.user import User
+    from shopping.services.self_healing.forensic_context import ForensicContext
 
 logger = logging.getLogger(__name__)
 

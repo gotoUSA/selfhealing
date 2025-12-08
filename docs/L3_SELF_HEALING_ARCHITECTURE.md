@@ -21,6 +21,7 @@
 11. [Failure Classification](#11-failure-classification)
 12. [DLQ & Replay Service Architecture](#12-dlq--replay-service-architecture)
 13. [AI Integration Roadmap](#13-ai-integration-roadmap)
+14. [Validation and Testing](#14-validation-and-testing)
 
 ---
 
@@ -844,6 +845,51 @@ Self-Healing: {
 
 ---
 
+## 14. Validation and Testing
+
+### Test Suites
+
+| Test Suite | Location | Purpose |
+|------------|----------|---------|
+| Unit Tests | `shopping/tests/unit/services/test_*.py` | Service-level logic |
+| Integration Tests | `shopping/tests/integration/test_*.py` | Full workflow validation |
+| Chaos Engineering | `shopping/tests/integration/test_chaos_engineering.py` | Fault tolerance |
+| Security Review | `python manage.py security_review` | Security compliance |
+
+### Chaos Engineering
+
+Validates system resilience under:
+- Random failures (30% failure rate)
+- Network latency (100-2000ms)
+- Concurrent operations
+- Circuit breaker stress
+
+```bash
+# Run chaos engineering tests
+pytest shopping/tests/integration/test_chaos_engineering.py -v -m chaos
+```
+
+### Security Review
+
+Automated validation of security implementation:
+
+```bash
+# Run security review
+python manage.py security_review
+
+# Export results
+python manage.py security_review --output security_results.json
+```
+
+**Checked Categories:**
+- Security violation handling (no auto-retry)
+- Multi-channel notifications
+- Access control (operator tracking)
+- Audit trail (timestamps, soft-delete)
+- IP management (logging, banning)
+
+---
+
 ## Summary
 
 L3 Self-Healing Layer transforms failures from **unpredictable incidents** into **manageable workflows**.
@@ -856,6 +902,7 @@ L3 Self-Healing Layer transforms failures from **unpredictable incidents** into 
 4. **Decision Table**: Policy lookup, not ad-hoc decisions
 5. **Manual First**: Circuit breaker starts manual, evolves to auto
 6. **AI Ready**: Structured data enables future automation
+7. **Validated**: Chaos engineering and security review ensure reliability
 
 ---
 

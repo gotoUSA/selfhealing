@@ -251,15 +251,7 @@ class TestSecurityViolationServiceUnit:
         Purpose:
             Verify deeply nested structures are fully sanitized.
         """
-        raw_data = {
-            "level1": {
-                "level2": {
-                    "level3": [
-                        {"api_key": "secret", "data": "visible"}
-                    ]
-                }
-            }
-        }
+        raw_data = {"level1": {"level2": {"level3": [{"api_key": "secret", "data": "visible"}]}}}
 
         sanitized = self.service._sanitize_request_data(raw_data)
 
@@ -292,9 +284,7 @@ class TestSecurityViolationServiceIntegration:
         request.META["REMOTE_ADDR"] = "192.168.1.100"
         request.META["HTTP_USER_AGENT"] = "TestAgent/1.0"
 
-        with patch.object(
-            self.service, "_send_security_notification"
-        ) as mock_notify:
+        with patch.object(self.service, "_send_security_notification") as mock_notify:
             result = self.service.handle_violation(
                 violation_type=ViolationType.UNAUTHORIZED_ACCESS,
                 request=request,
@@ -324,9 +314,7 @@ class TestSecurityViolationServiceIntegration:
         request = self.factory.post("/api/webhook/")
         request.META["REMOTE_ADDR"] = "203.0.113.50"
 
-        with patch.object(
-            self.service, "_send_security_notification"
-        ):
+        with patch.object(self.service, "_send_security_notification"):
             result = self.service.handle_violation(
                 violation_type=ViolationType.WEBHOOK_SIGNATURE_INVALID,
                 request=request,
@@ -349,9 +337,7 @@ class TestSecurityViolationServiceIntegration:
         request = self.factory.post("/api/login/")
         request.META["REMOTE_ADDR"] = "10.0.0.99"
 
-        with patch.object(
-            self.service, "_send_security_notification"
-        ):
+        with patch.object(self.service, "_send_security_notification"):
             result = self.service.handle_violation(
                 violation_type=ViolationType.RATE_LIMIT_ABUSE,
                 request=request,
@@ -373,11 +359,10 @@ class TestSecurityViolationServiceIntegration:
         request = self.factory.get("/api/protected/")
         request.META["REMOTE_ADDR"] = "172.16.0.1"
 
-        with patch.object(
-            self.service, "_send_security_notification"
-        ), patch.object(
-            self.service, "_invalidate_user_sessions", return_value="Sessions invalidated"
-        ) as mock_invalidate:
+        with (
+            patch.object(self.service, "_send_security_notification"),
+            patch.object(self.service, "_invalidate_user_sessions", return_value="Sessions invalidated") as mock_invalidate,
+        ):
             result = self.service.handle_violation(
                 violation_type=ViolationType.TOKEN_FORGED,
                 request=request,
@@ -399,9 +384,7 @@ class TestSecurityViolationServiceIntegration:
         request = self.factory.post("/api/payment/confirm/")
         request.META["REMOTE_ADDR"] = "192.168.0.1"
 
-        with patch.object(
-            self.service, "_send_security_notification"
-        ):
+        with patch.object(self.service, "_send_security_notification"):
             result = self.service.handle_violation(
                 violation_type=ViolationType.PAYMENT_AMOUNT_TAMPERED,
                 request=request,
@@ -487,6 +470,7 @@ class TestIPManagement:
 
         assert "permanent" in result.lower()
 
+
 # =============================================================================
 # Helper Function Tests
 # =============================================================================
@@ -502,6 +486,7 @@ class TestHelperFunctions:
         """
         # Reset singleton
         import shopping.services.self_healing.security_violation_service as svc_module
+
         svc_module._security_service = None
 
         service1 = get_security_violation_service()
@@ -520,8 +505,7 @@ class TestHelperFunctions:
         request.META["REMOTE_ADDR"] = "127.0.0.1"
 
         with patch(
-            "shopping.services.self_healing.security_violation_service."
-            "SecurityViolationService._send_security_notification"
+            "shopping.services.self_healing.security_violation_service." "SecurityViolationService._send_security_notification"
         ):
             result = handle_security_violation(
                 violation_type=ViolationType.SUSPICIOUS_ACTIVITY,

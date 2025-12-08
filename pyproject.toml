@@ -77,6 +77,7 @@ markers = [
     "fuzz: Fuzz tests - Hypothesis/Schemathesis based random input verification",
     "negative: Negative tests - proper error handling for invalid inputs",
     "security: Security tests - SQL Injection, XSS, SSTI attack defense verification",
+    "chaos: Chaos engineering tests - fault injection and recovery verification",
 ]
 filterwarnings = [
     # Ignore dj-rest-auth deprecation warnings (library internal, cannot fix)

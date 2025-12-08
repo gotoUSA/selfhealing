@@ -905,6 +905,7 @@ class TestHelperFunctions:
         """
         # Reset singleton
         import shopping.services.self_healing.security_notification_service as svc_module
+
         svc_module._notification_service = None
 
         service1 = get_security_notification_service()
@@ -920,9 +921,8 @@ class TestHelperFunctions:
         """
         # Reset singleton with dry run config
         import shopping.services.self_healing.security_notification_service as svc_module
-        svc_module._notification_service = SecurityNotificationService(
-            config=NotificationConfig(enabled=True, dry_run=True)
-        )
+
+        svc_module._notification_service = SecurityNotificationService(config=NotificationConfig(enabled=True, dry_run=True))
 
         incident = MagicMock(spec=SecurityIncident)
         incident.id = 999
