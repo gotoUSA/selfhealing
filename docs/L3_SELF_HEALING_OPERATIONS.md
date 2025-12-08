@@ -1,8 +1,8 @@
 # L3 Self-Healing Reliability Layer — Operations Guide
 
-> **Version**: 1.0  
-> **Last Updated**: 2025-12-08  
-> **Status**: Production Ready  
+> **Version**: 1.0
+> **Last Updated**: 2025-12-08
+> **Status**: Production Ready
 > **Prerequisite**: Read [L3 Architecture](./L3_SELF_HEALING_ARCHITECTURE.md) first
 
 ---
@@ -35,52 +35,52 @@ The DLQ is the **central storage for unrecoverable failures**. Every failure tha
 CREATE TABLE failed_operations (
     -- Primary Key
     id                  BIGSERIAL PRIMARY KEY,
-    
+
     -- Domain & Classification
     domain              VARCHAR(50) NOT NULL,      -- 'payment', 'point', 'inventory', 'webhook', 'notification'
     failure_type        VARCHAR(100) NOT NULL,     -- 'PG_TIMEOUT', 'AMOUNT_MISMATCH', etc.
-    
+
     -- Status (State Machine)
     status              VARCHAR(30) DEFAULT 'pending',
                         -- 'pending', 'reviewing', 'replayed', 'resolved', 'rejected', 'expired'
-    
+
     -- Original References
     order_id            BIGINT,
     payment_id          BIGINT,
     user_id             BIGINT,
-    
+
     -- Snapshot Data (for recovery without original records)
     snapshot_data       JSONB NOT NULL DEFAULT '{}',
-    
+
     -- Error Information
     error_code          VARCHAR(100),
     error_message       TEXT,
-    
+
     -- Retry Tracking
     retry_count         INTEGER DEFAULT 0,
     max_retries         INTEGER DEFAULT 3,
     last_retry_at       TIMESTAMP WITH TIME ZONE,
-    
+
     -- Forensic Context
     request_data        JSONB DEFAULT '{}',        -- Original request payload
     response_data       JSONB DEFAULT '{}',        -- External system response
     metadata            JSONB DEFAULT '{}',        -- Additional debug info
-    
+
     -- Resolution
     resolved_at         TIMESTAMP WITH TIME ZONE,
     resolved_by_id      BIGINT,                    -- FK to users
     resolution_type     VARCHAR(30),               -- 'auto_replay', 'manual_fix', 'rejected', 'expired'
     resolution_note     TEXT,
-    
+
     -- Recovery Hints
     next_action_hint    VARCHAR(200),              -- e.g., "Verify payment in PG admin"
     recommended_action  VARCHAR(30),               -- 'replay', 'manual_check', 'escalate', 'archive'
-    
+
     -- Lifecycle
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     expires_at          TIMESTAMP WITH TIME ZONE,  -- Auto-archive after retention period
-    
+
     -- Indexes
     CONSTRAINT fk_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT fk_payment FOREIGN KEY (payment_id) REFERENCES payments(id),
@@ -100,14 +100,14 @@ CREATE INDEX idx_failed_ops_domain_status ON failed_operations(domain, status);
 ```python
 class FailedOperation(models.Model):
     """Dead Letter Queue for unrecoverable failures"""
-    
+
     class Domain(models.TextChoices):
         PAYMENT = 'payment', 'Payment'
         POINT = 'point', 'Point'
         INVENTORY = 'inventory', 'Inventory'
         WEBHOOK = 'webhook', 'Webhook'
         NOTIFICATION = 'notification', 'Notification'
-    
+
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending Review'
         REVIEWING = 'reviewing', 'Under Review'
@@ -115,54 +115,54 @@ class FailedOperation(models.Model):
         RESOLVED = 'resolved', 'Resolved'
         REJECTED = 'rejected', 'Rejected (Unrecoverable)'
         EXPIRED = 'expired', 'Retention Expired'
-    
+
     # Classification
     domain = models.CharField(max_length=50, choices=Domain.choices)
     failure_type = models.CharField(max_length=100, db_index=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
-    
+
     # References
     order = models.ForeignKey('Order', null=True, on_delete=models.SET_NULL)
     payment = models.ForeignKey('Payment', null=True, on_delete=models.SET_NULL)
     user = models.ForeignKey('User', null=True, on_delete=models.SET_NULL)
-    
+
     # Snapshot & Error
     snapshot_data = models.JSONField(default=dict)
     error_code = models.CharField(max_length=100, blank=True)
     error_message = models.TextField(blank=True)
-    
+
     # Retry tracking
     retry_count = models.PositiveIntegerField(default=0)
     max_retries = models.PositiveIntegerField(default=3)
     last_retry_at = models.DateTimeField(null=True)
-    
+
     # Forensic data
     request_data = models.JSONField(default=dict)
     response_data = models.JSONField(default=dict)
     metadata = models.JSONField(default=dict)
-    
+
     # Resolution
     resolved_at = models.DateTimeField(null=True)
     resolved_by = models.ForeignKey('User', null=True, on_delete=models.SET_NULL, related_name='resolved_failures')
     resolution_type = models.CharField(max_length=30, blank=True)
     resolution_note = models.TextField(blank=True)
-    
+
     # Hints
     next_action_hint = models.CharField(max_length=200, blank=True)
     recommended_action = models.CharField(max_length=30, blank=True)
-    
+
     # Lifecycle
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True)
-    
+
     class Meta:
         db_table = 'failed_operations'
         indexes = [
             models.Index(fields=['domain', 'status']),
             models.Index(fields=['created_at']),
         ]
-    
+
     def mark_as_resolved(self, resolved_by, note="", resolution_type="manual_fix"):
         self.status = self.Status.RESOLVED
         self.resolved_at = timezone.now()
@@ -170,7 +170,7 @@ class FailedOperation(models.Model):
         self.resolution_type = resolution_type
         self.resolution_note = note
         self.save()
-    
+
     def queue_for_replay(self):
         if self.retry_count >= 2:
             raise ValueError("Maximum replay attempts (2) exceeded")
@@ -221,36 +221,36 @@ class FailedOperation(models.Model):
 @shared_task(name="replay_failed_operation")
 def replay_failed_operation(failed_op_id: int) -> dict:
     """Replay a single DLQ item"""
-    
+
     failed_op = FailedOperation.objects.select_for_update().get(id=failed_op_id)
-    
+
     # Check replay eligibility
     if failed_op.retry_count >= 2:
         failed_op.status = FailedOperation.Status.REJECTED
         failed_op.resolution_note = "Maximum replay attempts exceeded"
         failed_op.save()
         return {"success": False, "reason": "max_replays_exceeded"}
-    
+
     # Mark as replaying
     failed_op.queue_for_replay()
-    
+
     # Route to appropriate handler
     handler = get_replay_handler(failed_op.domain)
-    
+
     try:
         result = handler.replay(failed_op)
-        
+
         if result.success:
             failed_op.mark_as_resolved(
                 resolved_by=None,  # System
-                resolution_type="auto_replay"
+                resolution_type=FailedOperation.ResolutionType.AUTO_REPLAY
             )
             return {"success": True, "result": result.data}
         else:
             failed_op.status = FailedOperation.Status.PENDING
             failed_op.save()
             return {"success": False, "reason": result.error}
-            
+
     except Exception as e:
         failed_op.status = FailedOperation.Status.PENDING
         failed_op.error_message = str(e)
@@ -267,20 +267,20 @@ def batch_replay_by_failure_type(
     max_items: int = 100
 ) -> dict:
     """Replay all pending items of a specific failure type"""
-    
+
     pending_items = FailedOperation.objects.filter(
         failure_type=failure_type,
         status=FailedOperation.Status.PENDING,
         retry_count__lt=2
     )[:max_items]
-    
+
     results = {"total": 0, "success": 0, "failed": 0}
-    
+
     for item in pending_items:
         results["total"] += 1
         task_result = replay_failed_operation.delay(item.id)
         # Note: Results tracked asynchronously
-    
+
     return results
 ```
 
@@ -306,9 +306,9 @@ def batch_replay_by_failure_type(
 @shared_task(name="check_sla_violations")
 def check_sla_violations():
     """Check for DLQ items exceeding SLA and escalate"""
-    
+
     now = timezone.now()
-    
+
     SLA_THRESHOLDS = {
         'payment': timedelta(hours=1),
         'point': timedelta(hours=4),
@@ -316,20 +316,20 @@ def check_sla_violations():
         'webhook': timedelta(hours=8),
         'notification': timedelta(hours=24),
     }
-    
+
     violations = []
-    
+
     for domain, threshold in SLA_THRESHOLDS.items():
         overdue_items = FailedOperation.objects.filter(
             domain=domain,
             status=FailedOperation.Status.PENDING,
             created_at__lt=now - threshold
         )
-        
+
         for item in overdue_items:
             violations.append(item)
             escalate_sla_violation(item)
-    
+
     return {"violations_count": len(violations)}
 ```
 
@@ -355,17 +355,17 @@ SEVERITY_BY_FAILURE_TYPE = {
     'AMOUNT_MISMATCH_WEBHOOK': 'critical',
     'SECURITY_SIGNATURE_INVALID': 'critical',
     'NEGATIVE_BALANCE_DETECTED': 'critical',
-    
+
     # High - Within hours
     'PG_TIMEOUT_MAX_RETRIES': 'high',
     'DB_SAVE_AFTER_PG_SUCCESS': 'high',
     'DUPLICATE_DEDUCTION': 'high',
     'STOCK_NEGATIVE': 'high',
-    
+
     # Medium - Same day
     'WEBHOOK_ORDER_NOT_FOUND': 'medium',
     'STOCK_MISMATCH': 'medium',
-    
+
     # Low - Best effort
     'SMTP_TIMEOUT': 'low',
     'FCM_ERROR': 'low',
@@ -377,27 +377,27 @@ SEVERITY_BY_FAILURE_TYPE = {
 ```python
 def send_failure_notification(failed_op: FailedOperation):
     """Send notification based on severity"""
-    
+
     severity = SEVERITY_BY_FAILURE_TYPE.get(
-        failed_op.failure_type, 
+        failed_op.failure_type,
         'medium'
     )
-    
+
     message = format_failure_message(failed_op)
-    
+
     if severity == 'critical':
         send_slack_alert(message, channel="#critical-alerts")
         send_email_alert(message, recipients=get_oncall_emails())
         send_sms_alert(message, recipients=get_oncall_phones())
         trigger_pagerduty(failed_op)
-        
+
     elif severity == 'high':
         send_slack_alert(message, channel="#ops-alerts")
         send_email_alert(message, recipients=get_ops_emails())
-        
+
     elif severity == 'medium':
         send_slack_alert(message, channel="#dev-alerts")
-        
+
     else:  # low
         queue_for_daily_digest(failed_op)
 ```
@@ -451,39 +451,39 @@ Security violations are **immediately blocked** and routed to the security team.
 ```python
 class SecurityIncident(models.Model):
     """Separate table for security violations - never in main DLQ"""
-    
+
     class Severity(models.TextChoices):
         CRITICAL = 'critical', 'Critical'
         HIGH = 'high', 'High'
         MEDIUM = 'medium', 'Medium'
-    
+
     class Status(models.TextChoices):
         OPEN = 'open', 'Open'
         INVESTIGATING = 'investigating', 'Investigating'
         RESOLVED = 'resolved', 'Resolved'
         FALSE_POSITIVE = 'false_positive', 'False Positive'
-    
+
     incident_type = models.CharField(max_length=100)
     severity = models.CharField(max_length=20, choices=Severity.choices)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.OPEN)
-    
+
     # Source
     source_ip = models.GenericIPAddressField(null=True)
     user_agent = models.TextField(blank=True)
     user = models.ForeignKey('User', null=True, on_delete=models.SET_NULL)
-    
+
     # Details
     description = models.TextField()
     raw_request = models.JSONField(default=dict)
-    
+
     # Response
     action_taken = models.TextField(blank=True)  # e.g., "Session invalidated"
     investigated_by = models.ForeignKey('User', null=True, on_delete=models.SET_NULL, related_name='investigations')
     resolved_at = models.DateTimeField(null=True)
-    
+
     # Timestamps
     detected_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'security_incidents'
 ```
@@ -498,7 +498,7 @@ def handle_security_violation(
     details: dict = None
 ):
     """Handle security violation - never retry"""
-    
+
     # 1. Create incident record
     incident = SecurityIncident.objects.create(
         incident_type=incident_type,
@@ -509,25 +509,25 @@ def handle_security_violation(
         description=details.get('description', ''),
         raw_request=sanitize_request_data(request),
     )
-    
+
     # 2. Immediate protective action
     if incident_type == 'TOKEN_FORGED' and user:
         invalidate_all_user_sessions(user)
         incident.action_taken = "All user sessions invalidated"
-    
+
     elif incident_type == 'WEBHOOK_SIGNATURE_INVALID':
         log_suspicious_ip(get_client_ip(request))
         incident.action_taken = "IP logged for monitoring"
-    
+
     elif incident_type == 'RATE_LIMIT_ABUSE':
         temporary_ip_ban(get_client_ip(request), duration=timedelta(hours=1))
         incident.action_taken = "IP temporarily banned for 1 hour"
-    
+
     incident.save()
-    
+
     # 3. Alert security team
     send_security_alert(incident)
-    
+
     return incident
 ```
 
@@ -551,7 +551,7 @@ metadata = {
     "request_timestamp": "2025-12-08T10:30:00.123Z",
     "response_timestamp": "2025-12-08T10:30:05.456Z",
     "latency_ms": 5333,
-    
+
     # Retry History
     "retry_history": [
         {
@@ -569,7 +569,7 @@ metadata = {
             "backoff_seconds": 16
         }
     ],
-    
+
     # State Snapshots
     "state_before": {
         "order_status": "pending",
@@ -583,18 +583,18 @@ metadata = {
         "user_points": 5000,
         "product_stock": 10
     },
-    
+
     # Request Context
     "client_ip": "203.0.113.50",
     "user_agent": "Mozilla/5.0...",
     "session_id": "sess_abc123",
-    
+
     # Task Context
     "task_name": "process_payment_confirmation",
     "task_id": "task-uuid-here",
     "queue_name": "payment_processing",
     "worker_id": "worker-01",
-    
+
     # External System
     "external_request_id": "toss_req_12345",
     "external_response_code": 500,
@@ -611,16 +611,16 @@ snapshot_data = {
     "order_number": "ORD-2025-12345",
     "payment_id": 67890,
     "payment_key": "toss_pay_abc123",
-    
+
     # Financial data
     "amount": 50000,
     "points_used": 1000,
     "final_amount": 49000,
-    
+
     # User data
     "user_id": 100,
     "user_email": "user@example.com",
-    
+
     # Product data (for inventory)
     "items": [
         {"product_id": 1, "quantity": 2, "price": 25000}
@@ -714,11 +714,11 @@ panels:
   - title: "Retry Success Rate"
     type: graph
     query: rate(retry_success_total[5m]) / rate(retry_attempts_total[5m])
-    
+
   - title: "Recovery Time (P95)"
     type: stat
     query: histogram_quantile(0.95, recovery_time_seconds)
-    
+
   - title: "Circuit Breaker Status"
     type: table
     query: circuit_breaker_state
@@ -744,17 +744,17 @@ panels:
 
 class TestFailureClassification:
     """Test failure type → policy mapping"""
-    
+
     def test_pg_timeout_is_retryable(self):
         policy = get_policy_for_failure("PG_TIMEOUT")
         assert policy.is_retryable is True
         assert policy.max_retries == 3
-    
+
     def test_invalid_card_is_permanent(self):
         policy = get_policy_for_failure("INVALID_CARD")
         assert policy.is_retryable is False
         assert policy.action == "permanent_fail"
-    
+
     def test_amount_mismatch_requires_approval(self):
         policy = get_policy_for_failure("AMOUNT_MISMATCH_PG_RESPONSE")
         assert policy.is_retryable is False
@@ -764,7 +764,7 @@ class TestFailureClassification:
 
 class TestBackoffCalculation:
     """Test exponential backoff with jitter"""
-    
+
     def test_backoff_sequence(self):
         delays = [calculate_backoff(attempt) for attempt in range(1, 5)]
         # Base 4: 4, 16, 64, 180 (capped)
@@ -772,7 +772,7 @@ class TestBackoffCalculation:
         assert delays[1] >= 12 and delays[1] <= 20
         assert delays[2] >= 48 and delays[2] <= 80
         assert delays[3] == 180  # Max cap
-    
+
     def test_jitter_distribution(self):
         """Jitter should spread retries"""
         delays = [calculate_backoff(1) for _ in range(100)]
@@ -783,12 +783,12 @@ class TestBackoffCalculation:
 
 class TestIdempotencyCheck:
     """Test idempotency key validation"""
-    
+
     def test_duplicate_payment_detected(self):
         # First attempt
         result1 = process_payment(order_id=1, amount=1000)
         assert result1.was_duplicate is False
-        
+
         # Retry with same key
         result2 = process_payment(order_id=1, amount=1000)
         assert result2.was_duplicate is True
@@ -803,35 +803,35 @@ class TestIdempotencyCheck:
 @pytest.mark.django_db(transaction=True)
 class TestDLQFlow:
     """Test complete DLQ workflow"""
-    
+
     def test_failure_creates_dlq_entry(self, order, mock_pg_timeout):
         """Failure after max retries creates DLQ entry"""
         # Act
         with pytest.raises(MaxRetriesExceeded):
             process_payment_with_retry(order.id)
-        
+
         # Assert
         dlq_entry = FailedOperation.objects.get(order_id=order.id)
         assert dlq_entry.failure_type == "PG_TIMEOUT"
         assert dlq_entry.retry_count == 3
         assert dlq_entry.status == "pending"
-    
+
     def test_dlq_replay_success(self, dlq_entry, mock_pg_success):
         """Successful replay resolves DLQ entry"""
         # Act
         result = replay_failed_operation(dlq_entry.id)
-        
+
         # Assert
         dlq_entry.refresh_from_db()
         assert result["success"] is True
         assert dlq_entry.status == "resolved"
         assert dlq_entry.resolution_type == "auto_replay"
-    
+
     def test_dlq_replay_max_attempts(self, dlq_entry_with_2_replays):
         """Third replay attempt is rejected"""
         # Act
         result = replay_failed_operation(dlq_entry_with_2_replays.id)
-        
+
         # Assert
         assert result["success"] is False
         assert result["reason"] == "max_replays_exceeded"
@@ -842,18 +842,18 @@ class TestDLQFlow:
 @pytest.mark.django_db
 class TestCircuitBreaker:
     """Test circuit breaker behavior"""
-    
+
     def test_manual_open_blocks_requests(self):
         # Open circuit
         CircuitBreaker.force_open("toss_payment", reason="Test")
-        
+
         # Assert blocked
         assert CircuitBreaker.should_allow("toss_payment") is False
-    
+
     def test_manual_close_allows_requests(self):
         CircuitBreaker.force_open("toss_payment", reason="Test")
         CircuitBreaker.force_close("toss_payment", reason="Test complete")
-        
+
         assert CircuitBreaker.should_allow("toss_payment") is True
 ```
 
@@ -865,21 +865,21 @@ class TestCircuitBreaker:
 @pytest.mark.chaos
 class TestFaultTolerance:
     """Chaos engineering tests for self-healing"""
-    
+
     def test_random_pg_failures(self, order_factory):
         """System handles random PG failures gracefully"""
         orders = [order_factory() for _ in range(100)]
-        
+
         with RandomFailureInjector(failure_rate=0.3):
             results = [
                 process_payment_with_retry(order.id)
                 for order in orders
             ]
-        
+
         # At least 70% should eventually succeed
         success_count = sum(1 for r in results if r.success)
         assert success_count >= 70
-        
+
         # All failures should be in DLQ
         failed_order_ids = [
             o.id for o, r in zip(orders, results) if not r.success
@@ -888,14 +888,14 @@ class TestFaultTolerance:
             order_id__in=failed_order_ids
         ).count()
         assert dlq_count == len(failed_order_ids)
-    
+
     def test_network_latency_handling(self, order):
         """System handles high latency without timeout cascade"""
         with LatencyInjector(min_ms=100, max_ms=2000):
             start = time.time()
             result = process_payment_with_retry(order.id)
             elapsed = time.time() - start
-        
+
         # Should complete within SLA even with retries
         assert elapsed < 300  # 5 minutes max
 ```
@@ -980,7 +980,7 @@ SELF_HEALING = {
         "BACKOFF_MAX": int(os.environ.get("SH_BACKOFF_MAX", 180)),
         "JITTER_PERCENT": int(os.environ.get("SH_JITTER_PERCENT", 25)),
     },
-    
+
     # Per-Domain Overrides
     "DOMAIN_CONFIG": {
         "payment": {
@@ -999,14 +999,14 @@ SELF_HEALING = {
             "sla_seconds": 86400,
         },
     },
-    
+
     # DLQ Configuration
     "DLQ": {
         "ENABLED": os.environ.get("SH_DLQ_ENABLED", "true").lower() == "true",
         "RETENTION_DAYS": int(os.environ.get("SH_DLQ_RETENTION_DAYS", 30)),
         "MAX_REPLAY_ATTEMPTS": int(os.environ.get("SH_MAX_REPLAY", 2)),
     },
-    
+
     # Circuit Breaker
     "CIRCUIT_BREAKER": {
         "ENABLED": os.environ.get("SH_CB_ENABLED", "false").lower() == "true",
@@ -1014,7 +1014,7 @@ SELF_HEALING = {
         "RECOVERY_TIMEOUT": int(os.environ.get("SH_CB_RECOVERY_TIMEOUT", 60)),
         "SUCCESS_THRESHOLD": int(os.environ.get("SH_CB_SUCCESS_THRESHOLD", 2)),
     },
-    
+
     # Notifications
     "NOTIFICATIONS": {
         "SLACK_WEBHOOK_URL": os.environ.get("SLACK_ALERTS_WEBHOOK"),
@@ -1029,7 +1029,7 @@ SELF_HEALING = {
             "critical": ["+821012345678"],
         },
     },
-    
+
     # SLA Configuration
     "SLA": {
         "CHECK_INTERVAL_SECONDS": 300,  # Check every 5 minutes

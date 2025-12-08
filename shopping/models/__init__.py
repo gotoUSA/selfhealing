@@ -1,5 +1,6 @@
 from .cart import Cart, CartItem
 from .email_verification import EmailLog, EmailVerificationToken
+from .failed_operation import FailedOperation
 from .failed_payment import CircuitBreakerState, FailedPayment
 from .notification import Notification
 from .order import Order, OrderItem
@@ -9,11 +10,12 @@ from .point import PointHistory
 from .product import Category, Product, ProductImage, ProductReview
 from .product_qa import ProductAnswer, ProductQuestion
 from .return_request import Return, ReturnItem
+from .security_incident import SecurityIncident
 from .seller import SellerProfile
 from .user import User
 from .webhook_event import WebhookEvent
 
-# import 위해
+# For import convenience
 
 __all__ = [
     "Product",
@@ -28,7 +30,9 @@ __all__ = [
     "Payment",
     "PaymentLog",
     "FailedPayment",
+    "FailedOperation",
     "CircuitBreakerState",
+    "SecurityIncident",
     "PointHistory",
     "EmailVerificationToken",
     "EmailLog",
