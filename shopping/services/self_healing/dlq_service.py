@@ -352,30 +352,30 @@ class DLQService:
         """
         Get entries that have breached their SLA.
 
-        SLA thresholds by domain:
-        - payment: 1 hour
-        - point: 4 hours
-        - inventory: 2 hours
-        - webhook: 8 hours
-        - notification: 24 hours
+        SLA thresholds are loaded from configuration.
+        See config.SLAThresholds for default values.
 
         Returns:
             QuerySet of SLA-breached FailedOperation entries
         """
+        from django.db.models import Q
+
         from shopping.models.failed_operation import FailedOperation
+        from shopping.services.self_healing.config import get_sla_thresholds
 
         now = timezone.now()
+        sla_config = get_sla_thresholds()
+
+        # Map domain choices to config thresholds
         sla_thresholds = {
-            FailedOperation.Domain.PAYMENT: timedelta(hours=1),
-            FailedOperation.Domain.POINT: timedelta(hours=4),
-            FailedOperation.Domain.INVENTORY: timedelta(hours=2),
-            FailedOperation.Domain.WEBHOOK: timedelta(hours=8),
-            FailedOperation.Domain.NOTIFICATION: timedelta(hours=24),
+            FailedOperation.Domain.PAYMENT: sla_config.get_threshold("payment"),
+            FailedOperation.Domain.POINT: sla_config.get_threshold("point"),
+            FailedOperation.Domain.INVENTORY: sla_config.get_threshold("inventory"),
+            FailedOperation.Domain.WEBHOOK: sla_config.get_threshold("webhook"),
+            FailedOperation.Domain.NOTIFICATION: sla_config.get_threshold("notification"),
         }
 
         # Build OR conditions for each domain
-        from django.db.models import Q
-
         conditions = Q()
         for domain, threshold in sla_thresholds.items():
             conditions |= Q(domain=domain, created_at__lt=now - threshold)

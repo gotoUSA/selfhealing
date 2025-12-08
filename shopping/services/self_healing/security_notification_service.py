@@ -37,14 +37,23 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Constants
+# Constants - loaded from config
 # =============================================================================
 
-# Slack API limits
-SLACK_BLOCK_TEXT_LIMIT = 3000
-DESCRIPTION_MAX_LENGTH = 500
-ACTION_TAKEN_MAX_LENGTH = 200
-TITLE_MAX_LENGTH = 150
+
+def _get_notification_limits():
+    """Lazy-load notification limits from config."""
+    from shopping.services.self_healing.config import get_notification_limits
+
+    return get_notification_limits()
+
+
+# For backward compatibility, expose as module-level but load lazily
+# Use _get_notification_limits() for actual values
+SLACK_BLOCK_TEXT_LIMIT = 3000  # Deprecated: use _get_notification_limits()
+DESCRIPTION_MAX_LENGTH = 500  # Deprecated: use _get_notification_limits()
+ACTION_TAKEN_MAX_LENGTH = 200  # Deprecated: use _get_notification_limits()
+TITLE_MAX_LENGTH = 150  # Deprecated: use _get_notification_limits()
 
 
 # =============================================================================
@@ -318,11 +327,12 @@ class SecurityNotificationService:
         try:
             # Format for Slack
             slack_message = self._format_slack_message(message, channel)
+            limits = _get_notification_limits()
 
             response = requests.post(
                 self.config.slack_webhook_url,
                 json=slack_message,
-                timeout=10,
+                timeout=limits.notification_timeout_seconds,
             )
 
             if response.status_code == 200:
@@ -594,11 +604,12 @@ This is an automated security alert. Do not reply to this email.
                     },
                 },
             }
+            limits = _get_notification_limits()
 
             response = requests.post(
                 "https://events.pagerduty.com/v2/enqueue",
                 json=payload,
-                timeout=10,
+                timeout=limits.notification_timeout_seconds,
             )
 
             if response.status_code in (200, 202):

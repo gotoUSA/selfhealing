@@ -415,12 +415,8 @@ def check_and_report_sla_breaches(self) -> dict:
     """
     Periodic task to check for SLA breaches and record metrics.
 
-    SLA thresholds by domain:
-    - payment: 1 hour
-    - point: 4 hours
-    - inventory: 2 hours
-    - webhook: 8 hours
-    - notification: 24 hours
+    SLA thresholds are configured in services/self_healing/config.py.
+    See SLAThresholds class for default values and customization.
 
     This task should be scheduled to run every 5 minutes.
 

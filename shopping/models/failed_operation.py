@@ -453,22 +453,13 @@ class FailedOperation(models.Model):
         """
         Check if this entry has breached its SLA.
 
-        SLA thresholds by domain:
-        - payment: 1 hour
-        - point: 4 hours
-        - inventory: 2 hours
-        - webhook: 8 hours
-        - notification: 24 hours
+        SLA thresholds are loaded from configuration.
+        See services/self_healing/config.py for default values.
         """
-        sla_thresholds = {
-            self.Domain.PAYMENT: timedelta(hours=1),
-            self.Domain.POINT: timedelta(hours=4),
-            self.Domain.INVENTORY: timedelta(hours=2),
-            self.Domain.WEBHOOK: timedelta(hours=8),
-            self.Domain.NOTIFICATION: timedelta(hours=24),
-        }
+        from shopping.services.self_healing.config import get_sla_thresholds
 
-        threshold = sla_thresholds.get(self.domain, timedelta(hours=24))
+        sla_config = get_sla_thresholds()
+        threshold = sla_config.get_threshold(self.domain)
         return self.status == self.Status.PENDING and (timezone.now() - self.created_at) > threshold
 
     # ========================================

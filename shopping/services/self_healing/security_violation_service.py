@@ -113,6 +113,12 @@ class SecurityConfig:
     temporary_ban_hours: int = 1
     permanent_ban_threshold: int = 5  # violations before permanent ban
 
+    # Suspicious IP tracking cache timeout (seconds)
+    suspicious_ip_cache_timeout: int = 86400  # 24 hours
+
+    # Injection attempt ban duration (hours)
+    injection_ban_hours: int = 24
+
     # Suspicious activity detection
     failed_login_threshold: int = 5
     suspicious_ip_cache_prefix: str = "security:suspicious_ip:"
@@ -121,13 +127,19 @@ class SecurityConfig:
     @classmethod
     def from_settings(cls) -> "SecurityConfig":
         """Load configuration from Django settings."""
-        security_config = getattr(settings, "SECURITY", {})
+        from shopping.services.self_healing.config import get_security_thresholds
+
+        thresholds = get_security_thresholds()
         return cls(
-            rate_limit_window_seconds=security_config.get("RATE_LIMIT_WINDOW", 60),
-            rate_limit_max_requests=security_config.get("RATE_LIMIT_MAX", 100),
-            temporary_ban_hours=security_config.get("TEMP_BAN_HOURS", 1),
-            permanent_ban_threshold=security_config.get("PERM_BAN_THRESHOLD", 5),
-            failed_login_threshold=security_config.get("FAILED_LOGIN_THRESHOLD", 5),
+            rate_limit_window_seconds=thresholds.rate_limit_window_seconds,
+            rate_limit_max_requests=thresholds.rate_limit_max_requests,
+            temporary_ban_hours=thresholds.temporary_ban_hours,
+            permanent_ban_threshold=thresholds.permanent_ban_threshold,
+            suspicious_ip_cache_timeout=thresholds.suspicious_ip_cache_timeout,
+            injection_ban_hours=thresholds.injection_ban_hours,
+            failed_login_threshold=thresholds.failed_login_threshold,
+            suspicious_ip_cache_prefix=thresholds.suspicious_ip_cache_prefix,
+            banned_ip_cache_prefix=thresholds.banned_ip_cache_prefix,
         )
 
 
@@ -313,7 +325,7 @@ class SecurityViolationService:
         elif violation_type == ViolationType.INJECTION_ATTEMPT.value:
             action_taken = "Injection attempt blocked"
             if source_ip:
-                self._temporary_ip_ban(source_ip, hours=24)
+                self._temporary_ip_ban(source_ip, hours=self.config.injection_ban_hours)
 
         else:
             action_taken = f"Violation logged for review: {violation_type}"
@@ -363,7 +375,7 @@ class SecurityViolationService:
         # Increment suspicious activity count
         current_count = cache.get(cache_key, 0)
         new_count = current_count + 1
-        cache.set(cache_key, new_count, timeout=86400)  # 24 hours
+        cache.set(cache_key, new_count, timeout=self.config.suspicious_ip_cache_timeout)
 
         logger.info(f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})")
 

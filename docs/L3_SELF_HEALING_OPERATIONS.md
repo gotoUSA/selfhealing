@@ -1158,11 +1158,72 @@ SELF_HEALING = {
 
     # SLA Configuration
     "SLA": {
+        "PAYMENT_HOURS": 1,         # Payment domain SLA (1 hour)
+        "POINT_HOURS": 4,           # Point domain SLA (4 hours)
+        "INVENTORY_HOURS": 2,       # Inventory domain SLA (2 hours)
+        "WEBHOOK_HOURS": 8,         # Webhook domain SLA (8 hours)
+        "NOTIFICATION_HOURS": 24,   # Notification domain SLA (24 hours)
+        "DEFAULT_HOURS": 24,        # Default SLA for unknown domains
         "CHECK_INTERVAL_SECONDS": 300,  # Check every 5 minutes
         "ESCALATION_ENABLED": True,
     },
+
+    # Idempotency Configuration
+    "IDEMPOTENCY": {
+        "DEFAULT_CACHE_TTL": 60,    # Default cache TTL (60 seconds)
+        "PAYMENT_CACHE_TTL": 300,   # Payment operation TTL (5 minutes)
+        "WEBHOOK_CACHE_TTL": 60,    # Webhook idempotency TTL
+    },
+
+    # Security Thresholds
+    "SECURITY": {
+        "RATE_LIMIT_WINDOW": 60,              # Rate limit window (seconds)
+        "RATE_LIMIT_MAX": 100,                # Max requests per window
+        "TEMP_BAN_HOURS": 1,                  # Temporary IP ban duration
+        "PERM_BAN_THRESHOLD": 5,              # Violations before permanent ban
+        "SUSPICIOUS_IP_CACHE_TIMEOUT": 86400, # 24 hours
+        "INJECTION_BAN_HOURS": 24,            # Injection attempt ban duration
+        "FAILED_LOGIN_THRESHOLD": 5,
+    },
 }
 ```
+
+### Centralized Configuration Module
+
+All self-healing configuration is centralized in `shopping/services/self_healing/config.py`.
+This module provides type-safe configuration classes that load from Django settings.
+
+```python
+# Usage example
+from shopping.services.self_healing.config import (
+    get_sla_thresholds,
+    get_idempotency_config,
+    get_security_thresholds,
+    get_notification_limits,
+)
+
+# Get SLA threshold for payment domain
+sla = get_sla_thresholds()
+payment_threshold = sla.get_threshold("payment")  # timedelta(hours=1)
+
+# Get idempotency TTL
+idempotency = get_idempotency_config()
+ttl = idempotency.payment_cache_ttl  # 300 seconds
+
+# Get security thresholds
+security = get_security_thresholds()
+ban_hours = security.temporary_ban_hours  # 1 hour
+```
+
+**Configuration Classes:**
+
+| Class | Purpose | Key Settings |
+|-------|---------|--------------|
+| `SLAThresholds` | Recovery time SLA by domain | `payment_hours`, `point_hours`, etc. |
+| `IdempotencyConfig` | Cache TTL for idempotency | `default_cache_ttl`, `payment_cache_ttl` |
+| `SecurityThresholds` | Security violation handling | `temporary_ban_hours`, `injection_ban_hours` |
+| `NotificationLimits` | Message formatting limits | `description_max_length`, `slack_block_text_limit` |
+| `SlackChannels` | Alert channel routing | `critical_channel`, `high_channel` |
 
 ### Environment Variables
 

@@ -310,13 +310,23 @@ Attempt 4 failed → Move to DLQ
 
 ### Configuration
 
+All retry configuration is centralized in `shopping/services/self_healing/config.py`.
+Configuration can be overridden via Django `settings.SELF_HEALING` dict.
+
 ```python
-RETRY_CONFIG = {
-    "MAX_ATTEMPTS": 3,           # Maximum retry attempts
-    "BACKOFF_BASE": 4,           # Base for exponential (4^n seconds)
-    "BACKOFF_MAX": 180,          # Maximum wait time (3 minutes)
-    "JITTER_PERCENT": 25,        # ±25% random jitter
+# settings.py (or settings/components/self_healing.py)
+SELF_HEALING = {
+    "RETRY": {
+        "MAX_ATTEMPTS": 3,           # Maximum retry attempts
+        "BACKOFF_BASE": 4,           # Base for exponential (4^n seconds)
+        "BACKOFF_MAX": 180,          # Maximum wait time (3 minutes)
+        "JITTER_PERCENT": 25,        # ±25% random jitter
+    },
 }
+
+# In code, use the config module:
+from shopping.services.self_healing.config import get_config
+config = get_config()
 ```
 
 ### Why Jitter?

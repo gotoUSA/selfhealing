@@ -9,6 +9,21 @@ Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md (§7, §8)
 Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §7, §9)
 """
 
+from .config import (
+    SelfHealingConfig,
+    SLAThresholds,
+    IdempotencyConfig,
+    SecurityThresholds,
+    NotificationLimits,
+    SlackChannels,
+    get_config,
+    reload_config,
+    get_sla_thresholds,
+    get_idempotency_config,
+    get_security_thresholds,
+    get_notification_limits,
+    get_slack_channels,
+)
 from .retry_handler import (
     RetryHandler,
     RetryConfig,
@@ -95,6 +110,20 @@ from .security_notification_service import (
 )
 
 __all__ = [
+    # Configuration (centralized constants)
+    "SelfHealingConfig",
+    "SLAThresholds",
+    "IdempotencyConfig",
+    "SecurityThresholds",
+    "NotificationLimits",
+    "SlackChannels",
+    "get_config",
+    "reload_config",
+    "get_sla_thresholds",
+    "get_idempotency_config",
+    "get_security_thresholds",
+    "get_notification_limits",
+    "get_slack_channels",
     # Retry
     "RetryHandler",
     "RetryConfig",

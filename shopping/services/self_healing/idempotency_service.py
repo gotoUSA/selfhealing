@@ -204,12 +204,6 @@ class IdempotencyService:
     idempotency checking.
     """
 
-    # Default TTL for cache-based idempotency (60 seconds)
-    DEFAULT_CACHE_TTL = 60
-
-    # Extended TTL for payment operations (5 minutes)
-    PAYMENT_CACHE_TTL = 300
-
     def __init__(self, cache_ttl: int | None = None):
         """
         Initialize the idempotency service.
@@ -217,7 +211,22 @@ class IdempotencyService:
         Args:
             cache_ttl: Custom cache TTL in seconds
         """
-        self.cache_ttl = cache_ttl or self.DEFAULT_CACHE_TTL
+        from shopping.services.self_healing.config import get_idempotency_config
+
+        config = get_idempotency_config()
+        self._default_cache_ttl = config.default_cache_ttl
+        self._payment_cache_ttl = config.payment_cache_ttl
+        self.cache_ttl = cache_ttl or self._default_cache_ttl
+
+    @property
+    def DEFAULT_CACHE_TTL(self) -> int:
+        """Default TTL for cache-based idempotency (for backward compatibility)."""
+        return self._default_cache_ttl
+
+    @property
+    def PAYMENT_CACHE_TTL(self) -> int:
+        """Extended TTL for payment operations (for backward compatibility)."""
+        return self._payment_cache_ttl
 
     def check_payment(
         self,

@@ -33,7 +33,7 @@ REVIEW_DATE = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 class Colors:
     """ANSI color codes for terminal output."""
-    
+
     GREEN = "\033[92m"
     RED = "\033[91m"
     YELLOW = "\033[93m"
@@ -71,6 +71,7 @@ def print_info(message: str) -> None:
 # Security Checks
 # =============================================================================
 
+
 class SecurityReview:
     """
     Comprehensive security review for self-healing system.
@@ -95,22 +96,26 @@ class SecurityReview:
             self.passed += 1
         else:
             self.failed += 1
-        self.results.append({
-            "category": category,
-            "check": check,
-            "passed": passed,
-            "details": details,
-        })
+        self.results.append(
+            {
+                "category": category,
+                "check": check,
+                "passed": passed,
+                "details": details,
+            }
+        )
 
     def record_warning(self, category: str, message: str):
         """Record a warning."""
         self.warnings += 1
-        self.results.append({
-            "category": category,
-            "check": "WARNING",
-            "passed": None,
-            "details": message,
-        })
+        self.results.append(
+            {
+                "category": category,
+                "check": "WARNING",
+                "passed": None,
+                "details": message,
+            }
+        )
 
     def check_security_violation_service(self) -> None:
         """Check security violation service implementation."""
@@ -132,11 +137,7 @@ class SecurityReview:
                     all_mapped = False
                     unmapped.append(vtype.value)
 
-            print_check(
-                "All violation types have severity mapping",
-                all_mapped,
-                f"Unmapped: {unmapped}" if unmapped else ""
-            )
+            print_check("All violation types have severity mapping", all_mapped, f"Unmapped: {unmapped}" if unmapped else "")
             self.record_result("violation_handling", "severity_mapping", all_mapped)
 
             # Check 2: Critical violations never retry
@@ -190,15 +191,8 @@ class SecurityReview:
             # Check 2: Multi-channel support
             channels = list(NotificationChannel)
             expected_channels = ["slack", "email", "sms", "pagerduty"]
-            has_channels = all(
-                any(c.value.lower() == expected for c in channels)
-                for expected in expected_channels
-            )
-            print_check(
-                "Multi-channel notification support",
-                has_channels,
-                f"Available: {[c.value for c in channels]}"
-            )
+            has_channels = all(any(c.value.lower() == expected for c in channels) for expected in expected_channels)
+            print_check("Multi-channel notification support", has_channels, f"Available: {[c.value for c in channels]}")
             self.record_result("notifications", "multi_channel", has_channels)
 
             # Check 3: Dry-run mode available
@@ -228,11 +222,7 @@ class SecurityReview:
             model_fields = [f.name for f in SecurityIncident._meta.get_fields()]
             has_required = all(f in model_fields for f in required_fields)
             missing = [f for f in required_fields if f not in model_fields]
-            print_check(
-                "SecurityIncident has required fields",
-                has_required,
-                f"Missing: {missing}" if missing else ""
-            )
+            print_check("SecurityIncident has required fields", has_required, f"Missing: {missing}" if missing else "")
             self.record_result("model", "required_fields", has_required)
 
             # Check 2: Severity choices exist
@@ -258,11 +248,7 @@ class SecurityReview:
 
             # Check 1: ForensicContext sanitizes sensitive data
             # Look for sanitization methods
-            has_sanitize = any(
-                "saniti" in method.lower()
-                for method in dir(ForensicContext)
-                if not method.startswith("_")
-            )
+            has_sanitize = any("saniti" in method.lower() for method in dir(ForensicContext) if not method.startswith("_"))
 
             if not has_sanitize:
                 print_warning("No explicit sanitization method found in ForensicContext")
@@ -295,9 +281,10 @@ class SecurityReview:
 
             # Check 1: Circuit breaker force operations require user tracking
             service = CircuitBreakerService()
-            
+
             # Check method signatures for user parameter
             import inspect
+
             force_open_sig = inspect.signature(service.force_open)
             has_opened_by = "opened_by" in force_open_sig.parameters
             print_check("force_open tracks who opened", has_opened_by)
@@ -347,9 +334,7 @@ class SecurityReview:
             self.record_result("audit_trail", "resolved_at", has_resolved)
 
             # Check 2: Soft-delete implemented (ARCHIVED status)
-            has_archived = hasattr(FailedOperation, "Status") and hasattr(
-                FailedOperation.Status, "ARCHIVED"
-            )
+            has_archived = hasattr(FailedOperation, "Status") and hasattr(FailedOperation.Status, "ARCHIVED")
             print_check("Soft-delete (ARCHIVED status) implemented", has_archived)
             self.record_result("audit_trail", "soft_delete", has_archived)
 
@@ -389,16 +374,11 @@ class SecurityReview:
 
             # Check 1: IP logging capability
             has_ip_logging = hasattr(service, "log_suspicious_ip") or any(
-                "ip" in method.lower() and "log" in method.lower()
-                for method in dir(service)
-                if not method.startswith("_")
+                "ip" in method.lower() and "log" in method.lower() for method in dir(service) if not method.startswith("_")
             )
 
             # Check for any IP-related methods
-            ip_methods = [
-                m for m in dir(service)
-                if not m.startswith("_") and "ip" in m.lower()
-            ]
+            ip_methods = [m for m in dir(service) if not m.startswith("_") and "ip" in m.lower()]
             print_info(f"IP-related methods: {ip_methods}")
 
             print_check("IP management methods exist", len(ip_methods) > 0)
@@ -406,9 +386,7 @@ class SecurityReview:
 
             # Check 2: Temporary ban capability
             has_temp_ban = any(
-                "ban" in method.lower() or "block" in method.lower()
-                for method in dir(service)
-                if not method.startswith("_")
+                "ban" in method.lower() or "block" in method.lower() for method in dir(service) if not method.startswith("_")
             )
             print_check("Temporary ban capability", has_temp_ban)
             self.record_result("ip_management", "temp_ban", has_temp_ban)

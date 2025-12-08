@@ -104,9 +104,7 @@ class FailureInjector:
             "total_calls": self.total_calls,
             "failed_calls": self.failed_calls,
             "success_calls": self.total_calls - self.failed_calls,
-            "actual_failure_rate": (
-                self.failed_calls / self.total_calls if self.total_calls > 0 else 0
-            ),
+            "actual_failure_rate": (self.failed_calls / self.total_calls if self.total_calls > 0 else 0),
         }
 
 
@@ -187,9 +185,7 @@ class TestRandomFailureInjection:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.dlq_service = DLQService(
-            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
-        )
+        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
 
     def test_dlq_captures_random_failures(self):
         """
@@ -277,14 +273,10 @@ class TestRandomFailureInjection:
         failure_count = sum(1 for r in results if not r["success"])
 
         # At least 50% should succeed (with 30% failure rate, expect ~70%)
-        assert success_count >= batch_size * 0.5, (
-            f"Too many failures: {failure_count}/{batch_size}"
-        )
+        assert success_count >= batch_size * 0.5, f"Too many failures: {failure_count}/{batch_size}"
 
         # All failures in DLQ
-        dlq_count = FailedOperation.objects.filter(
-            failure_type="BATCH_CHAOS_FAILURE"
-        ).count()
+        dlq_count = FailedOperation.objects.filter(failure_type="BATCH_CHAOS_FAILURE").count()
         assert dlq_count == failure_count
 
         print(f"✓ Batch test: {success_count} succeeded, {failure_count} in DLQ")
@@ -309,9 +301,7 @@ class TestLatencyInjection:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.dlq_service = DLQService(
-            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
-        )
+        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
 
     def test_operations_complete_under_latency(self):
         """
@@ -348,9 +338,7 @@ class TestLatencyInjection:
 
         # Total time should be reasonable (num_ops * max_latency + overhead)
         max_expected_time = (num_operations * max_latency_ms / 1000) + 5  # 5s overhead
-        assert elapsed_time < max_expected_time, (
-            f"Operations too slow: {elapsed_time:.2f}s > {max_expected_time:.2f}s"
-        )
+        assert elapsed_time < max_expected_time, f"Operations too slow: {elapsed_time:.2f}s > {max_expected_time:.2f}s"
 
         avg_latency = stats["total_latency_ms"] / stats["total_calls"]
         print(f"✓ Latency test: avg={avg_latency:.1f}ms, total={elapsed_time:.2f}s")
@@ -384,9 +372,7 @@ class TestLatencyInjection:
         throughput = num_entries / elapsed_time
 
         # Verify all entries exist
-        count = FailedOperation.objects.filter(
-            failure_type="PERFORMANCE_TEST"
-        ).count()
+        count = FailedOperation.objects.filter(failure_type="PERFORMANCE_TEST").count()
         assert count == num_entries
 
         print(f"✓ Performance test: {throughput:.1f} writes/sec, {elapsed_time:.2f}s total")
@@ -411,9 +397,7 @@ class TestConcurrentFailures:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.dlq_config = DLQConfig(
-            enabled=True, retention_days=30, max_replay_attempts=2
-        )
+        self.dlq_config = DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
 
     def test_concurrent_dlq_writes(self):
         """
@@ -456,9 +440,7 @@ class TestConcurrentFailures:
         assert success_count == num_orders, f"Expected {num_orders} successes, got {success_count}"
 
         # Verify entries in database
-        db_count = FailedOperation.objects.filter(
-            failure_type="CONCURRENT_TEST"
-        ).count()
+        db_count = FailedOperation.objects.filter(failure_type="CONCURRENT_TEST").count()
         assert db_count == num_orders
 
         print(f"✓ Concurrent test: {num_orders} entries written from {num_threads} threads")
@@ -496,10 +478,7 @@ class TestConcurrentFailures:
                 return {"operation_id": operation_id, "failed": False, "dlq_stored": False}
 
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [
-                executor.submit(simulate_operation, i)
-                for i in range(num_operations)
-            ]
+            futures = [executor.submit(simulate_operation, i) for i in range(num_operations)]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -516,9 +495,7 @@ class TestConcurrentFailures:
         assert dlq_stored_count == failed_count
 
         # Verify database
-        db_count = FailedOperation.objects.filter(
-            failure_type="CONCURRENT_MIXED_TEST"
-        ).count()
+        db_count = FailedOperation.objects.filter(failure_type="CONCURRENT_MIXED_TEST").count()
         assert db_count == failed_count
 
         print(f"✓ Mixed concurrent test: {failed_count} failures, all in DLQ")
@@ -586,9 +563,7 @@ class TestCircuitBreakerStress:
                 assert state == CircuitState.CLOSED
 
         # Verify only one record exists for this service
-        cb_count = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).count()
+        cb_count = CircuitBreakerState.objects.filter(service_name=service_name).count()
         assert cb_count == 1
 
         print(f"✓ Rapid transition test: {num_transitions} transitions completed")
@@ -679,9 +654,7 @@ class TestRecoveryStability:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.dlq_service = DLQService(
-            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
-        )
+        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
 
     def test_dlq_state_consistency_after_failures(self):
         """
