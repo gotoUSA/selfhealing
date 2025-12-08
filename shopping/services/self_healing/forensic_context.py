@@ -139,10 +139,19 @@ class ForensicContext:
             # External System
             "external_request_id": self.external_request_id,
             "external_response_code": self.external_response_code,
-            "external_response_body": self.external_response_body[:5000] if self.external_response_body else "",
+            "external_response_body": self._truncate_response_body(self.external_response_body),
             # Extra
             **self.extra,
         }
+
+    @staticmethod
+    def _truncate_response_body(body: str) -> str:
+        """Truncate response body to configured max length."""
+        if not body:
+            return ""
+        from shopping.services.self_healing.config import get_forensic_settings
+        max_length = get_forensic_settings().response_body_max_length
+        return body[:max_length]
 
     def add_retry_attempt(
         self,
@@ -160,11 +169,13 @@ class ForensicContext:
             error_message: Human-readable error message
             backoff_seconds: Seconds waited before this attempt
         """
+        from shopping.services.self_healing.config import get_forensic_settings
+        max_length = get_forensic_settings().error_message_max_length
         self.retry_history.append(
             RetryAttempt(
                 attempt=attempt,
                 error_code=error_code,
-                error_message=error_message[:500],
+                error_message=error_message[:max_length],
                 attempted_at=timezone.now().isoformat(),
                 backoff_seconds=backoff_seconds,
             )
@@ -256,8 +267,10 @@ class ForensicContextBuilder:
             request: Django HttpRequest object
         """
         if hasattr(request, "META"):
+            from shopping.services.self_healing.config import get_forensic_settings
+            max_length = get_forensic_settings().user_agent_max_length
             self._context.client_ip = self._get_client_ip(request)
-            self._context.user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+            self._context.user_agent = request.META.get("HTTP_USER_AGENT", "")[:max_length]
             self._context.session_id = request.session.session_key if hasattr(request, "session") else ""
         return self
 
@@ -297,9 +310,11 @@ class ForensicContextBuilder:
             response_code: HTTP status code or error code
             response_body: Response body (will be truncated)
         """
+        from shopping.services.self_healing.config import get_forensic_settings
+        max_length = get_forensic_settings().response_body_max_length
         self._context.external_request_id = request_id
         self._context.external_response_code = response_code
-        self._context.external_response_body = response_body[:5000]
+        self._context.external_response_body = response_body[:max_length]
         return self
 
     def with_state_before(

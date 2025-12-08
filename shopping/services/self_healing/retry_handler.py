@@ -73,7 +73,7 @@ class RetryConfig:
     @classmethod
     def from_settings(cls, domain: str = "default") -> "RetryConfig":
         """
-        Load configuration from Django settings.
+        Load configuration from Django settings via centralized config.
 
         Args:
             domain: Domain name for per-domain overrides
@@ -81,16 +81,21 @@ class RetryConfig:
         Returns:
             RetryConfig instance
         """
+        from shopping.services.self_healing.config import get_retry_settings, get_dlq_settings
+
+        retry_settings = get_retry_settings()
+        dlq_settings = get_dlq_settings()
+
+        # Per-domain overrides
         self_healing = getattr(settings, "SELF_HEALING", {})
-        retry_config = self_healing.get("RETRY", {})
         domain_config = self_healing.get("DOMAIN_CONFIG", {}).get(domain, {})
 
         return cls(
-            max_attempts=domain_config.get("max_attempts", retry_config.get("MAX_ATTEMPTS", 3)),
-            backoff_base=domain_config.get("backoff_base", retry_config.get("BACKOFF_BASE", 4)),
-            backoff_max=domain_config.get("backoff_max", retry_config.get("BACKOFF_MAX", 180)),
-            jitter_percent=retry_config.get("JITTER_PERCENT", 25),
-            enable_dlq=self_healing.get("DLQ", {}).get("ENABLED", True),
+            max_attempts=domain_config.get("max_attempts", retry_settings.max_attempts),
+            backoff_base=domain_config.get("backoff_base", retry_settings.backoff_base),
+            backoff_max=domain_config.get("backoff_max", retry_settings.backoff_max),
+            jitter_percent=retry_settings.jitter_percent,
+            enable_dlq=dlq_settings.enabled,
             domain=domain,
         )
 

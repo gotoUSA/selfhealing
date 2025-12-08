@@ -51,21 +51,19 @@ class CircuitBreakerConfig:
 
     @classmethod
     def from_settings(cls) -> "CircuitBreakerConfig":
-        """Load configuration from Django settings."""
-        self_healing = getattr(settings, "SELF_HEALING", {})
-        cb_config = self_healing.get("CIRCUIT_BREAKER", {})
-        governance = self_healing.get("GOVERNANCE", {})
+        """Load configuration from Django settings via centralized config."""
+        from shopping.services.self_healing.config import get_circuit_breaker_settings
 
+        cb_settings = get_circuit_breaker_settings()
         return cls(
-            enabled=cb_config.get("ENABLED", False),
-            failure_threshold=cb_config.get("FAILURE_THRESHOLD", 5),
-            recovery_timeout=cb_config.get("RECOVERY_TIMEOUT", 60),
-            success_threshold=cb_config.get("SUCCESS_THRESHOLD", 2),
-            # Governance
-            manual_override_ttl_minutes=governance.get("MANUAL_OVERRIDE_TTL_MINUTES", 90),
-            half_open_request_limit=governance.get("HALF_OPEN_REQUEST_LIMIT", 10),
-            max_pending_duration_hours=governance.get("MAX_PENDING_DURATION_HOURS", 4),
-            max_retry_lifetime_hours=governance.get("MAX_RETRY_LIFETIME_HOURS", 24),
+            enabled=cb_settings.enabled,
+            failure_threshold=cb_settings.failure_threshold,
+            recovery_timeout=cb_settings.recovery_timeout,
+            success_threshold=cb_settings.success_threshold,
+            manual_override_ttl_minutes=cb_settings.manual_override_ttl_minutes,
+            half_open_request_limit=cb_settings.half_open_request_limit,
+            max_pending_duration_hours=cb_settings.max_pending_duration_hours,
+            max_retry_lifetime_hours=cb_settings.max_retry_lifetime_hours,
         )
 
 

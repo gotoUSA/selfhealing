@@ -37,7 +37,7 @@ class BackoffConfig:
     @classmethod
     def from_settings(cls, domain: str | None = None) -> "BackoffConfig":
         """
-        Load configuration from Django settings.
+        Load configuration from Django settings via centralized config.
 
         Args:
             domain: Optional domain for per-domain overrides
@@ -45,19 +45,21 @@ class BackoffConfig:
         Returns:
             BackoffConfig with merged settings
         """
-        self_healing_config = getattr(settings, "SELF_HEALING", {})
-        retry_config = self_healing_config.get("RETRY", {})
+        from shopping.services.self_healing.config import get_retry_settings
 
-        # Default values
+        retry_settings = get_retry_settings()
+
+        # Default values from centralized config
         config = cls(
-            base=retry_config.get("BACKOFF_BASE", 4),
-            max_delay=retry_config.get("BACKOFF_MAX", 180),
-            jitter_percent=retry_config.get("JITTER_PERCENT", 25),
-            min_delay=retry_config.get("MIN_DELAY", 1),
+            base=retry_settings.backoff_base,
+            max_delay=retry_settings.backoff_max,
+            jitter_percent=retry_settings.jitter_percent,
+            min_delay=retry_settings.min_delay,
         )
 
         # Apply per-domain overrides if available
         if domain:
+            self_healing_config = getattr(settings, "SELF_HEALING", {})
             domain_configs = self_healing_config.get("DOMAIN_CONFIG", {})
             domain_config = domain_configs.get(domain, {})
             if "backoff_base" in domain_config:

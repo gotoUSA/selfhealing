@@ -49,14 +49,14 @@ class DLQConfig:
 
     @classmethod
     def from_settings(cls) -> "DLQConfig":
-        """Load configuration from Django settings."""
-        self_healing = getattr(settings, "SELF_HEALING", {})
-        dlq_config = self_healing.get("DLQ", {})
+        """Load configuration from Django settings via centralized config."""
+        from shopping.services.self_healing.config import get_dlq_settings
 
+        dlq_settings = get_dlq_settings()
         return cls(
-            enabled=dlq_config.get("ENABLED", True),
-            retention_days=dlq_config.get("RETENTION_DAYS", 30),
-            max_replay_attempts=dlq_config.get("MAX_REPLAY_ATTEMPTS", 2),
+            enabled=dlq_settings.enabled,
+            retention_days=dlq_settings.retention_days,
+            max_replay_attempts=dlq_settings.max_replay_attempts,
         )
 
 

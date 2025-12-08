@@ -229,6 +229,141 @@ class NotificationLimits:
 
 
 # =============================================================================
+# Retry Configuration
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class RetrySettings:
+    """
+    Retry behavior configuration.
+
+    Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §8 (Retry Strategy)
+    """
+
+    max_attempts: int = 3
+    backoff_base: int = 4  # Base for exponential (4^n seconds)
+    backoff_max: int = 180  # Maximum wait time (3 minutes)
+    jitter_percent: int = 25  # ±25% random jitter
+    min_delay: int = 1  # Minimum delay in seconds
+
+    @classmethod
+    def from_settings(cls) -> "RetrySettings":
+        """Load retry configuration from Django settings."""
+        self_healing = getattr(settings, "SELF_HEALING", {})
+        retry_config = self_healing.get("RETRY", {})
+
+        return cls(
+            max_attempts=retry_config.get("MAX_ATTEMPTS", 3),
+            backoff_base=retry_config.get("BACKOFF_BASE", 4),
+            backoff_max=retry_config.get("BACKOFF_MAX", 180),
+            jitter_percent=retry_config.get("JITTER_PERCENT", 25),
+            min_delay=retry_config.get("MIN_DELAY", 1),
+        )
+
+
+# =============================================================================
+# Circuit Breaker Configuration
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class CircuitBreakerSettings:
+    """
+    Circuit breaker configuration.
+
+    Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §10 (Circuit Breaker Policy)
+    """
+
+    enabled: bool = False
+    failure_threshold: int = 5
+    recovery_timeout: int = 60  # seconds
+    success_threshold: int = 2
+    manual_override_ttl_minutes: int = 90  # Default 90 min, max recommended 180
+    half_open_request_limit: int = 10  # Max requests allowed in half-open state
+    max_pending_duration_hours: int = 4  # SLA for pending DLQ items
+    max_retry_lifetime_hours: int = 24  # Max time to attempt retries
+
+    @classmethod
+    def from_settings(cls) -> "CircuitBreakerSettings":
+        """Load circuit breaker configuration from Django settings."""
+        self_healing = getattr(settings, "SELF_HEALING", {})
+        cb_config = self_healing.get("CIRCUIT_BREAKER", {})
+        governance = self_healing.get("GOVERNANCE", {})
+
+        return cls(
+            enabled=cb_config.get("ENABLED", False),
+            failure_threshold=cb_config.get("FAILURE_THRESHOLD", 5),
+            recovery_timeout=cb_config.get("RECOVERY_TIMEOUT", 60),
+            success_threshold=cb_config.get("SUCCESS_THRESHOLD", 2),
+            manual_override_ttl_minutes=governance.get("MANUAL_OVERRIDE_TTL_MINUTES", 90),
+            half_open_request_limit=governance.get("HALF_OPEN_REQUEST_LIMIT", 10),
+            max_pending_duration_hours=governance.get("MAX_PENDING_DURATION_HOURS", 4),
+            max_retry_lifetime_hours=governance.get("MAX_RETRY_LIFETIME_HOURS", 24),
+        )
+
+
+# =============================================================================
+# DLQ Configuration
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class DLQSettings:
+    """
+    Dead Letter Queue configuration.
+
+    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1 (Dead Letter Queue)
+    """
+
+    enabled: bool = True
+    retention_days: int = 30
+    max_replay_attempts: int = 2
+
+    @classmethod
+    def from_settings(cls) -> "DLQSettings":
+        """Load DLQ configuration from Django settings."""
+        self_healing = getattr(settings, "SELF_HEALING", {})
+        dlq_config = self_healing.get("DLQ", {})
+
+        return cls(
+            enabled=dlq_config.get("ENABLED", True),
+            retention_days=dlq_config.get("RETENTION_DAYS", 30),
+            max_replay_attempts=dlq_config.get("MAX_REPLAY_ATTEMPTS", 2),
+        )
+
+
+# =============================================================================
+# Forensic Context Configuration
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ForensicSettings:
+    """
+    Forensic context truncation limits.
+
+    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §6 (Forensic Context)
+    """
+
+    error_message_max_length: int = 500
+    response_body_max_length: int = 5000
+    user_agent_max_length: int = 500
+
+    @classmethod
+    def from_settings(cls) -> "ForensicSettings":
+        """Load forensic configuration from Django settings."""
+        self_healing = getattr(settings, "SELF_HEALING", {})
+        forensic_config = self_healing.get("FORENSIC", {})
+
+        return cls(
+            error_message_max_length=forensic_config.get("ERROR_MESSAGE_MAX_LENGTH", 500),
+            response_body_max_length=forensic_config.get("RESPONSE_BODY_MAX_LENGTH", 5000),
+            user_agent_max_length=forensic_config.get("USER_AGENT_MAX_LENGTH", 500),
+        )
+
+
+# =============================================================================
 # Slack Channel Configuration
 # =============================================================================
 
@@ -278,6 +413,10 @@ class SelfHealingConfig:
     security: SecurityThresholds = field(default_factory=SecurityThresholds)
     notification_limits: NotificationLimits = field(default_factory=NotificationLimits)
     slack_channels: SlackChannels = field(default_factory=SlackChannels)
+    retry: RetrySettings = field(default_factory=RetrySettings)
+    circuit_breaker: CircuitBreakerSettings = field(default_factory=CircuitBreakerSettings)
+    dlq: DLQSettings = field(default_factory=DLQSettings)
+    forensic: ForensicSettings = field(default_factory=ForensicSettings)
 
     @classmethod
     def load(cls) -> "SelfHealingConfig":
@@ -293,6 +432,10 @@ class SelfHealingConfig:
             security=SecurityThresholds.from_settings(),
             notification_limits=NotificationLimits.from_settings(),
             slack_channels=SlackChannels.from_settings(),
+            retry=RetrySettings.from_settings(),
+            circuit_breaker=CircuitBreakerSettings.from_settings(),
+            dlq=DLQSettings.from_settings(),
+            forensic=ForensicSettings.from_settings(),
         )
 
 
@@ -351,3 +494,23 @@ def get_notification_limits() -> NotificationLimits:
 def get_slack_channels() -> SlackChannels:
     """Get Slack channel configuration."""
     return get_config().slack_channels
+
+
+def get_retry_settings() -> RetrySettings:
+    """Get retry configuration."""
+    return get_config().retry
+
+
+def get_circuit_breaker_settings() -> CircuitBreakerSettings:
+    """Get circuit breaker configuration."""
+    return get_config().circuit_breaker
+
+
+def get_dlq_settings() -> DLQSettings:
+    """Get DLQ configuration."""
+    return get_config().dlq
+
+
+def get_forensic_settings() -> ForensicSettings:
+    """Get forensic context configuration."""
+    return get_config().forensic
