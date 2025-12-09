@@ -22,6 +22,11 @@ TEST_USER_COUNT = 1000
 TEST_USER_PREFIX = "load_test_user_"
 TEST_USER_PASSWORD = "testpass123"
 
+# Admin user for control API tests (Stage 14, 15)
+# Create via: python manage.py createsuperuser --username=admin --email=admin@test.com
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
+
 # =============================================================================
 # 사용자 행동 비율 (Weight)
 # =============================================================================

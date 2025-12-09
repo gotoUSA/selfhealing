@@ -18,13 +18,15 @@ Available Stages:
     - Stage 7: Race Conflict (동일 order 동시 결제)
     - Stage 8: Webhook (Webhook 중복/역전)
     - Stage 9: Soak (메모리 누수/커넥션 풀)
+    - Stage 10: Self-Healing Control API
+    - Stage 11: Ramp-up Threshold Discovery
+    - Stage 12: Spike & Recovery
+    - Stage 13: Repeated Spike (Backoff Tuning)
+    - Stage 14: DLQ Replay Verification
+    - Stage 15: Circuit Breaker Auto Transitions
 """
 
 from pathlib import Path
-
-# Legacy imports for backward compatibility
-from .payment_stress import PaymentStressUser
-from .concurrent_order import ConcurrentOrderUser
 
 # 모든 Stage 파일 경로
 STAGES_DIR = Path(__file__).parent
@@ -40,11 +42,15 @@ STAGE_FILES = {
     "stage7_race": STAGES_DIR / "stage7_race_conflict.py",
     "stage8_webhook": STAGES_DIR / "stage8_webhook.py",
     "stage9_soak": STAGES_DIR / "stage9_soak.py",
+    "stage10_self_healing": STAGES_DIR / "stage10_self_healing.py",
+    "stage11_ramp_threshold": STAGES_DIR / "stage11_ramp_threshold.py",
+    "stage12_spike_recovery": STAGES_DIR / "stage12_spike_recovery.py",
+    "stage13_repeated_spike": STAGES_DIR / "stage13_repeated_spike.py",
+    "stage14_dlq_replay": STAGES_DIR / "stage14_dlq_replay.py",
+    "stage15_cb_transitions": STAGES_DIR / "stage15_cb_transitions.py",
 }
 
 __all__ = [
-    "PaymentStressUser",
-    "ConcurrentOrderUser",
     "STAGES_DIR",
     "STAGE_FILES",
 ]

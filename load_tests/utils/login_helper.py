@@ -11,6 +11,8 @@ from load_tests.config import (
     TEST_USER_COUNT,
     TEST_USER_PREFIX,
     TEST_USER_PASSWORD,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD,
     ENDPOINTS,
 )
 
@@ -122,6 +124,17 @@ class LoginHelper:
             return self.login(user_index)
         return True
 
+    def get_auth_header(self) -> dict:
+        """
+        인증 헤더 반환
+
+        Returns:
+            Authorization 헤더가 포함된 dict (토큰이 없으면 빈 dict)
+        """
+        if self.access_token:
+            return {"Authorization": f"Bearer {self.access_token}"}
+        return {}
+
     def _clear_auth(self):
         """인증 정보 초기화"""
         self.is_logged_in = False
@@ -131,3 +144,40 @@ class LoginHelper:
         self.username = None
         if "Authorization" in self.client.headers:
             del self.client.headers["Authorization"]
+
+    def login_as_admin(self) -> bool:
+        """
+        관리자로 로그인 (Control API 접근용)
+
+        Returns:
+            로그인 성공 여부
+        """
+        if self.is_logged_in:
+            return True
+
+        self.username = ADMIN_USERNAME
+
+        request_name = f"{self.stage_name} POST /api/auth/login/ (admin)".strip()
+
+        response = self.client.post(
+            ENDPOINTS["login"],
+            json={
+                "username": ADMIN_USERNAME,
+                "password": ADMIN_PASSWORD,
+            },
+            name=request_name,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            token_data = data.get("token", {})
+            self.access_token = token_data.get("access")
+            self.refresh_token = token_data.get("refresh")
+            self.user_id = data.get("user", {}).get("id")
+
+            if self.access_token:
+                self.client.headers.update({"Authorization": f"Bearer {self.access_token}"})
+                self.is_logged_in = True
+                return True
+
+        return False

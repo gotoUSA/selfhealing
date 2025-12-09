@@ -682,19 +682,12 @@ class ControlAPIService:
         except Exception:
             avg_time_to_recovery = None
 
-        # Count auto-allowed/blocked in last 24h (from audit logs)
-        try:
-            from shopping.models.self_healing_log import SelfHealingLog
-
-            auto_allowed = SelfHealingLog.objects.filter(
-                action="allow", created_at__gte=twenty_four_h_ago, actor__startswith="system"
-            ).count()
-            auto_blocked = SelfHealingLog.objects.filter(
-                action="block", created_at__gte=twenty_four_h_ago, actor__startswith="system"
-            ).count()
-        except Exception:
-            auto_allowed = 0
-            auto_blocked = 0
+        # Count auto-allowed/blocked in last 24h
+        # Note: SelfHealingLog model is not implemented yet.
+        # Audit logs are currently recorded via logger.info in _record_audit().
+        # TODO: Implement persistent SelfHealingLog model for audit trail querying.
+        auto_allowed = 0
+        auto_blocked = 0
 
         # Build per-service metrics
         services_metrics = []

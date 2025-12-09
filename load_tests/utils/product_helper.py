@@ -88,6 +88,15 @@ class ProductHelper:
             return random.choice(ProductHelper._product_ids_cache)
         return None
 
+    def get_random_product(self) -> Optional[Dict[str, Any]]:
+        """랜덤 상품 정보 반환 (캐시에서)"""
+        if not ProductHelper._products_cache:
+            self.ensure_products_cached()
+
+        if ProductHelper._products_cache:
+            return random.choice(ProductHelper._products_cache)
+        return None
+
     def get_random_product_ids(self, count: int = 3) -> List[int]:
         """랜덤 상품 ID 목록 반환 (중복 가능)"""
         if not ProductHelper._product_ids_cache:

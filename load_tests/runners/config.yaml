@@ -92,6 +92,56 @@ stages:
     optional: true  # CI에서는 스킵 가능
     description: "메모리 누수, 커넥션 풀 고갈 탐지"
 
+  stage10_self_healing:
+    file: scenarios/stage10_self_healing.py
+    users: 50
+    spawn_rate: 5
+    duration: "3m"
+    tags: ["self-healing", "control-api"]
+    description: "Self-Healing Control API 기능 검증"
+
+  stage11_ramp_threshold:
+    file: scenarios/stage11_ramp_threshold.py
+    users: 300
+    spawn_rate: 0.25
+    duration: "20m"
+    tags: ["self-healing", "threshold", "ramp"]
+    optional: true
+    description: "시스템 임계점 및 Self-Healing 트리거 포인트 발견"
+
+  stage12_spike_recovery:
+    file: scenarios/stage12_spike_recovery.py
+    users: 500
+    spawn_rate: 50
+    duration: "10m30s"
+    tags: ["self-healing", "spike", "recovery"]
+    description: "급격한 부하 스파이크 후 복구 안정성 검증"
+
+  stage13_repeated_spike:
+    file: scenarios/stage13_repeated_spike.py
+    users: 500
+    spawn_rate: 50
+    duration: "13m30s"
+    tags: ["self-healing", "backoff", "repeated"]
+    optional: true
+    description: "반복 스파이크 시 백오프 누적 방지 검증"
+
+  stage14_dlq_replay:
+    file: scenarios/stage14_dlq_replay.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "dlq", "replay"]
+    description: "DLQ 재처리 정확성 및 데이터 일관성 검증"
+
+  stage15_cb_transitions:
+    file: scenarios/stage15_cb_transitions.py
+    users: 20
+    spawn_rate: 5
+    duration: "5m"
+    tags: ["self-healing", "circuit-breaker", "transitions"]
+    description: "Circuit Breaker 자동 상태 전환 검증"
+
 # 실행 프로파일
 profiles:
   smoke:
@@ -141,6 +191,25 @@ profiles:
       - stage5_rollback
       - stage7_race
     description: "데이터 무결성 테스트만"
+
+  self_healing:
+    stages:
+      - stage0_smoke
+      - stage10_self_healing
+      - stage11_ramp_threshold
+      - stage12_spike_recovery
+      - stage13_repeated_spike
+      - stage14_dlq_replay
+      - stage15_cb_transitions
+    description: "Self-Healing 전체 테스트 (약 60분)"
+
+  self_healing_quick:
+    stages:
+      - stage0_smoke
+      - stage10_self_healing
+      - stage14_dlq_replay
+      - stage15_cb_transitions
+    description: "Self-Healing 빠른 테스트 (약 15분)"
 
   all:
     stages:

@@ -12,9 +12,10 @@
 3. [Load-Induced Tests (Stage 11-13)](#load-induced-tests-stage-11-13)
 4. [Recovery Mechanism Tests (Stage 14-15)](#recovery-mechanism-tests-stage-14-15)
 5. [Fault-Oriented Tests (Stage 16-22)](#fault-oriented-tests-stage-16-22)
-6. [Implementation Priority](#implementation-priority)
-7. [Verification Checklist](#verification-checklist)
-8. [References](#references)
+6. [Observability & Auditing Validation](#observability--auditing-validation) ★ NEW
+7. [Implementation Priority](#implementation-priority)
+8. [Verification Checklist](#verification-checklist)
+9. [References](#references)
 
 ---
 
@@ -360,8 +361,8 @@ Verification:
   - [ ] Alert for webhook delay > threshold
 
 Real-World Case:
-  "Customer pays, webhook delayed, order timeout → customer 
-   sees payment success in bank, order shows failed. 
+  "Customer pays, webhook delayed, order timeout → customer
+   sees payment success in bank, order shows failed.
    Double payment on retry attempt."
 ```
 
@@ -428,6 +429,184 @@ Real-World Case:
    → more retries → entire payment service blocked
    → all customers affected, not just original failures."
 ```
+
+---
+
+## Observability & Auditing Validation
+
+> **"It healed automatically, but who knows, how do we verify, and can we trace it later?"**
+
+The third pillar of Self-Healing: **Detectable → Traceable → Verifiable → Alertable**
+
+### Goals
+
+Every Self-Healing action must be:
+
+| Attribute | Description | Validation |
+|-----------|-------------|------------|
+| **Detectable** | Real-time detection of healing events | Immediately visible on dashboard |
+| **Traceable** | Track when, where, and why it occurred | Full context queryable from logs |
+| **Verifiable** | Prove that recovery actually happened | Before/After state comparison possible |
+| **Alertable** | Auto-notify responsible parties when needed | Alert rules function correctly |
+
+### Verification Checklist
+
+#### 1. Circuit Breaker Audit
+
+- [ ] CB state transition logged with timestamp
+- [ ] Transition reason included (failure_count, manual_override, etc.)
+- [ ] Duration in each state tracked
+- [ ] Prometheus metric `circuit_breaker_transitions_total` accurate
+
+```
+Expected Log Format:
+{
+  "event": "circuit_breaker_transition",
+  "service": "toss_payment",
+  "from_state": "closed",
+  "to_state": "open",
+  "reason": "failure_threshold_exceeded",
+  "failure_count": 5,
+  "timestamp": "2025-12-09T10:30:00Z"
+}
+```
+
+#### 2. DLQ Replay Audit
+
+- [ ] DLQ item creation logged with full context
+- [ ] Replay attempt logged (before count, after count)
+- [ ] Replay result logged (success/failure/rejected)
+- [ ] Idempotent key violation detected and logged
+- [ ] Prometheus metric `replay_outcomes_total` accurate
+
+```
+Expected Log Format:
+{
+  "event": "dlq_replay_completed",
+  "domain": "payment",
+  "replay_type": "batch",
+  "before_pending": 50,
+  "after_pending": 3,
+  "success": 47,
+  "failure": 3,
+  "duration_seconds": 12.5
+}
+```
+
+#### 3. Retry Action Audit
+
+- [ ] Each retry attempt has sequence number
+- [ ] Backoff duration logged
+- [ ] Final outcome logged (success/exhausted/circuit_open)
+- [ ] Prometheus metric `retry_attempts_total` accurate
+
+```
+Expected Log Format:
+{
+  "event": "retry_attempt",
+  "domain": "payment",
+  "operation_id": "op_12345",
+  "attempt": 3,
+  "max_attempts": 5,
+  "backoff_seconds": 8,
+  "outcome": "failure",
+  "error": "PG_TIMEOUT"
+}
+```
+
+#### 4. Alert Differentiation
+
+- [ ] Slow vs Broken alerts distinguished
+- [ ] False positive rate tracked
+- [ ] Alert noise ratio < 10% (actionable alerts)
+- [ ] Severity levels correctly assigned (warning/critical)
+
+| Alert Type | Trigger Condition | Expected Action |
+|------------|-------------------|-----------------|
+| `DLQPendingHigh` | > 10 pending for 5m | Monitor, investigate root cause |
+| `DLQPendingCritical` | > 50 pending for 5m | Immediate action required |
+| `CircuitBreakerOpen` | CB open for 1m | Check downstream service |
+| `RetrySuccessRateLow` | < 70% for 15m | Dev investigation |
+| `SLABreachDetected` | Any SLA breach | Ops escalation |
+
+#### 5. Healing Action Idempotency Proof
+
+- [ ] Each healing action has unique action_id
+- [ ] Duplicate healing attempts detected
+- [ ] No double-recovery (e.g., stock +2 instead of +1)
+- [ ] Audit trail preserved for compliance
+
+### Output Artifacts
+
+#### Dashboard (Grafana or equivalent)
+
+| Dashboard | Purpose | Key Panels |
+|-----------|---------|------------|
+| Self-Healing Overview | Real-time health | CB states, DLQ pending, Retry success rate |
+| DLQ Deep Dive | DLQ analysis | Pending by domain, Growth rate, Age distribution |
+| Circuit Breaker History | CB timeline | State transitions over time, Open duration |
+| Recovery Metrics | SLA tracking | Recovery time P95, SLA breach count |
+
+#### Log Queries (ELK/Kibana or equivalent)
+
+```json
+// Find all CB transitions in last 1 hour
+{
+  "query": "event:circuit_breaker_transition AND @timestamp:[now-1h TO now]",
+  "sort": "@timestamp:desc"
+}
+
+// Find failed replays
+{
+  "query": "event:dlq_replay_completed AND failure:>0"
+}
+
+// Find retry exhaustions
+{
+  "query": "event:retry_attempt AND outcome:exhausted"
+}
+```
+
+#### Alert Rule Paths
+
+| Platform | Configuration Path |
+|----------|-------------------|
+| Prometheus | `scripts/prometheus/self_healing_alerts.yml` |
+| Grafana | `scripts/grafana/alert_rules.json` |
+| Datadog | `scripts/datadog/monitors.tf` |
+| CloudWatch | `scripts/cloudwatch/alarms.yml` |
+
+### Log Structure (JSON Field Map)
+
+```json
+{
+  "timestamp": "ISO8601",
+  "level": "INFO|WARNING|ERROR",
+  "event": "string (event type identifier)",
+  "domain": "payment|point|inventory|webhook|notification",
+  "service": "string (affected service)",
+  "operation_id": "string (unique operation identifier)",
+  "action_id": "string (unique healing action identifier)",
+  "context": {
+    "before_state": {},
+    "after_state": {},
+    "duration_seconds": "float",
+    "attempt": "int",
+    "max_attempts": "int"
+  },
+  "outcome": "success|failure|rejected|exhausted",
+  "error": "string (if applicable)"
+}
+```
+
+### Platform Portability
+
+The current system is based on **Prometheus + Grafana**, but can be easily migrated to other platforms.
+
+For detailed platform migration guides and abstraction layer implementation, see:
+**[Platform Portability Guide](self_healing/3_EXECUTION/PLATFORM_PORTABILITY.md)**
+
+Supported platforms: Datadog, New Relic, AWS CloudWatch, Elastic APM, Splunk, OpenTelemetry
 
 ---
 
