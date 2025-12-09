@@ -142,6 +142,62 @@ stages:
     tags: ["self-healing", "circuit-breaker", "transitions"]
     description: "Circuit Breaker auto state transition verification"
 
+  stage16_db_lock_recovery:
+    file: scenarios/stage16_db_lock_recovery.py
+    users: 100
+    spawn_rate: 20
+    duration: "5m"
+    tags: ["self-healing", "fault", "db-lock"]
+    description: "DB Lock/Deadlock recovery verification"
+
+  stage17_cache_ttl_race:
+    file: scenarios/stage17_cache_ttl_race.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "fault", "cache"]
+    description: "Cache invalidation TTL race condition verification"
+
+  stage18_chain_failure:
+    file: scenarios/stage18_chain_failure.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "fault", "chain"]
+    description: "Service chain failure propagation verification"
+
+  stage19_rollback_failure:
+    file: scenarios/stage19_rollback_failure.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "fault", "rollback"]
+    description: "Rollback failure (double failure) handling verification"
+
+  stage20_delayed_webhook:
+    file: scenarios/stage20_delayed_webhook.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "fault", "webhook"]
+    description: "Delayed/out-of-order webhook handling verification"
+
+  stage21_false_positive:
+    file: scenarios/stage21_false_positive.py
+    users: 50
+    spawn_rate: 10
+    duration: "5m"
+    tags: ["self-healing", "fault", "false-positive"]
+    description: "False positive detection - CB doesn't trigger on transient issues"
+
+  stage22_rate_limit_conflict:
+    file: scenarios/stage22_rate_limit_conflict.py
+    users: 80
+    spawn_rate: 20
+    duration: "5m"
+    tags: ["self-healing", "fault", "rate-limit"]
+    description: "Rate limit conflict - retry doesn't cause self-DDoS"
+
 # Execution profiles
 profiles:
   smoke:
@@ -210,6 +266,25 @@ profiles:
       - stage14_dlq_replay
       - stage15_cb_transitions
     description: "Quick Self-Healing test (~15 minutes)"
+
+  self_healing_fault:
+    stages:
+      - stage0_smoke
+      - stage16_db_lock_recovery
+      - stage17_cache_ttl_race
+      - stage18_chain_failure
+      - stage19_rollback_failure
+      - stage20_delayed_webhook
+      - stage21_false_positive
+      - stage22_rate_limit_conflict
+    description: "Fault-oriented Self-Healing validation (~45 minutes)"
+
+  self_healing_fault_quick:
+    stages:
+      - stage0_smoke
+      - stage21_false_positive
+      - stage22_rate_limit_conflict
+    description: "Quick fault-oriented Self-Healing test (~15 minutes)"
 
   all:
     stages:
