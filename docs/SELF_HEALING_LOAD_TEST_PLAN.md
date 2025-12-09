@@ -1,175 +1,115 @@
-# Self-Healing 부하 테스트 계획
+# Self-Healing Load Test Plan
 
-> Self-Healing 시스템은 "에러 없이 정상 동작하는지" 테스트하는 게 아니라
-> "에러가 날 때는 항상 올바르게 종결되는지" 테스트하는 시스템이다.
-
----
-
-## 📋 목차
-
-1. [현재 상태 분석](#현재-상태-분석)
-2. [부족한 시나리오](#부족한-시나리오)
-3. [신규 테스트 계획](#신규-테스트-계획)
-4. [구현 우선순위](#구현-우선순위)
-5. [검증 항목 체크리스트](#검증-항목-체크리스트)
+> A Self-Healing system is not tested for "working without errors"
+> but for "always terminating correctly when errors occur."
 
 ---
 
-## 현재 상태 분석
+## 📋 Table of Contents
 
-### ✅ 갖춘 테스트
-
-| Stage | 테스트 | Self-Healing 관점 |
-|-------|--------|------------------|
-| 2 | Idempotency | idempotent key 검증 ✓ |
-| 3 | Latency | 지연 시 retry 발동 ✓ |
-| 5 | Rollback | 실패 시 재고 복구 ✓ |
-| 6 | Chaos | 랜덤 장애 복원력 ✓ |
-| 9 | Soak | 메모리/리소스 누수 ✓ |
-| 10 | Self-Healing | Control API 기능 ✓ |
-
-### ❌ 부족한 시나리오
-
-| 패턴 | 목적 | 현재 상태 |
-|------|------|----------|
-| Ramp-up | 임계점 탐색 | ❌ 없음 |
-| Spike → Recovery | 회복 안정성 | ❌ 없음 |
-| Spike 반복 | backoff 튜닝 | ❌ 없음 |
-| DLQ 검증 | 재처리 정합성 | ❌ 없음 |
-| Circuit Breaker 상태 전이 | 자동 open/close | ❌ 없음 |
+1. [Current State Analysis](#current-state-analysis)
+2. [Test Architecture Overview](#test-architecture-overview)
+3. [Load-Induced Tests (Stage 11-13)](#load-induced-tests-stage-11-13)
+4. [Recovery Mechanism Tests (Stage 14-15)](#recovery-mechanism-tests-stage-14-15)
+5. [Fault-Oriented Tests (Stage 16-22)](#fault-oriented-tests-stage-16-22)
+6. [Implementation Priority](#implementation-priority)
+7. [Verification Checklist](#verification-checklist)
+8. [References](#references)
 
 ---
 
-## 부족한 시나리오
+## Current State Analysis
 
-### 1. Ramp-up (점진적 증가)
+### ✅ Existing Tests
 
-```
-목적: 임계점 탐색 - 언제부터 retry가 발동되는가?
+| Stage | Test | Self-Healing Aspect |
+|-------|------|---------------------|
+| 2 | Idempotency | Idempotent key validation ✓ |
+| 3 | Latency | Retry on delay ✓ |
+| 5 | Rollback | Stock recovery on failure ✓ |
+| 6 | Chaos | Random failure resilience ✓ |
+| 9 | Soak | Memory/resource leak detection ✓ |
+| 10 | Self-Healing | Control API functionality ✓ |
 
-부하 패턴:
-  0분: 10 users
-  5분: 50 users
-  10분: 100 users
-  15분: 200 users
-  20분: 300 users
+### ❌ Missing Scenarios (Original)
 
-관찰 항목:
-  - retry 발생 시점
-  - 응답 시간 증가 추이
-  - 에러율 변화
-  - Circuit Breaker 상태 변화
-```
+| Pattern | Purpose | Status |
+|---------|---------|--------|
+| Ramp-up | Threshold discovery | ❌ Missing |
+| Spike → Recovery | Recovery stability | ❌ Missing |
+| Repeated Spike | Backoff tuning | ❌ Missing |
+| DLQ Verification | Reprocessing consistency | ❌ Missing |
+| Circuit Breaker Transitions | Auto open/close | ❌ Missing |
 
-### 2. Spike (급격한 폭발)
+### 🔴 Critical Missing Scenarios (Fault-Oriented)
 
-```
-목적: Circuit Breaker가 제때 열리는가?
+| Category | Risk | Test Status |
+|----------|------|-------------|
+| Stateful Failures (DB Lock, Deadlock, Long Tx) | Recovery failure, stock inconsistency, order stuck | ❌ Missing |
+| Cache Sync / TTL Strategy | Stale read, write-then-cache-hit race | ❌ Missing |
+| Service Chain Failover | Auth → Payment → Order coupling | ❌ Missing |
+| Rollback Failure (Double Failure) | Unclear "secondary failure" handling | ❌ Missing |
+| Delayed Success / Late Webhook | PG success but webhook 10min delayed | ❌ Missing |
+| Self-Healing False Positive | Normal but circuit opens | ❌ Missing |
+| Rate-Limited Environment Backoff | Retry worsens rate-limit | ❌ Missing |
 
-부하 패턴:
-  0초: 0 users
-  5초: 500 users (즉시 투입)
-  유지: 2분
-  
-관찰 항목:
-  - Circuit Breaker 열림 타이밍
-  - 열린 후 요청 차단 비율
-  - DLQ 적재 건수
-```
+---
 
-### 3. Spike → Recovery (회복 테스트)
-
-```
-목적: 폭발 후 정상화 - reset이 올바른가?
-
-부하 패턴:
-  Phase 1 (Spike): 0→500 users, 2분
-  Phase 2 (Cooldown): 500→50 users, 3분
-  Phase 3 (Normal): 50 users 유지, 5분
-
-관찰 항목:
-  - Circuit Breaker 닫힘 타이밍
-  - DLQ 재처리 시작 시점
-  - 재처리 후 데이터 정합성
-  - 응답 시간 정상화 시간
-```
-
-### 4. Spike 반복 (Backoff 튜닝)
+## Test Architecture Overview
 
 ```
-목적: 반복 장애 시 backoff가 과하지 않은가?
-
-부하 패턴:
-  Cycle 1: Spike(500) → Recovery(50) → 2분 대기
-  Cycle 2: Spike(500) → Recovery(50) → 2분 대기
-  Cycle 3: Spike(500) → Recovery(50) → 2분 대기
-
-관찰 항목:
-  - 각 사이클별 회복 시간 비교
-  - exponential backoff 누적 여부
-  - 3회차에서 backoff 과다 여부
-```
-
-### 5. DLQ 검증 (재처리 정합성)
-
-```
-목적: DLQ 없이 복구 가능한가? 재처리가 정확한가?
-
-시나리오:
-  1. 의도적으로 결제 실패 유발 (PG timeout 주입)
-  2. DLQ 적재 확인
-  3. PG 정상화
-  4. DLQ replay 트리거
-  5. 재처리 결과 검증
-
-검증 항목:
-  - 재처리 후 중복 결제 없음
-  - idempotent key 정상 작동
-  - 최종 데이터 정합성
-```
-
-### 6. Circuit Breaker 상태 전이 (자동 동작)
-
-```
-목적: 수동 Control이 아닌 자동 전이 검증
-
-시나리오:
-  Phase 1: 정상 트래픽 (closed 상태)
-  Phase 2: 연속 실패 주입 → open 전이 확인
-  Phase 3: recovery_timeout 대기 → half_open 전이
-  Phase 4: 성공 요청 → closed 복귀
-
-검증 항목:
-  - 각 전이 타이밍
-  - half_open에서 제한된 요청 허용
-  - 자동 closed 복귀 조건
+Self-Healing Test Suite
+│
+├── Load-Induced Tests (Stage 11-13)
+│   ├── Stage 11: Ramp-up Threshold Discovery
+│   ├── Stage 12: Spike & Recovery
+│   └── Stage 13: Repeated Spike (Backoff Tuning)
+│
+├── Recovery Mechanism Tests (Stage 14-15)
+│   ├── Stage 14: DLQ Replay Verification
+│   └── Stage 15: Circuit Breaker Auto Transitions
+│
+└── Fault-Oriented Tests (Stage 16-22) ★ NEW
+    │
+    ├── State Faults (16-17)
+    │   ├── Stage 16: DB Lock / Deadlock Recovery
+    │   └── Stage 17: Cache Invalidation TTL Race
+    │
+    ├── Event Faults (18-20)
+    │   ├── Stage 18: Chain Failure Propagation
+    │   ├── Stage 19: Rollback Failure (Secondary Action)
+    │   └── Stage 20: Delayed Webhook Out-of-Order
+    │
+    └── Self-Healing Faults (21-22)
+        ├── Stage 21: False Positive Detection
+        └── Stage 22: Self-Healing + Rate Limit Conflict
 ```
 
 ---
 
-## 신규 테스트 계획
+## Load-Induced Tests (Stage 11-13)
 
-### Stage 11: Ramp-up 임계점 탐색
+### Stage 11: Ramp-up Threshold Discovery
 
 ```python
 # load_tests/scenarios/stage11_ramp_threshold.py
 
-목적: 시스템 임계점과 Self-Healing 발동 시점 탐색
+Purpose: Discover system threshold and Self-Healing trigger points
 
 LoadShape:
-  - LinearRamp: 10 → 300 users over 20분
-  
-수집 지표:
-  - retry_count (분당)
+  - LinearRamp: 10 → 300 users over 20 minutes
+
+Metrics to Collect:
+  - retry_count (per minute)
   - circuit_breaker_state
   - dlq_count
-  - avg_response_time (분당)
-  - error_rate (분당)
-  
-출력:
-  - 임계점 그래프 (users vs metrics)
-  - retry 발동 시작 user 수
-  - CB 전이 시작 user 수
+  - avg_response_time (per minute)
+  - error_rate (per minute)
+
+Output:
+  - Threshold graph (users vs metrics)
+  - User count when retry starts
+  - User count when CB transitions
 ```
 
 ### Stage 12: Spike & Recovery
@@ -177,15 +117,15 @@ LoadShape:
 ```python
 # load_tests/scenarios/stage12_spike_recovery.py
 
-목적: 급격한 부하 후 회복 안정성 검증
+Purpose: Verify recovery stability after sudden load spike
 
 LoadShape:
   Phase 1 (0-30s): 0 → 500 users (spike)
   Phase 2 (30s-2m30s): 500 users (sustain)
   Phase 3 (2m30s-5m30s): 500 → 50 users (ramp-down)
   Phase 4 (5m30s-10m30s): 50 users (stabilize)
-  
-수집 지표:
+
+Metrics to Collect:
   - circuit_breaker_open_time
   - circuit_breaker_close_time
   - dlq_max_count
@@ -193,12 +133,12 @@ LoadShape:
   - data_consistency (before vs after)
 ```
 
-### Stage 13: Repeated Spike (Backoff 튜닝)
+### Stage 13: Repeated Spike (Backoff Tuning)
 
 ```python
 # load_tests/scenarios/stage13_repeated_spike.py
 
-목적: 반복 장애 시 backoff 과다 여부 검증
+Purpose: Verify backoff doesn't over-accumulate on repeated failures
 
 LoadShape:
   3 cycles of:
@@ -206,29 +146,33 @@ LoadShape:
     Sustain: 500 users (1m)
     Recovery: 500 → 50 users (1m)
     Cool: 50 users (2m)
-  
-수집 지표:
+
+Metrics to Collect:
   - recovery_time_per_cycle
   - backoff_duration_cumulative
   - circuit_breaker_transitions
-  - final_state (정상화 확인)
+  - final_state (normalized confirmation)
 ```
 
-### Stage 14: DLQ Replay 검증
+---
+
+## Recovery Mechanism Tests (Stage 14-15)
+
+### Stage 14: DLQ Replay Verification
 
 ```python
 # load_tests/scenarios/stage14_dlq_replay.py
 
-목적: DLQ 재처리 정확성 및 데이터 정합성
+Purpose: Verify DLQ reprocessing accuracy and data consistency
 
-시나리오:
-  Step 1: 결제 시도 100건 (50% 강제 실패)
-  Step 2: DLQ 적재 확인 (50건 예상)
-  Step 3: 강제 실패 해제
-  Step 4: DLQ replay 트리거
-  Step 5: 결과 검증
-  
-검증:
+Scenario:
+  Step 1: Attempt 100 payments (50% forced failure)
+  Step 2: Verify DLQ insertion (expect 50 entries)
+  Step 3: Remove forced failure
+  Step 4: Trigger DLQ replay
+  Step 5: Verify results
+
+Verification:
   - dlq_replayed == dlq_inserted
   - duplicate_payment == 0
   - idempotent_key_violations == 0
@@ -236,137 +180,463 @@ LoadShape:
   - point_after == point_expected
 ```
 
-### Stage 15: Circuit Breaker 자동 전이
+### Stage 15: Circuit Breaker Auto Transitions
 
 ```python
 # load_tests/scenarios/stage15_cb_transitions.py
 
-목적: Circuit Breaker 자동 상태 전이 검증
+Purpose: Verify automatic Circuit Breaker state transitions
 
-시나리오:
-  Phase 1: 정상 요청 → closed 확인
-  Phase 2: 연속 5회 실패 주입 → open 전이 확인
-  Phase 3: recovery_timeout(60s) 대기 → half_open 전이
-  Phase 4: 성공 2회 → closed 복귀
-  
-검증:
-  - 각 전이 정확성
-  - 전이 타이밍 (설정값 준수)
-  - half_open 요청 제한
-  - 전이 로그/audit 기록
+Scenario:
+  Phase 1: Normal requests → confirm closed
+  Phase 2: Inject 5 consecutive failures → confirm open transition
+  Phase 3: Wait recovery_timeout (60s) → confirm half_open transition
+  Phase 4: 2 successful requests → confirm closed return
+
+Verification:
+  - Each transition accuracy
+  - Transition timing (config compliance)
+  - half_open request limiting
+  - Transition audit log
 ```
 
 ---
 
-## 구현 우선순위
+## Fault-Oriented Tests (Stage 16-22)
 
-### Phase 1: 핵심 (1주차)
+> **Key Insight**: "Load breaks systems predictably. Timing breaks systems silently after deployment."
 
-| 순위 | Stage | 사유 |
-|------|-------|------|
-| 1 | Stage 12 | Spike & Recovery - 가장 기본적인 Self-Healing 검증 |
-| 2 | Stage 15 | CB 자동 전이 - Self-Healing 핵심 동작 |
-| 3 | Stage 14 | DLQ Replay - 데이터 정합성 최우선 |
+These tests validate self-healing behavior for **non-load-induced failures** that are often more dangerous in production.
 
-### Phase 2: 고급 (2주차)
+### Stage 16: DB Lock / Deadlock Recovery
 
-| 순위 | Stage | 사유 |
-|------|-------|------|
-| 4 | Stage 11 | Ramp-up - 운영 임계점 파악 |
-| 5 | Stage 13 | Repeated Spike - backoff 튜닝 |
+```python
+# load_tests/scenarios/stage16_db_lock_recovery.py
 
-### Phase 3: config.yaml 업데이트
+Purpose: Verify recovery from database lock contention and deadlocks
+
+Scenario:
+  Step 1: Start Transaction A (SELECT FOR UPDATE on product stock)
+  Step 2: Hold lock for 30 seconds (simulate long transaction)
+  Step 3: Concurrent requests try to update same stock
+  Step 4: Observe timeout handling and retry behavior
+  Step 5: Release lock, verify recovery
+
+Fault Injection:
+  - Long-running transaction (30s lock hold)
+  - Concurrent conflicting transactions
+  - Simulated deadlock (circular dependency)
+
+Verification:
+  - [ ] Lock timeout triggers retry (not crash)
+  - [ ] Deadlock detection and resolution
+  - [ ] No permanent order "pending" state
+  - [ ] Stock consistency after recovery
+  - [ ] Transaction audit log
+
+Real-World Case:
+  "Flash sale: 1000 users hit same product, SELECT FOR UPDATE
+   causes lock queue → timeout cascade → stock becomes negative"
+```
+
+### Stage 17: Cache Invalidation TTL Race
+
+```python
+# load_tests/scenarios/stage17_cache_ttl_race.py
+
+Purpose: Verify cache/DB consistency under TTL race conditions
+
+Scenario:
+  Step 1: Set product price = 10000 (cached, TTL=60s)
+  Step 2: Update price to 15000 in DB
+  Step 3: Immediately request product (before invalidation)
+  Step 4: Verify which price is used for validation
+  Step 5: Wait for TTL expiry, verify consistency
+
+Fault Injection:
+  - Stale cache read after DB write
+  - Cache invalidation delay
+  - Write-through vs write-behind race
+
+Verification:
+  - [ ] Stale price detection mechanism
+  - [ ] Order validation uses correct price
+  - [ ] Cache invalidation on critical updates
+  - [ ] No "price changed" errors on valid orders
+  - [ ] Eventual consistency achieved
+
+Real-World Case:
+  "Admin changes price, customer orders with old cached price,
+   order fails validation → customer complaint"
+```
+
+### Stage 18: Chain Failure Propagation
+
+```python
+# load_tests/scenarios/stage18_chain_failure.py
+
+Purpose: Verify failure handling across service chain (Auth → Order → Payment)
+
+Scenario:
+  Step 1: Auth success → Order creation success → Payment FAILS
+  Step 2: Verify order rollback initiated
+  Step 3: Verify auth session state
+  Step 4: Verify stock restoration
+  Step 5: Test partial success scenarios
+
+Failure Points:
+  Point A: Auth success → Order FAILS
+  Point B: Auth success → Order success → Payment FAILS
+  Point C: Auth success → Order success → Payment success → Webhook FAILS
+
+Verification:
+  - [ ] Each failure point has defined rollback
+  - [ ] No orphaned orders (created but unpaid)
+  - [ ] No orphaned payments (paid but no order)
+  - [ ] Stock correctly restored at each point
+  - [ ] User notification for each failure type
+
+Real-World Case:
+  "Payment succeeded at PG, but internal order creation failed.
+   Customer charged, no order record. Refund required."
+```
+
+### Stage 19: Rollback Failure (Secondary Action)
+
+```python
+# load_tests/scenarios/stage19_rollback_failure.py
+
+Purpose: Verify handling when rollback itself fails (double failure)
+
+Scenario:
+  Step 1: Payment fails → trigger stock rollback
+  Step 2: Inject failure during rollback (DB connection lost)
+  Step 3: Observe secondary failure handling
+  Step 4: Verify recovery mechanism (retry, DLQ, manual queue)
+  Step 5: Final consistency check
+
+Fault Injection:
+  - DB connection failure during rollback
+  - Cache invalidation failure during rollback
+  - Timeout during compensating transaction
+
+Verification:
+  - [ ] Rollback failure is logged/alerted
+  - [ ] Secondary retry mechanism exists
+  - [ ] DLQ captures failed rollback for manual review
+  - [ ] No double-decrement of stock
+  - [ ] Consistency reconciliation job exists
+
+Real-World Case:
+  "Stock -1 (order) → payment fails → rollback (+1) fails
+   → stock shows -1 but no order exists → inventory mismatch"
+```
+
+### Stage 20: Delayed Webhook Out-of-Order
+
+```python
+# load_tests/scenarios/stage20_delayed_webhook.py
+
+Purpose: Verify handling of delayed/out-of-order payment webhooks
+
+Scenario:
+  Step 1: Initiate payment (order status = PENDING)
+  Step 2: PG processes successfully
+  Step 3: Delay webhook delivery by 10 minutes
+  Step 4: Meanwhile, order times out → marked FAILED
+  Step 5: Late webhook arrives with SUCCESS status
+  Step 6: Verify conflict resolution
+
+Timing Variations:
+  - Normal: Payment → Webhook (5s) → Order confirmed
+  - Delayed: Payment → Webhook (10min) → Order already failed
+  - Out-of-order: Cancel webhook arrives before success webhook
+
+Verification:
+  - [ ] Delayed webhook doesn't resurrect failed order
+  - [ ] Idempotent key prevents duplicate processing
+  - [ ] Out-of-order events handled (state machine)
+  - [ ] Customer refund triggered for conflicts
+  - [ ] Alert for webhook delay > threshold
+
+Real-World Case:
+  "Customer pays, webhook delayed, order timeout → customer 
+   sees payment success in bank, order shows failed. 
+   Double payment on retry attempt."
+```
+
+### Stage 21: False Positive Detection
+
+```python
+# load_tests/scenarios/stage21_false_positive.py
+
+Purpose: Verify Self-Healing doesn't trigger on transient issues (false positive)
+
+Scenario:
+  Step 1: Normal traffic with 99.5% success
+  Step 2: Inject latency spike (500ms → 2000ms) but all succeed
+  Step 3: Observe if Circuit Breaker opens (should NOT)
+  Step 4: Inject 1 real failure among slow requests
+  Step 5: Verify proportional response
+
+False Positive Cases:
+  - High latency but 100% success → CB should stay closed
+  - Single timeout among many successes → should not open CB
+  - Slow external dependency but internal system healthy
+
+Verification:
+  - [ ] Latency alone doesn't trigger CB open
+  - [ ] Error rate threshold is respected
+  - [ ] No unnecessary service degradation
+  - [ ] Alert distinguishes slow vs broken
+  - [ ] Revenue impact of false positive logged
+
+Real-World Case:
+  "Slow network day, all requests succeed but take 3s.
+   CB opens → 50% requests rejected → revenue loss
+   when system was actually working fine."
+```
+
+### Stage 22: Self-Healing + Rate Limit Conflict
+
+```python
+# load_tests/scenarios/stage22_rate_limit_conflict.py
+
+Purpose: Verify retry mechanism doesn't trigger rate limiting (self-DDoS)
+
+Scenario:
+  Step 1: External API has 100 req/min rate limit
+  Step 2: 50 requests fail → retry triggered
+  Step 3: Retries + new requests exceed rate limit
+  Step 4: Rate limit (429) triggers more retries
+  Step 5: Observe cascade effect
+
+Rate Limit Scenarios:
+  - PG rate limit: Too many payment attempts
+  - SMS rate limit: OTP resend spam
+  - External API: Third-party service limits
+
+Verification:
+  - [ ] Retry respects external rate limits
+  - [ ] Backoff increases on 429 response
+  - [ ] Circuit breaker opens on rate limit cascade
+  - [ ] No self-inflicted DDoS
+  - [ ] Rate limit headers parsed and respected
+
+Real-World Case:
+  "Payment retries hit PG rate limit → 429 responses
+   → more retries → entire payment service blocked
+   → all customers affected, not just original failures."
+```
+
+---
+
+## Implementation Priority
+
+### Phase 1: Critical (Week 1)
+
+| Priority | Stage | Reason |
+|----------|-------|--------|
+| 1 | Stage 20 | Delayed Webhook - Most common PG integration issue |
+| 2 | Stage 16 | DB Lock - Most difficult to debug in production |
+| 3 | Stage 21 | False Positive - Direct revenue impact |
+| 4 | Stage 12 | Spike & Recovery - Basic Self-Healing validation |
+
+### Phase 2: High (Week 2)
+
+| Priority | Stage | Reason |
+|----------|-------|--------|
+| 5 | Stage 22 | Rate Limit Conflict - Prevents self-DDoS |
+| 6 | Stage 18 | Chain Failure - E-commerce critical path |
+| 7 | Stage 15 | CB Auto Transitions - Core self-healing |
+| 8 | Stage 14 | DLQ Replay - Data consistency priority |
+
+### Phase 3: Medium (Week 3)
+
+| Priority | Stage | Reason |
+|----------|-------|--------|
+| 9 | Stage 19 | Rollback Failure - Edge case but critical |
+| 10 | Stage 17 | Cache TTL Race - Common but manageable |
+| 11 | Stage 11 | Ramp-up - Operational threshold |
+| 12 | Stage 13 | Repeated Spike - Backoff tuning |
+
+### Phase 4: config.yaml Update
 
 ```yaml
-# 신규 프로파일 추가
+# New profile additions
 profiles:
-  self_healing:
+  self_healing_quick:
     stages:
       - stage10_self_healing
       - stage12_spike_recovery
-      - stage14_dlq_replay
       - stage15_cb_transitions
-    description: "Self-Healing 전용 검증 (약 30분)"
+    description: "Quick Self-Healing validation (~15min)"
 
-  self_healing_full:
+  self_healing_load:
     stages:
       - stage11_ramp_threshold
       - stage12_spike_recovery
       - stage13_repeated_spike
       - stage14_dlq_replay
       - stage15_cb_transitions
-    description: "Self-Healing 전체 검증 (약 60분)"
+    description: "Load-induced Self-Healing full test (~60min)"
+
+  self_healing_fault:
+    stages:
+      - stage16_db_lock_recovery
+      - stage17_cache_ttl_race
+      - stage18_chain_failure
+      - stage19_rollback_failure
+      - stage20_delayed_webhook
+      - stage21_false_positive
+      - stage22_rate_limit_conflict
+    description: "Fault-oriented Self-Healing validation (~45min)"
+
+  self_healing_complete:
+    stages:
+      - stage11_ramp_threshold
+      - stage12_spike_recovery
+      - stage13_repeated_spike
+      - stage14_dlq_replay
+      - stage15_cb_transitions
+      - stage16_db_lock_recovery
+      - stage17_cache_ttl_race
+      - stage18_chain_failure
+      - stage19_rollback_failure
+      - stage20_delayed_webhook
+      - stage21_false_positive
+      - stage22_rate_limit_conflict
+    description: "Complete Self-Healing validation (~90min)"
 ```
 
 ---
 
-## 검증 항목 체크리스트
+## Verification Checklist
 
-### 📋 Self-Healing 테스트 시 반드시 확인할 항목
+### 📋 Self-Healing Test Verification Items
 
-#### 1. Retry 메커니즘
-- [ ] retry 발생 횟수 기록
-- [ ] retry 간격 (exponential backoff) 확인
-- [ ] max_retry 초과 시 DLQ 적재
+#### 1. Retry Mechanism
+- [ ] Retry count logged
+- [ ] Retry interval (exponential backoff) verified
+- [ ] DLQ insertion on max_retry exceeded
+- [ ] Rate limit awareness in retry logic
 
 #### 2. DLQ (Dead Letter Queue)
-- [ ] DLQ 적재 건수
-- [ ] DLQ replay 성공률
-- [ ] replay 후 중복 처리 없음
-- [ ] idempotent key 정상 작동
+- [ ] DLQ insertion count
+- [ ] DLQ replay success rate
+- [ ] No duplicate processing after replay
+- [ ] Idempotent key working correctly
 
 #### 3. Circuit Breaker
-- [ ] open 전이 타이밍 (failure_threshold)
-- [ ] half_open 전이 타이밍 (recovery_timeout)
-- [ ] closed 복귀 조건 (success_threshold)
-- [ ] 수동 override 작동
+- [ ] Open transition timing (failure_threshold)
+- [ ] Half-open transition timing (recovery_timeout)
+- [ ] Closed return condition (success_threshold)
+- [ ] Manual override working
+- [ ] No false positive triggers
 
-#### 4. 데이터 정합성
-- [ ] 재고 before == 재고 after (실패 시)
-- [ ] 포인트 before == 포인트 after (실패 시)
-- [ ] 중복 결제 0건
-- [ ] 주문 상태 일관성
+#### 4. Data Consistency
+- [ ] stock_before == stock_after (on failure)
+- [ ] points_before == points_after (on failure)
+- [ ] Duplicate payments == 0
+- [ ] Order status consistency
+- [ ] No orphaned records
 
-#### 5. 모니터링/로그
-- [ ] 상태 전이 audit log
-- [ ] 알림 발송 여부
-- [ ] 메트릭 수집 정상
+#### 5. State Management
+- [ ] DB lock timeout handling
+- [ ] Deadlock detection and recovery
+- [ ] Cache invalidation on writes
+- [ ] Transaction rollback completeness
 
-#### 6. 회복 안정성
-- [ ] 장애 후 정상화 시간
-- [ ] 반복 장애 시 누적 악화 없음
-- [ ] 재부팅 후 이어서 복구
+#### 6. Event Handling
+- [ ] Delayed event tolerance
+- [ ] Out-of-order event handling
+- [ ] Duplicate event idempotency
+- [ ] Event ordering state machine
+
+#### 7. Monitoring/Logging
+- [ ] State transition audit log
+- [ ] Alert notification sent
+- [ ] Metrics collection working
+- [ ] False positive alerts distinguishable
+
+#### 8. Recovery Stability
+- [ ] Time to normalize after failure
+- [ ] No cumulative degradation on repeated failures
+- [ ] Continuation of recovery after reboot
+- [ ] Rollback failure secondary action
 
 ---
 
-## 참고
+## References
 
-### 업계 표준 Chaos Engineering
+### Industry Standard Chaos Engineering
 
 - [Netflix Chaos Monkey](https://netflix.github.io/chaosmonkey/)
 - [Principles of Chaos Engineering](https://principlesofchaos.org/)
 - [Gremlin Chaos Engineering](https://www.gremlin.com/)
+- [AWS Fault Injection Simulator](https://aws.amazon.com/fis/)
 
-### 핵심 원칙
+### Failure Mode Classifications (Google SRE)
 
-> "Self-Healing 시스템은 기능 테스트 = pass/fail이 아니라
-> 상황 반응 테스트 = 감지/조치/결과다."
+```
+Load-Induced (Stage 11-13)
+├── Traffic Spike
+├── Resource Exhaustion
+└── Cascade Failure
 
-- 폭탄 방식 하나로는 힐링 시스템의 본질을 검증할 수 없다
-- 폭탄은 "죽냐 안 죽냐"만 본다
-- Self-Healing은 "죽지 않게, 죽었어도 복구하게" 테스트하는 것
+State-Induced (Stage 16-17)
+├── Lock Contention
+├── Stale Cache
+├── Transaction Deadlock
+└── Race Condition
+
+Event-Induced (Stage 18-20)
+├── Out-of-Order Events
+├── Delayed Callbacks
+├── Duplicate Events
+└── Missing Events
+
+Self-Inflicted (Stage 21-22)
+├── Retry Storm
+├── False Positive Circuit Break
+├── Backoff Misconfiguration
+└── Rate Limit Self-DDoS
+```
+
+### Payment System Testing (Industry Standard)
+
+| Scenario | Description | Stage |
+|----------|-------------|-------|
+| Delayed Webhook | Payment success, notification 10min late | Stage 20 |
+| Duplicate Webhook | Same payment webhook sent twice | Stage 14 (covered) |
+| Out-of-Order | Cancel arrives before success | Stage 20 |
+| Partial Failure | Card approved, capture failed | Stage 18 |
+
+### Core Principles
+
+> "A Self-Healing system is not about pass/fail functional testing,
+> but about detect/act/result situational testing."
+
+- Single-method testing cannot validate healing system fundamentals
+- "Bomb tests" only check "alive or dead"
+- Self-Healing tests check "doesn't die, recovers if it does"
+
+> "Load breaks systems predictably.
+> Timing breaks systems silently after deployment."
 
 ---
 
-## 다음 단계
+## Next Steps
 
-1. **Stage 12 구현** - Spike & Recovery 테스트
-2. **Stage 15 구현** - Circuit Breaker 자동 전이 테스트
-3. **Stage 14 구현** - DLQ Replay 검증 테스트
-4. **config.yaml 업데이트** - 신규 프로파일 추가
-5. **CI/CD 통합** - self_healing 프로파일 자동 실행
+1. **Stage 20 Implementation** - Delayed Webhook Out-of-Order Test
+2. **Stage 16 Implementation** - DB Lock / Deadlock Recovery Test
+3. **Stage 21 Implementation** - False Positive Detection Test
+4. **Stage 12 Implementation** - Spike & Recovery Test
+5. **config.yaml Update** - Add new profiles
+6. **CI/CD Integration** - Auto-run self_healing_quick profile
 
 ---
 
-*작성일: 2025-12-09*
-*작성: Self-Healing Load Test 분석*
+*Created: 2025-12-09*
+*Last Updated: 2025-12-09*
+*Author: Self-Healing Load Test Analysis*
