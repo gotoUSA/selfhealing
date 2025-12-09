@@ -337,18 +337,20 @@ class TestCircuitBreakerService:
         assert state.failure_count == 0
         assert state.opened_at is None
 
-    def test_force_close_nonexistent_fails(self):
+    def test_force_close_nonexistent_creates_closed_circuit(self):
         """
         Purpose:
-            Verify force_close on nonexistent circuit fails.
+            Verify force_close on nonexistent circuit creates it in CLOSED state.
         """
         result = self.service.force_close(
             service_name="nonexistent_service",
             reason="Test",
         )
 
-        assert result.success is False
-        assert "does not exist" in result.error
+        # force_close creates a new CB in CLOSED state for nonexistent service
+        assert result.success is True
+        assert result.new_state == CircuitState.CLOSED
+        assert "already closed" in result.message.lower() or "created" in result.message.lower()
 
     def test_force_close_already_closed_succeeds(self):
         """
@@ -784,3 +786,483 @@ class TestManualOverrideTTL:
         assert state.state == "closed"
         assert state.manually_controlled is False
         assert state.manual_override_expires_at is None
+
+
+# =============================================================================
+# Rate Limit Cascade Detection Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestRateLimitCascadeDetection:
+    """Tests for rate limit cascade detection functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        self.config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=5,
+            recovery_timeout=60,
+            success_threshold=2,
+            rate_limit_cascade_threshold=5,  # Lower threshold for testing
+            rate_limit_cascade_window_seconds=60,
+        )
+        self.service = CircuitBreakerService(config=self.config)
+
+        # Clear tracker before each test
+        tracker = get_rate_limit_tracker()
+        tracker.clear_service("test_rate_limit_service")
+
+    def test_record_rate_limit_no_cascade(self):
+        """
+        Purpose:
+            Verify recording rate limit does not open CB below threshold.
+        """
+        # Record fewer rate limits than threshold
+        for _ in range(3):
+            result = self.service.record_rate_limit_response("test_rate_limit_service")
+            assert result is None  # CB should not open
+
+        # Circuit should still be closed
+        state = self.service.get_state("test_rate_limit_service")
+        assert state == CircuitState.CLOSED
+
+    def test_record_rate_limit_triggers_cascade(self):
+        """
+        Purpose:
+            Verify CB opens when rate limit cascade threshold is exceeded.
+        """
+        # Record enough rate limits to trigger cascade
+        result = None
+        for i in range(6):
+            result = self.service.record_rate_limit_response("test_cascade_service")
+
+        # Last recording should trigger CB open
+        assert result is not None
+        assert result.success is True
+        assert result.new_state == CircuitState.OPEN
+
+        # Verify circuit is now open
+        state = self.service.get_state("test_cascade_service")
+        assert state == CircuitState.OPEN
+
+    def test_check_rate_limit_cascade(self):
+        """
+        Purpose:
+            Verify cascade detection check works correctly.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Initially no cascade
+        assert self.service.check_rate_limit_cascade("test_check_service") is False
+
+        # Record rate limits below threshold
+        for _ in range(3):
+            tracker.record_rate_limit("test_check_service")
+        assert self.service.check_rate_limit_cascade("test_check_service") is False
+
+        # Record rate limits above threshold
+        for _ in range(3):
+            tracker.record_rate_limit("test_check_service")
+        assert self.service.check_rate_limit_cascade("test_check_service") is True
+
+    def test_cascade_reason_included_in_result(self):
+        """
+        Purpose:
+            Verify cascade triggers CB open and reason is stored in DB.
+        """
+        import uuid
+
+        # Use unique service name to ensure fresh state
+        service_name = f"test_reason_service_{uuid.uuid4().hex[:8]}"
+
+        first_open_result = None
+        for i in range(6):
+            result = self.service.record_rate_limit_response(service_name)
+            if result is not None and result.new_state == CircuitState.OPEN:
+                # Capture the first open transition (not subsequent "already open")
+                if first_open_result is None:
+                    first_open_result = result
+
+        assert first_open_result is not None
+        assert first_open_result.success is True
+        assert first_open_result.new_state == CircuitState.OPEN
+
+        # Verify the control_reason in the DB contains cascade info
+        state = CircuitBreakerState.objects.get(service_name=service_name)
+        assert "cascade" in state.control_reason.lower() or "rate limit" in state.control_reason.lower()
+
+
+# =============================================================================
+# Self-DDoS Protection Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestSelfDDoSProtection:
+    """Tests for self-DDoS protection functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        self.config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=5,
+            recovery_timeout=60,
+            success_threshold=2,
+            self_ddos_protection_enabled=True,
+            self_ddos_request_threshold=10,  # Low threshold for testing
+            self_ddos_window_seconds=10,
+            self_ddos_backoff_multiplier=2.0,
+        )
+        self.service = CircuitBreakerService(config=self.config)
+
+        # Clear tracker before each test
+        tracker = get_rate_limit_tracker()
+        tracker.clear_service("test_ddos_service")
+
+    def test_should_allow_with_ddos_protection_normal(self):
+        """
+        Purpose:
+            Verify normal requests are allowed without backoff suggestion.
+        """
+        CircuitBreakerState.objects.create(
+            service_name="test_ddos_normal",
+            state="closed",
+        )
+
+        allowed, backoff = self.service.should_allow_with_ddos_protection("test_ddos_normal")
+
+        assert allowed is True
+        assert backoff == 0.0
+
+    def test_should_allow_with_ddos_protection_circuit_open(self):
+        """
+        Purpose:
+            Verify requests are blocked when circuit is open with backoff.
+        """
+        CircuitBreakerState.objects.create(
+            service_name="test_ddos_open",
+            state="open",
+            opened_at=timezone.now(),
+        )
+
+        allowed, backoff = self.service.should_allow_with_ddos_protection("test_ddos_open")
+
+        assert allowed is False
+        assert backoff > 0.0
+
+    def test_should_allow_with_ddos_protection_high_traffic(self):
+        """
+        Purpose:
+            Verify high traffic suggests backoff but still allows request.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        CircuitBreakerState.objects.create(
+            service_name="test_high_traffic",
+            state="closed",
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Simulate high traffic
+        for _ in range(15):
+            tracker.record_request("test_high_traffic")
+
+        allowed, backoff = self.service.should_allow_with_ddos_protection("test_high_traffic")
+
+        assert allowed is True  # Still allows request
+        assert backoff > 0.0  # But suggests backoff
+
+    def test_is_self_ddos_detected(self):
+        """
+        Purpose:
+            Verify self-DDoS detection works correctly.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Initially not detected
+        assert self.service.is_self_ddos_detected("test_ddos_detect") is False
+
+        # Simulate high traffic
+        for _ in range(15):
+            tracker.record_request("test_ddos_detect")
+
+        assert self.service.is_self_ddos_detected("test_ddos_detect") is True
+
+    def test_calculate_adaptive_backoff(self):
+        """
+        Purpose:
+            Verify adaptive backoff calculation increases with level.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Initial backoff should be small
+        backoff1 = self.service.calculate_adaptive_backoff("test_backoff_service")
+        assert 0.75 <= backoff1 <= 1.25  # ~1 second with jitter
+
+        # Increment backoff level
+        tracker.increment_backoff("test_backoff_service")
+        backoff2 = self.service.calculate_adaptive_backoff("test_backoff_service")
+        assert 1.5 <= backoff2 <= 2.5  # ~2 seconds with jitter
+
+        # Increment again
+        tracker.increment_backoff("test_backoff_service")
+        backoff3 = self.service.calculate_adaptive_backoff("test_backoff_service")
+        assert 3.0 <= backoff3 <= 5.0  # ~4 seconds with jitter
+
+    def test_reset_backoff(self):
+        """
+        Purpose:
+            Verify backoff level is reset after successful recovery.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Set backoff level high
+        for _ in range(5):
+            tracker.increment_backoff("test_reset_backoff")
+        assert tracker.get_backoff_level("test_reset_backoff") == 5
+
+        # Reset backoff
+        self.service.reset_backoff("test_reset_backoff")
+        assert tracker.get_backoff_level("test_reset_backoff") == 0
+
+    def test_get_protection_status(self):
+        """
+        Purpose:
+            Verify protection status returns comprehensive information.
+        """
+        CircuitBreakerState.objects.create(
+            service_name="test_status_service",
+            state="closed",
+        )
+
+        status = self.service.get_protection_status("test_status_service")
+
+        assert status["service_name"] == "test_status_service"
+        assert status["circuit_state"] == "closed"
+        assert "rate_limit_cascade" in status
+        assert "self_ddos_protection" in status
+        assert "backoff" in status
+        assert status["self_ddos_protection"]["enabled"] is True
+
+    def test_ddos_protection_disabled(self):
+        """
+        Purpose:
+            Verify self-DDoS protection can be disabled.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+
+        config = CircuitBreakerConfig(
+            enabled=True,
+            self_ddos_protection_enabled=False,
+        )
+        service = CircuitBreakerService(config=config)
+
+        CircuitBreakerState.objects.create(
+            service_name="test_disabled_ddos",
+            state="closed",
+        )
+
+        tracker = get_rate_limit_tracker()
+
+        # Simulate high traffic
+        for _ in range(100):
+            tracker.record_request("test_disabled_ddos")
+
+        # Should not detect self-DDoS when disabled
+        assert service.is_self_ddos_detected("test_disabled_ddos") is False
+
+        # Should allow without backoff suggestion
+        allowed, backoff = service.should_allow_with_ddos_protection("test_disabled_ddos")
+        assert allowed is True
+        assert backoff == 0.0
+
+
+# =============================================================================
+# Rate Limit Tracker Tests
+# =============================================================================
+
+
+class TestRateLimitTracker:
+    """Tests for RateLimitTracker class."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            RateLimitTracker,
+        )
+
+        self.tracker = RateLimitTracker()
+
+    def test_record_and_get_rate_limit_count(self):
+        """
+        Purpose:
+            Verify rate limit recording and counting works correctly.
+        """
+        # Record some rate limits
+        for _ in range(5):
+            self.tracker.record_rate_limit("test_service")
+
+        count = self.tracker.get_rate_limit_count("test_service", 60)
+        assert count == 5
+
+    def test_record_and_get_request_count(self):
+        """
+        Purpose:
+            Verify request recording and counting works correctly.
+        """
+        # Record some requests
+        for _ in range(10):
+            self.tracker.record_request("test_service")
+
+        count = self.tracker.get_request_count("test_service", 60)
+        assert count == 10
+
+    def test_backoff_level_management(self):
+        """
+        Purpose:
+            Verify backoff level increment and reset works correctly.
+        """
+        # Initial level is 0
+        assert self.tracker.get_backoff_level("test_service") == 0
+
+        # Increment
+        level = self.tracker.increment_backoff("test_service")
+        assert level == 1
+        assert self.tracker.get_backoff_level("test_service") == 1
+
+        # Increment again
+        level = self.tracker.increment_backoff("test_service")
+        assert level == 2
+
+        # Reset
+        self.tracker.reset_backoff("test_service")
+        assert self.tracker.get_backoff_level("test_service") == 0
+
+    def test_clear_service(self):
+        """
+        Purpose:
+            Verify clearing service data works correctly.
+        """
+        # Add some data
+        self.tracker.record_rate_limit("test_service")
+        self.tracker.record_request("test_service")
+        self.tracker.increment_backoff("test_service")
+
+        # Clear
+        self.tracker.clear_service("test_service")
+
+        # All should be empty/zero
+        assert self.tracker.get_rate_limit_count("test_service", 60) == 0
+        assert self.tracker.get_request_count("test_service", 60) == 0
+        assert self.tracker.get_backoff_level("test_service") == 0
+
+
+# =============================================================================
+# Convenience Functions Tests (Rate Limit and DDoS Protection)
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestConvenienceFunctionsRateLimitDDoS:
+    """Tests for rate limit and DDoS protection convenience functions."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_rate_limit_tracker,
+        )
+        import shopping.services.self_healing.circuit_breaker_service as cb_module
+
+        # Reset singleton for testing
+        cb_module._circuit_breaker_service = None
+
+        # Clear tracker
+        tracker = get_rate_limit_tracker()
+        tracker.clear_service("test_convenience")
+
+    @patch("shopping.services.self_healing.circuit_breaker_service.get_circuit_breaker_service")
+    def test_record_rate_limit_delegates_to_service(self, mock_get_service):
+        """
+        Purpose:
+            Verify record_rate_limit delegates to service.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            record_rate_limit,
+        )
+
+        mock_service = MagicMock()
+        mock_service.record_rate_limit_response.return_value = None
+        mock_get_service.return_value = mock_service
+
+        result = record_rate_limit("test_service")
+
+        mock_service.record_rate_limit_response.assert_called_once_with("test_service")
+
+    @patch("shopping.services.self_healing.circuit_breaker_service.get_circuit_breaker_service")
+    def test_should_allow_with_protection_delegates_to_service(self, mock_get_service):
+        """
+        Purpose:
+            Verify should_allow_with_protection delegates to service.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            should_allow_with_protection,
+        )
+
+        mock_service = MagicMock()
+        mock_service.should_allow_with_ddos_protection.return_value = (True, 0.0)
+        mock_get_service.return_value = mock_service
+
+        result = should_allow_with_protection("test_service")
+
+        assert result == (True, 0.0)
+        mock_service.should_allow_with_ddos_protection.assert_called_once_with("test_service")
+
+    @patch("shopping.services.self_healing.circuit_breaker_service.get_circuit_breaker_service")
+    def test_get_protection_status_delegates_to_service(self, mock_get_service):
+        """
+        Purpose:
+            Verify get_protection_status delegates to service.
+        """
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_protection_status,
+        )
+
+        mock_service = MagicMock()
+        mock_status = {"service_name": "test", "circuit_state": "closed"}
+        mock_service.get_protection_status.return_value = mock_status
+        mock_get_service.return_value = mock_service
+
+        result = get_protection_status("test_service")
+
+        assert result == mock_status
+        mock_service.get_protection_status.assert_called_once_with("test_service")

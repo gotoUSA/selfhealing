@@ -91,11 +91,7 @@ PHASE_4_DUPLICATE_WEBHOOK = max(3, int(60 * _scale))  # Duplicate webhook handli
 PHASE_5_VERIFICATION = max(2, int(30 * _scale))  # Final verification
 
 TOTAL_DURATION = (
-    PHASE_1_NORMAL_WEBHOOK
-    + PHASE_2_DELAYED_WEBHOOK
-    + PHASE_3_OUT_OF_ORDER
-    + PHASE_4_DUPLICATE_WEBHOOK
-    + PHASE_5_VERIFICATION
+    PHASE_1_NORMAL_WEBHOOK + PHASE_2_DELAYED_WEBHOOK + PHASE_3_OUT_OF_ORDER + PHASE_4_DUPLICATE_WEBHOOK + PHASE_5_VERIFICATION
 )
 
 # Target products
@@ -188,9 +184,7 @@ def _get_current_phase() -> str:
         return "delayed_webhook"
     elif elapsed < (PHASE_1_NORMAL_WEBHOOK + PHASE_2_DELAYED_WEBHOOK + PHASE_3_OUT_OF_ORDER):
         return "out_of_order"
-    elif elapsed < (
-        PHASE_1_NORMAL_WEBHOOK + PHASE_2_DELAYED_WEBHOOK + PHASE_3_OUT_OF_ORDER + PHASE_4_DUPLICATE_WEBHOOK
-    ):
+    elif elapsed < (PHASE_1_NORMAL_WEBHOOK + PHASE_2_DELAYED_WEBHOOK + PHASE_3_OUT_OF_ORDER + PHASE_4_DUPLICATE_WEBHOOK):
         return "duplicate_webhook"
     else:
         return "verification"
@@ -914,9 +908,7 @@ class DelayedWebhookUser(HttpUser):
 
     def _get_payment_count(self) -> int:
         """Get current payment count for user"""
-        response = self.client.get(
-            "/api/payments/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Get Payment Count"
-        )
+        response = self.client.get("/api/payments/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Get Payment Count")
 
         if response.status_code == 200:
             data = response.json()
@@ -935,9 +927,7 @@ class DelayedWebhookUser(HttpUser):
         if phase != "verification":
             return
 
-        response = self.client.get(
-            "/api/orders/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Verify Orders"
-        )
+        response = self.client.get("/api/orders/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Verify Orders")
 
         if response.status_code == 200:
             orders = response.json()

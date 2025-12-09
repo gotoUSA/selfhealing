@@ -81,18 +81,18 @@ _original_total = 300  # Original total: 300s
 _scale = _test_duration / _original_total
 
 # Test phases - scaled
-PHASE_1_CACHE_WARM_DURATION = max(2, int(30 * _scale))        # Warm up cache
-PHASE_2_PRICE_UPDATE_DURATION = max(3, int(60 * _scale))      # Update prices, observe stale reads
-PHASE_3_RACE_CONDITION_DURATION = max(5, int(120 * _scale))   # Heavy read during TTL window
-PHASE_4_TTL_EXPIRY_DURATION = max(3, int(60 * _scale))        # Wait for TTL expiry
-PHASE_5_CONSISTENCY_CHECK_DURATION = max(2, int(30 * _scale)) # Verify consistency
+PHASE_1_CACHE_WARM_DURATION = max(2, int(30 * _scale))  # Warm up cache
+PHASE_2_PRICE_UPDATE_DURATION = max(3, int(60 * _scale))  # Update prices, observe stale reads
+PHASE_3_RACE_CONDITION_DURATION = max(5, int(120 * _scale))  # Heavy read during TTL window
+PHASE_4_TTL_EXPIRY_DURATION = max(3, int(60 * _scale))  # Wait for TTL expiry
+PHASE_5_CONSISTENCY_CHECK_DURATION = max(2, int(30 * _scale))  # Verify consistency
 
 TOTAL_DURATION = (
-    PHASE_1_CACHE_WARM_DURATION +
-    PHASE_2_PRICE_UPDATE_DURATION +
-    PHASE_3_RACE_CONDITION_DURATION +
-    PHASE_4_TTL_EXPIRY_DURATION +
-    PHASE_5_CONSISTENCY_CHECK_DURATION
+    PHASE_1_CACHE_WARM_DURATION
+    + PHASE_2_PRICE_UPDATE_DURATION
+    + PHASE_3_RACE_CONDITION_DURATION
+    + PHASE_4_TTL_EXPIRY_DURATION
+    + PHASE_5_CONSISTENCY_CHECK_DURATION
 )
 
 # Cache configuration (should match actual config)
@@ -115,8 +115,8 @@ _cache_stats = {
     "cache_hits": 0,
     "cache_misses": 0,
     # Price tracking
-    "original_prices": {},    # product_id -> original price
-    "updated_prices": {},     # product_id -> updated price
+    "original_prices": {},  # product_id -> original price
+    "updated_prices": {},  # product_id -> updated price
     "observed_prices": defaultdict(list),  # product_id -> list of observed prices
     # Stale read tracking
     "stale_reads_detected": 0,
@@ -166,11 +166,14 @@ def _get_current_phase() -> str:
         return "cache_warm"
     elif elapsed < PHASE_1_CACHE_WARM_DURATION + PHASE_2_PRICE_UPDATE_DURATION:
         return "price_update"
-    elif elapsed < (PHASE_1_CACHE_WARM_DURATION + PHASE_2_PRICE_UPDATE_DURATION + 
-                   PHASE_3_RACE_CONDITION_DURATION):
+    elif elapsed < (PHASE_1_CACHE_WARM_DURATION + PHASE_2_PRICE_UPDATE_DURATION + PHASE_3_RACE_CONDITION_DURATION):
         return "race_condition"
-    elif elapsed < (PHASE_1_CACHE_WARM_DURATION + PHASE_2_PRICE_UPDATE_DURATION + 
-                   PHASE_3_RACE_CONDITION_DURATION + PHASE_4_TTL_EXPIRY_DURATION):
+    elif elapsed < (
+        PHASE_1_CACHE_WARM_DURATION
+        + PHASE_2_PRICE_UPDATE_DURATION
+        + PHASE_3_RACE_CONDITION_DURATION
+        + PHASE_4_TTL_EXPIRY_DURATION
+    ):
         return "ttl_expiry"
     else:
         return "consistency_check"
@@ -215,14 +218,16 @@ def _record_cache_miss():
 def _record_price_observation(product_id: int, observed_price: float, expected_price: float):
     """Record a price observation"""
     with _stats_lock:
-        _cache_stats["observed_prices"][product_id].append({
-            "price": observed_price,
-            "timestamp": time.time(),
-            "expected": expected_price,
-        })
-        
+        _cache_stats["observed_prices"][product_id].append(
+            {
+                "price": observed_price,
+                "timestamp": time.time(),
+                "expected": expected_price,
+            }
+        )
+
         _cache_stats["total_reads_during_race"] += 1
-        
+
         # Check if stale
         if product_id in _cache_stats["updated_prices"]:
             updated_price = _cache_stats["updated_prices"][product_id]
@@ -271,18 +276,19 @@ def _record_consistency_check(passed: bool):
 def _verify_eventual_consistency():
     """Verify eventual consistency after TTL expiry"""
     print(f"\n📊 Eventual Consistency Verification:")
-    
+
     # Check stale detection
-    stale_rate = (_cache_stats["stale_reads_detected"] / 
-                  max(_cache_stats["total_reads_during_race"], 1))
+    stale_rate = _cache_stats["stale_reads_detected"] / max(_cache_stats["total_reads_during_race"], 1)
     _cache_stats["verification"]["stale_detection_works"] = stale_rate > 0 if _cache_stats["updated_prices"] else True
     print(f"   - Stale detection: {'✓' if _cache_stats['verification']['stale_detection_works'] else '✗'}")
     print(f"     (Stale rate: {stale_rate:.1%})")
 
     # Check order validation
-    total_orders = (_cache_stats["orders_with_correct_price"] + 
-                   _cache_stats["orders_with_stale_price"] + 
-                   _cache_stats["orders_rejected_price_mismatch"])
+    total_orders = (
+        _cache_stats["orders_with_correct_price"]
+        + _cache_stats["orders_with_stale_price"]
+        + _cache_stats["orders_rejected_price_mismatch"]
+    )
     if total_orders > 0:
         correct_rate = _cache_stats["orders_with_correct_price"] / total_orders
         _cache_stats["verification"]["order_validation_correct"] = correct_rate >= 0.95
@@ -301,15 +307,13 @@ def _verify_eventual_consistency():
         _cache_stats["verification"]["cache_invalidation_works"] = True
 
     # Check eventual consistency
-    consistency_rate = (_cache_stats["consistency_passed"] / 
-                       max(_cache_stats["consistency_checks"], 1))
+    consistency_rate = _cache_stats["consistency_passed"] / max(_cache_stats["consistency_checks"], 1)
     _cache_stats["verification"]["eventual_consistency"] = consistency_rate >= 0.99
     print(f"   - Eventual consistency: {'✓' if _cache_stats['verification']['eventual_consistency'] else '✗'}")
     print(f"     (Consistency rate: {consistency_rate:.1%})")
 
     # Check no invalid price errors
-    rejection_rate = (_cache_stats["orders_rejected_price_mismatch"] / 
-                     max(total_orders, 1))
+    rejection_rate = _cache_stats["orders_rejected_price_mismatch"] / max(total_orders, 1)
     _cache_stats["verification"]["no_invalid_price_errors"] = rejection_rate < 0.05
     print(f"   - No invalid price errors: {'✓' if _cache_stats['verification']['no_invalid_price_errors'] else '✗'}")
     print(f"     (Rejection rate: {rejection_rate:.1%})")
@@ -440,10 +444,7 @@ class CacheTTLRaceUser(HttpUser):
         product_id = random.choice(TARGET_PRODUCT_IDS)
         phase = _get_current_phase()
 
-        response = self.client.get(
-            f"/api/products/{product_id}/",
-            name=f"{STAGE_NAME} Read Product Price"
-        )
+        response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Read Product Price")
 
         if response.status_code == 200:
             product = response.json()
@@ -455,8 +456,7 @@ class CacheTTLRaceUser(HttpUser):
             # Record observation during relevant phases
             if phase in ["price_update", "race_condition", "ttl_expiry"]:
                 expected_price_raw = _cache_stats["updated_prices"].get(
-                    product_id,
-                    _cache_stats["original_prices"].get(product_id, observed_price)
+                    product_id, _cache_stats["original_prices"].get(product_id, observed_price)
                 )
                 expected_price = float(expected_price_raw) if expected_price_raw else observed_price
                 _record_price_observation(product_id, observed_price, expected_price)
@@ -472,10 +472,7 @@ class CacheTTLRaceUser(HttpUser):
     @tag("cache_read")
     def read_products_list(self):
         """Read products list to warm cache"""
-        response = self.client.get(
-            "/api/products/",
-            name=f"{STAGE_NAME} Read Products List"
-        )
+        response = self.client.get("/api/products/", name=f"{STAGE_NAME} Read Products List")
 
         if response.status_code == 200:
             _record_cache_hit()
@@ -499,10 +496,7 @@ class CacheTTLRaceUser(HttpUser):
         product_id = random.choice(TARGET_PRODUCT_IDS)
 
         # Get current price
-        get_response = self.client.get(
-            f"/api/products/{product_id}/",
-            name=f"{STAGE_NAME} Get Price for Update"
-        )
+        get_response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Get Price for Update")
 
         if get_response.status_code != 200:
             return
@@ -518,7 +512,7 @@ class CacheTTLRaceUser(HttpUser):
             f"/api/products/{product_id}/",
             json={"price": new_price},
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Update Price"
+            name=f"{STAGE_NAME} Update Price",
         )
 
         if update_response.status_code in [200, 204]:
@@ -542,10 +536,7 @@ class CacheTTLRaceUser(HttpUser):
         product_id = random.choice(TARGET_PRODUCT_IDS)
 
         # Step 1: Read product price (may be stale)
-        product_response = self.client.get(
-            f"/api/products/{product_id}/",
-            name=f"{STAGE_NAME} Order - Read Price"
-        )
+        product_response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Order - Read Price")
 
         if product_response.status_code != 200:
             return
@@ -560,7 +551,7 @@ class CacheTTLRaceUser(HttpUser):
                 "quantity": 1,
             },
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Order - Add to Cart"
+            name=f"{STAGE_NAME} Order - Add to Cart",
         )
 
         if cart_response.status_code != 200:
@@ -575,7 +566,7 @@ class CacheTTLRaceUser(HttpUser):
                 "shipping_postal_code": "12345",
             },
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Order - Create"
+            name=f"{STAGE_NAME} Order - Create",
         )
 
         if order_response.status_code == 201:
@@ -613,10 +604,7 @@ class CacheTTLRaceUser(HttpUser):
         product_id = random.choice(TARGET_PRODUCT_IDS)
 
         # Read from API (may hit cache)
-        api_response = self.client.get(
-            f"/api/products/{product_id}/",
-            name=f"{STAGE_NAME} Consistency - API Read"
-        )
+        api_response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Consistency - API Read")
 
         if api_response.status_code != 200:
             return
@@ -625,8 +613,7 @@ class CacheTTLRaceUser(HttpUser):
 
         # Get expected price (should be updated price if update happened)
         expected_price_raw = _cache_stats["updated_prices"].get(
-            product_id,
-            _cache_stats["original_prices"].get(product_id, api_price)
+            product_id, _cache_stats["original_prices"].get(product_id, api_price)
         )
         # Ensure expected_price is float
         expected_price = float(expected_price_raw) if expected_price_raw else api_price
@@ -657,10 +644,7 @@ class CacheTTLRaceUser(HttpUser):
         prices_observed = []
 
         for _ in range(5):
-            response = self.client.get(
-                f"/api/products/{product_id}/",
-                name=f"{STAGE_NAME} Rapid Read"
-            )
+            response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Rapid Read")
 
             if response.status_code == 200:
                 price = float(response.json().get("price", 0))
@@ -715,7 +699,7 @@ def on_test_stop(environment, **kwargs):
     print(f"\n📈 Cache Metrics:")
     print(f"   - Cache hits: {_cache_stats['cache_hits']}")
     print(f"   - Cache misses: {_cache_stats['cache_misses']}")
-    cache_hit_rate = _cache_stats['cache_hits'] / max(_cache_stats['cache_hits'] + _cache_stats['cache_misses'], 1)
+    cache_hit_rate = _cache_stats["cache_hits"] / max(_cache_stats["cache_hits"] + _cache_stats["cache_misses"], 1)
     print(f"   - Cache hit rate: {cache_hit_rate:.1%}")
 
     print(f"\n💰 Price Update Metrics:")
@@ -724,8 +708,8 @@ def on_test_stop(environment, **kwargs):
     print(f"   - Stale reads detected: {_cache_stats['stale_reads_detected']}")
     print(f"   - Fresh reads after update: {_cache_stats['fresh_reads_after_update']}")
 
-    if _cache_stats['total_reads_during_race'] > 0:
-        stale_rate = _cache_stats['stale_reads_detected'] / _cache_stats['total_reads_during_race']
+    if _cache_stats["total_reads_during_race"] > 0:
+        stale_rate = _cache_stats["stale_reads_detected"] / _cache_stats["total_reads_during_race"]
         print(f"   - Stale read rate: {stale_rate:.1%}")
 
     print(f"\n📦 Order Validation Metrics:")
@@ -734,10 +718,10 @@ def on_test_stop(environment, **kwargs):
     print(f"   - Orders rejected (price mismatch): {_cache_stats['orders_rejected_price_mismatch']}")
 
     print(f"\n⏱️ Cache Invalidation Timing:")
-    if _cache_stats['invalidation_delays']:
-        avg_delay = sum(_cache_stats['invalidation_delays']) / len(_cache_stats['invalidation_delays'])
-        min_delay = min(_cache_stats['invalidation_delays'])
-        max_delay = max(_cache_stats['invalidation_delays'])
+    if _cache_stats["invalidation_delays"]:
+        avg_delay = sum(_cache_stats["invalidation_delays"]) / len(_cache_stats["invalidation_delays"])
+        min_delay = min(_cache_stats["invalidation_delays"])
+        max_delay = max(_cache_stats["invalidation_delays"])
         print(f"   - Avg invalidation delay: {avg_delay:.0f}ms")
         print(f"   - Min delay: {min_delay:.0f}ms")
         print(f"   - Max delay: {max_delay:.0f}ms")
@@ -757,28 +741,28 @@ def on_test_stop(environment, **kwargs):
     # Recovery Latency Report
     recovery = _cache_stats["recovery"]
     print(f"\n🔄 Recovery Latency Metrics:")
-    if _cache_stats['invalidation_delays']:
-        avg_invalidation = sum(_cache_stats['invalidation_delays']) / len(_cache_stats['invalidation_delays'])
-        max_invalidation = max(_cache_stats['invalidation_delays'])
+    if _cache_stats["invalidation_delays"]:
+        avg_invalidation = sum(_cache_stats["invalidation_delays"]) / len(_cache_stats["invalidation_delays"])
+        max_invalidation = max(_cache_stats["invalidation_delays"])
         recovery["cache_invalidation_latency_ms"] = avg_invalidation
         print(f"   - Avg cache invalidation latency: {avg_invalidation:.0f}ms")
         print(f"   - Max cache invalidation latency: {max_invalidation:.0f}ms")
-    
+
     # Calculate eventual consistency latency
-    if _cache_stats['consistency_passed'] > 0:
+    if _cache_stats["consistency_passed"] > 0:
         # If consistency checks pass, eventual consistency was achieved
-        consistency_rate = _cache_stats['consistency_passed'] / max(_cache_stats['consistency_checks'], 1)
+        consistency_rate = _cache_stats["consistency_passed"] / max(_cache_stats["consistency_checks"], 1)
         print(f"   - Consistency rate: {consistency_rate:.1%}")
-        
+
         # Estimate recovery based on TTL and stale read pattern
-        if _cache_stats['stale_reads_detected'] > 0:
-            stale_rate = _cache_stats['stale_reads_detected'] / max(_cache_stats['total_reads_during_race'], 1)
+        if _cache_stats["stale_reads_detected"] > 0:
+            stale_rate = _cache_stats["stale_reads_detected"] / max(_cache_stats["total_reads_during_race"], 1)
             estimated_recovery = CACHE_TTL_SECONDS * stale_rate
             recovery["eventual_consistency_latency_seconds"] = estimated_recovery
             print(f"   - Estimated consistency latency: {estimated_recovery:.1f}s")
-    
+
     # SLA check (consistency should be achieved within TTL)
-    recovery["sla_compliant"] = _cache_stats['consistency_failed'] == 0
+    recovery["sla_compliant"] = _cache_stats["consistency_failed"] == 0
     if recovery["sla_compliant"]:
         print(f"   - SLA Status: ✓ Eventual consistency achieved")
     else:
@@ -793,13 +777,22 @@ def on_test_stop(environment, **kwargs):
 
 if __name__ == "__main__":
     import subprocess
-    subprocess.run([
-        "locust",
-        "-f", __file__,
-        "--host", "http://localhost:8000",
-        "--users", "50",
-        "--spawn-rate", "10",
-        "--run-time", "5m",
-        "--headless",
-        "--html", "stage17_report.html"
-    ])
+
+    subprocess.run(
+        [
+            "locust",
+            "-f",
+            __file__,
+            "--host",
+            "http://localhost:8000",
+            "--users",
+            "50",
+            "--spawn-rate",
+            "10",
+            "--run-time",
+            "5m",
+            "--headless",
+            "--html",
+            "stage17_report.html",
+        ]
+    )

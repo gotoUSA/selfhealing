@@ -274,6 +274,16 @@ class CircuitBreakerSettings:
     max_pending_duration_hours: int = 4  # SLA for pending DLQ items
     max_retry_lifetime_hours: int = 24  # Max time to attempt retries
 
+    # Rate limit cascade detection settings
+    rate_limit_cascade_threshold: int = 10  # Number of 429s in window to trigger CB
+    rate_limit_cascade_window_seconds: int = 60  # Time window for cascade detection
+
+    # Self-DDoS protection settings
+    self_ddos_protection_enabled: bool = True
+    self_ddos_request_threshold: int = 100  # Max requests in window
+    self_ddos_window_seconds: int = 10  # Time window for self-DDoS detection
+    self_ddos_backoff_multiplier: float = 2.0  # Exponential backoff multiplier
+
     @classmethod
     def from_settings(cls) -> "CircuitBreakerSettings":
         """Load circuit breaker configuration from Django settings."""
@@ -290,6 +300,14 @@ class CircuitBreakerSettings:
             half_open_request_limit=governance.get("HALF_OPEN_REQUEST_LIMIT", 10),
             max_pending_duration_hours=governance.get("MAX_PENDING_DURATION_HOURS", 4),
             max_retry_lifetime_hours=governance.get("MAX_RETRY_LIFETIME_HOURS", 24),
+            # Rate limit cascade settings
+            rate_limit_cascade_threshold=cb_config.get("RATE_LIMIT_CASCADE_THRESHOLD", 10),
+            rate_limit_cascade_window_seconds=cb_config.get("RATE_LIMIT_CASCADE_WINDOW_SECONDS", 60),
+            # Self-DDoS protection settings
+            self_ddos_protection_enabled=cb_config.get("SELF_DDOS_PROTECTION_ENABLED", True),
+            self_ddos_request_threshold=cb_config.get("SELF_DDOS_REQUEST_THRESHOLD", 100),
+            self_ddos_window_seconds=cb_config.get("SELF_DDOS_WINDOW_SECONDS", 10),
+            self_ddos_backoff_multiplier=cb_config.get("SELF_DDOS_BACKOFF_MULTIPLIER", 2.0),
         )
 
 

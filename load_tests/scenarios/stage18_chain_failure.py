@@ -180,9 +180,7 @@ def _get_current_phase() -> str:
         return "point_a"
     elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_POINT_A_FAILURE + PHASE_3_POINT_B_FAILURE):
         return "point_b"
-    elif elapsed < (
-        PHASE_1_BASELINE_DURATION + PHASE_2_POINT_A_FAILURE + PHASE_3_POINT_B_FAILURE + PHASE_4_POINT_C_FAILURE
-    ):
+    elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_POINT_A_FAILURE + PHASE_3_POINT_B_FAILURE + PHASE_4_POINT_C_FAILURE):
         return "point_c"
     else:
         return "verification"
@@ -742,9 +740,7 @@ class ChainFailureUser(HttpUser):
         if phase != "verification":
             return
 
-        response = self.client.get(
-            "/api/orders/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Verify Orders"
-        )
+        response = self.client.get("/api/orders/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Verify Orders")
 
         if response.status_code == 200:
             orders = response.json()

@@ -809,7 +809,9 @@ def on_test_stop(environment, **kwargs):
     print(f"\n🚨 Alert Summary:")
     print(f"   - Slow service alerts: {_fp_stats['alerts_slow_service']}")
     print(f"   - Broken service alerts: {_fp_stats['alerts_broken_service']}")
-    print(f"   - Alert differentiation: {'✓' if _fp_stats['alerts_slow_service'] >= _fp_stats['alerts_broken_service'] else '✗'}")
+    print(
+        f"   - Alert differentiation: {'✓' if _fp_stats['alerts_slow_service'] >= _fp_stats['alerts_broken_service'] else '✗'}"
+    )
 
     print(f"\n💰 Revenue Impact:")
     print(f"   - Requests rejected by CB: {_fp_stats['requests_rejected_by_cb']}")

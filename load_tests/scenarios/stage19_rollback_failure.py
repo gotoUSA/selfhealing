@@ -179,10 +179,7 @@ def _get_current_phase() -> str:
     elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_SINGLE_ROLLBACK_FAILURE + PHASE_3_DOUBLE_FAILURE):
         return "double_failure"
     elif elapsed < (
-        PHASE_1_BASELINE_DURATION
-        + PHASE_2_SINGLE_ROLLBACK_FAILURE
-        + PHASE_3_DOUBLE_FAILURE
-        + PHASE_4_RECOVERY_OBSERVATION
+        PHASE_1_BASELINE_DURATION + PHASE_2_SINGLE_ROLLBACK_FAILURE + PHASE_3_DOUBLE_FAILURE + PHASE_4_RECOVERY_OBSERVATION
     ):
         return "recovery_observation"
     else:
@@ -342,9 +339,7 @@ def _perform_final_verification():
         _rollback_stats["verification"]["reconciliation_available"] = reconcile_rate >= 0.8
     else:
         _rollback_stats["verification"]["reconciliation_available"] = True
-    print(
-        f"   - Reconciliation available: {'✓' if _rollback_stats['verification']['reconciliation_available'] else '✗'}"
-    )
+    print(f"   - Reconciliation available: {'✓' if _rollback_stats['verification']['reconciliation_available'] else '✗'}")
 
 
 # =============================================================================
@@ -706,7 +701,9 @@ class RollbackFailureUser(HttpUser):
             # If decrement is more than expected, double decrement occurred
             if actual_decrement > expected_decrements:
                 _record_double_decrement()
-                print(f"⚠️ Double decrement detected: Product {product_id}, Expected <= {expected_decrements}, Actual = {actual_decrement}")
+                print(
+                    f"⚠️ Double decrement detected: Product {product_id}, Expected <= {expected_decrements}, Actual = {actual_decrement}"
+                )
 
     @task(3)
     @tag("reconciliation")

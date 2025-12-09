@@ -90,11 +90,7 @@ PHASE_4_RETRY_CASCADE = max(3, int(60 * _scale))  # Retry cascade observation
 PHASE_5_RECOVERY = max(3, int(60 * _scale))  # Recovery after rate limit
 
 TOTAL_DURATION = (
-    PHASE_1_NORMAL_BASELINE
-    + PHASE_2_APPROACHING_LIMIT
-    + PHASE_3_RATE_LIMITED
-    + PHASE_4_RETRY_CASCADE
-    + PHASE_5_RECOVERY
+    PHASE_1_NORMAL_BASELINE + PHASE_2_APPROACHING_LIMIT + PHASE_3_RATE_LIMITED + PHASE_4_RETRY_CASCADE + PHASE_5_RECOVERY
 )
 
 # Target products
@@ -201,9 +197,7 @@ def _get_current_phase() -> str:
         return "approaching_limit"
     elif elapsed < (PHASE_1_NORMAL_BASELINE + PHASE_2_APPROACHING_LIMIT + PHASE_3_RATE_LIMITED):
         return "rate_limited"
-    elif elapsed < (
-        PHASE_1_NORMAL_BASELINE + PHASE_2_APPROACHING_LIMIT + PHASE_3_RATE_LIMITED + PHASE_4_RETRY_CASCADE
-    ):
+    elif elapsed < (PHASE_1_NORMAL_BASELINE + PHASE_2_APPROACHING_LIMIT + PHASE_3_RATE_LIMITED + PHASE_4_RETRY_CASCADE):
         return "retry_cascade"
     else:
         return "recovery"
@@ -359,9 +353,7 @@ def _record_cb_state_change(new_state: str, reason: str):
         old_state = _rl_stats["cb_current_state"]
 
         if new_state != old_state:
-            _rl_stats["cb_state_changes"].append(
-                {"time": time.time(), "from": old_state, "to": new_state, "reason": reason}
-            )
+            _rl_stats["cb_state_changes"].append({"time": time.time(), "from": old_state, "to": new_state, "reason": reason})
             _rl_stats["cb_current_state"] = new_state
 
             if new_state == "open" and "rate_limit" in reason.lower():
@@ -397,9 +389,7 @@ def _calculate_recovery_metrics():
             # Find first successful request after last rate limit
             recovery_time = None
             # Simplified - just calculate based on phase timing
-            _rl_stats["sla"]["rate_limit_recovery_time_s"] = (
-                time.time() - last_rate_limit if last_rate_limit else None
-            )
+            _rl_stats["sla"]["rate_limit_recovery_time_s"] = time.time() - last_rate_limit if last_rate_limit else None
 
         _rl_stats["sla"]["cascade_prevented"] = _rl_stats["retry_cascade_events"] < 5
         _rl_stats["sla"]["self_ddos_avoided"] = not _rl_stats["self_ddos_detected"]
@@ -411,15 +401,11 @@ def _perform_final_verification():
 
     # Check retry respects rate limit
     if _rl_stats["backoff_respected"] + _rl_stats["backoff_ignored"] > 0:
-        backoff_ratio = _rl_stats["backoff_respected"] / (
-            _rl_stats["backoff_respected"] + _rl_stats["backoff_ignored"]
-        )
+        backoff_ratio = _rl_stats["backoff_respected"] / (_rl_stats["backoff_respected"] + _rl_stats["backoff_ignored"])
         _rl_stats["verification"]["retry_respects_rate_limit"] = backoff_ratio >= 0.8
     else:
         _rl_stats["verification"]["retry_respects_rate_limit"] = True
-    print(
-        f"   - Retry respects rate limit: {'✓' if _rl_stats['verification']['retry_respects_rate_limit'] else '✗'}"
-    )
+    print(f"   - Retry respects rate limit: {'✓' if _rl_stats['verification']['retry_respects_rate_limit'] else '✗'}")
 
     # Check backoff on 429
     if _rl_stats["backoff_durations_ms"]:

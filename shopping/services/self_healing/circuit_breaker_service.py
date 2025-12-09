@@ -9,6 +9,8 @@ Features:
 - Manual force open/close by operators
 - Conditional replay trigger when circuit breaker closes
 - Admin integration for operational control
+- Rate limit cascade detection (auto-open CB on 429 storm)
+- Self-DDoS protection (prevent retry amplification)
 
 Reference: docs/L3_SELF_HEALING_OPERATIONS.md §9 (Runbook: Circuit Breaker)
 """
@@ -16,7 +18,11 @@ Reference: docs/L3_SELF_HEALING_OPERATIONS.md §9 (Runbook: Circuit Breaker)
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import random
+import threading
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -28,6 +34,87 @@ if TYPE_CHECKING:
     from shopping.models.user import User
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Rate Limit Tracker (Thread-safe)
+# =============================================================================
+
+
+class RateLimitTracker:
+    """
+    Thread-safe tracker for rate limit events.
+
+    Used to detect rate limit cascades and self-DDoS situations.
+    Tracks 429 responses and request rates per service.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        # {service_name: [timestamp, ...]} for rate limit hits
+        self._rate_limit_events: dict[str, list[float]] = defaultdict(list)
+        # {service_name: [timestamp, ...]} for all requests
+        self._request_events: dict[str, list[float]] = defaultdict(list)
+        # {service_name: backoff_level} for adaptive backoff
+        self._backoff_levels: dict[str, int] = defaultdict(int)
+
+    def record_rate_limit(self, service_name: str) -> None:
+        """Record a 429 rate limit response."""
+        with self._lock:
+            self._rate_limit_events[service_name].append(time.time())
+
+    def record_request(self, service_name: str) -> None:
+        """Record a request attempt."""
+        with self._lock:
+            self._request_events[service_name].append(time.time())
+
+    def get_rate_limit_count(self, service_name: str, window_seconds: int) -> int:
+        """Get the number of rate limits in the time window."""
+        cutoff = time.time() - window_seconds
+        with self._lock:
+            # Clean old entries
+            self._rate_limit_events[service_name] = [t for t in self._rate_limit_events[service_name] if t > cutoff]
+            return len(self._rate_limit_events[service_name])
+
+    def get_request_count(self, service_name: str, window_seconds: int) -> int:
+        """Get the number of requests in the time window."""
+        cutoff = time.time() - window_seconds
+        with self._lock:
+            # Clean old entries
+            self._request_events[service_name] = [t for t in self._request_events[service_name] if t > cutoff]
+            return len(self._request_events[service_name])
+
+    def get_backoff_level(self, service_name: str) -> int:
+        """Get current backoff level for a service."""
+        with self._lock:
+            return self._backoff_levels[service_name]
+
+    def increment_backoff(self, service_name: str) -> int:
+        """Increment and return the new backoff level."""
+        with self._lock:
+            self._backoff_levels[service_name] += 1
+            return self._backoff_levels[service_name]
+
+    def reset_backoff(self, service_name: str) -> None:
+        """Reset backoff level to zero."""
+        with self._lock:
+            self._backoff_levels[service_name] = 0
+
+    def clear_service(self, service_name: str) -> None:
+        """Clear all tracking data for a service."""
+        with self._lock:
+            self._rate_limit_events[service_name].clear()
+            self._request_events[service_name].clear()
+            self._backoff_levels[service_name] = 0
+
+
+# Global rate limit tracker instance
+_rate_limit_tracker = RateLimitTracker()
+
+
+def get_rate_limit_tracker() -> RateLimitTracker:
+    """Get the singleton rate limit tracker instance."""
+    return _rate_limit_tracker
 
 
 # =============================================================================
@@ -49,6 +136,16 @@ class CircuitBreakerConfig:
     max_pending_duration_hours: int = 4  # SLA for pending DLQ items
     max_retry_lifetime_hours: int = 24  # Max time to attempt retries
 
+    # Rate limit cascade detection settings
+    rate_limit_cascade_threshold: int = 10  # Number of 429s in window to trigger CB
+    rate_limit_cascade_window_seconds: int = 60  # Time window for cascade detection
+
+    # Self-DDoS protection settings
+    self_ddos_protection_enabled: bool = True
+    self_ddos_request_threshold: int = 100  # Max requests in window
+    self_ddos_window_seconds: int = 10  # Time window for self-DDoS detection
+    self_ddos_backoff_multiplier: float = 2.0  # Exponential backoff multiplier
+
     @classmethod
     def from_settings(cls) -> "CircuitBreakerConfig":
         """Load configuration from Django settings via centralized config."""
@@ -64,6 +161,12 @@ class CircuitBreakerConfig:
             half_open_request_limit=cb_settings.half_open_request_limit,
             max_pending_duration_hours=cb_settings.max_pending_duration_hours,
             max_retry_lifetime_hours=cb_settings.max_retry_lifetime_hours,
+            rate_limit_cascade_threshold=cb_settings.rate_limit_cascade_threshold,
+            rate_limit_cascade_window_seconds=cb_settings.rate_limit_cascade_window_seconds,
+            self_ddos_protection_enabled=cb_settings.self_ddos_protection_enabled,
+            self_ddos_request_threshold=cb_settings.self_ddos_request_threshold,
+            self_ddos_window_seconds=cb_settings.self_ddos_window_seconds,
+            self_ddos_backoff_multiplier=cb_settings.self_ddos_backoff_multiplier,
         )
 
 
@@ -243,6 +346,204 @@ class CircuitBreakerService:
 
         # half_open state: allow limited requests for testing
         return True
+
+    # =========================================================================
+    # Rate Limit Cascade Detection
+    # =========================================================================
+
+    def record_rate_limit_response(self, service_name: str) -> CircuitBreakerResult | None:
+        """
+        Record a 429 rate limit response and check for cascade.
+
+        Call this method when receiving a 429 response from an external service.
+        If a rate limit cascade is detected (too many 429s in a short window),
+        the circuit breaker will automatically open to prevent self-DDoS.
+
+        Args:
+            service_name: Name of the external service
+
+        Returns:
+            CircuitBreakerResult if circuit was opened, None otherwise
+        """
+        if not self.is_enabled:
+            return None
+
+        tracker = get_rate_limit_tracker()
+        tracker.record_rate_limit(service_name)
+
+        # Check for cascade condition
+        rate_limit_count = tracker.get_rate_limit_count(service_name, self.config.rate_limit_cascade_window_seconds)
+
+        if rate_limit_count >= self.config.rate_limit_cascade_threshold:
+            logger.warning(
+                f"[CircuitBreaker] Rate limit cascade detected for '{service_name}': "
+                f"{rate_limit_count} 429s in {self.config.rate_limit_cascade_window_seconds}s"
+            )
+
+            # Auto-open circuit breaker
+            result = self.force_open(
+                service_name=service_name,
+                reason=f"Rate limit cascade detected ({rate_limit_count} 429s in "
+                f"{self.config.rate_limit_cascade_window_seconds}s)",
+            )
+
+            if result.success:
+                # Increment backoff level for this service
+                tracker.increment_backoff(service_name)
+                logger.warning(f"[CircuitBreaker] Auto-opened circuit for '{service_name}' " "due to rate limit cascade")
+
+            return result
+
+        return None
+
+    def check_rate_limit_cascade(self, service_name: str) -> bool:
+        """
+        Check if a rate limit cascade is occurring for a service.
+
+        Args:
+            service_name: Name of the external service
+
+        Returns:
+            True if cascade is detected, False otherwise
+        """
+        tracker = get_rate_limit_tracker()
+        rate_limit_count = tracker.get_rate_limit_count(service_name, self.config.rate_limit_cascade_window_seconds)
+        return rate_limit_count >= self.config.rate_limit_cascade_threshold
+
+    # =========================================================================
+    # Self-DDoS Protection
+    # =========================================================================
+
+    def should_allow_with_ddos_protection(self, service_name: str) -> tuple[bool, float]:
+        """
+        Check if request should be allowed with self-DDoS protection.
+
+        This method combines circuit breaker check with self-DDoS protection.
+        If the request rate is too high, it returns a suggested backoff delay.
+
+        Args:
+            service_name: Name of the external service
+
+        Returns:
+            Tuple of (should_allow, suggested_backoff_seconds)
+            - If should_allow is False, the request should be blocked
+            - suggested_backoff_seconds indicates how long to wait before retry
+        """
+        # First, check standard circuit breaker
+        if not self.should_allow(service_name):
+            backoff = self.calculate_adaptive_backoff(service_name)
+            return False, backoff
+
+        # Check self-DDoS protection
+        if not self.config.self_ddos_protection_enabled:
+            return True, 0.0
+
+        tracker = get_rate_limit_tracker()
+        tracker.record_request(service_name)
+
+        request_count = tracker.get_request_count(service_name, self.config.self_ddos_window_seconds)
+
+        if request_count > self.config.self_ddos_request_threshold:
+            # Too many requests - suggest backoff but don't block
+            backoff = self.calculate_adaptive_backoff(service_name)
+            logger.warning(
+                f"[CircuitBreaker] Self-DDoS protection triggered for '{service_name}': "
+                f"{request_count} requests in {self.config.self_ddos_window_seconds}s, "
+                f"suggesting backoff of {backoff:.2f}s"
+            )
+            return True, backoff  # Allow but suggest delay
+
+        return True, 0.0
+
+    def calculate_adaptive_backoff(self, service_name: str) -> float:
+        """
+        Calculate adaptive backoff delay based on current conditions.
+
+        Uses exponential backoff with jitter to prevent thundering herd.
+
+        Args:
+            service_name: Name of the external service
+
+        Returns:
+            Backoff delay in seconds
+        """
+        tracker = get_rate_limit_tracker()
+        backoff_level = tracker.get_backoff_level(service_name)
+
+        # Base backoff: 1 second, exponentially increasing
+        base_backoff = 1.0
+        max_backoff = 60.0  # Maximum 60 seconds
+
+        # Calculate exponential backoff
+        backoff = min(base_backoff * (self.config.self_ddos_backoff_multiplier**backoff_level), max_backoff)
+
+        # Add jitter (±25%) to prevent thundering herd
+        jitter = backoff * 0.25 * (2 * random.random() - 1)
+        backoff_with_jitter = max(0.1, backoff + jitter)
+
+        return backoff_with_jitter
+
+    def reset_backoff(self, service_name: str) -> None:
+        """
+        Reset backoff level for a service after successful recovery.
+
+        Call this after a service has recovered to reset adaptive backoff.
+
+        Args:
+            service_name: Name of the external service
+        """
+        tracker = get_rate_limit_tracker()
+        tracker.reset_backoff(service_name)
+        logger.info(f"[CircuitBreaker] Reset backoff level for '{service_name}'")
+
+    def is_self_ddos_detected(self, service_name: str) -> bool:
+        """
+        Check if self-DDoS conditions are detected for a service.
+
+        Args:
+            service_name: Name of the external service
+
+        Returns:
+            True if self-DDoS is detected, False otherwise
+        """
+        if not self.config.self_ddos_protection_enabled:
+            return False
+
+        tracker = get_rate_limit_tracker()
+        request_count = tracker.get_request_count(service_name, self.config.self_ddos_window_seconds)
+        return request_count > self.config.self_ddos_request_threshold
+
+    def get_protection_status(self, service_name: str) -> dict[str, Any]:
+        """
+        Get comprehensive protection status for a service.
+
+        Returns:
+            Dictionary with protection status details
+        """
+        tracker = get_rate_limit_tracker()
+
+        return {
+            "service_name": service_name,
+            "circuit_state": self.get_state(service_name),
+            "circuit_breaker_enabled": self.is_enabled,
+            "rate_limit_cascade": {
+                "detected": self.check_rate_limit_cascade(service_name),
+                "count_in_window": tracker.get_rate_limit_count(service_name, self.config.rate_limit_cascade_window_seconds),
+                "threshold": self.config.rate_limit_cascade_threshold,
+                "window_seconds": self.config.rate_limit_cascade_window_seconds,
+            },
+            "self_ddos_protection": {
+                "enabled": self.config.self_ddos_protection_enabled,
+                "detected": self.is_self_ddos_detected(service_name),
+                "request_count_in_window": tracker.get_request_count(service_name, self.config.self_ddos_window_seconds),
+                "threshold": self.config.self_ddos_request_threshold,
+                "window_seconds": self.config.self_ddos_window_seconds,
+            },
+            "backoff": {
+                "current_level": tracker.get_backoff_level(service_name),
+                "suggested_delay_seconds": self.calculate_adaptive_backoff(service_name),
+            },
+        }
 
     def get_all_states(self) -> list[dict[str, Any]]:
         """
@@ -759,3 +1060,45 @@ def force_close_circuit(
         controlled_by=controlled_by,
         trigger_replay=trigger_replay,
     )
+
+
+def record_rate_limit(service_name: str) -> CircuitBreakerResult | None:
+    """
+    Convenience function to record a 429 rate limit response.
+
+    Call this when receiving a 429 response from an external service.
+    If a rate limit cascade is detected, the circuit breaker will auto-open.
+
+    Args:
+        service_name: Name of the external service
+
+    Returns:
+        CircuitBreakerResult if circuit was opened, None otherwise
+    """
+    return get_circuit_breaker_service().record_rate_limit_response(service_name)
+
+
+def should_allow_with_protection(service_name: str) -> tuple[bool, float]:
+    """
+    Convenience function to check if request should be allowed with self-DDoS protection.
+
+    Args:
+        service_name: Name of the external service
+
+    Returns:
+        Tuple of (should_allow, suggested_backoff_seconds)
+    """
+    return get_circuit_breaker_service().should_allow_with_ddos_protection(service_name)
+
+
+def get_protection_status(service_name: str) -> dict[str, Any]:
+    """
+    Convenience function to get comprehensive protection status.
+
+    Args:
+        service_name: Name of the external service
+
+    Returns:
+        Dictionary with protection status details
+    """
+    return get_circuit_breaker_service().get_protection_status(service_name)

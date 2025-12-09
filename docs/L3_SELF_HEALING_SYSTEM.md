@@ -13,6 +13,8 @@
    - [Dead Letter Queue (DLQ)](#2-dead-letter-queue-dlq)
    - [SLA Timeout Abort](#3-sla-timeout-abort)
    - [Circuit Breaker](#4-circuit-breaker-toggle-기반)
+   - [Rate Limit Cascade Detection](#5-rate-limit-cascade-detection)
+   - [Self-DDoS Protection](#6-self-ddos-protection)
 4. [설정](#설정)
 5. [모델](#모델)
 6. [서비스](#서비스)
@@ -230,6 +232,117 @@ reset_circuit_breaker.delay(
     reason="PG 복구 확인",
     controlled_by_id=admin_user.id,
 )
+```
+
+### 5. Rate Limit Cascade Detection
+
+외부 API의 Rate Limit (HTTP 429) 응답이 연속으로 발생하면 자동으로 Circuit Breaker를 Open합니다.
+
+**왜 필요한가?**
+- Rate Limit은 일시적인 오류처럼 보이지만, 연속 발생 시 외부 서비스가 과부하 상태
+- 계속 요청을 보내면 상황 악화 (차단 시간 증가, IP 블랙리스트 등)
+- Circuit Breaker를 열어 외부 서비스 복구 시간 확보
+
+**동작 원리**:
+```
+429 응답 10회 연속 (60초 내) → Circuit Breaker Open → 백오프 대기 후 재시도
+```
+
+**설정**:
+```python
+from shopping.services.self_healing.config import self_healing_config
+
+# CircuitBreakerSettings에 추가된 설정
+config = self_healing_config.circuit_breaker
+config.rate_limit_cascade_threshold  # 기본값: 10 (연속 429 응답 횟수)
+config.rate_limit_cascade_window_seconds  # 기본값: 60 (감지 윈도우)
+```
+
+**사용 예시**:
+```python
+from shopping.services.self_healing.circuit_breaker_service import (
+    record_rate_limit,
+    get_circuit_breaker
+)
+
+# 외부 API 호출 후 429 응답 수신 시
+def call_external_api():
+    response = requests.post(external_url, ...)
+
+    if response.status_code == 429:
+        # Rate limit 기록 및 cascade 체크
+        is_cascade = record_rate_limit("external_service")
+
+        if is_cascade:
+            # Circuit Breaker가 자동으로 Open됨
+            logger.warning("Rate limit cascade detected, CB opened")
+
+    return response
+```
+
+### 6. Self-DDoS Protection
+
+시스템 자체의 과도한 요청으로 인한 자기 자신에 대한 DDoS 방지 메커니즘입니다.
+
+**왜 필요한가?**
+- Retry 로직이 과도하게 동작하면 내부적으로 DDoS 상황 발생
+- 외부 서비스가 복구 중인데 지속적인 재시도가 복구를 방해
+- 적응형 백오프로 시스템 안정성 확보
+
+**동작 원리**:
+```
+서비스별 요청 추적 → 임계치 초과 감지 → 적응형 백오프 적용
+                                      ↓
+               요청 100회/60초 초과 → 백오프 배수 증가 (1.5x)
+                                      ↓
+               연속 감지 시 → 백오프 2x, 3x, ... 증가
+```
+
+**설정**:
+```python
+from shopping.services.self_healing.config import self_healing_config
+
+config = self_healing_config.circuit_breaker
+config.self_ddos_protection_enabled  # 기본값: True
+config.self_ddos_request_threshold   # 기본값: 100 (요청 임계치)
+config.self_ddos_window_seconds      # 기본값: 60 (감지 윈도우)
+config.self_ddos_backoff_multiplier  # 기본값: 1.5 (백오프 배수)
+```
+
+**사용 예시**:
+```python
+from shopping.services.self_healing.circuit_breaker_service import (
+    should_allow_with_ddos_protection,
+    get_protection_status
+)
+
+# 요청 전 DDoS 보호 체크
+def make_request_with_protection(service_name: str):
+    allowed, backoff = should_allow_with_ddos_protection(service_name)
+
+    if not allowed:
+        logger.warning(f"Self-DDoS detected, backoff: {backoff}s")
+        time.sleep(backoff)
+        return None
+
+    return call_external_service()
+
+# 보호 상태 확인
+def check_protection_status():
+    status = get_protection_status("toss_payment")
+    print(f"DDoS Detected: {status['self_ddos_detected']}")
+    print(f"Current Backoff: {status['current_backoff']}s")
+    print(f"Request Count: {status['request_count']}")
+```
+
+**적응형 백오프 계산**:
+```
+기본 백오프 × (배수 ^ 감지 횟수)
+
+예시 (배수 = 1.5):
+- 1차 감지: 4초 × 1.5^1 = 6초
+- 2차 감지: 4초 × 1.5^2 = 9초
+- 3차 감지: 4초 × 1.5^3 = 13.5초
 ```
 
 ---

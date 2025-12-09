@@ -559,7 +559,7 @@ def on_test_stop(environment, **kwargs):
         full_cycle = _cb_stats["closed_time"] - _cb_stats["open_time"]
         recovery["cb_full_cycle_latency_seconds"] = full_cycle
         print(f"   - Full CB cycle latency: {full_cycle:.1f}s")
-        
+
         if _cb_stats["half_open_time"]:
             open_to_half = _cb_stats["half_open_time"] - _cb_stats["open_time"]
             half_to_closed = _cb_stats["closed_time"] - _cb_stats["half_open_time"]
@@ -567,7 +567,7 @@ def on_test_stop(environment, **kwargs):
             recovery["half_open_to_closed_latency_seconds"] = half_to_closed
             print(f"   - OPEN → HALF_OPEN: {open_to_half:.1f}s (expected: ~{CB_RECOVERY_TIMEOUT}s)")
             print(f"   - HALF_OPEN → CLOSED: {half_to_closed:.1f}s")
-        
+
         # SLA check (full cycle should be under 2 minutes typically)
         sla_threshold = CB_RECOVERY_TIMEOUT + 30  # recovery_timeout + buffer
         recovery["sla_compliant"] = full_cycle < sla_threshold

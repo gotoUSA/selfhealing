@@ -81,18 +81,18 @@ _original_total = 300  # Original total: 300s
 _scale = _test_duration / _original_total
 
 # Test phases - scaled
-PHASE_1_BASELINE_DURATION = max(2, int(30 * _scale))      # Normal operations baseline
+PHASE_1_BASELINE_DURATION = max(2, int(30 * _scale))  # Normal operations baseline
 PHASE_2_LOCK_INJECTION_DURATION = max(5, int(120 * _scale))  # Lock contention injection
 PHASE_3_DEADLOCK_SIMULATION_DURATION = max(3, int(60 * _scale))  # Deadlock scenarios
-PHASE_4_RECOVERY_DURATION = max(3, int(60 * _scale))       # Recovery observation
-PHASE_5_VERIFICATION_DURATION = max(2, int(30 * _scale))   # Final consistency check
+PHASE_4_RECOVERY_DURATION = max(3, int(60 * _scale))  # Recovery observation
+PHASE_5_VERIFICATION_DURATION = max(2, int(30 * _scale))  # Final consistency check
 
 TOTAL_DURATION = (
-    PHASE_1_BASELINE_DURATION +
-    PHASE_2_LOCK_INJECTION_DURATION +
-    PHASE_3_DEADLOCK_SIMULATION_DURATION +
-    PHASE_4_RECOVERY_DURATION +
-    PHASE_5_VERIFICATION_DURATION
+    PHASE_1_BASELINE_DURATION
+    + PHASE_2_LOCK_INJECTION_DURATION
+    + PHASE_3_DEADLOCK_SIMULATION_DURATION
+    + PHASE_4_RECOVERY_DURATION
+    + PHASE_5_VERIFICATION_DURATION
 )
 
 # Concurrency settings
@@ -127,7 +127,7 @@ _lock_stats = {
     "response_times": defaultdict(list),  # phase -> list of response times
     # Stock tracking
     "initial_stock": {},  # product_id -> initial stock
-    "final_stock": {},    # product_id -> final stock
+    "final_stock": {},  # product_id -> final stock
     "expected_stock_change": {},  # product_id -> expected change
     # Order state tracking
     "orders_created": 0,
@@ -169,11 +169,14 @@ def _get_current_phase() -> str:
         return "baseline"
     elif elapsed < PHASE_1_BASELINE_DURATION + PHASE_2_LOCK_INJECTION_DURATION:
         return "lock_injection"
-    elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_LOCK_INJECTION_DURATION + 
-                   PHASE_3_DEADLOCK_SIMULATION_DURATION):
+    elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_LOCK_INJECTION_DURATION + PHASE_3_DEADLOCK_SIMULATION_DURATION):
         return "deadlock_simulation"
-    elif elapsed < (PHASE_1_BASELINE_DURATION + PHASE_2_LOCK_INJECTION_DURATION + 
-                   PHASE_3_DEADLOCK_SIMULATION_DURATION + PHASE_4_RECOVERY_DURATION):
+    elif elapsed < (
+        PHASE_1_BASELINE_DURATION
+        + PHASE_2_LOCK_INJECTION_DURATION
+        + PHASE_3_DEADLOCK_SIMULATION_DURATION
+        + PHASE_4_RECOVERY_DURATION
+    ):
         return "recovery"
     else:
         return "verification"
@@ -258,7 +261,7 @@ def _record_error(error_type: str):
 def _verify_consistency():
     """Verify data consistency after test"""
     print(f"\n📊 Verification Results:")
-    
+
     # Check lock timeout handling
     if _lock_stats["lock_timeout_count"] > 0:
         retry_rate = _lock_stats["lock_retry_count"] / _lock_stats["lock_timeout_count"]
@@ -286,11 +289,13 @@ def _verify_consistency():
     print(f"     (Pending rate: {pending_rate:.1%})")
 
     # Overall recovery status
-    _lock_stats["verification"]["recovery_successful"] = all([
-        _lock_stats["verification"]["lock_timeout_handled"],
-        _lock_stats["verification"]["no_crash_on_deadlock"],
-        _lock_stats["verification"]["no_stuck_pending_orders"],
-    ])
+    _lock_stats["verification"]["recovery_successful"] = all(
+        [
+            _lock_stats["verification"]["lock_timeout_handled"],
+            _lock_stats["verification"]["no_crash_on_deadlock"],
+            _lock_stats["verification"]["no_stuck_pending_orders"],
+        ]
+    )
     print(f"\n   Overall Recovery: {'✓ SUCCESS' if _lock_stats['verification']['recovery_successful'] else '✗ FAILED'}")
 
 
@@ -421,7 +426,7 @@ class DBLockRecoveryUser(HttpUser):
             },
             headers=self._get_auth_headers(),
             catch_response=True,
-            name=f"{STAGE_NAME} Add to Cart (Lock Test)"
+            name=f"{STAGE_NAME} Add to Cart (Lock Test)",
         ) as response:
             response_time = (time.time() - start_time) * 1000  # ms
             _record_response_time(phase, response_time)
@@ -473,7 +478,7 @@ class DBLockRecoveryUser(HttpUser):
                 "quantity": 1,
             },
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Order Flow - Add to Cart"
+            name=f"{STAGE_NAME} Order Flow - Add to Cart",
         )
 
         if cart_response.status_code != 200:
@@ -489,7 +494,7 @@ class DBLockRecoveryUser(HttpUser):
                 "shipping_postal_code": "12345",
             },
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Order Flow - Create Order"
+            name=f"{STAGE_NAME} Order Flow - Create Order",
         )
 
         if order_response.status_code == 201:
@@ -504,7 +509,7 @@ class DBLockRecoveryUser(HttpUser):
                     "payment_method": "card",
                 },
                 headers=self._get_auth_headers(),
-                name=f"{STAGE_NAME} Order Flow - Request Payment"
+                name=f"{STAGE_NAME} Order Flow - Request Payment",
             )
 
             if payment_response.status_code in [200, 201]:
@@ -540,7 +545,7 @@ class DBLockRecoveryUser(HttpUser):
             "/api/cart/add_item/",
             json={"product_id": product_a, "quantity": 1},
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Deadlock Pattern A→B (Step 1)"
+            name=f"{STAGE_NAME} Deadlock Pattern A→B (Step 1)",
         )
 
         # Small delay to increase deadlock probability
@@ -551,7 +556,7 @@ class DBLockRecoveryUser(HttpUser):
             "/api/cart/add_item/",
             json={"product_id": product_b, "quantity": 1},
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Deadlock Pattern A→B (Step 2)"
+            name=f"{STAGE_NAME} Deadlock Pattern A→B (Step 2)",
         )
 
         if response.status_code in [423, 409, 500]:
@@ -581,7 +586,7 @@ class DBLockRecoveryUser(HttpUser):
             "/api/cart/add_item/",
             json={"product_id": product_b, "quantity": 1},
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Deadlock Pattern B→A (Step 1)"
+            name=f"{STAGE_NAME} Deadlock Pattern B→A (Step 1)",
         )
 
         # Small delay to increase deadlock probability
@@ -592,7 +597,7 @@ class DBLockRecoveryUser(HttpUser):
             "/api/cart/add_item/",
             json={"product_id": product_a, "quantity": 1},
             headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Deadlock Pattern B→A (Step 2)"
+            name=f"{STAGE_NAME} Deadlock Pattern B→A (Step 2)",
         )
 
         if response.status_code in [423, 409, 500]:
@@ -608,11 +613,7 @@ class DBLockRecoveryUser(HttpUser):
         if phase != "verification":
             return
 
-        response = self.client.get(
-            "/api/orders/",
-            headers=self._get_auth_headers(),
-            name=f"{STAGE_NAME} Verify Orders"
-        )
+        response = self.client.get("/api/orders/", headers=self._get_auth_headers(), name=f"{STAGE_NAME} Verify Orders")
 
         if response.status_code == 200:
             orders = response.json()
@@ -639,10 +640,7 @@ class DBLockRecoveryUser(HttpUser):
             return
 
         for product_id in TARGET_PRODUCT_IDS[:3]:
-            response = self.client.get(
-                f"/api/products/{product_id}/",
-                name=f"{STAGE_NAME} Verify Stock"
-            )
+            response = self.client.get(f"/api/products/{product_id}/", name=f"{STAGE_NAME} Verify Stock")
 
             if response.status_code == 200:
                 product = response.json()
@@ -656,7 +654,7 @@ class DBLockRecoveryUser(HttpUser):
 
         if self.retry_count <= MAX_RETRY_ON_LOCK_TIMEOUT:
             # Exponential backoff
-            wait_time = 0.1 * (2 ** self.retry_count)
+            wait_time = 0.1 * (2**self.retry_count)
             time.sleep(wait_time)
             _record_lock_retry(success=False)  # Will be updated on success
         else:
@@ -776,13 +774,22 @@ def on_test_stop(environment, **kwargs):
 
 if __name__ == "__main__":
     import subprocess
-    subprocess.run([
-        "locust",
-        "-f", __file__,
-        "--host", "http://localhost:8000",
-        "--users", "50",
-        "--spawn-rate", "10",
-        "--run-time", "5m",
-        "--headless",
-        "--html", "stage16_report.html"
-    ])
+
+    subprocess.run(
+        [
+            "locust",
+            "-f",
+            __file__,
+            "--host",
+            "http://localhost:8000",
+            "--users",
+            "50",
+            "--spawn-rate",
+            "10",
+            "--run-time",
+            "5m",
+            "--headless",
+            "--html",
+            "stage16_report.html",
+        ]
+    )
