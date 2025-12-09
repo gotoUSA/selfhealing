@@ -170,9 +170,9 @@ class TestEnvironmentConstraints:
             reason="test",
             ttl_minutes=5
         )
-        
+
         response = control_api_handler.handle(request)
-        
+
         assert response.status == "rejected"
         assert response.error_code == "ACTION_FORBIDDEN_IN_ENVIRONMENT"
 
@@ -196,9 +196,9 @@ class TestEnvironmentConstraints:
             reason="test"
             # No ttl_minutes
         )
-        
+
         response = control_api_handler.handle(request)
-        
+
         assert response.status == "rejected"
         assert response.error_code == "TTL_REQUIRED_FOR_OPS_OVERRIDE"
 ```
@@ -258,15 +258,15 @@ class TestTTLManagement:
             reason="test",
             ttl_minutes=1
         ))
-        
+
         # Backdate expiration
         service_state = ServiceState.objects.get(service_name="payment")
         service_state.expires_at = timezone.now() - timedelta(minutes=1)
         service_state.save()
-        
+
         # Run expiration task
         result = expire_control_api_overrides()
-        
+
         # Verify
         service_state.refresh_from_db()
         assert service_state.state == "default"
@@ -292,7 +292,7 @@ class TestTTLManagement:
             reason="test",
             ttl_minutes=120
         ))
-        
+
         assert response.status == "rejected"
         assert response.error_code == "TTL_EXCEEDS_POLICY_LIMIT"
 ```
@@ -340,7 +340,7 @@ class TestAuthorization:
             - Error code: FORBIDDEN
         """
         developer = UserFactory(role="developer")
-        
+
         response = control_api_handler.handle(
             ControlRequest(
                 service_name="payment",
@@ -350,7 +350,7 @@ class TestAuthorization:
             ),
             actor=developer
         )
-        
+
         assert response.status == "rejected"
         assert response.error_code == "FORBIDDEN"
 
@@ -438,9 +438,9 @@ class TestValidation:
             environment="test"
             # No reason
         )
-        
+
         result = validate_control_request(request)
-        
+
         assert result.valid is False
         assert any(e.field == "reason" for e in result.errors)
 
@@ -468,9 +468,9 @@ class TestValidation:
                 }
             }
         )
-        
+
         result = validate_control_request(request)
-        
+
         assert result.valid is False
 ```
 
@@ -537,7 +537,7 @@ class TestServiceIntegration:
             environment="ops",
             reason="test recovery"
         ))
-        
+
         mock_close.assert_called_once_with(
             service_name="payment",
             reason="test recovery",
@@ -566,7 +566,7 @@ class TestServiceIntegration:
             status=FailedOperation.Status.PENDING,
             metadata={"service": "payment"}
         )
-        
+
         # Allow with replay
         control_api_handler.handle(ControlRequest(
             service_name="payment",
@@ -575,7 +575,7 @@ class TestServiceIntegration:
             reason="recovery",
             metadata={"trigger_replay": True}
         ))
-        
+
         # Verify replay
         dlq_entry.refresh_from_db()
         assert dlq_entry.status in [
@@ -637,7 +637,7 @@ class TestConditionalReplay:
             environment="ops",
             reason="test"
         ))
-        
+
         # Create failing entry
         dlq_entry = FailedOperation.objects.create(
             domain="payment",
@@ -645,7 +645,7 @@ class TestConditionalReplay:
             status=FailedOperation.Status.PENDING,
             metadata={"service": "payment"}
         )
-        
+
         # Allow with replay (will fail)
         with patch('replay_service.replay_single', side_effect=Exception("fail")):
             control_api_handler.handle(ControlRequest(
@@ -655,11 +655,11 @@ class TestConditionalReplay:
                 reason="recovery",
                 metadata={"trigger_replay": True}
             ))
-        
+
         # Verify state unchanged
         service_state = ServiceState.objects.get(service_name="payment")
         assert service_state.state == "allow"
-        
+
         # Verify entry escalated
         dlq_entry.refresh_from_db()
         assert dlq_entry.status == FailedOperation.Status.REQUIRES_REVIEW

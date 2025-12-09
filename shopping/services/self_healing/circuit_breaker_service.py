@@ -372,10 +372,20 @@ class CircuitBreakerService:
             state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
             previous_state = state.state
         except CircuitBreakerState.DoesNotExist:
-            logger.info(f"[CircuitBreaker] No circuit breaker exists for '{service_name}'")
-            return CircuitBreakerResult.failed(
+            # Service doesn't exist - create it in CLOSED state
+            state = CircuitBreakerState.objects.create(
                 service_name=service_name,
-                error=f"Circuit breaker for '{service_name}' does not exist",
+                state=CircuitState.CLOSED,
+                manually_controlled=True,
+                controlled_by=controlled_by,
+                control_reason=reason,
+            )
+            logger.info(f"[CircuitBreaker] Created circuit for '{service_name}' in CLOSED state")
+            return CircuitBreakerResult.succeeded(
+                service_name=service_name,
+                previous_state=CircuitState.CLOSED,
+                new_state=CircuitState.CLOSED,
+                message=f"Circuit breaker created and closed for {service_name}",
             )
 
         if state.state == CircuitState.CLOSED:

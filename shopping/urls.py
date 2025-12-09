@@ -81,6 +81,19 @@ from shopping.views.user_views import (
 # social auth callback
 from shopping.views.social_auth_views import SocialCallbackView
 
+# Self-Healing Control API
+from shopping.views.self_healing_views import (
+    ControlActionView,
+    ControlStatusView,
+    ServiceStatusView,
+    ControlAuditView,
+    QuickAllowView,
+    QuickBlockView,
+    QuickResetView,
+    SelfHealingHealthView,
+    SelfHealingMetricsView,
+)
+
 
 # 소셜 로그인 요청용 Serializer (Swagger 스키마용)
 from rest_framework import serializers as drf_serializers
@@ -407,6 +420,24 @@ urlpatterns = [
         TemplateView.as_view(template_name="social_test.html"),
         name="social-test-page",
     ),
+    # ==========================================================================
+    # Self-Healing Control API
+    # ==========================================================================
+    # Main control endpoint
+    path("self-healing/control/", ControlActionView.as_view(), name="self-healing-control"),
+    # Status endpoints
+    path("self-healing/status/", ControlStatusView.as_view(), name="self-healing-status"),
+    path("self-healing/status/<str:service_name>/", ServiceStatusView.as_view(), name="self-healing-service-status"),
+    # Audit endpoint
+    path("self-healing/audit/", ControlAuditView.as_view(), name="self-healing-audit"),
+    # Quick action endpoints
+    path("self-healing/allow/<str:service_name>/", QuickAllowView.as_view(), name="self-healing-quick-allow"),
+    path("self-healing/block/<str:service_name>/", QuickBlockView.as_view(), name="self-healing-quick-block"),
+    path("self-healing/reset/<str:service_name>/", QuickResetView.as_view(), name="self-healing-quick-reset"),
+    # Health check
+    path("self-healing/health/", SelfHealingHealthView.as_view(), name="self-healing-health"),
+    # Metrics endpoint (trend analysis for dashboards, AI agents, monitoring)
+    path("self-healing/metrics/", SelfHealingMetricsView.as_view(), name="self-healing-metrics"),
 ]
 
 """

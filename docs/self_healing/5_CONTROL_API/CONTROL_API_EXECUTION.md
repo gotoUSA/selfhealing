@@ -111,9 +111,9 @@ Implementation:
 def execute_allow(request: ControlRequest) -> ControlResponse:
     """
     Enable operations for the specified service.
-    
+
     Equivalent to Circuit Breaker: force_close (CB → CLOSED state)
-    
+
     Effects:
         - Service state → ALLOW
         - Pending operations → Resume processing
@@ -126,21 +126,21 @@ def execute_allow(request: ControlRequest) -> ControlResponse:
     service_state.controlled_by = request.actor
     service_state.control_reason = request.reason
     service_state.save()
-    
+
     # 2. Update Circuit Breaker if applicable
     circuit_breaker_service.force_close(
         service_name=request.service_name,
         reason=request.reason,
         controlled_by=request.actor
     )
-    
+
     # 3. Trigger conditional replay if configured
     if request.metadata.get("trigger_replay", False):
         trigger_conditional_replay(request.service_name)
-    
+
     # 4. Record audit
     record_audit(request, "allow", success=True)
-    
+
     return ControlResponse(
         status="success",
         action_applied="allow",
@@ -156,9 +156,9 @@ def execute_allow(request: ControlRequest) -> ControlResponse:
 def execute_block(request: ControlRequest) -> ControlResponse:
     """
     Block operations for the specified service.
-    
+
     Equivalent to Circuit Breaker: force_open (CB → OPEN state)
-    
+
     Effects:
         - Service state → BLOCK
         - New requests → Fail-fast with error
@@ -172,7 +172,7 @@ def execute_block(request: ControlRequest) -> ControlResponse:
     service_state.state = "block"
     service_state.controlled_by = request.actor
     service_state.control_reason = request.reason
-    
+
     # 2. Set TTL if provided
     if request.ttl_minutes:
         service_state.expires_at = timezone.now() + timedelta(minutes=request.ttl_minutes)
@@ -180,9 +180,9 @@ def execute_block(request: ControlRequest) -> ControlResponse:
         # Default TTL for block in ops: 90 minutes
         if request.environment == "ops":
             service_state.expires_at = timezone.now() + timedelta(minutes=90)
-    
+
     service_state.save()
-    
+
     # 3. Update Circuit Breaker
     circuit_breaker_service.force_open(
         service_name=request.service_name,
@@ -190,10 +190,10 @@ def execute_block(request: ControlRequest) -> ControlResponse:
         controlled_by=request.actor,
         ttl_minutes=request.ttl_minutes or 90
     )
-    
+
     # 4. Record audit with previous state
     record_audit(request, "block", success=True, previous_state=previous_state)
-    
+
     return ControlResponse(
         status="success",
         action_applied="block",
@@ -210,12 +210,12 @@ def execute_block(request: ControlRequest) -> ControlResponse:
 def execute_override(request: ControlRequest) -> ControlResponse:
     """
     Temporarily override normal policies.
-    
+
     Effects:
         - Specific policies → Suspended for TTL duration
         - Normal validation → Bypassed (with governance)
         - Audit → Enhanced logging
-    
+
     Requirements:
         - TTL required in ops environment
         - Reason required
@@ -224,10 +224,10 @@ def execute_override(request: ControlRequest) -> ControlResponse:
     # 1. Validate TTL for ops
     if request.environment == "ops" and not request.ttl_minutes:
         raise ValidationError("TTL required for override in ops environment")
-    
+
     if request.environment == "ops" and request.ttl_minutes > 60:
         raise ValidationError("TTL must not exceed 60 minutes in ops")
-    
+
     # 2. Check if CRITICAL risk requires approval
     risk_level = assess_risk(request)
     if risk_level == "CRITICAL":
@@ -238,7 +238,7 @@ def execute_override(request: ControlRequest) -> ControlResponse:
                 request_id=request.request_id,
                 approvers=approval.required_approvers
             )
-    
+
     # 3. Apply override
     override_policy = OverridePolicy.objects.create(
         service_name=request.service_name,
@@ -248,22 +248,22 @@ def execute_override(request: ControlRequest) -> ControlResponse:
         expires_at=timezone.now() + timedelta(minutes=request.ttl_minutes),
         environment=request.environment
     )
-    
+
     # 4. Collect evidence
     evidence = collect_evidence(request.service_name)
-    
+
     # 5. Classify reason (AI-assisted)
     reason_classification = classify_reason(request.reason)
-    
+
     # 6. Record enhanced audit
     record_audit(
-        request, 
-        "override", 
+        request,
+        "override",
         success=True,
         evidence=evidence,
         reason_classification=reason_classification
     )
-    
+
     return ControlResponse(
         status="success",
         action_applied="override",
@@ -282,7 +282,7 @@ def execute_override(request: ControlRequest) -> ControlResponse:
 def execute_reset(request: ControlRequest) -> ControlResponse:
     """
     Reset service to default state.
-    
+
     Effects:
         - All manual overrides → Cleared
         - Service state → Default policy
@@ -298,7 +298,7 @@ def execute_reset(request: ControlRequest) -> ControlResponse:
         cancelled_by=request.actor,
         cancelled_reason="Manual reset"
     )
-    
+
     # 2. Reset service state
     service_state = ServiceState.objects.get(service_name=request.service_name)
     previous_state = service_state.state
@@ -307,16 +307,16 @@ def execute_reset(request: ControlRequest) -> ControlResponse:
     service_state.control_reason = None
     service_state.expires_at = None
     service_state.save()
-    
+
     # 3. Reset Circuit Breaker
     circuit_breaker_service.reset(
         service_name=request.service_name,
         reason=request.reason
     )
-    
+
     # 4. Record audit
     record_audit(request, "reset", success=True, previous_state=previous_state)
-    
+
     return ControlResponse(
         status="success",
         action_applied="reset",
@@ -332,12 +332,12 @@ def execute_reset(request: ControlRequest) -> ControlResponse:
 def execute_inject_failure(request: ControlRequest) -> ControlResponse:
     """
     Inject controlled failures for chaos testing.
-    
+
     Effects:
         - Specified operations → Fail at configured rate
         - Failure patterns → Applied (timeout, error, latency)
         - Metrics → Tagged as chaos
-    
+
     Restrictions:
         - FORBIDDEN in ops environment
         - TTL recommended
@@ -345,7 +345,7 @@ def execute_inject_failure(request: ControlRequest) -> ControlResponse:
     # 1. Block in ops environment
     if request.environment == "ops":
         raise ForbiddenError("inject_failure is forbidden in ops environment")
-    
+
     # 2. Parse failure configuration
     failure_config = FailureConfig(
         failure_rate=request.metadata.get("failure_rate", 0.3),
@@ -353,7 +353,7 @@ def execute_inject_failure(request: ControlRequest) -> ControlResponse:
         affected_operations=request.metadata.get("affected_operations", []),
         latency_ms=request.metadata.get("latency_ms", 0)
     )
-    
+
     # 3. Register failure injection
     injection = FailureInjection.objects.create(
         service_name=request.service_name,
@@ -363,13 +363,13 @@ def execute_inject_failure(request: ControlRequest) -> ControlResponse:
         expires_at=timezone.now() + timedelta(minutes=request.ttl_minutes or 10),
         environment=request.environment
     )
-    
+
     # 4. Activate injection
     chaos_service.activate_injection(injection)
-    
+
     # 5. Record audit
     record_audit(request, "inject_failure", success=True)
-    
+
     return ControlResponse(
         status="success",
         action_applied="inject_failure",
@@ -429,9 +429,9 @@ def execute_inject_failure(request: ControlRequest) -> ControlResponse:
 def expire_control_api_overrides():
     """
     Periodic task to expire TTL-based overrides.
-    
+
     Runs every 5 minutes.
-    
+
     Actions:
         1. Find expired overrides
         2. Revert to previous/default state
@@ -439,49 +439,49 @@ def expire_control_api_overrides():
         4. Record audit
     """
     now = timezone.now()
-    
+
     # Find expired service states
     expired_states = ServiceState.objects.filter(
         expires_at__lte=now,
         state__in=["block", "override"]
     )
-    
+
     results = {"expired_count": 0, "services": []}
-    
+
     for state in expired_states:
         # Record previous state
         previous_state = state.state
-        
+
         # Revert to default
         state.state = "default"
         state.expires_at = None
         state.control_reason = f"Auto-expired from {previous_state}"
         state.save()
-        
+
         # Notify operators
         send_notification(
             channel="ops",
             message=f"Control override expired for {state.service_name}. "
                     f"State reverted from {previous_state} to default."
         )
-        
+
         # Record audit
         record_audit_expiration(state, previous_state)
-        
+
         results["expired_count"] += 1
         results["services"].append(state.service_name)
-    
+
     # Also expire failure injections
     expired_injections = FailureInjection.objects.filter(
         expires_at__lte=now,
         is_active=True
     )
-    
+
     for injection in expired_injections:
         chaos_service.deactivate_injection(injection)
         injection.is_active = False
         injection.save()
-    
+
     return results
 ```
 
@@ -491,7 +491,7 @@ def expire_control_api_overrides():
 def extend_ttl(request_id: str, additional_minutes: int, approver: User) -> ControlResponse:
     """
     Extend TTL for an active override.
-    
+
     Requirements:
         - Original actor or higher authority
         - Additional minutes within max limits
@@ -503,29 +503,29 @@ def extend_ttl(request_id: str, additional_minutes: int, approver: User) -> Cont
         request_id=request_id,
         expires_at__gt=timezone.now()
     )
-    
+
     # 2. Check extension limits
     new_expiry = override.expires_at + timedelta(minutes=additional_minutes)
     total_duration = (new_expiry - override.created_at).total_seconds() / 60
-    
+
     if override.environment == "ops" and total_duration > 120:
         raise ValidationError("Total override duration cannot exceed 120 minutes in ops")
-    
+
     # 3. Require approval for repeated extensions
     extension_count = override.extension_count or 0
     if extension_count >= 1:
         approval = require_approval(override, approver)
         if not approval.approved:
             raise ApprovalRequired("Repeated extension requires approval")
-    
+
     # 4. Apply extension
     override.expires_at = new_expiry
     override.extension_count = extension_count + 1
     override.save()
-    
+
     # 5. Record audit
     record_audit_extension(override, additional_minutes, approver)
-    
+
     return ControlResponse(
         status="success",
         action_applied="extend_ttl",
@@ -609,11 +609,11 @@ def trigger_conditional_replay(
 ) -> dict:
     """
     Replay backlogged DLQ entries when service becomes available.
-    
+
     Args:
         service_name: Target service
         escalate_failures: If True, escalate replay failures to REQUIRES_REVIEW
-    
+
     Returns:
         dict with replay statistics
     """
@@ -623,19 +623,19 @@ def trigger_conditional_replay(
         status=FailedOperation.Status.PENDING,
         retry_count__lt=2  # Respect max replay attempts
     )
-    
+
     results = {
         "total": pending_entries.count(),
         "success": 0,
         "failed": 0,
         "escalated": 0
     }
-    
+
     # 2. Process each entry
     for entry in pending_entries:
         try:
             replay_result = replay_single(entry.id)
-            
+
             if replay_result["success"]:
                 entry.status = FailedOperation.Status.RESOLVED
                 entry.resolution_type = "conditional_replay"
@@ -652,19 +652,19 @@ def trigger_conditional_replay(
                 else:
                     entry.retry_count += 1
                     results["failed"] += 1
-            
+
             entry.save()
-            
+
         except Exception as e:
             # Handler crash = immediate escalation
             entry.status = FailedOperation.Status.REQUIRES_REVIEW
             entry.resolution_note = f"Replay handler crashed: {type(e).__name__}: {str(e)}"
             entry.save()
             results["escalated"] += 1
-    
+
     # 3. Record metrics
     record_replay_metrics(service_name, results)
-    
+
     return results
 ```
 
@@ -689,7 +689,7 @@ def validate_control_request(request: ControlRequest) -> ValidationResult:
     Complete validation pipeline for control requests.
     """
     errors = []
-    
+
     # 1. Required fields
     if not request.service_name:
         errors.append(ValidationError("service_name", "required"))
@@ -699,36 +699,36 @@ def validate_control_request(request: ControlRequest) -> ValidationResult:
         errors.append(ValidationError("reason", "required"))
     if not request.environment:
         errors.append(ValidationError("environment", "required"))
-    
+
     # 2. Enum validation
     if request.action not in VALID_ACTIONS:
         errors.append(ValidationError("action", f"must be one of {VALID_ACTIONS}"))
     if request.environment not in VALID_ENVIRONMENTS:
         errors.append(ValidationError("environment", f"must be one of {VALID_ENVIRONMENTS}"))
-    
+
     # 3. Environment-specific rules
     if request.environment == "ops":
         # inject_failure forbidden
         if request.action == "inject_failure":
             errors.append(ValidationError(
-                "action", 
+                "action",
                 "inject_failure is forbidden in ops environment"
             ))
-        
+
         # TTL required for override
         if request.action == "override" and not request.ttl_minutes:
             errors.append(ValidationError(
                 "ttl_minutes",
                 "required for override in ops environment"
             ))
-        
+
         # TTL max limit
         if request.ttl_minutes and request.ttl_minutes > 60:
             errors.append(ValidationError(
                 "ttl_minutes",
                 "must not exceed 60 minutes in ops environment"
             ))
-    
+
     # 4. Metadata validation
     if request.metadata:
         if has_nested_objects(request.metadata):
@@ -746,17 +746,17 @@ def validate_control_request(request: ControlRequest) -> ValidationResult:
                 "metadata",
                 "size must not exceed 10KB"
             ))
-    
+
     # 5. Service existence
     if not service_exists(request.service_name):
         errors.append(ValidationError(
             "service_name",
             f"service '{request.service_name}' not found"
         ))
-    
+
     if errors:
         return ValidationResult(valid=False, errors=errors)
-    
+
     return ValidationResult(valid=True)
 ```
 
@@ -810,7 +810,7 @@ from shopping.services.self_healing.circuit_breaker_service import CircuitBreake
 class ControlAPIHandler:
     def __init__(self):
         self.circuit_breaker = CircuitBreakerService()
-    
+
     def handle_allow(self, request: ControlRequest) -> ControlResponse:
         # Map to existing force_close
         result = self.circuit_breaker.force_close(
@@ -819,7 +819,7 @@ class ControlAPIHandler:
             controlled_by=request.actor
         )
         return ControlResponse(status="success", ...)
-    
+
     def handle_block(self, request: ControlRequest) -> ControlResponse:
         # Map to existing force_open
         result = self.circuit_breaker.force_open(
@@ -844,7 +844,7 @@ class ControlAPIHandler:
             domain=None,  # All domains
             service=service_name
         )
-        
+
         # Trigger replay
         for entry in pending:
             ReplayService.replay_single(entry.id)
@@ -900,28 +900,28 @@ class ControlAPIHandler:
 def execute_action(request: ControlRequest) -> ControlResponse:
     """
     Execute action with transaction safety.
-    
+
     All-or-nothing: If any step fails, all changes are rolled back.
     """
     try:
         # Create savepoint
         sid = transaction.savepoint()
-        
+
         # Execute action
         result = _execute_action_impl(request)
-        
+
         # Commit on success
         transaction.savepoint_commit(sid)
-        
+
         return result
-        
+
     except Exception as e:
         # Rollback on failure
         transaction.savepoint_rollback(sid)
-        
+
         # Record failed attempt in audit (separate transaction)
         record_audit_failure(request, str(e))
-        
+
         raise
 ```
 
@@ -989,7 +989,7 @@ groups:
           severity: warning
         annotations:
           summary: "High number of blocked services"
-          
+
       - alert: ControlAPIOverrideLongDuration
         expr: control_api_override_duration_seconds > 3600
         for: 1m
@@ -997,7 +997,7 @@ groups:
           severity: high
         annotations:
           summary: "Override active for more than 1 hour"
-          
+
       - alert: ControlAPIReplayFailureHigh
         expr: |
           rate(control_api_conditional_replays_total{result="failed"}[5m])
@@ -1048,14 +1048,14 @@ from rest_framework.response import Response
 class ControlAPIView(APIView):
     """
     Self-Healing Control API endpoint.
-    
+
     POST /api/v1/control/
     """
-    
+
     def post(self, request):
         # Parse request
         control_request = ControlRequest.from_dict(request.data)
-        
+
         # Validate
         validation_result = validate_control_request(control_request)
         if not validation_result.valid:
@@ -1063,7 +1063,7 @@ class ControlAPIView(APIView):
                 {"status": "rejected", "errors": validation_result.errors},
                 status=400
             )
-        
+
         # Authorize
         auth_result = authorize_request(control_request, request.user)
         if not auth_result.authorized:
@@ -1071,11 +1071,11 @@ class ControlAPIView(APIView):
                 {"status": "rejected", "error": auth_result.reason},
                 status=403
             )
-        
+
         # Execute
         handler = ControlAPIHandler()
         result = handler.handle(control_request)
-        
+
         return Response(result.to_dict())
 ```
 
@@ -1092,18 +1092,18 @@ CONTROL_API = {
         "CHAOS_INJECT_DEFAULT_MINUTES": 10,
         "CHAOS_OVERRIDE_MAX_MINUTES": 120,
     },
-    
+
     # Expiration Task
     "EXPIRATION": {
         "CHECK_INTERVAL_SECONDS": 300,  # 5 minutes
     },
-    
+
     # Conditional Replay
     "REPLAY": {
         "ESCALATE_FAILURES": True,
         "MAX_BATCH_SIZE": 100,
     },
-    
+
     # Validation
     "VALIDATION": {
         "METADATA_MAX_SIZE_KB": 10,
