@@ -100,7 +100,7 @@ def control_api_service():
 class TestActionExecution:
     """
     Tests for Control API action execution.
-    
+
     Based on: CONTROL_API_TEST_REQUIREMENTS.md §2
     """
 
@@ -266,7 +266,7 @@ class TestActionExecution:
         assert response.status == "success"
         assert response.action_applied == "inject_failure"
         assert response.evidence.get("failure_rate") == 0.5
-        
+
         # Verify injection is active
         assert control_api_service.is_failure_injection_active("test_payment")
         config = control_api_service.get_failure_injection_config("test_payment")
@@ -282,7 +282,7 @@ class TestActionExecution:
 class TestEnvironmentConstraints:
     """
     Tests for environment-specific restrictions.
-    
+
     Based on: CONTROL_API_TEST_REQUIREMENTS.md §3
     """
 
@@ -437,7 +437,7 @@ class TestEnvironmentConstraints:
 class TestAPIAuthorization:
     """
     Tests for API-level authorization.
-    
+
     Based on: CONTROL_API_SECURITY_GOVERNANCE.md §3
     """
 

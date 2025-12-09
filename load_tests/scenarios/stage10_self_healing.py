@@ -477,6 +477,7 @@ class SelfHealingReadOnlyUser(HttpUser):
     def _login_as_user(self) -> bool:
         """Login as regular user"""
         import random
+
         user_idx = random.randint(1, 99)
         with self.client.post(
             "/api/auth/login/",

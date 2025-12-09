@@ -46,30 +46,30 @@ logger = logging.getLogger(__name__)
 class ControlActionView(APIView):
     """
     Execute Self-Healing Control Actions.
-    
+
     This endpoint provides a unified, auditable, reversible, and governed
     control surface to manage reliability behaviors.
-    
+
     **Actions:**
     - `allow`: Enable service operations (CB → CLOSED)
     - `block`: Disable service operations (CB → OPEN)
     - `override`: Temporarily bypass rules (requires TTL in ops)
     - `reset`: Revert to default configuration
     - `inject_failure`: Simulate failures (test/chaos only)
-    
+
     **Environments:**
     - `test`: CI/CD validation (minimal restrictions)
     - `chaos`: Resilience testing (TTL recommended)
     - `ops`: Production control (strict governance)
-    
+
     **Governance:**
     - `inject_failure` is FORBIDDEN in ops
     - `override` in ops requires TTL (max 60 min)
     - All actions are audited
     """
-    
+
     permission_classes = [IsAuthenticated, IsAdminUser]
-    
+
     @extend_schema(
         summary="Execute Control Action",
         description="""
@@ -107,8 +107,8 @@ Execute a self-healing control action on a service.
                     "service_name": "payment",
                     "action": "allow",
                     "environment": "ops",
-                    "reason": "PG recovered after maintenance"
-                }
+                    "reason": "PG recovered after maintenance",
+                },
             ),
             OpenApiExample(
                 "Block with TTL",
@@ -117,8 +117,8 @@ Execute a self-healing control action on a service.
                     "action": "block",
                     "environment": "ops",
                     "reason": "External API maintenance window",
-                    "ttl_minutes": 60
-                }
+                    "ttl_minutes": 60,
+                },
             ),
             OpenApiExample(
                 "Override for SLA Breach",
@@ -127,8 +127,8 @@ Execute a self-healing control action on a service.
                     "action": "override",
                     "environment": "ops",
                     "reason": "SLA breach mitigation - latency exceeded 2s",
-                    "ttl_minutes": 45
-                }
+                    "ttl_minutes": 45,
+                },
             ),
             OpenApiExample(
                 "Inject Failure (Chaos)",
@@ -138,18 +138,15 @@ Execute a self-healing control action on a service.
                     "environment": "chaos",
                     "reason": "Resilience testing - payment timeout",
                     "ttl_minutes": 10,
-                    "metadata": {
-                        "failure_rate": 0.5,
-                        "failure_type": "timeout"
-                    }
-                }
+                    "metadata": {"failure_rate": 0.5, "failure_type": "timeout"},
+                },
             ),
-        ]
+        ],
     )
     def post(self, request):
         """Execute a control action."""
         serializer = ControlRequestSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(
                 {
@@ -159,9 +156,9 @@ Execute a self-healing control action on a service.
                     "action_requested": request.data.get("action", "unknown"),
                     "environment": request.data.get("environment", "unknown"),
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Build internal request
         control_request = ControlRequest(
             service_name=serializer.validated_data["service_name"],
@@ -172,13 +169,13 @@ Execute a self-healing control action on a service.
             request_id=str(serializer.validated_data.get("request_id", "")),
             metadata=serializer.validated_data.get("metadata", {}),
             actor=request.user.username if request.user else "anonymous",
-            actor_role="admin" if request.user and request.user.is_staff else "user"
+            actor_role="admin" if request.user and request.user.is_staff else "user",
         )
-        
+
         # Execute
         service = get_control_api_service()
         response = service.execute(control_request)
-        
+
         # Return response
         if response.status == "rejected":
             return Response(response.to_dict(), status=status.HTTP_403_FORBIDDEN)
@@ -192,12 +189,12 @@ Execute a self-healing control action on a service.
 class ControlStatusView(APIView):
     """
     Get Self-Healing Service Status.
-    
+
     Returns the current state of all services or a specific service.
     """
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     @extend_schema(
         summary="Get All Service States",
         description="""
@@ -216,18 +213,18 @@ Get the current status of all services in the self-healing system.
                 required=False,
                 type=str,
                 enum=["test", "chaos", "ops"],
-                default="ops"
+                default="ops",
             )
         ],
-        responses={200: ControlStatusResponseSerializer}
+        responses={200: ControlStatusResponseSerializer},
     )
     def get(self, request):
         """Get status of all services."""
         environment = request.query_params.get("environment", "ops")
-        
+
         service = get_control_api_service()
         status_data = service.get_status(environment=environment)
-        
+
         return Response(status_data)
 
 
@@ -235,22 +232,22 @@ Get the current status of all services in the self-healing system.
 class ServiceStatusView(APIView):
     """
     Get Specific Service Status.
-    
+
     Returns the current state of a specific service.
     """
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     @extend_schema(
         summary="Get Service State",
         description="Get the current status of a specific service.",
-        responses={200: ServiceStateSerializer}
+        responses={200: ServiceStateSerializer},
     )
     def get(self, request, service_name: str):
         """Get status of a specific service."""
         service = get_control_api_service()
         status_data = service.get_service_status(service_name)
-        
+
         return Response(status_data)
 
 
@@ -258,12 +255,12 @@ class ServiceStatusView(APIView):
 class ControlAuditView(APIView):
     """
     Get Self-Healing Audit Logs.
-    
+
     Returns audit logs for control API actions.
     """
-    
+
     permission_classes = [IsAuthenticated, IsAdminUser]
-    
+
     @extend_schema(
         summary="Get Audit Logs",
         description="""
@@ -283,18 +280,20 @@ Get audit logs for self-healing control actions.
             OpenApiParameter(name="page", type=int, required=False, default=1),
             OpenApiParameter(name="page_size", type=int, required=False, default=50),
         ],
-        responses={200: AuditLogListResponseSerializer}
+        responses={200: AuditLogListResponseSerializer},
     )
     def get(self, request):
         """Get audit logs."""
         # TODO: Implement actual audit log retrieval from database
         # For now, return empty response
-        return Response({
-            "logs": [],
-            "total_count": 0,
-            "page": int(request.query_params.get("page", 1)),
-            "page_size": int(request.query_params.get("page_size", 50))
-        })
+        return Response(
+            {
+                "logs": [],
+                "total_count": 0,
+                "page": int(request.query_params.get("page", 1)),
+                "page_size": int(request.query_params.get("page_size", 50)),
+            }
+        )
 
 
 # =============================================================================
@@ -306,17 +305,17 @@ Get audit logs for self-healing control actions.
 class QuickAllowView(APIView):
     """
     Quick Allow Action.
-    
+
     Shortcut endpoint to quickly enable a service.
     """
-    
+
     permission_classes = [IsAuthenticated, IsAdminUser]
-    
+
     @extend_schema(
         summary="Quick Allow Service",
         description="Quickly enable service operations (shortcut for allow action).",
         request=None,
-        responses={200: ControlResponseSerializer}
+        responses={200: ControlResponseSerializer},
     )
     def post(self, request, service_name: str):
         """Quick allow a service."""
@@ -325,12 +324,12 @@ class QuickAllowView(APIView):
             action=ControlAPIActions.ALLOW,
             reason=request.data.get("reason", "Quick allow via API"),
             environment=request.data.get("environment", "ops"),
-            actor=request.user.username if request.user else "anonymous"
+            actor=request.user.username if request.user else "anonymous",
         )
-        
+
         service = get_control_api_service()
         response = service.execute(control_request)
-        
+
         return Response(response.to_dict())
 
 
@@ -338,17 +337,17 @@ class QuickAllowView(APIView):
 class QuickBlockView(APIView):
     """
     Quick Block Action.
-    
+
     Shortcut endpoint to quickly block a service.
     """
-    
+
     permission_classes = [IsAuthenticated, IsAdminUser]
-    
+
     @extend_schema(
         summary="Quick Block Service",
         description="Quickly block service operations (shortcut for block action).",
         request=None,
-        responses={200: ControlResponseSerializer}
+        responses={200: ControlResponseSerializer},
     )
     def post(self, request, service_name: str):
         """Quick block a service."""
@@ -358,12 +357,12 @@ class QuickBlockView(APIView):
             reason=request.data.get("reason", "Quick block via API"),
             environment=request.data.get("environment", "ops"),
             ttl_minutes=request.data.get("ttl_minutes", 90),
-            actor=request.user.username if request.user else "anonymous"
+            actor=request.user.username if request.user else "anonymous",
         )
-        
+
         service = get_control_api_service()
         response = service.execute(control_request)
-        
+
         return Response(response.to_dict())
 
 
@@ -371,17 +370,17 @@ class QuickBlockView(APIView):
 class QuickResetView(APIView):
     """
     Quick Reset Action.
-    
+
     Shortcut endpoint to quickly reset a service to defaults.
     """
-    
+
     permission_classes = [IsAuthenticated, IsAdminUser]
-    
+
     @extend_schema(
         summary="Quick Reset Service",
         description="Quickly reset service to default configuration.",
         request=None,
-        responses={200: ControlResponseSerializer}
+        responses={200: ControlResponseSerializer},
     )
     def post(self, request, service_name: str):
         """Quick reset a service."""
@@ -390,12 +389,12 @@ class QuickResetView(APIView):
             action=ControlAPIActions.RESET,
             reason=request.data.get("reason", "Quick reset via API"),
             environment=request.data.get("environment", "ops"),
-            actor=request.user.username if request.user else "anonymous"
+            actor=request.user.username if request.user else "anonymous",
         )
-        
+
         service = get_control_api_service()
         response = service.execute(control_request)
-        
+
         return Response(response.to_dict())
 
 
@@ -408,12 +407,12 @@ class QuickResetView(APIView):
 class SelfHealingHealthView(APIView):
     """
     Self-Healing System Health Check.
-    
+
     Returns the health status of the self-healing system itself.
     """
-    
+
     permission_classes = []  # Public endpoint
-    
+
     @extend_schema(
         summary="Self-Healing Health Check",
         description="Check the health of the self-healing system.",
@@ -424,17 +423,17 @@ class SelfHealingHealthView(APIView):
                     "status": {"type": "string"},
                     "circuit_breaker_enabled": {"type": "boolean"},
                     "services_count": {"type": "integer"},
-                    "timestamp": {"type": "string"}
-                }
+                    "timestamp": {"type": "string"},
+                },
             }
-        }
+        },
     )
     def get(self, request):
         """Get self-healing system health."""
         from django.utils import timezone
-        
+
         service = get_control_api_service()
-        
+
         try:
             status_data = service.get_status()
             services_count = len(status_data.get("services", []))
@@ -445,13 +444,15 @@ class SelfHealingHealthView(APIView):
             services_count = 0
             cb_enabled = False
             health_status = "degraded"
-        
-        return Response({
-            "status": health_status,
-            "circuit_breaker_enabled": cb_enabled,
-            "services_count": services_count,
-            "timestamp": timezone.now().isoformat()
-        })
+
+        return Response(
+            {
+                "status": health_status,
+                "circuit_breaker_enabled": cb_enabled,
+                "services_count": services_count,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 # =============================================================================
@@ -463,26 +464,26 @@ class SelfHealingHealthView(APIView):
 class SelfHealingMetricsView(APIView):
     """
     Self-Healing Metrics for Trend Analysis.
-    
+
     Unlike status (point-in-time snapshot), metrics provide trend data
     for dashboards, AI agents, and monitoring integration.
-    
+
     **Consumers:**
     - Admin UI: Dashboard visualization with trend charts
     - AI Agent: Automated decision making based on trends
     - Celery: Periodic health assessments
     - Prometheus/Grafana: Metrics scraping and alerting
     - External Monitoring: Third-party integration
-    
+
     **Use Cases:**
     - Identify degradation trends before outages
     - Track recovery effectiveness over time
     - Monitor automation success rates
     - Feed ML models for predictive healing
     """
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     @extend_schema(
         summary="Get Self-Healing Metrics",
         description="""
@@ -520,25 +521,24 @@ Retrieve comprehensive self-healing metrics for trend analysis.
                     "dlq_by_service": {"type": "object"},
                     "services": {"type": "array"},
                     "timestamp": {"type": "string"},
-                    "collection_duration_ms": {"type": "integer"}
-                }
+                    "collection_duration_ms": {"type": "integer"},
+                },
             }
-        }
+        },
     )
     def get(self, request):
         """
         Get comprehensive self-healing metrics.
-        
+
         Returns trend data for monitoring and analysis.
         """
         service = get_control_api_service()
-        
+
         try:
             metrics = service.get_metrics()
             return Response(metrics, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"[SelfHealing] Metrics collection failed: {e}")
             return Response(
-                {"error": "Failed to collect metrics", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to collect metrics", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
