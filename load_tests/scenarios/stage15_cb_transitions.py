@@ -307,36 +307,33 @@ class CBTransitionUser(HttpUser):
             pass
         return None
 
-    def _inject_failure(self):
-        """Inject failure to trigger CB open"""
+    def _block_service(self):
+        """Block service via Control API (force CB to OPEN)"""
         try:
             with self.client.post(
                 "/api/self-healing/control/",
                 json={
                     "service_name": TARGET_SERVICE,
-                    "action": "inject_failure",
+                    "action": "block",
                     "environment": "test",
-                    "reason": "Stage 15 CB transition test",
-                    "ttl_minutes": 2,
-                    "metadata": {
-                        "failure_rate": 1.0,  # 100% failure
-                        "failure_type": "error",
-                    },
+                    "reason": "Stage 15 CB control test - blocking service",
+                    "ttl_minutes": 5,
                 },
                 headers=self.admin_login_helper.get_auth_header(),
-                name=f"{STAGE_NAME} inject-failure",
+                name=f"{STAGE_NAME} block-service",
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
                     self._failure_injection_active = True
+                    print(f"\n🔴 Service BLOCKED via Control API")
                     response.success()
                 else:
-                    response.failure(f"Injection failed: {response.status_code}")
-        except Exception:
-            pass
+                    response.failure(f"Block failed: {response.status_code}")
+        except Exception as e:
+            print(f"Block error: {e}")
 
-    def _remove_failure_injection(self):
-        """Remove failure injection"""
+    def _allow_service(self):
+        """Allow service via Control API (force CB to CLOSED)"""
         if not self._failure_injection_active:
             return
 
@@ -345,19 +342,20 @@ class CBTransitionUser(HttpUser):
                 "/api/self-healing/control/",
                 json={
                     "service_name": TARGET_SERVICE,
-                    "action": "reset",
+                    "action": "allow",
                     "environment": "test",
-                    "reason": "Stage 15 reset",
+                    "reason": "Stage 15 CB control test - allowing service",
                 },
                 headers=self.admin_login_helper.get_auth_header(),
-                name=f"{STAGE_NAME} reset",
+                name=f"{STAGE_NAME} allow-service",
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
                     self._failure_injection_active = False
+                    print(f"\n🟢 Service ALLOWED via Control API")
                     response.success()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Allow error: {e}")
 
     # =========================================================================
     # Test Tasks
@@ -374,19 +372,20 @@ class CBTransitionUser(HttpUser):
         if phase == "normal":
             self._normal_request()
 
-        # Phase 2: Inject failures
+        # Phase 2: Block service to force CB OPEN
         elif phase == "failure_injection":
             if not self._failure_injection_active:
-                self._inject_failure()
-            self._failing_request()
+                self._block_service()
+            # Check state after blocking
+            self._check_cb_state()
 
-        # Phase 3: Wait for recovery
+        # Phase 3: Wait, then allow service
         elif phase == "wait_recovery":
-            # Remove failure injection at start of wait phase
+            # Allow service at start of wait phase
             if self._failure_injection_active:
-                self._remove_failure_injection()
-            # Just monitor, minimal requests
-            pass
+                self._allow_service()
+            # Check state after allowing
+            self._check_cb_state()
 
         # Phase 4: Recovery requests
         elif phase == "recovery":

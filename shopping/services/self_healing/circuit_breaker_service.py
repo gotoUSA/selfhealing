@@ -372,12 +372,22 @@ class CircuitBreakerService:
             state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
             previous_state = state.state
         except CircuitBreakerState.DoesNotExist:
-            # force_close requires an existing circuit breaker
-            # Unlike force_open, closing a non-existent circuit is not meaningful
-            logger.warning(f"[CircuitBreaker] Cannot close non-existent circuit for '{service_name}'")
-            return CircuitBreakerResult.failed(
+            # Create new state in CLOSED (allow is the default state)
+            state = CircuitBreakerState.objects.create(
                 service_name=service_name,
-                error=f"Circuit breaker for '{service_name}' does not exist. Use force_open first.",
+                state=CircuitState.CLOSED,
+                failure_count=0,
+                success_count=0,
+                manually_controlled=True,
+                controlled_by=controlled_by,
+                control_reason=reason,
+            )
+            logger.info(f"[CircuitBreaker] Created circuit for '{service_name}' in CLOSED state: {reason}")
+            return CircuitBreakerResult.succeeded(
+                service_name=service_name,
+                previous_state=CircuitState.CLOSED,
+                new_state=CircuitState.CLOSED,
+                message=f"Circuit breaker created for {service_name} (already closed)",
             )
 
         if state.state == CircuitState.CLOSED:

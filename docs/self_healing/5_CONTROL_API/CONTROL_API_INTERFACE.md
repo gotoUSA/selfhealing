@@ -543,7 +543,81 @@ X-Control-API-Version: 1.0
 
 ---
 
-## 12. Related Documents
+## 12. Supplementary APIs
+
+### DLQ Replay API
+
+In addition to the 5 core Control API actions, a supplementary API is provided for DLQ (Dead Letter Queue) batch reprocessing.
+
+#### Endpoint
+
+```
+POST /api/self-healing/dlq/replay/
+```
+
+#### Purpose
+
+- Batch reprocessing of failed messages in the DLQ
+- Filtering by domain/service supported
+- Configurable batch size and max retry count
+
+#### Request Model
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `domain` | string | No | - | Domain filter (e.g., `payment`, `order`) |
+| `service_name` | string | No | - | Service filter |
+| `batch_size` | integer | No | 100 | Number of messages to process at once |
+| `max_retries` | integer | No | 3 | Maximum retry attempts |
+
+#### Request Example
+
+```json
+{
+  "domain": "payment",
+  "batch_size": 50,
+  "max_retries": 2
+}
+```
+
+#### Response Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether the request was processed successfully |
+| `processed` | integer | Number of messages processed |
+| `failed` | integer | Number of messages that failed |
+| `message` | string | Result message |
+
+#### Response Example
+
+**Success (200)**
+```json
+{
+  "success": true,
+  "processed": 45,
+  "failed": 5,
+  "message": "DLQ replay completed: 45 processed, 5 failed"
+}
+```
+
+**Error (500)**
+```json
+{
+  "success": false,
+  "error": "DLQ replay failed: Connection timeout"
+}
+```
+
+#### Access Control
+
+- Available in all environments (test, chaos, ops)
+- Audit log is recorded in `ops` environment
+- Authentication required (session or API token)
+
+---
+
+## 13. Related Documents
 
 | Document | Purpose | Location |
 |----------|---------|----------|

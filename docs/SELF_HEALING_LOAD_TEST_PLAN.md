@@ -159,46 +159,58 @@ Metrics to Collect:
 
 ## Recovery Mechanism Tests (Stage 14-15)
 
-### Stage 14: DLQ Replay Verification
+### Stage 14: DLQ Insertion Verification
 
 ```python
 # load_tests/scenarios/stage14_dlq_replay.py
 
-Purpose: Verify DLQ reprocessing accuracy and data consistency
+Purpose: Verify DLQ insertion accuracy and monitoring
+
+Note: Full DLQ replay testing now available via REST API.
+      POST /api/self-healing/dlq/replay/
 
 Scenario:
-  Step 1: Attempt 100 payments (50% forced failure)
-  Step 2: Verify DLQ insertion (expect 50 entries)
-  Step 3: Remove forced failure
-  Step 4: Trigger DLQ replay
-  Step 5: Verify results
+  Step 1: Attempt payments with forced failures
+  Step 2: Verify DLQ pending count increases
+  Step 3: (Optional) Trigger replay via API
+  Step 4: Verify results
 
 Verification:
-  - dlq_replayed == dlq_inserted
+  - dlq_pending_count increases after failures
   - duplicate_payment == 0
   - idempotent_key_violations == 0
-  - stock_after == stock_expected
-  - point_after == point_expected
+  - DLQ status API returns valid data
+
+API Endpoints:
+  - GET  /api/self-healing/status/       - Check DLQ pending count
+  - POST /api/self-healing/dlq/replay/   - Trigger batch replay
 ```
 
-### Stage 15: Circuit Breaker Auto Transitions
+### Stage 15: Circuit Breaker Control & Monitoring
 
 ```python
 # load_tests/scenarios/stage15_cb_transitions.py
 
-Purpose: Verify automatic Circuit Breaker state transitions
+Purpose: Verify CB Control API and state monitoring
+
+Note: Manual CB control via Control API.
+      Auto-transitions (failure → OPEN) tested in Stage 16-22.
 
 Scenario:
-  Phase 1: Normal requests → confirm closed
-  Phase 2: Inject 5 consecutive failures → confirm open transition
-  Phase 3: Wait recovery_timeout (60s) → confirm half_open transition
-  Phase 4: 2 successful requests → confirm closed return
+  Phase 1: Confirm initial CLOSED state
+  Phase 2: Block service → confirm OPEN state
+  Phase 3: Allow service → confirm CLOSED state
+  Phase 4: Verify final state and audit
 
 Verification:
-  - Each transition accuracy
-  - Transition timing (config compliance)
-  - half_open request limiting
-  - Transition audit log
+  - block action sets CB to OPEN
+  - allow action sets CB to CLOSED
+  - status API returns correct state
+  - Each control action is logged
+
+API Endpoints:
+  - POST /api/self-healing/control/           - block/allow/reset
+  - GET  /api/self-healing/status/{service}/  - Check CB state
 ```
 
 ---

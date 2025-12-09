@@ -542,3 +542,109 @@ Retrieve comprehensive self-healing metrics for trend analysis.
             return Response(
                 {"error": "Failed to collect metrics", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# =============================================================================
+# DLQ Replay View
+# =============================================================================
+
+
+@extend_schema(tags=["Self-Healing"])
+class DLQReplayView(APIView):
+    """
+    DLQ Replay API.
+
+    Trigger replay of failed operations from the Dead Letter Queue.
+    This provides REST API access to the same functionality available in Django Admin.
+
+    **Use Cases:**
+    - Automated recovery after service restoration
+    - CI/CD pipeline integration for testing
+    - External monitoring system triggers
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        summary="Replay DLQ Items",
+        description="""
+Trigger replay of failed operations from the Dead Letter Queue.
+
+**Parameters:**
+- `domain`: Filter by domain (payment, point, inventory, etc.)
+- `service_name`: Filter by service name
+- `batch_size`: Maximum items to replay (default: 50, max: 200)
+- `status`: DLQ item status to replay (default: pending)
+
+**Response:**
+- Total items processed
+- Success/failure counts
+- Individual replay results
+""",
+        request={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Domain to replay (payment, point, inventory)"},
+                "service_name": {"type": "string", "description": "Service name filter"},
+                "batch_size": {"type": "integer", "default": 50, "maximum": 200},
+                "status": {"type": "string", "default": "pending"},
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "total": {"type": "integer"},
+                    "success_count": {"type": "integer"},
+                    "failed_count": {"type": "integer"},
+                    "skipped_count": {"type": "integer"},
+                },
+            },
+            400: {"type": "object", "properties": {"error": {"type": "string"}}},
+        },
+    )
+    def post(self, request):
+        """Trigger DLQ replay."""
+        domain = request.data.get("domain")
+        service_name = request.data.get("service_name")
+        batch_size = min(int(request.data.get("batch_size", 50)), 200)
+        item_status = request.data.get("status", "pending")
+
+        try:
+            from shopping.services.self_healing.replay_service import ReplayService
+
+            replay_service = ReplayService()
+
+            # Build filter
+            filters = {"status": item_status}
+            if domain:
+                filters["domain"] = domain
+            if service_name:
+                filters["service_name"] = service_name
+
+            # Execute batch replay
+            result = replay_service.replay_batch(
+                filters=filters,
+                batch_size=batch_size,
+                triggered_by=request.user.username if request.user else "api",
+            )
+
+            logger.info(
+                f"[DLQ] Replay triggered via API: domain={domain}, service={service_name}, "
+                f"batch_size={batch_size}, success={result.success_count}, failed={result.failed_count}"
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "total": result.total,
+                    "success_count": result.success_count,
+                    "failed_count": result.failed_count,
+                    "skipped_count": result.skipped_count,
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"[DLQ] Replay failed: {e}")
+            return Response({"status": "error", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

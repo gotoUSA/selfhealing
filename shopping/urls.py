@@ -92,6 +92,7 @@ from shopping.views.self_healing_views import (
     QuickResetView,
     SelfHealingHealthView,
     SelfHealingMetricsView,
+    DLQReplayView,
 )
 
 
@@ -438,6 +439,8 @@ urlpatterns = [
     path("self-healing/health/", SelfHealingHealthView.as_view(), name="self-healing-health"),
     # Metrics endpoint (trend analysis for dashboards, AI agents, monitoring)
     path("self-healing/metrics/", SelfHealingMetricsView.as_view(), name="self-healing-metrics"),
+    # DLQ Replay endpoint (for automated testing and recovery)
+    path("self-healing/dlq/replay/", DLQReplayView.as_view(), name="self-healing-dlq-replay"),
 ]
 
 """

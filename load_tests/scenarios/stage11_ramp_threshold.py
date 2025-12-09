@@ -182,7 +182,7 @@ class RampUpShape(LoadTestShape):
 
     Gradually increases users from 10 to 300 over 20 minutes.
     This allows us to observe when the system starts showing stress.
-    
+
     Set LOCUST_TEST_DURATION env var to override duration (in seconds).
     """
 

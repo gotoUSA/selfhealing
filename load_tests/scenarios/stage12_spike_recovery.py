@@ -164,7 +164,7 @@ class SpikeRecoveryShape(LoadTestShape):
 
     Simulates a sudden traffic spike followed by gradual recovery.
     This tests the system's ability to recover from overload.
-    
+
     Set LOCUST_TEST_DURATION env var to scale all durations.
     """
 
