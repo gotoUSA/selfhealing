@@ -1,192 +1,192 @@
-# Payment Load Test Suite — 설계 문서
+# Payment Load Test Suite — Design Document
 
-> **버전**: 1.1
-> **최종 수정**: 2025-12-07
-> **프로젝트**: 솔로 개발 e-commerce Payment 시스템
+> **Version**: 1.1
+> **Last Modified**: 2025-12-07
+> **Project**: Solo Developer e-commerce Payment System
 
 ---
 
-## ⚠️ 범위 및 제약사항
+## ⚠️ Scope and Constraints
 
-> 본 문서는 **솔로 개발 e-commerce 프로젝트**의 Payment Load Test 설계입니다.
+> This document describes the Payment Load Test design for a **solo developer e-commerce project**.
 >
-> - **필수 구현**: Stage 0-5 (환경검증 → Rollback 검증)
-> - **확장/참고용**: Stage 6-9 (Chaos, Race, Webhook, Soak)
-> - **현재 제약**: 클라이언트측 시뮬레이션 (실제 PG/네트워크 장애 주입 아님)
+> - **Required Implementation**: Stage 0-5 (Environment Verification → Rollback Verification)
+> - **Extension/Reference**: Stage 6-9 (Chaos, Race, Webhook, Soak)
+> - **Current Limitation**: Client-side simulation (not actual PG/network fault injection)
 
-### 현재 구현의 한계
+### Current Implementation Limitations
 
-| 테스트 | 문서 목표 | 실제 구현 |
-|--------|----------|----------|
-| Latency Injection | PG 서버 지연 | Locust 클라이언트 `time.sleep()` |
-| Webhook Test | 실 Toss 서명 검증 | 서명 없이 핸들러 직접 호출 |
-| Race Condition | DB 레벨 동시성 | Locust 동시 요청 (한계 있음) |
+| Test | Document Goal | Actual Implementation |
+|------|---------------|----------------------|
+| Latency Injection | PG Server Delay | Locust Client `time.sleep()` |
+| Webhook Test | Real Toss Signature Verification | Direct handler call without signature |
+| Race Condition | DB Level Concurrency | Locust concurrent requests (limited) |
 
-> 📌 진정한 Chaos Engineering (Toxiproxy, 서버측 미들웨어 등)은 향후 확장 시 고려
-
----
-
-## 📍 Test Stage 개요
-
-### 필수 Stage (Stage 0-5)
-
-| Stage | Name | 목적 | Users | Duration |
-|-------|------|------|-------|----------|
-| **0** | Smoke | 환경/로그인/기본 플로우 확인 | 5 | 30s |
-| **1** | Happy Load | 정상 부하 성능 측정 | 50~200 | 3m |
-| **2** | Idempotency | 중복 결제 방지 검증 | 30 | 2m |
-| **3** | Latency | 지연 상황 동작 확인 | 50 | 3m |
-| **4** | Cancel Storm | 결제 직후 취소 스트레스 | 50 | 2m |
-| **5** | Rollback | 재고/포인트 복구 검증 | 30 | 3m |
-
-### 확장 Stage (Stage 6-9) — Optional
-
-| Stage | Name | 목적 | 비고 |
-|-------|------|------|------|
-| **6** | Chaos Random | 랜덤 실패 주입 | 클라이언트 시뮬레이션 |
-| **7** | Race Conflict | 동시 결제 충돌 | Locust 동시성 한계 |
-| **8** | Webhook | Webhook 핸들러 테스트 | 서명 검증 미포함 |
-| **9** | Soak | 장시간 안정성 | CI 제외 권장 |
+> 📌 True Chaos Engineering (Toxiproxy, server-side middleware, etc.) will be considered for future expansion
 
 ---
 
-## 📁 디렉토리 구조
+## 📍 Test Stage Overview
+
+### Required Stages (Stage 0-5)
+
+| Stage | Name | Purpose | Users | Duration |
+|-------|------|---------|-------|----------|
+| **0** | Smoke | Environment/Login/Basic Flow Verification | 5 | 30s |
+| **1** | Happy Load | Normal Load Performance Measurement | 50~200 | 3m |
+| **2** | Idempotency | Duplicate Payment Prevention Verification | 30 | 2m |
+| **3** | Latency | Latency Scenario Behavior Verification | 50 | 3m |
+| **4** | Cancel Storm | Post-Payment Cancel Stress | 50 | 2m |
+| **5** | Rollback | Stock/Point Recovery Verification | 30 | 3m |
+
+### Extension Stages (Stage 6-9) — Optional
+
+| Stage | Name | Purpose | Notes |
+|-------|------|---------|-------|
+| **6** | Chaos Random | Random Failure Injection | Client simulation |
+| **7** | Race Conflict | Concurrent Payment Collision | Locust concurrency limits |
+| **8** | Webhook | Webhook Handler Test | No signature verification |
+| **9** | Soak | Long-term Stability | Recommend excluding from CI |
+
+---
+
+## 📁 Directory Structure
 
 ```
 load_tests/
-├── README.md                    # 빠른 시작 가이드
-├── config.py                    # Python 설정
-├── locustfile.py                # 메인 진입점
+├── README.md                    # Quick Start Guide
+├── config.py                    # Python Configuration
+├── locustfile.py                # Main Entry Point
 │
 ├── docs/
-│   └── CHAOS_TEST_DESIGN.md     # 이 문서
+│   └── CHAOS_TEST_DESIGN.md     # This Document
 │
-├── scenarios/                   # Stage별 시나리오
+├── scenarios/                   # Stage-specific Scenarios
 │   ├── stage0_smoke.py
 │   ├── stage1_happy_load.py
 │   ├── stage2_idempotent.py
 │   ├── stage3_latency.py
 │   ├── stage4_cancel_storm.py
 │   ├── stage5_rollback.py
-│   ├── stage6_chaos_random.py   # [확장]
-│   ├── stage7_race_conflict.py  # [확장]
-│   ├── stage8_webhook.py        # [확장]
-│   └── stage9_soak.py           # [확장]
+│   ├── stage6_chaos_random.py   # [Extension]
+│   ├── stage7_race_conflict.py  # [Extension]
+│   ├── stage8_webhook.py        # [Extension]
+│   └── stage9_soak.py           # [Extension]
 │
-├── utils/                       # 공통 헬퍼
+├── utils/                       # Common Helpers
 │   ├── login_helper.py
 │   ├── product_helper.py
 │   ├── cart_helper.py
 │   └── payment_helper.py
 │
-├── validators/                  # 데이터 무결성 검증
+├── validators/                  # Data Integrity Validators
 │   ├── stock_validator.py
 │   ├── point_validator.py
 │   └── order_validator.py
 │
-├── chaos/                       # 장애 시뮬레이션 (클라이언트측)
+├── chaos/                       # Fault Simulation (Client-side)
 │   └── fault_injector.py
 │
-├── metrics/                     # 커스텀 메트릭
+├── metrics/                     # Custom Metrics
 │   ├── custom_metrics.py
 │   └── event_hooks.py
 │
-├── runners/                     # 실행 스크립트
+├── runners/                     # Execution Scripts
 │   ├── config.yaml
 │   ├── run_stage.py
 │   ├── smoke.sh / smoke.ps1
 │   └── full_cycle.sh / full_cycle.ps1
 │
-├── fixtures/                    # 테스트 데이터
+├── fixtures/                    # Test Data
 │   ├── seeder.py
 │   └── cleaner.py
 │
-└── reports/                     # 결과 리포트
+└── reports/                     # Result Reports
 ```
 
 ---
 
-## 📑 Stage별 상세
+## 📑 Stage Details
 
 ### Stage 0 — Smoke
 
 ```python
-# 환경 정상 동작 확인
+# Environment Normal Operation Verification
 # Users: 5, Duration: 30s
 
-- 로그인 성공 확인
-- 제품 조회 성공 확인
-- 단일 상품 주문 + 결제 1회 성공
+- Verify login success
+- Verify product list retrieval
+- Single product order + 1 successful payment
 ```
 
 ### Stage 1 — Happy Load
 
 ```python
-# 정상 부하에서 성능 측정
+# Performance measurement under normal load
 # Users: 50 → 100 → 200
 
-- 전체 결제 플로우 반복
-- P95/P99 레이턴시 측정
-- 에러율 < 1% 목표
+- Repeat full payment flow
+- Measure P95/P99 latency
+- Target error rate < 1%
 ```
 
 ### Stage 2 — Idempotency
 
 ```python
-# 중복 결제 방지 검증
+# Duplicate Payment Prevention Verification
 
-- 동일 payment_key로 2회 요청
-- 첫 요청: 200/201, 두 번째: 400/409
-- 둘 다 200이면 CRITICAL
+- Request twice with same payment_key
+- First request: 200/201, Second: 400/409
+- CRITICAL if both return 200
 ```
 
 ### Stage 3 — Latency
 
 ```python
-# 지연 상황 동작 확인
-# ⚠️ 클라이언트측 sleep으로 시뮬레이션
+# Latency Scenario Behavior Verification
+# ⚠️ Simulated with client-side sleep
 
-- 요청 전 500~3000ms 대기
-- Timeout 처리 로직 검증
+- Wait 500~3000ms before request
+- Verify timeout handling logic
 ```
 
 ### Stage 4 — Cancel Storm
 
 ```python
-# 결제 직후 취소 스트레스
+# Post-Payment Cancel Stress
 
-- confirm 후 0.1~1초 내 cancel
-- 취소 성공률 측정
-- 재고 복구 확인
+- Cancel within 0.1~1 second after confirm
+- Measure cancel success rate
+- Verify stock recovery
 ```
 
 ### Stage 5 — Rollback
 
 ```python
-# 실패 시 재고/포인트 롤백 검증
+# Stock/Point Rollback Verification on Failure
 
-1. stock_before, point_before 저장
-2. 강제 결제 실패 트리거
-3. stock_after, point_after 확인
-4. before == after 검증
+1. Save stock_before, point_before
+2. Trigger forced payment failure
+3. Check stock_after, point_after
+4. Verify before == after
 ```
 
 ---
 
-## 📊 측정 지표
+## 📊 Measurement Metrics
 
-| 지표 | 설명 | 목표 |
-|------|------|------|
-| P95 | 상위 5% 제외 | SLA 기준 |
-| P99 | 상위 1% 제외 | 경고 기준 |
-| Error Rate (4xx) | 클라이언트 에러 | < 5% |
-| Error Rate (5xx) | 서버 에러 | < 0.1% |
+| Metric | Description | Target |
+|--------|-------------|--------|
+| P95 | Excludes top 5% | SLA baseline |
+| P99 | Excludes top 1% | Warning threshold |
+| Error Rate (4xx) | Client errors | < 5% |
+| Error Rate (5xx) | Server errors | < 0.1% |
 
 ---
 
-## 🚀 실행 방법
+## 🚀 Execution Methods
 
-### 단일 Stage
+### Single Stage
 
 ```bash
 # Smoke Test
@@ -196,7 +196,7 @@ python load_tests/runners/run_stage.py stage0_smoke
 python load_tests/runners/run_stage.py stage1_happy
 ```
 
-### 프로파일
+### Profiles
 
 ```bash
 # Quick (Stage 0-2)
@@ -205,37 +205,37 @@ python load_tests/runners/run_stage.py --profile quick
 # Standard (Stage 0-5)
 python load_tests/runners/run_stage.py --profile standard
 
-# Stage 목록 확인
+# List stages
 python load_tests/runners/run_stage.py --list
 ```
 
 ---
 
-## ✅ 성공 기준
+## ✅ Success Criteria
 
-| Stage | 성공 조건 |
-|-------|----------|
-| Stage 0 | 100% 성공, 에러 0 |
-| Stage 1 | P99 < SLA, 에러율 < 1% |
-| Stage 2 | 중복 결제 0건 |
-| Stage 3 | 지연 후 정상 처리 |
-| Stage 4 | 취소 성공률 > 95% |
-| Stage 5 | Rollback 100% 성공 |
-
----
-
-## 📌 향후 확장 고려사항
-
-진정한 Chaos Engineering 도입 시:
-
-| 방법 | 설명 |
-|------|------|
-| Toxiproxy | 네트워크 레벨 지연/장애 주입 |
-| 서버 TEST_MODE | Django 미들웨어로 장애 주입 |
-| DB 레벨 Lock 테스트 | 별도 테스트 스크립트 |
-| 실 PG Sandbox | Toss 테스트 환경 연동 |
+| Stage | Success Condition |
+|-------|-------------------|
+| Stage 0 | 100% success, 0 errors |
+| Stage 1 | P99 < SLA, Error rate < 1% |
+| Stage 2 | 0 duplicate payments |
+| Stage 3 | Normal processing after delay |
+| Stage 4 | Cancel success rate > 95% |
+| Stage 5 | 100% Rollback success |
 
 ---
 
-> 본 문서는 솔로 개발 프로젝트의 실용적인 부하 테스트를 목표로 합니다.
-> 엔터프라이즈급 Chaos Engineering은 팀/인프라 확장 시 고려하세요.
+## 📌 Future Expansion Considerations
+
+When introducing true Chaos Engineering:
+
+| Method | Description |
+|--------|-------------|
+| Toxiproxy | Network-level latency/fault injection |
+| Server TEST_MODE | Django middleware fault injection |
+| DB Level Lock Test | Separate test scripts |
+| Real PG Sandbox | Toss test environment integration |
+
+---
+
+> This document aims for practical load testing for a solo developer project.
+> Consider enterprise-grade Chaos Engineering when team/infrastructure scales.

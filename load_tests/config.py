@@ -1,23 +1,23 @@
 """
-Locust 부하 테스트 설정
+Locust Load Test Configuration
 
-CLI로 override 가능 (Windows는 한 줄 명령어 권장):
+Can be overridden via CLI (single-line command recommended for Windows):
     PYTHONUTF8=1 locust -f load_tests/locustfile.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=5m
 """
 
 import os
 
 # =============================================================================
-# 서버 설정
+# Server Configuration
 # =============================================================================
 HOST = os.getenv("LOCUST_HOST", "http://localhost:8000")
 
 # =============================================================================
-# 테스트 사용자 설정
+# Test User Configuration
 # =============================================================================
-# 테스트 유저 범위 (load_test_user_0 ~ load_test_user_99)
-# 주의: 실제 생성된 유저 수에 맞게 설정해야 함
-# 유저 생성: python manage.py create_load_test_users --count=100
+# Test user range (load_test_user_0 ~ load_test_user_99)
+# Note: Must match the actual number of created users
+# Create users: python manage.py create_load_test_users --count=100
 TEST_USER_COUNT = 1000
 TEST_USER_PREFIX = "load_test_user_"
 TEST_USER_PASSWORD = "testpass123"
@@ -28,44 +28,44 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 
 # =============================================================================
-# 사용자 행동 비율 (Weight)
+# User Behavior Weights
 # =============================================================================
-# 실제 서비스 기준: 방문자 65%, 장바구니 25%, 구매자 10%
+# Based on real service: Visitors 65%, Shoppers 25%, Buyers 10%
 USER_WEIGHTS = {
-    "browser": 65,  # 조회만 하는 사용자
-    "shopper": 25,  # 장바구니까지 담는 사용자
-    "buyer": 10,  # 결제까지 완료하는 사용자
+    "browser": 65,  # Browse-only users
+    "shopper": 25,  # Users who add to cart
+    "buyer": 10,  # Users who complete payment
 }
 
 # =============================================================================
-# 대기 시간 설정 (초)
+# Wait Time Settings (seconds)
 # =============================================================================
-# 사용자가 다음 행동까지 대기하는 시간
+# Time user waits between actions
 WAIT_TIME_MIN = 1
 WAIT_TIME_MAX = 5
 
 # =============================================================================
-# API 엔드포인트
+# API Endpoints
 # =============================================================================
 ENDPOINTS = {
-    # 인증
+    # Authentication
     "login": "/api/auth/login/",
     "logout": "/api/auth/logout/",
     "token_refresh": "/api/auth/token/refresh/",
-    # 상품
+    # Products
     "products": "/api/products/",
     "product_detail": "/api/products/{id}/",
     "categories": "/api/categories/",
-    # 장바구니 (새로운 API 구조)
+    # Cart (new API structure)
     "cart": "/api/cart/",
     "cart_add_item": "/api/cart/add_item/",
     "cart_items": "/api/cart/items/",
     "cart_item_detail": "/api/cart/items/{id}/",
     "cart_clear": "/api/cart/clear/",
     "cart_summary": "/api/cart/summary/",
-    # 레거시 장바구니 (CartItemViewSet - 아직 존재함)
+    # Legacy cart (CartItemViewSet - still exists)
     "cart_items_legacy": "/api/cart-items/",
-    # 주문
+    # Orders
     "orders": "/api/orders/",
     "order_detail": "/api/orders/{id}/",
     # 결제
@@ -77,7 +77,7 @@ ENDPOINTS = {
 }
 
 # =============================================================================
-# 성능 목표 (SLA) - 1차 측정 후 조정 예정
+# Performance Targets (SLA) - To be adjusted after initial measurement
 # =============================================================================
 SLA_TARGETS = {
     "products_list": {
@@ -103,6 +103,6 @@ SLA_TARGETS = {
     "payment": {
         "p95": 300,
         "p99": 500,
-        "error_rate": 0.001,  # 0.1% (결제는 더 엄격)
+        "error_rate": 0.001,  # 0.1% (stricter for payments)
     },
 }

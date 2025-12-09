@@ -1,7 +1,7 @@
 """
-장애 주입기 - Fault Injector
+Fault Injector - Chaos Engineering
 
-Netflix Chaos Monkey 스타일의 제어된 장애 주입
+Netflix Chaos Monkey style controlled fault injection
 """
 
 import os
@@ -13,18 +13,18 @@ from dataclasses import dataclass
 
 
 class FaultType(Enum):
-    """장애 유형"""
+    """Fault types"""
 
-    LATENCY = "latency"  # 지연
-    ERROR_500 = "error_500"  # 서버 에러
-    ERROR_503 = "error_503"  # 서비스 불가
-    TIMEOUT = "timeout"  # 타임아웃
-    CONNECTION_RESET = "connection_reset"  # 연결 끊김
+    LATENCY = "latency"  # Latency
+    ERROR_500 = "error_500"  # Server error
+    ERROR_503 = "error_503"  # Service unavailable
+    TIMEOUT = "timeout"  # Timeout
+    CONNECTION_RESET = "connection_reset"  # Connection reset
 
 
 @dataclass
 class FaultConfig:
-    """장애 설정"""
+    """Fault configuration"""
 
     fault_type: FaultType
     probability: float  # 0.0 ~ 1.0
@@ -35,16 +35,16 @@ class FaultConfig:
 
 class FaultInjector:
     """
-    카오스 장애 주입기
+    Chaos Fault Injector
 
-    환경변수로 활성화/설정 가능:
+    Can be enabled/configured via environment variables:
     - CHAOS_ENABLED: true/false
     - CHAOS_PROBABILITY: 0.0 ~ 1.0
-    - CHAOS_LATENCY_MIN_MS: 최소 지연 (ms)
-    - CHAOS_LATENCY_MAX_MS: 최대 지연 (ms)
+    - CHAOS_LATENCY_MIN_MS: Minimum latency (ms)
+    - CHAOS_LATENCY_MAX_MS: Maximum latency (ms)
     """
 
-    # 기본 장애 설정
+    # Default fault configuration
     DEFAULT_FAULTS: Dict[FaultType, FaultConfig] = {
         FaultType.LATENCY: FaultConfig(
             fault_type=FaultType.LATENCY,
@@ -73,29 +73,29 @@ class FaultInjector:
     def __init__(self, custom_faults: Optional[Dict[FaultType, FaultConfig]] = None):
         """
         Args:
-            custom_faults: 커스텀 장애 설정 (기본값 덮어쓰기)
+            custom_faults: Custom fault configuration (overrides defaults)
         """
         self.enabled = os.getenv("CHAOS_ENABLED", "false").lower() == "true"
         self.global_probability = float(os.getenv("CHAOS_PROBABILITY", "0.10"))
 
-        # 환경변수에서 지연 설정 로드
+        # Load latency settings from environment variables
         self.latency_min = int(os.getenv("CHAOS_LATENCY_MIN_MS", "500"))
         self.latency_max = int(os.getenv("CHAOS_LATENCY_MAX_MS", "3000"))
 
-        # 장애 설정 초기화
+        # Initialize fault configuration
         self.faults = self.DEFAULT_FAULTS.copy()
         if custom_faults:
             self.faults.update(custom_faults)
 
-        # 환경변수 기반 지연 설정 업데이트
+        # Update latency settings from environment variables
         if FaultType.LATENCY in self.faults:
             self.faults[FaultType.LATENCY].min_latency_ms = self.latency_min
             self.faults[FaultType.LATENCY].max_latency_ms = self.latency_max
 
-        # 활성화된 장애 목록
+        # Active fault list
         self._active_faults: list = []
 
-        # 통계
+        # Statistics
         self.stats = {
             "total_checks": 0,
             "faults_injected": 0,
@@ -103,44 +103,44 @@ class FaultInjector:
         }
 
     def enable(self):
-        """장애 주입 활성화"""
+        """Enable fault injection"""
         self.enabled = True
 
     def disable(self):
-        """장애 주입 비활성화"""
+        """Disable fault injection"""
         self.enabled = False
 
     def set_probability(self, probability: float):
-        """전역 확률 설정"""
+        """Set global probability"""
         self.global_probability = max(0.0, min(1.0, probability))
 
     def activate_fault(self, fault_type: FaultType):
-        """특정 장애 타입 활성화"""
+        """Activate specific fault type"""
         if fault_type not in self._active_faults:
             self._active_faults.append(fault_type)
 
     def deactivate_fault(self, fault_type: FaultType):
-        """특정 장애 타입 비활성화"""
+        """Deactivate specific fault type"""
         if fault_type in self._active_faults:
             self._active_faults.remove(fault_type)
 
     def activate_all(self):
-        """모든 장애 타입 활성화"""
+        """Activate all fault types"""
         self._active_faults = list(FaultType)
 
     def deactivate_all(self):
-        """모든 장애 타입 비활성화"""
+        """Deactivate all fault types"""
         self._active_faults.clear()
 
     def should_inject(self, fault_type: Optional[FaultType] = None) -> bool:
         """
-        장애 주입 여부 결정
+        Determine whether to inject fault
 
         Args:
-            fault_type: 특정 장애 타입 (None이면 랜덤)
+            fault_type: Specific fault type (None for random)
 
         Returns:
-            장애 주입 여부
+            Whether to inject fault
         """
         if not self.enabled:
             return False
@@ -153,7 +153,7 @@ class FaultInjector:
                 return random.random() < config.probability
             return False
         else:
-            # 전역 확률로 결정
+            # Decide based on global probability
             return random.random() < self.global_probability
 
     def inject_latency(
@@ -162,14 +162,14 @@ class FaultInjector:
         max_ms: Optional[int] = None,
     ) -> int:
         """
-        지연 주입
+        Inject latency
 
         Args:
-            min_ms: 최소 지연 (ms)
-            max_ms: 최대 지연 (ms)
+            min_ms: Minimum latency (ms)
+            max_ms: Maximum latency (ms)
 
         Returns:
-            주입된 지연 시간 (ms)
+            Injected latency time (ms)
         """
         config = self.faults.get(FaultType.LATENCY)
         min_latency = min_ms or (config.min_latency_ms if config else 500)
@@ -189,10 +189,10 @@ class FaultInjector:
         max_ms: Optional[int] = None,
     ) -> Optional[int]:
         """
-        확률에 따라 지연 주입
+        Inject latency based on probability
 
         Returns:
-            주입된 지연 시간 (ms) 또는 None
+            Injected latency time (ms) or None
         """
         if self.should_inject(FaultType.LATENCY):
             return self.inject_latency(min_ms, max_ms)
@@ -200,15 +200,15 @@ class FaultInjector:
 
     def get_random_fault(self) -> Optional[FaultType]:
         """
-        랜덤 장애 타입 선택
+        Select random fault type
 
         Returns:
-            선택된 장애 타입 또는 None
+            Selected fault type or None
         """
         if not self.enabled:
             return None
 
-        # 활성화된 장애 중에서 확률 기반 선택
+        # Probability-based selection from active faults
         active = self._active_faults or list(FaultType)
 
         for fault_type in active:
@@ -226,14 +226,14 @@ class FaultInjector:
         **kwargs,
     ) -> Any:
         """
-        요청 함수를 감싸서 장애 주입
+        Wrap request function to inject faults
 
         Args:
-            request_func: 원본 요청 함수
-            *args, **kwargs: 요청 함수 인자
+            request_func: Original request function
+            *args, **kwargs: Request function arguments
 
         Returns:
-            요청 결과 또는 장애 응답
+            Request result or fault response
         """
         fault = self.get_random_fault()
 
@@ -242,19 +242,19 @@ class FaultInjector:
             return request_func(*args, **kwargs)
 
         elif fault == FaultType.TIMEOUT:
-            # 타임아웃 시뮬레이션 (긴 지연)
-            time.sleep(30)  # 30초 지연
+            # Timeout simulation (long delay)
+            time.sleep(30)  # 30 second delay
             return request_func(*args, **kwargs)
 
-        # 다른 장애 타입은 요청 후 처리 필요
+        # Other fault types need post-request handling
         return request_func(*args, **kwargs)
 
     def get_stats(self) -> Dict[str, Any]:
-        """통계 조회"""
+        """Get statistics"""
         return self.stats.copy()
 
     def reset_stats(self):
-        """통계 초기화"""
+        """Reset statistics"""
         self.stats = {
             "total_checks": 0,
             "faults_injected": 0,
@@ -262,12 +262,12 @@ class FaultInjector:
         }
 
 
-# 전역 인스턴스
+# Global instance
 _default_injector: Optional[FaultInjector] = None
 
 
 def get_fault_injector() -> FaultInjector:
-    """기본 FaultInjector 인스턴스 반환"""
+    """Return default FaultInjector instance"""
     global _default_injector
     if _default_injector is None:
         _default_injector = FaultInjector()

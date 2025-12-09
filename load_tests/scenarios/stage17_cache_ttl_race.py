@@ -142,6 +142,14 @@ _cache_stats = {
         "eventual_consistency": None,
         "no_invalid_price_errors": None,
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "stale_window_start": None,  # When stale reads started
+        "consistency_restored_at": None,  # When consistency was restored
+        "cache_invalidation_latency_ms": None,  # Time for cache to invalidate
+        "eventual_consistency_latency_seconds": None,  # Time to achieve consistency
+        "sla_compliant": None,  # Consistency achieved under TTL threshold
+    },
 }
 
 _stats_lock = threading.Lock()
@@ -745,6 +753,36 @@ def on_test_stop(environment, **kwargs):
     for check, result in _cache_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
+
+    # Recovery Latency Report
+    recovery = _cache_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if _cache_stats['invalidation_delays']:
+        avg_invalidation = sum(_cache_stats['invalidation_delays']) / len(_cache_stats['invalidation_delays'])
+        max_invalidation = max(_cache_stats['invalidation_delays'])
+        recovery["cache_invalidation_latency_ms"] = avg_invalidation
+        print(f"   - Avg cache invalidation latency: {avg_invalidation:.0f}ms")
+        print(f"   - Max cache invalidation latency: {max_invalidation:.0f}ms")
+    
+    # Calculate eventual consistency latency
+    if _cache_stats['consistency_passed'] > 0:
+        # If consistency checks pass, eventual consistency was achieved
+        consistency_rate = _cache_stats['consistency_passed'] / max(_cache_stats['consistency_checks'], 1)
+        print(f"   - Consistency rate: {consistency_rate:.1%}")
+        
+        # Estimate recovery based on TTL and stale read pattern
+        if _cache_stats['stale_reads_detected'] > 0:
+            stale_rate = _cache_stats['stale_reads_detected'] / max(_cache_stats['total_reads_during_race'], 1)
+            estimated_recovery = CACHE_TTL_SECONDS * stale_rate
+            recovery["eventual_consistency_latency_seconds"] = estimated_recovery
+            print(f"   - Estimated consistency latency: {estimated_recovery:.1f}s")
+    
+    # SLA check (consistency should be achieved within TTL)
+    recovery["sla_compliant"] = _cache_stats['consistency_failed'] == 0
+    if recovery["sla_compliant"]:
+        print(f"   - SLA Status: ✓ Eventual consistency achieved")
+    else:
+        print(f"   - SLA Status: ✗ Consistency failures detected")
 
     print(f"\n{'='*70}\n")
 

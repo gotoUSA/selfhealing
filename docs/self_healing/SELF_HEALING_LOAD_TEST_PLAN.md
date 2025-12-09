@@ -58,6 +58,37 @@
 
 ## Test Architecture Overview
 
+### Recovery Latency Measurement (SLA Compliance)
+
+> **"단순히 성공/실패가 아니라 지연 기반 가용성을 측정"**
+
+모든 Self-Healing 테스트는 **Recovery Latency**를 측정하여 SLA 준수 여부를 검증합니다.
+
+| Stage | Recovery Type | SLA Threshold | Measured Metric |
+|-------|---------------|---------------|-----------------|
+| 10 | Control API Response | < 2s | `control_action_latency_ms` |
+| 11 | Degradation Recovery | < 2min | `recovery_latency_seconds` |
+| 12 | Spike Recovery | < 2min | `cb_recovery_latency_seconds` |
+| 13 | Repeated Spike | < 2min/cycle | `per_cycle_latencies[]` |
+| 14 | DLQ Processing | < 1min | `dlq_recovery_latency_seconds` |
+| 15 | CB Full Cycle | < recovery_timeout + 30s | `cb_full_cycle_latency_seconds` |
+| 16 | DB Lock Recovery | < 2s | `lock_retry_latencies_ms[]` |
+| 17 | Cache Consistency | < TTL | `eventual_consistency_latency_seconds` |
+
+**Example Output:**
+```
+🔄 Recovery Latency Metrics:
+   - Recovery completion time: 1.4s
+   - SLA Status: ✓ Under 2s threshold
+```
+
+**Why This Matters:**
+- 비즈니스 KPI 생성 가능 ("복구 2s 미만 보장")
+- SLA 협상 시 데이터 기반 근거 제공
+- 지연 기반 가용성 (Latency-based Availability) 측정
+
+---
+
 ```
 Self-Healing Test Suite
 │
@@ -106,11 +137,13 @@ Metrics to Collect:
   - dlq_count
   - avg_response_time (per minute)
   - error_rate (per minute)
+  - recovery_latency_seconds (time from degradation to recovery)
 
 Output:
   - Threshold graph (users vs metrics)
   - User count when retry starts
   - User count when CB transitions
+  - Recovery latency analysis (SLA compliance check)
 ```
 
 ### Stage 12: Spike & Recovery
@@ -129,9 +162,11 @@ LoadShape:
 Metrics to Collect:
   - circuit_breaker_open_time
   - circuit_breaker_close_time
+  - cb_recovery_latency_seconds (CB open to close duration)
   - dlq_max_count
   - dlq_replay_success_rate
   - data_consistency (before vs after)
+  - total_recovery_latency_seconds
 ```
 
 ### Stage 13: Repeated Spike (Backoff Tuning)
@@ -150,9 +185,11 @@ LoadShape:
 
 Metrics to Collect:
   - recovery_time_per_cycle
+  - per_cycle_latencies[] (recovery latency per spike cycle)
   - backoff_duration_cumulative
   - circuit_breaker_transitions
   - final_state (normalized confirmation)
+  - sla_breaches (count of cycles exceeding threshold)
 ```
 
 ---
@@ -246,6 +283,7 @@ Verification:
   - [ ] No permanent order "pending" state
   - [ ] Stock consistency after recovery
   - [ ] Transaction audit log
+  - [ ] Recovery latency under 2s threshold (SLA)
 
 Real-World Case:
   "Flash sale: 1000 users hit same product, SELECT FOR UPDATE
@@ -277,6 +315,7 @@ Verification:
   - [ ] Cache invalidation on critical updates
   - [ ] No "price changed" errors on valid orders
   - [ ] Eventual consistency achieved
+  - [ ] Consistency latency under TTL threshold (SLA)
 
 Real-World Case:
   "Admin changes price, customer orders with old cached price,
@@ -755,6 +794,15 @@ profiles:
 - [ ] No cumulative degradation on repeated failures
 - [ ] Continuation of recovery after reboot
 - [ ] Rollback failure secondary action
+
+#### 9. Recovery Latency (SLA Compliance)
+- [ ] Control API recovery < 2s
+- [ ] CB full cycle recovery < recovery_timeout + 30s
+- [ ] DLQ processing < 1min
+- [ ] DB lock retry < 2s
+- [ ] Cache consistency < TTL
+- [ ] Spike recovery < 2min
+- [ ] Repeated spike recovery consistent across cycles
 
 ---
 

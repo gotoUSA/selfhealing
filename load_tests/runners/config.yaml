@@ -1,6 +1,6 @@
 # Load Test Runner Configuration
 # ===============================
-# Stage별 테스트 설정 및 실행 프로파일 정의
+# Stage-based test settings and execution profile definitions
 
 stages:
   stage0_smoke:
@@ -9,8 +9,8 @@ stages:
     spawn_rate: 5
     duration: "30s"
     tags: ["smoke", "baseline"]
-    required: true  # 실패 시 후속 Stage 중단
-    description: "환경/로그인/기본 플로우 정상 확인"
+    required: true  # Abort subsequent stages on failure
+    description: "Environment/Login/Basic flow verification"
 
   stage1_happy:
     file: scenarios/stage1_happy_load.py
@@ -18,7 +18,7 @@ stages:
     spawn_rate: 20
     duration: "3m"
     tags: ["load", "performance"]
-    description: "정상 성능 측정 (Baseline)"
+    description: "Normal performance measurement (Baseline)"
 
   stage2_idempotent:
     file: scenarios/stage2_idempotent.py
@@ -26,7 +26,7 @@ stages:
     spawn_rate: 10
     duration: "2m"
     tags: ["idempotency", "critical"]
-    description: "중복 결제 방지 검증"
+    description: "Duplicate payment prevention verification"
 
   stage3_latency:
     file: scenarios/stage3_latency.py
@@ -38,7 +38,7 @@ stages:
       CHAOS_ENABLED: "true"
       CHAOS_LATENCY_MIN_MS: "500"
       CHAOS_LATENCY_MAX_MS: "3000"
-    description: "PG 지연/timeout 시뮬레이션"
+    description: "PG latency/timeout simulation"
 
   stage4_cancel:
     file: scenarios/stage4_cancel_storm.py
@@ -46,7 +46,7 @@ stages:
     spawn_rate: 20
     duration: "2m"
     tags: ["cancel", "stress"]
-    description: "결제 직후 취소 폭주"
+    description: "Post-payment cancel storm"
 
   stage5_rollback:
     file: scenarios/stage5_rollback.py
@@ -54,7 +54,7 @@ stages:
     spawn_rate: 10
     duration: "3m"
     tags: ["rollback", "validation"]
-    description: "재고/포인트 복구 검증"
+    description: "Stock/Point recovery verification"
 
   stage6_chaos:
     file: scenarios/stage6_chaos_random.py
@@ -65,15 +65,15 @@ stages:
     env:
       CHAOS_ENABLED: "true"
       CHAOS_PROBABILITY: "0.10"
-    description: "3~15% 랜덤 실패"
+    description: "3~15% random failures"
 
   stage7_race:
     file: scenarios/stage7_race_conflict.py
     users: 50
-    spawn_rate: 50  # 빠른 spawn으로 동시성 극대화
+    spawn_rate: 50  # Fast spawn for maximum concurrency
     duration: "2m"
     tags: ["race", "concurrency"]
-    description: "동일 order 동시 결제"
+    description: "Same order concurrent payments"
 
   stage8_webhook:
     file: scenarios/stage8_webhook.py
@@ -81,7 +81,7 @@ stages:
     spawn_rate: 10
     duration: "3m"
     tags: ["webhook", "reliability"]
-    description: "Webhook 중복/순서역전/지연"
+    description: "Webhook duplication/order reversal/latency"
 
   stage9_soak:
     file: scenarios/stage9_soak.py
@@ -89,8 +89,8 @@ stages:
     spawn_rate: 10
     duration: "30m"
     tags: ["soak", "endurance"]
-    optional: true  # CI에서는 스킵 가능
-    description: "메모리 누수, 커넥션 풀 고갈 탐지"
+    optional: true  # Can skip in CI
+    description: "Memory leak, connection pool exhaustion detection"
 
   stage10_self_healing:
     file: scenarios/stage10_self_healing.py
@@ -98,7 +98,7 @@ stages:
     spawn_rate: 5
     duration: "3m"
     tags: ["self-healing", "control-api"]
-    description: "Self-Healing Control API 기능 검증"
+    description: "Self-Healing Control API functionality verification"
 
   stage11_ramp_threshold:
     file: scenarios/stage11_ramp_threshold.py
@@ -107,7 +107,7 @@ stages:
     duration: "20m"
     tags: ["self-healing", "threshold", "ramp"]
     optional: true
-    description: "시스템 임계점 및 Self-Healing 트리거 포인트 발견"
+    description: "System threshold and Self-Healing trigger point discovery"
 
   stage12_spike_recovery:
     file: scenarios/stage12_spike_recovery.py
@@ -115,7 +115,7 @@ stages:
     spawn_rate: 50
     duration: "10m30s"
     tags: ["self-healing", "spike", "recovery"]
-    description: "급격한 부하 스파이크 후 복구 안정성 검증"
+    description: "Sudden load spike recovery stability verification"
 
   stage13_repeated_spike:
     file: scenarios/stage13_repeated_spike.py
@@ -124,7 +124,7 @@ stages:
     duration: "13m30s"
     tags: ["self-healing", "backoff", "repeated"]
     optional: true
-    description: "반복 스파이크 시 백오프 누적 방지 검증"
+    description: "Repeated spike backoff accumulation prevention verification"
 
   stage14_dlq_replay:
     file: scenarios/stage14_dlq_replay.py
@@ -132,7 +132,7 @@ stages:
     spawn_rate: 10
     duration: "5m"
     tags: ["self-healing", "dlq", "replay"]
-    description: "DLQ 재처리 정확성 및 데이터 일관성 검증"
+    description: "DLQ replay accuracy and data consistency verification"
 
   stage15_cb_transitions:
     file: scenarios/stage15_cb_transitions.py
@@ -140,21 +140,21 @@ stages:
     spawn_rate: 5
     duration: "5m"
     tags: ["self-healing", "circuit-breaker", "transitions"]
-    description: "Circuit Breaker 자동 상태 전환 검증"
+    description: "Circuit Breaker auto state transition verification"
 
-# 실행 프로파일
+# Execution profiles
 profiles:
   smoke:
     stages:
       - stage0_smoke
-    description: "기본 환경 확인만"
+    description: "Basic environment verification only"
 
   quick:
     stages:
       - stage0_smoke
       - stage1_happy
       - stage2_idempotent
-    description: "빠른 검증 (약 5분)"
+    description: "Quick verification (~5 minutes)"
 
   standard:
     stages:
@@ -164,7 +164,7 @@ profiles:
       - stage3_latency
       - stage4_cancel
       - stage5_rollback
-    description: "표준 테스트 (약 15분)"
+    description: "Standard test (~15 minutes)"
 
   full:
     stages:
@@ -176,13 +176,13 @@ profiles:
       - stage5_rollback
       - stage6_chaos
       - stage7_race
-    description: "전체 테스트 (Soak 제외, 약 25분)"
+    description: "Full test (excludes Soak, ~25 minutes)"
 
   chaos:
     stages:
       - stage6_chaos
       - stage7_race
-    description: "카오스 테스트만"
+    description: "Chaos tests only"
 
   critical:
     stages:
@@ -190,7 +190,7 @@ profiles:
       - stage2_idempotent
       - stage5_rollback
       - stage7_race
-    description: "데이터 무결성 테스트만"
+    description: "Data integrity tests only"
 
   self_healing:
     stages:
@@ -201,7 +201,7 @@ profiles:
       - stage13_repeated_spike
       - stage14_dlq_replay
       - stage15_cb_transitions
-    description: "Self-Healing 전체 테스트 (약 60분)"
+    description: "Full Self-Healing test (~60 minutes)"
 
   self_healing_quick:
     stages:
@@ -209,7 +209,7 @@ profiles:
       - stage10_self_healing
       - stage14_dlq_replay
       - stage15_cb_transitions
-    description: "Self-Healing 빠른 테스트 (약 15분)"
+    description: "Quick Self-Healing test (~15 minutes)"
 
   all:
     stages:
@@ -223,9 +223,9 @@ profiles:
       - stage7_race
       - stage8_webhook
       - stage9_soak
-    description: "전체 테스트 (Soak 포함)"
+    description: "Full test (includes Soak)"
 
-# 공통 설정
+# Common settings
 defaults:
   host: "http://localhost:8000"
   docker_host: "http://web:8000"
@@ -234,26 +234,26 @@ defaults:
   report_dir: "reports"
   headless: true
 
-# 스케일링 테스트 설정
+# Scaling test settings
 scaling:
   stage1_happy:
     user_levels: [50, 100, 200, 300]
     duration_per_level: "2m"
 
-# 환경 설정 (Setup)
-# --setup 옵션 사용 시 적용되는 설정
+# Environment Configuration (Setup)
+# Settings applied when using --setup option
 setup:
-  # 부하 테스트 사용자 설정
+  # Load test user settings
   users:
-    count: 1000          # 생성할 사용자 수
-    points: 50000        # 초기 포인트
-    clear: true          # 기존 사용자 삭제 후 생성
+    count: 1000          # Number of users to create
+    points: 50000        # Initial points
+    clear: true          # Clear existing users before creation
 
-  # 테스트 상품 설정
+  # Test product settings
   products:
     preset: "full"       # minimal, basic, full
-    clear: false         # 상품은 기본적으로 유지
+    clear: false         # Products are preserved by default
 
-  # 자동 설정
-  auto_migrate: true     # 마이그레이션 자동 실행
-  reset_orders: true     # 기존 주문 데이터 정리
+  # Auto configuration
+  auto_migrate: true     # Auto-run migrations
+  reset_orders: true     # Clean up existing order data

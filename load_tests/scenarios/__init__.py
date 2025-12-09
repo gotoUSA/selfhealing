@@ -4,20 +4,20 @@ Load Test Scenarios Module
 
 Stage-based Payment Load & Chaos Test Scenarios
 
-Stage 순서는 실제 장애 시나리오 재현을 기반으로 함:
-1. PG 지연 (Latency) → 2. 사용자 Cancel 연타 → 3. Rollback 실패
+Stage order is based on real failure scenario reproduction:
+1. PG Latency → 2. User Cancel Burst → 3. Rollback Failure
 
 Available Stages:
-    - Stage 0: Smoke (환경 검증)
-    - Stage 1: Happy Load (정상 성능 측정)
-    - Stage 2: Idempotent (중복 결제 방지)
-    - Stage 3: Latency (PG 지연/timeout)
-    - Stage 4: Cancel Storm (결제 직후 취소)
-    - Stage 5: Rollback (재고/포인트 복구)
-    - Stage 6: Chaos Random (3~15% 랜덤 실패)
-    - Stage 7: Race Conflict (동일 order 동시 결제)
-    - Stage 8: Webhook (Webhook 중복/역전)
-    - Stage 9: Soak (메모리 누수/커넥션 풀)
+    - Stage 0: Smoke (Environment Verification)
+    - Stage 1: Happy Load (Normal Performance Measurement)
+    - Stage 2: Idempotent (Duplicate Payment Prevention)
+    - Stage 3: Latency (PG Latency/Timeout)
+    - Stage 4: Cancel Storm (Post-Payment Cancellation)
+    - Stage 5: Rollback (Stock/Point Recovery)
+    - Stage 6: Chaos Random (3~15% Random Failures)
+    - Stage 7: Race Conflict (Concurrent Order Payments)
+    - Stage 8: Webhook (Webhook Duplication/Reversal)
+    - Stage 9: Soak (Memory Leak/Connection Pool)
     - Stage 10: Self-Healing Control API
     - Stage 11: Ramp-up Threshold Discovery
     - Stage 12: Spike & Recovery
@@ -28,7 +28,7 @@ Available Stages:
 
 from pathlib import Path
 
-# 모든 Stage 파일 경로
+# All Stage file paths
 STAGES_DIR = Path(__file__).parent
 
 STAGE_FILES = {

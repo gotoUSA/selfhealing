@@ -112,6 +112,14 @@ _dlq_stats = {
         "stock_consistent": None,
         "data_integrity_passed": None,
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "failure_injection_end_time": None,  # When failures stopped
+        "replay_start_time": None,  # When replay started
+        "replay_completion_time": None,  # When replay completed
+        "dlq_recovery_latency_seconds": None,  # Time to process DLQ
+        "consistency_restored_time": None,  # When data became consistent
+    },
 }
 
 
@@ -494,6 +502,18 @@ def on_test_stop(environment, **kwargs):
     verification["data_integrity_passed"] = data_integrity
 
     print(f"\n🎯 Overall Data Integrity: {'PASSED ✓' if data_integrity else 'FAILED ✗'}")
+
+    # Recovery Latency Report
+    recovery = _dlq_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if recovery.get("dlq_recovery_latency_seconds"):
+        print(f"   - DLQ Processing latency: {recovery['dlq_recovery_latency_seconds']:.1f}s")
+        if recovery["dlq_recovery_latency_seconds"] < 60:
+            print(f"   - SLA Status: ✓ Under 1min threshold")
+        else:
+            print(f"   - SLA Status: ✗ Exceeded 1min threshold")
+    else:
+        print(f"   - DLQ replay not performed or not timed")
 
     # Save report
     report_path = os.path.join(_load_tests_dir, "reports", "stage14_dlq_replay_report.json")

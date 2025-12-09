@@ -60,6 +60,13 @@ _self_healing_stats = {
         "ttl_exceeded": 0,
     },
     "response_times": [],
+    # Recovery Latency Metrics
+    "recovery": {
+        "control_action_start": None,  # When control action initiated
+        "control_action_complete": None,  # When action confirmed
+        "recovery_latency_ms": None,  # Time to complete control action
+        "recovery_latencies": [],  # All recorded latencies
+    },
 }
 
 
@@ -114,7 +121,7 @@ class SelfHealingAdminUser(HttpUser):
         ) as response:
             if response.status_code == 200:
                 data = response.json()
-                # 토큰은 token.access에 있음
+                # Token is in token.access
                 token_data = data.get("token", {})
                 self.access_token = token_data.get("access") or data.get("access")
                 response.success()
@@ -124,7 +131,7 @@ class SelfHealingAdminUser(HttpUser):
                 return False
 
     def _get_headers(self) -> dict:
-        """인증 헤더 반환"""
+        """Return authentication headers"""
         headers = {"Content-Type": "application/json"}
         if self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
@@ -603,5 +610,20 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Avg: {avg_time:.2f}ms")
         print(f"   - Min: {min_time:.2f}ms")
         print(f"   - Max: {max_time:.2f}ms")
+
+    # Recovery Latency Report
+    recovery = _self_healing_stats["recovery"]
+    if recovery["recovery_latencies"]:
+        latencies = recovery["recovery_latencies"]
+        avg_latency = sum(latencies) / len(latencies)
+        max_latency = max(latencies)
+        print(f"\n🔄 Recovery Latency Metrics:")
+        print(f"   - Control actions recorded: {len(latencies)}")
+        print(f"   - Avg recovery latency: {avg_latency:.2f}ms")
+        print(f"   - Max recovery latency: {max_latency:.2f}ms")
+        if max_latency < 2000:
+            print(f"   - SLA Status: ✓ Under 2s threshold")
+        else:
+            print(f"   - SLA Status: ✗ Exceeded 2s threshold")
 
     print("\n" + "=" * 70 + "\n")

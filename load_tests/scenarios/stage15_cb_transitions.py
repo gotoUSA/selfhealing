@@ -119,6 +119,13 @@ _cb_stats = {
         "recovery_timeout_accurate": None,
         "all_transitions_valid": None,
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "cb_full_cycle_latency_seconds": None,  # CLOSED → OPEN → HALF_OPEN → CLOSED
+        "open_to_half_open_latency_seconds": None,  # Recovery timeout
+        "half_open_to_closed_latency_seconds": None,  # Success validation time
+        "sla_compliant": None,  # Whether recovery met SLA
+    },
 }
 
 
@@ -544,6 +551,32 @@ def on_test_stop(environment, **kwargs):
     v["all_transitions_valid"] = all_transitions_valid
 
     print(f"\n🎯 All Transitions Valid: {'PASSED ✓' if all_transitions_valid else 'FAILED ✗'}")
+
+    # Recovery Latency Report
+    recovery = _cb_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if _cb_stats["open_time"] and _cb_stats["closed_time"]:
+        full_cycle = _cb_stats["closed_time"] - _cb_stats["open_time"]
+        recovery["cb_full_cycle_latency_seconds"] = full_cycle
+        print(f"   - Full CB cycle latency: {full_cycle:.1f}s")
+        
+        if _cb_stats["half_open_time"]:
+            open_to_half = _cb_stats["half_open_time"] - _cb_stats["open_time"]
+            half_to_closed = _cb_stats["closed_time"] - _cb_stats["half_open_time"]
+            recovery["open_to_half_open_latency_seconds"] = open_to_half
+            recovery["half_open_to_closed_latency_seconds"] = half_to_closed
+            print(f"   - OPEN → HALF_OPEN: {open_to_half:.1f}s (expected: ~{CB_RECOVERY_TIMEOUT}s)")
+            print(f"   - HALF_OPEN → CLOSED: {half_to_closed:.1f}s")
+        
+        # SLA check (full cycle should be under 2 minutes typically)
+        sla_threshold = CB_RECOVERY_TIMEOUT + 30  # recovery_timeout + buffer
+        recovery["sla_compliant"] = full_cycle < sla_threshold
+        if recovery["sla_compliant"]:
+            print(f"   - SLA Status: ✓ Under {sla_threshold}s threshold")
+        else:
+            print(f"   - SLA Status: ✗ Exceeded {sla_threshold}s threshold")
+    else:
+        print(f"   - CB full cycle not completed")
 
     # Save report
     report_path = os.path.join(_load_tests_dir, "reports", "stage15_cb_transitions_report.json")

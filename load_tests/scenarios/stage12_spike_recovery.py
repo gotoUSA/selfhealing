@@ -95,6 +95,14 @@ _spike_stats = {
         "orders_after": 0,
         "stock_consistent": None,
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "spike_impact_detected_at": None,  # When error rate exceeded threshold
+        "recovery_started_at": None,  # When ramp_down phase started
+        "recovery_completed_at": None,  # When error rate normalized
+        "recovery_latency_seconds": None,  # Total recovery time
+        "cb_recovery_latency_seconds": None,  # CB open to close time
+    },
 }
 
 
@@ -503,6 +511,22 @@ def on_test_stop(environment, **kwargs):
             f,
             indent=2,
         )
+
+    # Recovery Latency Report
+    recovery = _spike_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if cb["first_open_time"] and cb["first_close_time"]:
+        cb_recovery = cb["first_close_time"] - cb["first_open_time"]
+        recovery["cb_recovery_latency_seconds"] = cb_recovery
+        print(f"   - CB Recovery latency: {cb_recovery:.1f}s")
+        if cb_recovery < 120:
+            print(f"   - CB SLA Status: ✓ Under 2min threshold")
+        else:
+            print(f"   - CB SLA Status: ✗ Exceeded 2min threshold")
+    if recovery.get("recovery_latency_seconds"):
+        print(f"   - Total recovery latency: {recovery['recovery_latency_seconds']:.1f}s")
+    else:
+        print(f"   - System recovery time not measured (CB may not have opened)")
 
     print(f"\n💾 Report saved to: {report_path}")
     print("=" * 70)

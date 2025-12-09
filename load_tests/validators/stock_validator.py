@@ -1,7 +1,7 @@
 """
-재고 검증기 - Stock Validator
+Stock Validator
 
-결제 전후 재고 정합성 검증
+Payment pre/post stock consistency validation
 """
 
 from typing import Optional, Dict, Any
@@ -10,20 +10,20 @@ from load_tests.config import ENDPOINTS
 
 
 class StockValidator:
-    """재고 정합성 검증"""
+    """Stock consistency validation"""
 
     def __init__(self, client, stage_name: str = ""):
         """
         Args:
             client: Locust HttpUser client
-            stage_name: 메트릭 prefix용 Stage 이름
+            stage_name: Stage name for metrics prefix
         """
         self.client = client
         self.stage_name = stage_name
         self._stock_snapshots: Dict[int, int] = {}
 
     def get_stock(self, product_id: int) -> Optional[int]:
-        """현재 재고 조회"""
+        """Get current stock"""
         request_name = f"{self.stage_name} [Validator] GET Product Stock".strip()
 
         response = self.client.get(
@@ -37,18 +37,18 @@ class StockValidator:
         return None
 
     def snapshot_stock(self, product_id: int) -> Optional[int]:
-        """재고 스냅샷 저장 (비교용)"""
+        """Save stock snapshot (for comparison)"""
         stock = self.get_stock(product_id)
         if stock is not None:
             self._stock_snapshots[product_id] = stock
         return stock
 
     def get_snapshot(self, product_id: int) -> Optional[int]:
-        """저장된 스냅샷 조회"""
+        """Get saved snapshot"""
         return self._stock_snapshots.get(product_id)
 
     def clear_snapshots(self):
-        """스냅샷 초기화"""
+        """Clear snapshots"""
         self._stock_snapshots.clear()
 
     def validate_no_oversell(
@@ -59,16 +59,16 @@ class StockValidator:
         after: int,
     ) -> Dict[str, Any]:
         """
-        과잉 판매 검증
+        Oversell validation
 
         Args:
-            product_id: 상품 ID
-            before: 판매 전 재고
-            sold: 판매 수량
-            after: 판매 후 재고
+            product_id: Product ID
+            before: Stock before sale
+            sold: Quantity sold
+            after: Stock after sale
 
         Returns:
-            검증 결과 딕셔너리
+            Validation result dictionary
         """
         expected = before - sold
 
@@ -99,15 +99,15 @@ class StockValidator:
         after: int,
     ) -> Dict[str, Any]:
         """
-        롤백 후 재고 복구 검증
+        Stock recovery validation after rollback
 
         Args:
-            product_id: 상품 ID
-            before: 롤백 전 재고 (원래 재고)
-            after: 롤백 후 재고
+            product_id: Product ID
+            before: Stock before rollback (original stock)
+            after: Stock after rollback
 
         Returns:
-            검증 결과 딕셔너리
+            Validation result dictionary
         """
         result = {
             "product_id": product_id,
@@ -128,14 +128,14 @@ class StockValidator:
         expected_change: int,
     ) -> Dict[str, Any]:
         """
-        스냅샷 대비 재고 변화 검증
+        Stock change validation against snapshot
 
         Args:
-            product_id: 상품 ID
-            expected_change: 예상 변화량 (음수: 감소, 양수: 증가)
+            product_id: Product ID
+            expected_change: Expected change amount (negative: decrease, positive: increase)
 
         Returns:
-            검증 결과 딕셔너리
+            Validation result dictionary
         """
         before = self._stock_snapshots.get(product_id)
         if before is None:

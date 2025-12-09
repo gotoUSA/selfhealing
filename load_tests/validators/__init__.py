@@ -1,7 +1,7 @@
 """
-load_tests.validators - 데이터 무결성 검증
+load_tests.validators - Data Integrity Validation
 
-결제/재고/포인트 정합성 검증 모듈
+Payment/Stock/Point consistency validation module
 """
 
 from .stock_validator import StockValidator

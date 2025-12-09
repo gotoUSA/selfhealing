@@ -77,6 +77,13 @@ _threshold_stats = {
         "retries": 0,
         "response_times": [],
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "degradation_detected_at": None,  # When system started degrading
+        "recovery_detected_at": None,  # When system recovered
+        "recovery_latency_seconds": None,  # Time from degradation to recovery
+        "threshold_discovery_latencies": [],  # Per-milestone recovery times
+    },
 }
 
 
@@ -471,6 +478,18 @@ def on_test_stop(environment, **kwargs):
             indent=2,
             ensure_ascii=False,
         )
+
+    # Recovery Latency Report
+    recovery = _threshold_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if recovery["recovery_latency_seconds"]:
+        print(f"   - Recovery latency: {recovery['recovery_latency_seconds']:.1f}s")
+        if recovery["recovery_latency_seconds"] < 120:
+            print(f"   - SLA Status: ✓ Under 2min threshold")
+        else:
+            print(f"   - SLA Status: ✗ Exceeded 2min threshold")
+    else:
+        print(f"   - No recovery event recorded (system may not have degraded)")
 
     print(f"\n💾 Full report saved to: {report_path}")
     print("=" * 70)

@@ -94,6 +94,13 @@ _repeated_stats = {
     "circuit_breaker_transitions": [],  # All CB state changes
     "backoff_observations": [],  # Observed backoff durations
     "final_state": None,
+    # Recovery Latency Metrics
+    "recovery": {
+        "per_cycle_latencies": [],  # Recovery time per cycle
+        "avg_recovery_latency_seconds": None,
+        "recovery_latency_trend": None,  # "stable", "increasing", "decreasing"
+        "sla_breaches": 0,  # Count of cycles exceeding SLA
+    },
 }
 
 
@@ -465,6 +472,7 @@ def on_test_stop(environment, **kwargs):
 
     # Recovery consistency analysis
     print("\n🔄 Recovery Consistency:")
+    recovery = _repeated_stats["recovery"]
     if recovery_times:
         avg_recovery = sum(recovery_times) / len(recovery_times)
         max_recovery = max(recovery_times)
@@ -475,12 +483,26 @@ def on_test_stop(environment, **kwargs):
         print(f"  - Max Recovery: {max_recovery:.1f}s")
         print(f"  - Variance: {max_recovery - min_recovery:.1f}s")
 
+        # Update recovery metrics
+        recovery["per_cycle_latencies"] = recovery_times
+        recovery["avg_recovery_latency_seconds"] = avg_recovery
+
         # Check for accumulation
         if len(recovery_times) >= 2:
             if recovery_times[-1] > recovery_times[0] * 1.5:
                 print("  ⚠️ WARNING: Recovery time increased significantly across cycles")
+                recovery["recovery_latency_trend"] = "increasing"
             else:
                 print("  ✅ Recovery time remained consistent")
+                recovery["recovery_latency_trend"] = "stable"
+
+        # SLA check (2 minute threshold per cycle)
+        sla_breaches = sum(1 for t in recovery_times if t > 120)
+        recovery["sla_breaches"] = sla_breaches
+        if sla_breaches > 0:
+            print(f"  ⚠️ SLA Breaches: {sla_breaches}/{len(recovery_times)} cycles exceeded 2min")
+        else:
+            print(f"  ✅ SLA Status: All cycles under 2min threshold")
 
     # Circuit breaker transitions
     print(f"\n🔌 Total CB Transitions: {len(_repeated_stats['circuit_breaker_transitions'])}")

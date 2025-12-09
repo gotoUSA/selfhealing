@@ -1,15 +1,15 @@
 """
 Stage 9: Soak Test (Long Run)
 
-목적: 장시간 부하에서 리소스 누수 탐지
+Purpose: Detect resource leaks under long-running load
 - Users: 100
-- Duration: 30분 ~ 2시간
-- 메모리 사용량 추이
-- DB 커넥션 풀 상태
-- Redis 메모리
-- 응답시간 증가 추이
+- Duration: 30 minutes ~ 2 hours
+- Memory usage trends
+- DB connection pool status
+- Redis memory
+- Response time increase trends
 
-실행:
+Run:
     locust -f load_tests/scenarios/stage9_soak.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=30m --headless
 """
 
@@ -32,15 +32,15 @@ from load_tests.metrics import setup_event_hooks, get_metrics_collector
 
 STAGE_NAME = "[Stage9]"
 
-# Soak 테스트 통계
+# Soak test statistics
 _soak_stats = {
     "start_time": None,
-    "intervals": [],  # 5분 간격 스냅샷
+    "intervals": [],  # 5-minute interval snapshots
     "total_requests": 0,
     "total_errors": 0,
 }
 
-# 5분 간격 통계 수집
+# 5-minute interval statistics collection
 _interval_stats = {
     "requests": 0,
     "errors": 0,
@@ -50,7 +50,7 @@ _interval_stats = {
 
 
 def _maybe_snapshot_interval():
-    """5분마다 간격 통계 저장"""
+    """Save interval statistics every 5 minutes"""
     global _interval_stats, _soak_stats
 
     now = time.time()
@@ -59,9 +59,9 @@ def _maybe_snapshot_interval():
         _interval_stats["last_snapshot"] = now
         return
 
-    # 5분 경과 확인
-    if now - _interval_stats["last_snapshot"] >= 300:  # 5분
-        # 스냅샷 저장
+    # Check if 5 minutes have passed
+    if now - _interval_stats["last_snapshot"] >= 300:  # 5 minutes
+        # Save snapshot
         avg_response = (
             sum(_interval_stats["response_times"]) / len(_interval_stats["response_times"])
             if _interval_stats["response_times"]
@@ -81,7 +81,7 @@ def _maybe_snapshot_interval():
             }
         )
 
-        # 초기화
+        # Reset
         _interval_stats["requests"] = 0
         _interval_stats["errors"] = 0
         _interval_stats["response_times"] = []
@@ -90,15 +90,15 @@ def _maybe_snapshot_interval():
 
 class SoakUser(HttpUser):
     """
-    Soak Test 사용자
+    Soak Test User
 
-    장시간 지속적인 부하로 시스템 안정성 검증
+    Verify system stability under long-running sustained load
     """
 
     wait_time = between(1, 3)
 
     def on_start(self):
-        """테스트 시작 시 초기화"""
+        """Initialize on test start"""
         global _soak_stats
 
         setup_event_hooks(STAGE_NAME)
@@ -115,7 +115,7 @@ class SoakUser(HttpUser):
         self.login_helper.login()
 
     def _record_request(self, success: bool, response_time: float):
-        """요청 통계 기록"""
+        """Record request statistics"""
         global _interval_stats, _soak_stats
 
         _soak_stats["total_requests"] += 1
@@ -131,7 +131,7 @@ class SoakUser(HttpUser):
     @task(5)
     @tag("soak", "browse")
     def soak_browse(self):
-        """지속적 상품 조회"""
+        """Continuous product browsing"""
         start = time.time()
 
         with self.client.get(
@@ -152,7 +152,7 @@ class SoakUser(HttpUser):
     @task(3)
     @tag("soak", "cart")
     def soak_cart(self):
-        """지속적 장바구니 조작"""
+        """Continuous cart operations"""
         if not self.login_helper.ensure_logged_in():
             return
 
@@ -184,7 +184,7 @@ class SoakUser(HttpUser):
     @task(1)
     @tag("soak", "payment")
     def soak_payment(self):
-        """지속적 결제"""
+        """Continuous payment"""
         if not self.login_helper.ensure_logged_in():
             return
 
@@ -192,11 +192,11 @@ class SoakUser(HttpUser):
         if not product_ids:
             return
 
-        # 장바구니 준비
+        # Prepare cart
         if not self.cart_helper.prepare_cart_for_order(product_ids, min_items=1, max_items=1):
             return
 
-        # 주문 생성
+        # Create order
         order_data = self.payment_helper.create_order()
         if not order_data:
             return
@@ -207,7 +207,7 @@ class SoakUser(HttpUser):
         if not order_id or not final_amount:
             return
 
-        # 결제
+        # Payment
         payment_key = self.payment_helper.generate_payment_key("soak")
         start = time.time()
 
@@ -234,10 +234,10 @@ class SoakUser(HttpUser):
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    """테스트 종료 시 Soak 테스트 결과"""
+    """Soak test results on test stop"""
     global _soak_stats
 
-    # 마지막 간격 저장
+    # Save last interval
     _maybe_snapshot_interval()
 
     print("\n" + "=" * 70)
@@ -255,7 +255,7 @@ def on_test_stop(environment, **kwargs):
         overall_error_rate = _soak_stats["total_errors"] / _soak_stats["total_requests"] * 100
         print(f"Overall Error Rate: {overall_error_rate:.2f}%")
 
-    # 간격별 추이 분석
+    # Interval trend analysis
     if _soak_stats["intervals"]:
         print("\n📈 Interval Analysis (5-minute windows):")
         print("-" * 70)

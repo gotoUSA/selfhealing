@@ -144,6 +144,15 @@ _lock_stats = {
         "stock_consistency": None,
         "recovery_successful": None,
     },
+    # Recovery Latency Metrics
+    "recovery": {
+        "lock_contention_start": None,  # When lock issues started
+        "lock_contention_end": None,  # When lock issues resolved
+        "deadlock_resolution_times": [],  # Time to resolve each deadlock
+        "total_recovery_latency_seconds": None,  # Overall recovery time
+        "lock_retry_latencies_ms": [],  # Per-retry latencies
+        "sla_compliant": None,  # Recovery under 2s threshold
+    },
 }
 
 _stats_lock = threading.Lock()
@@ -727,6 +736,36 @@ def on_test_stop(environment, **kwargs):
     for check, result in _lock_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
+
+    # Recovery Latency Report
+    recovery = _lock_stats["recovery"]
+    print(f"\n🔄 Recovery Latency Metrics:")
+    if recovery["lock_retry_latencies_ms"]:
+        avg_retry = sum(recovery["lock_retry_latencies_ms"]) / len(recovery["lock_retry_latencies_ms"])
+        max_retry = max(recovery["lock_retry_latencies_ms"])
+        print(f"   - Lock retry attempts: {len(recovery['lock_retry_latencies_ms'])}")
+        print(f"   - Avg retry latency: {avg_retry:.0f}ms")
+        print(f"   - Max retry latency: {max_retry:.0f}ms")
+    if recovery["deadlock_resolution_times"]:
+        avg_deadlock = sum(recovery["deadlock_resolution_times"]) / len(recovery["deadlock_resolution_times"])
+        print(f"   - Deadlock resolutions: {len(recovery['deadlock_resolution_times'])}")
+        print(f"   - Avg deadlock resolution: {avg_deadlock:.0f}ms")
+    if recovery.get("total_recovery_latency_seconds"):
+        print(f"   - Total recovery latency: {recovery['total_recovery_latency_seconds']:.1f}s")
+        recovery["sla_compliant"] = recovery["total_recovery_latency_seconds"] < 2.0
+        if recovery["sla_compliant"]:
+            print(f"   - SLA Status: ✓ Under 2s threshold")
+        else:
+            print(f"   - SLA Status: ✗ Exceeded 2s threshold")
+    else:
+        # Calculate from retry latencies
+        if recovery["lock_retry_latencies_ms"]:
+            max_latency_s = max(recovery["lock_retry_latencies_ms"]) / 1000
+            recovery["sla_compliant"] = max_latency_s < 2.0
+            if recovery["sla_compliant"]:
+                print(f"   - SLA Status: ✓ All retries under 2s threshold")
+            else:
+                print(f"   - SLA Status: ✗ Some retries exceeded 2s")
 
     print(f"\n{'='*70}\n")
 

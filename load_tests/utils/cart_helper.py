@@ -1,7 +1,7 @@
 """
-장바구니 헬퍼 - 장바구니 조작
+Cart Helper - Cart Operations
 
-모든 Stage 시나리오에서 재사용
+Reusable across all Stage scenarios
 """
 
 import random
@@ -11,19 +11,19 @@ from load_tests.config import ENDPOINTS
 
 
 class CartHelper:
-    """장바구니 조작 헬퍼"""
+    """Cart operations helper"""
 
     def __init__(self, client, stage_name: str = ""):
         """
         Args:
             client: Locust HttpUser client
-            stage_name: 메트릭 prefix용 Stage 이름
+            stage_name: Stage name for metrics prefix
         """
         self.client = client
         self.stage_name = stage_name
 
     def get_cart_items(self) -> Optional[List[Dict[str, Any]]]:
-        """장바구니 아이템 조회"""
+        """Get cart items"""
         request_name = f"{self.stage_name} GET /api/cart/items/".strip()
 
         response = self.client.get(
@@ -36,7 +36,7 @@ class CartHelper:
         return None
 
     def add_item(self, product_id: int, quantity: int = 1) -> bool:
-        """장바구니에 상품 추가"""
+        """Add product to cart"""
         request_name = f"{self.stage_name} POST /api/cart/add_item/".strip()
 
         with self.client.post(
@@ -48,7 +48,7 @@ class CartHelper:
             name=request_name,
             catch_response=True,
         ) as response:
-            # 400 에러는 재고 부족, 중복 상품 등 비즈니스 로직으로 정상 처리
+            # 400 errors (out of stock, duplicate product, etc.) are treated as normal business logic
             if response.status_code in [200, 201, 400]:
                 response.success()
                 return response.status_code in [200, 201]
@@ -65,17 +65,17 @@ class CartHelper:
         max_quantity: int = 2,
     ) -> int:
         """
-        랜덤 상품들을 장바구니에 추가
+        Add random products to cart
 
         Args:
-            product_ids: 추가할 상품 ID 풀
-            min_items: 최소 상품 종류 수
-            max_items: 최대 상품 종류 수
-            min_quantity: 최소 수량
-            max_quantity: 최대 수량
+            product_ids: Pool of product IDs to add
+            min_items: Minimum number of product types
+            max_items: Maximum number of product types
+            min_quantity: Minimum quantity
+            max_quantity: Maximum quantity
 
         Returns:
-            추가된 상품 종류 수
+            Number of product types added
         """
         if not product_ids:
             return 0
@@ -92,7 +92,7 @@ class CartHelper:
         return added_count
 
     def update_item(self, item_id: int, quantity: int) -> bool:
-        """장바구니 아이템 수량 변경"""
+        """Update cart item quantity"""
         request_name = f"{self.stage_name} PATCH /api/cart/items/{{id}}/".strip()
 
         response = self.client.patch(
@@ -104,7 +104,7 @@ class CartHelper:
         return response.status_code == 200
 
     def remove_item(self, item_id: int) -> bool:
-        """장바구니 아이템 삭제"""
+        """Remove cart item"""
         request_name = f"{self.stage_name} DELETE /api/cart/items/{{id}}/".strip()
 
         response = self.client.delete(
@@ -115,7 +115,7 @@ class CartHelper:
         return response.status_code in [200, 204]
 
     def clear_cart(self) -> bool:
-        """장바구니 비우기"""
+        """Clear cart"""
         request_name = f"{self.stage_name} POST /api/cart/clear/".strip()
 
         with self.client.post(
@@ -128,7 +128,7 @@ class CartHelper:
                 response.success()
                 return True
             elif response.status_code == 400:
-                # 빈 장바구니 clear는 정상 케이스로 처리
+                # Clearing empty cart is treated as normal case
                 try:
                     data = response.json()
                     if data.get("code") == "CART_EMPTY":
@@ -143,7 +143,7 @@ class CartHelper:
                 return False
 
     def get_cart_summary(self) -> Optional[Dict[str, Any]]:
-        """장바구니 요약 조회"""
+        """Get cart summary"""
         request_name = f"{self.stage_name} GET /api/cart/summary/".strip()
 
         response = self.client.get(
@@ -156,7 +156,7 @@ class CartHelper:
         return None
 
     def has_items(self) -> bool:
-        """장바구니에 상품이 있는지 확인"""
+        """Check if cart has items"""
         items = self.get_cart_items()
         return bool(items)
 
@@ -167,15 +167,15 @@ class CartHelper:
         max_items: int = 3,
     ) -> bool:
         """
-        주문을 위한 장바구니 준비 (비우고 → 추가)
+        Prepare cart for order (clear -> add)
 
         Returns:
-            장바구니 준비 성공 여부
+            Whether cart preparation succeeded
         """
-        # 기존 장바구니 비우기 (실패해도 계속 진행)
+        # Clear existing cart (continue even if fails)
         self.clear_cart()
 
-        # 상품 추가
+        # Add products
         added = self.add_random_items(
             product_ids,
             min_items=min_items,
