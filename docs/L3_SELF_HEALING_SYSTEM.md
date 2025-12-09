@@ -600,13 +600,6 @@ record.mark_as_resolved(
 
 **Core Tests**: `shopping/tests/integration/test_l3_self_healing.py`
 
-**Governance Tests (Phase 1 & 2)**:
-- `shopping/tests/unit/self_healing/test_idempotency_enforcement.py` - G-01
-- `shopping/tests/unit/self_healing/test_backoff_jitter_distribution.py` - G-02
-- `shopping/tests/integration/self_healing/test_circuit_breaker_ttl.py` - G-03
-- `shopping/tests/integration/self_healing/test_retry_persistence.py` - G-06
-- `shopping/tests/integration/self_healing/test_security_dlq_separation.py` - G-07
-
 ### 테스트 시나리오
 
 | 분류 | 테스트 | 설명 |
@@ -631,15 +624,6 @@ record.mark_as_resolved(
 | **L3-D** | Manual Control | 운영자 수동 제어 |
 | **통합** | Complete Flow | 전체 복구 플로우 |
 
-### Governance Tests (37 tests)
-
-| Code | Category | Tests | Description |
-|------|----------|-------|-------------|
-| **G-01** | Idempotency | 9 | Payment, confirm, webhook idempotency enforcement |
-| **G-02** | Jitter | 8 | Statistical distribution and randomness validation |
-| **G-03** | Circuit TTL | 8 | Manual override TTL expiration and recovery |
-| **G-06** | Persistence | 7 | Retry count persistence across worker restarts |
-| **G-07** | Security DLQ | 7 | Security violations isolated from DLQ |
 
 ### 테스트 실행
 
@@ -647,8 +631,6 @@ record.mark_as_resolved(
 # Docker Compose로 Core L3 테스트 실행
 docker-compose run --rm web pytest shopping/tests/integration/test_l3_self_healing.py -v
 
-# Governance 테스트만 실행
-docker-compose run --rm web pytest shopping/tests/unit/self_healing/test_idempotency_enforcement.py shopping/tests/unit/self_healing/test_backoff_jitter_distribution.py shopping/tests/integration/self_healing/test_circuit_breaker_ttl.py shopping/tests/integration/self_healing/test_retry_persistence.py shopping/tests/integration/self_healing/test_security_dlq_separation.py -v --no-cov
 
 # 특정 테스트만
 docker-compose run --rm web pytest shopping/tests/integration/test_l3_self_healing.py::TestL3CircuitBreaker -v

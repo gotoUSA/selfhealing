@@ -1,9 +1,9 @@
 # L3 Self-Healing Reliability Layer — Operations Guide
 
-> **Version**: 1.1
-> **Last Updated**: 2025-12-08
+> **Version**: 1.2
+> **Last Updated**: 2025-12-09
 > **Status**: Production Ready
-> **Prerequisite**: Read [L3 Architecture](./L3_SELF_HEALING_ARCHITECTURE.md) first
+> **Prerequisite**: Read [L3 Architecture](./SELF_HEALING_ARCHITECTURE.md) first
 
 ---
 
@@ -23,6 +23,7 @@
 12. [REQUIRES_REVIEW Escalation Policy](#12-requires_review-escalation-policy)
 13. [Data Retention & Soft-Delete Policy](#13-data-retention--soft-delete-policy)
 14. [Security Review Process](#14-security-review-process)
+15. [Control API Operations](#15-control-api-operations)
 
 ---
 
@@ -1539,12 +1540,146 @@ The `CircuitBreakerState` model stores:
 
 ---
 
-## Related Documents
+## 15. Control API Operations
 
-- [L3 Self-Healing Architecture](./L3_SELF_HEALING_ARCHITECTURE.md)
-- [Celery Retry Guide](./CELERY_RETRY_GUIDE.md)
-- [Production Checklist](./PRODUCTION_CHECKLIST.md)
+### Overview
+
+The **Self-Healing Control API** provides a unified, governed interface for operational control of self-healing behaviors. This section covers operational aspects of using the Control API.
+
+> **Full Documentation**: See [5_CONTROL_API/](../5_CONTROL_API/) for complete specifications.
+
+### Control API Quick Reference
+
+| Action | Purpose | Environment | Example Use Case |
+|--------|---------|-------------|------------------|
+| `allow` | Enable service operations | All | Recovery from outage |
+| `block` | Disable service operations | All | Known PG maintenance |
+| `override` | Bypass rules temporarily | All (TTL in ops) | SLA breach mitigation |
+| `reset` | Revert to defaults | All | Post-incident cleanup |
+| `inject_failure` | Simulate failures | test, chaos only | Chaos engineering |
+
+### Terminology Mapping
+
+To avoid confusion with Circuit Breaker terminology:
+
+| Control API | Circuit Breaker | Effect |
+|-------------|-----------------|--------|
+| `allow` | `force_close` | Operations proceed (CB CLOSED) |
+| `block` | `force_open` | Operations blocked (CB OPEN) |
+
+### Operational Runbook: Using Control API
+
+#### Blocking a Service (Planned Maintenance)
+
+```bash
+# Using curl
+curl -X POST https://api.example.com/api/v1/control/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_name": "toss_payment",
+    "action": "block",
+    "environment": "ops",
+    "reason": "Scheduled PG maintenance 2025-12-09 10:00-11:00",
+    "ttl_minutes": 60
+  }'
+```
+
+**Expected Response:**
+```json
+{
+  "status": "success",
+  "action_applied": "block",
+  "system_state": "block",
+  "effective_until": "2025-12-09T11:00:00Z"
+}
+```
+
+#### Allowing a Service (Post-Maintenance Recovery)
+
+```bash
+curl -X POST https://api.example.com/api/v1/control/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_name": "toss_payment",
+    "action": "allow",
+    "environment": "ops",
+    "reason": "PG maintenance complete, confirmed operational"
+  }'
+```
+
+#### Emergency Override
+
+```bash
+curl -X POST https://api.example.com/api/v1/control/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_name": "external_gateway",
+    "action": "override",
+    "environment": "ops",
+    "reason": "External API latency breach - temporary bypass",
+    "ttl_minutes": 30
+  }'
+```
+
+### Environment-Specific Rules
+
+| Environment | Key Rules |
+|-------------|-----------|
+| `test` | All actions allowed, minimal restrictions |
+| `chaos` | `inject_failure` allowed, TTL recommended |
+| `ops` | `inject_failure` **forbidden**, TTL required for override (max 60 min) |
+
+### TTL Expiration Monitoring
+
+The `expire_control_api_overrides` Celery task runs every 5 minutes to:
+
+1. Find expired overrides and blocks
+2. Revert to default state
+3. Send notification to operators
+4. Record audit trail
+
+**Monitoring Alert:**
+```yaml
+- alert: ControlAPIOverrideLongDuration
+  expr: control_api_override_duration_seconds > 3600
+  labels:
+    severity: high
+  annotations:
+    summary: "Override active for more than 1 hour"
+```
+
+### Governance Checklist
+
+Before using Control API in production:
+
+- [ ] Verify role authorization (Ops Engineer or higher)
+- [ ] Document reason clearly
+- [ ] Set appropriate TTL (max 60 min for override in ops)
+- [ ] Notify stakeholders if blocking critical service
+- [ ] Plan for conditional replay after allowing
+
+### Related Control API Documents
+
+| Document | Purpose |
+|----------|---------|
+| [CONTROL_API_INTERFACE.md](../5_CONTROL_API/CONTROL_API_INTERFACE.md) | API request/response specification |
+| [CONTROL_API_SECURITY_GOVERNANCE.md](../5_CONTROL_API/CONTROL_API_SECURITY_GOVERNANCE.md) | Authorization and risk classification |
+| [CONTROL_API_EXECUTION.md](../5_CONTROL_API/CONTROL_API_EXECUTION.md) | Execution behavior and TTL management |
 
 ---
 
-*This document covers operations. For architecture, concepts, and decision tables, see the [Architecture Guide](./L3_SELF_HEALING_ARCHITECTURE.md).*
+## Related Documents
+
+- [L3 Self-Healing Architecture](./SELF_HEALING_ARCHITECTURE.md)
+- [Control API Interface](../5_CONTROL_API/CONTROL_API_INTERFACE.md)
+- [Control API Security Governance](../5_CONTROL_API/CONTROL_API_SECURITY_GOVERNANCE.md)
+- [Control API Execution](../5_CONTROL_API/CONTROL_API_EXECUTION.md)
+- [Celery Retry Guide](../../CELERY_RETRY_GUIDE.md)
+- [Production Checklist](../../PRODUCTION_CHECKLIST.md)
+
+---
+
+*This document covers operations. For architecture, concepts, and decision tables, see the [Architecture Guide](./SELF_HEALING_ARCHITECTURE.md). For Control API specifications, see [5_CONTROL_API/](../5_CONTROL_API/).*

@@ -1,7 +1,7 @@
 # L3 Self-Healing Reliability Layer — Architecture
 
-> **Version**: 1.1
-> **Last Updated**: 2025-12-08
+> **Version**: 1.2
+> **Last Updated**: 2025-12-09
 > **Status**: Production Ready
 
 ---
@@ -20,8 +20,9 @@
 10. [Circuit Breaker Policy](#10-circuit-breaker-policy)
 11. [Failure Classification](#11-failure-classification)
 12. [DLQ & Replay Service Architecture](#12-dlq--replay-service-architecture)
-13. [AI Integration Roadmap](#13-ai-integration-roadmap)
-14. [Validation and Testing](#14-validation-and-testing)
+13. [Control API Integration](#13-control-api-integration)
+14. [AI Integration Roadmap](#14-ai-integration-roadmap)
+15. [Validation and Testing](#15-validation-and-testing)
 
 ---
 
@@ -818,7 +819,87 @@ def cleanup_resolved_dlq_entries():
 
 ---
 
-## 13. AI Integration Roadmap
+## 13. Control API Integration
+
+### Overview
+
+The **Self-Healing Control API** provides a unified, governed interface for managing reliability behaviors across testing, chaos experimentation, and production operations.
+
+> **Full Documentation**: See [5_CONTROL_API/](../5_CONTROL_API/) for complete specifications.
+
+### Control API Architecture Position
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            Application Layer                              │
+│                      (Domain Business Logic)                              │
+└─────────────────────────────────┬────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        Control API Layer (NEW)                            │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
+│  │   allow     │  │   block     │  │  override   │  │   inject    │     │
+│  │  (enable)   │  │  (disable)  │  │ (temp bypass)│ │  (chaos)    │     │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     │
+│                                  │                                       │
+│                          Governance Layer                                │
+│                    (Authorization + TTL + Audit)                         │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        Self-Healing Layer                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
+│  │   Retry     │  │  Circuit    │  │    DLQ      │  │   Human     │     │
+│  │  Handler    │  │  Breaker    │  │  Manager    │  │  Approval   │     │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Terminology Mapping
+
+The Control API uses `allow`/`block` terminology to avoid Circuit Breaker confusion:
+
+| Control API Action | Circuit Breaker Equivalent | Self-Healing Effect |
+|--------------------|---------------------------|---------------------|
+| `allow` | `force_close` (CB CLOSED) | Operations proceed normally |
+| `block` | `force_open` (CB OPEN) | Operations are blocked |
+| `override` | Bypass with governance | Temporarily bypass rules |
+| `reset` | Return to default | Revert to base ruleset |
+| `inject_failure` | Fault injection | Controlled failure simulation |
+
+### Environment-Based Access Control
+
+| Environment | Purpose | Key Restrictions |
+|-------------|---------|------------------|
+| `test` | CI/CD validation | Minimal restrictions |
+| `chaos` | Resilience testing | TTL recommended |
+| `ops` | Production control | `inject_failure` **forbidden**, TTL required for override |
+
+### Governance Integration
+
+All Control API actions are:
+
+- ✅ **Audited**: Every action recorded with who, what, why, when
+- ✅ **TTL-bounded**: Operations expire automatically
+- ✅ **Role-authorized**: Based on authority level
+- ✅ **Evidence-backed**: Metrics captured as proof
+- ✅ **Reversible**: No permanent overrides without review
+
+### Related Control API Documents
+
+| Document | Purpose |
+|----------|---------|
+| [CONTROL_API_INTERFACE.md](../5_CONTROL_API/CONTROL_API_INTERFACE.md) | API request/response specification |
+| [CONTROL_API_SECURITY_GOVERNANCE.md](../5_CONTROL_API/CONTROL_API_SECURITY_GOVERNANCE.md) | Authorization and risk classification |
+| [CONTROL_API_EXECUTION.md](../5_CONTROL_API/CONTROL_API_EXECUTION.md) | Execution behavior and TTL management |
+
+---
+
+## 14. AI Integration Roadmap
 
 ### Why Self-Healing Enables AI
 
@@ -855,7 +936,7 @@ Self-Healing: {
 
 ---
 
-## 14. Validation and Testing
+## 15. Validation and Testing
 
 ### Test Suites
 
@@ -918,10 +999,13 @@ L3 Self-Healing Layer transforms failures from **unpredictable incidents** into 
 
 ## Related Documents
 
-- [L3 Self-Healing Operations Guide](./L3_SELF_HEALING_OPERATIONS.md)
-- [L2 Crash Recovery Test Plan](./L2_CRASH_RECOVERY_TEST_PLAN.md)
-- [Celery Retry Guide](./CELERY_RETRY_GUIDE.md)
+- [L3 Self-Healing Operations Guide](./SELF_HEALING_OPERATIONS.md)
+- [Control API Interface](../5_CONTROL_API/CONTROL_API_INTERFACE.md)
+- [Control API Security Governance](../5_CONTROL_API/CONTROL_API_SECURITY_GOVERNANCE.md)
+- [Control API Execution](../5_CONTROL_API/CONTROL_API_EXECUTION.md)
+- [L2 Crash Recovery Test Plan](../../L2_CRASH_RECOVERY_TEST_PLAN.md)
+- [Celery Retry Guide](../../CELERY_RETRY_GUIDE.md)
 
 ---
 
-*This document defines the architecture. For operational procedures, DLQ management, metrics, and testing, see the [Operations Guide](./L3_SELF_HEALING_OPERATIONS.md).*
+*This document defines the architecture. For operational procedures, DLQ management, metrics, and testing, see the [Operations Guide](./SELF_HEALING_OPERATIONS.md). For Control API specifications, see [5_CONTROL_API/](../5_CONTROL_API/).*
