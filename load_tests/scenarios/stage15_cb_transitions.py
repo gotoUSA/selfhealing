@@ -62,8 +62,8 @@ STAGE_NAME = "[Stage15-CBTransitions]"
 # Test Configuration
 # =============================================================================
 
-# Scale factor from env var (default 15s total test time)
-_test_duration = int(os.environ.get("LOCUST_TEST_DURATION", "15"))
+# Scale factor from env var (default 120s total test time for 2-minute test)
+_test_duration = int(os.environ.get("LOCUST_TEST_DURATION", "120"))
 _original_total = 190  # Original total: 190s
 _scale = _test_duration / _original_total
 
@@ -72,15 +72,20 @@ CB_FAILURE_THRESHOLD = 5  # Failures to trigger OPEN
 CB_RECOVERY_TIMEOUT = 60  # Seconds before HALF_OPEN
 CB_SUCCESS_THRESHOLD = 2  # Successes in HALF_OPEN to close
 
-# Test phases - scaled
-PHASE_1_NORMAL_DURATION = max(2, int(30 * _scale))
-PHASE_2_FAILURE_DURATION = max(2, int(30 * _scale))
-PHASE_3_WAIT_DURATION = max(3, int(70 * _scale))
-PHASE_4_RECOVERY_DURATION = max(3, int(60 * _scale))
+# Test phases - scaled with minimum durations for meaningful testing
+# Phase 1: Normal requests to confirm CB is closed
+PHASE_1_NORMAL_DURATION = max(10, int(30 * _scale))
+# Phase 2: Inject failures to trigger OPEN state
+PHASE_2_FAILURE_DURATION = max(15, int(30 * _scale))
+# Phase 3: Wait for recovery_timeout (CB should NATURALLY go HALF_OPEN)
+# NO allow API call - we wait for CB to auto-transition after recovery_timeout
+PHASE_3_WAIT_DURATION = max(70, int(70 * _scale))  # Must be > CB_RECOVERY_TIMEOUT (60s)
+# Phase 4: Recovery requests to transition HALF_OPEN → CLOSED
+PHASE_4_RECOVERY_DURATION = max(20, int(60 * _scale))
 
 TOTAL_DURATION = PHASE_1_NORMAL_DURATION + PHASE_2_FAILURE_DURATION + PHASE_3_WAIT_DURATION + PHASE_4_RECOVERY_DURATION
 
-TARGET_SERVICE = "payment"  # Service to test CB on
+TARGET_SERVICE = "stage15_test"  # Test-only service name (isolated from production)
 
 
 # =============================================================================
@@ -110,6 +115,7 @@ _cb_stats = {
         "closed": {"success": 0, "failure": 0},
         "open": {"success": 0, "failure": 0, "rejected": 0},
         "half_open": {"success": 0, "failure": 0},
+        "unknown": {"success": 0, "failure": 0},  # CB가 아직 생성되지 않은 상태
     },
     # Verification results
     "verification": {
@@ -155,13 +161,14 @@ def _update_phase():
         _cb_stats["phase"] = phase
 
         if phase == "failure_injection":
-            print(f"\n⚡ Phase 2: Injecting failures to trigger OPEN state")
+            print(f"\n[!] Phase 2: Injecting failures to trigger OPEN state")
         elif phase == "wait_recovery":
-            print(f"\n⏳ Phase 3: Waiting for recovery_timeout ({CB_RECOVERY_TIMEOUT}s)")
-            print(f"   - CB should transition from OPEN → HALF_OPEN")
+            print(f"\n[WAIT] Phase 3: Waiting for NATURAL recovery_timeout ({CB_RECOVERY_TIMEOUT}s)")
+            print(f"   - NO allow API call - waiting for CB to auto-transition")
+            print(f"   - CB should NATURALLY transition from OPEN -> HALF_OPEN")
         elif phase == "recovery":
-            print(f"\n✅ Phase 4: Recovery - sending successful requests")
-            print(f"   - CB should transition from HALF_OPEN → CLOSED")
+            print(f"\n[OK] Phase 4: Recovery - sending successful requests in HALF_OPEN")
+            print(f"   - CB should transition from HALF_OPEN -> CLOSED after {CB_SUCCESS_THRESHOLD} successes")
 
 
 def _record_state_change(new_state: str, phase: str):
@@ -191,12 +198,12 @@ def _record_state_change(new_state: str, phase: str):
         # Track specific transition times
         if old_state == "closed" and new_state == "open":
             _cb_stats["open_time"] = now
-            print(f"\n🔴 TRANSITION: CLOSED → OPEN")
+            print(f"\n[CLOSED->OPEN] TRANSITION: CLOSED -> OPEN")
             _cb_stats["verification"]["closed_to_open"] = True
 
         elif old_state == "open" and new_state == "half_open":
             _cb_stats["half_open_time"] = now
-            print(f"\n🟡 TRANSITION: OPEN → HALF_OPEN")
+            print(f"\n[OPEN->HALFOPEN] TRANSITION: OPEN -> HALF_OPEN")
             _cb_stats["verification"]["open_to_half_open"] = True
 
             # Verify timing
@@ -209,11 +216,11 @@ def _record_state_change(new_state: str, phase: str):
                 _cb_stats["verification"]["recovery_timeout_accurate"] = timing_accurate
 
                 print(f"   - Actual timeout: {actual_timeout:.1f}s (expected: {expected_timeout}s)")
-                print(f"   - Timing accurate: {'✓' if timing_accurate else '✗'}")
+                print(f"   - Timing accurate: {'[PASS]' if timing_accurate else '[FAIL]'}")
 
         elif old_state == "half_open" and new_state == "closed":
             _cb_stats["closed_time"] = now
-            print(f"\n🟢 TRANSITION: HALF_OPEN → CLOSED")
+            print(f"\n[HALFOPEN->CLOSED] TRANSITION: HALF_OPEN -> CLOSED")
             _cb_stats["verification"]["half_open_to_closed"] = True
 
     _cb_stats["current_state"] = new_state
@@ -272,8 +279,9 @@ class CBTransitionUser(HttpUser):
         self.admin_login_helper = LoginHelper(self.client, STAGE_NAME)
         self.admin_login_helper.login_as_admin()
 
-        # Get initial CB state (using admin auth)
+        # Reset CB to CLOSED state at test start (ensures clean state for full cycle test)
         if _cb_stats["initial_state"] is None:
+            self._reset_cb_to_closed()
             self._check_cb_state(initial=True)
 
         # Regular user login helper for normal operations
@@ -298,12 +306,13 @@ class CBTransitionUser(HttpUser):
             ) as response:
                 if response.status_code == 200:
                     data = response.json()
-                    state = data.get("circuit_state", "closed")
+                    # API returns "state" field, not "circuit_state"
+                    state = data.get("state", "closed").lower()  # Normalize to lowercase
 
                     if initial:
                         _cb_stats["initial_state"] = state
                         _cb_stats["current_state"] = state
-                        print(f"\n📊 Initial CB State: {state.upper()}")
+                        print(f"\n[INFO] Initial CB State: {state.upper()}")
                     else:
                         phase = _get_current_phase()
                         _record_state_change(state, phase)
@@ -314,33 +323,109 @@ class CBTransitionUser(HttpUser):
             pass
         return None
 
-    def _block_service(self):
-        """Block service via Control API (force CB to OPEN)"""
+    def _trigger_cb_failures(self):
+        """
+        Trigger CB failures via inject_failure API with trigger_cb_failures option.
+
+        This records N failures to naturally open the Circuit Breaker,
+        WITHOUT setting manually_controlled=True, allowing natural HALF_OPEN transition.
+        """
         try:
             with self.client.post(
                 "/api/self-healing/control/",
                 json={
                     "service_name": TARGET_SERVICE,
-                    "action": "block",
+                    "action": "inject_failure",
                     "environment": "test",
-                    "reason": "Stage 15 CB control test - blocking service",
-                    "ttl_minutes": 5,
+                    "reason": "Stage 15 CB test - triggering natural CB OPEN",
+                    "metadata": {
+                        "trigger_cb_failures": CB_FAILURE_THRESHOLD,  # Record 5 failures
+                    },
                 },
                 headers=self.admin_login_helper.get_auth_header(),
-                name=f"{STAGE_NAME} block-service",
+                name=f"{STAGE_NAME} trigger-cb-failures",
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
+                    data = response.json()
                     self._failure_injection_active = True
-                    print(f"\n🔴 Service BLOCKED via Control API")
+                    cb_state = data.get("evidence", {}).get("cb_state", "unknown")
+                    failure_count = data.get("evidence", {}).get("failure_count", 0)
+                    manually_controlled = data.get("evidence", {}).get("manually_controlled", False)
+                    print(
+                        f"\n[CB-OPEN] CB OPENED via failures: state={cb_state}, "
+                        f"failures={failure_count}, manual={manually_controlled}"
+                    )
                     response.success()
                 else:
-                    response.failure(f"Block failed: {response.status_code}")
+                    print(f"Trigger failures error: {response.status_code} - {response.text}")
+                    response.failure(f"Trigger failures failed: {response.status_code}")
         except Exception as e:
-            print(f"Block error: {e}")
+            print(f"Trigger failures error: {e}")
 
-    def _allow_service(self):
-        """Allow service via Control API (force CB to CLOSED)"""
+    def _reset_cb_to_closed(self):
+        """Reset CB to CLOSED state at test start for clean full-cycle testing"""
+        try:
+            with self.client.post(
+                "/api/self-healing/control/",
+                json={
+                    "service_name": TARGET_SERVICE,
+                    "action": "reset",
+                    "environment": "test",
+                    "reason": "Stage 15 CB test - reset to CLOSED for full cycle test",
+                },
+                headers=self.admin_login_helper.get_auth_header(),
+                name=f"{STAGE_NAME} reset-cb-to-closed",
+                catch_response=True,
+            ) as response:
+                if response.status_code == 200:
+                    print(f"\n[INIT] CB RESET to CLOSED state for full cycle testing")
+                    response.success()
+                else:
+                    print(f"[INIT] CB reset response: {response.status_code}")
+                    response.success()  # Don't fail test on reset issues
+        except Exception as e:
+            print(f"[INIT] CB reset error (may not exist yet): {e}")
+
+    def _inject_success(self):
+        """
+        Inject success via Control API to transition HALF_OPEN -> CLOSED.
+
+        Uses the inject_success action which calls record_success() on CB service.
+        """
+        if not hasattr(self, "_success_injected") or not self._success_injected:
+            try:
+                with self.client.post(
+                    "/api/self-healing/control/",
+                    json={
+                        "service_name": TARGET_SERVICE,
+                        "action": "inject_success",
+                        "environment": "test",
+                        "reason": "Stage 15 CB test - trigger HALF_OPEN to CLOSED transition",
+                        "metadata": {
+                            "success_count": CB_SUCCESS_THRESHOLD,  # Record 2 successes
+                        },
+                    },
+                    headers=self.admin_login_helper.get_auth_header(),
+                    name=f"{STAGE_NAME} inject-success",
+                    catch_response=True,
+                ) as response:
+                    if response.status_code == 200:
+                        data = response.json()
+                        initial_state = data.get("evidence", {}).get("initial_state", "unknown")
+                        final_state = data.get("evidence", {}).get("final_state", "unknown")
+                        success_count = data.get("evidence", {}).get("successes_triggered", 0)
+                        print(f"\n[CB-SUCCESS] Injected {success_count} successes: " f"{initial_state} -> {final_state}")
+                        self._success_injected = True
+                        response.success()
+                    else:
+                        print(f"Inject success error: {response.status_code} - {response.text}")
+                        response.failure(f"Inject success failed: {response.status_code}")
+            except Exception as e:
+                print(f"Inject success error: {e}")
+
+    def _reset_cb_state(self):
+        """Reset CB state via Control API (clears manually_controlled flag)"""
         if not self._failure_injection_active:
             return
 
@@ -349,20 +434,20 @@ class CBTransitionUser(HttpUser):
                 "/api/self-healing/control/",
                 json={
                     "service_name": TARGET_SERVICE,
-                    "action": "allow",
+                    "action": "reset",
                     "environment": "test",
-                    "reason": "Stage 15 CB control test - allowing service",
+                    "reason": "Stage 15 CB test - reset to allow natural recovery",
                 },
                 headers=self.admin_login_helper.get_auth_header(),
-                name=f"{STAGE_NAME} allow-service",
+                name=f"{STAGE_NAME} reset-cb",
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
                     self._failure_injection_active = False
-                    print(f"\n🟢 Service ALLOWED via Control API")
+                    print(f"\n[CB-RESET] CB RESET via Control API")
                     response.success()
         except Exception as e:
-            print(f"Allow error: {e}")
+            print(f"Reset error: {e}")
 
     # =========================================================================
     # Test Tasks
@@ -379,24 +464,37 @@ class CBTransitionUser(HttpUser):
         if phase == "normal":
             self._normal_request()
 
-        # Phase 2: Block service to force CB OPEN
+        # Phase 2: Inject failures to trigger CB OPEN (naturally, not manually_controlled)
         elif phase == "failure_injection":
+            # Trigger CB failures if not already done
             if not self._failure_injection_active:
-                self._block_service()
-            # Check state after blocking
+                self._trigger_cb_failures()
+            # Check state after failures
             self._check_cb_state()
 
-        # Phase 3: Wait, then allow service
+        # Phase 3: Wait for recovery timeout (NATURAL HALF_OPEN transition)
         elif phase == "wait_recovery":
-            # Allow service at start of wait phase
-            if self._failure_injection_active:
-                self._allow_service()
-            # Check state after allowing
+            # DO NOT call reset or allow - let CB naturally transition
+            # After recovery_timeout (60s), CB should auto-transition OPEN → HALF_OPEN
+            # We MUST send actual requests to trigger should_allow() which checks timeout
+            self._probe_for_half_open()
             self._check_cb_state()
 
-        # Phase 4: Recovery requests
+            # Log progress toward HALF_OPEN
+            if _cb_stats["open_time"] and _cb_stats["current_state"] == "open":
+                elapsed_since_open = time.time() - _cb_stats["open_time"]
+                remaining = CB_RECOVERY_TIMEOUT - elapsed_since_open
+                if remaining > 0 and int(elapsed_since_open) % 15 == 0:  # Log every 15s
+                    print(f"   [WAIT] Waiting for HALF_OPEN: {remaining:.0f}s remaining")
+
+        # Phase 4: Recovery requests (successful requests in HALF_OPEN → CLOSED)
         elif phase == "recovery":
-            self._normal_request()
+            # In HALF_OPEN, CB allows limited requests to test if service recovered
+            # Use inject_success API to call record_success() and transition HALF_OPEN → CLOSED
+            if _cb_stats["current_state"] == "half_open":
+                self._inject_success()
+            self._recovery_request()
+            self._check_cb_state()
 
     def _normal_request(self):
         """Send normal request that should succeed"""
@@ -404,7 +502,10 @@ class CBTransitionUser(HttpUser):
         if not product:
             return
 
-        state = _cb_stats["current_state"] or "closed"
+        state = (_cb_stats["current_state"] or "closed").lower()
+        # Ensure state exists in stats dict
+        if state not in _cb_stats["requests_per_state"]:
+            state = "closed"  # Treat unknown states as closed
 
         with self.client.get(
             f"/api/products/{product['id']}/",
@@ -431,7 +532,18 @@ class CBTransitionUser(HttpUser):
         if not product:
             return
 
-        state = _cb_stats["current_state"] or "closed"
+        state = (_cb_stats["current_state"] or "closed").lower()
+        # Ensure state exists in stats dict
+        if state not in _cb_stats["requests_per_state"]:
+            state = "closed"  # Treat unknown states as closed
+
+        # Clear cart first to avoid duplicate item errors
+        self.client.post(
+            "/api/cart/clear/",
+            json={"confirm": True},
+            headers=self.login_helper.get_auth_header(),
+            name=f"{STAGE_NAME} cart-clear",
+        )
 
         # Add to cart and create order
         self.client.post(
@@ -443,16 +555,22 @@ class CBTransitionUser(HttpUser):
 
         order_response = self.client.post(
             "/api/orders/",
-            json={"shipping_address": "CB Test"},
+            json={
+                "shipping_name": "CB Test User",
+                "shipping_phone": "010-1234-5678",
+                "shipping_postal_code": "12345",
+                "shipping_address": "CB Test Address",
+                "shipping_address_detail": "Test Building 101",
+            },
             headers=self.login_helper.get_auth_header(),
             name=f"{STAGE_NAME} create-order",
         )
 
-        if order_response.status_code not in [200, 201]:
+        if order_response.status_code not in [200, 201, 202]:
             return
 
         order_data = order_response.json()
-        order_id = order_data.get("id")
+        order_id = order_data.get("id") or order_data.get("order_id")
 
         if not order_id:
             return
@@ -482,6 +600,72 @@ class CBTransitionUser(HttpUser):
                 )
                 response.failure(f"Payment failed (expected): {response.status_code}")
 
+    def _recovery_request(self):
+        """Send successful request in HALF_OPEN state to transition to CLOSED"""
+        product = self.product_helper.get_random_product()
+        if not product:
+            return
+
+        state = (_cb_stats["current_state"] or "half_open").lower()
+        # Ensure state exists in stats dict
+        if state not in _cb_stats["requests_per_state"]:
+            state = "half_open"
+
+        # Simple product request that should succeed
+        with self.client.get(
+            f"/api/products/{product['id']}/",
+            headers=self.login_helper.get_auth_header(),
+            name=f"{STAGE_NAME} recovery-request",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                if state == "half_open":
+                    _cb_stats["requests_per_state"]["half_open"]["success"] = (
+                        _cb_stats["requests_per_state"]["half_open"].get("success", 0) + 1
+                    )
+                    print(f"   [PASS] Success in HALF_OPEN (count: {_cb_stats['requests_per_state']['half_open']['success']})")
+                response.success()
+            elif response.status_code == 503:
+                # CB might still be OPEN
+                _cb_stats["requests_per_state"]["open"]["rejected"] = (
+                    _cb_stats["requests_per_state"]["open"].get("rejected", 0) + 1
+                )
+                response.success()  # Expected if CB not yet HALF_OPEN
+            else:
+                response.failure(f"Recovery request failed: {response.status_code}")
+
+    def _probe_for_half_open(self):
+        """
+        Send probe request to payment service to trigger should_allow() check.
+
+        The CB's should_allow() method checks the recovery_timeout and transitions
+        OPEN → HALF_OPEN when the timeout has elapsed. We need to actually call
+        an endpoint that uses the CB to trigger this check.
+        """
+        # Try to access payment-related endpoint that goes through CB
+        # This will trigger should_allow() which checks recovery_timeout
+        with self.client.get(
+            "/api/payments/methods/",  # Payment endpoint protected by CB
+            headers=self.login_helper.get_auth_header(),
+            name=f"{STAGE_NAME} probe-half-open",
+            catch_response=True,
+        ) as response:
+            state = (_cb_stats["current_state"] or "open").lower()
+
+            if response.status_code == 200:
+                # CB allowed the request - might have transitioned to HALF_OPEN!
+                if state == "open":
+                    print(f"\n[PROBE] Probe succeeded! CB may have transitioned to HALF_OPEN")
+                response.success()
+            elif response.status_code == 503:
+                # CB still OPEN, blocking requests
+                response.success()  # Expected behavior
+            elif response.status_code == 404:
+                # Endpoint doesn't exist, try alternative
+                response.success()
+            else:
+                response.success()  # Don't fail on probe errors
+
     @task(5)
     @tag("cb", "monitoring")
     def monitor_cb_state(self):
@@ -498,32 +682,32 @@ class CBTransitionUser(HttpUser):
 def on_test_stop(environment, **kwargs):
     """Generate Circuit Breaker transition report"""
     print("\n" + "=" * 70)
-    print("📊 CIRCUIT BREAKER TRANSITION REPORT")
+    print("[REPORT] CIRCUIT BREAKER TRANSITION REPORT")
     print("=" * 70)
 
     # State history
-    print("\n📈 State History:")
+    print("\n[HISTORY] State History:")
     for entry in _cb_stats["state_history"][-10:]:  # Last 10 entries
         print(f"  - {entry['elapsed_seconds']:.1f}s: {entry['state'].upper()} (phase: {entry['phase']})")
 
     # Transitions
-    print("\n🔄 Recorded Transitions:")
+    print("\n[TRANSITIONS] Recorded Transitions:")
     for trans in _cb_stats["transitions"]:
         print(
-            f"  - {trans['from'].upper()} → {trans['to'].upper()} at {trans['elapsed_seconds']:.1f}s (phase: {trans['phase']})"
+            f"  - {trans['from'].upper()} -> {trans['to'].upper()} at {trans['elapsed_seconds']:.1f}s (phase: {trans['phase']})"
         )
 
     # Verification results
-    print("\n✅ Verification Results:")
+    print("\n[VERIFICATION] Verification Results:")
     v = _cb_stats["verification"]
 
-    print(f"  - CLOSED → OPEN transition: {'✓' if v['closed_to_open'] else '✗'}")
-    print(f"  - OPEN → HALF_OPEN transition: {'✓' if v['open_to_half_open'] else '✗'}")
-    print(f"  - HALF_OPEN → CLOSED transition: {'✓' if v['half_open_to_closed'] else '✗'}")
-    print(f"  - Recovery timeout accurate: {'✓' if v['recovery_timeout_accurate'] else '✗'}")
+    print(f"  - CLOSED -> OPEN transition: {'[PASS]' if v['closed_to_open'] else '[FAIL]'}")
+    print(f"  - OPEN -> HALF_OPEN transition: {'[PASS]' if v['open_to_half_open'] else '[FAIL]'}")
+    print(f"  - HALF_OPEN -> CLOSED transition: {'[PASS]' if v['half_open_to_closed'] else '[FAIL]'}")
+    print(f"  - Recovery timeout accurate: {'[PASS]' if v['recovery_timeout_accurate'] else '[FAIL]'}")
 
     # Timing analysis
-    print("\n⏱️ Timing Analysis:")
+    print("\n[TIMING] Timing Analysis:")
     if _cb_stats["open_time"] and _cb_stats["half_open_time"]:
         recovery_wait = _cb_stats["half_open_time"] - _cb_stats["open_time"]
         print(f"  - Time in OPEN state: {recovery_wait:.1f}s (expected: ~{CB_RECOVERY_TIMEOUT}s)")
@@ -533,7 +717,7 @@ def on_test_stop(environment, **kwargs):
         print(f"  - Time in HALF_OPEN state: {half_open_duration:.1f}s")
 
     # Request statistics per state
-    print("\n📊 Requests per State:")
+    print("\n[STATS] Requests per State:")
     for state, stats in _cb_stats["requests_per_state"].items():
         if any(stats.values()):
             print(
@@ -550,11 +734,11 @@ def on_test_stop(environment, **kwargs):
     )
     v["all_transitions_valid"] = all_transitions_valid
 
-    print(f"\n🎯 All Transitions Valid: {'PASSED ✓' if all_transitions_valid else 'FAILED ✗'}")
+    print(f"\n[RESULT] All Transitions Valid: {'PASSED' if all_transitions_valid else 'FAILED'}")
 
     # Recovery Latency Report
     recovery = _cb_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print(f"\n[LATENCY] Recovery Latency Metrics:")
     if _cb_stats["open_time"] and _cb_stats["closed_time"]:
         full_cycle = _cb_stats["closed_time"] - _cb_stats["open_time"]
         recovery["cb_full_cycle_latency_seconds"] = full_cycle
@@ -565,16 +749,16 @@ def on_test_stop(environment, **kwargs):
             half_to_closed = _cb_stats["closed_time"] - _cb_stats["half_open_time"]
             recovery["open_to_half_open_latency_seconds"] = open_to_half
             recovery["half_open_to_closed_latency_seconds"] = half_to_closed
-            print(f"   - OPEN → HALF_OPEN: {open_to_half:.1f}s (expected: ~{CB_RECOVERY_TIMEOUT}s)")
-            print(f"   - HALF_OPEN → CLOSED: {half_to_closed:.1f}s")
+            print(f"   - OPEN -> HALF_OPEN: {open_to_half:.1f}s (expected: ~{CB_RECOVERY_TIMEOUT}s)")
+            print(f"   - HALF_OPEN -> CLOSED: {half_to_closed:.1f}s")
 
         # SLA check (full cycle should be under 2 minutes typically)
         sla_threshold = CB_RECOVERY_TIMEOUT + 30  # recovery_timeout + buffer
         recovery["sla_compliant"] = full_cycle < sla_threshold
         if recovery["sla_compliant"]:
-            print(f"   - SLA Status: ✓ Under {sla_threshold}s threshold")
+            print(f"   - SLA Status: [PASS] Under {sla_threshold}s threshold")
         else:
-            print(f"   - SLA Status: ✗ Exceeded {sla_threshold}s threshold")
+            print(f"   - SLA Status: [FAIL] Exceeded {sla_threshold}s threshold")
     else:
         print(f"   - CB full cycle not completed")
 
@@ -606,5 +790,5 @@ def on_test_stop(environment, **kwargs):
             indent=2,
         )
 
-    print(f"\n💾 Report saved to: {report_path}")
+    print(f"\n[SAVED] Report saved to: {report_path}")
     print("=" * 70)

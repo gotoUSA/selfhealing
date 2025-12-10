@@ -363,6 +363,14 @@ class DLQReplayUser(HttpUser):
         # Generate idempotent key
         idempotent_key = str(uuid.uuid4())
 
+        # Clear cart first to avoid duplicate item errors
+        self.client.post(
+            "/api/cart/clear/",
+            json={"confirm": True},
+            headers=self.login_helper.get_auth_header(),
+            name=f"{STAGE_NAME} cart-clear",
+        )
+
         # Add to cart
         self.client.post(
             "/api/cart/add_item/",
@@ -374,16 +382,22 @@ class DLQReplayUser(HttpUser):
         # Create order
         order_response = self.client.post(
             "/api/orders/",
-            json={"shipping_address": "DLQ Test Address"},
+            json={
+                "shipping_name": "DLQ Test User",
+                "shipping_phone": "010-1234-5678",
+                "shipping_postal_code": "12345",
+                "shipping_address": "DLQ Test Address",
+                "shipping_address_detail": "Test Building 101",
+            },
             headers=self.login_helper.get_auth_header(),
             name=f"{STAGE_NAME} create-order",
         )
 
-        if order_response.status_code not in [200, 201]:
+        if order_response.status_code not in [200, 201, 202]:
             return
 
         order_data = order_response.json()
-        order_id = order_data.get("id")
+        order_id = order_data.get("id") or order_data.get("order_id")
 
         if not order_id:
             return

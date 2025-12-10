@@ -116,6 +116,9 @@ def assess_risk_level(action: str, environment: str) -> str:
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.TEST): RiskLevels.INFO,
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.CHAOS): RiskLevels.HIGH,
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.TEST): RiskLevels.INFO,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.CHAOS): RiskLevels.INFO,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
     }
 
     return risk_matrix.get((action, environment), RiskLevels.WARNING)
@@ -215,10 +218,10 @@ class ControlAPIService:
 
     def __init__(self):
         """Initialize the Control API Service."""
-        from selfhealing.circuit_breaker_service import CircuitBreakerService
-        from selfhealing.replay_service import ReplayService
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.replay_service import ReplayService
 
-        self.circuit_breaker = CircuitBreakerService()
+        self.circuit_breaker = get_circuit_breaker_service()
         self.replay_service = ReplayService()
 
         # Failure injection state (in-memory for chaos/test)
@@ -260,6 +263,8 @@ class ControlAPIService:
                 response = self._execute_reset(request)
             elif request.action == ControlAPIActions.INJECT_FAILURE:
                 response = self._execute_inject_failure(request)
+            elif request.action == ControlAPIActions.INJECT_SUCCESS:
+                response = self._execute_inject_success(request)
             else:
                 response = ControlResponse(
                     status="error",
@@ -411,8 +416,42 @@ class ControlAPIService:
         Execute inject_failure action - simulate failures.
 
         Only allowed in test and chaos environments.
+
+        Supports two modes:
+        1. Configuration mode: Sets up failure injection config for future requests
+        2. Trigger CB mode: Immediately records N failures to trigger Circuit Breaker
+           - Use metadata: {"trigger_cb_failures": 5} to record 5 failures immediately
+           - This will naturally open the CB without setting manually_controlled=True
         """
-        # Store failure injection config
+        # Check for immediate CB trigger mode
+        trigger_cb_failures = request.metadata.get("trigger_cb_failures", 0)
+
+        if trigger_cb_failures > 0:
+            # Record failures to naturally trigger CB OPEN
+            for i in range(trigger_cb_failures):
+                self.circuit_breaker.record_failure(request.service_name)
+
+            # Get the resulting state
+            state = self.circuit_breaker.get_or_create_state(request.service_name)
+
+            logger.info(
+                f"[ControlAPI] Triggered {trigger_cb_failures} failures for '{request.service_name}': "
+                f"state={state.state}, failure_count={state.failure_count}"
+            )
+
+            return ControlResponse(
+                status="success",
+                action_applied="inject_failure",
+                system_state="block" if state.state == "open" else "allow",
+                evidence={
+                    "failures_triggered": trigger_cb_failures,
+                    "cb_state": state.state,
+                    "failure_count": state.failure_count,
+                    "manually_controlled": state.manually_controlled,
+                },
+            )
+
+        # Original configuration mode - store failure injection config
         failure_config = {
             "enabled": True,
             "failure_rate": request.metadata.get("failure_rate", 1.0),
@@ -443,6 +482,42 @@ class ControlAPIService:
             evidence={"failure_rate": failure_config["failure_rate"], "failure_type": failure_config["failure_type"]},
         )
 
+    def _execute_inject_success(self, request: ControlRequest) -> ControlResponse:
+        """
+        Execute inject_success action - simulate successful requests.
+
+        Only allowed in test and chaos environments.
+        Used to help Circuit Breaker recover from HALF_OPEN to CLOSED state.
+
+        Supports:
+        - metadata: {"success_count": N} to record N successes
+        """
+        success_count = request.metadata.get("success_count", 1)
+
+        # Record successes to help CB recover
+        for i in range(success_count):
+            self.circuit_breaker.record_success(request.service_name)
+
+        # Get the resulting state
+        state = self.circuit_breaker.get_or_create_state(request.service_name)
+
+        logger.info(
+            f"[ControlAPI] Recorded {success_count} successes for '{request.service_name}': "
+            f"state={state.state}, success_count_in_half_open={state.success_count}"
+        )
+
+        return ControlResponse(
+            status="success",
+            action_applied="inject_success",
+            system_state="allow" if state.state == "closed" else "half_open",
+            evidence={
+                "successes_recorded": success_count,
+                "cb_state": state.state,
+                "success_count": state.success_count,
+                "manually_controlled": state.manually_controlled,
+            },
+        )
+
     # =========================================================================
     # Helper Methods
     # =========================================================================
@@ -461,6 +536,16 @@ class ControlAPIService:
                     action_applied=request.action,
                     error_code="ACTION_FORBIDDEN_IN_ENVIRONMENT",
                     error_message="inject_failure is forbidden in ops environment",
+                )
+
+        # inject_success forbidden in ops
+        if request.action == ControlAPIActions.INJECT_SUCCESS:
+            if request.environment == ControlAPIEnvironments.OPS:
+                return ControlResponse(
+                    status="rejected",
+                    action_applied=request.action,
+                    error_code="ACTION_FORBIDDEN_IN_ENVIRONMENT",
+                    error_message="inject_success is forbidden in ops environment",
                 )
 
         # override in ops requires TTL (max 60)

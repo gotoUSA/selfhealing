@@ -40,10 +40,10 @@ from selfhealing.api.django.serializers import (
     ControlAPIEnvironments,
     DLQReplayRequestSerializer,
 )
-from selfhealing.adapters.django.models import (
-    FailedOperation,
-    CircuitBreakerState,
-)
+
+# Use shopping.models to ensure same tables as CircuitBreakerService repository
+from shopping.models import CircuitBreakerState
+from shopping.models.failed_operation import FailedOperation
 from selfhealing.core.types import CircuitState
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,8 @@ class ControlAPIService:
                 return self._execute_override(request)
             elif request.action == ControlAPIActions.INJECT_FAILURE:
                 return self._execute_inject_failure(request)
+            elif request.action == ControlAPIActions.INJECT_SUCCESS:
+                return self._execute_inject_success(request)
             else:
                 return ControlResponse(
                     status="error",
@@ -204,10 +206,18 @@ class ControlAPIService:
 
     def _execute_reset(self, request: ControlRequest) -> ControlResponse:
         """Execute reset action."""
+        from selfhealing.services import get_circuit_breaker_service
+
         try:
             cb = CircuitBreakerState.objects.get(service_name=request.service_name)
             previous_state = cb.state
-            cb.reset()
+
+            # Use CircuitBreakerService to reset properly
+            cb_service = get_circuit_breaker_service()
+            cb_service.reset(request.service_name)
+
+            # Refresh from DB
+            cb.refresh_from_db()
 
             return ControlResponse(
                 status="success",
@@ -255,7 +265,15 @@ class ControlAPIService:
         )
 
     def _execute_inject_failure(self, request: ControlRequest) -> ControlResponse:
-        """Execute inject_failure action (chaos testing only)."""
+        """
+        Execute inject_failure action (chaos testing only).
+
+        Supports two modes:
+        1. Configuration mode: Sets up failure injection config for future requests
+        2. Trigger CB mode: Immediately records N failures to trigger Circuit Breaker
+           - Use metadata: {"trigger_cb_failures": 5} to record 5 failures immediately
+           - This will naturally open the CB without setting manually_controlled=True
+        """
         if request.environment == ControlAPIEnvironments.OPS:
             return ControlResponse(
                 status="rejected",
@@ -264,7 +282,39 @@ class ControlAPIService:
                 error_message="inject_failure is FORBIDDEN in ops environment",
             )
 
-        # In a real implementation, this would configure failure injection
+        # Check for immediate CB trigger mode
+        trigger_cb_failures = request.metadata.get("trigger_cb_failures", 0)
+
+        if trigger_cb_failures > 0:
+            from selfhealing.services import get_circuit_breaker_service
+
+            cb_service = get_circuit_breaker_service()
+
+            # Record failures to naturally trigger CB OPEN
+            for i in range(trigger_cb_failures):
+                cb_service.record_failure(request.service_name)
+
+            # Get the resulting state
+            state = cb_service.get_or_create_state(request.service_name)
+
+            logger.info(
+                f"[ControlAPI] Triggered {trigger_cb_failures} failures for '{request.service_name}': "
+                f"state={state.state}, failure_count={state.failure_count}"
+            )
+
+            return ControlResponse(
+                status="success",
+                action_applied=request.action,
+                system_state="block" if state.state == "open" else "allow",
+                evidence={
+                    "failures_triggered": trigger_cb_failures,
+                    "cb_state": state.state,
+                    "failure_count": state.failure_count,
+                    "manually_controlled": state.manually_controlled,
+                },
+            )
+
+        # Original configuration mode
         return ControlResponse(
             status="success",
             action_applied=request.action,
@@ -273,6 +323,54 @@ class ControlAPIService:
             reason_classification="chaos_test",
             evidence={
                 "metadata": request.metadata,
+            },
+        )
+
+    def _execute_inject_success(self, request: ControlRequest) -> ControlResponse:
+        """
+        Execute inject_success action - simulate successful requests.
+
+        Only allowed in test and chaos environments.
+        Used to help Circuit Breaker recover from HALF_OPEN to CLOSED state.
+
+        Supports:
+        - metadata: {"success_count": N} to record N successes
+        """
+        if request.environment == ControlAPIEnvironments.OPS:
+            return ControlResponse(
+                status="rejected",
+                action_applied=request.action,
+                error_code="ACTION_FORBIDDEN_IN_ENVIRONMENT",
+                error_message="inject_success is FORBIDDEN in ops environment",
+            )
+
+        success_count = request.metadata.get("success_count", 1)
+
+        from selfhealing.services import get_circuit_breaker_service
+
+        cb_service = get_circuit_breaker_service()
+
+        # Record successes to help CB recover
+        for i in range(success_count):
+            cb_service.record_success(request.service_name)
+
+        # Get the resulting state
+        state = cb_service.get_or_create_state(request.service_name)
+
+        logger.info(
+            f"[ControlAPI] Recorded {success_count} successes for '{request.service_name}': "
+            f"state={state.state}, success_count={state.success_count}"
+        )
+
+        return ControlResponse(
+            status="success",
+            action_applied=request.action,
+            system_state="allow" if state.state == "closed" else "half_open",
+            evidence={
+                "successes_recorded": success_count,
+                "cb_state": state.state,
+                "success_count": state.success_count,
+                "manually_controlled": state.manually_controlled,
             },
         )
 
@@ -304,7 +402,19 @@ class ControlAPIService:
         }
 
     def get_service_status(self, service_name: str) -> Dict[str, Any]:
-        """Get status of a specific service."""
+        """
+        Get status of a specific service.
+
+        This also triggers automatic state transitions by calling should_allow(),
+        which handles OPEN → HALF_OPEN transition after recovery_timeout.
+        """
+        from selfhealing.services import get_circuit_breaker_service
+
+        cb_service = get_circuit_breaker_service()
+
+        # Call should_allow() to trigger automatic OPEN → HALF_OPEN transition
+        is_allowed = cb_service.should_allow(service_name)
+
         try:
             cb = CircuitBreakerState.objects.get(service_name=service_name)
             return {
@@ -318,12 +428,14 @@ class ControlAPIService:
                 "controlled_by": cb.controlled_by_id,
                 "control_reason": cb.control_reason,
                 "expires_at": cb.manual_override_expires_at,
+                "is_allowed": is_allowed,
             }
         except CircuitBreakerState.DoesNotExist:
             return {
                 "service_name": service_name,
                 "state": "unknown",
                 "error": "Service not found",
+                "is_allowed": is_allowed,
             }
 
     def get_metrics(self) -> Dict[str, Any]:

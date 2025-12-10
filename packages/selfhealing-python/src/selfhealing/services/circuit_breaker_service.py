@@ -352,10 +352,12 @@ class CircuitBreakerService:
             if state.opened_at:
                 elapsed = (now() - state.opened_at).total_seconds()
                 if elapsed >= self.config.recovery_timeout:
-                    # Transition to half-open
-                    state.state = CircuitState.HALF_OPEN
-                    state.success_count = 0
-                    state.save(update_fields=["state", "success_count", "updated_at"])
+                    # Transition to half-open via repository
+                    self.repository.update_state(
+                        service_name=service_name,
+                        state=CircuitState.HALF_OPEN,
+                        success_count=0,
+                    )
                     return True
             return False
 

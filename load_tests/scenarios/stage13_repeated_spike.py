@@ -377,6 +377,14 @@ class RepeatedSpikeUser(HttpUser):
         if not product:
             return
 
+        # Clear cart first to avoid duplicate item errors
+        self.client.post(
+            "/api/cart/clear/",
+            json={"confirm": True},
+            headers=self.login_helper.get_auth_header(),
+            name=f"{STAGE_NAME} cart-clear",
+        )
+
         # Add to cart
         self.client.post(
             "/api/cart/add_item/",
@@ -390,17 +398,23 @@ class RepeatedSpikeUser(HttpUser):
 
         with self.client.post(
             "/api/orders/",
-            json={"shipping_address": "Repeated Spike Test"},
+            json={
+                "shipping_name": "Load Test User",
+                "shipping_phone": "010-1234-5678",
+                "shipping_postal_code": "12345",
+                "shipping_address": "Repeated Spike Test Address",
+                "shipping_address_detail": "Test Building 101",
+            },
             headers=self.login_helper.get_auth_header(),
             name=f"{STAGE_NAME} POST /orders/",
             catch_response=True,
         ) as response:
             elapsed_ms = (time.time() - start) * 1000
-            success = response.status_code in [200, 201]
+            success = response.status_code in [200, 201, 202]
 
             if success:
                 order_data = response.json()
-                order_id = order_data.get("id")
+                order_id = order_data.get("id") or order_data.get("order_id")
 
                 if order_id:
                     self._request_payment(order_id)

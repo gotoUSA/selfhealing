@@ -119,6 +119,9 @@ def assess_risk_level(action: str, environment: str) -> str:
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.TEST): RiskLevels.INFO,
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.CHAOS): RiskLevels.HIGH,
         (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.TEST): RiskLevels.INFO,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.CHAOS): RiskLevels.INFO,
+        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
     }
 
     return risk_matrix.get((action, environment), RiskLevels.WARNING)
@@ -263,6 +266,8 @@ class ControlAPIService:
                 response = self._execute_reset(request)
             elif request.action == ControlAPIActions.INJECT_FAILURE:
                 response = self._execute_inject_failure(request)
+            elif request.action == ControlAPIActions.INJECT_SUCCESS:
+                response = self._execute_inject_success(request)
             else:
                 response = ControlResponse(
                     status="error",
@@ -414,8 +419,49 @@ class ControlAPIService:
         Execute inject_failure action - simulate failures.
 
         Only allowed in test and chaos environments.
+
+        Supports two modes:
+        1. Configuration mode: Sets up failure injection config for future requests
+        2. Trigger CB mode: Immediately records N failures to trigger Circuit Breaker
+           - Use metadata: {"trigger_cb_failures": 5} to record 5 failures immediately
+           - This will naturally open the CB without setting manually_controlled=True
         """
-        # Store failure injection config
+        # Check for immediate CB trigger mode
+        trigger_cb_failures = request.metadata.get("trigger_cb_failures", 0)
+
+        if trigger_cb_failures > 0:
+            # Import here to avoid circular dependency
+            from shopping.services.self_healing.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
+            cb_service = get_circuit_breaker_service()
+
+            # Record failures to naturally trigger CB OPEN
+            for i in range(trigger_cb_failures):
+                cb_service.record_failure(request.service_name)
+
+            # Get the resulting state
+            state = cb_service.get_or_create_state(request.service_name)
+
+            logger.info(
+                f"[ControlAPI] Triggered {trigger_cb_failures} failures for '{request.service_name}': "
+                f"state={state.state}, failure_count={state.failure_count}"
+            )
+
+            return ControlResponse(
+                status="success",
+                action_applied="inject_failure",
+                system_state="block" if state.state == "open" else "allow",
+                evidence={
+                    "failures_triggered": trigger_cb_failures,
+                    "cb_state": state.state,
+                    "failure_count": state.failure_count,
+                    "manually_controlled": state.manually_controlled,
+                },
+            )
+
+        # Original configuration mode: Store failure injection config
         failure_config = {
             "enabled": True,
             "failure_rate": request.metadata.get("failure_rate", 1.0),
@@ -446,6 +492,55 @@ class ControlAPIService:
             evidence={"failure_rate": failure_config["failure_rate"], "failure_type": failure_config["failure_type"]},
         )
 
+    def _execute_inject_success(self, request: ControlRequest) -> ControlResponse:
+        """
+        Execute inject_success action - simulate successful requests.
+
+        Only allowed in test environments.
+
+        Used to transition Circuit Breaker from HALF_OPEN to CLOSED state.
+        Use metadata: {"success_count": 2} to record 2 successes immediately.
+        This will naturally close the CB when success_threshold is met.
+        """
+        success_count = request.metadata.get("success_count", 1)
+
+        # Import here to avoid circular dependency
+        from shopping.services.self_healing.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
+        cb_service = get_circuit_breaker_service()
+
+        # Get initial state
+        initial_state = cb_service.get_or_create_state(request.service_name)
+        initial_state_name = initial_state.state
+
+        # Record successes to naturally trigger CB CLOSED (from HALF_OPEN)
+        for i in range(success_count):
+            cb_service.record_success(request.service_name)
+
+        # Get the resulting state
+        final_state = cb_service.get_or_create_state(request.service_name)
+
+        logger.info(
+            f"[ControlAPI] Triggered {success_count} successes for '{request.service_name}': "
+            f"state={initial_state_name} -> {final_state.state}, "
+            f"success_count={final_state.success_count}"
+        )
+
+        return ControlResponse(
+            status="success",
+            action_applied="inject_success",
+            system_state="allow" if final_state.state == "closed" else "block",
+            evidence={
+                "successes_triggered": success_count,
+                "initial_state": initial_state_name,
+                "final_state": final_state.state,
+                "success_count": final_state.success_count,
+                "manually_controlled": final_state.manually_controlled,
+            },
+        )
+
     # =========================================================================
     # Helper Methods
     # =========================================================================
@@ -464,6 +559,16 @@ class ControlAPIService:
                     action_applied=request.action,
                     error_code="ACTION_FORBIDDEN_IN_ENVIRONMENT",
                     error_message="inject_failure is forbidden in ops environment",
+                )
+
+        # inject_success forbidden in ops (test only)
+        if request.action == ControlAPIActions.INJECT_SUCCESS:
+            if request.environment == ControlAPIEnvironments.OPS:
+                return ControlResponse(
+                    status="rejected",
+                    action_applied=request.action,
+                    error_code="ACTION_FORBIDDEN_IN_ENVIRONMENT",
+                    error_message="inject_success is forbidden in ops environment",
                 )
 
         # override in ops requires TTL (max 60)
@@ -545,12 +650,20 @@ class ControlAPIService:
         """
         Get the status of a specific service.
 
+        This also triggers should_allow() check which handles
+        automatic OPEN → HALF_OPEN transition after recovery_timeout.
+
         Args:
             service_name: Service to check
 
         Returns:
             Service state dictionary
         """
+        # First, trigger should_allow() which handles automatic HALF_OPEN transition
+        # This is important for testing - checking status can trigger state transitions
+        is_allowed = self.circuit_breaker.should_allow(service_name)
+
+        # Now get the (potentially updated) state
         state = self.circuit_breaker.get_or_create_state(service_name)
 
         return {
@@ -561,6 +674,7 @@ class ControlAPIService:
             "last_failure_at": state.last_failure_at,
             "manually_controlled": state.manually_controlled,
             "control_reason": state.control_reason,
+            "is_allowed": is_allowed,  # Whether requests are currently allowed
         }
 
     def is_failure_injection_active(self, service_name: str) -> bool:

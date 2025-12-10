@@ -260,7 +260,7 @@ class MetricsCollector:
         summary = self.get_summary()
 
         print("\n" + "=" * 80)
-        print("📊 CUSTOM METRICS SUMMARY")
+        print("[METRICS] CUSTOM METRICS SUMMARY")
         print("=" * 80)
         print(f"Elapsed: {summary['elapsed_seconds']}s")
         print(f"Total Requests: {summary['total_requests']}")

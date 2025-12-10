@@ -13,6 +13,7 @@ class ControlAPIActions:
     OVERRIDE = "override"
     RESET = "reset"
     INJECT_FAILURE = "inject_failure"
+    INJECT_SUCCESS = "inject_success"
 
     CHOICES = [
         (ALLOW, "Allow - Enable service operations (CB → CLOSED)"),
@@ -20,9 +21,10 @@ class ControlAPIActions:
         (OVERRIDE, "Override - Temporarily bypass rules"),
         (RESET, "Reset - Revert to default configuration"),
         (INJECT_FAILURE, "Inject Failure - Simulate failures (non-ops only)"),
+        (INJECT_SUCCESS, "Inject Success - Record successes for CB recovery (test only)"),
     ]
 
-    ALL = [ALLOW, BLOCK, OVERRIDE, RESET, INJECT_FAILURE]
+    ALL = [ALLOW, BLOCK, OVERRIDE, RESET, INJECT_FAILURE, INJECT_SUCCESS]
 
 
 class ControlAPIEnvironments:
