@@ -281,7 +281,7 @@ def check_payment(self, order_id: int, amount: int) -> IdempotencyResult:
     except Exception as e:
         # Redis unavailable - fall back to DB-only check
         logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
-    
+
     # Check database (reliable path) - always executes
     existing = Payment.objects.filter(order_id=order_id, amount=amount, ...).first()
 ```

@@ -765,6 +765,162 @@ def test_complete_failure_recovery_failure_cycle(self):
 
 ---
 
+## 11. Time-Based Behavior Tests
+
+**File**: `integration/self_healing/test_time_based_behaviors.py`
+
+**Business Risk**: Incorrect SLA breach detection, premature/delayed Circuit Breaker transitions
+
+**Compliance Alignment**: SOC 2 CC7.2 (Monitoring), SLA Compliance
+
+### Purpose
+
+These tests use `freezegun.freeze_time` to verify time-dependent behaviors that are
+difficult to test reliably with real time. Time-based logic is critical for:
+
+- Circuit Breaker state transitions (OPEN → HALF_OPEN after recovery_timeout)
+- SLA breach detection (domain-specific thresholds)
+- Manual override TTL expiration
+- Retry backoff calculations
+
+### Test Cases
+
+| ID | Test Name | Scenario | Expected Behavior |
+|----|-----------|----------|-------------------|
+| TIME-001 | `test_circuit_breaker_remains_open_before_timeout` | Check CB 30s before recovery_timeout | CB remains OPEN, requests blocked |
+| TIME-002 | `test_circuit_breaker_transitions_to_half_open_after_timeout` | Check CB after recovery_timeout expires | CB transitions to HALF_OPEN, test request allowed |
+| TIME-003 | `test_circuit_breaker_closes_after_success_in_half_open` | Record successes in HALF_OPEN state | CB transitions to CLOSED after success_threshold |
+| TIME-004 | `test_payment_sla_breach_detected_after_one_hour` | Payment pending > 1 hour | Identified as SLA breach |
+| TIME-005 | `test_payment_sla_not_breached_within_threshold` | Payment pending < 1 hour | Not flagged as breach |
+| TIME-006 | `test_point_sla_breach_detected_after_four_hours` | Point pending > 4 hours | Identified as SLA breach |
+| TIME-007 | `test_backoff_increases_exponentially` | Calculate delays for attempts 1-4 | Delays follow 2^n or 4^n pattern |
+| TIME-008 | `test_backoff_respects_max_limit` | High attempt number | Delay capped at max_backoff |
+| TIME-009 | `test_manual_override_active_within_ttl` | Check override before TTL expires | Override still active |
+| TIME-010 | `test_manual_override_expires_after_ttl` | Check override after TTL expires | Override expired, auto-management resumed |
+
+### Dependencies
+
+```txt
+freezegun>=1.2.0  # Required for freeze_time decorator
+```
+
+### Sample Test Implementation
+
+```python
+from freezegun import freeze_time
+from django.utils import timezone
+
+@pytest.mark.django_db
+class TestCircuitBreakerTimeBased:
+    """
+    Tests for Circuit Breaker time-dependent state transitions.
+    Uses freeze_time for deterministic, reproducible tests.
+    """
+
+    @freeze_time("2025-01-01 12:00:00")
+    def test_circuit_breaker_transitions_to_half_open_after_timeout(self):
+        """
+        Purpose:
+            Verify CB transitions to HALF_OPEN after recovery_timeout.
+
+        Scenario:
+            1. Create CB in OPEN state at 12:00:00
+            2. Check state at 12:01:05 (65s later, after 60s timeout)
+            3. Expect HALF_OPEN state, test request allowed
+
+        Risk Covered:
+            R-015: Incorrect recovery timing
+        """
+        # Create OPEN state at frozen time
+        cb_state = CircuitBreakerState.objects.create(
+            service_name="test_service",
+            state=CircuitState.OPEN,
+            last_failure_at=timezone.now(),
+        )
+
+        # Check at 65 seconds later
+        with freeze_time("2025-01-01 12:01:05"):
+            is_available = service.should_allow("test_service")
+            assert is_available is True
+            cb_state.refresh_from_db()
+            assert cb_state.state == CircuitState.HALF_OPEN
+```
+
+---
+
+## 12. External API Failure Recovery Tests
+
+**File**: `integration/self_healing/test_external_api_failures.py`
+
+**Business Risk**: Unrecovered payments, data loss, cascading failures
+
+**Compliance Alignment**: PCI-DSS (Payment Security), Business Continuity
+
+### Purpose
+
+These tests verify the self-healing system's response to external API failures,
+specifically focusing on Toss Payment API failures and recovery mechanisms:
+
+- Network timeouts
+- Connection refused
+- Rate limiting (429 responses)
+- Service unavailable (503)
+- Partial failures
+
+### Test Cases
+
+| ID | Test Name | Scenario | Expected Behavior |
+|----|-----------|----------|-------------------|
+| API-001 | `test_payment_timeout_creates_dlq_entry` | Payment confirmation times out | DLQ entry created with full context |
+| API-002 | `test_payment_timeout_preserves_idempotency_key` | Timeout with idempotency key | Key preserved for safe retry |
+| API-003 | `test_connection_error_triggers_circuit_breaker_record` | Multiple connection errors | CB failure count increments |
+| API-004 | `test_connection_failure_creates_retryable_dlq_entry` | Connection refused | DLQ entry marked as retryable |
+| API-005 | `test_rate_limit_triggers_cascade_detection` | Multiple 429 responses | Rate limit cascade detected |
+| API-006 | `test_rate_limit_schedules_delayed_retry` | 429 with Retry-After | DLQ includes recommended delay |
+| API-007 | `test_backoff_increases_with_retry_attempts` | Calculate backoff for retries | Exponential increase |
+| API-008 | `test_repeated_failures_open_circuit_breaker` | Exceed failure threshold | CB transitions to OPEN |
+| API-009 | `test_circuit_breaker_blocks_requests_when_open` | CB in OPEN state | Requests blocked immediately |
+| API-010 | `test_payment_success_webhook_failure_handled` | Payment OK, webhook fails | DLQ entry for webhook domain |
+| API-011 | `test_database_saved_notification_failed` | DB OK, notification fails | DLQ entry for notification |
+| API-012 | `test_503_creates_retryable_entry` | 503 Service Unavailable | DLQ entry with retry flag |
+
+### Key Scenarios
+
+#### Timeout Recovery
+```python
+def test_payment_timeout_creates_dlq_entry(self):
+    """
+    When payment confirmation times out, preserve all context for recovery.
+    The DLQ entry enables later investigation and replay.
+    """
+    dlq_service = DLQService()
+    result = dlq_service.store_failure(
+        domain="payment",
+        failure_type="PG_TIMEOUT",
+        snapshot_data={"order_id": 12345, "payment_key": "key", "amount": 50000},
+        recommended_action="manual_check",
+    )
+    assert result.success is True
+```
+
+#### Partial Failure Handling
+```python
+def test_payment_success_webhook_failure_handled(self):
+    """
+    Payment succeeded but webhook processing failed.
+    DLQ entry should be for webhook domain, not payment.
+    """
+    result = dlq_service.store_failure(
+        domain="webhook",  # Not payment
+        failure_type="WEBHOOK_PROCESSING_FAILED",
+        metadata={"payment_confirmed": True},
+    )
+    dlq_entry = FailedOperation.objects.get(id=result.dlq_id)
+    assert dlq_entry.domain == "webhook"
+```
+
+---
+
 ## Appendix A: Required Fixtures Summary
 
 ```python
@@ -808,3 +964,52 @@ pytest.mark.cost_sensitive # Cost-aware tests
 pytest.mark.requires_redis # Tests needing Redis
 pytest.mark.requires_celery # Tests needing Celery
 ```
+
+---
+
+## Appendix C: Time-Based Behavior Tests (Added 2025-12-10)
+
+**File**: `integration/self_healing/test_time_based_behaviors.py`
+
+**Dependency**: `freezegun>=1.2.0`
+
+### Test Cases (12 tests)
+
+| ID | Test Class | Test Name | Description |
+|----|------------|-----------|-------------|
+| TB-001 | TestCircuitBreakerTimeBased | test_circuit_breaker_remains_open_before_timeout | CB stays OPEN before recovery timeout |
+| TB-002 | TestCircuitBreakerTimeBased | test_circuit_breaker_transitions_to_half_open_after_timeout | CB transitions to HALF_OPEN after timeout |
+| TB-003 | TestCircuitBreakerTimeBased | test_circuit_breaker_closes_after_success_in_half_open | CB closes after success_threshold |
+| TB-004 | TestSLABreachDetectionTimeBased | test_payment_sla_breach_detected_after_one_hour | Payment SLA breach (1h threshold) |
+| TB-005 | TestSLABreachDetectionTimeBased | test_payment_sla_not_breached_within_threshold | Payment within SLA |
+| TB-006 | TestSLABreachDetectionTimeBased | test_point_sla_breach_detected_after_four_hours | Point SLA breach (4h threshold) |
+| TB-007 | TestSLABreachDetectionTimeBased | test_point_sla_not_breached_within_four_hours | Point within SLA |
+| TB-008 | TestRetryBackoffTimeBased | test_backoff_increases_exponentially | Exponential backoff verification |
+| TB-009 | TestRetryBackoffTimeBased | test_backoff_respects_max_limit | Max delay cap enforcement |
+| TB-010 | TestRetryBackoffTimeBased | test_backoff_applies_jitter | Jitter randomness verification |
+| TB-011 | TestManualOverrideTTLTimeBased | test_manual_override_active_within_ttl | Override active before expiry |
+| TB-012 | TestManualOverrideTTLTimeBased | test_manual_override_expires_after_ttl | Override expired after TTL |
+
+---
+
+## Appendix D: External API Failure Recovery Tests (Added 2025-12-10)
+
+**File**: `integration/self_healing/test_external_api_failures.py`
+
+### Test Cases (13 tests)
+
+| ID | Test Class | Test Name | Description |
+|----|------------|-----------|-------------|
+| EAF-001 | TestPaymentTimeoutRecovery | test_payment_timeout_creates_dlq_entry | Timeout creates DLQ entry |
+| EAF-002 | TestPaymentTimeoutRecovery | test_payment_timeout_preserves_idempotency_key | Idempotency key preserved |
+| EAF-003 | TestConnectionFailureRecovery | test_connection_error_triggers_circuit_breaker_record | CB failure count increments |
+| EAF-004 | TestConnectionFailureRecovery | test_connection_failure_creates_retryable_dlq_entry | Retryable DLQ entry |
+| EAF-005 | TestRateLimitingRecovery | test_rate_limit_triggers_cascade_detection | Rate limit cascade detection |
+| EAF-006 | TestRateLimitingRecovery | test_rate_limit_schedules_delayed_retry | Delayed retry scheduling |
+| EAF-007 | TestExponentialBackoffRetry | test_backoff_increases_with_retry_attempts | Exponential delay growth |
+| EAF-008 | TestExponentialBackoffRetry | test_dlq_entry_includes_retry_attempt_count | Retry metadata preserved |
+| EAF-009 | TestCircuitBreakerExternalAPI | test_repeated_failures_open_circuit_breaker | CB opens after failures |
+| EAF-010 | TestCircuitBreakerExternalAPI | test_circuit_breaker_blocks_requests_when_open | CB blocks in OPEN state |
+| EAF-011 | TestPartialFailureScenarios | test_payment_success_webhook_failure_handled | Partial failure handling |
+| EAF-012 | TestPartialFailureScenarios | test_database_saved_notification_failed | Notification failure handling |
+| EAF-013 | TestServiceUnavailableRecovery | test_503_creates_retryable_entry | 503 creates retryable entry |

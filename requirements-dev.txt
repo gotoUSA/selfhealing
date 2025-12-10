@@ -31,6 +31,11 @@ locust==2.42.5               # 부하 테스트 도구
 schemathesis==4.6.7          # API 테스트 자동화 도구
 
 # ==========================================
+# Time Mocking (for time-based tests)
+# ==========================================
+freezegun>=1.2.0      # Time freezing for tests (CB timeout, SLA breach detection)
+
+# ==========================================
 # 코드 분석 & 시각화 도구
 # ==========================================
 pydeps==3.0.1         # Python 의존성 그래프 시각화

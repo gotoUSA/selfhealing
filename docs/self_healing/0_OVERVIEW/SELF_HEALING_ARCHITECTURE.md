@@ -1138,13 +1138,13 @@ class TestCircuitBreakerRedisFailure:
 
 class TestIdempotencyServiceRedisFailure:
     """4 tests - Graceful degradation"""
-    
+
 class TestDLQServiceRedisFailure:
     """3 tests - DB-first design confirmation"""
-    
+
 class TestRateLimitTrackerCacheIndependence:
     """2 tests - In-memory operation"""
-    
+
 class TestCascadePreventionDuringRedisOutage:
     """2 tests - Full flow verification"""
 ```

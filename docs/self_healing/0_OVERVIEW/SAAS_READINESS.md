@@ -36,7 +36,7 @@ The `IdempotencyService` implements a **cache-first, DB-fallback** pattern that 
 def check_payment(self, order_id: int, amount: int) -> IdempotencyResult:
     """
     Check if a payment for this order/amount already exists.
-    
+
     Note:
         Gracefully degrades to DB-only check if Redis is unavailable.
         This ensures the service works even during cache failures.
@@ -58,7 +58,7 @@ def check_payment(self, order_id: int, amount: int) -> IdempotencyResult:
         amount=amount,
         status__in=["done", "in_progress", "ready"],
     ).first()
-    
+
     # ... return result
 ```
 
@@ -89,7 +89,7 @@ def should_allow(self, service_name: str) -> bool:
             return cached_state != "open"
     except Exception:
         pass  # Cache unavailable, check DB
-    
+
     # DB is source of truth
     state = CircuitBreakerState.objects.filter(service_name=service_name).first()
     return state is None or state.state != "open"
@@ -127,7 +127,7 @@ The DLQ (Dead Letter Queue) service is inherently **database-first**:
 def test_idempotency_check_payment_falls_back_to_db_on_cache_failure(self):
     """
     Verify IdempotencyService gracefully degrades to DB when cache fails.
-    
+
     When cache.get() raises an exception, the service should:
     - Catch the exception and log a warning
     - Fall back to database-only idempotency check
@@ -136,14 +136,14 @@ def test_idempotency_check_payment_falls_back_to_db_on_cache_failure(self):
     user = UserFactory()
     order = OrderFactory(user=user)
     payment = PaymentFactory(order=order, status="done", amount=10000)
-    
-    with patch("django.core.cache.cache.get", 
+
+    with patch("django.core.cache.cache.get",
                side_effect=RedisConnectionError("Connection refused")):
         service = IdempotencyService()
-        
+
         # Should NOT raise exception - graceful degradation
         result = service.check_payment(order_id=order.id, amount=10000)
-        
+
         # Should still detect duplicate via database
         assert result.is_duplicate is True
         assert result.existing_record.id == payment.id
