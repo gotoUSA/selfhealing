@@ -116,6 +116,24 @@ from .security_notification_service import (
     get_security_notification_service,
     notify_security_incident,
 )
+from .factory import (
+    # Repository factory functions
+    create_failed_operation_repository,
+    create_circuit_breaker_repository,
+    create_security_incident_repository,
+    # Service factory functions
+    create_dlq_service,
+    create_replay_service,
+    create_circuit_breaker_service,
+    create_security_violation_service,
+    # DI-enabled singleton accessors
+    get_dlq_service_with_di,
+    get_replay_service_with_di,
+    get_circuit_breaker_service_with_di,
+    get_security_violation_service_with_di,
+    # Utility
+    reset_service_singletons,
+)
 
 __all__ = [
     # Configuration (centralized constants)
@@ -210,4 +228,17 @@ __all__ = [
     "NotificationChannel",
     "get_security_notification_service",
     "notify_security_incident",
+    # Factory (for DI and testing)
+    "create_failed_operation_repository",
+    "create_circuit_breaker_repository",
+    "create_security_incident_repository",
+    "create_dlq_service",
+    "create_replay_service",
+    "create_circuit_breaker_service",
+    "create_security_violation_service",
+    "get_dlq_service_with_di",
+    "get_replay_service_with_di",
+    "get_circuit_breaker_service_with_di",
+    "get_security_violation_service_with_di",
+    "reset_service_singletons",
 ]

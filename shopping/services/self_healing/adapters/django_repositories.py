@@ -47,6 +47,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies"""
         from shopping.models.failed_operation import FailedOperation
+
         return FailedOperation
 
     def _to_data(self, obj) -> FailedOperationData:
@@ -76,7 +77,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             recommended_action=obj.recommended_action or "",
             created_at=obj.created_at,
             updated_at=obj.updated_at,
-            expires_at=obj.expires_at if hasattr(obj, 'expires_at') else None,
+            expires_at=obj.expires_at if hasattr(obj, "expires_at") else None,
         )
 
     def create(
@@ -141,7 +142,9 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         queryset = FailedOperation.objects.filter(
             domain=domain,
             status=FailedOperationStatus.PENDING.value,
-        ).order_by('created_at')[:limit]
+        ).order_by(
+            "created_at"
+        )[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 
@@ -187,7 +190,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             obj = FailedOperation.objects.get(id=id)
             obj.retry_count += 1
             obj.last_retry_at = timezone.now()
-            obj.save(update_fields=['retry_count', 'last_retry_at', 'updated_at'])
+            obj.save(update_fields=["retry_count", "last_retry_at", "updated_at"])
             return True
         except FailedOperation.DoesNotExist:
             return False
@@ -219,7 +222,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         queryset = FailedOperation.objects.filter(
             expires_at__lt=before_date,
             status=FailedOperationStatus.PENDING.value,
-        ).order_by('expires_at')[:limit]
+        ).order_by("expires_at")[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 
@@ -247,6 +250,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies"""
         from shopping.models.failed_payment import CircuitBreakerState
+
         return CircuitBreakerState
 
     def _to_data(self, obj) -> CircuitBreakerStateData:
@@ -278,7 +282,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 "state": CircuitBreakerStateEnum.CLOSED.value,
                 "failure_count": 0,
                 "success_count": 0,
-            }
+            },
         )
         return self._to_data(obj)
 
@@ -312,9 +316,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if opened_at is not None:
             update_fields["opened_at"] = opened_at
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(**update_fields)
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(**update_fields)
         return updated > 0
 
     def record_failure(self, service_name: str) -> CircuitBreakerStateData:
@@ -327,7 +329,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 defaults={
                     "state": CircuitBreakerStateEnum.CLOSED.value,
                     "failure_count": 0,
-                }
+                },
             )
             obj.record_failure()
 
@@ -343,7 +345,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 defaults={
                     "state": CircuitBreakerStateEnum.CLOSED.value,
                     "failure_count": 0,
-                }
+                },
             )
             obj.record_success()
 
@@ -360,9 +362,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Set manual control on a circuit breaker"""
         CircuitBreakerState = self._get_model()
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
             state=state,
             manually_controlled=True,
             controlled_by_id=controlled_by_id,
@@ -375,9 +375,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Clear manual control from a circuit breaker"""
         CircuitBreakerState = self._get_model()
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
             manually_controlled=False,
             controlled_by_id=None,
             control_reason="",
@@ -389,16 +387,14 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Get all circuit breaker states"""
         CircuitBreakerState = self._get_model()
 
-        queryset = CircuitBreakerState.objects.all().order_by('service_name')
+        queryset = CircuitBreakerState.objects.all().order_by("service_name")
         return [self._to_data(obj) for obj in queryset]
 
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state"""
         CircuitBreakerState = self._get_model()
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
             state=CircuitBreakerStateEnum.CLOSED.value,
             failure_count=0,
             success_count=0,
@@ -423,6 +419,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies"""
         from shopping.models.security_incident import SecurityIncident
+
         return SecurityIncident
 
     def _to_data(self, obj) -> SecurityIncidentData:
@@ -435,15 +432,15 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
             source_ip=obj.source_ip,
             user_agent=obj.user_agent or "",
             user_id=obj.user_id,
-            order_id=obj.order_id if hasattr(obj, 'order_id') else None,
-            payment_id=obj.payment_id if hasattr(obj, 'payment_id') else None,
-            description=obj.description if hasattr(obj, 'description') else "",
-            raw_payload=obj.raw_payload if hasattr(obj, 'raw_payload') else {},
-            assigned_to_id=obj.assigned_to_id if hasattr(obj, 'assigned_to_id') else None,
-            investigation_notes=obj.investigation_notes if hasattr(obj, 'investigation_notes') else "",
-            resolved_at=obj.resolved_at if hasattr(obj, 'resolved_at') else None,
+            order_id=obj.order_id if hasattr(obj, "order_id") else None,
+            payment_id=obj.payment_id if hasattr(obj, "payment_id") else None,
+            description=obj.description if hasattr(obj, "description") else "",
+            raw_payload=obj.raw_payload if hasattr(obj, "raw_payload") else {},
+            assigned_to_id=obj.assigned_to_id if hasattr(obj, "assigned_to_id") else None,
+            investigation_notes=obj.investigation_notes if hasattr(obj, "investigation_notes") else "",
+            resolved_at=obj.resolved_at if hasattr(obj, "resolved_at") else None,
             created_at=obj.created_at,
-            updated_at=obj.updated_at if hasattr(obj, 'updated_at') else None,
+            updated_at=obj.updated_at if hasattr(obj, "updated_at") else None,
         )
 
     def create(
@@ -512,7 +509,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
                 SecurityIncidentStatus.OPEN.value,
                 SecurityIncidentStatus.INVESTIGATING.value,
             ]
-        ).order_by('-created_at')[:limit]
+        ).order_by("-created_at")[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 
@@ -524,9 +521,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         """Get incidents by type"""
         SecurityIncident = self._get_model()
 
-        queryset = SecurityIncident.objects.filter(
-            incident_type=incident_type
-        ).order_by('-created_at')[:limit]
+        queryset = SecurityIncident.objects.filter(incident_type=incident_type).order_by("-created_at")[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 
@@ -538,9 +533,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         """Get incidents by severity"""
         SecurityIncident = self._get_model()
 
-        queryset = SecurityIncident.objects.filter(
-            severity=severity
-        ).order_by('-created_at')[:limit]
+        queryset = SecurityIncident.objects.filter(severity=severity).order_by("-created_at")[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 
@@ -602,7 +595,9 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         queryset = SecurityIncident.objects.filter(
             source_ip=source_ip,
             created_at__gte=since,
-        ).order_by('-created_at')[:limit]
+        ).order_by(
+            "-created_at"
+        )[:limit]
 
         return [self._to_data(obj) for obj in queryset]
 

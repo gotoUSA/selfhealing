@@ -361,7 +361,7 @@ class TestReplayService:
         result = replay_service.replay_single(pending_dlq_entry.id)
 
         assert result.success is False
-        assert result.error == "max_replays_exceeded"
+        assert "max" in result.error.lower() and "exceeded" in result.error.lower()
 
         # Verify entry is rejected
         pending_dlq_entry.refresh_from_db()

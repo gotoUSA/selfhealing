@@ -33,6 +33,9 @@ if TYPE_CHECKING:
     from shopping.models.payment import Payment
     from shopping.models.security_incident import SecurityIncident
     from shopping.models.user import User
+    from shopping.services.self_healing.interfaces.repositories import (
+        SecurityIncidentRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -164,16 +167,35 @@ class SecurityViolationService:
             request=request,
             description="HMAC signature mismatch",
         )
+
+    For testing with mock repository:
+        mock_repo = Mock(spec=SecurityIncidentRepository)
+        service = SecurityViolationService(repository=mock_repo)
     """
 
-    def __init__(self, config: SecurityConfig | None = None):
+    def __init__(
+        self,
+        config: SecurityConfig | None = None,
+        repository: "SecurityIncidentRepository | None" = None,
+    ):
         """
         Initialize the security violation service.
 
         Args:
             config: Optional configuration, loads from settings if None
+            repository: Optional repository for DI, uses Django adapter if None
         """
         self.config = config or SecurityConfig.from_settings()
+        self._repository = repository
+
+    @property
+    def repository(self) -> "SecurityIncidentRepository":
+        """Get the repository, creating Django adapter if needed."""
+        if self._repository is None:
+            from .adapters.django_repositories import DjangoSecurityIncidentRepository
+
+            self._repository = DjangoSecurityIncidentRepository()
+        return self._repository
 
     def handle_violation(
         self,

@@ -32,6 +32,9 @@ from django.utils import timezone
 if TYPE_CHECKING:
     from shopping.models.failed_payment import CircuitBreakerState
     from shopping.models.user import User
+    from shopping.services.self_healing.interfaces.repositories import (
+        CircuitBreakerStateRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -259,16 +262,35 @@ class CircuitBreakerService:
         # Check if requests should be allowed
         if service.should_allow("toss_payment"):
             # proceed with request
+
+    For testing with mock repository:
+        mock_repo = Mock(spec=CircuitBreakerStateRepository)
+        service = CircuitBreakerService(repository=mock_repo)
     """
 
-    def __init__(self, config: CircuitBreakerConfig | None = None):
+    def __init__(
+        self,
+        config: CircuitBreakerConfig | None = None,
+        repository: "CircuitBreakerStateRepository | None" = None,
+    ):
         """
         Initialize the circuit breaker service.
 
         Args:
             config: Optional configuration, loads from settings if None
+            repository: Optional repository for DI, uses Django adapter if None
         """
         self.config = config or CircuitBreakerConfig.from_settings()
+        self._repository = repository
+
+    @property
+    def repository(self) -> "CircuitBreakerStateRepository":
+        """Get the repository, creating Django adapter if needed."""
+        if self._repository is None:
+            from .adapters.django_repositories import DjangoCircuitBreakerStateRepository
+
+            self._repository = DjangoCircuitBreakerStateRepository()
+        return self._repository
 
     @property
     def is_enabled(self) -> bool:

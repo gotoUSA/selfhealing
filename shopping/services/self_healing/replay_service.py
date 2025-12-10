@@ -25,6 +25,9 @@ from django.utils import timezone
 
 if TYPE_CHECKING:
     from shopping.models.failed_operation import FailedOperation
+    from shopping.services.self_healing.interfaces.repositories import (
+        FailedOperationRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -343,10 +346,30 @@ class ReplayService:
             failure_type="PG_TIMEOUT",
             max_items=50
         )
+
+    For testing with mock repository:
+        mock_repo = Mock(spec=FailedOperationRepository)
+        service = ReplayService(repository=mock_repo)
     """
 
-    def __init__(self):
+    def __init__(self, repository: "FailedOperationRepository | None" = None):
+        """
+        Initialize the replay service.
+
+        Args:
+            repository: Optional repository for DI, uses Django adapter if None
+        """
         self.config = self._load_config()
+        self._repository = repository
+
+    @property
+    def repository(self) -> "FailedOperationRepository":
+        """Get the repository, creating Django adapter if needed."""
+        if self._repository is None:
+            from .adapters.django_repositories import DjangoFailedOperationRepository
+
+            self._repository = DjangoFailedOperationRepository()
+        return self._repository
 
     def _load_config(self) -> dict[str, Any]:
         """Load replay configuration from settings."""
@@ -377,8 +400,11 @@ class ReplayService:
         except FailedOperation.DoesNotExist:
             return ReplayResult.failed(dlq_id, "DLQ entry not found")
 
-        # Check replay eligibility
-        max_replays = self.config["max_replay_attempts"]
+        # Check replay eligibility - use the minimum of config and model's max_retries
+        config_max = self.config["max_replay_attempts"]
+        model_max = failed_op.max_retries
+        max_replays = min(config_max, model_max)
+
         if failed_op.retry_count >= max_replays:
             failed_op.mark_as_rejected(note=f"Maximum replay attempts ({max_replays}) exceeded")
             return ReplayResult.failed(dlq_id, "max_replays_exceeded")
@@ -387,7 +413,9 @@ class ReplayService:
         try:
             failed_op.queue_for_replay()
         except ValueError as e:
-            return ReplayResult.failed(dlq_id, str(e))
+            # queue_for_replay also checks max_retries - mark as rejected
+            failed_op.mark_as_rejected(note=str(e))
+            return ReplayResult.failed(dlq_id, "max_replays_exceeded")
 
         # Get appropriate handler and execute replay
         handler = get_replay_handler(failed_op.domain)

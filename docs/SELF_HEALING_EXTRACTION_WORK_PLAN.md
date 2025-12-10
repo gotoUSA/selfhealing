@@ -296,7 +296,7 @@ refactor(self-healing): CircuitBreaker services use repository pattern
 - [ ] 6.1 factory.py 생성
   ```python
   # shopping/services/self_healing/factory.py
-  
+
   from .adapters.django_repositories import (
       DjangoFailedOperationRepository,
       DjangoCircuitBreakerStateRepository,
@@ -305,15 +305,15 @@ refactor(self-healing): CircuitBreaker services use repository pattern
   from .dlq_service import DLQService
   from .circuit_breaker_service import CircuitBreakerService
   from .replay_service import ReplayService
-  
+
   def create_dlq_service() -> DLQService:
       return DLQService(repository=DjangoFailedOperationRepository())
-  
+
   def create_circuit_breaker_service() -> CircuitBreakerService:
       return CircuitBreakerService(
           repository=DjangoCircuitBreakerStateRepository()
       )
-  
+
   # ... 기타 서비스
   ```
 
@@ -356,7 +356,7 @@ feat(self-healing): add service factory for DI
   ```bash
   # 옵션 A: 같은 저장소 내 별도 폴더
   mkdir -p packages/selfhealing-python
-  
+
   # 옵션 B: 별도 저장소 (권장)
   # GitHub에서 selfhealing-python 저장소 생성
   ```
@@ -395,7 +395,7 @@ feat(self-healing): add service factory for DI
   description = "Self-Healing Reliability Layer for Python Applications"
   requires-python = ">=3.10"
   dependencies = []
-  
+
   [project.optional-dependencies]
   django = ["django>=4.2"]
   celery = ["celery>=5.0"]
@@ -511,7 +511,7 @@ feat(selfhealing): migrate core modules
   # tests/integration/django/conftest.py
   import django
   from django.conf import settings
-  
+
   def pytest_configure():
       settings.configure(
           DEBUG=True,
@@ -606,7 +606,7 @@ feat(selfhealing): migrate all tests
   ```
   # 로컬 개발 시
   -e ../selfhealing-python[all]
-  
+
   # 또는 배포 시
   selfhealing[django,celery,prometheus]>=0.1.0
   ```
@@ -737,14 +737,14 @@ chore: complete self-healing extraction
 
 | # | 스프린트 | 상태 | 시작일 | 완료일 | 비고 |
 |---|---------|------|-------|-------|------|
-| 1 | 준비 & 기준선 | ⬜ | | | |
-| 2 | 인터페이스 정의 | ⬜ | | | |
-| 3 | Django 어댑터 | ⬜ | | | |
-| 4 | DLQ/Replay 리팩토링 | ⬜ | | | |
-| 5 | CircuitBreaker 리팩토링 | ⬜ | | | |
-| 6 | Factory 패턴 | ⬜ | | | |
-| 7 | 패키지 구조 생성 | ⬜ | | | |
-| 8 | Core 마이그레이션 | ⬜ | | | |
+| 1 | 준비 & 기준선 | ✅ | 2024-12-10 | 2024-12-10 | 기준선 테스트 완료 |
+| 2 | 인터페이스 정의 | ✅ | 2024-12-10 | 2024-12-10 | Repository 인터페이스 정의 |
+| 3 | Django 어댑터 | ✅ | 2024-12-10 | 2024-12-10 | Django 어댑터 구현 |
+| 4 | DLQ/Replay 리팩토링 | ✅ | 2024-12-10 | 2024-12-10 | DLQ 서비스 리팩토링 |
+| 5 | CircuitBreaker 리팩토링 | ✅ | 2024-12-10 | 2024-12-10 | CB 서비스 리팩토링 |
+| 6 | Factory 패턴 | ✅ | 2024-12-10 | 2024-12-10 | Factory 패턴 적용 |
+| 7 | 패키지 구조 생성 | ✅ | 2024-12-10 | 2024-12-10 | selfhealing-python 패키지 생성 (31 tests passed) |
+| 8 | Core 마이그레이션 | ✅ | 2024-12-10 | 2024-12-10 | config, forensic, metrics 마이그레이션 (65 tests passed) |
 | 9 | Adapters 마이그레이션 | ⬜ | | | |
 | 10 | 테스트 마이그레이션 | ⬜ | | | |
 | 11 | 쇼핑몰 통합 | ⬜ | | | |
