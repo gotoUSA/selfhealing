@@ -3,13 +3,13 @@ L3 Self-Healing Services
 
 .. deprecated:: 0.1.0
     This module is deprecated. Please migrate to the standalone `selfhealing` package.
-    
+
     Before:
         from shopping.services.self_healing import CircuitBreakerService
-    
+
     After:
         from selfhealing.services import CircuitBreakerService
-    
+
     See: packages/selfhealing-python/docs/MIGRATION.md
 
 This module provides self-healing capabilities for the shopping application.
