@@ -18,7 +18,7 @@ HOST = os.getenv("LOCUST_HOST", "http://localhost:8000")
 # Test user range (load_test_user_0 ~ load_test_user_99)
 # Note: Must match the actual number of created users
 # Create users: python manage.py create_load_test_users --count=100
-TEST_USER_COUNT = 1000
+TEST_USER_COUNT = 100
 TEST_USER_PREFIX = "load_test_user_"
 TEST_USER_PASSWORD = "testpass123"
 

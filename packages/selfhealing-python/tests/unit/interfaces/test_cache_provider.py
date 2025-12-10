@@ -337,7 +337,7 @@ class TestInMemoryCacheAdapter:
 class TestInMemoryLock:
     """
     InMemoryLock 테스트.
-    
+
     참고: InMemoryLock은 단일 프로세스 내에서만 동작합니다.
     멀티 프로세스 환경에서는 Redis 기반 분산 락을 사용하세요.
     """
@@ -345,7 +345,7 @@ class TestInMemoryLock:
     def test_lock_repr(self):
         """락의 문자열 표현이 에러 없이 동작하는지 확인."""
         from datetime import timedelta
-        
+
         dist_lock = InMemoryLock(name="test_lock", timeout=timedelta(seconds=10))
         # repr이 에러 없이 동작해야 함
         repr(dist_lock)
@@ -353,11 +353,11 @@ class TestInMemoryLock:
     def test_double_release(self):
         """
         이중 해제가 예외를 발생시키지 않는지 확인.
-        
+
         락을 두 번 해제해도 안전해야 합니다 (idempotent).
         """
         from datetime import timedelta
-        
+
         dist_lock = InMemoryLock(name="test_lock", timeout=timedelta(seconds=10))
         dist_lock.acquire()
         dist_lock.release()
@@ -393,4 +393,3 @@ class TestCacheProviderInterfaceContract:
         ]
         for method in required_methods:
             assert hasattr(CacheProviderInterface, method)
-

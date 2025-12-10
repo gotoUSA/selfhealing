@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /code/
 COPY requirements-dev.txt /code/
 
+# selfhealing 패키지 먼저 복사 (editable 설치 위해)
+COPY packages/ /code/packages/
+
 # Python 패키지 설치
 # requirements-dev.txt가 이미 requirements.txt를 포함(-r)하므로 한 번만 설치
 RUN pip install --upgrade pip

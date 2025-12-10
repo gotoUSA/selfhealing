@@ -54,7 +54,7 @@ class TestMockPaymentAdapterBasic:
     def test_default_webhook_valid(self, adapter: MockPaymentAdapter):
         """
         기본 verify_webhook 응답 테스트.
-        
+
         참고: event_type은 구현에 따라 다를 수 있음.
         (예: 'PAYMENT_CONFIRMED' 또는 'payment.confirmed')
         인터페이스 계약은 'valid=True이고 event_type이 존재'만 보장.
@@ -70,14 +70,14 @@ class TestMockPaymentAdapterBasic:
     def test_default_status_success(self, adapter: MockPaymentAdapter):
         """
         기본 get_payment_status 응답 테스트.
-        
+
         참고: 결제 내역이 없는 payment_key로 조회하면
         NOT_FOUND를 반환하는 것이 올바른 동작.
         """
         result = adapter.get_payment_status("pk_test")
         # 추적된 결제가 없으므로 NOT_FOUND 반환이 올바름
         # 실제 결제 후 조회하면 success=True
-        assert hasattr(result, 'success')
+        assert hasattr(result, "success")
 
     def test_default_health_check(self, adapter: MockPaymentAdapter):
         """기본 health_check가 True를 반환하는지 확인."""
@@ -95,7 +95,7 @@ class TestMockPaymentAdapterConfiguration:
     def test_set_confirm_response_success(self, adapter: MockPaymentAdapter):
         """
         성공 응답 설정 테스트.
-        
+
         참고: payment_key는 confirm_payment 호출 시 전달한 값이 사용됨.
         set_confirm_response에서 설정한 payment_key는 무시됨 (올바른 동작).
         """

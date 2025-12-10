@@ -657,4 +657,3 @@ class MockPaymentAdapter(PaymentProviderInterface):
         get_cancel_call_count()와 동일하지만 속성으로 접근 가능합니다.
         """
         return self.get_cancel_call_count()
-

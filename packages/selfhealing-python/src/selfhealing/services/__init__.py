@@ -97,6 +97,12 @@ from .forensic_context import (
     ForensicContext,
     capture_forensic_context,
 )
+from .control_api_service import (
+    ControlAPIService,
+    ControlRequest,
+    ControlResponse,
+    get_control_api_service,
+)
 from .dlq_service import (
     DLQService,
     DLQConfig,
@@ -234,6 +240,11 @@ __all__ = [
     # Forensic
     "ForensicContext",
     "capture_forensic_context",
+    # Control API Service
+    "ControlAPIService",
+    "ControlRequest",
+    "ControlResponse",
+    "get_control_api_service",
     # DLQ Service
     "DLQService",
     "DLQConfig",

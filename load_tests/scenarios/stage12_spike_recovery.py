@@ -387,7 +387,12 @@ class SpikeRecoveryUser(HttpUser):
 
         with self.client.post(
             "/api/orders/",
-            json={"shipping_address": "Spike Test Address"},
+            json={
+                "shipping_address": "서울시 강남구 테헤란로 123",
+                "shipping_name": "테스트유저",
+                "shipping_phone": "010-1234-5678",
+                "shipping_postal_code": "06234",
+            },
             headers=self.login_helper.get_auth_header(),
             name=f"{STAGE_NAME} POST /orders/",
             catch_response=True,

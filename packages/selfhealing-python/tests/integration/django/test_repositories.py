@@ -3,7 +3,7 @@ Django Repository 통합 테스트
 
 이 테스트는 Django ORM 리포지토리 구현을 테스트합니다:
 - DjangoFailedOperationRepository
-- DjangoCircuitBreakerStateRepository  
+- DjangoCircuitBreakerStateRepository
 - DjangoSecurityIncidentRepository
 
 주의: 이 테스트는 Django 프로젝트 환경에서 실행해야 합니다.
@@ -23,6 +23,7 @@ import pytest
 # Django 프로젝트 환경에서만 실행
 try:
     from django.conf import settings
+
     if not settings.configured:
         pytest.skip("Django not configured", allow_module_level=True)
 except Exception:
@@ -38,7 +39,7 @@ pytestmark = pytest.mark.django_db
 class TestDjangoFailedOperationRepository:
     """
     DjangoFailedOperationRepository 테스트.
-    
+
     참고: 추상 메서드가 모두 구현되어야 인스턴스화 가능.
     """
 
