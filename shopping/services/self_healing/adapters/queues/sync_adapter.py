@@ -139,6 +139,7 @@ class SyncTaskAdapter(TaskQueueInterface):
 
         In sync mode, most options are ignored but stored for compatibility.
         """
+
         def decorator(func: F) -> F:
             task_name = name or f"{func.__module__}.{func.__qualname__}"
 
@@ -160,9 +161,7 @@ class SyncTaskAdapter(TaskQueueInterface):
 
             # Add delay method for Celery compatibility
             wrapper.delay = lambda *a, **kw: self.enqueue(task_name, args=a, kwargs=kw)
-            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(
-                task_name, args=args, kwargs=kwargs or {}
-            )
+            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(task_name, args=args, kwargs=kwargs or {})
             wrapper.name = task_name
 
             return wrapper
@@ -529,14 +528,8 @@ class SyncTaskAdapter(TaskQueueInterface):
 
     def get_all_results(self) -> dict[str, TaskResult]:
         """Get all task results (for testing inspection)."""
-        return {
-            task_id: self.get_result(task_id)
-            for task_id in self._results.keys()
-        }
+        return {task_id: self.get_result(task_id) for task_id in self._results.keys()}
 
     def get_call_count(self, task_name: str) -> int:
         """Get number of times a task was called."""
-        return sum(
-            1 for record in self._results.values()
-            if record.task_name == task_name
-        )
+        return sum(1 for record in self._results.values() if record.task_name == task_name)

@@ -199,9 +199,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
         self._confirm_error_message = error_message
         return self
 
-    def set_on_confirm(
-        self, callback: Callable[[str, str, Decimal], PaymentConfirmResult]
-    ) -> "MockPaymentAdapter":
+    def set_on_confirm(self, callback: Callable[[str, str, Decimal], PaymentConfirmResult]) -> "MockPaymentAdapter":
         """Set a custom callback for confirm_payment."""
         self._on_confirm = callback
         return self
@@ -270,14 +268,16 @@ class MockPaymentAdapter(PaymentProviderInterface):
         Returns configured result or generates default success response.
         """
         # Record call
-        self._call_history.append({
-            "method": "confirm_payment",
-            "payment_key": payment_key,
-            "order_id": order_id,
-            "amount": amount,
-            "idempotency_key": idempotency_key,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._call_history.append(
+            {
+                "method": "confirm_payment",
+                "payment_key": payment_key,
+                "order_id": order_id,
+                "amount": amount,
+                "idempotency_key": idempotency_key,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug(f"[MockPayment] confirm_payment called: {payment_key}")
 
@@ -336,14 +336,16 @@ class MockPaymentAdapter(PaymentProviderInterface):
         Returns configured result or generates default success response.
         """
         # Record call
-        self._call_history.append({
-            "method": "cancel_payment",
-            "payment_key": payment_key,
-            "cancel_reason": cancel_reason,
-            "cancel_amount": cancel_amount,
-            "idempotency_key": idempotency_key,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._call_history.append(
+            {
+                "method": "cancel_payment",
+                "payment_key": payment_key,
+                "cancel_reason": cancel_reason,
+                "cancel_amount": cancel_amount,
+                "idempotency_key": idempotency_key,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug(f"[MockPayment] cancel_payment called: {payment_key}")
 
@@ -381,12 +383,14 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         Returns configured result or default valid response.
         """
-        self._call_history.append({
-            "method": "verify_webhook",
-            "payload_size": len(payload),
-            "signature": signature,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._call_history.append(
+            {
+                "method": "verify_webhook",
+                "payload_size": len(payload),
+                "signature": signature,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug("[MockPayment] verify_webhook called")
 
@@ -396,6 +400,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
         # Default: parse payload and return as valid
         try:
             import json
+
             payload_data = json.loads(payload.decode("utf-8"))
             return WebhookVerifyResult(
                 valid=True,
@@ -418,11 +423,13 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         Returns tracked payment state or configured result.
         """
-        self._call_history.append({
-            "method": "get_payment_status",
-            "payment_key": payment_key,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._call_history.append(
+            {
+                "method": "get_payment_status",
+                "payment_key": payment_key,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug(f"[MockPayment] get_payment_status called: {payment_key}")
 
@@ -455,9 +462,11 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         Returns configured health status.
         """
-        self._call_history.append({
-            "method": "health_check",
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._call_history.append(
+            {
+                "method": "health_check",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         return self._health_status

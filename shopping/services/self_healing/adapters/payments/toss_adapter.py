@@ -83,12 +83,8 @@ class TossPaymentAdapter(PaymentProviderInterface):
 
         self.secret_key = secret_key or getattr(settings, "TOSS_SECRET_KEY", "")
         self.client_key = client_key or getattr(settings, "TOSS_CLIENT_KEY", "")
-        self.base_url = base_url or getattr(
-            settings, "TOSS_BASE_URL", "https://api.tosspayments.com"
-        )
-        self.webhook_secret = webhook_secret or getattr(
-            settings, "TOSS_WEBHOOK_SECRET", ""
-        )
+        self.base_url = base_url or getattr(settings, "TOSS_BASE_URL", "https://api.tosspayments.com")
+        self.webhook_secret = webhook_secret or getattr(settings, "TOSS_WEBHOOK_SECRET", "")
         self.debug_mode = debug_mode if debug_mode is not None else settings.DEBUG
         self.timeout = timeout
 
@@ -174,9 +170,7 @@ class TossPaymentAdapter(PaymentProviderInterface):
 
             # Handle error response
             error_data = response.json()
-            logger.warning(
-                f"[TossAdapter] Payment confirm failed: {error_data.get('code')}"
-            )
+            logger.warning(f"[TossAdapter] Payment confirm failed: {error_data.get('code')}")
             return PaymentConfirmResult(
                 success=False,
                 payment_key=payment_key,
@@ -271,7 +265,7 @@ class TossPaymentAdapter(PaymentProviderInterface):
                 refund_amt = None
                 if resp_data.get("cancels"):
                     refund_amt = Decimal(str(resp_data["cancels"][-1].get("cancelAmount", 0)))
-                
+
                 return PaymentCancelResult(
                     success=True,
                     cancel_key=resp_data.get("transactionKey"),
@@ -280,9 +274,7 @@ class TossPaymentAdapter(PaymentProviderInterface):
                 )
 
             error_data = response.json()
-            logger.warning(
-                f"[TossAdapter] Payment cancel failed: {error_data.get('code')}"
-            )
+            logger.warning(f"[TossAdapter] Payment cancel failed: {error_data.get('code')}")
             return PaymentCancelResult(
                 success=False,
                 error_code=error_data.get("code", "UNKNOWN"),

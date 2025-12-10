@@ -72,11 +72,17 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
     try:
-        # Import here to avoid circular dependencies
-        from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
-        from selfhealing.core.types import OperationStatus
+        # Use ProviderRegistry to get repository
+        from selfhealing.factory import ProviderRegistry
 
-        repo = DjangoFailedOperationRepository()
+        try:
+            repo = ProviderRegistry.get_failed_operation_repo()
+        except (ImportError, ValueError):
+            # Fallback to direct import
+            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+            repo = DjangoFailedOperationRepository()
+
+        from selfhealing.core.types import OperationStatus
 
         # Get pending operations for this domain/service
         pending = repo.get_pending(domain=service_name, limit=max_items)
@@ -438,9 +444,15 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     logger.info(f"[DLQ Replay] Starting replay for DLQ entry: {dlq_id}")
 
     try:
-        from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+        # Use ProviderRegistry to get repository
+        from selfhealing.factory import ProviderRegistry
 
-        repo = DjangoFailedOperationRepository()
+        try:
+            repo = ProviderRegistry.get_failed_operation_repo()
+        except (ImportError, ValueError):
+            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+            repo = DjangoFailedOperationRepository()
+
         operation = repo.get_by_id(dlq_id)
 
         if not operation:
@@ -508,9 +520,15 @@ def replay_batch_by_domain(
     logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}")
 
     try:
-        from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+        # Use ProviderRegistry to get repository
+        from selfhealing.factory import ProviderRegistry
 
-        repo = DjangoFailedOperationRepository()
+        try:
+            repo = ProviderRegistry.get_failed_operation_repo()
+        except (ImportError, ValueError):
+            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+            repo = DjangoFailedOperationRepository()
+
         pending = repo.get_pending(domain=domain, limit=max_items)
 
         success_count = 0

@@ -15,7 +15,7 @@ Key Components:
     - ProviderRegistry: Register and retrieve pluggable adapters
     - Singleton Accessors: Manage service lifecycle
 
-Reference: 
+Reference:
     - docs/SELF_HEALING_EXTRACTION_WORK_PLAN.md Sprint 6
     - docs/PLUGGABLE_ARCHITECTURE.md Section 5
 """
@@ -369,8 +369,19 @@ class ProviderRegistry:
     @classmethod
     def _auto_register_payment_adapters(cls) -> None:
         """Auto-register available payment adapters."""
+        # Try selfhealing package first
+        try:
+            from selfhealing.adapters.payments import MockPaymentAdapter
+
+            if "mock" not in cls._payment_providers:
+                cls.register_payment("mock", MockPaymentAdapter)
+        except ImportError:
+            pass
+
+        # Then try local adapters
         try:
             from .adapters.payments.toss_adapter import TossPaymentAdapter
+
             if "toss" not in cls._payment_providers:
                 cls.register_payment("toss", TossPaymentAdapter)
         except ImportError:
@@ -378,6 +389,7 @@ class ProviderRegistry:
 
         try:
             from .adapters.payments.mock_adapter import MockPaymentAdapter
+
             if "mock" not in cls._payment_providers:
                 cls.register_payment("mock", MockPaymentAdapter)
         except ImportError:
@@ -386,8 +398,21 @@ class ProviderRegistry:
     @classmethod
     def _auto_register_cache_adapters(cls) -> None:
         """Auto-register available cache adapters."""
+        # Try selfhealing package first
+        try:
+            from selfhealing.adapters.cache import RedisCacheAdapter, InMemoryCacheAdapter
+
+            if "redis" not in cls._cache_providers:
+                cls.register_cache("redis", RedisCacheAdapter)
+            if "memory" not in cls._cache_providers:
+                cls.register_cache("memory", InMemoryCacheAdapter)
+        except ImportError:
+            pass
+
+        # Then try local adapters
         try:
             from .adapters.cache.redis_adapter import RedisCacheAdapter
+
             if "redis" not in cls._cache_providers:
                 cls.register_cache("redis", RedisCacheAdapter)
         except ImportError:
@@ -395,6 +420,7 @@ class ProviderRegistry:
 
         try:
             from .adapters.cache.memory_adapter import InMemoryCacheAdapter
+
             if "memory" not in cls._cache_providers:
                 cls.register_cache("memory", InMemoryCacheAdapter)
         except ImportError:
@@ -403,8 +429,21 @@ class ProviderRegistry:
     @classmethod
     def _auto_register_queue_adapters(cls) -> None:
         """Auto-register available queue adapters."""
+        # Try selfhealing package first
+        try:
+            from selfhealing.adapters.queues import CeleryTaskAdapter, SyncTaskAdapter
+
+            if "celery" not in cls._task_queues:
+                cls.register_queue("celery", CeleryTaskAdapter)
+            if "sync" not in cls._task_queues:
+                cls.register_queue("sync", SyncTaskAdapter)
+        except ImportError:
+            pass
+
+        # Then try local adapters
         try:
             from .adapters.queues.celery_adapter import CeleryTaskAdapter
+
             if "celery" not in cls._task_queues:
                 cls.register_queue("celery", CeleryTaskAdapter)
         except ImportError:
@@ -412,6 +451,7 @@ class ProviderRegistry:
 
         try:
             from .adapters.queues.sync_adapter import SyncTaskAdapter
+
             if "sync" not in cls._task_queues:
                 cls.register_queue("sync", SyncTaskAdapter)
         except ImportError:

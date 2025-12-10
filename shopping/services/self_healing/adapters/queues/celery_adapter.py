@@ -73,6 +73,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         """
         if app is None:
             from myproject.celery import app as celery_app
+
             self._app = celery_app
         else:
             self._app = app
@@ -108,6 +109,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
         This wraps the Celery @app.task decorator with our interface.
         """
+
         def decorator(func: F) -> F:
             task_name = name or f"{func.__module__}.{func.__qualname__}"
 
@@ -449,9 +451,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         try:
             # This requires broker inspection
             with self._app.connection() as conn:
-                queue = conn.default_channel.queue_declare(
-                    queue_name, passive=True
-                )
+                queue = conn.default_channel.queue_declare(queue_name, passive=True)
                 return queue.message_count
         except Exception as e:
             logger.error(f"[CeleryAdapter] Error getting queue length: {e}")

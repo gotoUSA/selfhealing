@@ -287,9 +287,14 @@ class CircuitBreakerService:
     def repository(self) -> "CircuitBreakerStateRepository":
         """Get the repository, creating Django adapter if needed."""
         if self._repository is None:
-            from .adapters.django_repositories import DjangoCircuitBreakerStateRepository
-
-            self._repository = DjangoCircuitBreakerStateRepository()
+            # Try to use ProviderRegistry from selfhealing package first
+            try:
+                from selfhealing.factory import ProviderRegistry
+                self._repository = ProviderRegistry.get_circuit_breaker_repo()
+            except (ImportError, ValueError):
+                # Fallback to local Django adapter
+                from .adapters.django_repositories import DjangoCircuitBreakerStateRepository
+                self._repository = DjangoCircuitBreakerStateRepository()
         return self._repository
 
     @property

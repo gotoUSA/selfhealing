@@ -196,9 +196,7 @@ class RedisDistributedLock(DistributedLock):
         """
 
         try:
-            result = self._redis.eval(
-                lua_script, 1, self._name, self._owner_id, additional_ms
-            )
+            result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
             return result == 1
         except Exception as e:
             logger.error(f"[RedisLock] Error extending lock: {e}")
@@ -257,6 +255,7 @@ class RedisCacheAdapter(CacheProviderInterface):
 
             if url is None:
                 from django.conf import settings
+
                 url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
 
             self._redis = redis.from_url(
@@ -315,11 +314,13 @@ class RedisCacheAdapter(CacheProviderInterface):
             serialized = self._serialize(value)
 
             if ttl:
-                return bool(self._redis.set(
-                    self._make_key(key),
-                    serialized,
-                    ex=int(ttl.total_seconds()),
-                ))
+                return bool(
+                    self._redis.set(
+                        self._make_key(key),
+                        serialized,
+                        ex=int(ttl.total_seconds()),
+                    )
+                )
             else:
                 return bool(self._redis.set(self._make_key(key), serialized))
         except Exception as e:
@@ -365,10 +366,12 @@ class RedisCacheAdapter(CacheProviderInterface):
     def expire(self, key: str, ttl: timedelta) -> bool:
         """Set expiration on existing key."""
         try:
-            return bool(self._redis.expire(
-                self._make_key(key),
-                int(ttl.total_seconds()),
-            ))
+            return bool(
+                self._redis.expire(
+                    self._make_key(key),
+                    int(ttl.total_seconds()),
+                )
+            )
         except Exception as e:
             logger.error(f"[RedisCache] Expire error for {key}: {e}")
             return False
@@ -391,12 +394,14 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             serialized = self._serialize(value)
             if ttl:
-                return bool(self._redis.set(
-                    self._make_key(key),
-                    serialized,
-                    nx=True,
-                    ex=int(ttl.total_seconds()),
-                ))
+                return bool(
+                    self._redis.set(
+                        self._make_key(key),
+                        serialized,
+                        nx=True,
+                        ex=int(ttl.total_seconds()),
+                    )
+                )
             else:
                 return bool(self._redis.setnx(self._make_key(key), serialized))
         except Exception as e:
@@ -453,10 +458,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             return True
 
         try:
-            prefixed_mapping = {
-                self._make_key(k): self._serialize(v)
-                for k, v in mapping.items()
-            }
+            prefixed_mapping = {self._make_key(k): self._serialize(v) for k, v in mapping.items()}
 
             # MSET doesn't support TTL, so we use pipeline
             if ttl:
@@ -568,11 +570,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             raw_keys = self._redis.keys(full_pattern)
             # Remove prefix from returned keys
             prefix_len = len(self._key_prefix)
-            return [
-                k.decode("utf-8")[prefix_len:] if isinstance(k, bytes)
-                else k[prefix_len:]
-                for k in raw_keys
-            ]
+            return [k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:] for k in raw_keys]
         except Exception as e:
             logger.error(f"[RedisCache] Keys error for {pattern}: {e}")
             return []
@@ -587,11 +585,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             full_pattern = self._make_key(pattern)
             cursor, raw_keys = self._redis.scan(0, match=full_pattern, count=count)
             prefix_len = len(self._key_prefix)
-            keys = [
-                k.decode("utf-8")[prefix_len:] if isinstance(k, bytes)
-                else k[prefix_len:]
-                for k in raw_keys
-            ]
+            keys = [k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:] for k in raw_keys]
             return (cursor, keys)
         except Exception as e:
             logger.error(f"[RedisCache] Scan error for {pattern}: {e}")

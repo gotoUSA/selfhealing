@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CacheEntry:
     """Internal cache entry with value and expiration."""
+
     value: Any
     expires_at: Optional[float] = None  # Unix timestamp
 
@@ -107,12 +108,12 @@ class InMemoryLock(DistributedLock):
             with InMemoryLock._registry_lock:
                 # Check for existing lock
                 existing = InMemoryLock._locks.get(self._name)
-                
+
                 if existing is None or existing._is_expired():
                     # Clean up expired lock
                     if existing is not None:
                         del InMemoryLock._locks[self._name]
-                    
+
                     # Acquire lock
                     self._expires_at = time.time() + self._timeout.total_seconds()
                     self._acquired = True
@@ -231,10 +232,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def _cleanup_expired(self) -> None:
         """Remove expired entries (should be called periodically)."""
         current_time = time.time()
-        expired_keys = [
-            k for k, v in self._store.items()
-            if v.expires_at is not None and v.expires_at < current_time
-        ]
+        expired_keys = [k for k, v in self._store.items() if v.expires_at is not None and v.expires_at < current_time]
         for key in expired_keys:
             del self._store[key]
 
@@ -252,14 +250,14 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is None:
                 return None
-            
+
             if entry.is_expired():
                 del self._store[full_key]
                 return None
-            
+
             return entry.value
 
     def set(
@@ -274,7 +272,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             expires_at = None
             if ttl is not None:
                 expires_at = time.time() + ttl.total_seconds()
-            
+
             self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
             return True
 
@@ -292,14 +290,14 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is None:
                 return False
-            
+
             if entry.is_expired():
                 del self._store[full_key]
                 return False
-            
+
             return True
 
     # =========================================================================
@@ -311,12 +309,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is None or entry.is_expired():
                 # Create new counter
                 self._store[full_key] = CacheEntry(value=amount)
                 return amount
-            
+
             # Increment existing
             new_value = int(entry.value) + amount
             entry.value = new_value
@@ -331,10 +329,10 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is None or entry.is_expired():
                 return False
-            
+
             entry.expires_at = time.time() + ttl.total_seconds()
             return True
 
@@ -343,17 +341,17 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is None:
                 return -2  # Key doesn't exist
-            
+
             if entry.is_expired():
                 del self._store[full_key]
                 return -2
-            
+
             if entry.expires_at is None:
                 return None  # No expiration
-            
+
             remaining = entry.expires_at - time.time()
             return max(0, int(remaining))
 
@@ -362,14 +360,14 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         with self._lock:
             full_key = self._make_key(key)
             entry = self._store.get(full_key)
-            
+
             if entry is not None and not entry.is_expired():
                 return False
-            
+
             expires_at = None
             if ttl is not None:
                 expires_at = time.time() + ttl.total_seconds()
-            
+
             self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
             return True
 
@@ -415,7 +413,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             expires_at = None
             if ttl is not None:
                 expires_at = time.time() + ttl.total_seconds()
-            
+
             for key, value in mapping.items():
                 full_key = self._make_key(key)
                 self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
@@ -448,14 +446,11 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         """Clear all keys."""
         with self._lock:
             # Only clear keys with our prefix
-            keys_to_delete = [
-                k for k in self._store.keys()
-                if k.startswith(self._key_prefix)
-            ]
+            keys_to_delete = [k for k in self._store.keys() if k.startswith(self._key_prefix)]
             for key in keys_to_delete:
                 del self._store[key]
             logger.info(f"[InMemoryCache] Flushed {len(keys_to_delete)} keys")
-        
+
         # Also clear locks
         InMemoryLock.clear_all_locks()
         return True
@@ -470,12 +465,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             self._cleanup_expired()
             full_pattern = self._make_key(pattern)
             prefix_len = len(self._key_prefix)
-            
+
             matching = []
             for key in self._store.keys():
                 if fnmatch.fnmatch(key, full_pattern):
                     matching.append(key[prefix_len:])
-            
+
             return matching
 
     def scan(
