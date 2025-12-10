@@ -188,7 +188,7 @@ class FailedOperationAdmin(admin.ModelAdmin):
     @admin.action(description="Replay selected DLQ entries")
     def replay_selected(self, request, queryset):
         """Replay selected DLQ entries."""
-        from shopping.services.self_healing.replay_service import get_replay_service
+        from selfhealing.services import get_replay_service
 
         service = get_replay_service()
         success_count = 0

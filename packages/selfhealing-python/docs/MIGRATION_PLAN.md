@@ -1,7 +1,7 @@
 # Self-Healing SaaS 전환 마이그레이션 계획
 
-> **Created**: 2025-12-10  
-> **Status**: TODO  
+> **Created**: 2025-12-10
+> **Status**: TODO
 > **Branch**: feature/self-healing-extraction
 
 ---
@@ -174,7 +174,7 @@ myproject/
 ## 📅 실행 시점
 
 - [ ] Phase 1 완료
-- [ ] Phase 2 완료  
+- [ ] Phase 2 완료
 - [ ] Phase 3 완료
 - [ ] 테스트 통과 확인
 - [ ] 커밋 & PR

@@ -119,9 +119,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
     @admin.action(description="Force OPEN selected circuits (block requests)")
     def force_open_selected(self, request, queryset):
         """Force open selected circuit breakers."""
-        from shopping.services.self_healing.circuit_breaker_service import (
-            get_circuit_breaker_service,
-        )
+        from selfhealing.services import get_circuit_breaker_service
 
         service = get_circuit_breaker_service()
         count = 0
@@ -143,9 +141,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
     @admin.action(description="Force CLOSE selected circuits (allow requests)")
     def force_close_selected(self, request, queryset):
         """Force close selected circuit breakers without replay."""
-        from shopping.services.self_healing.circuit_breaker_service import (
-            get_circuit_breaker_service,
-        )
+        from selfhealing.services import get_circuit_breaker_service
 
         service = get_circuit_breaker_service()
         count = 0
@@ -168,9 +164,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
     @admin.action(description="Force CLOSE with DLQ replay")
     def force_close_with_replay(self, request, queryset):
         """Force close selected circuit breakers and trigger DLQ replay."""
-        from shopping.services.self_healing.circuit_breaker_service import (
-            get_circuit_breaker_service,
-        )
+        from selfhealing.services import get_circuit_breaker_service
 
         service = get_circuit_breaker_service()
         count = 0
@@ -193,9 +187,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
     @admin.action(description="Reset selected circuits to initial state")
     def reset_selected(self, request, queryset):
         """Reset selected circuit breakers."""
-        from shopping.services.self_healing.circuit_breaker_service import (
-            get_circuit_breaker_service,
-        )
+        from selfhealing.services import get_circuit_breaker_service
 
         service = get_circuit_breaker_service()
         count = 0

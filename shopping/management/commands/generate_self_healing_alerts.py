@@ -20,7 +20,7 @@ import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from shopping.services.self_healing.metrics import ALERTING_RULES, DOMAINS
+from selfhealing.services import ALERTING_RULES, DOMAINS
 
 
 class Command(BaseCommand):

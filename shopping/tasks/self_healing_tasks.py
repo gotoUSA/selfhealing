@@ -37,7 +37,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     Returns:
         Dictionary with replay result summary
     """
-    from shopping.services.self_healing.replay_service import get_replay_service
+    from selfhealing.services import get_replay_service
 
     logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
@@ -176,9 +176,7 @@ def force_open_circuit_breaker(
         Dictionary with operation result
     """
     from shopping.models.user import User
-    from shopping.services.self_healing.circuit_breaker_service import (
-        get_circuit_breaker_service,
-    )
+    from selfhealing.services import get_circuit_breaker_service
 
     logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
 
@@ -252,9 +250,7 @@ def force_close_circuit_breaker(
         Dictionary with operation result
     """
     from shopping.models.user import User
-    from shopping.services.self_healing.circuit_breaker_service import (
-        get_circuit_breaker_service,
-    )
+    from selfhealing.services import get_circuit_breaker_service
 
     logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
 
@@ -324,9 +320,7 @@ def expire_manual_overrides(self) -> dict:
     Returns:
         Dictionary with expiration results
     """
-    from shopping.services.self_healing.circuit_breaker_service import (
-        get_circuit_breaker_service,
-    )
+    from selfhealing.services import get_circuit_breaker_service
 
     logger.debug("[Circuit Breaker] Checking for expired manual overrides")
 
@@ -381,7 +375,7 @@ def collect_self_healing_metrics(self) -> dict:
     Returns:
         Dictionary with collected metric values
     """
-    from shopping.services.self_healing.metrics import collect_all_metrics
+    from selfhealing.services import collect_all_metrics
 
     logger.debug("[Metrics] Collecting self-healing metrics")
 
@@ -425,8 +419,7 @@ def check_and_report_sla_breaches(self) -> dict:
     Returns:
         Dictionary with SLA breach information
     """
-    from shopping.services.self_healing.dlq_service import get_dlq_service
-    from shopping.services.self_healing.metrics import record_sla_breach
+    from selfhealing.services import get_dlq_service, record_sla_breach
 
     logger.debug("[SLA Check] Checking for SLA breaches")
 

@@ -28,7 +28,7 @@ from shopping.serializers.self_healing_serializers import (
     ControlAPIActions,
     ControlAPIEnvironments,
 )
-from shopping.services.self_healing.control_api_service import (
+from selfhealing.services import (
     ControlAPIService,
     ControlRequest,
     get_control_api_service,
@@ -612,7 +612,7 @@ Trigger replay of failed operations from the Dead Letter Queue.
         item_status = request.data.get("status", "pending")
 
         try:
-            from shopping.services.self_healing.replay_service import ReplayService
+            from selfhealing.services import ReplayService
 
             replay_service = ReplayService()
 

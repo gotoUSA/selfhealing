@@ -456,7 +456,7 @@ class FailedOperation(models.Model):
         SLA thresholds are loaded from configuration.
         See services/self_healing/config.py for default values.
         """
-        from shopping.services.self_healing.config import get_sla_thresholds
+        from selfhealing.services import get_sla_thresholds
 
         sla_config = get_sla_thresholds()
         threshold = sla_config.get_threshold(self.domain)

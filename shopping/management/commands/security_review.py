@@ -45,7 +45,7 @@ def check_security_violation_service() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.services.self_healing.security_violation_service import (
+        from selfhealing.services import (
             SEVERITY_BY_VIOLATION_TYPE,
             SecurityViolationService,
             Severity,
@@ -124,7 +124,7 @@ def check_security_notification_service() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.services.self_healing.security_notification_service import (
+        from selfhealing.services import (
             NotificationChannel,
             NotificationConfig,
             SecurityNotificationService,
@@ -227,14 +227,14 @@ def check_data_protection() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.services.self_healing.forensic_context import ForensicContext
+        from selfhealing.services import ForensicContext
 
         results.append(CheckResult("data_protection", "ForensicContext class exists", True))
     except ImportError as e:
         results.append(CheckResult("data_protection", "ForensicContext exists", False, str(e)))
 
     try:
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         results.append(CheckResult("data_protection", "DLQ service exists", True))
     except ImportError as e:
@@ -250,9 +250,7 @@ def check_access_control() -> list[CheckResult]:
     try:
         import inspect
 
-        from shopping.services.self_healing.circuit_breaker_service import (
-            CircuitBreakerService,
-        )
+        from selfhealing.services import CircuitBreakerService
 
         service = CircuitBreakerService()
 
@@ -321,9 +319,7 @@ def check_ip_management() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.services.self_healing.security_violation_service import (
-            SecurityViolationService,
-        )
+        from selfhealing.services import SecurityViolationService
 
         service = SecurityViolationService()
 

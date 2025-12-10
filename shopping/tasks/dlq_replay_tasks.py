@@ -34,7 +34,7 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     Returns:
         Dictionary with replay result
     """
-    from shopping.services.self_healing.replay_service import get_replay_service
+    from selfhealing.services import get_replay_service
 
     logger.info(f"[DLQ Replay] Starting replay for DLQ entry: {dlq_id}")
 
@@ -93,7 +93,7 @@ def replay_batch_by_failure_type(
     Returns:
         Dictionary with batch replay summary
     """
-    from shopping.services.self_healing.replay_service import get_replay_service
+    from selfhealing.services import get_replay_service
 
     logger.info(f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, " f"max_items={max_items}")
 
@@ -151,7 +151,7 @@ def replay_batch_by_domain(
     Returns:
         Dictionary with batch replay summary
     """
-    from shopping.services.self_healing.replay_service import get_replay_service
+    from selfhealing.services import get_replay_service
 
     logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, " f"max_items={max_items}")
 
@@ -209,7 +209,7 @@ def replay_on_circuit_breaker_close(
     Returns:
         Dictionary with replay summary
     """
-    from shopping.services.self_healing.replay_service import get_replay_service
+    from selfhealing.services import get_replay_service
 
     logger.info(
         f"[DLQ Circuit Recovery] Circuit breaker closed for {service_name}, " f"attempting replay of up to {max_items} items"
