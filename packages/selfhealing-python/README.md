@@ -188,10 +188,17 @@ pytest tests/ --cov=src/selfhealing --cov-report=html
 - [x] Core 모듈 (types, config, backoff)
 - [x] Repository 인터페이스
 - [x] Prometheus 메트릭
-- [ ] Django 어댑터 (Sprint 9)
-- [ ] Celery 어댑터 (Sprint 9)
-- [ ] REST API (Sprint 9)
-- [ ] 문서화 (Sprint 12)
+- [x] Django 어댑터
+- [x] Celery 어댑터
+- [x] REST API
+- [x] 문서화 (Sprint 12 완료)
+
+### 향후 계획
+- [ ] FastAPI 어댑터
+- [ ] Flask 어댑터
+- [ ] Redis 기반 Repository
+- [ ] AsyncIO 지원
+- [ ] OpenTelemetry 통합
 
 ## 📄 라이선스
 

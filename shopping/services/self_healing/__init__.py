@@ -1,6 +1,17 @@
 """
 L3 Self-Healing Services
 
+.. deprecated:: 0.1.0
+    This module is deprecated. Please migrate to the standalone `selfhealing` package.
+    
+    Before:
+        from shopping.services.self_healing import CircuitBreakerService
+    
+    After:
+        from selfhealing.services import CircuitBreakerService
+    
+    See: packages/selfhealing-python/docs/MIGRATION.md
+
 This module provides self-healing capabilities for the shopping application.
 Includes retry logic, backoff calculation, idempotency checking, DLQ management,
 replay functionality, circuit breaker management, and observability metrics.
@@ -8,6 +19,17 @@ replay functionality, circuit breaker management, and observability metrics.
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md (§7, §8)
 Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §7, §9)
 """
+
+import warnings
+
+# Emit deprecation warning on module import
+warnings.warn(
+    "Importing from 'shopping.services.self_healing' is deprecated and will be "
+    "removed in a future version. Please migrate to 'selfhealing' package. "
+    "See packages/selfhealing-python/docs/MIGRATION.md for details.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from .config import (
     SelfHealingConfig,
