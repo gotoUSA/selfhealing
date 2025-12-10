@@ -15,7 +15,7 @@ from django.utils import timezone
 from unittest.mock import patch, MagicMock
 
 from shopping.models.failed_payment import CircuitBreakerState
-from shopping.services.self_healing.circuit_breaker_service import (
+from selfhealing.services import (
     CircuitBreakerService,
     CircuitBreakerConfig,
     CircuitBreakerResult,
@@ -799,7 +799,7 @@ class TestRateLimitCascadeDetection:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -855,7 +855,7 @@ class TestRateLimitCascadeDetection:
         Purpose:
             Verify cascade detection check works correctly.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -912,7 +912,7 @@ class TestSelfDDoSProtection:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -968,7 +968,7 @@ class TestSelfDDoSProtection:
         Purpose:
             Verify high traffic suggests backoff but still allows request.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -993,7 +993,7 @@ class TestSelfDDoSProtection:
         Purpose:
             Verify self-DDoS detection works correctly.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -1013,7 +1013,7 @@ class TestSelfDDoSProtection:
         Purpose:
             Verify adaptive backoff calculation increases with level.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -1038,7 +1038,7 @@ class TestSelfDDoSProtection:
         Purpose:
             Verify backoff level is reset after successful recovery.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -1077,7 +1077,7 @@ class TestSelfDDoSProtection:
         Purpose:
             Verify self-DDoS protection can be disabled.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -1117,7 +1117,7 @@ class TestRateLimitTracker:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             RateLimitTracker,
         )
 
@@ -1198,7 +1198,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
         import shopping.services.self_healing.circuit_breaker_service as cb_module
@@ -1216,7 +1216,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
         Purpose:
             Verify record_rate_limit delegates to service.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             record_rate_limit,
         )
 
@@ -1234,7 +1234,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
         Purpose:
             Verify should_allow_with_protection delegates to service.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             should_allow_with_protection,
         )
 
@@ -1253,7 +1253,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
         Purpose:
             Verify get_protection_status delegates to service.
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_protection_status,
         )
 

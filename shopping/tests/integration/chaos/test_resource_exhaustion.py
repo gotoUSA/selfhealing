@@ -24,12 +24,12 @@ from unittest.mock import patch, MagicMock
 import pytest
 from django.utils import timezone
 
-from shopping.services.self_healing.circuit_breaker_service import (
+from selfhealing.services import (
     CircuitBreakerConfig,
     CircuitBreakerService,
     CircuitState,
 )
-from shopping.services.self_healing.dlq_service import DLQConfig, DLQService
+from selfhealing.services import DLQConfig, DLQService
 
 
 # =============================================================================

@@ -10,7 +10,7 @@ Risk Covered: R-015 (Retry storm overwhelming PG)
 
 import pytest
 
-from shopping.services.self_healing.retry_handler import (
+from selfhealing.services import (
     RetryAction,
     RetryConfig,
     RetryHandler,

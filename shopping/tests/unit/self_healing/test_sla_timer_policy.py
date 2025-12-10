@@ -13,7 +13,7 @@ from datetime import timedelta
 
 import pytest
 
-from shopping.services.self_healing.config import SLAThresholds
+from selfhealing.core import SLAThresholds
 
 
 @pytest.mark.tier1

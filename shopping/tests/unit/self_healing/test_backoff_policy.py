@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from shopping.services.self_healing.backoff_calculator import (
+from selfhealing.core import (
     BackoffCalculator,
     BackoffConfig,
     calculate_backoff,

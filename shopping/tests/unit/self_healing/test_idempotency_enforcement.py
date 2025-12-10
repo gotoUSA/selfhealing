@@ -16,13 +16,13 @@ from django.core.cache import cache
 from django.test import RequestFactory
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.idempotency_service import (
+from selfhealing.services import (
     IdempotencyKey,
     IdempotencyResult,
     IdempotencyService,
     get_idempotency_service,
 )
-from shopping.services.self_healing.replay_service import (
+from selfhealing.services import (
     PaymentReplayHandler,
     ReplayResult,
     ReplayService,

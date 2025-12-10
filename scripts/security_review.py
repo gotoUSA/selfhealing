@@ -122,7 +122,7 @@ class SecurityReview:
         print_header("Security Violation Service")
 
         try:
-            from shopping.services.self_healing.security_violation_service import (
+            from selfhealing.services import (
                 SecurityViolationService,
                 ViolationType,
                 Severity,
@@ -172,7 +172,7 @@ class SecurityReview:
         print_header("Security Notification Service")
 
         try:
-            from shopping.services.self_healing.security_notification_service import (
+            from selfhealing.services import (
                 SecurityNotificationService,
                 NotificationConfig,
                 NotificationChannel,
@@ -244,7 +244,7 @@ class SecurityReview:
         print_header("Sensitive Data Protection")
 
         try:
-            from shopping.services.self_healing.forensic_context import ForensicContext
+            from selfhealing.services import ForensicContext
 
             # Check 1: ForensicContext sanitizes sensitive data
             # Look for sanitization methods
@@ -262,7 +262,7 @@ class SecurityReview:
             self.record_result("data_protection", "forensic_context_exists", False, str(e))
 
         try:
-            from shopping.services.self_healing.dlq_service import DLQService
+            from selfhealing.services import DLQService
 
             # Check 2: DLQ service doesn't expose raw payment data
             print_check("DLQ service exists", True)
@@ -277,7 +277,7 @@ class SecurityReview:
         print_header("Access Control")
 
         try:
-            from shopping.services.self_healing.circuit_breaker_service import CircuitBreakerService
+            from selfhealing.services import CircuitBreakerService
 
             # Check 1: Circuit breaker force operations require user tracking
             service = CircuitBreakerService()
@@ -366,9 +366,7 @@ class SecurityReview:
         print_header("IP Management")
 
         try:
-            from shopping.services.self_healing.security_violation_service import (
-                SecurityViolationService,
-            )
+            from selfhealing.services import SecurityViolationService
 
             service = SecurityViolationService()
 

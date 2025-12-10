@@ -43,14 +43,14 @@ from django.utils import timezone
 import pytest
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.dlq_service import (
+from selfhealing.services import (
     DLQConfig,
     DLQEntryResult,
     DLQService,
     get_dlq_service,
     store_to_dlq,
 )
-from shopping.services.self_healing.replay_service import (
+from selfhealing.services import (
     BatchReplayResult,
     DefaultReplayHandler,
     PaymentReplayHandler,
@@ -1037,7 +1037,7 @@ class TestSoftDeleteAndArchival:
         Purpose:
             Verify archived entries don't appear in pending queries.
         """
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         # Create one pending and one archived
         pending_entry = FailedOperation.create_from_failure(

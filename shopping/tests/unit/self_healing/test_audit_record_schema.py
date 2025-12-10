@@ -450,7 +450,7 @@ class TestAuditRetentionPolicy:
         Compliance:
             SOC 2 CC5.2 (Log Retention)
         """
-        from shopping.services.self_healing.config import get_dlq_settings
+        from selfhealing.core import get_dlq_settings
 
         dlq_settings = get_dlq_settings()
 
@@ -467,7 +467,7 @@ class TestAuditRetentionPolicy:
             - At least 30 days for SOC 2
             - At least 90 days recommended for full audit cycle
         """
-        from shopping.services.self_healing.config import get_dlq_settings
+        from selfhealing.core import get_dlq_settings
 
         dlq_settings = get_dlq_settings()
         min_retention = 30  # SOC 2 minimum

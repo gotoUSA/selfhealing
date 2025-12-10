@@ -27,7 +27,7 @@ from django.utils import timezone
 from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
 from shopping.models.order import Order
 from shopping.models.payment import Payment
-from shopping.services.self_healing.circuit_breaker_service import (
+from selfhealing.services import (
     CircuitBreakerConfig,
     CircuitBreakerService,
     CircuitState,

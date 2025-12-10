@@ -20,7 +20,7 @@ import pytest
 from django.utils import timezone
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.dlq_service import DLQService, DLQConfig
+from selfhealing.services import DLQService, DLQConfig
 from shopping.tests.factories import UserFactory
 
 
@@ -229,7 +229,7 @@ class TestNotificationSLAPolicy:
             - webhook: 8 hours
             - notification: 24 hours (longest, least critical)
         """
-        from shopping.services.self_healing.config import get_sla_thresholds
+        from selfhealing.core import get_sla_thresholds
 
         sla_config = get_sla_thresholds()
         thresholds = sla_config.get_all_thresholds()

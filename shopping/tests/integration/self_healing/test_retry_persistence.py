@@ -16,7 +16,7 @@ import pytest
 from django.utils import timezone
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.replay_service import (
+from selfhealing.services import (
     PaymentReplayHandler,
     ReplayResult,
     ReplayService,

@@ -23,7 +23,7 @@ from django.utils import timezone
 from shopping.models.failed_operation import FailedOperation
 from shopping.models.order import Order
 from shopping.models.payment import Payment
-from shopping.services.self_healing.replay_service import (
+from selfhealing.services import (
     PaymentReplayHandler,
     ReplayService,
     ReplayResult,

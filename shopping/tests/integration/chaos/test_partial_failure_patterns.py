@@ -23,12 +23,12 @@ import pytest
 from django.utils import timezone
 
 from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
-from shopping.services.self_healing.circuit_breaker_service import (
+from selfhealing.services import (
     CircuitBreakerConfig,
     CircuitBreakerService,
     CircuitState,
 )
-from shopping.services.self_healing.dlq_service import DLQConfig, DLQService
+from selfhealing.services import DLQConfig, DLQService
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 

@@ -20,13 +20,13 @@ from django.test import override_settings
 
 from shopping.models.failed_payment import CircuitBreakerState
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.circuit_breaker_service import (
+from selfhealing.services import (
     CircuitBreakerService,
     CircuitBreakerConfig,
     CircuitState,
     get_circuit_breaker_service,
 )
-from shopping.services.self_healing.replay_service import get_replay_service
+from selfhealing.services import get_replay_service
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 

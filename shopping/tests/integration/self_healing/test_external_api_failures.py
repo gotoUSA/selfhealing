@@ -66,7 +66,7 @@ class TestPaymentTimeoutRecovery:
         - Entry includes order_id, payment_key, amount for replay
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -118,7 +118,7 @@ class TestPaymentTimeoutRecovery:
         - Replay mechanism can use the same key
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -172,7 +172,7 @@ class TestConnectionFailureRecovery:
         - Failure count increments
         - After threshold, Circuit Breaker opens
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
         )
         from shopping.models.failed_payment import CircuitBreakerState
@@ -204,7 +204,7 @@ class TestConnectionFailureRecovery:
         - Entry is marked as retryable (auto_replay candidate)
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -260,7 +260,7 @@ class TestRateLimitingRecovery:
         - After threshold (e.g., 10 in 60s), cascade detected
         - Circuit Breaker opens automatically
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -293,7 +293,7 @@ class TestRateLimitingRecovery:
         - Retry is not immediate
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -344,7 +344,7 @@ class TestExponentialBackoffRetry:
         - Attempt 3: 64 seconds
         - Attempt 4+: capped at max (180s)
         """
-        from shopping.services.self_healing.backoff_calculator import (
+        from selfhealing.core import (
             BackoffCalculator,
             BackoffConfig,
         )
@@ -379,7 +379,7 @@ class TestExponentialBackoffRetry:
         - Metrics on retry success rates
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -428,7 +428,7 @@ class TestCircuitBreakerExternalAPI:
         - Circuit Breaker transitions to OPEN
         - should_allow() returns False
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -463,7 +463,7 @@ class TestCircuitBreakerExternalAPI:
         - should_allow() returns False immediately
         - No actual API call is attempted
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -521,7 +521,7 @@ class TestPartialFailureScenarios:
         - Entry includes payment confirmation details
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -563,7 +563,7 @@ class TestPartialFailureScenarios:
         - Can be retried independently
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 
@@ -619,7 +619,7 @@ class TestServiceUnavailableRecovery:
         - Entry includes suggested retry delay
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         dlq_service = DLQService()
 

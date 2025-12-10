@@ -53,7 +53,7 @@ class TestCircuitBreakerRedisFailure:
         - Circuit Breaker falls back to database lookup
         - If no DB record exists, default to CLOSED (available)
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
         )
 
@@ -79,7 +79,7 @@ class TestCircuitBreakerRedisFailure:
         - Correct state is returned based on DB record
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
         )
 
@@ -114,7 +114,7 @@ class TestCircuitBreakerRedisFailure:
         - State change is durable
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
         )
 
@@ -160,7 +160,7 @@ class TestIdempotencyServiceRedisFailure:
 
         This ensures the self-healing system works even during Redis outages.
         """
-        from shopping.services.self_healing.idempotency_service import (
+        from selfhealing.services import (
             IdempotencyService,
         )
         from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
@@ -189,7 +189,7 @@ class TestIdempotencyServiceRedisFailure:
         - Should return is_duplicate=False
         - Operation can proceed
         """
-        from shopping.services.self_healing.idempotency_service import (
+        from selfhealing.services import (
             IdempotencyService,
         )
         from shopping.tests.factories import OrderFactory, UserFactory
@@ -220,7 +220,7 @@ class TestIdempotencyServiceRedisFailure:
 
         This ensures completed operations are not failed due to cache issues.
         """
-        from shopping.services.self_healing.idempotency_service import (
+        from selfhealing.services import (
             IdempotencyService,
             IdempotencyKey,
             IdempotencyDomain,
@@ -251,7 +251,7 @@ class TestIdempotencyServiceRedisFailure:
         - Database check finds existing payment
         - Returns is_duplicate=True
         """
-        from shopping.services.self_healing.idempotency_service import (
+        from selfhealing.services import (
             IdempotencyService,
         )
         from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
@@ -294,7 +294,7 @@ class TestDLQServiceRedisFailure:
         - DLQ entry is persisted
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
         from shopping.tests.factories import OrderFactory, UserFactory
 
         user = UserFactory()
@@ -333,7 +333,7 @@ class TestDLQServiceRedisFailure:
         - Entries are returned
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
         from shopping.tests.factories import OrderFactory, UserFactory
 
         # Create a test DLQ entry directly
@@ -371,7 +371,7 @@ class TestDLQServiceRedisFailure:
         - Correct count returned
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
         from shopping.tests.factories import OrderFactory, UserFactory
 
         # Clear existing entries and create known count
@@ -420,7 +420,7 @@ class TestRateLimitTrackerCacheIndependence:
         - No Redis calls made
         - Counts are accurate
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -454,7 +454,7 @@ class TestRateLimitTrackerCacheIndependence:
         - Increment and reset operations work
         - No Redis dependency
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             get_rate_limit_tracker,
         )
 
@@ -552,7 +552,7 @@ class TestCascadePreventionDuringRedisOutage:
         - TimeoutError: Handled
         - BrokenPipeError wrapped in Redis error: Handled
         """
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
         )
 

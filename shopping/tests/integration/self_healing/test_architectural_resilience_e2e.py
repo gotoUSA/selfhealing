@@ -38,24 +38,24 @@ import pytest
 from shopping.models.failed_operation import FailedOperation
 from shopping.models.order import Order
 from shopping.models.payment import Payment
-from shopping.services.self_healing.backoff_calculator import (
+from selfhealing.core import (
     BackoffCalculator,
     BackoffConfig,
     calculate_backoff,
     get_calculator_for_domain,
 )
-from shopping.services.self_healing.forensic_context import (
+from selfhealing.services import (
     ForensicContext,
     ForensicContextBuilder,
     capture_forensic_context,
     create_snapshot_data,
 )
-from shopping.services.self_healing.idempotency_service import (
+from selfhealing.services import (
     IdempotencyKey,
     IdempotencyService,
     get_idempotency_service,
 )
-from shopping.services.self_healing.retry_handler import (
+from selfhealing.services import (
     MaxRetriesExceededError,
     RetryAction,
     RetryConfig,

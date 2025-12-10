@@ -16,7 +16,7 @@ import pytest
 from django.test import RequestFactory
 
 from shopping.models.security_incident import SecurityIncident
-from shopping.services.self_healing.security_violation_service import (
+from selfhealing.services import (
     SecurityConfig,
     SecurityViolationResult,
     SecurityViolationService,

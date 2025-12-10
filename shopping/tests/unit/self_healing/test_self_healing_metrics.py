@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from shopping.services.self_healing.metrics import (
+from selfhealing.services import (
     ALERTING_RULES,
     DOMAINS,
     collect_all_metrics,

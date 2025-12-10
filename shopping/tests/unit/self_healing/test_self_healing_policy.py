@@ -11,16 +11,16 @@ from decimal import Decimal
 
 import pytest
 
-from shopping.services.self_healing.backoff_calculator import (
+from selfhealing.core import (
     BackoffCalculator,
     BackoffConfig,
     calculate_backoff,
 )
-from shopping.services.self_healing.idempotency_service import (
+from selfhealing.services import (
     IdempotencyDomain,
     IdempotencyKey,
 )
-from shopping.services.self_healing.retry_handler import (
+from selfhealing.services import (
     RetryAction,
     RetryConfig,
     RetryHandler,

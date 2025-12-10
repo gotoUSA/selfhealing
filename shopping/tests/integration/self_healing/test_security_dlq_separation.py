@@ -18,7 +18,7 @@ from django.test import RequestFactory
 
 from shopping.models.failed_operation import FailedOperation
 from shopping.models.security_incident import SecurityIncident
-from shopping.services.self_healing.security_violation_service import (
+from selfhealing.services import (
     SecurityConfig,
     SecurityViolationResult,
     SecurityViolationService,
@@ -293,7 +293,7 @@ class TestSecurityDLQSeparation:
         Expected:
             - DLQ queries return only DLQ entries
         """
-        from shopping.services.self_healing.dlq_service import DLQService
+        from selfhealing.services import DLQService
 
         user = UserFactory()
         order = OrderFactory(user=user, status="confirmed")

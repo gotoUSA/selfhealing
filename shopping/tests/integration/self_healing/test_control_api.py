@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from shopping.services.self_healing.control_api_service import (
+from selfhealing.services import (
     ControlAPIService,
     ControlRequest,
     ControlResponse,

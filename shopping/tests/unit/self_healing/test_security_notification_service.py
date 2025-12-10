@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch, Mock
 import pytest
 
 from shopping.models.security_incident import SecurityIncident
-from shopping.services.self_healing.security_notification_service import (
+from selfhealing.services import (
     NotificationChannel,
     NotificationConfig,
     NotificationResult,

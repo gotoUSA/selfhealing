@@ -71,7 +71,7 @@ class TestCircuitBreakerTimeBased:
         - State remains OPEN
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -114,7 +114,7 @@ class TestCircuitBreakerTimeBased:
         - State transitions to HALF_OPEN
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -160,7 +160,7 @@ class TestCircuitBreakerTimeBased:
         - All subsequent requests are allowed
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -225,7 +225,7 @@ class TestSLABreachDetectionTimeBased:
         - Operation created_at + 1 hour < current_time = breach
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.config import SLAThresholds
+        from selfhealing.core import SLAThresholds
 
         # Create a pending payment failure at the frozen time
         failed_op = FailedOperation.objects.create(
@@ -268,7 +268,7 @@ class TestSLABreachDetectionTimeBased:
         - Operation created_at + 1 hour > current_time = no breach
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.config import SLAThresholds
+        from selfhealing.core import SLAThresholds
 
         # Create a pending payment failure at the frozen time
         failed_op = FailedOperation.objects.create(
@@ -306,7 +306,7 @@ class TestSLABreachDetectionTimeBased:
         3. Expect: Failure is identified as SLA breach
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.config import SLAThresholds
+        from selfhealing.core import SLAThresholds
 
         failed_op = FailedOperation.objects.create(
             domain=FailedOperation.Domain.POINT,
@@ -339,7 +339,7 @@ class TestSLABreachDetectionTimeBased:
         3. Expect: No breach (within 4 hour threshold)
         """
         from shopping.models.failed_operation import FailedOperation
-        from shopping.services.self_healing.config import SLAThresholds
+        from selfhealing.core import SLAThresholds
 
         failed_op = FailedOperation.objects.create(
             domain=FailedOperation.Domain.POINT,
@@ -392,7 +392,7 @@ class TestRetryBackoffTimeBased:
         - Attempt 2: 16 seconds (4^2)
         - Attempt 3: 64 seconds (4^3)
         """
-        from shopping.services.self_healing.backoff_calculator import (
+        from selfhealing.core import (
             BackoffCalculator,
             BackoffConfig,
         )
@@ -428,7 +428,7 @@ class TestRetryBackoffTimeBased:
         - High attempt numbers should cap at max_delay
         - Example: 4^5 = 1024, but max_delay=180 limits it
         """
-        from shopping.services.self_healing.backoff_calculator import (
+        from selfhealing.core import (
             BackoffCalculator,
             BackoffConfig,
         )
@@ -457,7 +457,7 @@ class TestRetryBackoffTimeBased:
         - Delays vary within jitter_percent of base delay
         - Multiple calculations produce different values
         """
-        from shopping.services.self_healing.backoff_calculator import (
+        from selfhealing.core import (
             BackoffCalculator,
             BackoffConfig,
         )
@@ -514,7 +514,7 @@ class TestManualOverrideTTLTimeBased:
         3. Expect: Override still active, CB remains forced open
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
@@ -555,7 +555,7 @@ class TestManualOverrideTTLTimeBased:
         3. Expect: Override expired, CB returns to auto management
         """
         from shopping.models.failed_payment import CircuitBreakerState
-        from shopping.services.self_healing.circuit_breaker_service import (
+        from selfhealing.services import (
             CircuitBreakerService,
             CircuitState,
         )
