@@ -224,7 +224,7 @@ class TestMockPaymentAdapter:
             error_message="Invalid signature",
         )
         result = adapter.verify_webhook(
-            payload=b'malformed',
+            payload=b"malformed",
             signature="bad_sig",
         )
         assert result.valid is False

@@ -28,6 +28,13 @@ from selfhealing.interfaces.payment_provider import (
     WebhookVerifyResult,
     PaymentStatusResult,
 )
+from selfhealing.interfaces.web_framework import (
+    WebFrameworkInterface,
+    RequestContext,
+    ResponseContext,
+    HttpMethod,
+    HandlerFunc,
+)
 
 __all__ = [
     # Repository interfaces
@@ -48,4 +55,10 @@ __all__ = [
     "PaymentCancelResult",
     "WebhookVerifyResult",
     "PaymentStatusResult",
+    # Web framework interface
+    "WebFrameworkInterface",
+    "RequestContext",
+    "ResponseContext",
+    "HttpMethod",
+    "HandlerFunc",
 ]

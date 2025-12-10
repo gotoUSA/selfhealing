@@ -195,9 +195,7 @@ class TestSyncTaskAdapter:
         def greet(name, greeting="Hello"):
             return f"{greeting}, {name}!"
 
-        task_id = adapter.enqueue(
-            "greet_task", args=("World",), kwargs={"greeting": "Hi"}
-        )
+        task_id = adapter.enqueue("greet_task", args=("World",), kwargs={"greeting": "Hi"})
         result = adapter.get_result(task_id)
         assert result.result == "Hi, World!"
 

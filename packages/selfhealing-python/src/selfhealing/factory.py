@@ -419,6 +419,13 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
+    try:
+        from selfhealing.adapters.cache.memcached_adapter import MemcachedCacheAdapter
+
+        ProviderRegistry.register_cache("memcached", MemcachedCacheAdapter)
+    except ImportError:
+        pass
+
     # Task queues
     try:
         from selfhealing.adapters.queues.celery_adapter import CeleryTaskAdapter
@@ -434,11 +441,25 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
+    try:
+        from selfhealing.adapters.queues.rq_adapter import RQTaskAdapter
+
+        ProviderRegistry.register_queue("rq", RQTaskAdapter)
+    except ImportError:
+        pass
+
     # Payment providers
     try:
         from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
 
         ProviderRegistry.register_payment("mock", MockPaymentAdapter)
+    except ImportError:
+        pass
+
+    try:
+        from selfhealing.adapters.payments.stripe_adapter import StripePaymentAdapter
+
+        ProviderRegistry.register_payment("stripe", StripePaymentAdapter)
     except ImportError:
         pass
 

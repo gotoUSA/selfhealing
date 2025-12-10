@@ -11,3 +11,11 @@ __all__ = [
     "CeleryTaskAdapter",
     "SyncTaskAdapter",
 ]
+
+# Conditionally import adapters based on available dependencies
+try:
+    from selfhealing.adapters.queues.rq_adapter import RQTaskAdapter
+
+    __all__.append("RQTaskAdapter")
+except ImportError:
+    pass

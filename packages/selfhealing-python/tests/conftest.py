@@ -144,4 +144,3 @@ def test_provider_registry():
 
     # Restore original state
     ProviderRegistry._instances = original_instances
-

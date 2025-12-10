@@ -11,3 +11,11 @@ __all__ = [
     "RedisCacheAdapter",
     "InMemoryCacheAdapter",
 ]
+
+# Conditionally import adapters based on available dependencies
+try:
+    from selfhealing.adapters.cache.memcached_adapter import MemcachedCacheAdapter
+
+    __all__.append("MemcachedCacheAdapter")
+except ImportError:
+    pass

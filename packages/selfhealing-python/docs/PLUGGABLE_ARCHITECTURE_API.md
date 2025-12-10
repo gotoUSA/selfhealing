@@ -160,33 +160,33 @@ adapter.reset()
 
 ```python
 def confirm_payment_idempotent(
-    payment_key: str, 
-    order_id: str, 
+    payment_key: str,
+    order_id: str,
     amount: Decimal
 ) -> PaymentConfirmResult:
     cache = ProviderRegistry.get_cache()
     payment = ProviderRegistry.get_payment()
-    
+
     # Check idempotency cache
     idem_key = f"payment:idem:{order_id}"
     cached = cache.get(idem_key)
     if cached:
         return PaymentConfirmResult(**cached)
-    
+
     # Process payment
     result = payment.confirm_payment(
         payment_key=payment_key,
         order_id=order_id,
         amount=amount,
     )
-    
+
     # Cache result
     if result.success:
         cache.set(idem_key, {
             "success": result.success,
             "transaction_id": result.transaction_id,
         }, ttl=timedelta(days=1))
-    
+
     return result
 ```
 
@@ -389,13 +389,13 @@ def test_payment_flow(mock_payment):
         success=True,
         transaction_id="tx_test_123",
     )
-    
+
     result = mock_payment.confirm_payment(
         payment_key="pk_test",
         order_id="order_test",
         amount=Decimal("10000"),
     )
-    
+
     assert result.success is True
     assert result.transaction_id == "tx_test_123"
     assert mock_payment.confirm_call_count == 1
@@ -406,13 +406,13 @@ def test_payment_failure(mock_payment):
         success=False,
         error_code="CARD_DECLINED",
     )
-    
+
     result = mock_payment.confirm_payment(
         payment_key="pk_test",
         order_id="order_test",
         amount=Decimal("10000"),
     )
-    
+
     assert result.success is False
     assert result.error_code == "CARD_DECLINED"
 ```
@@ -446,11 +446,11 @@ from selfhealing.interfaces.payment_provider import (
 
 class StripePaymentAdapter(PaymentProviderInterface):
     """Stripe payment provider implementation."""
-    
+
     @property
     def provider_name(self) -> str:
         return "stripe"
-    
+
     def confirm_payment(
         self,
         payment_key: str,
@@ -460,7 +460,7 @@ class StripePaymentAdapter(PaymentProviderInterface):
     ) -> PaymentConfirmResult:
         # Implement Stripe API call
         pass
-    
+
     # ... implement other methods
 
 # Register with factory
