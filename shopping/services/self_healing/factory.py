@@ -295,6 +295,74 @@ class ProviderRegistry:
         }
 
     # =========================================================================
+    # Health Check Aggregation
+    # =========================================================================
+
+    @classmethod
+    def health_check_all(cls) -> Dict[str, bool]:
+        """
+        Perform health check on all providers.
+
+        Returns:
+            Dict mapping provider type to health status
+
+        Example:
+            >>> results = ProviderRegistry.health_check_all()
+            >>> # {'payment': True, 'cache': True, 'queue': False}
+        """
+        results = {}
+
+        try:
+            payment = cls.get_payment()
+            results["payment"] = payment.health_check()
+        except Exception as e:
+            logger.error(f"[ProviderRegistry] Payment health check failed: {e}")
+            results["payment"] = False
+
+        try:
+            cache = cls.get_cache()
+            results["cache"] = cache.health_check()
+        except Exception as e:
+            logger.error(f"[ProviderRegistry] Cache health check failed: {e}")
+            results["cache"] = False
+
+        try:
+            queue = cls.get_queue()
+            results["queue"] = queue.health_check()
+        except Exception as e:
+            logger.error(f"[ProviderRegistry] Queue health check failed: {e}")
+            results["queue"] = False
+
+        return results
+
+    @classmethod
+    def is_healthy(cls) -> bool:
+        """
+        Check if all providers are healthy.
+
+        Returns:
+            True if all providers are healthy
+        """
+        results = cls.health_check_all()
+        return all(results.values())
+
+    @classmethod
+    def get_health_summary(cls) -> Dict[str, Any]:
+        """
+        Get detailed health summary for monitoring.
+
+        Returns:
+            Dict with health status, provider info, and defaults
+        """
+        health = cls.health_check_all()
+        return {
+            "healthy": all(health.values()),
+            "providers": health,
+            "defaults": cls.get_defaults(),
+            "registered": cls.list_providers(),
+        }
+
+    # =========================================================================
     # Auto-Registration
     # =========================================================================
 
