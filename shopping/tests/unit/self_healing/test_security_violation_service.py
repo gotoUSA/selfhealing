@@ -502,9 +502,7 @@ class TestHelperFunctions:
         request = factory.get("/api/test/")
         request.META["REMOTE_ADDR"] = "127.0.0.1"
 
-        with patch(
-            "selfhealing.services.security_violation_service." "SecurityViolationService._send_security_notification"
-        ):
+        with patch("selfhealing.services.security_violation_service." "SecurityViolationService._send_security_notification"):
             result = handle_security_violation(
                 violation_type=ViolationType.SUSPICIOUS_ACTIVITY,
                 request=request,

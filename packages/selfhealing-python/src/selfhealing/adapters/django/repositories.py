@@ -41,6 +41,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         # Try shopping app model first (for Django projects using shopping app)
         try:
             from shopping.models.failed_operation import FailedOperation
+
             return FailedOperation
         except ImportError:
             pass
@@ -243,6 +244,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         # Try shopping app model first (for Django projects using shopping app)
         try:
             from shopping.models.failed_payment import CircuitBreakerState
+
             return CircuitBreakerState
         except ImportError:
             pass
@@ -259,20 +261,20 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             failure_count=obj.failure_count,
             success_count=obj.success_count,
             last_failure_at=obj.last_failure_at,
-            last_success_at=getattr(obj, 'last_success_at', None),
+            last_success_at=getattr(obj, "last_success_at", None),
             opened_at=obj.opened_at,
-            half_opened_at=getattr(obj, 'half_opened_at', None),
-            failure_threshold=getattr(obj, 'failure_threshold', 5),
-            recovery_timeout=getattr(obj, 'recovery_timeout', 60),
-            half_open_max_calls=getattr(obj, 'half_open_max_calls', 3),
-            manually_controlled=getattr(obj, 'manually_controlled', False),
-            controlled_by_id=getattr(obj, 'controlled_by_id', None),
-            control_reason=getattr(obj, 'control_reason', "") or "",
-            manual_override_expires_at=getattr(obj, 'manual_override_expires_at', None),
-            half_open_request_count=getattr(obj, 'half_open_request_count', 0),
-            id=obj.id if hasattr(obj, 'id') else None,
-            created_at=getattr(obj, 'created_at', None),
-            updated_at=getattr(obj, 'updated_at', None),
+            half_opened_at=getattr(obj, "half_opened_at", None),
+            failure_threshold=getattr(obj, "failure_threshold", 5),
+            recovery_timeout=getattr(obj, "recovery_timeout", 60),
+            half_open_max_calls=getattr(obj, "half_open_max_calls", 3),
+            manually_controlled=getattr(obj, "manually_controlled", False),
+            controlled_by_id=getattr(obj, "controlled_by_id", None),
+            control_reason=getattr(obj, "control_reason", "") or "",
+            manual_override_expires_at=getattr(obj, "manual_override_expires_at", None),
+            half_open_request_count=getattr(obj, "half_open_request_count", 0),
+            id=obj.id if hasattr(obj, "id") else None,
+            created_at=getattr(obj, "created_at", None),
+            updated_at=getattr(obj, "updated_at", None),
         )
 
     def get_state(
@@ -319,7 +321,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         CircuitBreakerState = self._get_model()
 
         # Handle both string and enum values
-        state_value = state.value if hasattr(state, 'value') else state
+        state_value = state.value if hasattr(state, "value") else state
         update_fields = {"state": state_value}
         if failure_count is not None:
             update_fields["failure_count"] = failure_count
@@ -465,7 +467,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
     def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
         """Clear manual control from a circuit breaker
-        
+
         Args:
             service_name: Name of the service
             preserve_reason: If True, keep the existing control_reason value
@@ -480,9 +482,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if not preserve_reason:
             update_fields["control_reason"] = ""
 
-        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
-            **update_fields
-        )
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(**update_fields)
         return updated > 0
 
     def get_all(self) -> List[CircuitBreakerStateData]:
@@ -588,9 +588,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         try:
             with transaction.atomic():
-                obj = CircuitBreakerState.objects.select_for_update().get(
-                    service_name=service_name
-                )
+                obj = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
                 previous_state = obj.state
                 obj.state = CircuitState.CLOSED.value
                 obj.failure_count = 0
@@ -621,6 +619,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         # Try shopping app model first (for Django projects using shopping app)
         try:
             from shopping.models.security_incident import SecurityIncident
+
             return SecurityIncident
         except ImportError:
             pass

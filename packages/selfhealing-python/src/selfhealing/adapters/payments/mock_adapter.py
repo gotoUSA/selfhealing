@@ -79,19 +79,23 @@ class MockPaymentAdapter(PaymentProviderInterface):
         self._payments: dict[str, MockPaymentState] = {}
         self._call_history: list[dict[str, Any]] = []
 
-        # Configurable response settings
+        # 설정 가능한 응답값들
         self._confirm_result: Optional[PaymentConfirmResult] = None
         self._cancel_result: Optional[PaymentCancelResult] = None
         self._webhook_result: Optional[WebhookVerifyResult] = None
         self._status_result: Optional[PaymentStatusResult] = None
         self._health_status: bool = True
 
-        # Failure injection
+        # 실패 주입 (간헐적 실패 테스트용)
         self._confirm_should_fail: bool = False
         self._confirm_fail_times: int = 0
         self._confirm_fail_count: int = 0
         self._confirm_error_code: str = "MOCK_ERROR"
         self._confirm_error_message: str = "Mock failure"
+
+        # 예외 주입 (네트워크 오류 등 예외 테스트용)
+        self._confirm_exception: Optional[Exception] = None
+        self._cancel_exception: Optional[Exception] = None
 
         # Callbacks for custom behavior
         self._on_confirm: Optional[Callable[[str, str, Decimal], PaymentConfirmResult]] = None
@@ -205,7 +209,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
         return self
 
     def reset(self) -> "MockPaymentAdapter":
-        """Reset all state and configuration."""
+        """모든 상태와 설정을 초기화합니다."""
         self._payments.clear()
         self._call_history.clear()
         self._confirm_result = None
@@ -218,6 +222,9 @@ class MockPaymentAdapter(PaymentProviderInterface):
         self._confirm_fail_count = 0
         self._on_confirm = None
         self._on_cancel = None
+        # 예외 설정도 초기화
+        self._confirm_exception = None
+        self._cancel_exception = None
         return self
 
     # =========================================================================
@@ -267,7 +274,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         Returns configured result or generates default success response.
         """
-        # Record call
+        # 호출 기록 (예외 발생 시에도 호출 기록은 남김)
         self._call_history.append(
             {
                 "method": "confirm_payment",
@@ -281,11 +288,15 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         logger.debug(f"[MockPayment] confirm_payment called: {payment_key}")
 
+        # 예외 주입이 설정되어 있으면 예외 발생
+        if self._confirm_exception is not None:
+            raise self._confirm_exception
+
         # Custom callback
         if self._on_confirm:
             return self._on_confirm(payment_key, order_id, amount)
 
-        # Intermittent failure simulation
+        # 간헐적 실패 시뮬레이션 (재시도 테스트용)
         if self._confirm_should_fail and self._confirm_fail_count < self._confirm_fail_times:
             self._confirm_fail_count += 1
             return PaymentConfirmResult(
@@ -295,7 +306,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
                 error_message=self._confirm_error_message,
             )
 
-        # Configured result
+        # 설정된 응답 반환
         if self._confirm_result is not None:
             return PaymentConfirmResult(
                 success=self._confirm_result.success,
@@ -306,7 +317,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
                 error_message=self._confirm_result.error_message,
             )
 
-        # Default success
+        # 기본값: 성공 응답
         now = datetime.now()
         self._payments[payment_key] = MockPaymentState(
             payment_key=payment_key,
@@ -335,7 +346,7 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         Returns configured result or generates default success response.
         """
-        # Record call
+        # 호출 기록 (예외 발생 시에도 호출 기록은 남김)
         self._call_history.append(
             {
                 "method": "cancel_payment",
@@ -349,15 +360,19 @@ class MockPaymentAdapter(PaymentProviderInterface):
 
         logger.debug(f"[MockPayment] cancel_payment called: {payment_key}")
 
+        # 예외 주입이 설정되어 있으면 예외 발생
+        if self._cancel_exception is not None:
+            raise self._cancel_exception
+
         # Custom callback
         if self._on_cancel:
             return self._on_cancel(payment_key, cancel_reason)
 
-        # Configured result
+        # 설정된 응답 반환
         if self._cancel_result is not None:
             return self._cancel_result
 
-        # Default success
+        # 기본값: 성공 응답
         now = datetime.now()
         if payment_key in self._payments:
             self._payments[payment_key].status = "CANCELED"
@@ -470,3 +485,176 @@ class MockPaymentAdapter(PaymentProviderInterface):
         )
 
         return self._health_status
+
+    # =========================================================================
+    # Alias 메서드 (하위 호환성)
+    # =========================================================================
+    # 참고: 기존 테스트 코드에서 set_confirm_response, set_cancel_response 등의
+    # 이름을 사용하고 있어서 alias로 제공합니다.
+    # 신규 코드에서는 set_confirm_result, set_cancel_result 등을 사용하세요.
+
+    def set_confirm_response(
+        self,
+        success: bool = True,
+        payment_key: Optional[str] = None,
+        transaction_id: Optional[str] = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> "MockPaymentAdapter":
+        """
+        set_confirm_result의 alias (하위 호환성용).
+
+        신규 코드에서는 set_confirm_result()를 사용하세요.
+        """
+        return self.set_confirm_result(
+            success=success,
+            payment_key=payment_key,
+            transaction_id=transaction_id,
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    def set_cancel_response(
+        self,
+        success: bool = True,
+        refund_amount: Optional[Decimal] = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> "MockPaymentAdapter":
+        """
+        set_cancel_result의 alias (하위 호환성용).
+
+        신규 코드에서는 set_cancel_result()를 사용하세요.
+        """
+        return self.set_cancel_result(
+            success=success,
+            refund_amount=refund_amount,
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    def set_webhook_response(
+        self,
+        valid: bool = True,
+        event_type: Optional[str] = None,
+        payload: Optional[dict] = None,
+        error_message: Optional[str] = None,
+    ) -> "MockPaymentAdapter":
+        """
+        set_webhook_result의 alias (하위 호환성용).
+
+        신규 코드에서는 set_webhook_result()를 사용하세요.
+        """
+        return self.set_webhook_result(
+            valid=valid,
+            event_type=event_type,
+            payload=payload,
+            error_message=error_message,
+        )
+
+    def set_status_response(
+        self,
+        success: bool = True,
+        status: Optional[str] = None,
+        payment_key: Optional[str] = None,
+        order_id: Optional[str] = None,
+        amount: Optional[Decimal] = None,
+        approved_at: Optional[str] = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> "MockPaymentAdapter":
+        """
+        get_payment_status 호출 시 반환할 결과를 설정합니다.
+
+        Args:
+            success: 조회 성공 여부
+            status: 결제 상태 (DONE, CANCELED 등)
+            payment_key: 결제 키
+            order_id: 주문 ID
+            amount: 결제 금액
+            approved_at: 승인 일시
+            error_code: 에러 코드 (실패 시)
+            error_message: 에러 메시지 (실패 시)
+        """
+        self._status_result = PaymentStatusResult(
+            success=success,
+            status=status,
+            payment_key=payment_key,
+            order_id=order_id,
+            amount=amount,
+            approved_at=approved_at,
+            error_code=error_code,
+            error_message=error_message,
+        )
+        return self
+
+    def set_health(self, healthy: bool) -> "MockPaymentAdapter":
+        """
+        set_health_status의 alias (하위 호환성용).
+
+        신규 코드에서는 set_health_status()를 사용하세요.
+        """
+        return self.set_health_status(healthy)
+
+    def set_confirm_exception(self, exception: Exception) -> "MockPaymentAdapter":
+        """
+        confirm_payment 호출 시 예외를 발생시키도록 설정합니다.
+
+        테스트에서 네트워크 오류 등 예외 상황을 시뮬레이션할 때 사용합니다.
+
+        Args:
+            exception: 발생시킬 예외 객체
+
+        Example:
+            >>> adapter.set_confirm_exception(ConnectionError("Network timeout"))
+            >>> adapter.confirm_payment(...)  # ConnectionError 발생
+        """
+        self._confirm_exception = exception
+        return self
+
+    def set_cancel_exception(self, exception: Exception) -> "MockPaymentAdapter":
+        """
+        cancel_payment 호출 시 예외를 발생시키도록 설정합니다.
+
+        Args:
+            exception: 발생시킬 예외 객체
+        """
+        self._cancel_exception = exception
+        return self
+
+    def get_confirm_calls(self) -> list[dict[str, Any]]:
+        """
+        confirm_payment 호출 이력만 반환합니다.
+
+        Returns:
+            confirm_payment 호출 기록 리스트
+        """
+        return [call for call in self._call_history if call["method"] == "confirm_payment"]
+
+    def get_cancel_calls(self) -> list[dict[str, Any]]:
+        """
+        cancel_payment 호출 이력만 반환합니다.
+
+        Returns:
+            cancel_payment 호출 기록 리스트
+        """
+        return [call for call in self._call_history if call["method"] == "cancel_payment"]
+
+    @property
+    def confirm_call_count(self) -> int:
+        """
+        confirm_payment 호출 횟수 (속성으로 접근).
+
+        get_confirm_call_count()와 동일하지만 속성으로 접근 가능합니다.
+        """
+        return self.get_confirm_call_count()
+
+    @property
+    def cancel_call_count(self) -> int:
+        """
+        cancel_payment 호출 횟수 (속성으로 접근).
+
+        get_cancel_call_count()와 동일하지만 속성으로 접근 가능합니다.
+        """
+        return self.get_cancel_call_count()
+

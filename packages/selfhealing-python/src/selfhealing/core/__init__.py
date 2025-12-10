@@ -6,7 +6,7 @@ This module contains pure Python implementations without any framework dependenc
 Backoff API:
     - BackoffCalculator: Simple config-based calculator (legacy interface)
       Usage: calc = BackoffCalculator(BackoffConfig()); calc.calculate(attempt)
-    
+
     - ExponentialBackoff, LinearBackoff, etc.: Strategy pattern implementations
       Usage: strategy = ExponentialBackoff(base=2); strategy.calculate(attempt)
 """

@@ -1,13 +1,33 @@
 """
-Django Repository Tests for Self-Healing System.
+Django Repository 통합 테스트
 
-Tests the Django ORM repository implementations:
+이 테스트는 Django ORM 리포지토리 구현을 테스트합니다:
 - DjangoFailedOperationRepository
-- DjangoCircuitBreakerStateRepository
+- DjangoCircuitBreakerStateRepository  
 - DjangoSecurityIncidentRepository
+
+주의: 이 테스트는 Django 프로젝트 환경에서 실행해야 합니다.
+selfhealing-python 패키지 단독으로 실행 시 INSTALLED_APPS 설정이 없어
+RuntimeError가 발생할 수 있습니다.
+
+실행 방법:
+1. Django 프로젝트 루트에서: pytest shopping/tests/test_repositories.py
+2. 또는: python manage.py test shopping.tests.test_repositories
+
+selfhealing-python 패키지 내에서 pytest 실행 시 이 파일은 스킵됩니다.
 """
 
 import pytest
+
+# selfhealing-python 패키지 내에서 단독 테스트 시 스킵
+# Django 프로젝트 환경에서만 실행
+try:
+    from django.conf import settings
+    if not settings.configured:
+        pytest.skip("Django not configured", allow_module_level=True)
+except Exception:
+    pytest.skip("Django not available or not configured", allow_module_level=True)
+
 from django.utils import timezone
 from datetime import timedelta
 
@@ -16,10 +36,14 @@ pytestmark = pytest.mark.django_db
 
 
 class TestDjangoFailedOperationRepository:
-    """Tests for DjangoFailedOperationRepository."""
+    """
+    DjangoFailedOperationRepository 테스트.
+    
+    참고: 추상 메서드가 모두 구현되어야 인스턴스화 가능.
+    """
 
     def test_create(self):
-        """Test creating a failed operation via repository."""
+        """리포지토리를 통해 실패 작업 생성 테스트."""
         from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
 
         repo = DjangoFailedOperationRepository()
@@ -39,7 +63,7 @@ class TestDjangoFailedOperationRepository:
         assert result.max_retries == 3
 
     def test_get_by_id(self):
-        """Test getting operation by ID."""
+        """ID로 작업 조회 테스트."""
         from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
         from selfhealing.adapters.django.models import FailedOperation
 

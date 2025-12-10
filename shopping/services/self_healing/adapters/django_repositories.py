@@ -318,12 +318,8 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         from django.db.models import Count, Avg
 
         total = FailedOperation.objects.count()
-        by_status = dict(
-            FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
-        )
-        by_domain = dict(
-            FailedOperation.objects.values("domain").annotate(count=Count("id")).values_list("domain", "count")
-        )
+        by_status = dict(FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
+        by_domain = dict(FailedOperation.objects.values("domain").annotate(count=Count("id")).values_list("domain", "count"))
         avg_retries = FailedOperation.objects.aggregate(avg_retries=Avg("retry_count"))["avg_retries"] or 0
 
         return {
@@ -567,7 +563,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
     def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
         """Clear manual control from a circuit breaker
-        
+
         Args:
             service_name: Name of the service
             preserve_reason: If True, keep the existing control_reason value
@@ -582,9 +578,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if not preserve_reason:
             update_fields["control_reason"] = ""
 
-        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
-            **update_fields
-        )
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(**update_fields)
         return updated > 0
 
     def get_all_states(self) -> list[CircuitBreakerStateData]:
@@ -710,9 +704,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         try:
             with transaction.atomic():
-                obj = CircuitBreakerState.objects.select_for_update().get(
-                    service_name=service_name
-                )
+                obj = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
                 previous_state = obj.state
                 obj.state = CircuitBreakerStateEnum.CLOSED.value
                 obj.failure_count = 0

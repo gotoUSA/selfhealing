@@ -614,8 +614,8 @@ class CircuitBreakerService:
         """
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
-            controlled_by_id = getattr(controlled_by, 'id', None) or getattr(controlled_by, 'pk', None)
-        
+            controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+
         try:
             # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_open(
@@ -686,8 +686,8 @@ class CircuitBreakerService:
         """
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
-            controlled_by_id = getattr(controlled_by, 'id', None) or getattr(controlled_by, 'pk', None)
-        
+            controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+
         try:
             # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_close(
@@ -805,7 +805,9 @@ class CircuitBreakerService:
                 state="open",
                 opened_at=now(),
             )
-            logger.warning(f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {updated_state.failure_count})")
+            logger.warning(
+                f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {updated_state.failure_count})"
+            )
 
     def record_success(self, service_name: str) -> None:
         """
@@ -955,12 +957,13 @@ class CircuitBreakerService:
                     # We use a direct model update for this
                     try:
                         from shopping.models.failed_payment import CircuitBreakerState
-                        CircuitBreakerState.objects.filter(
-                            service_name=state.service_name
-                        ).update(control_reason=expired_reason)
+
+                        CircuitBreakerState.objects.filter(service_name=state.service_name).update(
+                            control_reason=expired_reason
+                        )
                     except ImportError:
                         pass  # Running without Django models
-                    
+
                     self.repository.clear_manual_control(state.service_name, preserve_reason=True)
 
                     expired_services.append(state.service_name)

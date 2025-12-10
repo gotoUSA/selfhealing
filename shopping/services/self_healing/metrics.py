@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Safe Metric Registration Helpers
 # =============================================================================
 
+
 def _get_or_create_counter(name: str, description: str, labels: list[str]) -> Counter:
     """Get existing counter or create new one to avoid duplicate registration."""
     # Check if already registered

@@ -335,35 +335,46 @@ class TestInMemoryCacheAdapter:
 
 
 class TestInMemoryLock:
-    """Tests for InMemoryLock implementation."""
+    """
+    InMemoryLock 테스트.
+    
+    참고: InMemoryLock은 단일 프로세스 내에서만 동작합니다.
+    멀티 프로세스 환경에서는 Redis 기반 분산 락을 사용하세요.
+    """
 
     def test_lock_repr(self):
-        """Test lock has proper representation."""
-        lock = threading.Lock()
-        dist_lock = InMemoryLock(lock, "test", 10.0)
-        # Just verify it doesn't raise
+        """락의 문자열 표현이 에러 없이 동작하는지 확인."""
+        from datetime import timedelta
+        
+        dist_lock = InMemoryLock(name="test_lock", timeout=timedelta(seconds=10))
+        # repr이 에러 없이 동작해야 함
         repr(dist_lock)
 
     def test_double_release(self):
-        """Test double release doesn't raise."""
-        lock = threading.Lock()
-        dist_lock = InMemoryLock(lock, "test", 10.0)
+        """
+        이중 해제가 예외를 발생시키지 않는지 확인.
+        
+        락을 두 번 해제해도 안전해야 합니다 (idempotent).
+        """
+        from datetime import timedelta
+        
+        dist_lock = InMemoryLock(name="test_lock", timeout=timedelta(seconds=10))
         dist_lock.acquire()
         dist_lock.release()
-        # Second release should not raise
+        # 두 번째 해제도 예외 없이 완료되어야 함
         dist_lock.release()
 
 
 class TestCacheProviderInterfaceContract:
-    """Tests to verify interface contract compliance."""
+    """인터페이스 계약 준수 여부 테스트."""
 
     def test_abstract_methods_required(self):
-        """Test that all abstract methods must be implemented."""
+        """추상 메서드가 구현되지 않으면 인스턴스화 불가."""
         with pytest.raises(TypeError):
             CacheProviderInterface()
 
     def test_interface_has_required_methods(self):
-        """Test that interface defines all required methods."""
+        """인터페이스에 필수 메서드가 정의되어 있는지 확인."""
         required_methods = [
             "provider_name",
             "get",
@@ -382,3 +393,4 @@ class TestCacheProviderInterfaceContract:
         ]
         for method in required_methods:
             assert hasattr(CacheProviderInterface, method)
+

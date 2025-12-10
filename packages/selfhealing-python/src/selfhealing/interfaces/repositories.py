@@ -560,7 +560,7 @@ class CircuitBreakerStateRepository(ABC):
     @abstractmethod
     def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
         """Clear manual control from a circuit breaker
-        
+
         Args:
             service_name: Name of the service
             preserve_reason: If True, keep the existing control_reason value

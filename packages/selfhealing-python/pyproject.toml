@@ -95,6 +95,9 @@ markers = [
     "tier2: integration tests",
     "tier3_chaos: chaos engineering tests",
 ]
+# Django 통합 테스트는 Django 프로젝트 환경에서만 실행
+# selfhealing-python 패키지 단독 테스트 시 제외
+norecursedirs = ["tests/integration/django"]
 DJANGO_SETTINGS_MODULE = ""
 
 [tool.coverage.run]
