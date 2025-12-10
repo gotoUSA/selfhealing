@@ -89,6 +89,10 @@ addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "django_db: mark test as requiring database access",
+]
+DJANGO_SETTINGS_MODULE = ""
 
 [tool.coverage.run]
 source = ["src/selfhealing"]
