@@ -168,19 +168,14 @@ class TestPartialFailurePatterns:
 
         # Verify all failures are captured
         assert len(failures_captured) == stats["failed_calls"], (
-            f"Captured failures ({len(failures_captured)}) does not match "
-            f"actual failures ({stats['failed_calls']})"
+            f"Captured failures ({len(failures_captured)}) does not match " f"actual failures ({stats['failed_calls']})"
         )
 
         # Verify DLQ captured all failures
-        assert self.dlq_service.get_pending_count() == len(failures_captured), (
-            "DLQ should capture all failed operations"
-        )
+        assert self.dlq_service.get_pending_count() == len(failures_captured), "DLQ should capture all failed operations"
 
         # Verify system continued processing
-        assert stats["total_calls"] == operations, (
-            f"Expected {operations} total operations, got {stats['total_calls']}"
-        )
+        assert stats["total_calls"] == operations, f"Expected {operations} total operations, got {stats['total_calls']}"
 
     def test_chaos_p002_burst_failures_trigger_circuit_breaker(self, burst_failure_injector):
         """
@@ -214,21 +209,15 @@ class TestPartialFailurePatterns:
                 self.cb_service.record_success(service_name)
 
         # Assert
-        assert burst_failure_injector.failed_calls > 0, (
-            "Expected at least one burst of failures"
-        )
+        assert burst_failure_injector.failed_calls > 0, "Expected at least one burst of failures"
 
         # Verify burst pattern occurred
-        assert burst_failure_injector.total_calls == 100, (
-            f"Expected 100 operations, got {burst_failure_injector.total_calls}"
-        )
+        assert burst_failure_injector.total_calls == 100, f"Expected 100 operations, got {burst_failure_injector.total_calls}"
 
         # If enough failures occurred, CB should have opened
         if burst_failure_injector.failed_calls >= 5:
             state = self.cb_service._get_state(service_name)
-            assert state["failure_count"] >= 5, (
-                "CB should have recorded failures"
-            )
+            assert state["failure_count"] >= 5, "CB should have recorded failures"
 
     def test_chaos_p003_alternating_pattern_no_cb_trigger(self, failure_injector):
         """
@@ -261,9 +250,7 @@ class TestPartialFailurePatterns:
 
         # Assert: CB should remain closed (never 5 consecutive failures)
         state = self.cb_service.get_state(service_name)
-        assert state == CircuitState.CLOSED, (
-            "CB should remain closed with alternating pattern"
-        )
+        assert state == CircuitState.CLOSED, "CB should remain closed with alternating pattern"
 
     def test_chaos_p004_failure_statistics(self, failure_injector):
         """
@@ -349,9 +336,7 @@ class TestLatencyInjection:
             latencies.append(latency_injector.inject_latency())
 
         # Later latencies should generally be higher
-        assert latencies[-1] >= latencies[0], (
-            "Latency should increase with degradation"
-        )
+        assert latencies[-1] >= latencies[0], "Latency should increase with degradation"
 
     def test_average_latency_tracking(self, latency_injector):
         """Verify average latency is tracked correctly."""

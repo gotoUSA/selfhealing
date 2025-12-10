@@ -100,6 +100,49 @@ app.conf.beat_schedule = {
         },
         "kwargs": {"threshold_minutes": 10},  # 10분 이상 불일치 상태인 주문만
     },
+    # ==========================================================================
+    # Self-Healing Tasks (selfhealing package)
+    # ==========================================================================
+    # Circuit breaker recovery check - 매분
+    "check-circuit-breaker-recovery": {
+        "task": "selfhealing.adapters.celery.tasks.check_circuit_breaker_recovery",
+        "schedule": 60.0,  # 매분
+        "options": {
+            "expires": 55,
+        },
+    },
+    # Manual override expiration - 5분마다
+    "expire-manual-overrides": {
+        "task": "selfhealing.adapters.celery.tasks.expire_manual_overrides",
+        "schedule": 300.0,  # 5분마다
+        "options": {
+            "expires": 290,
+        },
+    },
+    # Self-healing metrics collection - 매분
+    "collect-self-healing-metrics": {
+        "task": "selfhealing.adapters.celery.tasks.collect_self_healing_metrics",
+        "schedule": 60.0,  # 매분
+        "options": {
+            "expires": 55,
+        },
+    },
+    # SLA breach check - 5분마다
+    "check-sla-breaches": {
+        "task": "selfhealing.adapters.celery.tasks.check_and_report_sla_breaches",
+        "schedule": 300.0,  # 5분마다
+        "options": {
+            "expires": 290,
+        },
+    },
+    # DLQ cleanup - 매일 새벽 5시
+    "cleanup-dlq-entries": {
+        "task": "selfhealing.adapters.celery.tasks.cleanup_resolved_dlq_entries",
+        "schedule": crontab(hour=5, minute=0),  # 매일 05:00
+        "options": {
+            "expires": 3600,
+        },
+    },
     # 테스트용: 5분마다 실행 (개발 환경에서만 사용)
     # 'test-periodic-task': {
     #     'task': 'shopping.tasks.test_periodic_task',

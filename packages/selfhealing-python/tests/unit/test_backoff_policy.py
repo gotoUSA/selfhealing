@@ -34,10 +34,7 @@ class TestBackoffPolicyDefaults:
             - base = 4 (4^n progression: 4, 16, 64 seconds)
         """
         config = BackoffConfig()
-        assert config.base == 4, (
-            "Policy Violation: Default backoff base must be 4. "
-            "Check RETRY_BACKOFF_BASE configuration."
-        )
+        assert config.base == 4, "Policy Violation: Default backoff base must be 4. " "Check RETRY_BACKOFF_BASE configuration."
 
     def test_default_max_delay_is_180(self):
         """
@@ -49,8 +46,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.max_delay == 180, (
-            "Policy Violation: Default max delay must be 180 seconds. "
-            "Check RETRY_BACKOFF_MAX configuration."
+            "Policy Violation: Default max delay must be 180 seconds. " "Check RETRY_BACKOFF_MAX configuration."
         )
 
     def test_default_jitter_is_25_percent(self):
@@ -63,8 +59,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.jitter_percent == 25, (
-            "Policy Violation: Default jitter must be 25%. "
-            "Jitter prevents thundering herd problem."
+            "Policy Violation: Default jitter must be 25%. " "Jitter prevents thundering herd problem."
         )
 
     def test_default_min_delay_is_1(self):
@@ -77,8 +72,7 @@ class TestBackoffPolicyDefaults:
         """
         config = BackoffConfig()
         assert config.min_delay == 1, (
-            "Policy Violation: Minimum delay must be at least 1 second. "
-            "Zero or negative delays risk retry loops."
+            "Policy Violation: Minimum delay must be at least 1 second. " "Zero or negative delays risk retry loops."
         )
 
 

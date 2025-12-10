@@ -49,10 +49,7 @@ class TestJitterDistribution:
 
         # Verify variance exists (not all same value)
         std_dev = statistics.stdev(delays)
-        assert std_dev > 0, (
-            "Jitter should produce variance. "
-            f"All values identical: {delays[0]}"
-        )
+        assert std_dev > 0, "Jitter should produce variance. " f"All values identical: {delays[0]}"
 
         # Verify range (16 ± 25% = 12 to 20)
         base_delay = 16
@@ -61,15 +58,13 @@ class TestJitterDistribution:
 
         out_of_range = [d for d in delays if d < min_expected or d > max_expected]
         assert len(out_of_range) == 0, (
-            f"Jitter out of range: {out_of_range}. "
-            f"Expected all values in [{min_expected}, {max_expected}]"
+            f"Jitter out of range: {out_of_range}. " f"Expected all values in [{min_expected}, {max_expected}]"
         )
 
         # Verify not all identical (should have many unique values)
         unique_values = set(delays)
         assert len(unique_values) > 5, (
-            f"Should have many unique values, got only {len(unique_values)}. "
-            "Jitter should produce good distribution."
+            f"Should have many unique values, got only {len(unique_values)}. " "Jitter should produce good distribution."
         )
 
     def test_jitter_distribution_uniformity(self):
@@ -115,8 +110,7 @@ class TestJitterDistribution:
         min_per_bucket = 50  # 5% minimum to allow for randomness
         for bucket_name, count in buckets.items():
             assert count >= min_per_bucket, (
-                f"Bucket {bucket_name} has only {count} samples. "
-                f"Distribution may be biased. All buckets: {buckets}"
+                f"Bucket {bucket_name} has only {count} samples. " f"Distribution may be biased. All buckets: {buckets}"
             )
 
     def test_no_jitter_produces_identical_values(self):
@@ -133,9 +127,7 @@ class TestJitterDistribution:
         delays = [calc.calculate(2, with_jitter=False) for _ in range(100)]
 
         unique_values = set(delays)
-        assert len(unique_values) == 1, (
-            f"Without jitter, all delays should be identical. Got: {unique_values}"
-        )
+        assert len(unique_values) == 1, f"Without jitter, all delays should be identical. Got: {unique_values}"
         assert delays[0] == 16, "Base delay for attempt 2 should be 16"
 
     def test_jitter_is_symmetric(self):
@@ -164,6 +156,5 @@ class TestJitterDistribution:
         below_percent = below_count / total
 
         assert 0.3 < above_percent < 0.7, (
-            f"Above/below distribution should be roughly even. "
-            f"Above: {above_percent:.1%}, Below: {below_percent:.1%}"
+            f"Above/below distribution should be roughly even. " f"Above: {above_percent:.1%}, Below: {below_percent:.1%}"
         )

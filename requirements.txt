@@ -58,3 +58,5 @@ uritemplate==4.2.0
 urllib3==2.6.0
 vine==5.1.0
 
+# Self-Healing Package (local development)
+-e ./packages/selfhealing-python[all]

@@ -142,14 +142,12 @@ class TestSlowDegradation:
         if sla_breaches:
             first_breach = sla_breaches[0]["operation"]
             assert first_breach > 5, (
-                f"First SLA breach at operation {first_breach}, "
-                f"expected after initial operations (latency still low)"
+                f"First SLA breach at operation {first_breach}, " f"expected after initial operations (latency still low)"
             )
 
         # Verify average latency increased
         assert latency_injector.average_latency > 1000, (
-            f"Average latency should be above 1000ms after degradation, "
-            f"got {latency_injector.average_latency:.0f}ms"
+            f"Average latency should be above 1000ms after degradation, " f"got {latency_injector.average_latency:.0f}ms"
         )
 
     def test_chaos_s002_memory_pressure_graceful_shedding(self):
@@ -178,10 +176,7 @@ class TestSlowDegradation:
         operations_shed = []
 
         # Define operations with priorities
-        operations = [
-            {"id": i, "priority": ["low", "normal", "high", "critical"][i % 4]}
-            for i in range(100)
-        ]
+        operations = [{"id": i, "priority": ["low", "normal", "high", "critical"][i % 4]} for i in range(100)]
 
         # Act: Process operations with increasing memory pressure
         for op in operations:
@@ -199,18 +194,13 @@ class TestSlowDegradation:
         # Assert
         # Low priority operations should be shed first
         shed_priorities = [op["priority"] for op in operations_shed]
-        assert "low" in shed_priorities or "normal" in shed_priorities, (
-            "Low priority operations should be shed under pressure"
-        )
+        assert "low" in shed_priorities or "normal" in shed_priorities, "Low priority operations should be shed under pressure"
 
         # Critical operations should mostly be processed
-        critical_processed = sum(
-            1 for op in operations_processed if op["priority"] == "critical"
-        )
+        critical_processed = sum(1 for op in operations_processed if op["priority"] == "critical")
         total_critical = sum(1 for op in operations if op["priority"] == "critical")
         assert critical_processed >= total_critical * 0.5, (
-            f"At least 50% of critical ops should be processed, "
-            f"got {critical_processed}/{total_critical}"
+            f"At least 50% of critical ops should be processed, " f"got {critical_processed}/{total_critical}"
         )
 
     def test_chaos_s003_connection_pool_recovery(self, resource_simulator):
@@ -237,21 +227,15 @@ class TestSlowDegradation:
             resource_simulator.acquire_connection()
 
         assert resource_simulator.is_exhausted, "Pool should be exhausted"
-        assert resource_simulator.acquire_connection() is False, (
-            "Should fail to acquire when exhausted"
-        )
+        assert resource_simulator.acquire_connection() is False, "Should fail to acquire when exhausted"
 
         # Release half the connections
         for _ in range(25):
             resource_simulator.release_connection()
 
         # Assert: Should be able to acquire again
-        assert resource_simulator.is_exhausted is False, (
-            "Pool should not be exhausted after release"
-        )
-        assert resource_simulator.acquire_connection() is True, (
-            "Should be able to acquire after release"
-        )
+        assert resource_simulator.is_exhausted is False, "Pool should not be exhausted after release"
+        assert resource_simulator.acquire_connection() is True, "Should be able to acquire after release"
 
 
 @pytest.mark.tier3_chaos

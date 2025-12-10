@@ -747,7 +747,7 @@ chore: complete self-healing extraction
 | 8 | Core 마이그레이션 | ✅ | 2024-12-10 | 2024-12-10 | config, forensic, metrics 마이그레이션 (65 tests passed) |
 | 9 | Adapters 마이그레이션 | ⬜ | | | |
 | 10 | 테스트 마이그레이션 | ✅ | 2024-12-10 | 2024-12-10 | 137 tests passed (unit, chaos, integration) |
-| 11 | 쇼핑몰 통합 | ⬜ | | | |
+| 11 | 쇼핑몰 통합 | ✅ | 2024-12-10 | 2024-12-10 | selfhealing 패키지 통합 완료 |
 | 12 | 정리 & 문서화 | ⬜ | | | |
 
 상태: ⬜ 대기 | 🔄 진행중 | ✅ 완료 | ❌ 차단됨

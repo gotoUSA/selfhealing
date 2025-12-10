@@ -230,7 +230,7 @@ class LegacyBackoffCalculator:
             return self.config.min_delay
 
         # Exponential backoff: base^attempt
-        delay = self.config.base ** attempt
+        delay = self.config.base**attempt
 
         # Cap at maximum delay
         delay = min(delay, self.config.max_delay)

@@ -59,6 +59,7 @@ def sample_config():
 def failure_injector():
     """Provides a configurable failure injector for chaos tests."""
     from tests.chaos.conftest import FailureInjector
+
     return FailureInjector(failure_rate=0.3)
 
 
@@ -66,6 +67,7 @@ def failure_injector():
 def burst_failure_injector():
     """Provides a burst failure pattern injector."""
     from tests.chaos.conftest import BurstFailureInjector
+
     return BurstFailureInjector(burst_size=10, burst_interval=50)
 
 
@@ -73,6 +75,7 @@ def burst_failure_injector():
 def latency_injector():
     """Provides a latency injector for slow degradation tests."""
     from tests.chaos.conftest import LatencyInjector
+
     return LatencyInjector(
         min_latency_ms=100,
         max_latency_ms=30000,
@@ -84,4 +87,5 @@ def latency_injector():
 def resource_simulator():
     """Provides a resource exhaustion simulator."""
     from tests.chaos.conftest import ResourceExhaustionSimulator
+
     return ResourceExhaustionSimulator(max_connections=100)

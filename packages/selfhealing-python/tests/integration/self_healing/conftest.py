@@ -95,10 +95,7 @@ class MockDLQService:
 
     def get_replayable(self, limit: int = 100) -> List[MockFailedOperation]:
         """Get operations eligible for replay."""
-        return [
-            op for op in self._operations.values()
-            if op.status == "pending" and op.retry_count < op.max_retries
-        ][:limit]
+        return [op for op in self._operations.values() if op.status == "pending" and op.retry_count < op.max_retries][:limit]
 
     def mark_processing(self, op_id: int) -> bool:
         """Mark operation as processing."""
@@ -247,12 +244,14 @@ class MockReplayService:
             else:
                 self.dlq_service.increment_retry(op_id)
 
-            self.replay_history.append({
-                "op_id": op_id,
-                "domain": op.domain,
-                "result": result,
-                "timestamp": datetime.now(),
-            })
+            self.replay_history.append(
+                {
+                    "op_id": op_id,
+                    "domain": op.domain,
+                    "result": result,
+                    "timestamp": datetime.now(),
+                }
+            )
             return result
         except Exception as e:
             self.dlq_service.increment_retry(op_id)

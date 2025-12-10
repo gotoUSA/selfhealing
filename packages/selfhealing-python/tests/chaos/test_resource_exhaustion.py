@@ -155,12 +155,8 @@ class TestResourceExhaustion:
                 failed_requests.append(i)
 
         # Assert
-        assert len(successful_requests) == 50, (
-            f"Expected 50 successful connections, got {len(successful_requests)}"
-        )
-        assert len(failed_requests) == 20, (
-            f"Expected 20 failed requests, got {len(failed_requests)}"
-        )
+        assert len(successful_requests) == 50, f"Expected 50 successful connections, got {len(successful_requests)}"
+        assert len(failed_requests) == 20, f"Expected 20 failed requests, got {len(failed_requests)}"
 
         # Verify exhaustion was detected
         assert len(resource_simulator.exhaustion_events) == 20
@@ -175,9 +171,7 @@ class TestResourceExhaustion:
                 recovered_requests.append(i)
 
         # Assert: Recovery successful
-        assert len(recovered_requests) == 10, (
-            "Should recover connections after release"
-        )
+        assert len(recovered_requests) == 10, "Should recover connections after release"
 
     def test_exhaust_002_redis_connection_exhaustion(self):
         """
@@ -205,9 +199,7 @@ class TestResourceExhaustion:
 
         # Assert
         assert redis_sim.is_exhausted, "Redis should be exhausted"
-        assert fallback_used == 10, (
-            f"Expected 10 fallback uses, got {fallback_used}"
-        )
+        assert fallback_used == 10, f"Expected 10 fallback uses, got {fallback_used}"
         assert redis_sim.failed_connections == 10
 
         # Recovery

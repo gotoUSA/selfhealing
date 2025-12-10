@@ -270,10 +270,7 @@ class TestMockReplayService:
     def test_replay_with_handler_success(self, mock_replay_service, mock_dlq_service):
         """Test successful replay with handler."""
         # Register a successful handler
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": True, "result": "processed"}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": True, "result": "processed"})
 
         op = mock_dlq_service.store(
             domain="payment",
@@ -289,10 +286,7 @@ class TestMockReplayService:
     def test_replay_with_handler_failure(self, mock_replay_service, mock_dlq_service):
         """Test failed replay increments retry count."""
         # Register a failing handler
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": False, "error": "Still failing"}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": False, "error": "Still failing"})
 
         op = mock_dlq_service.store(
             domain="payment",
@@ -309,10 +303,7 @@ class TestMockReplayService:
     def test_batch_replay(self, mock_replay_service, mock_dlq_service):
         """Test batch replay."""
         # Register handler
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": True}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": True})
 
         # Store multiple payment failures
         for i in range(3):
@@ -353,10 +344,7 @@ class TestMockReplayService:
 
     def test_replay_history_tracking(self, mock_replay_service, mock_dlq_service):
         """Test that replay history is tracked."""
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": True}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": True})
 
         op = mock_dlq_service.store(
             domain="payment",
@@ -379,9 +367,7 @@ class TestMockReplayService:
 class TestDLQAndCircuitBreakerIntegration:
     """Tests for DLQ and Circuit Breaker integration."""
 
-    def test_dlq_entries_replayed_on_circuit_close(
-        self, mock_dlq_service, mock_circuit_breaker_service, mock_replay_service
-    ):
+    def test_dlq_entries_replayed_on_circuit_close(self, mock_dlq_service, mock_circuit_breaker_service, mock_replay_service):
         """
         Test that DLQ entries are replayed when circuit breaker closes.
 
@@ -394,10 +380,7 @@ class TestDLQAndCircuitBreakerIntegration:
         service = "payment_gateway"
 
         # Register replay handler
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": True}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": True})
 
         # Open circuit breaker
         for _ in range(5):
@@ -422,9 +405,7 @@ class TestDLQAndCircuitBreakerIntegration:
         assert result["total"] == 3
         assert result["success"] == 3
 
-    def test_replay_failure_doesnt_reopen_circuit(
-        self, mock_dlq_service, mock_circuit_breaker_service, mock_replay_service
-    ):
+    def test_replay_failure_doesnt_reopen_circuit(self, mock_dlq_service, mock_circuit_breaker_service, mock_replay_service):
         """
         Test that replay failures don't immediately reopen circuit.
 
@@ -434,10 +415,7 @@ class TestDLQAndCircuitBreakerIntegration:
         service = "payment_gateway"
 
         # Register failing handler
-        mock_replay_service.register_handler(
-            "payment",
-            lambda op: {"success": False, "error": "Still failing"}
-        )
+        mock_replay_service.register_handler("payment", lambda op: {"success": False, "error": "Still failing"})
 
         # Store some failures
         for i in range(3):
