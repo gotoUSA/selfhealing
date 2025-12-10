@@ -51,14 +51,17 @@ from ..core.config import (
     get_forensic_settings,
 )
 
+
 # Compatibility aliases for removed configs
 def get_idempotency_config():
     """Get idempotency configuration."""
     return get_config().idempotency
 
+
 def get_notification_limits():
     """Get notification limits configuration."""
     return get_config().notification
+
 
 def get_slack_channels():
     """Get slack channels from notification config."""
@@ -69,12 +72,14 @@ def get_slack_channels():
         "medium": config.medium_channel,
     }
 
+
 # Legacy alias
 SlackChannels = dict
 from .retry_handler import (
     RetryHandler,
     RetryConfig,
     RetryResult,
+    RetryAction,  # Enum for retry decisions
     MaxRetriesExceededError,
 )
 from .backoff_calculator import (
@@ -85,6 +90,8 @@ from .idempotency_service import (
     IdempotencyService,
     IdempotencyKey,
     IdempotencyResult,
+    IdempotencyDomain,
+    get_idempotency_service,
 )
 from .forensic_context import (
     ForensicContext,
@@ -102,6 +109,7 @@ from .replay_service import (
     ReplayResult,
     BatchReplayResult,
     ReplayHandler,
+    PaymentReplayHandler,
     get_replay_handler,
     get_replay_service,
     replay_failed_operation,
@@ -116,10 +124,18 @@ from .circuit_breaker_service import (
     should_allow_request,
     force_open_circuit,
     force_close_circuit,
+    # Rate Limit / Self-DDoS Protection
+    RateLimitTracker,
+    get_rate_limit_tracker,
+    record_rate_limit,
+    should_allow_with_protection,
+    should_allow_with_protection as should_allow_with_ddos_protection,  # Alias
+    get_protection_status,
 )
 from .metrics import (
     # Constants
     DOMAINS,
+    ALERTING_RULES,
     # Recording functions
     record_dlq_item_created,
     record_retry_attempt,
@@ -143,6 +159,7 @@ from .security_violation_service import (
     SecurityViolationResult,
     SecurityConfig,
     ViolationType,
+    Severity,
     SEVERITY_BY_VIOLATION_TYPE,
     get_security_violation_service,
     handle_security_violation,
@@ -150,10 +167,12 @@ from .security_violation_service import (
 from .security_notification_service import (
     SecurityNotificationService,
     SecurityNotificationResult,
+    NotificationResult,
     NotificationConfig,
     NotificationChannel,
     get_security_notification_service,
-    notify_security_incident_by_id as notify_security_incident,  # Legacy alias
+    notify_security_incident_by_id,
+    notify_security_incident,  # Legacy API for incident objects
 )
 from .factory import (
     # Repository factory functions
@@ -201,6 +220,7 @@ __all__ = [
     "RetryHandler",
     "RetryConfig",
     "RetryResult",
+    "RetryAction",
     "MaxRetriesExceededError",
     # Backoff
     "BackoffCalculator",
@@ -209,6 +229,8 @@ __all__ = [
     "IdempotencyService",
     "IdempotencyKey",
     "IdempotencyResult",
+    "IdempotencyDomain",
+    "get_idempotency_service",
     # Forensic
     "ForensicContext",
     "capture_forensic_context",
@@ -236,8 +258,16 @@ __all__ = [
     "should_allow_request",
     "force_open_circuit",
     "force_close_circuit",
+    # Rate Limit / Self-DDoS Protection
+    "RateLimitTracker",
+    "get_rate_limit_tracker",
+    "record_rate_limit",
+    "should_allow_with_protection",
+    "should_allow_with_ddos_protection",  # Alias
+    "get_protection_status",
     # Metrics (Phase 5 Observability)
     "DOMAINS",
+    "ALERTING_RULES",
     "record_dlq_item_created",
     "record_retry_attempt",
     "record_recovery_time",
@@ -257,12 +287,14 @@ __all__ = [
     "SecurityViolationResult",
     "SecurityConfig",
     "ViolationType",
+    "Severity",
     "SEVERITY_BY_VIOLATION_TYPE",
     "get_security_violation_service",
     "handle_security_violation",
     # Security Notification Service (Phase 6)
     "SecurityNotificationService",
     "SecurityNotificationResult",
+    "NotificationResult",
     "NotificationConfig",
     "NotificationChannel",
     "get_security_notification_service",

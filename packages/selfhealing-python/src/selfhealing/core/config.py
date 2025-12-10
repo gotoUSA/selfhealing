@@ -60,7 +60,7 @@ class RetryConfig:
     jitter_percent: int = 25
 
 
-@dataclass
+@dataclass(frozen=True)
 class SLAConfig:
     """SLA thresholds for each domain."""
 
@@ -83,6 +83,16 @@ class SLAConfig:
         hours = domain_map.get(domain.lower(), self.default_hours)
         return timedelta(hours=hours)
 
+    def get_all_thresholds(self) -> dict[str, timedelta]:
+        """Get all SLA thresholds as a dictionary."""
+        return {
+            "payment": timedelta(hours=self.payment_hours),
+            "point": timedelta(hours=self.point_hours),
+            "inventory": timedelta(hours=self.inventory_hours),
+            "webhook": timedelta(hours=self.webhook_hours),
+            "notification": timedelta(hours=self.notification_hours),
+        }
+
 
 @dataclass
 class IdempotencyConfig:
@@ -104,6 +114,8 @@ class SecurityConfig:
     suspicious_ip_cache_timeout: int = 86400
     injection_ban_hours: int = 24
     failed_login_threshold: int = 5
+    suspicious_ip_cache_prefix: str = "security:suspicious_ip:"
+    banned_ip_cache_prefix: str = "security:banned_ip:"
 
 
 @dataclass
@@ -173,6 +185,9 @@ class SelfHealingConfig:
     auto_replay_enabled: bool = True
     security_monitoring_enabled: bool = True
     debug_mode: bool = False
+
+    # Site configuration
+    site_url: str = "http://localhost:8000"
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "SelfHealingConfig":

@@ -413,40 +413,38 @@ class TestIPManagement:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.service = SecurityViolationService()
+        self.mock_cache = MagicMock()
+        self.service = SecurityViolationService(cache=self.mock_cache)
 
-    @patch("shopping.services.self_healing.security_violation_service.cache")
-    def test_temporary_ip_ban(self, mock_cache):
+    def test_temporary_ip_ban(self):
         """
         Purpose:
             Verify temporary IP ban is set correctly.
         """
-        mock_cache.get.return_value = {"banned": True, "type": "temporary"}
+        self.mock_cache.get.return_value = {"banned": True, "type": "temporary"}
 
         result = self.service._temporary_ip_ban("192.168.1.1", hours=2)
 
         assert "banned" in result.lower()
         assert "2" in result
-        mock_cache.set.assert_called_once()
+        self.mock_cache.set.assert_called_once()
 
-    @patch("shopping.services.self_healing.security_violation_service.cache")
-    def test_is_ip_banned_returns_false_for_unbanned(self, mock_cache):
+    def test_is_ip_banned_returns_false_for_unbanned(self):
         """
         Purpose:
             Verify is_ip_banned returns False for non-banned IPs.
         """
-        mock_cache.get.return_value = None
+        self.mock_cache.get.return_value = None
 
         assert self.service.is_ip_banned("192.168.1.99") is False
 
-    @patch("shopping.services.self_healing.security_violation_service.cache")
-    def test_log_suspicious_ip_increments_count(self, mock_cache):
+    def test_log_suspicious_ip_increments_count(self):
         """
         Purpose:
             Verify suspicious IP logging increments count.
         """
-        # First call returns 0, second returns 1
-        mock_cache.get.side_effect = [0, 1]
+        # First call returns None (0), second returns 1
+        self.mock_cache.get.side_effect = [None, 1]
 
         result1 = self.service._log_suspicious_ip("10.0.0.1")
         result2 = self.service._log_suspicious_ip("10.0.0.1")
@@ -454,19 +452,19 @@ class TestIPManagement:
         assert "1" in result1
         assert "2" in result2
 
-    @patch("shopping.services.self_healing.security_violation_service.cache")
-    def test_suspicious_ip_escalates_to_ban(self, mock_cache):
+    def test_suspicious_ip_escalates_to_ban(self):
         """
         Purpose:
             Verify reaching threshold escalates to permanent ban.
         """
-        # Set low threshold for test
-        self.service.config.permanent_ban_threshold = 3
+        # Create a new service with custom threshold
+        config = SecurityConfig(permanent_ban_threshold=3)
+        service = SecurityViolationService(config=config, cache=self.mock_cache)
 
         # Simulate count at threshold
-        mock_cache.get.return_value = 2  # Next call will be 3rd
+        self.mock_cache.get.return_value = 2  # Next call will be 3rd
 
-        result = self.service._log_suspicious_ip("10.0.0.2")
+        result = service._log_suspicious_ip("10.0.0.2")
 
         assert "permanent" in result.lower()
 
@@ -485,7 +483,7 @@ class TestHelperFunctions:
             Verify get_security_violation_service returns same instance.
         """
         # Reset singleton
-        import shopping.services.self_healing.security_violation_service as svc_module
+        import selfhealing.services.security_violation_service as svc_module
 
         svc_module._security_service = None
 
@@ -505,7 +503,7 @@ class TestHelperFunctions:
         request.META["REMOTE_ADDR"] = "127.0.0.1"
 
         with patch(
-            "shopping.services.self_healing.security_violation_service." "SecurityViolationService._send_security_notification"
+            "selfhealing.services.security_violation_service." "SecurityViolationService._send_security_notification"
         ):
             result = handle_security_violation(
                 violation_type=ViolationType.SUSPICIOUS_ACTIVITY,

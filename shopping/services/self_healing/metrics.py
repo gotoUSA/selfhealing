@@ -21,12 +21,54 @@ from datetime import datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, Generator
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram, REGISTRY
 
 if TYPE_CHECKING:
     from shopping.models.failed_operation import FailedOperation
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Safe Metric Registration Helpers
+# =============================================================================
+
+def _get_or_create_counter(name: str, description: str, labels: list[str]) -> Counter:
+    """Get existing counter or create new one to avoid duplicate registration."""
+    # Check if already registered
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Counter(name, description, labels)
+    except ValueError:
+        # Metric already registered, retrieve it from registry
+        return REGISTRY._names_to_collectors[name]
+
+
+def _get_or_create_gauge(name: str, description: str, labels: list[str]) -> Gauge:
+    """Get existing gauge or create new one to avoid duplicate registration."""
+    # Check if already registered
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Gauge(name, description, labels)
+    except ValueError:
+        # Metric already registered, retrieve it from registry
+        return REGISTRY._names_to_collectors[name]
+
+
+def _get_or_create_histogram(name: str, description: str, labels: list[str], buckets: tuple = None) -> Histogram:
+    """Get existing histogram or create new one to avoid duplicate registration."""
+    # Check if already registered
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        if buckets:
+            return Histogram(name, description, labels, buckets=buckets)
+        return Histogram(name, description, labels)
+    except ValueError:
+        # Metric already registered, retrieve it from registry
+        return REGISTRY._names_to_collectors[name]
 
 
 # =============================================================================
@@ -48,28 +90,28 @@ DOMAINS: list[str] = [
 # =============================================================================
 
 # Total DLQ items created (labeled by domain and failure_type)
-dlq_items_total = Counter(
+dlq_items_total = _get_or_create_counter(
     "dlq_items_total",
     "Total DLQ items created",
     ["domain", "failure_type"],
 )
 
 # Current pending DLQ items gauge (labeled by domain)
-dlq_pending_gauge = Gauge(
+dlq_pending_gauge = _get_or_create_gauge(
     "dlq_pending_count",
     "Current pending DLQ items",
     ["domain"],
 )
 
 # DLQ items by status gauge
-dlq_by_status_gauge = Gauge(
+dlq_by_status_gauge = _get_or_create_gauge(
     "dlq_items_by_status",
     "DLQ items count by status",
     ["status"],
 )
 
 # DLQ growth rate counter (for alerting on rapid growth)
-dlq_created_total = Counter(
+dlq_created_total = _get_or_create_counter(
     "dlq_created_total",
     "Total DLQ items created (for rate calculation)",
     ["domain"],
@@ -81,22 +123,22 @@ dlq_created_total = Counter(
 # =============================================================================
 
 # Retry attempts histogram (distribution of attempts before resolution)
-retry_attempts_histogram = Histogram(
+retry_attempts_histogram = _get_or_create_histogram(
     "retry_attempts_total",
     "Number of retry attempts before resolution",
     ["domain"],
-    buckets=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    buckets=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
 )
 
 # Retry success/failure counter
-retry_outcomes_total = Counter(
+retry_outcomes_total = _get_or_create_counter(
     "retry_outcomes_total",
     "Retry outcomes by domain and result",
     ["domain", "outcome"],  # outcome: success, failure, exhausted
 )
 
 # Per-domain retry success rate gauge (updated periodically)
-retry_success_rate = Gauge(
+retry_success_rate = _get_or_create_gauge(
     "retry_success_rate",
     "Percentage of successful retries (0-100)",
     ["domain"],
@@ -108,26 +150,26 @@ retry_success_rate = Gauge(
 # =============================================================================
 
 # Time from failure to resolution (histogram)
-recovery_time_seconds = Histogram(
+recovery_time_seconds = _get_or_create_histogram(
     "recovery_time_seconds",
     "Time from failure to resolution in seconds",
     ["domain", "resolution_type"],
-    buckets=[60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400],  # 1m, 5m, 15m, 30m, 1h, 2h, 4h, 8h, 24h
+    buckets=(60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400),  # 1m, 5m, 15m, 30m, 1h, 2h, 4h, 8h, 24h
 )
 
 # SLA breach counter
-sla_breach_total = Counter(
+sla_breach_total = _get_or_create_counter(
     "sla_breach_total",
     "Total SLA breaches detected",
     ["domain"],
 )
 
 # Human review queue time (time waiting for human intervention)
-human_review_queue_time = Histogram(
+human_review_queue_time = _get_or_create_histogram(
     "human_review_queue_time_seconds",
     "Time items wait in queue for human review",
     ["domain"],
-    buckets=[300, 900, 1800, 3600, 7200, 14400, 28800],  # 5m, 15m, 30m, 1h, 2h, 4h, 8h
+    buckets=(300, 900, 1800, 3600, 7200, 14400, 28800),  # 5m, 15m, 30m, 1h, 2h, 4h, 8h
 )
 
 
@@ -136,25 +178,25 @@ human_review_queue_time = Histogram(
 # =============================================================================
 
 # Circuit breaker state gauge (0=closed, 1=open, 2=half-open)
-circuit_breaker_state = Gauge(
+circuit_breaker_state = _get_or_create_gauge(
     "circuit_breaker_state",
     "Circuit breaker state (0=closed, 1=open, 2=half-open)",
     ["service"],
 )
 
 # Circuit breaker state change counter
-circuit_breaker_transitions = Counter(
+circuit_breaker_transitions = _get_or_create_counter(
     "circuit_breaker_transitions_total",
     "Total circuit breaker state transitions",
     ["service", "from_state", "to_state"],
 )
 
 # Time spent in open state
-circuit_breaker_open_duration = Histogram(
+circuit_breaker_open_duration = _get_or_create_histogram(
     "circuit_breaker_open_duration_seconds",
     "Duration in open state before closing",
     ["service"],
-    buckets=[60, 300, 600, 1800, 3600, 7200],  # 1m, 5m, 10m, 30m, 1h, 2h
+    buckets=(60, 300, 600, 1800, 3600, 7200),  # 1m, 5m, 10m, 30m, 1h, 2h
 )
 
 
@@ -163,14 +205,14 @@ circuit_breaker_open_duration = Histogram(
 # =============================================================================
 
 # Replay attempts counter
-replay_attempts_total = Counter(
+replay_attempts_total = _get_or_create_counter(
     "replay_attempts_total",
     "Total replay attempts",
     ["domain", "replay_type"],  # replay_type: single, batch, conditional
 )
 
 # Replay outcomes counter
-replay_outcomes_total = Counter(
+replay_outcomes_total = _get_or_create_counter(
     "replay_outcomes_total",
     "Replay outcomes",
     ["domain", "outcome"],  # outcome: success, failure, rejected

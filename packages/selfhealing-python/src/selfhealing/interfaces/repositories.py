@@ -424,22 +424,22 @@ class FailedOperationRepository(ABC):
     ) -> Optional[FailedOperationData]:
         """
         Atomically acquire a DLQ entry for replay.
-        
+
         This method MUST:
         1. Check if status is PENDING and retry_count < max_retries
         2. If eligible, atomically set status to REPLAYING and increment retry_count
         3. Return the FailedOperationData if acquired, None if not eligible
-        
-        Implementation should use row-level locking (SELECT FOR UPDATE) or 
+
+        Implementation should use row-level locking (SELECT FOR UPDATE) or
         optimistic locking (version/updated_at check) to prevent race conditions.
-        
+
         Args:
             id: The DLQ entry ID to acquire
             max_retries: Maximum allowed retry attempts
-            
+
         Returns:
             FailedOperationData if successfully acquired, None otherwise
-            
+
         Example Django implementation:
             with transaction.atomic():
                 entry = FailedOperation.objects.select_for_update().get(id=id)
@@ -465,14 +465,14 @@ class FailedOperationRepository(ABC):
     ) -> bool:
         """
         Complete a replay operation by updating the final status.
-        
+
         Should be called after replay execution to set final state:
         - success=True: Mark as RESOLVED with resolution details
         - success=False: Revert to PENDING (for retry) or REQUIRES_REVIEW (if escalated)
-        
+
         This method is safe to call without transaction wrapper as it only
         updates an already-acquired entry.
-        
+
         Args:
             id: The DLQ entry ID
             success: Whether the replay succeeded
@@ -480,7 +480,7 @@ class FailedOperationRepository(ABC):
             note: Resolution note or error message
             resolved_by_id: User ID who resolved (None for system)
             error_details: Additional error context (for failed replays)
-            
+
         Returns:
             True if update succeeded, False otherwise
         """
@@ -493,13 +493,13 @@ class FailedOperationRepository(ABC):
     ) -> int:
         """
         Release DLQ entries stuck in REPLAYING state.
-        
+
         Entries can get stuck if the replay process crashes after acquiring
         but before completing. This method reverts them to PENDING for retry.
-        
+
         Args:
             older_than_minutes: Consider entries older than this as stale
-            
+
         Returns:
             Number of entries released
         """
@@ -558,8 +558,13 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def clear_manual_control(self, service_name: str) -> bool:
-        """Clear manual control from a circuit breaker"""
+    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+        """Clear manual control from a circuit breaker
+        
+        Args:
+            service_name: Name of the service
+            preserve_reason: If True, keep the existing control_reason value
+        """
         ...
 
     @abstractmethod
@@ -591,19 +596,19 @@ class CircuitBreakerStateRepository(ABC):
     ) -> tuple[bool, str, str]:
         """
         Atomically force open a circuit breaker.
-        
+
         This method MUST use row-level locking to prevent concurrent modifications.
         Creates the circuit breaker if it doesn't exist.
-        
+
         Args:
             service_name: Name of the service
             reason: Reason for opening
             controlled_by_id: User ID who initiated the change
             ttl_minutes: TTL for manual override
-            
+
         Returns:
             Tuple of (success, previous_state, new_state)
-            
+
         Example Django implementation:
             with transaction.atomic():
                 state, created = CircuitBreakerState.objects.select_for_update().get_or_create(
@@ -626,14 +631,14 @@ class CircuitBreakerStateRepository(ABC):
     ) -> tuple[bool, str, str]:
         """
         Atomically force close a circuit breaker.
-        
+
         This method MUST use row-level locking to prevent concurrent modifications.
-        
+
         Args:
             service_name: Name of the service
             reason: Reason for closing
             controlled_by_id: User ID who initiated the change
-            
+
         Returns:
             Tuple of (success, previous_state, new_state)
         """
@@ -648,15 +653,15 @@ class CircuitBreakerStateRepository(ABC):
     ) -> tuple[bool, str, str]:
         """
         Atomically reset a circuit breaker to initial state.
-        
+
         This method MUST use row-level locking to prevent concurrent modifications.
         Resets all counters and clears manual control.
-        
+
         Args:
             service_name: Name of the service
             reason: Reason for reset
             controlled_by_id: User ID who initiated the change
-            
+
         Returns:
             Tuple of (success, previous_state, new_state)
         """

@@ -7,7 +7,7 @@ This keeps Django-specific code isolated in the adapters layer.
 Usage:
     from selfhealing.adapters.django.config_provider import DjangoConfigProvider
     from selfhealing.services.config import set_config_provider
-    
+
     set_config_provider(DjangoConfigProvider())
 """
 
@@ -21,49 +21,50 @@ from selfhealing.interfaces.config_provider import ConfigProviderInterface
 class DjangoConfigProvider(ConfigProviderInterface):
     """
     Configuration provider that reads from Django settings.
-    
+
     Maps selfhealing configuration keys to Django settings.
     """
-    
+
     def __init__(self):
         # Lazy import to avoid AppRegistryNotReady
         pass
-    
+
     def _get_settings(self):
         """Get Django settings (lazy import)."""
         from django.conf import settings
+
         return settings
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """
         Get a configuration value using dot notation.
-        
+
         Args:
             key: Configuration key (e.g., "SELF_HEALING.SLA.PAYMENT_HOURS")
             default: Default value if not found
         """
         keys = key.split(".")
         return self.get_nested(*keys, default=default)
-    
+
     def get_nested(self, *keys: str, default: Any = None) -> Any:
         """
         Get a nested configuration value.
-        
+
         Args:
             keys: Path to configuration value
             default: Default value if not found
         """
         if not keys:
             return default
-        
+
         settings = self._get_settings()
-        
+
         # Start from Django settings
         value = getattr(settings, keys[0], None)
-        
+
         if value is None:
             return default
-        
+
         # Navigate through nested keys
         for key in keys[1:]:
             if isinstance(value, dict):
@@ -72,13 +73,13 @@ class DjangoConfigProvider(ConfigProviderInterface):
                     return default
             else:
                 return default
-        
+
         return value
-    
+
     def get_section(self, section: str) -> dict[str, Any]:
         """
         Get an entire configuration section as a dictionary.
-        
+
         Args:
             section: Section name (e.g., "SELF_HEALING")
         """
@@ -90,9 +91,9 @@ class DjangoConfigProvider(ConfigProviderInterface):
 def configure_selfhealing_from_django() -> None:
     """
     Configure the selfhealing system using Django settings.
-    
+
     Call this during Django app initialization (e.g., in AppConfig.ready()).
-    
+
     Usage in apps.py:
         class MyAppConfig(AppConfig):
             def ready(self):
@@ -101,15 +102,15 @@ def configure_selfhealing_from_django() -> None:
     """
     from selfhealing.core.config import set_config
     from selfhealing.core.config import SelfHealingConfig
-    
+
     # Import Django settings
     from django.conf import settings
-    
+
     # Build config from Django settings
     sh_settings = getattr(settings, "SELF_HEALING", {})
-    
+
     config_dict = {}
-    
+
     # Map Django SELF_HEALING settings to SelfHealingConfig format
     if "CIRCUIT_BREAKER" in sh_settings:
         cb = sh_settings["CIRCUIT_BREAKER"]
@@ -125,7 +126,7 @@ def configure_selfhealing_from_django() -> None:
             "self_ddos_window_seconds": cb.get("SELF_DDOS_WINDOW_SECONDS", 10),
             "self_ddos_backoff_multiplier": cb.get("SELF_DDOS_BACKOFF_MULTIPLIER", 2.0),
         }
-    
+
     if "DLQ" in sh_settings:
         dlq = sh_settings["DLQ"]
         config_dict["dlq"] = {
@@ -135,7 +136,7 @@ def configure_selfhealing_from_django() -> None:
             "retention_days": dlq.get("RETENTION_DAYS", 30),
             "max_replay_attempts": dlq.get("MAX_REPLAY_ATTEMPTS", 2),
         }
-    
+
     if "RETRY" in sh_settings:
         retry = sh_settings["RETRY"]
         config_dict["retry"] = {
@@ -145,7 +146,7 @@ def configure_selfhealing_from_django() -> None:
             "jitter_percent": retry.get("JITTER_PERCENT", 25),
             "min_delay": retry.get("MIN_DELAY", 1),
         }
-    
+
     if "SLA" in sh_settings:
         sla = sh_settings["SLA"]
         config_dict["sla"] = {
@@ -156,7 +157,7 @@ def configure_selfhealing_from_django() -> None:
             "notification_hours": sla.get("NOTIFICATION_HOURS", 24),
             "default_hours": sla.get("DEFAULT_HOURS", 24),
         }
-    
+
     if "IDEMPOTENCY" in sh_settings:
         idemp = sh_settings["IDEMPOTENCY"]
         config_dict["idempotency"] = {
@@ -164,7 +165,7 @@ def configure_selfhealing_from_django() -> None:
             "payment_cache_ttl": idemp.get("PAYMENT_CACHE_TTL", 300),
             "webhook_cache_ttl": idemp.get("WEBHOOK_CACHE_TTL", 60),
         }
-    
+
     if "SECURITY" in sh_settings:
         sec = sh_settings["SECURITY"]
         config_dict["security"] = {
@@ -176,7 +177,7 @@ def configure_selfhealing_from_django() -> None:
             "injection_ban_hours": sec.get("INJECTION_BAN_HOURS", 24),
             "failed_login_threshold": sec.get("FAILED_LOGIN_THRESHOLD", 5),
         }
-    
+
     if "FORENSIC" in sh_settings:
         forensic = sh_settings["FORENSIC"]
         config_dict["forensic"] = {
@@ -184,7 +185,7 @@ def configure_selfhealing_from_django() -> None:
             "response_body_max_length": forensic.get("RESPONSE_BODY_MAX_LENGTH", 5000),
             "user_agent_max_length": forensic.get("USER_AGENT_MAX_LENGTH", 500),
         }
-    
+
     if "NOTIFICATIONS" in sh_settings:
         notif = sh_settings["NOTIFICATIONS"]
         config_dict["notification"] = {
@@ -197,12 +198,12 @@ def configure_selfhealing_from_django() -> None:
             "title_max_length": notif.get("LIMITS", {}).get("TITLE_MAX_LENGTH", 150),
             "notification_timeout_seconds": notif.get("LIMITS", {}).get("TIMEOUT_SECONDS", 10),
         }
-    
+
     # Additional top-level settings
     config_dict["auto_replay_enabled"] = sh_settings.get("AUTO_REPLAY_ENABLED", True)
     config_dict["security_monitoring_enabled"] = sh_settings.get("SECURITY_MONITORING_ENABLED", True)
     config_dict["debug_mode"] = sh_settings.get("DEBUG_MODE", False)
-    
+
     # Create and set configuration
     config = SelfHealingConfig.from_dict(config_dict)
     set_config(config)

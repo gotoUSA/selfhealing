@@ -188,10 +188,12 @@ class SecurityViolationService:
         """Get the repository, creating default adapter if needed."""
         if self._repository is None:
             from selfhealing.factory import ProviderRegistry
+
             try:
                 self._repository = ProviderRegistry.get_security_repo()
             except (ValueError, ImportError):
                 from .adapters.django_repositories import DjangoSecurityIncidentRepository
+
                 self._repository = DjangoSecurityIncidentRepository()
         return self._repository
 
@@ -200,10 +202,12 @@ class SecurityViolationService:
         """Get the cache provider, creating default if needed."""
         if self._cache is None:
             from selfhealing.factory import ProviderRegistry
+
             try:
                 self._cache = ProviderRegistry.get_cache()
             except (ValueError, ImportError):
                 from selfhealing.interfaces.cache_provider import InMemoryCacheAdapter
+
                 self._cache = InMemoryCacheAdapter()
         return self._cache
 
@@ -396,9 +400,9 @@ class SecurityViolationService:
         cache_key = f"{self.config.suspicious_ip_cache_prefix}{ip_address}"
 
         # Increment suspicious activity count
-        current_count = self.cache.get(cache_key, 0)
+        current_count = self.cache.get(cache_key) or 0
         new_count = current_count + 1
-        self.cache.set(cache_key, new_count, timeout=self.config.suspicious_ip_cache_timeout)
+        self.cache.set(cache_key, new_count, ttl=timedelta(seconds=self.config.suspicious_ip_cache_timeout))
 
         logger.info(f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})")
 
@@ -421,7 +425,7 @@ class SecurityViolationService:
             Description of action taken
         """
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
-        self.cache.set(cache_key, {"banned": True, "type": "temporary"}, timeout=hours * 3600)
+        self.cache.set(cache_key, {"banned": True, "type": "temporary"}, ttl=timedelta(hours=hours))
 
         logger.info(f"[Security] IP temporarily banned: {ip_address} for {hours} hours")
         return f"IP {ip_address} temporarily banned for {hours} hour(s)"
@@ -437,7 +441,7 @@ class SecurityViolationService:
             Description of action taken
         """
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
-        self.cache.set(cache_key, {"banned": True, "type": "permanent"}, timeout=None)
+        self.cache.set(cache_key, {"banned": True, "type": "permanent"}, ttl=None)
 
         logger.warning(f"[Security] IP permanently banned: {ip_address}")
         return f"IP {ip_address} permanently banned"

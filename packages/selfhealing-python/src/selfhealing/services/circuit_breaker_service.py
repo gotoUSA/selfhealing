@@ -156,10 +156,10 @@ class CircuitBreakerConfig:
             failure_threshold=cb_settings.failure_threshold,
             recovery_timeout=cb_settings.recovery_timeout,
             success_threshold=cb_settings.success_threshold,
-            manual_override_ttl_minutes=getattr(cb_settings, 'manual_override_ttl_minutes', 90),
-            half_open_request_limit=getattr(cb_settings, 'half_open_request_limit', 10),
-            max_pending_duration_hours=getattr(cb_settings, 'max_pending_duration_hours', 4),
-            max_retry_lifetime_hours=getattr(cb_settings, 'max_retry_lifetime_hours', 24),
+            manual_override_ttl_minutes=getattr(cb_settings, "manual_override_ttl_minutes", 90),
+            half_open_request_limit=getattr(cb_settings, "half_open_request_limit", 10),
+            max_pending_duration_hours=getattr(cb_settings, "max_pending_duration_hours", 4),
+            max_retry_lifetime_hours=getattr(cb_settings, "max_retry_lifetime_hours", 24),
             rate_limit_cascade_threshold=cb_settings.rate_limit_cascade_threshold,
             rate_limit_cascade_window_seconds=cb_settings.rate_limit_cascade_window_seconds,
             self_ddos_protection_enabled=cb_settings.self_ddos_protection_enabled,
@@ -350,7 +350,7 @@ class CircuitBreakerService:
         if state.state == CircuitState.OPEN:
             # Check recovery timeout for automatic transition to half-open
             if state.opened_at:
-                elapsed = (timezone.now() - state.opened_at).total_seconds()
+                elapsed = (now() - state.opened_at).total_seconds()
                 if elapsed >= self.config.recovery_timeout:
                     # Transition to half-open
                     state.state = CircuitState.HALF_OPEN
@@ -591,6 +591,7 @@ class CircuitBreakerService:
         self,
         service_name: str,
         reason: str = "",
+        controlled_by: Any = None,
         controlled_by_id: int | None = None,
     ) -> CircuitBreakerResult:
         """
@@ -598,18 +599,23 @@ class CircuitBreakerService:
 
         Use this when an external service is detected as down
         and you want to stop sending requests.
-        
+
         This operation uses atomic locking to prevent race conditions
         when multiple operators try to change the state simultaneously.
 
         Args:
             service_name: Name of the external service
             reason: Reason for opening (for audit)
+            controlled_by: User object who initiated the change (for backward compat)
             controlled_by_id: User ID who initiated the change
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
+        # Handle both controlled_by (User object) and controlled_by_id
+        if controlled_by_id is None and controlled_by is not None:
+            controlled_by_id = getattr(controlled_by, 'id', None) or getattr(controlled_by, 'pk', None)
+        
         try:
             # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_open(
@@ -655,6 +661,7 @@ class CircuitBreakerService:
         self,
         service_name: str,
         reason: str = "",
+        controlled_by: Any = None,
         controlled_by_id: int | None = None,
         trigger_replay: bool = False,
     ) -> CircuitBreakerResult:
@@ -663,19 +670,24 @@ class CircuitBreakerService:
 
         Use this when an external service has recovered
         and you want to resume normal operations.
-        
+
         This operation uses atomic locking to prevent race conditions
         when multiple operators try to change the state simultaneously.
 
         Args:
             service_name: Name of the external service
             reason: Reason for closing (for audit)
+            controlled_by: User object who initiated the change (for backward compat)
             controlled_by_id: User ID who initiated the change
             trigger_replay: Whether to trigger conditional replay for queued items
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
+        # Handle both controlled_by (User object) and controlled_by_id
+        if controlled_by_id is None and controlled_by is not None:
+            controlled_by_id = getattr(controlled_by, 'id', None) or getattr(controlled_by, 'pk', None)
+        
         try:
             # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_close(
@@ -782,18 +794,18 @@ class CircuitBreakerService:
             logger.debug(f"[CircuitBreaker] Skipping failure recording for '{service_name}': " "manually controlled")
             return
 
-        # Increment failure count
-        state.failure_count += 1
-        state.last_failure_at = timezone.now()
-        state.success_count = 0  # Reset success counter
+        # Use repository to record failure (handles atomic update)
+        updated_state = self.repository.record_failure(service_name)
 
         # Check if threshold exceeded and circuit should open
-        if state.failure_count >= self.config.failure_threshold and state.state == CircuitState.CLOSED:
-            state.state = CircuitState.OPEN
-            state.opened_at = timezone.now()
-            logger.warning(f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {state.failure_count})")
-
-        state.save()
+        if updated_state.failure_count >= self.config.failure_threshold and updated_state.state == "closed":
+            # Need to open the circuit
+            self.repository.update_state(
+                service_name=service_name,
+                state="open",
+                opened_at=now(),
+            )
+            logger.warning(f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {updated_state.failure_count})")
 
     def record_success(self, service_name: str) -> None:
         """
@@ -815,25 +827,30 @@ class CircuitBreakerService:
             logger.debug(f"[CircuitBreaker] Skipping success recording for '{service_name}': " "manually controlled")
             return
 
-        previous_state = state.state
         circuit_closed = False
 
-        if state.state == CircuitState.HALF_OPEN:
-            state.success_count += 1
+        if state.state == "half_open":
+            # Use repository to record success
+            updated_state = self.repository.record_success(service_name)
 
-            if state.success_count >= self.config.success_threshold:
-                # Close the circuit
-                state.state = CircuitState.CLOSED
-                state.failure_count = 0
-                state.success_count = 0
-                state.opened_at = None
+            if updated_state.success_count >= self.config.success_threshold:
+                # Close the circuit - use atomic operation
+                self.repository.update_state(
+                    service_name=service_name,
+                    state="closed",
+                    failure_count=0,
+                    success_count=0,
+                    opened_at=None,
+                )
                 circuit_closed = True
 
-        elif state.state == CircuitState.CLOSED:
+        elif state.state == "closed":
             # Reset failure count on success in closed state
-            state.failure_count = 0
-
-        state.save()
+            self.repository.update_state(
+                service_name=service_name,
+                state="closed",
+                failure_count=0,
+            )
 
         if circuit_closed:
             logger.info(
@@ -875,7 +892,10 @@ class CircuitBreakerService:
             )
 
             if success:
-                logger.info(f"[CircuitBreaker] Reset circuit for '{service_name}': " f"{previous_state} -> {new_state} | Reason: {reason}")
+                logger.info(
+                    f"[CircuitBreaker] Reset circuit for '{service_name}': "
+                    f"{previous_state} -> {new_state} | Reason: {reason}"
+                )
                 return CircuitBreakerResult.succeeded(
                     service_name=service_name,
                     previous_state=previous_state,
@@ -923,12 +943,25 @@ class CircuitBreakerService:
                     and state.manual_override_expires_at <= current_time
                 ):
                     previous_state = state.state
+                    previous_reason = state.control_reason or ""
+                    expired_reason = f"{previous_reason} [EXPIRED]".strip()
+
                     # Expire the override - transition to HALF_OPEN for testing
                     self.repository.update_state(
                         service_name=state.service_name,
                         state=CircuitState.HALF_OPEN,
                     )
-                    self.repository.clear_manual_control(state.service_name)
+                    # Update control_reason separately since update_state doesn't support it
+                    # We use a direct model update for this
+                    try:
+                        from shopping.models.failed_payment import CircuitBreakerState
+                        CircuitBreakerState.objects.filter(
+                            service_name=state.service_name
+                        ).update(control_reason=expired_reason)
+                    except ImportError:
+                        pass  # Running without Django models
+                    
+                    self.repository.clear_manual_control(state.service_name, preserve_reason=True)
 
                     expired_services.append(state.service_name)
                     logger.warning(

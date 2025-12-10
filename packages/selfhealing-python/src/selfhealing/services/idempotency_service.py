@@ -283,12 +283,14 @@ class IdempotencyService:
         if lookup is None:
             try:
                 from shopping.models.payment import Payment
+
                 def lookup(oid: int, amt: int):
                     return Payment.objects.filter(
                         order_id=oid,
                         amount=amt,
                         status__in=["done", "in_progress", "ready"],
                     ).first()
+
             except ImportError:
                 logger.warning("[Idempotency] No payment lookup configured and shopping module not available")
                 return IdempotencyResult(
@@ -359,6 +361,7 @@ class IdempotencyService:
         if lookup is None:
             try:
                 from shopping.models.payment import Payment
+
                 def lookup(pkey: str, oid: int, amt: int):
                     return Payment.objects.filter(
                         payment_key=pkey,
@@ -366,6 +369,7 @@ class IdempotencyService:
                         amount=amt,
                         status="done",
                     ).first()
+
             except ImportError:
                 logger.warning("[Idempotency] No payment confirm lookup configured and shopping module not available")
                 return IdempotencyResult(
@@ -392,7 +396,7 @@ class IdempotencyService:
 
         if existing:
             try:
-                cache.set(key.cache_key, getattr(existing, 'id', existing), timeout=self.PAYMENT_CACHE_TTL)
+                cache.set(key.cache_key, getattr(existing, "id", existing), timeout=self.PAYMENT_CACHE_TTL)
             except Exception:
                 pass  # Cache update is optional
             logger.info(f"[Idempotency] Duplicate confirm detected (DB): {key.key}")
@@ -427,8 +431,10 @@ class IdempotencyService:
         if lookup is None:
             try:
                 from shopping.models.webhook_event import WebhookEvent
+
                 def lookup(eid: str) -> bool:
                     return WebhookEvent.objects.filter(event_id=eid).exists()
+
             except ImportError:
                 logger.warning("[Idempotency] No webhook lookup configured and shopping module not available")
                 return IdempotencyResult(
@@ -495,12 +501,14 @@ class IdempotencyService:
         if lookup is None:
             try:
                 from shopping.models.point import PointHistory
+
                 def lookup(oid: int, ptype: str, amt: int):
                     return PointHistory.objects.filter(
                         order_id=oid,
                         change_type=ptype,
                         amount=amt,
                     ).first()
+
             except ImportError:
                 logger.warning("[Idempotency] No point lookup configured and shopping module not available")
                 return IdempotencyResult(
@@ -527,7 +535,7 @@ class IdempotencyService:
 
         if existing:
             try:
-                cache.set(key.cache_key, getattr(existing, 'id', existing), timeout=self.cache_ttl)
+                cache.set(key.cache_key, getattr(existing, "id", existing), timeout=self.cache_ttl)
             except Exception:
                 pass  # Cache update is optional
             return IdempotencyResult(

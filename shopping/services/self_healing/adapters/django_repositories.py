@@ -239,6 +239,200 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             updated_at=timezone.now(),
         )
 
+    def find_by_status(
+        self,
+        status: str,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Find operations by status with optional filters"""
+        FailedOperation = self._get_model()
+
+        filters = {"status": status}
+        if domain:
+            filters["domain"] = domain
+        if failure_type:
+            filters["failure_type"] = failure_type
+
+        queryset = FailedOperation.objects.filter(**filters).order_by("-created_at")[:limit]
+        return [self._to_data(obj) for obj in queryset]
+
+    def find_replayable(
+        self,
+        max_retries: int,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Find operations that can be replayed (pending and retry_count < max_retries)"""
+        FailedOperation = self._get_model()
+
+        filters = {
+            "status": FailedOperationStatus.PENDING.value,
+            "retry_count__lt": max_retries,
+        }
+        if domain:
+            filters["domain"] = domain
+        if failure_type:
+            filters["failure_type"] = failure_type
+
+        queryset = FailedOperation.objects.filter(**filters).order_by("created_at")[:limit]
+        return [self._to_data(obj) for obj in queryset]
+
+    def find_sla_breached(
+        self,
+        current_time: datetime,
+        sla_thresholds: dict[str, timedelta],
+    ) -> list[FailedOperationData]:
+        """Find operations that have breached their SLA"""
+        FailedOperation = self._get_model()
+
+        results = []
+        for domain, threshold in sla_thresholds.items():
+            cutoff_time = current_time - threshold
+            queryset = FailedOperation.objects.filter(
+                domain=domain,
+                status=FailedOperationStatus.PENDING.value,
+                created_at__lt=cutoff_time,
+            )
+            results.extend([self._to_data(obj) for obj in queryset])
+
+        return results
+
+    def find_expired(
+        self,
+        current_time: datetime,
+    ) -> list[FailedOperationData]:
+        """Find operations past their retention period"""
+        FailedOperation = self._get_model()
+
+        queryset = FailedOperation.objects.filter(
+            expires_at__lt=current_time,
+        )
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_statistics(self) -> dict[str, Any]:
+        """Get statistics about failed operations"""
+        FailedOperation = self._get_model()
+        from django.db.models import Count, Avg
+
+        total = FailedOperation.objects.count()
+        by_status = dict(
+            FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
+        )
+        by_domain = dict(
+            FailedOperation.objects.values("domain").annotate(count=Count("id")).values_list("domain", "count")
+        )
+        avg_retries = FailedOperation.objects.aggregate(avg_retries=Avg("retry_count"))["avg_retries"] or 0
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "by_domain": by_domain,
+            "avg_retries": float(avg_retries),
+        }
+
+    def try_acquire_for_replay(
+        self,
+        id: int,
+        max_retries: int,
+    ) -> Optional[FailedOperationData]:
+        """
+        Atomically acquire a DLQ entry for replay.
+
+        Uses row-level locking (SELECT FOR UPDATE) to prevent race conditions.
+        """
+        FailedOperation = self._get_model()
+
+        with transaction.atomic():
+            try:
+                obj = FailedOperation.objects.select_for_update(nowait=True).get(id=id)
+
+                # Check if eligible for replay
+                if obj.status != FailedOperationStatus.PENDING.value:
+                    return None
+                if obj.retry_count >= max_retries:
+                    return None
+
+                # Acquire the entry
+                obj.status = "replaying"
+                obj.retry_count += 1
+                obj.last_retry_at = timezone.now()
+                obj.save(update_fields=["status", "retry_count", "last_retry_at", "updated_at"])
+
+                return self._to_data(obj)
+            except FailedOperation.DoesNotExist:
+                return None
+            except Exception:
+                # Could be locked by another process
+                return None
+
+    def complete_replay(
+        self,
+        id: int,
+        success: bool,
+        resolution_type: str = "",
+        note: str = "",
+        resolved_by_id: Optional[int] = None,
+        error_details: Optional[dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Complete a replay operation by updating the final status.
+        """
+        FailedOperation = self._get_model()
+
+        try:
+            obj = FailedOperation.objects.get(id=id)
+
+            if success:
+                obj.status = FailedOperationStatus.RESOLVED.value
+                obj.resolution_type = resolution_type or "auto_replay"
+                obj.resolution_note = note
+                obj.resolved_by_id = resolved_by_id
+                obj.resolved_at = timezone.now()
+            else:
+                # Revert to pending for retry or mark as requires_review
+                if obj.retry_count >= obj.max_retries:
+                    obj.status = FailedOperationStatus.REQUIRES_REVIEW.value
+                else:
+                    obj.status = FailedOperationStatus.PENDING.value
+
+                if error_details:
+                    obj.metadata = {**(obj.metadata or {}), "last_error": error_details}
+                if note:
+                    obj.resolution_note = note
+
+            obj.save()
+            return True
+        except FailedOperation.DoesNotExist:
+            return False
+
+    def release_stale_replaying(
+        self,
+        older_than_minutes: int = 30,
+    ) -> int:
+        """
+        Release DLQ entries stuck in REPLAYING state.
+
+        Entries can get stuck if the replay process crashes.
+        This reverts them to PENDING for retry.
+        """
+        FailedOperation = self._get_model()
+
+        cutoff_time = timezone.now() - timedelta(minutes=older_than_minutes)
+
+        # Find stale entries (status='replaying' and last_retry_at is old)
+        updated = FailedOperation.objects.filter(
+            status="replaying",
+            last_retry_at__lt=cutoff_time,
+        ).update(
+            status=FailedOperationStatus.PENDING.value,
+            updated_at=timezone.now(),
+        )
+
+        return updated
+
 
 class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
@@ -371,15 +565,25 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         )
         return updated > 0
 
-    def clear_manual_control(self, service_name: str) -> bool:
-        """Clear manual control from a circuit breaker"""
+    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+        """Clear manual control from a circuit breaker
+        
+        Args:
+            service_name: Name of the service
+            preserve_reason: If True, keep the existing control_reason value
+        """
         CircuitBreakerState = self._get_model()
 
+        update_fields = {
+            "manually_controlled": False,
+            "controlled_by_id": None,
+            "manual_override_expires_at": None,
+        }
+        if not preserve_reason:
+            update_fields["control_reason"] = ""
+
         updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
-            manually_controlled=False,
-            controlled_by_id=None,
-            control_reason="",
-            manual_override_expires_at=None,
+            **update_fields
         )
         return updated > 0
 
@@ -406,6 +610,124 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             half_open_request_count=0,
         )
         return updated > 0
+
+    def get_all(self) -> list[CircuitBreakerStateData]:
+        """Get all circuit breaker states (alias for get_all_states)"""
+        return self.get_all_states()
+
+    def atomic_force_open(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+        ttl_minutes: int = 90,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically force open a circuit breaker.
+
+        Uses row-level locking to prevent concurrent modifications.
+        Creates the circuit breaker if it doesn't exist.
+
+        Returns:
+            Tuple of (success, previous_state, new_state)
+        """
+        CircuitBreakerState = self._get_model()
+
+        with transaction.atomic():
+            obj, created = CircuitBreakerState.objects.select_for_update().get_or_create(
+                service_name=service_name,
+                defaults={
+                    "state": CircuitBreakerStateEnum.CLOSED.value,
+                    "failure_count": 0,
+                    "success_count": 0,
+                },
+            )
+            previous_state = obj.state
+            obj.state = CircuitBreakerStateEnum.OPEN.value
+            obj.manually_controlled = True
+            obj.controlled_by_id = controlled_by_id
+            obj.control_reason = reason
+            obj.opened_at = timezone.now()
+            obj.manual_override_expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
+            obj.save()
+
+        return (True, previous_state, CircuitBreakerStateEnum.OPEN.value)
+
+    def atomic_force_close(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically force close a circuit breaker.
+
+        Uses row-level locking to prevent concurrent modifications.
+
+        Returns:
+            Tuple of (success, previous_state, new_state)
+        """
+        CircuitBreakerState = self._get_model()
+
+        with transaction.atomic():
+            obj, created = CircuitBreakerState.objects.select_for_update().get_or_create(
+                service_name=service_name,
+                defaults={
+                    "state": CircuitBreakerStateEnum.CLOSED.value,
+                    "failure_count": 0,
+                    "success_count": 0,
+                },
+            )
+            previous_state = obj.state
+            obj.state = CircuitBreakerStateEnum.CLOSED.value
+            obj.manually_controlled = True
+            obj.controlled_by_id = controlled_by_id
+            obj.control_reason = reason
+            obj.failure_count = 0
+            obj.success_count = 0
+            obj.opened_at = None
+            obj.half_open_request_count = 0
+            obj.save()
+
+        return (True, previous_state, CircuitBreakerStateEnum.CLOSED.value)
+
+    def atomic_reset(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically reset a circuit breaker to initial state.
+
+        Uses row-level locking to prevent concurrent modifications.
+        Resets all counters and clears manual control.
+
+        Returns:
+            Tuple of (success, previous_state, new_state)
+        """
+        CircuitBreakerState = self._get_model()
+
+        try:
+            with transaction.atomic():
+                obj = CircuitBreakerState.objects.select_for_update().get(
+                    service_name=service_name
+                )
+                previous_state = obj.state
+                obj.state = CircuitBreakerStateEnum.CLOSED.value
+                obj.failure_count = 0
+                obj.success_count = 0
+                obj.opened_at = None
+                obj.manually_controlled = False
+                obj.controlled_by_id = None
+                obj.control_reason = ""
+                obj.manual_override_expires_at = None
+                obj.half_open_request_count = 0
+                obj.save()
+
+            return (True, previous_state, CircuitBreakerStateEnum.CLOSED.value)
+        except CircuitBreakerState.DoesNotExist:
+            return (False, "", "")
 
 
 class DjangoSecurityIncidentRepository(SecurityIncidentRepository):

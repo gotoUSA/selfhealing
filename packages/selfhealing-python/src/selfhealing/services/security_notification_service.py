@@ -96,20 +96,20 @@ class NotificationConfig:
     def from_settings(cls) -> "NotificationConfig":
         """Load configuration from settings."""
         config = get_config()
-        notifications = config.notifications
+        notification = config.notification  # Use singular form
 
         return cls(
-            slack_webhook_url=notifications.slack_webhook_url,
-            slack_critical_channel=notifications.slack_critical_channel,
-            slack_high_channel=notifications.slack_high_channel,
-            slack_medium_channel=notifications.slack_medium_channel,
-            email_critical_recipients=notifications.email_critical_recipients,
-            email_high_recipients=notifications.email_high_recipients,
-            sms_critical_recipients=notifications.sms_critical_recipients,
-            pagerduty_service_key=notifications.pagerduty_service_key,
-            pagerduty_enabled=notifications.pagerduty_enabled,
-            enabled=notifications.enabled,
-            dry_run=notifications.dry_run,
+            slack_webhook_url=getattr(notification, "slack_webhook_url", ""),
+            slack_critical_channel=getattr(notification, "critical_channel", "#critical-alerts"),
+            slack_high_channel=getattr(notification, "high_channel", "#ops-alerts"),
+            slack_medium_channel=getattr(notification, "medium_channel", "#dev-alerts"),
+            email_critical_recipients=getattr(notification, "email_critical_recipients", []),
+            email_high_recipients=getattr(notification, "email_high_recipients", []),
+            sms_critical_recipients=getattr(notification, "sms_critical_recipients", []),
+            pagerduty_service_key=getattr(notification, "pagerduty_service_key", ""),
+            pagerduty_enabled=getattr(notification, "pagerduty_enabled", False),
+            enabled=notification.enabled,
+            dry_run=getattr(notification, "dry_run", False),
         )
 
 
@@ -213,6 +213,7 @@ class SecurityNotificationService:
 
         # Format the message
         from selfhealing.core.timezone import now
+
         message = self._format_incident_message_data(
             incident_id=incident_id,
             incident_type=incident_type,
@@ -248,6 +249,56 @@ class SecurityNotificationService:
         logger.info(f"[Security Notification] Incident {incident_id}: " f"{success_count}/{total_count} notifications sent")
 
         return result
+
+    def notify_security_incident(self, incident: Any) -> SecurityNotificationResult:
+        """
+        Send notifications for a security incident object (legacy API).
+
+        This is a convenience method that extracts data from an incident object
+        (e.g., Django model instance) and delegates to notify_security_incident_by_id.
+
+        Args:
+            incident: Incident object with id, incident_type, severity, description, etc.
+
+        Returns:
+            SecurityNotificationResult with results from all channels
+        """
+        return self.notify_security_incident_by_id(
+            incident_id=incident.id,
+            incident_type=getattr(incident, "incident_type", "unknown"),
+            severity=getattr(incident, "severity", "medium"),
+            description=getattr(incident, "description", ""),
+            source_ip=getattr(incident, "source_ip", None),
+            user_id=getattr(incident, "user_id", None),
+            action_taken=getattr(incident, "action_taken", ""),
+        )
+
+    def _format_incident_message(self, incident: Any) -> dict[str, Any]:
+        """
+        Format an incident object into a structured message (legacy API).
+
+        This is a convenience method that extracts data from an incident object
+        and delegates to _format_incident_message_data.
+
+        Args:
+            incident: Incident object with id, incident_type, severity, description, etc.
+
+        Returns:
+            Formatted message dictionary
+        """
+        from selfhealing.core.timezone import now
+
+        detected_at = getattr(incident, "detected_at", None) or now()
+        return self._format_incident_message_data(
+            incident_id=incident.id,
+            incident_type=getattr(incident, "incident_type", "unknown"),
+            severity=getattr(incident, "severity", "medium"),
+            description=getattr(incident, "description", ""),
+            source_ip=getattr(incident, "source_ip", None),
+            user_id=getattr(incident, "user_id", None),
+            action_taken=getattr(incident, "action_taken", ""),
+            detected_at=detected_at,
+        )
 
     def _format_incident_message_data(
         self,
@@ -297,7 +348,7 @@ class SecurityNotificationService:
             "description": desc,
             "source_ip": source_ip or "N/A",
             "user_id": user_id if user_id else "N/A",
-            "detected_at": detected_at.isoformat() if hasattr(detected_at, 'isoformat') else str(detected_at),
+            "detected_at": detected_at.isoformat() if hasattr(detected_at, "isoformat") else str(detected_at),
             "action_taken": action,
             "admin_url": admin_url,
         }
@@ -477,8 +528,7 @@ class SecurityNotificationService:
             # The selfhealing package logs the intent but actual sending
             # should be handled by the application's email service
             logger.info(
-                f"[Security Notification] Email notification prepared for {len(recipients)} recipients: "
-                f"Subject: {subject}"
+                f"[Security Notification] Email notification prepared for {len(recipients)} recipients: " f"Subject: {subject}"
             )
             logger.debug(f"[Security Notification] Email body: {body[:200]}...")
 
@@ -585,6 +635,26 @@ This is an automated security alert. Do not reply to this email.
                 success=False,
                 error=str(e),
             )
+
+    def _trigger_pagerduty(self, incident: Any) -> NotificationResult:
+        """
+        Trigger a PagerDuty incident from an incident object.
+
+        This is a convenience method that extracts data from an incident object
+        and delegates to _trigger_pagerduty_by_data.
+
+        Args:
+            incident: Incident object with id, incident_type, description, source_ip
+
+        Returns:
+            NotificationResult
+        """
+        return self._trigger_pagerduty_by_data(
+            incident_id=incident.id,
+            incident_type=getattr(incident, "incident_type", "unknown"),
+            description=getattr(incident, "description", ""),
+            source_ip=getattr(incident, "source_ip", None),
+        )
 
     def _trigger_pagerduty_by_data(
         self,
@@ -708,3 +778,17 @@ def notify_security_incident_by_id(
         severity=severity,
         **kwargs,
     )
+
+
+def notify_security_incident(incident: Any) -> SecurityNotificationResult:
+    """
+    Convenience function to notify about a security incident object (legacy API).
+
+    Args:
+        incident: Incident object with id, incident_type, severity, etc.
+
+    Returns:
+        SecurityNotificationResult
+    """
+    service = get_security_notification_service()
+    return service.notify_security_incident(incident)

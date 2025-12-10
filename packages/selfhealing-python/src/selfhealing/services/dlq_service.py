@@ -343,10 +343,10 @@ class DLQService:
             List of SLA-breached FailedOperationData entries
         """
         from selfhealing.core.config import get_config
-        
+
         current_time = now()
         sla_config = get_config().sla
-        
+
         return self.repository.find_sla_breached(
             current_time=current_time,
             sla_thresholds={
@@ -355,7 +355,7 @@ class DLQService:
                 "inventory": sla_config.get_threshold("inventory"),
                 "webhook": sla_config.get_threshold("webhook"),
                 "notification": sla_config.get_threshold("notification"),
-            }
+            },
         )
 
     def get_expired_entries(self) -> List["FailedOperationData"]:

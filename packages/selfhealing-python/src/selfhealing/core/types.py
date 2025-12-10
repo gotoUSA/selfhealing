@@ -91,6 +91,15 @@ class CircuitBreakerStateData:
     failure_threshold: int = 5
     recovery_timeout: int = 60
     half_open_max_calls: int = 3
+    # Manual control fields
+    manually_controlled: bool = False
+    controlled_by_id: Optional[int] = None
+    control_reason: str = ""
+    manual_override_expires_at: Optional[datetime] = None
+    half_open_request_count: int = 0
+    id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
