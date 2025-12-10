@@ -33,6 +33,7 @@ class FailedOperation(models.Model):
 
     class Domain(models.TextChoices):
         """Domain classification for failed operations"""
+
         PAYMENT = "payment", "Payment"
         POINT = "point", "Point"
         INVENTORY = "inventory", "Inventory"
@@ -41,6 +42,7 @@ class FailedOperation(models.Model):
 
     class Status(models.TextChoices):
         """State machine for DLQ item lifecycle"""
+
         PENDING = "pending", "Pending Review"
         REVIEWING = "reviewing", "Under Review"
         REPLAYED = "replayed", "Replay Queued"
@@ -52,6 +54,7 @@ class FailedOperation(models.Model):
 
     class ResolutionType(models.TextChoices):
         """How the failure was resolved"""
+
         AUTO_REPLAY = "auto_replay", "Automatic Replay"
         MANUAL_FIX = "manual_fix", "Manual Fix"
         REJECTED = "rejected", "Rejected"
@@ -61,6 +64,7 @@ class FailedOperation(models.Model):
 
     class RecommendedAction(models.TextChoices):
         """Suggested action for operators"""
+
         REPLAY = "replay", "Replay Operation"
         MANUAL_CHECK = "manual_check", "Manual Verification"
         ESCALATE = "escalate", "Escalate to Senior"
@@ -257,10 +261,9 @@ class FailedOperation(models.Model):
         self.resolution_note = note
         if resolved_by_id:
             self.resolved_by_id = resolved_by_id
-        self.save(update_fields=[
-            "status", "resolved_at", "resolution_type",
-            "resolution_note", "resolved_by_id", "updated_at"
-        ])
+        self.save(
+            update_fields=["status", "resolved_at", "resolution_type", "resolution_note", "resolved_by_id", "updated_at"]
+        )
 
     def increment_retry(self) -> None:
         """Increment retry count and update timestamp."""
@@ -279,6 +282,7 @@ class CircuitBreakerState(models.Model):
 
     class State(models.TextChoices):
         """Circuit breaker states"""
+
         CLOSED = "closed", "Closed (Normal)"
         OPEN = "open", "Open (Blocked)"
         HALF_OPEN = "half_open", "Half-Open (Testing)"
@@ -455,6 +459,7 @@ class SecurityIncident(models.Model):
 
     class IncidentType(models.TextChoices):
         """Types of security incidents"""
+
         WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
         PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
         TOKEN_FORGED = "token_forged", "Token Forged"
@@ -466,6 +471,7 @@ class SecurityIncident(models.Model):
 
     class Severity(models.TextChoices):
         """Severity levels"""
+
         CRITICAL = "critical", "Critical"
         HIGH = "high", "High"
         MEDIUM = "medium", "Medium"
@@ -473,6 +479,7 @@ class SecurityIncident(models.Model):
 
     class Status(models.TextChoices):
         """Investigation status"""
+
         OPEN = "open", "Open"
         INVESTIGATING = "investigating", "Investigating"
         RESOLVED = "resolved", "Resolved"
@@ -607,7 +614,4 @@ class SecurityIncident(models.Model):
             self.investigation_notes = notes
         if investigated_by_id:
             self.investigated_by_id = investigated_by_id
-        self.save(update_fields=[
-            "status", "resolved_at", "investigation_notes",
-            "investigated_by_id", "updated_at"
-        ])
+        self.save(update_fields=["status", "resolved_at", "investigation_notes", "investigated_by_id", "updated_at"])

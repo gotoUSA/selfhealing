@@ -7,7 +7,7 @@ for the self-healing control API.
 Usage:
     # In your Django project's urls.py:
     from selfhealing.api.django import urls as selfhealing_urls
-    
+
     urlpatterns = [
         path('api/self-healing/', include(selfhealing_urls)),
     ]

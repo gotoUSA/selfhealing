@@ -69,10 +69,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     Returns:
         Dictionary with replay result summary
     """
-    logger.info(
-        f"[Circuit Recovery] Starting conditional replay for '{service_name}', "
-        f"max_items={max_items}"
-    )
+    logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
     try:
         # Import here to avoid circular dependencies
@@ -168,15 +165,13 @@ def check_circuit_breaker_recovery(self) -> dict:
                 circuit.half_opened_at = now
                 circuit.success_count = 0
                 circuit.half_open_request_count = 0
-                circuit.save(update_fields=[
-                    "state", "half_opened_at", "success_count",
-                    "half_open_request_count", "updated_at"
-                ])
+                circuit.save(
+                    update_fields=["state", "half_opened_at", "success_count", "half_open_request_count", "updated_at"]
+                )
 
                 transitioned.append(circuit.service_name)
                 logger.info(
-                    f"[Circuit Check] Transitioned '{circuit.service_name}' "
-                    f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                    f"[Circuit Check] Transitioned '{circuit.service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
                 )
 
         return {
@@ -226,8 +221,7 @@ def force_open_circuit_breaker(
         from selfhealing.core.types import CircuitState
 
         obj, created = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={"state": CircuitState.CLOSED.value}
+            service_name=service_name, defaults={"state": CircuitState.CLOSED.value}
         )
 
         previous_state = obj.state
@@ -387,11 +381,13 @@ def expire_manual_overrides(self) -> dict:
             circuit.manual_override_expires_at = None
             circuit.save()
 
-            expired.append({
-                "service_name": circuit.service_name,
-                "previous_state": previous_state,
-                "new_state": circuit.state,
-            })
+            expired.append(
+                {
+                    "service_name": circuit.service_name,
+                    "previous_state": previous_state,
+                    "new_state": circuit.state,
+                }
+            )
 
             logger.warning(
                 f"[Circuit Breaker] Expired manual override for '{circuit.service_name}': "
@@ -531,10 +527,7 @@ def replay_batch_by_domain(
             #     repo.increment_retry(operation.id, result.error)
             #     failed_count += 1
 
-        logger.info(
-            f"[DLQ Batch Replay] Completed: total={len(pending)}, "
-            f"success={success_count}, failed={failed_count}"
-        )
+        logger.info(f"[DLQ Batch Replay] Completed: total={len(pending)}, " f"success={success_count}, failed={failed_count}")
 
         return {
             "success": True,
@@ -654,25 +647,20 @@ def collect_self_healing_metrics(self) -> dict:
 
         # DLQ stats by domain
         dlq_by_domain = dict(
-            FailedOperation.objects.filter(
-                status=FailedOperation.Status.PENDING
-            ).values("domain").annotate(count=Count("id")).values_list("domain", "count")
+            FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
+            .values("domain")
+            .annotate(count=Count("id"))
+            .values_list("domain", "count")
         )
 
         # DLQ stats by status
         dlq_by_status = dict(
-            FailedOperation.objects.values("status").annotate(
-                count=Count("id")
-            ).values_list("status", "count")
+            FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
         )
 
         # Circuit breaker stats
-        cb_open = CircuitBreakerState.objects.filter(
-            state=CircuitState.OPEN.value
-        ).count()
-        cb_half_open = CircuitBreakerState.objects.filter(
-            state=CircuitState.HALF_OPEN.value
-        ).count()
+        cb_open = CircuitBreakerState.objects.filter(state=CircuitState.OPEN.value).count()
+        cb_half_open = CircuitBreakerState.objects.filter(state=CircuitState.HALF_OPEN.value).count()
 
         metrics = {
             "dlq_pending_by_domain": dlq_by_domain,

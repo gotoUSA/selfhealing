@@ -6,6 +6,11 @@ import pytest
 from datetime import datetime
 
 
+# =============================================================================
+# Core Type Fixtures
+# =============================================================================
+
+
 @pytest.fixture
 def sample_failed_operation_data():
     """Sample failed operation data for tests."""
@@ -43,3 +48,40 @@ def sample_config():
     from selfhealing.core.config import SelfHealingConfig
 
     return SelfHealingConfig()
+
+
+# =============================================================================
+# Chaos Engineering Fixtures (imported from chaos/conftest.py)
+# =============================================================================
+
+
+@pytest.fixture
+def failure_injector():
+    """Provides a configurable failure injector for chaos tests."""
+    from tests.chaos.conftest import FailureInjector
+    return FailureInjector(failure_rate=0.3)
+
+
+@pytest.fixture
+def burst_failure_injector():
+    """Provides a burst failure pattern injector."""
+    from tests.chaos.conftest import BurstFailureInjector
+    return BurstFailureInjector(burst_size=10, burst_interval=50)
+
+
+@pytest.fixture
+def latency_injector():
+    """Provides a latency injector for slow degradation tests."""
+    from tests.chaos.conftest import LatencyInjector
+    return LatencyInjector(
+        min_latency_ms=100,
+        max_latency_ms=30000,
+        degradation_rate=100,
+    )
+
+
+@pytest.fixture
+def resource_simulator():
+    """Provides a resource exhaustion simulator."""
+    from tests.chaos.conftest import ResourceExhaustionSimulator
+    return ResourceExhaustionSimulator(max_connections=100)

@@ -39,6 +39,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies."""
         from selfhealing.adapters.django.models import FailedOperation
+
         return FailedOperation
 
     def _to_data(self, obj) -> FailedOperationData:
@@ -98,9 +99,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         """Get pending operations ready for retry."""
         FailedOperation = self._get_model()
 
-        queryset = FailedOperation.objects.filter(
-            status=OperationStatus.PENDING.value
-        )
+        queryset = FailedOperation.objects.filter(status=OperationStatus.PENDING.value)
         if domain:
             queryset = queryset.filter(domain=domain)
 
@@ -221,9 +220,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         """Delete expired operations. Returns count of deleted."""
         FailedOperation = self._get_model()
 
-        result = FailedOperation.objects.filter(
-            expires_at__lt=older_than
-        ).delete()
+        result = FailedOperation.objects.filter(expires_at__lt=older_than).delete()
         return result[0] if result else 0
 
 
@@ -237,6 +234,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies."""
         from selfhealing.adapters.django.models import CircuitBreakerState
+
         return CircuitBreakerState
 
     def _to_data(self, obj) -> CircuitBreakerStateData:
@@ -278,7 +276,8 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         obj, created = CircuitBreakerState.objects.get_or_create(
             service_name=service_name,
-            defaults=defaults or {
+            defaults=defaults
+            or {
                 "state": CircuitState.CLOSED.value,
                 "failure_count": 0,
                 "success_count": 0,
@@ -302,9 +301,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if success_count is not None:
             update_fields["success_count"] = success_count
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(**update_fields)
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(**update_fields)
 
         if updated:
             return self.get_state(service_name)
@@ -369,9 +366,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Open a circuit breaker."""
         CircuitBreakerState = self._get_model()
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
             state=CircuitState.OPEN.value,
             opened_at=timezone.now(),
         )
@@ -387,9 +382,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Transition a circuit breaker to half-open state."""
         CircuitBreakerState = self._get_model()
 
-        updated = CircuitBreakerState.objects.filter(
-            service_name=service_name
-        ).update(
+        updated = CircuitBreakerState.objects.filter(service_name=service_name).update(
             state=CircuitState.HALF_OPEN.value,
             half_opened_at=timezone.now(),
             success_count=0,
@@ -404,10 +397,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """List all circuit breaker states."""
         CircuitBreakerState = self._get_model()
 
-        return [
-            self._to_data(obj)
-            for obj in CircuitBreakerState.objects.all().order_by("service_name")
-        ]
+        return [self._to_data(obj) for obj in CircuitBreakerState.objects.all().order_by("service_name")]
 
     def list_open(self) -> List[CircuitBreakerStateData]:
         """List all open circuit breakers."""
@@ -415,9 +405,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         return [
             self._to_data(obj)
-            for obj in CircuitBreakerState.objects.filter(
-                state=CircuitState.OPEN.value
-            ).order_by("service_name")
+            for obj in CircuitBreakerState.objects.filter(state=CircuitState.OPEN.value).order_by("service_name")
         ]
 
 
@@ -432,6 +420,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
     def _get_model(self):
         """Lazy import to avoid circular dependencies."""
         from selfhealing.adapters.django.models import SecurityIncident
+
         return SecurityIncident
 
     def _to_data(self, obj) -> SecurityIncidentData:
@@ -540,9 +529,7 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         from django.db.models import Count
 
         since = timezone.now() - timedelta(hours=hours)
-        results = SecurityIncident.objects.filter(
-            created_at__gte=since
-        ).values("incident_type").annotate(count=Count("id"))
+        results = SecurityIncident.objects.filter(created_at__gte=since).values("incident_type").annotate(count=Count("id"))
 
         return {r["incident_type"]: r["count"] for r in results}
 

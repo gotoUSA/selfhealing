@@ -16,13 +16,12 @@ def pytest_configure(config):
     """Configure Django settings for testing."""
     # Disable pytest-django if it's auto-loading
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "")
-    
+
     if not settings.configured:
         settings.configure(
             DEBUG=True,
             USE_TZ=True,
             TIME_ZONE="UTC",
-            
             # Database
             DATABASES={
                 "default": {
@@ -30,7 +29,6 @@ def pytest_configure(config):
                     "NAME": ":memory:",
                 }
             },
-            
             # Installed apps - include admin for admin.py registration
             INSTALLED_APPS=[
                 "django.contrib.contenttypes",
@@ -41,14 +39,12 @@ def pytest_configure(config):
                 "rest_framework",
                 "selfhealing.adapters.django",
             ],
-            
             # Middleware for admin
             MIDDLEWARE=[
                 "django.contrib.sessions.middleware.SessionMiddleware",
                 "django.contrib.auth.middleware.AuthenticationMiddleware",
                 "django.contrib.messages.middleware.MessageMiddleware",
             ],
-            
             # Templates for admin
             TEMPLATES=[
                 {
@@ -64,7 +60,6 @@ def pytest_configure(config):
                     },
                 },
             ],
-            
             # REST Framework settings
             REST_FRAMEWORK={
                 "DEFAULT_AUTHENTICATION_CLASSES": [],
@@ -72,21 +67,19 @@ def pytest_configure(config):
                     "rest_framework.permissions.AllowAny",
                 ],
             },
-            
             # Root URL conf (not really needed for unit tests)
             ROOT_URLCONF="selfhealing.api.django.urls",
-            
             # Secret key for testing
             SECRET_KEY="test-secret-key-for-selfhealing-tests",
-            
             # Default auto field
             DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
         )
-        
+
         django.setup()
-        
+
         # Create tables immediately after setup
         from django.core.management import call_command
+
         call_command("migrate", "--run-syncdb", verbosity=0)
 
 
@@ -95,16 +88,17 @@ def reset_database():
     """Reset database between tests by using transactions."""
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
-    
+
     # Start transaction
     yield
-    
+
     # Rollback all changes - clear all data from tables
     from selfhealing.adapters.django.models import (
         FailedOperation,
         CircuitBreakerState,
         SecurityIncident,
     )
+
     FailedOperation.objects.all().delete()
     CircuitBreakerState.objects.all().delete()
     SecurityIncident.objects.all().delete()

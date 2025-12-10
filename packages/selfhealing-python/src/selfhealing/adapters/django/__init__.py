@@ -9,7 +9,7 @@ This module provides Django-specific implementations including:
 
 Usage:
     After Django is fully configured, import directly:
-    
+
     from selfhealing.adapters.django.models import (
         FailedOperation,
         CircuitBreakerState,
@@ -48,6 +48,7 @@ def __getattr__(name: str):
     """Lazy import to avoid AppRegistryNotReady errors."""
     if name in ("FailedOperation", "CircuitBreakerState", "SecurityIncident"):
         from selfhealing.adapters.django import models
+
         return getattr(models, name)
     elif name in (
         "DjangoFailedOperationRepository",
@@ -55,5 +56,6 @@ def __getattr__(name: str):
         "DjangoSecurityIncidentRepository",
     ):
         from selfhealing.adapters.django import repositories
+
         return getattr(repositories, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -178,3 +178,109 @@ def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffCa
         raise ValueError(f"Unknown backoff strategy: {strategy}. " f"Available: {list(strategies.keys())}")
 
     return strategies[strategy](**kwargs)
+
+
+# =============================================================================
+# Legacy compatible classes (for migration from shopping project)
+# =============================================================================
+
+
+@dataclass
+class BackoffConfig:
+    """
+    Configuration for exponential backoff calculation.
+
+    Compatible with shopping project's BackoffConfig for migration.
+    """
+
+    base: int = 4  # Base for exponential (4^n seconds)
+    max_delay: int = 180  # Maximum wait time (3 minutes)
+    jitter_percent: int = 25  # ±25% random jitter
+    min_delay: int = 1  # Minimum delay in seconds
+
+
+class LegacyBackoffCalculator:
+    """
+    Legacy backoff calculator compatible with shopping project.
+
+    Uses BackoffConfig for configuration.
+    """
+
+    def __init__(self, config: Optional[BackoffConfig] = None):
+        """
+        Initialize the calculator.
+
+        Args:
+            config: BackoffConfig instance
+        """
+        self.config = config or BackoffConfig()
+
+    def calculate(self, attempt: int, with_jitter: bool = True) -> int:
+        """
+        Calculate backoff delay for a given attempt.
+
+        Args:
+            attempt: The attempt number (1-based)
+            with_jitter: Whether to apply jitter
+
+        Returns:
+            Delay in seconds (integer)
+        """
+        if attempt < 1:
+            return self.config.min_delay
+
+        # Exponential backoff: base^attempt
+        delay = self.config.base ** attempt
+
+        # Cap at maximum delay
+        delay = min(delay, self.config.max_delay)
+
+        # Apply jitter if enabled
+        if with_jitter and self.config.jitter_percent > 0:
+            jitter_factor = self.config.jitter_percent / 100.0
+            # Random value between -jitter_factor and +jitter_factor
+            jitter = delay * jitter_factor * (random.random() * 2 - 1)
+            delay = int(delay + jitter)
+
+        # Ensure minimum delay
+        return max(self.config.min_delay, delay)
+
+    def get_delays_sequence(self, max_attempts: int, with_jitter: bool = False) -> list:
+        """
+        Get the sequence of delays for multiple attempts.
+
+        Args:
+            max_attempts: Number of attempts to calculate
+            with_jitter: Whether to apply jitter
+
+        Returns:
+            List of delay values in seconds
+        """
+        return [self.calculate(attempt, with_jitter) for attempt in range(1, max_attempts + 1)]
+
+
+def calculate_backoff(
+    attempt: int,
+    base: int = 4,
+    max_delay: int = 180,
+    jitter_percent: int = 25,
+) -> int:
+    """
+    Convenience function to calculate backoff delay.
+
+    Args:
+        attempt: The attempt number (1-based)
+        base: Base for exponential calculation
+        max_delay: Maximum delay in seconds
+        jitter_percent: Jitter percentage (0-100)
+
+    Returns:
+        Delay in seconds
+    """
+    config = BackoffConfig(
+        base=base,
+        max_delay=max_delay,
+        jitter_percent=jitter_percent,
+    )
+    calculator = LegacyBackoffCalculator(config)
+    return calculator.calculate(attempt)

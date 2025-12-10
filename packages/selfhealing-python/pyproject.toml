@@ -91,6 +91,9 @@ filterwarnings = [
 ]
 markers = [
     "django_db: mark test as requiring database access",
+    "tier1: fundamental functionality tests",
+    "tier2: integration tests",
+    "tier3_chaos: chaos engineering tests",
 ]
 DJANGO_SETTINGS_MODULE = ""
 

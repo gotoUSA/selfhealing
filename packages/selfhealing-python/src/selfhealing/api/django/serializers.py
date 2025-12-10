@@ -116,23 +116,29 @@ class ControlRequestSerializer(serializers.Serializer):
 
         # Rule 1: inject_failure forbidden in ops
         if action == ControlAPIActions.INJECT_FAILURE and environment == ControlAPIEnvironments.OPS:
-            raise serializers.ValidationError({
-                "action": "inject_failure is FORBIDDEN in ops environment",
-                "error_code": "ACTION_FORBIDDEN_IN_ENVIRONMENT",
-            })
+            raise serializers.ValidationError(
+                {
+                    "action": "inject_failure is FORBIDDEN in ops environment",
+                    "error_code": "ACTION_FORBIDDEN_IN_ENVIRONMENT",
+                }
+            )
 
         # Rule 2: override in ops requires TTL (max 60 minutes)
         if action == ControlAPIActions.OVERRIDE and environment == ControlAPIEnvironments.OPS:
             if not ttl_minutes:
-                raise serializers.ValidationError({
-                    "ttl_minutes": "TTL is required for override action in ops environment",
-                    "error_code": "TTL_REQUIRED_FOR_OPS_OVERRIDE",
-                })
+                raise serializers.ValidationError(
+                    {
+                        "ttl_minutes": "TTL is required for override action in ops environment",
+                        "error_code": "TTL_REQUIRED_FOR_OPS_OVERRIDE",
+                    }
+                )
             if ttl_minutes > 60:
-                raise serializers.ValidationError({
-                    "ttl_minutes": f"TTL cannot exceed 60 minutes in ops environment (got: {ttl_minutes})",
-                    "error_code": "TTL_EXCEEDS_OPS_LIMIT",
-                })
+                raise serializers.ValidationError(
+                    {
+                        "ttl_minutes": f"TTL cannot exceed 60 minutes in ops environment (got: {ttl_minutes})",
+                        "error_code": "TTL_EXCEEDS_OPS_LIMIT",
+                    }
+                )
 
         return data
 

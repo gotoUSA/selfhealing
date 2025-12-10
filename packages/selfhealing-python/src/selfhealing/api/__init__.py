@@ -22,6 +22,7 @@ __all__ = []
 # Try to import Django API
 try:
     from selfhealing.api import django
+
     __all__.append("django")
 except ImportError:
     pass

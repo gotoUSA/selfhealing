@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ControlRequest:
     """Internal control request representation."""
+
     service_name: str
     action: str
     reason: str
@@ -71,6 +72,7 @@ class ControlRequest:
 @dataclass
 class ControlResponse:
     """Internal control response representation."""
+
     status: str  # success, rejected, error
     action_applied: str
     system_state: Optional[str] = None
@@ -111,7 +113,7 @@ class ControlResponse:
 class ControlAPIService:
     """
     Service layer for Control API operations.
-    
+
     Handles the business logic for control actions.
     """
 
@@ -147,8 +149,7 @@ class ControlAPIService:
     def _execute_allow(self, request: ControlRequest) -> ControlResponse:
         """Execute allow action (close circuit breaker)."""
         cb, created = CircuitBreakerState.objects.get_or_create(
-            service_name=request.service_name,
-            defaults={"state": CircuitState.CLOSED.value}
+            service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
 
         previous_state = cb.state
@@ -175,8 +176,7 @@ class ControlAPIService:
     def _execute_block(self, request: ControlRequest) -> ControlResponse:
         """Execute block action (open circuit breaker)."""
         cb, created = CircuitBreakerState.objects.get_or_create(
-            service_name=request.service_name,
-            defaults={"state": CircuitState.CLOSED.value}
+            service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
 
         previous_state = cb.state
@@ -230,8 +230,7 @@ class ControlAPIService:
     def _execute_override(self, request: ControlRequest) -> ControlResponse:
         """Execute override action."""
         cb, created = CircuitBreakerState.objects.get_or_create(
-            service_name=request.service_name,
-            defaults={"state": CircuitState.CLOSED.value}
+            service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
 
         previous_state = cb.state
@@ -283,18 +282,20 @@ class ControlAPIService:
 
         services = []
         for cb in circuits:
-            services.append({
-                "service_name": cb.service_name,
-                "state": cb.state,
-                "failure_count": cb.failure_count,
-                "success_count": cb.success_count,
-                "last_failure_at": cb.last_failure_at,
-                "opened_at": cb.opened_at,
-                "manually_controlled": cb.manually_controlled,
-                "controlled_by": cb.controlled_by_id,
-                "control_reason": cb.control_reason,
-                "expires_at": cb.manual_override_expires_at,
-            })
+            services.append(
+                {
+                    "service_name": cb.service_name,
+                    "state": cb.state,
+                    "failure_count": cb.failure_count,
+                    "success_count": cb.success_count,
+                    "last_failure_at": cb.last_failure_at,
+                    "opened_at": cb.opened_at,
+                    "manually_controlled": cb.manually_controlled,
+                    "controlled_by": cb.controlled_by_id,
+                    "control_reason": cb.control_reason,
+                    "expires_at": cb.manual_override_expires_at,
+                }
+            )
 
         return {
             "services": services,
@@ -337,9 +338,10 @@ class ControlAPIService:
 
         # DLQ stats
         dlq_by_domain = dict(
-            FailedOperation.objects.filter(
-                status=FailedOperation.Status.PENDING
-            ).values("domain").annotate(count=Count("id")).values_list("domain", "count")
+            FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
+            .values("domain")
+            .annotate(count=Count("id"))
+            .values_list("domain", "count")
         )
         total_dlq_pending = sum(dlq_by_domain.values())
 
@@ -351,14 +353,16 @@ class ControlAPIService:
                 status=FailedOperation.Status.PENDING,
             ).count()
 
-            services.append({
-                "service_name": cb.service_name,
-                "failure_rate_5m": 0.0,  # Would need more data to calculate
-                "retry_success_rate": 0.0,
-                "dlq_count": dlq_count,
-                "circuit_state": cb.state,
-                "avg_recovery_time_seconds": None,
-            })
+            services.append(
+                {
+                    "service_name": cb.service_name,
+                    "failure_rate_5m": 0.0,  # Would need more data to calculate
+                    "retry_success_rate": 0.0,
+                    "dlq_count": dlq_count,
+                    "circuit_state": cb.state,
+                    "avg_recovery_time_seconds": None,
+                }
+            )
 
         collection_duration_ms = int((time.time() - start_time) * 1000)
 
@@ -610,12 +614,14 @@ class SelfHealingHealthView(APIView):
             services_count = 0
             health_status = "degraded"
 
-        return Response({
-            "status": health_status,
-            "circuit_breaker_enabled": True,
-            "services_count": services_count,
-            "timestamp": timezone.now().isoformat(),
-        })
+        return Response(
+            {
+                "status": health_status,
+                "circuit_breaker_enabled": True,
+                "services_count": services_count,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class SelfHealingMetricsView(APIView):
@@ -667,9 +673,7 @@ class DLQReplayView(APIView):
 
         try:
             # Get pending DLQ entries
-            queryset = FailedOperation.objects.filter(
-                status=FailedOperation.Status.PENDING
-            )
+            queryset = FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
             if domain:
                 queryset = queryset.filter(domain=domain)
 
@@ -697,13 +701,15 @@ class DLQReplayView(APIView):
                 f"batch_size={batch_size}, success={success_count}, failed={failed_count}"
             )
 
-            return Response({
-                "status": "success",
-                "total": total,
-                "success_count": success_count,
-                "failed_count": failed_count,
-                "skipped_count": skipped_count,
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "total": total,
+                    "success_count": success_count,
+                    "failed_count": failed_count,
+                    "skipped_count": skipped_count,
+                }
+            )
 
         except Exception as e:
             logger.error(f"[DLQ] Replay failed: {e}")

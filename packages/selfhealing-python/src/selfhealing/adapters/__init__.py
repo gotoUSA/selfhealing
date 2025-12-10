@@ -47,8 +47,10 @@ def __getattr__(name: str):
     """Lazy import of adapter submodules."""
     if name == "django":
         from selfhealing.adapters import django as _django
+
         return _django
     elif name == "celery":
         from selfhealing.adapters import celery as _celery
+
         return _celery
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
