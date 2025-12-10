@@ -21,7 +21,7 @@ from selfhealing.interfaces.task_queue import (
 )
 
 logger = logging.getLogger(__name__)
-F = TypeVar('F', bound=Callable)
+F = TypeVar("F", bound=Callable)
 
 
 class SyncTaskAdapter(TaskQueueInterface):
@@ -60,6 +60,7 @@ class SyncTaskAdapter(TaskQueueInterface):
         rate_limit: Optional[str] = None,
     ) -> Callable[[F], F]:
         """Decorator to register a function as a task."""
+
         def decorator(func: F) -> F:
             task_name = name or func.__name__
 
@@ -181,7 +182,7 @@ class SyncTaskAdapter(TaskQueueInterface):
             TaskResult(
                 task_id=task_id,
                 status=TaskStatus.PENDING,
-            )
+            ),
         )
 
     def revoke(
@@ -226,16 +227,13 @@ class SyncTaskAdapter(TaskQueueInterface):
         kwargs = kwargs or {}
 
         self._periodic_schedules[schedule_name] = {
-            'task': task_name,
-            'schedule': schedule,
-            'args': args,
-            'kwargs': kwargs,
+            "task": task_name,
+            "schedule": schedule,
+            "args": args,
+            "kwargs": kwargs,
         }
 
-        logger.info(
-            f"[SyncAdapter] Periodic task registered: {schedule_name} "
-            f"(will not run automatically in sync mode)"
-        )
+        logger.info(f"[SyncAdapter] Periodic task registered: {schedule_name} " f"(will not run automatically in sync mode)")
         return schedule_name
 
     def unschedule(self, schedule_id: str) -> bool:
@@ -260,9 +258,9 @@ class SyncTaskAdapter(TaskQueueInterface):
             return None
 
         return self.enqueue(
-            schedule['task'],
-            schedule['args'],
-            schedule['kwargs'],
+            schedule["task"],
+            schedule["args"],
+            schedule["kwargs"],
         )
 
     # =========================================================================

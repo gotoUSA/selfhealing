@@ -14,6 +14,7 @@ from decimal import Decimal
 @dataclass
 class PaymentConfirmResult:
     """Result of payment confirmation attempt"""
+
     success: bool
     payment_key: Optional[str] = None
     transaction_id: Optional[str] = None
@@ -26,6 +27,7 @@ class PaymentConfirmResult:
 @dataclass
 class PaymentCancelResult:
     """Result of payment cancellation/refund"""
+
     success: bool
     cancel_key: Optional[str] = None
     refund_amount: Optional[Decimal] = None
@@ -37,6 +39,7 @@ class PaymentCancelResult:
 @dataclass
 class WebhookVerifyResult:
     """Result of webhook signature verification"""
+
     valid: bool
     event_type: Optional[str] = None
     payload: Optional[dict] = None
@@ -46,6 +49,7 @@ class WebhookVerifyResult:
 @dataclass
 class PaymentStatusResult:
     """Result of payment status query"""
+
     success: bool
     status: Optional[str] = None
     payment_key: Optional[str] = None

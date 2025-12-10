@@ -18,7 +18,7 @@ from selfhealing.interfaces.task_queue import (
 )
 
 logger = logging.getLogger(__name__)
-F = TypeVar('F', bound=Callable)
+F = TypeVar("F", bound=Callable)
 
 
 class CeleryTaskAdapter(TaskQueueInterface):
@@ -44,6 +44,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         if self._app is None:
             try:
                 from celery import current_app
+
                 self._app = current_app
             except ImportError:
                 raise ImportError("Celery is required for CeleryTaskAdapter")
@@ -68,6 +69,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         rate_limit: Optional[str] = None,
     ) -> Callable[[F], F]:
         """Decorator to register a function as a task."""
+
         def decorator(func: F) -> F:
             task_name = name or func.__name__
 
@@ -129,15 +131,15 @@ class CeleryTaskAdapter(TaskQueueInterface):
         # Build apply_async options
         celery_options = {}
         if options.countdown is not None:
-            celery_options['countdown'] = options.countdown
+            celery_options["countdown"] = options.countdown
         if options.eta is not None:
-            celery_options['eta'] = options.eta
+            celery_options["eta"] = options.eta
         if options.expires is not None:
-            celery_options['expires'] = options.expires
+            celery_options["expires"] = options.expires
         if options.queue is not None:
-            celery_options['queue'] = options.queue
+            celery_options["queue"] = options.queue
         if options.priority != 0:
-            celery_options['priority'] = options.priority
+            celery_options["priority"] = options.priority
 
         # Execute
         result = task.apply_async(args=args, kwargs=kwargs, **celery_options)
@@ -209,12 +211,12 @@ class CeleryTaskAdapter(TaskQueueInterface):
     def _map_celery_status(self, celery_status: str) -> TaskStatus:
         """Map Celery status to TaskStatus."""
         mapping = {
-            'PENDING': TaskStatus.PENDING,
-            'STARTED': TaskStatus.STARTED,
-            'SUCCESS': TaskStatus.SUCCESS,
-            'FAILURE': TaskStatus.FAILURE,
-            'RETRY': TaskStatus.RETRY,
-            'REVOKED': TaskStatus.REVOKED,
+            "PENDING": TaskStatus.PENDING,
+            "STARTED": TaskStatus.STARTED,
+            "SUCCESS": TaskStatus.SUCCESS,
+            "FAILURE": TaskStatus.FAILURE,
+            "RETRY": TaskStatus.RETRY,
+            "REVOKED": TaskStatus.REVOKED,
         }
         return mapping.get(celery_status, TaskStatus.PENDING)
 
@@ -276,10 +278,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
             # Add to beat schedule
             self.app.conf.beat_schedule[schedule_name] = {
-                'task': task_name,
-                'schedule': schedule,
-                'args': args,
-                'kwargs': kwargs,
+                "task": task_name,
+                "schedule": schedule,
+                "args": args,
+                "kwargs": kwargs,
             }
             return schedule_name
         except Exception as e:
@@ -313,9 +315,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         """Get number of pending tasks in queue."""
         try:
             with self.app.connection_or_acquire() as conn:
-                return conn.default_channel.queue_declare(
-                    queue=queue_name, passive=True
-                ).message_count
+                return conn.default_channel.queue_declare(queue=queue_name, passive=True).message_count
         except Exception as e:
             logger.warning(f"[CeleryAdapter] Failed to get queue length: {e}")
             return 0

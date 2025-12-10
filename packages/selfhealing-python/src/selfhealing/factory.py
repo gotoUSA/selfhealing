@@ -131,10 +131,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._payment_providers:
-            raise ValueError(
-                f"Unknown payment provider: {name}. "
-                f"Available: {list(cls._payment_providers.keys())}"
-            )
+            raise ValueError(f"Unknown payment provider: {name}. " f"Available: {list(cls._payment_providers.keys())}")
 
         instance = cls._payment_providers[name]()
 
@@ -167,10 +164,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._cache_providers:
-            raise ValueError(
-                f"Unknown cache provider: {name}. "
-                f"Available: {list(cls._cache_providers.keys())}"
-            )
+            raise ValueError(f"Unknown cache provider: {name}. " f"Available: {list(cls._cache_providers.keys())}")
 
         instance = cls._cache_providers[name]()
 
@@ -203,10 +197,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._task_queues:
-            raise ValueError(
-                f"Unknown task queue: {name}. "
-                f"Available: {list(cls._task_queues.keys())}"
-            )
+            raise ValueError(f"Unknown task queue: {name}. " f"Available: {list(cls._task_queues.keys())}")
 
         instance = cls._task_queues[name]()
 
@@ -230,10 +221,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._failed_op_repos:
-            raise ValueError(
-                f"Unknown repository: {name}. "
-                f"Available: {list(cls._failed_op_repos.keys())}"
-            )
+            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._failed_op_repos.keys())}")
 
         instance = cls._failed_op_repos[name]()
 
@@ -257,10 +245,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._circuit_breaker_repos:
-            raise ValueError(
-                f"Unknown repository: {name}. "
-                f"Available: {list(cls._circuit_breaker_repos.keys())}"
-            )
+            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._circuit_breaker_repos.keys())}")
 
         instance = cls._circuit_breaker_repos[name]()
 
@@ -284,10 +269,7 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._security_repos:
-            raise ValueError(
-                f"Unknown repository: {name}. "
-                f"Available: {list(cls._security_repos.keys())}"
-            )
+            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._security_repos.keys())}")
 
         instance = cls._security_repos[name]()
 
@@ -418,18 +400,21 @@ class ProviderRegistry:
 # Auto-registration on import
 # =============================================================================
 
+
 def _auto_register_adapters() -> None:
     """Auto-register available adapters based on installed packages."""
 
     # Cache providers
     try:
         from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
+
         ProviderRegistry.register_cache("redis", RedisCacheAdapter)
     except ImportError:
         pass
 
     try:
         from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+
         ProviderRegistry.register_cache("memory", InMemoryCacheAdapter)
     except ImportError:
         pass
@@ -437,12 +422,14 @@ def _auto_register_adapters() -> None:
     # Task queues
     try:
         from selfhealing.adapters.queues.celery_adapter import CeleryTaskAdapter
+
         ProviderRegistry.register_queue("celery", CeleryTaskAdapter)
     except ImportError:
         pass
 
     try:
         from selfhealing.adapters.queues.sync_adapter import SyncTaskAdapter
+
         ProviderRegistry.register_queue("sync", SyncTaskAdapter)
     except ImportError:
         pass
@@ -450,6 +437,7 @@ def _auto_register_adapters() -> None:
     # Payment providers
     try:
         from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
+
         ProviderRegistry.register_payment("mock", MockPaymentAdapter)
     except ImportError:
         pass
@@ -461,6 +449,7 @@ def _auto_register_adapters() -> None:
             DjangoCircuitBreakerStateRepository,
             DjangoSecurityIncidentRepository,
         )
+
         ProviderRegistry.register_failed_operation_repo("django", DjangoFailedOperationRepository)
         ProviderRegistry.register_circuit_breaker_repo("django", DjangoCircuitBreakerStateRepository)
         ProviderRegistry.register_security_repo("django", DjangoSecurityIncidentRepository)

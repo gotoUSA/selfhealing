@@ -93,6 +93,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             # Try Django cache first
             from django.core.cache import cache
             from django_redis import get_redis_connection
+
             return get_redis_connection("default")
         except ImportError:
             pass
@@ -100,7 +101,8 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             # Fallback to direct redis connection
             import redis
-            return redis.Redis(host='localhost', port=6379, db=0)
+
+            return redis.Redis(host="localhost", port=6379, db=0)
         except ImportError:
             raise ImportError("redis-py is required for RedisCacheAdapter")
 
@@ -140,11 +142,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             serialized = json.dumps(value)
             if ttl:
-                return bool(self.client.setex(
-                    self._make_key(key),
-                    int(ttl.total_seconds()),
-                    serialized
-                ))
+                return bool(self.client.setex(self._make_key(key), int(ttl.total_seconds()), serialized))
             return bool(self.client.set(self._make_key(key), serialized))
         except Exception as e:
             logger.error(f"[RedisCache] Set failed for key '{key}': {e}")
@@ -189,10 +187,7 @@ class RedisCacheAdapter(CacheProviderInterface):
     def expire(self, key: str, ttl: timedelta) -> bool:
         """Set expiration on existing key."""
         try:
-            return bool(self.client.expire(
-                self._make_key(key),
-                int(ttl.total_seconds())
-            ))
+            return bool(self.client.expire(self._make_key(key), int(ttl.total_seconds())))
         except Exception as e:
             logger.error(f"[RedisCache] Expire failed for key '{key}': {e}")
             return False
@@ -263,10 +258,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             return True
 
         try:
-            prefixed_mapping = {
-                self._make_key(k): json.dumps(v)
-                for k, v in mapping.items()
-            }
+            prefixed_mapping = {self._make_key(k): json.dumps(v) for k, v in mapping.items()}
 
             if ttl:
                 # Redis doesn't support MSET with TTL, use pipeline

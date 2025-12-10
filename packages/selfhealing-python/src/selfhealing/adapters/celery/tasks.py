@@ -80,6 +80,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         except (ImportError, ValueError):
             # Fallback to direct import
             from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+
             repo = DjangoFailedOperationRepository()
 
         from selfhealing.core.types import OperationStatus
@@ -451,6 +452,7 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
             repo = ProviderRegistry.get_failed_operation_repo()
         except (ImportError, ValueError):
             from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+
             repo = DjangoFailedOperationRepository()
 
         operation = repo.get_by_id(dlq_id)
@@ -527,6 +529,7 @@ def replay_batch_by_domain(
             repo = ProviderRegistry.get_failed_operation_repo()
         except (ImportError, ValueError):
             from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
+
             repo = DjangoFailedOperationRepository()
 
         pending = repo.get_pending(domain=domain, limit=max_items)

@@ -202,17 +202,18 @@ class MockPaymentAdapter(PaymentProviderInterface):
     ) -> PaymentConfirmResult:
         """Confirm a payment."""
         # Track the call
-        self._confirm_calls.append({
-            "payment_key": payment_key,
-            "order_id": order_id,
-            "amount": amount,
-            "idempotency_key": idempotency_key,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._confirm_calls.append(
+            {
+                "payment_key": payment_key,
+                "order_id": order_id,
+                "amount": amount,
+                "idempotency_key": idempotency_key,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug(
-            f"[MockPayment] confirm_payment called: "
-            f"payment_key={payment_key}, order_id={order_id}, amount={amount}"
+            f"[MockPayment] confirm_payment called: " f"payment_key={payment_key}, order_id={order_id}, amount={amount}"
         )
 
         # Raise exception if configured
@@ -239,18 +240,17 @@ class MockPaymentAdapter(PaymentProviderInterface):
     ) -> PaymentCancelResult:
         """Cancel a payment."""
         # Track the call
-        self._cancel_calls.append({
-            "payment_key": payment_key,
-            "cancel_reason": cancel_reason,
-            "cancel_amount": cancel_amount,
-            "idempotency_key": idempotency_key,
-            "timestamp": datetime.now().isoformat(),
-        })
-
-        logger.debug(
-            f"[MockPayment] cancel_payment called: "
-            f"payment_key={payment_key}, reason={cancel_reason}"
+        self._cancel_calls.append(
+            {
+                "payment_key": payment_key,
+                "cancel_reason": cancel_reason,
+                "cancel_amount": cancel_amount,
+                "idempotency_key": idempotency_key,
+                "timestamp": datetime.now().isoformat(),
+            }
         )
+
+        logger.debug(f"[MockPayment] cancel_payment called: " f"payment_key={payment_key}, reason={cancel_reason}")
 
         # Raise exception if configured
         if self._cancel_exception is not None:
@@ -274,17 +274,16 @@ class MockPaymentAdapter(PaymentProviderInterface):
     ) -> WebhookVerifyResult:
         """Verify webhook signature."""
         # Track the call
-        self._webhook_calls.append({
-            "payload_size": len(payload),
-            "signature": signature,
-            "timestamp": timestamp,
-            "call_timestamp": datetime.now().isoformat(),
-        })
-
-        logger.debug(
-            f"[MockPayment] verify_webhook called: "
-            f"signature={signature[:20]}..."
+        self._webhook_calls.append(
+            {
+                "payload_size": len(payload),
+                "signature": signature,
+                "timestamp": timestamp,
+                "call_timestamp": datetime.now().isoformat(),
+            }
         )
+
+        logger.debug(f"[MockPayment] verify_webhook called: " f"signature={signature[:20]}...")
 
         # Return configured response or default valid
         if self._webhook_response is not None:
@@ -302,10 +301,12 @@ class MockPaymentAdapter(PaymentProviderInterface):
     ) -> PaymentStatusResult:
         """Get payment status."""
         # Track the call
-        self._status_calls.append({
-            "payment_key": payment_key,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._status_calls.append(
+            {
+                "payment_key": payment_key,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         logger.debug(f"[MockPayment] get_payment_status called: payment_key={payment_key}")
 

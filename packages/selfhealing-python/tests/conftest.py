@@ -89,3 +89,59 @@ def resource_simulator():
     from tests.chaos.conftest import ResourceExhaustionSimulator
 
     return ResourceExhaustionSimulator(max_connections=100)
+
+
+# =============================================================================
+# Pluggable Architecture Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def mock_payment_adapter():
+    """Provides a mock payment adapter for testing."""
+    from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
+
+    adapter = MockPaymentAdapter()
+    yield adapter
+    adapter.reset()
+
+
+@pytest.fixture
+def memory_cache_adapter():
+    """Provides an in-memory cache adapter for testing."""
+    from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+
+    adapter = InMemoryCacheAdapter(key_prefix="test:")
+    yield adapter
+    adapter.flush_all()
+
+
+@pytest.fixture
+def sync_queue_adapter():
+    """Provides a synchronous task queue adapter for testing."""
+    from selfhealing.adapters.queues.sync_adapter import SyncTaskAdapter
+
+    return SyncTaskAdapter()
+
+
+@pytest.fixture(autouse=False)
+def test_provider_registry():
+    """Setup and teardown provider registry for tests."""
+    from selfhealing.factory import ProviderRegistry
+
+    # Store original state
+    original_instances = ProviderRegistry._instances.copy()
+
+    # Set test defaults
+    ProviderRegistry.set_defaults(
+        payment="mock",
+        cache="memory",
+        queue="sync",
+    )
+    ProviderRegistry.clear_instances()
+
+    yield ProviderRegistry
+
+    # Restore original state
+    ProviderRegistry._instances = original_instances
+

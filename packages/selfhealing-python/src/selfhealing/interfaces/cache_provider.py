@@ -10,7 +10,7 @@ from typing import Any, Optional, TypeVar
 from datetime import timedelta
 from contextlib import contextmanager
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class DistributedLock(ABC):

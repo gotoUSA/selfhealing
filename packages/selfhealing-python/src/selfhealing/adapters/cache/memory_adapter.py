@@ -112,10 +112,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def _cleanup_expired(self) -> None:
         """Remove expired entries (called internally)."""
         now = time.time()
-        expired_keys = [
-            k for k, (_, expires_at) in self._store.items()
-            if expires_at is not None and expires_at <= now
-        ]
+        expired_keys = [k for k, (_, expires_at) in self._store.items() if expires_at is not None and expires_at <= now]
         for key in expired_keys:
             del self._store[key]
 
@@ -305,10 +302,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         """Clear all keys."""
         with self._lock:
             # Only clear keys with our prefix
-            keys_to_delete = [
-                k for k in self._store.keys()
-                if k.startswith(self._key_prefix)
-            ]
+            keys_to_delete = [k for k in self._store.keys() if k.startswith(self._key_prefix)]
             for key in keys_to_delete:
                 del self._store[key]
         return True

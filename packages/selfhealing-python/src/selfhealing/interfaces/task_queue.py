@@ -11,11 +11,12 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
 
-F = TypeVar('F', bound=Callable)
+F = TypeVar("F", bound=Callable)
 
 
 class TaskStatus(str, Enum):
     """Task execution status"""
+
     PENDING = "pending"
     STARTED = "started"
     SUCCESS = "success"
@@ -27,6 +28,7 @@ class TaskStatus(str, Enum):
 @dataclass
 class TaskResult:
     """Result of task execution or status check"""
+
     task_id: str
     status: TaskStatus
     result: Optional[Any] = None
@@ -40,15 +42,16 @@ class TaskResult:
 @dataclass
 class TaskOptions:
     """Options for task enqueueing"""
-    countdown: Optional[int] = None          # Delay in seconds
-    eta: Optional[datetime] = None           # Exact execution time
-    expires: Optional[datetime] = None       # Task expiration time
-    retry: bool = True                        # Enable auto-retry
-    max_retries: int = 3                      # Max retry attempts
-    retry_backoff: bool = True                # Exponential backoff
-    retry_backoff_max: int = 600              # Max backoff seconds
-    queue: Optional[str] = None               # Target queue name
-    priority: int = 0                         # Task priority (higher = sooner)
+
+    countdown: Optional[int] = None  # Delay in seconds
+    eta: Optional[datetime] = None  # Exact execution time
+    expires: Optional[datetime] = None  # Task expiration time
+    retry: bool = True  # Enable auto-retry
+    max_retries: int = 3  # Max retry attempts
+    retry_backoff: bool = True  # Exponential backoff
+    retry_backoff_max: int = 600  # Max backoff seconds
+    queue: Optional[str] = None  # Target queue name
+    priority: int = 0  # Task priority (higher = sooner)
 
 
 class TaskQueueInterface(ABC):
