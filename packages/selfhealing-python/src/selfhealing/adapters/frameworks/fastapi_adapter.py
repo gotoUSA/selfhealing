@@ -68,10 +68,7 @@ class FastAPIAdapter(WebFrameworkInterface):
 
                 self._fastapi = fastapi
             except ImportError:
-                raise ImportError(
-                    "fastapi is required for FastAPIAdapter. "
-                    "Install it with: pip install fastapi"
-                )
+                raise ImportError("fastapi is required for FastAPIAdapter. " "Install it with: pip install fastapi")
         return self._fastapi
 
     @property
@@ -130,9 +127,7 @@ class FastAPIAdapter(WebFrameworkInterface):
             permissions: Required permission codes
         """
         # Create wrapped handler
-        wrapped = self._create_fastapi_handler(
-            handler, auth_required, permissions
-        )
+        wrapped = self._create_fastapi_handler(handler, auth_required, permissions)
 
         # Build route options
         route_options = {
@@ -194,10 +189,7 @@ class FastAPIAdapter(WebFrameworkInterface):
                 if permissions and ctx.user:
                     user_perms = getattr(ctx.user, "permissions", set())
                     if not all(p in user_perms for p in permissions):
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Insufficient permissions"
-                        )
+                        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
                 # Call the handler
                 response_ctx = handler(ctx)

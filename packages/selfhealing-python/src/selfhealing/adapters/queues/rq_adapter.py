@@ -84,10 +84,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._rq = rq
             except ImportError:
-                raise ImportError(
-                    "rq is required for RQTaskAdapter. "
-                    "Install it with: pip install rq"
-                )
+                raise ImportError("rq is required for RQTaskAdapter. " "Install it with: pip install rq")
         return self._rq
 
     @property
@@ -99,10 +96,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._redis = redis
             except ImportError:
-                raise ImportError(
-                    "redis is required for RQTaskAdapter. "
-                    "Install it with: pip install redis"
-                )
+                raise ImportError("redis is required for RQTaskAdapter. " "Install it with: pip install redis")
         return self._redis
 
     @property
@@ -246,10 +240,14 @@ class RQTaskAdapter(TaskQueueInterface):
         # Build job options
         job_options = {
             "job_timeout": self._default_timeout,
-            "retry": self.rq.Retry(
-                max=task_info.get("max_retries", options.max_retries),
-                interval=self._get_retry_intervals(options) if options.retry else None,
-            ) if options.retry else None,
+            "retry": (
+                self.rq.Retry(
+                    max=task_info.get("max_retries", options.max_retries),
+                    interval=self._get_retry_intervals(options) if options.retry else None,
+                )
+                if options.retry
+                else None
+            ),
         }
 
         # Handle delayed execution
@@ -485,10 +483,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return job.id
 
         except ImportError:
-            raise ImportError(
-                "rq-scheduler is required for periodic tasks. "
-                "Install it with: pip install rq-scheduler"
-            )
+            raise ImportError("rq-scheduler is required for periodic tasks. " "Install it with: pip install rq-scheduler")
 
     def unschedule(self, schedule_id: str) -> bool:
         """

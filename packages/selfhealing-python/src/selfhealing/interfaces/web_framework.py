@@ -67,9 +67,7 @@ class ResponseContext:
         return cls(status_code=status_code, body=data)
 
     @classmethod
-    def error(
-        cls, message: str, status_code: int = 400, code: Optional[str] = None
-    ) -> "ResponseContext":
+    def error(cls, message: str, status_code: int = 400, code: Optional[str] = None) -> "ResponseContext":
         """Create error response"""
         error_body = {"error": message, "success": False}
         if code:
@@ -103,9 +101,7 @@ class ResponseContext:
         return cls.error(message, status_code=403, code="FORBIDDEN")
 
     @classmethod
-    def internal_error(
-        cls, message: str = "Internal server error"
-    ) -> "ResponseContext":
+    def internal_error(cls, message: str = "Internal server error") -> "ResponseContext":
         """Create 500 Internal Server Error response"""
         return cls.error(message, status_code=500, code="INTERNAL_ERROR")
 

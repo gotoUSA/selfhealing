@@ -180,8 +180,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
                 self._pymemcache = pymemcache
             except ImportError:
                 raise ImportError(
-                    "pymemcache is required for MemcachedCacheAdapter. "
-                    "Install it with: pip install pymemcache"
+                    "pymemcache is required for MemcachedCacheAdapter. " "Install it with: pip install pymemcache"
                 )
         return self._pymemcache
 
@@ -432,11 +431,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
 
             # Map back to original keys
             prefix_len = len(self._key_prefix)
-            return {
-                k[prefix_len:]: v
-                for k, v in result.items()
-                if v is not None
-            }
+            return {k[prefix_len:]: v for k, v in result.items() if v is not None}
         except Exception as e:
             logger.error(f"[MemcachedCache] MGet failed: {e}")
             return {}
@@ -449,10 +444,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         """Set multiple values at once."""
         try:
             expire = int(ttl.total_seconds()) if ttl else 0
-            full_mapping = {
-                self._make_key(k): v
-                for k, v in mapping.items()
-            }
+            full_mapping = {self._make_key(k): v for k, v in mapping.items()}
 
             failed = self.client.set_many(full_mapping, expire=expire)
             return len(failed) == 0
@@ -515,10 +507,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         Note: Requires Memcached 1.4.8+
         """
         try:
-            return self.client.touch(
-                self._make_key(key),
-                expire=int(ttl.total_seconds())
-            )
+            return self.client.touch(self._make_key(key), expire=int(ttl.total_seconds()))
         except Exception as e:
             logger.error(f"[MemcachedCache] Touch failed for key '{key}': {e}")
             return False
