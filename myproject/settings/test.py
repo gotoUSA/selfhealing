@@ -112,3 +112,48 @@ PASSWORD_HASHERS = [
 # ==========================================================================
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# ==========================================================================
+# Self-Healing Configuration (Test Environment)
+# Test-optimized settings with minimal delays for fast test execution.
+# WARNING: CELERY_TASK_ALWAYS_EAGER=True means tasks run synchronously,
+# which differs from production async behavior. See test_celery_async_mode.py
+# for tests that simulate production async behavior.
+# ==========================================================================
+
+SELF_HEALING = {
+    # SLA - Same thresholds, tests use freezegun for time manipulation
+    "SLA": {
+        "PAYMENT_HOURS": 1,
+        "POINT_HOURS": 4,
+        "INVENTORY_HOURS": 2,
+        "WEBHOOK_HOURS": 8,
+        "NOTIFICATION_HOURS": 24,
+    },
+    # Retry Policy - Minimal delays for fast tests
+    "RETRY": {
+        "MAX_RETRIES": 3,
+        "BACKOFF_BASE": 2,
+        "BACKOFF_MAX": 10,        # Very short for test speed
+        "JITTER_PERCENT": 0.0,    # No jitter for deterministic tests
+    },
+    # Circuit Breaker - Enabled but with short timeout
+    "CIRCUIT_BREAKER": {
+        "ENABLED": True,
+        "FAILURE_THRESHOLD": 5,
+        "SUCCESS_THRESHOLD": 3,
+        "RECOVERY_TIMEOUT": 5,    # Very short for fast tests
+    },
+    # Dead Letter Queue - Minimal delays
+    "DLQ": {
+        "AUTO_REPLAY_ENABLED": True,
+        "MAX_REPLAY_ATTEMPTS": 3,
+        "REPLAY_DELAY_SECONDS": 1,  # Near-instant for tests
+    },
+    # Idempotency - Short TTLs for test isolation
+    "IDEMPOTENCY": {
+        "DEFAULT_CACHE_TTL": 10,
+        "PAYMENT_CACHE_TTL": 30,
+        "WEBHOOK_CACHE_TTL": 20,
+    },
+}

@@ -438,3 +438,95 @@ def authenticated_user(api_client):
 - [Test Requirements Specification](./L3_TEST_REQUIREMENTS_SPECIFICATION.md)
 - [Test Coverage Analysis](./L3_TEST_COVERAGE_ANALYSIS.md)
 - [Test Gap Report](./L3_TEST_GAP_REPORT.md)
+
+---
+
+## Appendix: Test Gap Resolutions (Added 2025-12-10)
+
+This section documents test gaps identified in the self-healing system and their resolutions.
+
+### A.1 SELF_HEALING Configuration
+
+**Issue**: `SELF_HEALING` settings were not defined in any settings file, causing the system to rely on implicit default values.
+
+**Resolution**: Added explicit `SELF_HEALING` configuration to:
+- `myproject/settings/production.py` - Production-optimized values
+- `myproject/settings/local.py` - Development-friendly values
+- `myproject/settings/test.py` - Test-optimized values with minimal delays
+
+**Configuration Structure**:
+```python
+SELF_HEALING = {
+    "SLA": {...},            # Service Level Agreement thresholds
+    "RETRY": {...},          # Retry policy with exponential backoff
+    "CIRCUIT_BREAKER": {...}, # Circuit breaker settings
+    "DLQ": {...},            # Dead Letter Queue settings
+    "IDEMPOTENCY": {...},    # Idempotency cache TTLs
+}
+```
+
+### A.2 Celery Eager vs Async Mode Gap
+
+**Issue**: Tests run with `CELERY_TASK_ALWAYS_EAGER=True`, which masks critical differences from production async behavior:
+
+| Aspect | Eager (Test) | Async (Production) |
+|--------|--------------|-------------------|
+| Execution | Synchronous | Asynchronous via broker |
+| Error propagation | Immediate exception | Task-internal only |
+| Retry behavior | Often ignored | Actual backoff applied |
+| Transaction | Same transaction | Separate connection |
+
+**Resolution**: Created two new test files:
+
+1. **`test_celery_async_mode.py`** - Tests that simulate async behavior:
+   - `TestCeleryAsyncBehavior`: Task queuing verification
+   - `TestCeleryRetrySimulation`: Retry configuration validation
+   - `TestBrokerFailureRecovery`: Broker failure handling
+
+2. **`test_transaction_task_timing.py`** - Transaction-task coordination:
+   - `TestTransactionTaskCoordination`: on_commit pattern testing
+   - `TestDLQTransactionPatterns`: DLQ-specific patterns
+   - `TestEagerVsAsyncDifferences`: Documentation of mode differences
+
+**Key Pattern for Production Safety**:
+```python
+# CORRECT: Use on_commit to ensure task sees committed data
+with transaction.atomic():
+    obj = Model.objects.create(...)
+    transaction.on_commit(
+        lambda: my_task.apply_async(args=[obj.id])
+    )
+
+# WRONG: Task may execute before commit in production
+with transaction.atomic():
+    obj = Model.objects.create(...)
+    my_task.delay(obj.id)  # BAD! Race condition in production
+```
+
+### A.3 Running New Tests
+
+```bash
+# Run Celery async mode tests
+pytest shopping/tests/integration/self_healing/test_celery_async_mode.py -v
+
+# Run transaction timing tests
+pytest shopping/tests/integration/self_healing/test_transaction_task_timing.py -v
+
+# Run both with coverage
+pytest shopping/tests/integration/self_healing/test_celery_async_mode.py \
+       shopping/tests/integration/self_healing/test_transaction_task_timing.py \
+       --cov=shopping/tasks \
+       --cov-report=term-missing -v
+```
+
+### A.4 Future Work
+
+The following test gaps are planned for future resolution:
+
+| Priority | Test File | Focus |
+|----------|-----------|-------|
+| 🟠 Medium | `test_redis_failure_scenarios.py` | Redis connection failure handling |
+| 🟠 Medium | `test_time_based_behaviors.py` | Time-dependent logic with freezegun |
+| 🟠 Medium | `test_external_api_failures.py` | External API timeout/failure recovery |
+
+See `docs/SELF_HEALING_TEST_GAP_ANALYSIS.md` for full details.

@@ -129,3 +129,51 @@ REST_AUTH["JWT_AUTH_SECURE"] = True  # noqa: F405
 
 if not ENCRYPTION_KEY:  # noqa: F405
     raise ValueError("❌ ENCRYPTION_KEY가 설정되지 않았습니다! " "프로덕션 환경에서는 암호화 키가 필수입니다.")
+
+# ==========================================================================
+# Self-Healing Configuration (Production)
+# Defines recovery SLA, retry policies, circuit breaker and DLQ settings.
+# These values are used by shopping/services/self_healing/config.py
+# ==========================================================================
+
+SELF_HEALING = {
+    # SLA (Service Level Agreement) - Maximum hours before escalation
+    # Each operation type has different urgency levels
+    "SLA": {
+        "PAYMENT_HOURS": 1,       # Critical: Payment failures need fast resolution
+        "POINT_HOURS": 4,         # Medium: Points can wait a bit longer
+        "INVENTORY_HOURS": 2,     # High: Inventory sync is important for orders
+        "WEBHOOK_HOURS": 8,       # Low: Webhooks can be retried later
+        "NOTIFICATION_HOURS": 24, # Lowest: Notifications are not critical
+    },
+    # Retry Policy - Exponential backoff with jitter
+    # Production uses more retries with longer max delay
+    "RETRY": {
+        "MAX_RETRIES": 5,         # More retries in production than dev
+        "BACKOFF_BASE": 2,        # Exponential base: delay = base^attempt
+        "BACKOFF_MAX": 300,       # Maximum delay cap: 5 minutes
+        "JITTER_PERCENT": 0.25,   # Random jitter to prevent thundering herd
+    },
+    # Circuit Breaker - Prevents cascading failures
+    # Opens circuit after threshold failures, allows test requests after timeout
+    "CIRCUIT_BREAKER": {
+        "ENABLED": True,
+        "FAILURE_THRESHOLD": 5,   # Number of failures before opening circuit
+        "SUCCESS_THRESHOLD": 3,   # Successes needed to close from half-open
+        "RECOVERY_TIMEOUT": 60,   # Seconds before trying half-open (longer in prod)
+    },
+    # Dead Letter Queue - Failed operation storage and replay
+    # Auto-replay attempts to recover failed operations automatically
+    "DLQ": {
+        "AUTO_REPLAY_ENABLED": True,
+        "MAX_REPLAY_ATTEMPTS": 3,
+        "REPLAY_DELAY_SECONDS": 60,  # Delay between replay attempts
+    },
+    # Idempotency - Prevents duplicate operations
+    # Longer TTLs in production to handle delayed retries
+    "IDEMPOTENCY": {
+        "DEFAULT_CACHE_TTL": 60,      # Default: 1 minute
+        "PAYMENT_CACHE_TTL": 600,     # Payment: 10 minutes (critical operations)
+        "WEBHOOK_CACHE_TTL": 120,     # Webhook: 2 minutes
+    },
+}

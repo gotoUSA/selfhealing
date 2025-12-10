@@ -130,3 +130,46 @@ if not ENCRYPTION_KEY:  # noqa: F405
         "계좌번호 암호화 기능이 작동하지 않습니다. "
         ".env 파일에 ENCRYPTION_KEY를 추가해주세요."
     )
+
+# ==========================================================================
+# Self-Healing Configuration (Local Development)
+# Development-friendly settings with shorter timeouts for faster iteration.
+# These values are used by shopping/services/self_healing/config.py
+# ==========================================================================
+
+SELF_HEALING = {
+    # SLA (Service Level Agreement) - Shorter for dev to see failures quickly
+    "SLA": {
+        "PAYMENT_HOURS": 1,
+        "POINT_HOURS": 4,
+        "INVENTORY_HOURS": 2,
+        "WEBHOOK_HOURS": 8,
+        "NOTIFICATION_HOURS": 24,
+    },
+    # Retry Policy - Fewer retries and shorter delays for dev
+    "RETRY": {
+        "MAX_RETRIES": 3,         # Fewer retries for faster dev feedback
+        "BACKOFF_BASE": 2,
+        "BACKOFF_MAX": 60,        # Shorter max delay in dev: 1 minute
+        "JITTER_PERCENT": 0.25,
+    },
+    # Circuit Breaker - Shorter timeout for faster dev cycles
+    "CIRCUIT_BREAKER": {
+        "ENABLED": True,
+        "FAILURE_THRESHOLD": 5,
+        "SUCCESS_THRESHOLD": 3,
+        "RECOVERY_TIMEOUT": 30,   # Shorter timeout in dev: 30 seconds
+    },
+    # Dead Letter Queue - Same as production
+    "DLQ": {
+        "AUTO_REPLAY_ENABLED": True,
+        "MAX_REPLAY_ATTEMPTS": 3,
+        "REPLAY_DELAY_SECONDS": 30,  # Shorter delay in dev
+    },
+    # Idempotency - Shorter TTLs for dev testing
+    "IDEMPOTENCY": {
+        "DEFAULT_CACHE_TTL": 60,
+        "PAYMENT_CACHE_TTL": 300,    # 5 minutes in dev
+        "WEBHOOK_CACHE_TTL": 120,
+    },
+}
