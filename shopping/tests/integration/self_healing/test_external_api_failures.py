@@ -435,9 +435,7 @@ class TestCircuitBreakerExternalAPI:
         from shopping.models.failed_payment import CircuitBreakerState
 
         # Clean up any existing state
-        CircuitBreakerState.objects.filter(
-            service_name="api_failure_test"
-        ).delete()
+        CircuitBreakerState.objects.filter(service_name="api_failure_test").delete()
 
         cb_service = CircuitBreakerService()
 
@@ -448,7 +446,7 @@ class TestCircuitBreakerExternalAPI:
 
         # Check Circuit Breaker state
         state = cb_service.get_or_create_state("api_failure_test")
-        
+
         # After multiple failures, should transition towards OPEN
         # (exact threshold depends on configuration)
         assert state.failure_count >= 5
@@ -513,7 +511,7 @@ class TestPartialFailureScenarios:
         A common failure mode:
         1. Payment is confirmed successfully
         2. Webhook to update our system fails
-        
+
         In this case:
         - Payment is complete (money charged)
         - We need to recover the webhook/update, not the payment

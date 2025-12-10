@@ -91,7 +91,7 @@ class TestCircuitBreakerTimeBased:
         # Check at 3 seconds later (before 5s recovery timeout in test settings)
         with freeze_time("2025-01-01 12:00:03"):
             is_available = service.should_allow("timeout_test_service")
-            
+
             # Should still be blocked (OPEN state, timeout not reached)
             assert is_available is False
 
@@ -133,10 +133,10 @@ class TestCircuitBreakerTimeBased:
         # Check at 6 seconds later (after 5s recovery timeout in test settings)
         with freeze_time("2025-01-01 12:00:06"):
             is_available = service.should_allow("half_open_test_service")
-            
+
             # Should be available (transition to HALF_OPEN for test request)
             assert is_available is True
-            
+
             # Verify state has transitioned to HALF_OPEN
             cb_state.refresh_from_db()
             assert cb_state.state == CircuitState.HALF_OPEN
@@ -243,7 +243,7 @@ class TestSLABreachDetectionTimeBased:
         with freeze_time("2025-01-01 13:01:00"):
             sla_thresholds = SLAThresholds.from_settings()
             payment_threshold = sla_thresholds.get_threshold("payment")
-            
+
             # Calculate if SLA is breached
             time_pending = timezone.now() - failed_op.created_at
             is_breached = time_pending > payment_threshold
@@ -284,7 +284,7 @@ class TestSLABreachDetectionTimeBased:
         with freeze_time("2025-01-01 12:30:00"):
             sla_thresholds = SLAThresholds.from_settings()
             payment_threshold = sla_thresholds.get_threshold("payment")
-            
+
             # Calculate if SLA is breached
             time_pending = timezone.now() - failed_op.created_at
             is_breached = time_pending > payment_threshold
@@ -321,7 +321,7 @@ class TestSLABreachDetectionTimeBased:
         with freeze_time("2025-01-01 16:01:00"):
             sla_thresholds = SLAThresholds.from_settings()
             point_threshold = sla_thresholds.get_threshold("point")
-            
+
             time_pending = timezone.now() - failed_op.created_at
             is_breached = time_pending > point_threshold
 
@@ -354,7 +354,7 @@ class TestSLABreachDetectionTimeBased:
         with freeze_time("2025-01-01 15:00:00"):
             sla_thresholds = SLAThresholds.from_settings()
             point_threshold = sla_thresholds.get_threshold("point")
-            
+
             time_pending = timezone.now() - failed_op.created_at
             is_breached = time_pending > point_threshold
 
@@ -533,10 +533,10 @@ class TestManualOverrideTTLTimeBased:
         # Check at 45 minutes later (within 90 minute TTL)
         with freeze_time("2025-01-01 12:45:00"):
             is_available = service.should_allow("manual_override_test")
-            
+
             # Should be blocked due to manual override (OPEN state)
             assert is_available is False
-            
+
             # Verify override is still active
             cb_state.refresh_from_db()
             assert cb_state.manually_controlled is True
@@ -574,11 +574,11 @@ class TestManualOverrideTTLTimeBased:
         # Check at 91 minutes later (after 90 minute TTL)
         with freeze_time("2025-01-01 13:31:00"):
             is_available = service.should_allow("override_expiry_test")
-            
+
             # Override should have expired, returning to normal operation
             # If no recent failures, should be available
             # Note: Actual behavior depends on implementation
             cb_state.refresh_from_db()
-            
+
             # Verify override has expired
             assert cb_state.manual_override_expires_at < timezone.now()
