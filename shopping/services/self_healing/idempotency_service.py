@@ -242,25 +242,33 @@ class IdempotencyService:
 
         Returns:
             IdempotencyResult with duplicate status
+
+        Note:
+            Gracefully degrades to DB-only check if Redis is unavailable.
+            This ensures the service works even during cache failures.
         """
         from shopping.models.payment import Payment
 
         key = IdempotencyKey.for_payment(order_id, amount)
 
-        # Check cache first (fast path)
-        cached_payment_id = cache.get(key.cache_key)
-        if cached_payment_id:
-            try:
-                payment = Payment.objects.get(pk=cached_payment_id)
-                logger.debug(f"[Idempotency] Cache hit for payment: {key.key}")
-                return IdempotencyResult(
-                    is_duplicate=True,
-                    existing_record=payment,
-                    message="Payment found in cache",
-                )
-            except Payment.DoesNotExist:
-                # Cache is stale, delete it
-                cache.delete(key.cache_key)
+        # Check cache first (fast path) with graceful degradation
+        try:
+            cached_payment_id = cache.get(key.cache_key)
+            if cached_payment_id:
+                try:
+                    payment = Payment.objects.get(pk=cached_payment_id)
+                    logger.debug(f"[Idempotency] Cache hit for payment: {key.key}")
+                    return IdempotencyResult(
+                        is_duplicate=True,
+                        existing_record=payment,
+                        message="Payment found in cache",
+                    )
+                except Payment.DoesNotExist:
+                    # Cache is stale, delete it
+                    cache.delete(key.cache_key)
+        except Exception as e:
+            # Redis unavailable - fall back to DB-only check
+            logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
 
         # Check database (reliable path)
         existing = Payment.objects.filter(
@@ -270,8 +278,11 @@ class IdempotencyService:
         ).first()
 
         if existing:
-            # Update cache for future lookups
-            cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+            # Update cache for future lookups (best-effort)
+            try:
+                cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+            except Exception:
+                pass  # Cache update is optional
             logger.debug(f"[Idempotency] DB hit for payment: {key.key}")
             return IdempotencyResult(
                 is_duplicate=True,
@@ -300,24 +311,31 @@ class IdempotencyService:
 
         Returns:
             IdempotencyResult with duplicate status
+
+        Note:
+            Gracefully degrades to DB-only check if Redis is unavailable.
         """
         from shopping.models.payment import Payment
 
         key = IdempotencyKey.for_payment_confirm(payment_key, order_id, amount)
 
-        # Check cache first
-        cached_payment_id = cache.get(key.cache_key)
-        if cached_payment_id:
-            try:
-                payment = Payment.objects.get(pk=cached_payment_id, status="done")
-                logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
-                return IdempotencyResult(
-                    is_duplicate=True,
-                    existing_record=payment,
-                    message="Payment already confirmed (cached)",
-                )
-            except Payment.DoesNotExist:
-                cache.delete(key.cache_key)
+        # Check cache first with graceful degradation
+        try:
+            cached_payment_id = cache.get(key.cache_key)
+            if cached_payment_id:
+                try:
+                    payment = Payment.objects.get(pk=cached_payment_id, status="done")
+                    logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
+                    return IdempotencyResult(
+                        is_duplicate=True,
+                        existing_record=payment,
+                        message="Payment already confirmed (cached)",
+                    )
+                except Payment.DoesNotExist:
+                    cache.delete(key.cache_key)
+        except Exception as e:
+            # Redis unavailable - fall back to DB-only check
+            logger.warning(f"[Idempotency] Cache unavailable for confirm check, falling back to DB: {e}")
 
         # Check database
         existing = Payment.objects.filter(
@@ -328,7 +346,10 @@ class IdempotencyService:
         ).first()
 
         if existing:
-            cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+            try:
+                cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+            except Exception:
+                pass  # Cache update is optional
             logger.info(f"[Idempotency] Duplicate confirm detected (DB): {key.key}")
             return IdempotencyResult(
                 is_duplicate=True,
@@ -350,25 +371,35 @@ class IdempotencyService:
 
         Returns:
             IdempotencyResult with duplicate status
+
+        Note:
+            Gracefully degrades to DB-only check if Redis is unavailable.
         """
         from shopping.models.webhook_event import WebhookEvent
 
         key = IdempotencyKey.for_webhook(event_id)
 
-        # Check cache
-        if cache.get(key.cache_key):
-            logger.info(f"[Idempotency] Duplicate webhook detected (cache): {event_id}")
-            return IdempotencyResult(
-                is_duplicate=True,
-                message="Webhook already processed (cached)",
-            )
+        # Check cache with graceful degradation
+        try:
+            if cache.get(key.cache_key):
+                logger.info(f"[Idempotency] Duplicate webhook detected (cache): {event_id}")
+                return IdempotencyResult(
+                    is_duplicate=True,
+                    message="Webhook already processed (cached)",
+                )
+        except Exception as e:
+            # Redis unavailable - fall back to DB-only check
+            logger.warning(f"[Idempotency] Cache unavailable for webhook check, falling back to DB: {e}")
 
         # Check database
         exists = WebhookEvent.objects.filter(event_id=event_id).exists()
 
         if exists:
-            # Cache for future lookups
-            cache.set(key.cache_key, True, timeout=self.cache_ttl)
+            # Cache for future lookups (best-effort)
+            try:
+                cache.set(key.cache_key, True, timeout=self.cache_ttl)
+            except Exception:
+                pass  # Cache update is optional
             logger.info(f"[Idempotency] Duplicate webhook detected (DB): {event_id}")
             return IdempotencyResult(
                 is_duplicate=True,
@@ -396,24 +427,31 @@ class IdempotencyService:
 
         Returns:
             IdempotencyResult with duplicate status
+
+        Note:
+            Gracefully degrades to DB-only check if Redis is unavailable.
         """
         from shopping.models.point import PointHistory
 
         key = IdempotencyKey.for_point_operation(order_id, point_type, amount)
 
-        # Check cache
-        cached_id = cache.get(key.cache_key)
-        if cached_id:
-            try:
-                record = PointHistory.objects.get(pk=cached_id)
-                logger.info(f"[Idempotency] Duplicate point op detected: {key.key}")
-                return IdempotencyResult(
-                    is_duplicate=True,
-                    existing_record=record,
-                    message="Point operation already processed (cached)",
-                )
-            except PointHistory.DoesNotExist:
-                cache.delete(key.cache_key)
+        # Check cache with graceful degradation
+        try:
+            cached_id = cache.get(key.cache_key)
+            if cached_id:
+                try:
+                    record = PointHistory.objects.get(pk=cached_id)
+                    logger.info(f"[Idempotency] Duplicate point op detected: {key.key}")
+                    return IdempotencyResult(
+                        is_duplicate=True,
+                        existing_record=record,
+                        message="Point operation already processed (cached)",
+                    )
+                except PointHistory.DoesNotExist:
+                    cache.delete(key.cache_key)
+        except Exception as e:
+            # Redis unavailable - fall back to DB-only check
+            logger.warning(f"[Idempotency] Cache unavailable for point check, falling back to DB: {e}")
 
         # Check database
         existing = PointHistory.objects.filter(
@@ -423,7 +461,10 @@ class IdempotencyService:
         ).first()
 
         if existing:
-            cache.set(key.cache_key, existing.id, timeout=self.cache_ttl)
+            try:
+                cache.set(key.cache_key, existing.id, timeout=self.cache_ttl)
+            except Exception:
+                pass  # Cache update is optional
             return IdempotencyResult(
                 is_duplicate=True,
                 existing_record=existing,
@@ -440,7 +481,7 @@ class IdempotencyService:
         key: IdempotencyKey,
         record_id: int | None = None,
         ttl: int | None = None,
-    ) -> None:
+    ) -> bool:
         """
         Mark an operation as processed in the cache.
 
@@ -450,12 +491,23 @@ class IdempotencyService:
             key: The idempotency key
             record_id: Optional record ID to cache
             ttl: Optional custom TTL
+
+        Returns:
+            True if cache was updated, False if cache was unavailable.
+            The operation is still considered successful even if cache fails,
+            as the DB is the source of truth.
         """
         value = record_id if record_id else True
-        cache.set(key.cache_key, value, timeout=ttl or self.cache_ttl)
-        logger.debug(f"[Idempotency] Marked as processed: {key.cache_key}")
+        try:
+            cache.set(key.cache_key, value, timeout=ttl or self.cache_ttl)
+            logger.debug(f"[Idempotency] Marked as processed: {key.cache_key}")
+            return True
+        except Exception as e:
+            # Redis unavailable - log but don't fail the operation
+            logger.warning(f"[Idempotency] Failed to mark as processed (cache unavailable): {e}")
+            return False
 
-    def clear(self, key: IdempotencyKey) -> None:
+    def clear(self, key: IdempotencyKey) -> bool:
         """
         Clear an idempotency key from cache.
 
@@ -463,9 +515,17 @@ class IdempotencyService:
 
         Args:
             key: The idempotency key to clear
+
+        Returns:
+            True if cache was cleared, False if cache was unavailable.
         """
-        cache.delete(key.cache_key)
-        logger.debug(f"[Idempotency] Cleared: {key.cache_key}")
+        try:
+            cache.delete(key.cache_key)
+            logger.debug(f"[Idempotency] Cleared: {key.cache_key}")
+            return True
+        except Exception as e:
+            logger.warning(f"[Idempotency] Failed to clear key (cache unavailable): {e}")
+            return False
 
 
 # Singleton instance

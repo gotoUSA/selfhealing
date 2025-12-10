@@ -143,24 +143,51 @@ class TestIdempotencyServiceRedisFailure:
     - Check operations should fall back to database
     - Payment idempotency is also enforced by Toss API and DB constraints
     
-    NOTE: Currently the IdempotencyService does NOT have graceful degradation
-    for Redis failures. These tests document the expected behavior that should
-    be implemented in the future. See docs/SELF_HEALING_TEST_GAP_ANALYSIS.md §2.3.
+    The IdempotencyService implements graceful degradation:
+    - Cache failures are caught and logged
+    - DB-only checks continue to work
+    - Duplicate detection still functions via database
     """
 
-    def test_idempotency_check_payment_requires_working_cache(self):
+    def test_idempotency_check_payment_falls_back_to_db_on_cache_failure(self):
         """
-        Document current behavior: IdempotencyService requires cache.
+        Verify IdempotencyService gracefully degrades to DB when cache fails.
         
-        Currently, when cache.get() fails, the exception propagates up.
-        This test documents this limitation.
+        When cache.get() raises an exception, the service should:
+        - Catch the exception and log a warning
+        - Fall back to database-only idempotency check
+        - Continue to detect duplicates via DB queries
         
-        TODO: Implement graceful degradation to fall back to DB-only check.
+        This ensures the self-healing system works even during Redis outages.
+        """
+        from shopping.services.self_healing.idempotency_service import (
+            IdempotencyService,
+        )
+        from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
         
-        Expected current behavior:
-        - Cache get() fails
-        - RedisConnectionError is raised
-        - Operation fails (needs improvement)
+        user = UserFactory()
+        order = OrderFactory(user=user)
+        # Create an existing payment that should be detected via DB
+        payment = PaymentFactory(order=order, status="done", amount=10000)
+        
+        with patch("django.core.cache.cache.get", side_effect=RedisConnectionError("Connection refused")):
+            service = IdempotencyService()
+            
+            # Should NOT raise exception - graceful degradation
+            result = service.check_payment(order_id=order.id, amount=10000)
+            
+            # Should still detect duplicate via database
+            assert result.is_duplicate is True
+            assert result.existing_record is not None
+            assert result.existing_record.id == payment.id
+
+    def test_idempotency_check_payment_no_duplicate_with_cache_failure(self):
+        """
+        Verify non-duplicate detection works when cache fails.
+        
+        When cache fails and no existing payment in DB:
+        - Should return is_duplicate=False
+        - Operation can proceed
         """
         from shopping.services.self_healing.idempotency_service import (
             IdempotencyService,
@@ -169,27 +196,29 @@ class TestIdempotencyServiceRedisFailure:
         
         user = UserFactory()
         order = OrderFactory(user=user)
+        # No payment exists
         
         with patch("django.core.cache.cache.get", side_effect=RedisConnectionError("Connection refused")):
-            service = IdempotencyService()
-            
-            # Current behavior: exception is raised (not graceful)
-            # This documents a gap that should be addressed in production
-            with pytest.raises(RedisConnectionError):
-                service.check_payment(order_id=order.id, amount=10000)
+            with patch("django.core.cache.cache.set", side_effect=RedisConnectionError("Connection refused")):
+                service = IdempotencyService()
+                
+                # Should NOT raise exception
+                result = service.check_payment(order_id=order.id, amount=10000)
+                
+                # Should return not duplicate
+                assert result.is_duplicate is False
+                assert result.should_proceed is True
 
-    def test_idempotency_mark_as_processed_requires_working_cache(self):
+    def test_idempotency_mark_as_processed_gracefully_handles_cache_failure(self):
         """
-        Document current behavior: mark_as_processed requires cache.
+        Verify mark_as_processed gracefully handles cache failure.
         
-        Currently, when cache.set() fails, the exception propagates up.
-        This should be improved to fail silently with logging.
+        When cache.set() fails, the service should:
+        - Catch the exception and log a warning
+        - Return False to indicate cache was not updated
+        - NOT raise an exception (the main operation succeeded)
         
-        TODO: Wrap cache.set() in try/except with logging.
-        
-        Expected current behavior:
-        - Cache set() fails
-        - RedisConnectionError is raised
+        This ensures completed operations are not failed due to cache issues.
         """
         from shopping.services.self_healing.idempotency_service import (
             IdempotencyService,
@@ -205,9 +234,11 @@ class TestIdempotencyServiceRedisFailure:
                 components={"order_id": 456, "amount": 20000},
             )
             
-            # Current behavior: exception is raised
-            with pytest.raises(RedisConnectionError):
-                service.mark_as_processed(key, record_id=123)
+            # Should NOT raise exception - returns False instead
+            result = service.mark_as_processed(key, record_id=123)
+            
+            # Returns False to indicate cache update failed
+            assert result is False
 
     def test_idempotency_check_with_working_db_and_cache(self):
         """

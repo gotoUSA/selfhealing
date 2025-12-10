@@ -3,6 +3,7 @@
 > **문서 목적**: L3 Self-Healing 시스템의 테스트-운영 환경 차이로 인한 잠재적 위험 요소 분석 및 해결 방안
 >
 > **작성일**: 2025-12-10
+> **최종 수정**: 2025-12-10
 > **관련 문서**: `docs/SELF_HEALING_EXTRACTION_PLAN.md`
 
 ---
@@ -14,9 +15,22 @@
 | 보안 테스트 | ✅ 양호 | Control API 권한, 민감정보 sanitization 테스트 완비 |
 | 동시성 테스트 | ✅ 양호 | select_for_update 기반 race condition 테스트 존재 |
 | **설정 누락** | 🔴 심각 | `SELF_HEALING` 설정이 settings 파일에 미정의 |
-| **Celery 차이** | 🔴 심각 | Eager mode vs 비동기 모드 동작 차이 미검증 |
-| Redis 장애 | 🟠 부족 | 테스트 3개만 존재, Circuit Breaker 캐시 장애 미검증 |
+| **Celery 차이** | ✅ 해결 | Eager mode vs 비동기 모드 동작 차이 테스트 추가됨 |
+| Redis 장애 | ✅ 해결 | IdempotencyService, CircuitBreaker, DLQ 모두 graceful degradation 구현 |
 | 시간 기반 | 🟠 부족 | freeze_time 테스트 없음 |
+
+### 해결된 항목 (2025-12-10)
+
+1. **Celery Async Mode 테스트**: `test_celery_async_mode.py` 추가
+   - Task 큐잉 동작 검증
+   - 브로커 장애 처리 테스트
+   - 비동기 모드 시뮬레이션
+
+2. **Redis 장애 Graceful Degradation**: `test_redis_failure_scenarios.py` 추가
+   - **IdempotencyService**: Cache 실패 시 DB-only 체크로 폴백 (코드 수정됨)
+   - **CircuitBreakerService**: DB 폴백 동작 검증
+   - **DLQService**: DB-first 설계 확인
+   - **RateLimitTracker**: In-memory 동작 확인
 
 ---
 
@@ -85,7 +99,10 @@ SELF_HEALING = {
 
 ---
 
-### 2.2. 🔴 [심각] Celery Eager Mode 차이
+### 2.2. ✅ [해결됨] Celery Eager Mode 차이
+
+> **상태**: 2025-12-10 해결됨
+> **테스트 파일**: `shopping/tests/integration/self_healing/test_celery_async_mode.py`
 
 #### 현황
 ```python
@@ -227,73 +244,46 @@ class TestTransactionTaskTiming:
 
 ---
 
-### 2.3. 🟠 [중요] Redis 장애 시나리오 테스트 부족
+### 2.3. ✅ [해결됨] Redis 장애 시나리오 테스트 부족
 
-#### 현황
+> **상태**: 2025-12-10 해결됨
+> **테스트 파일**: `shopping/tests/integration/self_healing/test_redis_failure_scenarios.py`
+> **코드 수정**: `shopping/services/self_healing/idempotency_service.py` - graceful degradation 추가
+
+#### 해결 내용
+
+1. **IdempotencyService Graceful Degradation 구현**
+   - `check_payment()`, `check_payment_confirm()`, `check_webhook()`, `check_point_operation()` 메서드에 try/except 추가
+   - Redis 장애 시 경고 로그 후 DB-only 체크로 폴백
+   - `mark_as_processed()`, `clear()` 메서드도 예외 처리 추가
+
+2. **테스트 커버리지** (14개 테스트)
+   - `TestCircuitBreakerRedisFailure`: 3개 - DB 폴백 동작 검증
+   - `TestIdempotencyServiceRedisFailure`: 4개 - Graceful degradation 검증
+   - `TestDLQServiceRedisFailure`: 3개 - DB-first 설계 확인
+   - `TestRateLimitTrackerCacheIndependence`: 2개 - In-memory 동작 확인
+   - `TestCascadePreventionDuringRedisOutage`: 2개 - 전체 플로우 검증
+
+#### 참고: 이전 현황 (해결됨)
 - `shopping/tests/integration/test_redis_fallback.py` - 3개 테스트만 존재
 - Circuit Breaker 상태가 Redis에 캐시될 경우 장애 시 동작 미검증
 
-#### 해결 방안
+#### 해결된 코드 예시
 ```python
-# shopping/tests/integration/self_healing/test_redis_failure_scenarios.py (신규 생성)
+# shopping/services/self_healing/idempotency_service.py
 
-import pytest
-from unittest.mock import patch, MagicMock
-from redis.exceptions import ConnectionError as RedisConnectionError
-
-@pytest.mark.django_db
-class TestCircuitBreakerRedisFailure:
-    """Circuit Breaker Redis 장애 시나리오 테스트"""
-
-    def test_circuit_breaker_continues_on_redis_failure(self):
-        """Redis 장애 시 Circuit Breaker가 기본 동작 유지"""
-        from shopping.services.self_healing.circuit_breaker_service import CircuitBreakerService
-
-        with patch('django.core.cache.cache.get', side_effect=RedisConnectionError("Connection refused")):
-            with patch('django.core.cache.cache.set', side_effect=RedisConnectionError("Connection refused")):
-                cb = CircuitBreakerService("test_service")
-
-                # Redis 없이도 기본 CLOSED 상태로 동작
-                assert cb.is_available() == True
-
-                # 실패 기록도 가능해야 함 (메모리 폴백)
-                cb.record_failure()
-
-    def test_idempotency_graceful_degradation(self):
-        """멱등성 체크 Redis 장애 시 graceful degradation"""
-        from shopping.services.self_healing.idempotency_service import IdempotencyService
-
-        with patch('django.core.cache.cache.get', side_effect=RedisConnectionError("Connection refused")):
-            idempotency = IdempotencyService()
-
-            # Redis 장애 시 중복 체크 스킵 (false positive 허용)
-            # 단, 결제는 DB 레벨에서 추가 검증 필요
-            is_duplicate = idempotency.check("payment_123")
-
-            # 장애 시 False 반환 (처리 진행)
-            assert is_duplicate == False
-
-
-@pytest.mark.django_db
-class TestDLQRedisFailure:
-    """DLQ Redis 장애 시나리오 테스트"""
-
-    def test_dlq_stores_to_db_on_redis_failure(self):
-        """Redis 장애 시 DLQ가 DB에 직접 저장"""
-        from shopping.services.self_healing.dlq_service import DLQService
-        from shopping.models import FailedOperation
-
-        with patch('django.core.cache.cache.set', side_effect=RedisConnectionError("Connection refused")):
-            dlq = DLQService()
-
-            # DB 저장은 정상 동작
-            failed_op = dlq.enqueue(
-                operation_type="payment",
-                operation_data={"order_id": 123},
-                error_message="Test error"
-            )
-
-            assert FailedOperation.objects.filter(id=failed_op.id).exists()
+def check_payment(self, order_id: int, amount: int) -> IdempotencyResult:
+    # Check cache first (fast path) with graceful degradation
+    try:
+        cached_payment_id = cache.get(key.cache_key)
+        if cached_payment_id:
+            # ... cache hit logic
+    except Exception as e:
+        # Redis unavailable - fall back to DB-only check
+        logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
+    
+    # Check database (reliable path) - always executes
+    existing = Payment.objects.filter(order_id=order_id, amount=amount, ...).first()
 ```
 
 ---
