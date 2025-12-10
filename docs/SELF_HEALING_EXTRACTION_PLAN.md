@@ -1147,3 +1147,207 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
 | Celery 태스크 | 2개 | **3개** (+1) |
 | **합계** | ~80개 | **~82개** (+2) |
 
+---
+
+## 10. Post-Plan Implementation Updates (2025-12-10)
+
+> **Note**: This section documents changes made after the initial extraction plan was created.
+> All additions below are required for complete SaaS package extraction.
+
+### 10.1 New Configuration: SELF_HEALING Settings
+
+**Files Modified**:
+- `myproject/settings/local.py`
+- `myproject/settings/production.py`
+- `myproject/settings/test.py`
+
+**Change**: Added centralized `SELF_HEALING` configuration dictionary.
+
+```python
+# myproject/settings/production.py (added)
+
+SELF_HEALING = {
+    "SLA": {
+        "PAYMENT_HOURS": 1,
+        "POINT_HOURS": 4,
+        "INVENTORY_HOURS": 2,
+        "WEBHOOK_HOURS": 8,
+        "NOTIFICATION_HOURS": 24,
+    },
+    "RETRY": {
+        "MAX_RETRIES": 5,
+        "BACKOFF_BASE": 2,
+        "BACKOFF_MAX": 300,
+        "JITTER_PERCENT": 0.25,
+    },
+    "CIRCUIT_BREAKER": {
+        "ENABLED": True,
+        "FAILURE_THRESHOLD": 5,
+        "SUCCESS_THRESHOLD": 3,
+        "RECOVERY_TIMEOUT": 60,
+    },
+    "DLQ": {
+        "ENABLED": True,
+        "MAX_REPLAY_ATTEMPTS": 3,
+        "REPLAY_DELAY_SECONDS": 60,
+        "RETENTION_DAYS": 30,
+    },
+    "IDEMPOTENCY": {
+        "DEFAULT_CACHE_TTL": 60,
+        "PAYMENT_CACHE_TTL": 600,
+        "WEBHOOK_CACHE_TTL": 120,
+    },
+}
+```
+
+**Impact on Extraction**: SaaS package must provide default `SELF_HEALING` settings template.
+
+---
+
+### 10.2 IdempotencyService: Redis Graceful Degradation
+
+**File Modified**: `shopping/services/self_healing/idempotency_service.py` (+180 lines changed)
+
+**Breaking Changes**:
+
+| Method | Old Signature | New Signature |
+|--------|--------------|---------------|
+| `mark_as_processed()` | `-> None` | `-> bool` |
+| `clear()` | `-> None` | `-> bool` |
+
+**New Behavior**: All cache operations wrapped in try/except for graceful degradation.
+
+```python
+# Before (would crash on Redis failure)
+cached_payment_id = cache.get(key.cache_key)
+
+# After (gracefully degrades to DB-only)
+try:
+    cached_payment_id = cache.get(key.cache_key)
+    if cached_payment_id:
+        # ... cache hit logic
+except Exception as e:
+    logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
+    # Continue to database check
+```
+
+**Affected Methods**:
+- `check_payment()` - Cache-first, DB-fallback
+- `check_payment_confirm()` - Cache-first, DB-fallback
+- `check_webhook()` - Cache-first, DB-fallback
+- `check_point_operation()` - Cache-first, DB-fallback
+- `mark_as_processed()` - Returns `False` if cache fails
+- `clear()` - Returns `False` if cache fails
+
+**Impact on Extraction**: This is a **policy change** that makes the system Redis-independent. Must be included in SaaS package.
+
+---
+
+### 10.3 New Test Files
+
+**Files Added**:
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `test_celery_async_mode.py` | 317 | Tests Celery eager vs async mode differences |
+| `test_redis_failure_scenarios.py` | 575 | Tests Redis graceful degradation (14 tests) |
+| `test_transaction_task_timing.py` | 393 | Tests transaction/task timing issues |
+
+**Test Classes in `test_redis_failure_scenarios.py`**:
+
+```python
+class TestCircuitBreakerRedisFailure:
+    """3 tests - DB fallback verification"""
+
+class TestIdempotencyServiceRedisFailure:
+    """4 tests - Graceful degradation"""
+    
+class TestDLQServiceRedisFailure:
+    """3 tests - DB-first design confirmation"""
+    
+class TestRateLimitTrackerCacheIndependence:
+    """2 tests - In-memory operation"""
+    
+class TestCascadePreventionDuringRedisOutage:
+    """2 tests - Full flow verification"""
+```
+
+**Impact on Extraction**: All tests must be included in SaaS package.
+
+---
+
+### 10.4 New Documentation
+
+**Files Added**:
+
+| File | Purpose |
+|------|---------|
+| `docs/self_healing/0_OVERVIEW/SAAS_READINESS.md` | SaaS readiness assessment (283 lines) |
+
+**Updated Documentation**:
+
+| File | Changes |
+|------|---------|
+| `SELF_HEALING_ARCHITECTURE.md` | §7 IdempotencyService architecture, §16 Infrastructure Resilience |
+| `SELF_HEALING_TEST_GAP_ANALYSIS.md` | Marked Celery and Redis gaps as resolved |
+| `SELF_HEALING_TEST_EXECUTION_GUIDE.md` | Added new test file references |
+
+---
+
+### 10.5 Infrastructure Resilience Policy
+
+**New Policy**: All Self-Healing services must operate with PostgreSQL as the single point of truth.
+
+**Service Resilience Matrix**:
+
+| Service | PostgreSQL | Redis | Graceful Degradation |
+|---------|-----------|-------|---------------------|
+| DLQService | Required | Not used | ✅ DB-first by design |
+| CircuitBreakerService | Required | Optional (fast lookup) | ✅ DB fallback |
+| IdempotencyService | Required | Optional (fast lookup) | ✅ DB fallback (NEW) |
+| RateLimitTracker | Not used | Not used | ✅ In-memory |
+| BackoffCalculator | Not used | Not used | ✅ Stateless |
+
+**Impact on Extraction**: SaaS package must document that Redis is **recommended but not required**.
+
+---
+
+### 10.6 Updated File Count Summary
+
+| Category | Original Plan | Current | Delta |
+|----------|--------------|---------|-------|
+| Service Code | 14 | 15 | +1 |
+| Celery Tasks | 2 | 3 | +1 |
+| Unit Tests | 14 | 14 | 0 |
+| Integration Tests | 22 | **25** | **+3** |
+| Documentation | 28 | **29** | **+1** |
+| Settings Files | 1 | **4** | **+3** |
+| **Total** | ~81 | **~90** | **+9** |
+
+---
+
+### 10.7 Extraction Checklist Additions
+
+Add these items to Phase 1 checklist:
+
+- [ ] Include `SELF_HEALING` settings template in package
+- [ ] Update `idempotency_service.py` with graceful degradation
+- [ ] Include all 3 new test files
+- [ ] Document Redis-optional policy
+- [ ] Update return types for `mark_as_processed()` and `clear()`
+
+Add these items to Phase 3 checklist:
+
+- [ ] Create `SAAS_READINESS.md` in package docs
+- [ ] Document infrastructure resilience policy
+- [ ] Include `SELF_HEALING_ARCHITECTURE.md` §16
+
+---
+
+## Changelog
+
+| Date | Version | Changes |
+|------|---------|---------|
+| 2025-12-10 | 1.0 | Initial extraction plan created |
+| 2025-12-10 | 1.1 | Added §10: Post-plan implementation updates |
+

@@ -1,7 +1,7 @@
 # L3 Self-Healing Reliability Layer — Architecture
 
-> **Version**: 1.2
-> **Last Updated**: 2025-12-09
+> **Version**: 1.3
+> **Last Updated**: 2025-12-10
 > **Status**: Production Ready
 
 ---
@@ -23,6 +23,7 @@
 13. [Control API Integration](#13-control-api-integration)
 14. [AI Integration Roadmap](#14-ai-integration-roadmap)
 15. [Validation and Testing](#15-validation-and-testing)
+16. [Infrastructure Resilience](#16-infrastructure-resilience)
 
 ---
 
@@ -263,7 +264,85 @@ With Idempotency:
 | **Inventory** | `order_item_id` + `action` | Stock transaction log |
 | **Notification** | `user_id` + `type` + `reference_id` | Dedup within time window |
 
-### Idempotency Implementation Pattern
+### IdempotencyService Architecture
+
+> **Updated 2025-12-10**: Implements Cache-First, DB-Fallback pattern with Redis graceful degradation.
+
+The `IdempotencyService` uses a two-tier lookup strategy:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Idempotency Check Flow                                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Cache Check (Fast Path)                                 │
+│     ├─ Try Redis lookup                                     │
+│     ├─ If hit → Return existing record                      │
+│     └─ If Redis fails → Log warning, continue to DB         │
+│                                                             │
+│  2. Database Check (Reliable Path)                          │
+│     ├─ Query PostgreSQL for existing record                 │
+│     ├─ If found → Update cache (best-effort), return dup    │
+│     └─ If not found → Return "proceed with operation"       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Graceful Degradation Policy
+
+| Scenario | Behavior | Result |
+|----------|----------|--------|
+| Redis available, cache hit | Return cached result | ✅ Fast path |
+| Redis available, cache miss | Check DB, update cache | ✅ Normal flow |
+| Redis unavailable | Log warning, check DB only | ✅ Degraded but functional |
+| Both Redis and DB fail | Raise exception | ❌ Operation fails |
+
+#### Implementation Example
+
+```python
+# shopping/services/self_healing/idempotency_service.py
+
+def check_payment(self, order_id: int, amount: int) -> IdempotencyResult:
+    key = IdempotencyKey.for_payment(order_id, amount)
+
+    # Check cache first (fast path) with graceful degradation
+    try:
+        cached_payment_id = cache.get(key.cache_key)
+        if cached_payment_id:
+            payment = Payment.objects.get(pk=cached_payment_id)
+            return IdempotencyResult(is_duplicate=True, existing_record=payment)
+    except Exception as e:
+        # Redis unavailable - fall back to DB-only check
+        logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
+
+    # Check database (reliable path) - ALWAYS executes
+    existing = Payment.objects.filter(
+        order_id=order_id,
+        amount=amount,
+        status__in=["done", "in_progress", "ready"],
+    ).first()
+
+    if existing:
+        # Update cache for future lookups (best-effort)
+        try:
+            cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+        except Exception:
+            pass  # Cache update is optional
+        return IdempotencyResult(is_duplicate=True, existing_record=existing)
+
+    return IdempotencyResult(is_duplicate=False)
+```
+
+#### Method Return Type Changes
+
+> **Breaking Change (2025-12-10)**: `mark_as_processed()` and `clear()` now return `bool` instead of `None`.
+
+| Method | Old Return | New Return | Reason |
+|--------|-----------|------------|--------|
+| `mark_as_processed()` | `None` | `bool` | Returns `False` if cache unavailable |
+| `clear()` | `None` | `bool` | Returns `False` if cache unavailable |
+
+### Legacy Idempotency Pattern
 
 ```python
 # Example: Payment retry with idempotency
@@ -946,6 +1025,7 @@ Self-Healing: {
 | Integration Tests | `shopping/tests/integration/test_*.py` | Full workflow validation |
 | Chaos Engineering | `shopping/tests/integration/test_chaos_engineering.py` | Fault tolerance |
 | Security Review | `python manage.py security_review` | Security compliance |
+| Redis Failure Tests | `shopping/tests/integration/self_healing/test_redis_failure_scenarios.py` | Infrastructure resilience |
 
 ### Chaos Engineering
 
@@ -981,6 +1061,107 @@ python manage.py security_review --output security_results.json
 
 ---
 
+## 16. Infrastructure Resilience
+
+> **Added 2025-12-10**: Documents graceful degradation policies for infrastructure failures.
+
+### Design Philosophy
+
+All Self-Healing services are designed to operate with **PostgreSQL as the single point of truth**. Redis and other caching layers are **optional performance enhancements**, not requirements.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Infrastructure Dependency Hierarchy                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Required (SPOF):                                           │
+│  └─ PostgreSQL Database                                     │
+│                                                             │
+│  Recommended (Graceful Degradation):                        │
+│  ├─ Redis Cache (falls back to DB)                          │
+│  └─ Celery Beat (manual triggers available)                 │
+│                                                             │
+│  Optional (Independent):                                    │
+│  ├─ Monitoring/Alerting                                     │
+│  └─ Log Aggregation                                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Service Resilience Matrix
+
+| Service | PostgreSQL | Redis | Celery | Graceful Degradation |
+|---------|-----------|-------|--------|---------------------|
+| **DLQService** | Required | Not used | For async replay | ✅ DB-first design |
+| **CircuitBreakerService** | Required | For fast lookups | Not used | ✅ DB fallback |
+| **IdempotencyService** | Required | For fast lookups | Not used | ✅ DB fallback |
+| **ReplayService** | Required | Not used | Required | ⚠️ Needs Celery |
+| **BackoffCalculator** | Not used | Not used | Not used | ✅ Stateless |
+| **RateLimitTracker** | Not used | Not used | Not used | ✅ In-memory |
+
+### Redis Failure Handling
+
+Each service implements a consistent pattern for Redis failures:
+
+```python
+# Standard pattern for cache operations
+try:
+    cached_value = cache.get(key)
+    if cached_value:
+        return cached_value
+except Exception as e:
+    logger.warning(f"Cache unavailable, falling back to DB: {e}")
+
+# Database is always checked as fallback
+db_value = Model.objects.filter(...).first()
+```
+
+### Failure Scenarios and Responses
+
+| Scenario | System Behavior | User Impact |
+|----------|----------------|-------------|
+| Redis down | Services fall back to DB queries | Slightly slower, fully functional |
+| Redis slow | Cache timeouts trigger DB fallback | Minimal impact |
+| Redis connection storm | Rate limiting prevents cascade | Controlled degradation |
+| DB down | All operations fail | System unavailable |
+| Celery down | Async operations queued but not processed | Delayed processing |
+
+### Test Coverage
+
+**File**: `shopping/tests/integration/self_healing/test_redis_failure_scenarios.py`
+
+```python
+# 14 tests covering Redis failure scenarios
+
+class TestCircuitBreakerRedisFailure:
+    """3 tests - DB fallback verification"""
+
+class TestIdempotencyServiceRedisFailure:
+    """4 tests - Graceful degradation"""
+    
+class TestDLQServiceRedisFailure:
+    """3 tests - DB-first design confirmation"""
+    
+class TestRateLimitTrackerCacheIndependence:
+    """2 tests - In-memory operation"""
+    
+class TestCascadePreventionDuringRedisOutage:
+    """2 tests - Full flow verification"""
+```
+
+### Monitoring Recommendations
+
+When deploying in production, monitor these metrics:
+
+| Metric | Alert Threshold | Action |
+|--------|----------------|--------|
+| Cache fallback rate | > 10% in 5 min | Investigate Redis health |
+| DB query latency | > 100ms avg | Check DB performance |
+| Idempotency DB hits | > 50% of checks | Redis may be unhealthy |
+| Circuit breaker state changes | > 5 per hour | Review service stability |
+
+---
+
 ## Summary
 
 L3 Self-Healing Layer transforms failures from **unpredictable incidents** into **manageable workflows**.
@@ -994,12 +1175,23 @@ L3 Self-Healing Layer transforms failures from **unpredictable incidents** into 
 5. **Manual First**: Circuit breaker starts manual, evolves to auto
 6. **AI Ready**: Structured data enables future automation
 7. **Validated**: Chaos engineering and security review ensure reliability
+8. **Resilient**: Graceful degradation for infrastructure failures
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.3 | 2025-12-10 | Added §16 Infrastructure Resilience, updated §7 IdempotencyService with graceful degradation |
+| 1.2 | 2025-12-09 | Initial production-ready release |
 
 ---
 
 ## Related Documents
 
 - [L3 Self-Healing Operations Guide](./SELF_HEALING_OPERATIONS.md)
+- [SaaS Readiness Assessment](./SAAS_READINESS.md)
 - [Control API Interface](../5_CONTROL_API/CONTROL_API_INTERFACE.md)
 - [Control API Security Governance](../5_CONTROL_API/CONTROL_API_SECURITY_GOVERNANCE.md)
 - [Control API Execution](../5_CONTROL_API/CONTROL_API_EXECUTION.md)
