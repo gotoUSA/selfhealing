@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Optional, TypeVar
 
-F = TypeVar('F', bound=Callable)
+F = TypeVar("F", bound=Callable)
 
 
 # ============================================================================
@@ -31,18 +31,18 @@ F = TypeVar('F', bound=Callable)
 
 class TaskStatus(str, Enum):
     """Task execution status"""
-    
-    PENDING = "pending"       # Task queued, not yet started
-    STARTED = "started"       # Task execution began
-    SUCCESS = "success"       # Task completed successfully
-    FAILURE = "failure"       # Task failed after all retries
-    RETRY = "retry"           # Task is being retried
-    REVOKED = "revoked"       # Task was cancelled
+
+    PENDING = "pending"  # Task queued, not yet started
+    STARTED = "started"  # Task execution began
+    SUCCESS = "success"  # Task completed successfully
+    FAILURE = "failure"  # Task failed after all retries
+    RETRY = "retry"  # Task is being retried
+    REVOKED = "revoked"  # Task was cancelled
 
 
 class TaskPriority(int, Enum):
     """Task priority levels (higher = processed sooner)"""
-    
+
     LOW = 0
     NORMAL = 5
     HIGH = 10
@@ -58,10 +58,10 @@ class TaskPriority(int, Enum):
 class TaskResult:
     """
     Result of task execution or status check.
-    
+
     Immutable dataclass representing the outcome or current
     state of a queued task.
-    
+
     Attributes:
         task_id: Unique task identifier
         status: Current task status
@@ -72,6 +72,7 @@ class TaskResult:
         started_at: When task execution began
         completed_at: When task execution completed
     """
+
     task_id: str
     status: TaskStatus
     result: Optional[Any] = None
@@ -103,10 +104,10 @@ class TaskResult:
 class TaskOptions:
     """
     Options for task enqueueing.
-    
+
     Configures how a task should be executed, including
     scheduling, retries, and queue selection.
-    
+
     Attributes:
         countdown: Delay in seconds before execution
         eta: Exact time to execute task
@@ -121,6 +122,7 @@ class TaskOptions:
         timeout: Task execution timeout in seconds
         soft_timeout: Soft timeout (raises SoftTimeLimitExceeded)
     """
+
     countdown: Optional[int] = None
     eta: Optional[datetime] = None
     expires: Optional[datetime] = None
@@ -173,7 +175,7 @@ class TaskOptions:
 class ScheduleInfo:
     """
     Information about a periodic schedule.
-    
+
     Attributes:
         schedule_id: Unique schedule identifier
         task_name: Name of the scheduled task
@@ -184,6 +186,7 @@ class ScheduleInfo:
         next_run: When task will next execute
         enabled: Whether schedule is active
     """
+
     schedule_id: str
     task_name: str
     interval: timedelta
@@ -201,21 +204,25 @@ class ScheduleInfo:
 
 class TaskQueueError(Exception):
     """Base exception for task queue errors."""
+
     pass
 
 
 class TaskNotFoundError(TaskQueueError):
     """Raised when a task is not registered."""
+
     pass
 
 
 class TaskTimeoutError(TaskQueueError):
     """Raised when task execution times out."""
+
     pass
 
 
 class TaskRevokedError(TaskQueueError):
     """Raised when a revoked task is accessed."""
+
     pass
 
 
@@ -227,27 +234,27 @@ class TaskRevokedError(TaskQueueError):
 class TaskQueueInterface(ABC):
     """
     Abstract interface for async task queues.
-    
+
     This interface defines the contract for background task
     execution systems. It enables the self-healing system to
     work with different task queue backends interchangeably.
-    
+
     Implementations:
         - CeleryTaskAdapter (current - Celery)
         - RQTaskAdapter (planned - Redis Queue)
         - DramatiqTaskAdapter (planned)
         - SyncTaskAdapter (for testing - synchronous execution)
-    
+
     Example:
         >>> queue = ProviderRegistry.get_queue()
-        >>> 
+        >>>
         >>> # Enqueue a task
         >>> task_id = queue.enqueue(
         ...     "process_payment",
         ...     args=(order_id,),
         ...     options=TaskOptions(priority=TaskPriority.HIGH),
         ... )
-        >>> 
+        >>>
         >>> # Check result later
         >>> result = queue.get_result(task_id)
         >>> if result.is_successful:
@@ -259,7 +266,7 @@ class TaskQueueInterface(ABC):
     def provider_name(self) -> str:
         """
         Return the provider name.
-        
+
         Returns:
             Provider identifier (e.g., 'celery', 'rq', 'dramatiq')
         """
@@ -285,7 +292,7 @@ class TaskQueueInterface(ABC):
     ) -> Callable[[F], F]:
         """
         Decorator to register a function as a task.
-        
+
         Args:
             name: Task name (default: function qualified name)
             bind: If True, pass task instance as first argument
@@ -297,10 +304,10 @@ class TaskQueueInterface(ABC):
             rate_limit: Rate limit (e.g., "10/m" for 10 per minute)
             time_limit: Hard time limit in seconds
             soft_time_limit: Soft time limit (raises exception)
-        
+
         Returns:
             Decorator function
-        
+
         Example:
             >>> @queue.task(max_retries=5, autoretry_for=(ConnectionError,))
             ... def process_payment(payment_id: int):
@@ -317,12 +324,12 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Register a function as a task programmatically.
-        
+
         Args:
             func: Function to register
             name: Task name (default: function qualified name)
             **options: Additional task options
-        
+
         Returns:
             Registered task name
         """
@@ -344,19 +351,19 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Enqueue a task for async execution.
-        
+
         Args:
             task_name: Registered task name
             args: Positional arguments for task
             kwargs: Keyword arguments for task
             options: Execution options
-        
+
         Returns:
             Task ID for tracking
-        
+
         Raises:
             TaskNotFoundError: If task_name is not registered
-        
+
         Example:
             >>> task_id = queue.enqueue(
             ...     "send_notification",
@@ -374,14 +381,14 @@ class TaskQueueInterface(ABC):
     ) -> list[str]:
         """
         Enqueue multiple tasks atomically.
-        
+
         Args:
             tasks: List of (task_name, args, kwargs) tuples
             options: Shared execution options for all tasks
-        
+
         Returns:
             List of task IDs in same order as input
-        
+
         Note:
             Implementations should ensure either all tasks are
             enqueued or none are (atomic operation).
@@ -396,12 +403,12 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Convenience method to enqueue a task immediately.
-        
+
         Args:
             task_name: Registered task name
             *args: Positional arguments for task
             **kwargs: Keyword arguments for task
-        
+
         Returns:
             Task ID for tracking
         """
@@ -418,7 +425,7 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Enqueue a task with common options as keyword arguments.
-        
+
         Args:
             task_name: Registered task name
             args: Positional arguments
@@ -426,7 +433,7 @@ class TaskQueueInterface(ABC):
             countdown: Delay in seconds
             eta: Exact execution time
             **extra_options: Additional TaskOptions fields
-        
+
         Returns:
             Task ID for tracking
         """
@@ -449,14 +456,14 @@ class TaskQueueInterface(ABC):
     ) -> TaskResult:
         """
         Get task result (may block if timeout provided).
-        
+
         Args:
             task_id: Task ID from enqueue
             timeout: Max seconds to wait for completion
-        
+
         Returns:
             TaskResult with status and result/error
-        
+
         Note:
             If timeout is None, returns immediately with current status.
             If timeout is provided, blocks until task completes or
@@ -473,15 +480,15 @@ class TaskQueueInterface(ABC):
     ) -> bool:
         """
         Cancel a pending or running task.
-        
+
         Args:
             task_id: Task ID to cancel
             terminate: If True, terminate running task
             signal: Signal to send if terminating
-        
+
         Returns:
             True if task was revoked
-        
+
         Note:
             Revoking a pending task prevents execution.
             Terminating a running task sends the specified signal.
@@ -497,15 +504,15 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Retry a failed task.
-        
+
         Args:
             task_id: Original task ID
             countdown: Delay before retry
             max_retries: Override maximum retries
-        
+
         Returns:
             New task ID for the retry
-        
+
         Note:
             This creates a new task based on the original.
             The original task's state remains unchanged.
@@ -515,10 +522,10 @@ class TaskQueueInterface(ABC):
     def forget(self, task_id: str) -> bool:
         """
         Forget a task result (cleanup).
-        
+
         Args:
             task_id: Task ID to forget
-        
+
         Returns:
             True if result was forgotten
         """
@@ -539,17 +546,17 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """
         Schedule a periodic task.
-        
+
         Args:
             task_name: Registered task name
             schedule: Execution interval
             args: Positional arguments for task
             kwargs: Keyword arguments for task
             name: Unique schedule name (auto-generated if not provided)
-        
+
         Returns:
             Schedule ID
-        
+
         Example:
             >>> schedule_id = queue.schedule_periodic(
             ...     "cleanup_expired_tokens",
@@ -562,10 +569,10 @@ class TaskQueueInterface(ABC):
     def unschedule(self, schedule_id: str) -> bool:
         """
         Remove a periodic schedule.
-        
+
         Args:
             schedule_id: Schedule ID to remove
-        
+
         Returns:
             True if schedule was removed
         """
@@ -574,10 +581,10 @@ class TaskQueueInterface(ABC):
     def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
         """
         Get information about a periodic schedule.
-        
+
         Args:
             schedule_id: Schedule ID to query
-        
+
         Returns:
             ScheduleInfo or None if not found
         """
@@ -586,7 +593,7 @@ class TaskQueueInterface(ABC):
     def list_schedules(self) -> list[ScheduleInfo]:
         """
         List all periodic schedules.
-        
+
         Returns:
             List of ScheduleInfo objects
         """
@@ -600,13 +607,13 @@ class TaskQueueInterface(ABC):
     def purge_queue(self, queue_name: str = "default") -> int:
         """
         Remove all pending tasks from a queue.
-        
+
         Args:
             queue_name: Queue to purge
-        
+
         Returns:
             Number of tasks purged
-        
+
         Warning:
             This permanently removes all pending tasks.
             Use with caution in production.
@@ -617,10 +624,10 @@ class TaskQueueInterface(ABC):
     def queue_length(self, queue_name: str = "default") -> int:
         """
         Get number of pending tasks in queue.
-        
+
         Args:
             queue_name: Queue to check
-        
+
         Returns:
             Number of pending tasks
         """
@@ -629,7 +636,7 @@ class TaskQueueInterface(ABC):
     def list_queues(self) -> list[str]:
         """
         List all known queue names.
-        
+
         Returns:
             List of queue names
         """
@@ -638,7 +645,7 @@ class TaskQueueInterface(ABC):
     def active_count(self) -> int:
         """
         Get number of currently executing tasks.
-        
+
         Returns:
             Number of active tasks across all workers
         """
@@ -652,7 +659,7 @@ class TaskQueueInterface(ABC):
     def health_check(self) -> bool:
         """
         Check if task queue backend is reachable.
-        
+
         Returns:
             True if broker and backend are healthy
         """
@@ -661,7 +668,7 @@ class TaskQueueInterface(ABC):
     def worker_count(self) -> int:
         """
         Get number of active workers.
-        
+
         Returns:
             Number of workers processing tasks
         """
@@ -670,7 +677,7 @@ class TaskQueueInterface(ABC):
     def ping(self) -> bool:
         """
         Simple connectivity check.
-        
+
         Returns:
             True if connection is alive
         """

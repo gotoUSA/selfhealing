@@ -28,17 +28,17 @@ from typing import Any, Optional
 class DistributedLock(ABC):
     """
     Distributed lock interface for cross-process synchronization.
-    
+
     Used by CircuitBreaker for state transitions and other
     critical sections that require mutual exclusion across
     multiple processes or servers.
-    
+
     Supports context manager protocol for safe usage:
-    
+
         with cache.get_lock("circuit_breaker:payment") as lock:
             # Critical section - only one process can execute
             circuit_breaker.transition_state()
-    
+
     Implementations:
         - RedisDistributedLock (Redis-based)
         - InMemoryLock (for testing - single process only)
@@ -52,14 +52,14 @@ class DistributedLock(ABC):
     ) -> bool:
         """
         Acquire the lock.
-        
+
         Args:
             blocking: If True, block until lock is acquired
             timeout: Max seconds to wait (None = infinite)
-        
+
         Returns:
             True if lock was acquired, False otherwise
-        
+
         Note:
             If blocking=False and lock is held, returns False immediately.
             If blocking=True and timeout expires, returns False.
@@ -70,7 +70,7 @@ class DistributedLock(ABC):
     def release(self) -> None:
         """
         Release the lock.
-        
+
         Raises:
             LockNotOwnedError: If lock is not held by current owner
         """
@@ -80,7 +80,7 @@ class DistributedLock(ABC):
     def locked(self) -> bool:
         """
         Check if lock is currently held by anyone.
-        
+
         Returns:
             True if lock is held, False if available
         """
@@ -90,7 +90,7 @@ class DistributedLock(ABC):
     def owned(self) -> bool:
         """
         Check if lock is held by current owner.
-        
+
         Returns:
             True if lock is held by this instance
         """
@@ -99,13 +99,13 @@ class DistributedLock(ABC):
     def extend(self, additional_time: timedelta) -> bool:
         """
         Extend the lock's TTL.
-        
+
         Args:
             additional_time: Time to add to current TTL
-        
+
         Returns:
             True if extension was successful
-        
+
         Note:
             Default implementation returns False (not supported).
             Override in implementations that support TTL extension.
@@ -126,11 +126,13 @@ class DistributedLock(ABC):
 
 class LockAcquisitionError(Exception):
     """Raised when lock acquisition fails."""
+
     pass
 
 
 class LockNotOwnedError(Exception):
     """Raised when trying to release a lock not owned by current instance."""
+
     pass
 
 
@@ -142,28 +144,28 @@ class LockNotOwnedError(Exception):
 class CacheProviderInterface(ABC):
     """
     Abstract interface for cache/state storage.
-    
+
     This interface abstracts cache operations including basic
     get/set, atomic counters, and distributed locking.
-    
+
     Implementations:
         - RedisCacheAdapter (current - Redis)
         - InMemoryCacheAdapter (for testing)
         - MemcachedCacheAdapter (planned)
         - DynamoDBCacheAdapter (planned - AWS serverless)
-    
+
     Example:
         >>> cache = ProviderRegistry.get_cache()
-        >>> 
+        >>>
         >>> # Basic operations
         >>> cache.set("key", "value", ttl=timedelta(minutes=5))
         >>> value = cache.get("key")
-        >>> 
+        >>>
         >>> # Atomic counter (for rate limiting)
         >>> count = cache.incr("request_count")
         >>> if count == 1:
         ...     cache.expire("request_count", timedelta(minutes=1))
-        >>> 
+        >>>
         >>> # Distributed locking
         >>> with cache.get_lock("payment:process") as lock:
         ...     process_payment()
@@ -174,7 +176,7 @@ class CacheProviderInterface(ABC):
     def provider_name(self) -> str:
         """
         Return the provider name.
-        
+
         Returns:
             Provider identifier (e.g., 'redis', 'memcached', 'memory')
         """
@@ -188,10 +190,10 @@ class CacheProviderInterface(ABC):
     def get(self, key: str) -> Optional[Any]:
         """
         Get value by key.
-        
+
         Args:
             key: Cache key
-        
+
         Returns:
             Cached value or None if not found/expired
         """
@@ -206,12 +208,12 @@ class CacheProviderInterface(ABC):
     ) -> bool:
         """
         Set value with optional TTL.
-        
+
         Args:
             key: Cache key
             value: Value to cache (must be serializable)
             ttl: Time-to-live (None = no expiration)
-        
+
         Returns:
             True if successful
         """
@@ -221,10 +223,10 @@ class CacheProviderInterface(ABC):
     def delete(self, key: str) -> bool:
         """
         Delete key from cache.
-        
+
         Args:
             key: Cache key to delete
-        
+
         Returns:
             True if key existed and was deleted
         """
@@ -234,10 +236,10 @@ class CacheProviderInterface(ABC):
     def exists(self, key: str) -> bool:
         """
         Check if key exists in cache.
-        
+
         Args:
             key: Cache key to check
-        
+
         Returns:
             True if key exists and is not expired
         """
@@ -251,12 +253,12 @@ class CacheProviderInterface(ABC):
     ) -> Any:
         """
         Get value or compute and cache it if missing.
-        
+
         Args:
             key: Cache key
             default_factory: Callable to compute value if missing
             ttl: Time-to-live for new value
-        
+
         Returns:
             Cached or newly computed value
         """
@@ -274,14 +276,14 @@ class CacheProviderInterface(ABC):
     def incr(self, key: str, amount: int = 1) -> int:
         """
         Atomically increment a counter.
-        
+
         Args:
             key: Counter key
             amount: Increment amount (default 1)
-        
+
         Returns:
             New counter value after increment
-        
+
         Note:
             Creates key with value 0 if not exists, then increments.
             This is an atomic operation - safe for concurrent access.
@@ -292,11 +294,11 @@ class CacheProviderInterface(ABC):
     def decr(self, key: str, amount: int = 1) -> int:
         """
         Atomically decrement a counter.
-        
+
         Args:
             key: Counter key
             amount: Decrement amount (default 1)
-        
+
         Returns:
             New counter value after decrement
         """
@@ -306,11 +308,11 @@ class CacheProviderInterface(ABC):
     def expire(self, key: str, ttl: timedelta) -> bool:
         """
         Set expiration on existing key.
-        
+
         Args:
             key: Cache key
             ttl: Time-to-live duration
-        
+
         Returns:
             True if key exists and expiration was set
         """
@@ -320,10 +322,10 @@ class CacheProviderInterface(ABC):
     def ttl(self, key: str) -> Optional[int]:
         """
         Get remaining TTL in seconds.
-        
+
         Args:
             key: Cache key
-        
+
         Returns:
             - Positive int: seconds until expiration
             - None: key has no expiration
@@ -334,12 +336,12 @@ class CacheProviderInterface(ABC):
     def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
         """
         Set value only if key does not exist (SET if Not eXists).
-        
+
         Args:
             key: Cache key
             value: Value to set
             ttl: Optional time-to-live
-        
+
         Returns:
             True if key was set (didn't exist), False otherwise
         """
@@ -360,20 +362,20 @@ class CacheProviderInterface(ABC):
     ) -> DistributedLock:
         """
         Get a distributed lock instance.
-        
+
         Args:
             name: Lock name (should be unique across application)
             timeout: Lock auto-release timeout (prevents deadlocks)
             blocking_timeout: Max time to wait when acquiring
-        
+
         Returns:
             DistributedLock instance
-        
+
         Example:
             >>> with cache.get_lock("circuit_breaker:payment") as lock:
             ...     # Critical section - only one process executes this
             ...     transition_circuit_breaker_state()
-        
+
         Note:
             Always use locks with context manager to ensure release.
             The timeout parameter prevents deadlocks if a process
@@ -389,10 +391,10 @@ class CacheProviderInterface(ABC):
     def mget(self, keys: list[str]) -> dict[str, Any]:
         """
         Get multiple values at once.
-        
+
         Args:
             keys: List of cache keys
-        
+
         Returns:
             Dict mapping keys to values (missing keys omitted)
         """
@@ -406,11 +408,11 @@ class CacheProviderInterface(ABC):
     ) -> bool:
         """
         Set multiple values at once.
-        
+
         Args:
             mapping: Key-value pairs to set
             ttl: Optional TTL for all keys
-        
+
         Returns:
             True if successful
         """
@@ -419,10 +421,10 @@ class CacheProviderInterface(ABC):
     def mdelete(self, keys: list[str]) -> int:
         """
         Delete multiple keys at once.
-        
+
         Args:
             keys: List of cache keys to delete
-        
+
         Returns:
             Number of keys that were deleted
         """
@@ -439,11 +441,11 @@ class CacheProviderInterface(ABC):
     def hget(self, name: str, key: str) -> Optional[Any]:
         """
         Get a field from a hash.
-        
+
         Args:
             name: Hash name
             key: Field key within the hash
-        
+
         Returns:
             Field value or None
         """
@@ -455,12 +457,12 @@ class CacheProviderInterface(ABC):
     def hset(self, name: str, key: str, value: Any) -> bool:
         """
         Set a field in a hash.
-        
+
         Args:
             name: Hash name
             key: Field key within the hash
             value: Field value
-        
+
         Returns:
             True if successful
         """
@@ -471,10 +473,10 @@ class CacheProviderInterface(ABC):
     def hgetall(self, name: str) -> dict[str, Any]:
         """
         Get all fields from a hash.
-        
+
         Args:
             name: Hash name
-        
+
         Returns:
             Dict of all fields and values
         """
@@ -489,7 +491,7 @@ class CacheProviderInterface(ABC):
     def health_check(self) -> bool:
         """
         Check if cache backend is reachable.
-        
+
         Returns:
             True if healthy and connected
         """
@@ -499,10 +501,10 @@ class CacheProviderInterface(ABC):
     def flush_all(self) -> bool:
         """
         Clear all keys (USE WITH CAUTION - mainly for testing).
-        
+
         Returns:
             True if successful
-        
+
         Warning:
             This will delete ALL data in the cache. Only use
             in testing environments or with explicit confirmation.
@@ -512,7 +514,7 @@ class CacheProviderInterface(ABC):
     def ping(self) -> bool:
         """
         Simple connectivity check.
-        
+
         Returns:
             True if connection is alive
         """
@@ -525,13 +527,13 @@ class CacheProviderInterface(ABC):
     def keys(self, pattern: str = "*") -> list[str]:
         """
         Find keys matching a pattern.
-        
+
         Args:
             pattern: Glob-style pattern (e.g., "circuit_breaker:*")
-        
+
         Returns:
             List of matching keys
-        
+
         Warning:
             Use with caution in production - may be slow with many keys.
             Default implementation returns empty list.
@@ -545,14 +547,14 @@ class CacheProviderInterface(ABC):
     ) -> tuple[int, list[str]]:
         """
         Incrementally iterate keys matching a pattern.
-        
+
         Args:
             pattern: Glob-style pattern
             count: Approximate number of keys per iteration
-        
+
         Returns:
             Tuple of (cursor, keys) - cursor 0 means scan complete
-        
+
         Note:
             Default implementation returns (0, []).
             Override for implementations that support scanning.

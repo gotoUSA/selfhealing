@@ -1,28 +1,102 @@
 """
 Self-Healing Adapters Module
 
-Concrete implementations of repository interfaces.
-These adapters bridge the abstract interfaces with specific frameworks.
+Concrete implementations of pluggable interfaces.
+These adapters bridge the abstract interfaces with specific frameworks,
+services, and libraries.
 
 Available Adapters:
-- Django ORM adapters (django_repositories.py)
+    Repository Adapters:
+        - DjangoFailedOperationRepository
+        - DjangoCircuitBreakerStateRepository
+        - DjangoSecurityIncidentRepository
+
+    Payment Adapters:
+        - TossPaymentAdapter (Toss Payments - Korean PG)
+        - MockPaymentAdapter (Testing)
+
+    Cache Adapters:
+        - RedisCacheAdapter (Redis)
+        - InMemoryCacheAdapter (Testing)
+
+    Task Queue Adapters:
+        - CeleryTaskAdapter (Celery)
+        - SyncTaskAdapter (Testing - synchronous execution)
 
 Usage:
     from shopping.services.self_healing.adapters import (
+        # Repositories
         DjangoFailedOperationRepository,
         DjangoCircuitBreakerStateRepository,
         DjangoSecurityIncidentRepository,
+        # Payments
+        TossPaymentAdapter,
+        MockPaymentAdapter,
+        # Cache
+        RedisCacheAdapter,
+        InMemoryCacheAdapter,
+        # Task Queues
+        CeleryTaskAdapter,
+        SyncTaskAdapter,
     )
+
+Reference: docs/PLUGGABLE_ARCHITECTURE.md
 """
 
+# =============================================================================
+# Repository Adapters (Phase 0)
+# =============================================================================
 from shopping.services.self_healing.adapters.django_repositories import (
     DjangoFailedOperationRepository,
     DjangoCircuitBreakerStateRepository,
     DjangoSecurityIncidentRepository,
 )
 
+# =============================================================================
+# Payment Adapters (Phase 2)
+# =============================================================================
+from shopping.services.self_healing.adapters.payments import (
+    TossPaymentAdapter,
+    MockPaymentAdapter,
+)
+
+# =============================================================================
+# Cache Adapters (Phase 2)
+# =============================================================================
+from shopping.services.self_healing.adapters.cache import (
+    RedisCacheAdapter,
+    InMemoryCacheAdapter,
+)
+
+# =============================================================================
+# Task Queue Adapters (Phase 2)
+# =============================================================================
+from shopping.services.self_healing.adapters.queues import (
+    CeleryTaskAdapter,
+    SyncTaskAdapter,
+)
+
+
 __all__ = [
+    # =========================================================================
+    # Repository Adapters
+    # =========================================================================
     "DjangoFailedOperationRepository",
     "DjangoCircuitBreakerStateRepository",
     "DjangoSecurityIncidentRepository",
+    # =========================================================================
+    # Payment Adapters
+    # =========================================================================
+    "TossPaymentAdapter",
+    "MockPaymentAdapter",
+    # =========================================================================
+    # Cache Adapters
+    # =========================================================================
+    "RedisCacheAdapter",
+    "InMemoryCacheAdapter",
+    # =========================================================================
+    # Task Queue Adapters
+    # =========================================================================
+    "CeleryTaskAdapter",
+    "SyncTaskAdapter",
 ]
