@@ -23,12 +23,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from django.utils import timezone
+from selfhealing.core.timezone import now
 
 if TYPE_CHECKING:
-    from shopping.models.order import Order
-    from shopping.models.payment import Payment
-    from shopping.models.user import User
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -251,27 +249,27 @@ class ForensicContextBuilder:
     def start_timing(self) -> "ForensicContextBuilder":
         """Start timing the operation."""
         self._start_time = time.time()
-        self._context.request_timestamp = timezone.now().isoformat()
+        self._context.request_timestamp = now().isoformat()
         return self
 
     def end_timing(self) -> "ForensicContextBuilder":
         """End timing and calculate latency."""
-        self._context.response_timestamp = timezone.now().isoformat()
+        self._context.response_timestamp = now().isoformat()
         if self._start_time:
             self._context.latency_ms = int((time.time() - self._start_time) * 1000)
         return self
 
     def with_request(self, request: Any) -> "ForensicContextBuilder":
         """
-        Add request context from Django request.
+        Add request context from HTTP request (framework-agnostic).
 
         Args:
-            request: Django HttpRequest object
+            request: HTTP request object (Django, Flask, etc.)
         """
         if hasattr(request, "META"):
-            from selfhealing.config import get_forensic_settings
+            from selfhealing.core.config import get_config
 
-            max_length = get_forensic_settings().user_agent_max_length
+            max_length = get_config().forensic.user_agent_max_length
             self._context.client_ip = self._get_client_ip(request)
             self._context.user_agent = request.META.get("HTTP_USER_AGENT", "")[:max_length]
             self._context.session_id = request.session.session_key if hasattr(request, "session") else ""

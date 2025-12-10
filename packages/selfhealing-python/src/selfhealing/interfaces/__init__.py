@@ -123,6 +123,17 @@ from selfhealing.interfaces.web_framework import (
     HandlerFunc,
 )
 
+# =============================================================================
+# Configuration Provider Interface (Phase 2)
+# =============================================================================
+from selfhealing.interfaces.config_provider import (
+    # Interface
+    ConfigProviderInterface,
+    # Default implementations
+    DictConfigProvider,
+    EnvConfigProvider,
+)
+
 
 __all__ = [
     # =========================================================================
@@ -198,4 +209,12 @@ __all__ = [
     "WebFrameworkInterface",
     # Type alias
     "HandlerFunc",
+    # =========================================================================
+    # Configuration Provider Interface
+    # =========================================================================
+    # Interface
+    "ConfigProviderInterface",
+    # Default implementations
+    "DictConfigProvider",
+    "EnvConfigProvider",
 ]

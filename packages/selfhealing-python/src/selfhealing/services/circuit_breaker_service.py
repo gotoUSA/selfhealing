@@ -23,17 +23,15 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
-from django.conf import settings
-from django.db import transaction
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
-    from shopping.models.failed_payment import CircuitBreakerState
-    from shopping.models.user import User
     from selfhealing.interfaces.repositories import (
         CircuitBreakerStateRepository,
+        CircuitBreakerStateData,
     )
 
 logger = logging.getLogger(__name__)
@@ -151,19 +149,17 @@ class CircuitBreakerConfig:
 
     @classmethod
     def from_settings(cls) -> "CircuitBreakerConfig":
-        """Load configuration from Django settings via centralized config."""
-        from selfhealing.config import get_circuit_breaker_settings
-
-        cb_settings = get_circuit_breaker_settings()
+        """Load configuration from core config."""
+        cb_settings = get_config().circuit_breaker
         return cls(
             enabled=cb_settings.enabled,
             failure_threshold=cb_settings.failure_threshold,
             recovery_timeout=cb_settings.recovery_timeout,
             success_threshold=cb_settings.success_threshold,
-            manual_override_ttl_minutes=cb_settings.manual_override_ttl_minutes,
-            half_open_request_limit=cb_settings.half_open_request_limit,
-            max_pending_duration_hours=cb_settings.max_pending_duration_hours,
-            max_retry_lifetime_hours=cb_settings.max_retry_lifetime_hours,
+            manual_override_ttl_minutes=getattr(cb_settings, 'manual_override_ttl_minutes', 90),
+            half_open_request_limit=getattr(cb_settings, 'half_open_request_limit', 10),
+            max_pending_duration_hours=getattr(cb_settings, 'max_pending_duration_hours', 4),
+            max_retry_lifetime_hours=getattr(cb_settings, 'max_retry_lifetime_hours', 24),
             rate_limit_cascade_threshold=cb_settings.rate_limit_cascade_threshold,
             rate_limit_cascade_window_seconds=cb_settings.rate_limit_cascade_window_seconds,
             self_ddos_protection_enabled=cb_settings.self_ddos_protection_enabled,
@@ -285,7 +281,7 @@ class CircuitBreakerService:
 
     @property
     def repository(self) -> "CircuitBreakerStateRepository":
-        """Get the repository, creating Django adapter if needed."""
+        """Get the repository, creating default adapter if needed."""
         if self._repository is None:
             # Try to use ProviderRegistry from selfhealing package first
             try:
@@ -308,7 +304,7 @@ class CircuitBreakerService:
     # State Query Operations
     # =========================================================================
 
-    def get_or_create_state(self, service_name: str) -> "CircuitBreakerState":
+    def get_or_create_state(self, service_name: str) -> "CircuitBreakerStateData":
         """
         Get or create a circuit breaker state for a service.
 
@@ -316,19 +312,9 @@ class CircuitBreakerService:
             service_name: Name of the external service
 
         Returns:
-            CircuitBreakerState instance
+            CircuitBreakerStateData instance
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
-        state, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={
-                "state": CircuitState.CLOSED,
-                "failure_count": 0,
-                "success_count": 0,
-            },
-        )
-        return state
+        return self.repository.get_or_create(service_name)
 
     def get_state(self, service_name: str) -> str:
         """
@@ -581,9 +567,7 @@ class CircuitBreakerService:
         Returns:
             List of state dictionaries
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
-        states = CircuitBreakerState.objects.all()
+        states = self.repository.get_all_states()
         return [
             {
                 "service_name": s.service_name,
@@ -603,82 +587,75 @@ class CircuitBreakerService:
     # Manual Control Operations
     # =========================================================================
 
-    @transaction.atomic
     def force_open(
         self,
         service_name: str,
         reason: str = "",
-        controlled_by: "User | None" = None,
+        controlled_by_id: int | None = None,
     ) -> CircuitBreakerResult:
         """
         Force the circuit breaker to OPEN state (block all requests).
 
         Use this when an external service is detected as down
         and you want to stop sending requests.
+        
+        This operation uses atomic locking to prevent race conditions
+        when multiple operators try to change the state simultaneously.
 
         Args:
             service_name: Name of the external service
             reason: Reason for opening (for audit)
-            controlled_by: User who initiated the change
+            controlled_by_id: User ID who initiated the change
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
-            previous_state = state.state
-        except CircuitBreakerState.DoesNotExist:
-            # Create new state in OPEN with TTL
-            from datetime import timedelta
-
-            ttl_minutes = self.config.manual_override_ttl_minutes
-            state = CircuitBreakerState.objects.create(
+            # Use atomic operation to prevent race conditions
+            success, previous_state, new_state = self.repository.atomic_force_open(
                 service_name=service_name,
-                state=CircuitState.OPEN,
-                opened_at=timezone.now(),
-                manually_controlled=True,
-                manual_override_expires_at=timezone.now() + timedelta(minutes=ttl_minutes),
-                controlled_by=controlled_by,
-                control_reason=reason,
-            )
-            logger.info(f"[CircuitBreaker] Created and opened circuit for '{service_name}': {reason} (TTL: {ttl_minutes}m)")
-            return CircuitBreakerResult.succeeded(
-                service_name=service_name,
-                previous_state=CircuitState.CLOSED,
-                new_state=CircuitState.OPEN,
-                message=f"Circuit breaker created and opened for {service_name}",
+                reason=reason,
+                controlled_by_id=controlled_by_id,
+                ttl_minutes=self.config.manual_override_ttl_minutes,
             )
 
-        if state.state == CircuitState.OPEN:
-            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already open")
-            return CircuitBreakerResult.succeeded(
+            if success:
+                if previous_state == new_state:
+                    logger.info(f"[CircuitBreaker] Circuit '{service_name}' already open")
+                    return CircuitBreakerResult.succeeded(
+                        service_name=service_name,
+                        previous_state=previous_state,
+                        new_state=new_state,
+                        message="Circuit breaker already open",
+                    )
+                else:
+                    logger.warning(
+                        f"[CircuitBreaker] Force opened circuit for '{service_name}': "
+                        f"{previous_state} -> {new_state} | Reason: {reason}"
+                    )
+                    return CircuitBreakerResult.succeeded(
+                        service_name=service_name,
+                        previous_state=previous_state,
+                        new_state=new_state,
+                        message=f"Circuit breaker opened for {service_name}",
+                    )
+            else:
+                return CircuitBreakerResult.failed(
+                    service_name=service_name,
+                    error="Failed to force open circuit breaker",
+                )
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Failed to force open: {e}")
+            return CircuitBreakerResult.failed(
                 service_name=service_name,
-                previous_state=CircuitState.OPEN,
-                new_state=CircuitState.OPEN,
-                message="Circuit breaker already open",
+                error=str(e),
             )
 
-        state.force_open(controlled_by=controlled_by, reason=reason)
-
-        logger.warning(
-            f"[CircuitBreaker] Force opened circuit for '{service_name}': " f"{previous_state} -> open | Reason: {reason}"
-        )
-
-        return CircuitBreakerResult.succeeded(
-            service_name=service_name,
-            previous_state=previous_state,
-            new_state=CircuitState.OPEN,
-            message=f"Circuit breaker opened for {service_name}",
-        )
-
-    @transaction.atomic
     def force_close(
         self,
         service_name: str,
         reason: str = "",
-        controlled_by: "User | None" = None,
+        controlled_by_id: int | None = None,
         trigger_replay: bool = False,
     ) -> CircuitBreakerResult:
         """
@@ -686,67 +663,65 @@ class CircuitBreakerService:
 
         Use this when an external service has recovered
         and you want to resume normal operations.
+        
+        This operation uses atomic locking to prevent race conditions
+        when multiple operators try to change the state simultaneously.
 
         Args:
             service_name: Name of the external service
             reason: Reason for closing (for audit)
-            controlled_by: User who initiated the change
+            controlled_by_id: User ID who initiated the change
             trigger_replay: Whether to trigger conditional replay for queued items
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
-            previous_state = state.state
-        except CircuitBreakerState.DoesNotExist:
-            # Create new state in CLOSED (allow is the default state)
-            state = CircuitBreakerState.objects.create(
+            # Use atomic operation to prevent race conditions
+            success, previous_state, new_state = self.repository.atomic_force_close(
                 service_name=service_name,
-                state=CircuitState.CLOSED,
-                failure_count=0,
-                success_count=0,
-                manually_controlled=True,
-                controlled_by=controlled_by,
-                control_reason=reason,
-            )
-            logger.info(f"[CircuitBreaker] Created circuit for '{service_name}' in CLOSED state: {reason}")
-            return CircuitBreakerResult.succeeded(
-                service_name=service_name,
-                previous_state=CircuitState.CLOSED,
-                new_state=CircuitState.CLOSED,
-                message=f"Circuit breaker created for {service_name} (already closed)",
+                reason=reason,
+                controlled_by_id=controlled_by_id,
             )
 
-        if state.state == CircuitState.CLOSED:
-            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
-            return CircuitBreakerResult.succeeded(
+            if success:
+                if previous_state == new_state:
+                    logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
+                    return CircuitBreakerResult.succeeded(
+                        service_name=service_name,
+                        previous_state=previous_state,
+                        new_state=new_state,
+                        message="Circuit breaker already closed",
+                    )
+                else:
+                    logger.info(
+                        f"[CircuitBreaker] Force closed circuit for '{service_name}': "
+                        f"{previous_state} -> {new_state} | Reason: {reason}"
+                    )
+
+                    result = CircuitBreakerResult.succeeded(
+                        service_name=service_name,
+                        previous_state=previous_state,
+                        new_state=new_state,
+                        message=f"Circuit breaker closed for {service_name}",
+                    )
+
+                    # Trigger conditional replay if requested
+                    if trigger_replay:
+                        self._trigger_conditional_replay(service_name)
+
+                    return result
+            else:
+                return CircuitBreakerResult.failed(
+                    service_name=service_name,
+                    error="Failed to force close circuit breaker",
+                )
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Failed to force close: {e}")
+            return CircuitBreakerResult.failed(
                 service_name=service_name,
-                previous_state=CircuitState.CLOSED,
-                new_state=CircuitState.CLOSED,
-                message="Circuit breaker already closed",
+                error=str(e),
             )
-
-        state.force_close(controlled_by=controlled_by, reason=reason)
-
-        logger.info(
-            f"[CircuitBreaker] Force closed circuit for '{service_name}': " f"{previous_state} -> closed | Reason: {reason}"
-        )
-
-        result = CircuitBreakerResult.succeeded(
-            service_name=service_name,
-            previous_state=previous_state,
-            new_state=CircuitState.CLOSED,
-            message=f"Circuit breaker closed for {service_name}",
-        )
-
-        # Trigger conditional replay if requested
-        if trigger_replay:
-            self._trigger_conditional_replay(service_name)
-
-        return result
 
     # =========================================================================
     # Conditional Replay
@@ -756,21 +731,29 @@ class CircuitBreakerService:
         """
         Trigger conditional replay when circuit breaker closes.
 
-        Queues a Celery task to replay DLQ entries related to the
+        Queues a task to replay DLQ entries related to the
         recovered service.
+
+        Note: The actual task execution is delegated to the application's
+        task queue system. This method logs the intent and attempts to
+        use the TaskQueue interface if available.
 
         Args:
             service_name: Name of the service that recovered
         """
         try:
-            from shopping.tasks.self_healing_tasks import conditional_replay_on_circuit_close
+            from selfhealing.factory import ProviderRegistry
 
-            task = conditional_replay_on_circuit_close.delay(service_name=service_name)
+            queue = ProviderRegistry.get_queue()
+            task_id = queue.enqueue(
+                "selfhealing.tasks.conditional_replay_on_circuit_close",
+                kwargs={"service_name": service_name},
+            )
 
-            logger.info(f"[CircuitBreaker] Triggered conditional replay for '{service_name}': " f"task_id={task.id}")
-        except ImportError:
-            # Task not yet defined, log warning
-            logger.warning(f"[CircuitBreaker] Cannot trigger replay for '{service_name}': " "Celery task not available")
+            logger.info(f"[CircuitBreaker] Triggered conditional replay for '{service_name}': " f"task_id={task_id}")
+        except (ImportError, ValueError):
+            # Task queue not configured, log warning
+            logger.warning(f"[CircuitBreaker] Cannot trigger replay for '{service_name}': " "Task queue not available")
         except Exception as e:
             # Non-critical error, log but don't fail
             logger.error(f"[CircuitBreaker] Failed to trigger replay for '{service_name}': {e}")
@@ -863,58 +846,53 @@ class CircuitBreakerService:
     # Reset Operations
     # =========================================================================
 
-    @transaction.atomic
     def reset(
         self,
         service_name: str,
-        controlled_by: "User | None" = None,
+        controlled_by: int | None = None,
         reason: str = "",
     ) -> CircuitBreakerResult:
         """
         Reset a circuit breaker to initial state.
 
         Clears all counters and sets state to CLOSED.
+        Uses atomic operation to prevent race conditions.
 
         Args:
             service_name: Name of the external service
-            controlled_by: User who initiated the reset
+            controlled_by: User ID who initiated the reset (optional)
             reason: Reason for reset (for audit)
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
         try:
-            state = CircuitBreakerState.objects.select_for_update().get(service_name=service_name)
-            previous_state = state.state
-        except CircuitBreakerState.DoesNotExist:
-            return CircuitBreakerResult.failed(
+            # Use atomic operation to prevent race conditions
+            success, previous_state, new_state = self.repository.atomic_reset(
                 service_name=service_name,
-                error=f"Circuit breaker for '{service_name}' does not exist",
+                reason=reason,
+                controlled_by_id=controlled_by,
             )
 
-        # Reset all fields
-        state.state = CircuitState.CLOSED
-        state.failure_count = 0
-        state.success_count = 0
-        state.half_open_request_count = 0
-        state.opened_at = None
-        state.last_failure_at = None
-        state.manually_controlled = False
-        state.manual_override_expires_at = None
-        state.controlled_by = controlled_by
-        state.control_reason = reason
-        state.save()
-
-        logger.info(f"[CircuitBreaker] Reset circuit for '{service_name}': " f"{previous_state} -> closed | Reason: {reason}")
-
-        return CircuitBreakerResult.succeeded(
-            service_name=service_name,
-            previous_state=previous_state,
-            new_state=CircuitState.CLOSED,
-            message=f"Circuit breaker reset for {service_name}",
-        )
+            if success:
+                logger.info(f"[CircuitBreaker] Reset circuit for '{service_name}': " f"{previous_state} -> {new_state} | Reason: {reason}")
+                return CircuitBreakerResult.succeeded(
+                    service_name=service_name,
+                    previous_state=previous_state,
+                    new_state=new_state,
+                    message=f"Circuit breaker reset for {service_name}",
+                )
+            else:
+                return CircuitBreakerResult.failed(
+                    service_name=service_name,
+                    error=f"Circuit breaker for '{service_name}' does not exist",
+                )
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Failed to reset: {e}")
+            return CircuitBreakerResult.failed(
+                service_name=service_name,
+                error=str(e),
+            )
 
     # =========================================================================
     # Manual Override TTL Management
@@ -931,25 +909,34 @@ class CircuitBreakerService:
         Returns:
             List of service names that had their overrides expired
         """
-        from shopping.models.failed_payment import CircuitBreakerState
-
         expired_services = []
 
-        manual_circuits = CircuitBreakerState.objects.filter(
-            manually_controlled=True,
-            manual_override_expires_at__isnull=False,
-            manual_override_expires_at__lte=timezone.now(),
-        )
+        try:
+            # Get all states and filter manually controlled ones
+            all_states = self.repository.get_all_states()
+            current_time = now()
 
-        for circuit in manual_circuits:
-            previous_state = circuit.state
-            circuit.expire_manual_override()
+            for state in all_states:
+                if (
+                    state.manually_controlled
+                    and state.manual_override_expires_at
+                    and state.manual_override_expires_at <= current_time
+                ):
+                    previous_state = state.state
+                    # Expire the override - transition to HALF_OPEN for testing
+                    self.repository.update_state(
+                        service_name=state.service_name,
+                        state=CircuitState.HALF_OPEN,
+                    )
+                    self.repository.clear_manual_control(state.service_name)
 
-            expired_services.append(circuit.service_name)
-            logger.warning(
-                f"[CircuitBreaker] Manual override expired for '{circuit.service_name}': "
-                f"{previous_state} -> {circuit.state}"
-            )
+                    expired_services.append(state.service_name)
+                    logger.warning(
+                        f"[CircuitBreaker] Manual override expired for '{state.service_name}': "
+                        f"{previous_state} -> half_open"
+                    )
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Failed to check expired overrides: {e}")
 
         return expired_services
 
@@ -957,7 +944,7 @@ class CircuitBreakerService:
         self,
         service_name: str,
         additional_minutes: int = 90,
-        controlled_by: "User | None" = None,
+        controlled_by_id: int | None = None,
         reason: str = "",
     ) -> CircuitBreakerResult:
         """
@@ -968,7 +955,7 @@ class CircuitBreakerService:
         Args:
             service_name: Name of the external service
             additional_minutes: Minutes to extend the override
-            controlled_by: User who initiated the extension
+            controlled_by_id: User ID who initiated the extension
             reason: Reason for extension
 
         Returns:
@@ -976,41 +963,51 @@ class CircuitBreakerService:
         """
         from datetime import timedelta
 
-        from shopping.models.failed_payment import CircuitBreakerState
-
         try:
-            state = CircuitBreakerState.objects.get(service_name=service_name)
-        except CircuitBreakerState.DoesNotExist:
-            return CircuitBreakerResult.failed(
+            state = self.repository.get_by_service_name(service_name)
+            if state is None:
+                return CircuitBreakerResult.failed(
+                    service_name=service_name,
+                    error=f"Circuit breaker for '{service_name}' does not exist",
+                )
+
+            if not state.manually_controlled:
+                return CircuitBreakerResult.failed(
+                    service_name=service_name,
+                    error="Circuit is not under manual control",
+                )
+
+            # Extend TTL
+            current_time = now()
+            if state.manual_override_expires_at:
+                new_expires_at = state.manual_override_expires_at + timedelta(minutes=additional_minutes)
+            else:
+                new_expires_at = current_time + timedelta(minutes=additional_minutes)
+
+            new_reason = f"{state.control_reason} | Extended: {reason}" if reason else state.control_reason
+
+            self.repository.set_manual_control(
                 service_name=service_name,
-                error=f"Circuit breaker for '{service_name}' does not exist",
+                state=state.state,
+                controlled_by_id=controlled_by_id,
+                reason=new_reason,
+                expires_at=new_expires_at,
             )
 
-        if not state.manually_controlled:
+            logger.info(f"[CircuitBreaker] Extended manual override for '{service_name}' " f"by {additional_minutes} minutes")
+
+            return CircuitBreakerResult.succeeded(
+                service_name=service_name,
+                previous_state=state.state,
+                new_state=state.state,
+                message=f"Manual override extended by {additional_minutes} minutes",
+            )
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Failed to extend override: {e}")
             return CircuitBreakerResult.failed(
                 service_name=service_name,
-                error="Circuit is not under manual control",
+                error=str(e),
             )
-
-        # Extend TTL
-        if state.manual_override_expires_at:
-            state.manual_override_expires_at += timedelta(minutes=additional_minutes)
-        else:
-            state.manual_override_expires_at = timezone.now() + timedelta(minutes=additional_minutes)
-
-        state.controlled_by = controlled_by
-        if reason:
-            state.control_reason = f"{state.control_reason} | Extended: {reason}"
-        state.save()
-
-        logger.info(f"[CircuitBreaker] Extended manual override for '{service_name}' " f"by {additional_minutes} minutes")
-
-        return CircuitBreakerResult.succeeded(
-            service_name=service_name,
-            previous_state=state.state,
-            new_state=state.state,
-            message=f"Manual override extended by {additional_minutes} minutes",
-        )
 
 
 # =============================================================================

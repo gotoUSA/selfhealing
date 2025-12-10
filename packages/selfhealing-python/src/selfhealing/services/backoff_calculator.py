@@ -19,7 +19,7 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from django.conf import settings
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
     pass
@@ -37,7 +37,7 @@ class BackoffConfig:
     @classmethod
     def from_settings(cls, domain: str | None = None) -> "BackoffConfig":
         """
-        Load configuration from Django settings via centralized config.
+        Load configuration from core config.
 
         Args:
             domain: Optional domain for per-domain overrides
@@ -45,9 +45,7 @@ class BackoffConfig:
         Returns:
             BackoffConfig with merged settings
         """
-        from selfhealing.config import get_retry_settings
-
-        retry_settings = get_retry_settings()
+        retry_settings = get_config().retry
 
         # Default values from centralized config
         config = cls(

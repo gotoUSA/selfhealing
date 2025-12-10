@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional
@@ -368,6 +368,143 @@ class FailedOperationRepository(ABC):
         """Bulk update status for multiple operations"""
         ...
 
+    @abstractmethod
+    def find_by_status(
+        self,
+        status: str,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Find operations by status with optional filters"""
+        ...
+
+    @abstractmethod
+    def find_replayable(
+        self,
+        max_retries: int,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Find operations that can be replayed (pending and retry_count < max_retries)"""
+        ...
+
+    @abstractmethod
+    def find_sla_breached(
+        self,
+        current_time: datetime,
+        sla_thresholds: dict[str, "timedelta"],
+    ) -> list[FailedOperationData]:
+        """Find operations that have breached their SLA"""
+        ...
+
+    @abstractmethod
+    def find_expired(
+        self,
+        current_time: datetime,
+    ) -> list[FailedOperationData]:
+        """Find operations past their retention period"""
+        ...
+
+    @abstractmethod
+    def get_statistics(self) -> dict[str, Any]:
+        """Get statistics about failed operations"""
+        ...
+
+    # =========================================================================
+    # Atomic Operations for Concurrency Safety
+    # =========================================================================
+
+    @abstractmethod
+    def try_acquire_for_replay(
+        self,
+        id: int,
+        max_retries: int,
+    ) -> Optional[FailedOperationData]:
+        """
+        Atomically acquire a DLQ entry for replay.
+        
+        This method MUST:
+        1. Check if status is PENDING and retry_count < max_retries
+        2. If eligible, atomically set status to REPLAYING and increment retry_count
+        3. Return the FailedOperationData if acquired, None if not eligible
+        
+        Implementation should use row-level locking (SELECT FOR UPDATE) or 
+        optimistic locking (version/updated_at check) to prevent race conditions.
+        
+        Args:
+            id: The DLQ entry ID to acquire
+            max_retries: Maximum allowed retry attempts
+            
+        Returns:
+            FailedOperationData if successfully acquired, None otherwise
+            
+        Example Django implementation:
+            with transaction.atomic():
+                entry = FailedOperation.objects.select_for_update().get(id=id)
+                if entry.status != 'pending' or entry.retry_count >= max_retries:
+                    return None
+                entry.status = 'replaying'
+                entry.retry_count += 1
+                entry.last_retry_at = now()
+                entry.save()
+                return FailedOperationData.from_model(entry)
+        """
+        ...
+
+    @abstractmethod
+    def complete_replay(
+        self,
+        id: int,
+        success: bool,
+        resolution_type: str = "",
+        note: str = "",
+        resolved_by_id: Optional[int] = None,
+        error_details: Optional[dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Complete a replay operation by updating the final status.
+        
+        Should be called after replay execution to set final state:
+        - success=True: Mark as RESOLVED with resolution details
+        - success=False: Revert to PENDING (for retry) or REQUIRES_REVIEW (if escalated)
+        
+        This method is safe to call without transaction wrapper as it only
+        updates an already-acquired entry.
+        
+        Args:
+            id: The DLQ entry ID
+            success: Whether the replay succeeded
+            resolution_type: Type of resolution (for successful replays)
+            note: Resolution note or error message
+            resolved_by_id: User ID who resolved (None for system)
+            error_details: Additional error context (for failed replays)
+            
+        Returns:
+            True if update succeeded, False otherwise
+        """
+        ...
+
+    @abstractmethod
+    def release_stale_replaying(
+        self,
+        older_than_minutes: int = 30,
+    ) -> int:
+        """
+        Release DLQ entries stuck in REPLAYING state.
+        
+        Entries can get stuck if the replay process crashes after acquiring
+        but before completing. This method reverts them to PENDING for retry.
+        
+        Args:
+            older_than_minutes: Consider entries older than this as stale
+            
+        Returns:
+            Number of entries released
+        """
+        ...
+
 
 class CircuitBreakerStateRepository(ABC):
     """
@@ -426,6 +563,11 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
+    def get_all(self) -> list[CircuitBreakerStateData]:
+        """Get all circuit breaker states"""
+        ...
+
+    @abstractmethod
     def get_all_states(self) -> list[CircuitBreakerStateData]:
         """Get all circuit breaker states"""
         ...
@@ -433,6 +575,91 @@ class CircuitBreakerStateRepository(ABC):
     @abstractmethod
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state"""
+        ...
+
+    # =========================================================================
+    # Atomic Operations for Concurrency Safety
+    # =========================================================================
+
+    @abstractmethod
+    def atomic_force_open(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+        ttl_minutes: int = 90,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically force open a circuit breaker.
+        
+        This method MUST use row-level locking to prevent concurrent modifications.
+        Creates the circuit breaker if it doesn't exist.
+        
+        Args:
+            service_name: Name of the service
+            reason: Reason for opening
+            controlled_by_id: User ID who initiated the change
+            ttl_minutes: TTL for manual override
+            
+        Returns:
+            Tuple of (success, previous_state, new_state)
+            
+        Example Django implementation:
+            with transaction.atomic():
+                state, created = CircuitBreakerState.objects.select_for_update().get_or_create(
+                    service_name=service_name
+                )
+                previous = state.state
+                state.state = 'open'
+                state.manually_controlled = True
+                state.save()
+                return (True, previous, 'open')
+        """
+        ...
+
+    @abstractmethod
+    def atomic_force_close(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically force close a circuit breaker.
+        
+        This method MUST use row-level locking to prevent concurrent modifications.
+        
+        Args:
+            service_name: Name of the service
+            reason: Reason for closing
+            controlled_by_id: User ID who initiated the change
+            
+        Returns:
+            Tuple of (success, previous_state, new_state)
+        """
+        ...
+
+    @abstractmethod
+    def atomic_reset(
+        self,
+        service_name: str,
+        reason: str = "",
+        controlled_by_id: Optional[int] = None,
+    ) -> tuple[bool, str, str]:
+        """
+        Atomically reset a circuit breaker to initial state.
+        
+        This method MUST use row-level locking to prevent concurrent modifications.
+        Resets all counters and clears manual control.
+        
+        Args:
+            service_name: Name of the service
+            reason: Reason for reset
+            controlled_by_id: User ID who initiated the change
+            
+        Returns:
+            Tuple of (success, previous_state, new_state)
+        """
         ...
 
 

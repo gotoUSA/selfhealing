@@ -21,19 +21,17 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, Optional, Callable
 
-from django.core.cache import cache
-from django.db import models
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
-    from shopping.models.payment import Payment
-    from shopping.models.point import PointHistory
+    from selfhealing.interfaces import CacheProviderInterface
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=models.Model)
+T = TypeVar("T")
 
 
 class IdempotencyDomain(Enum):
@@ -202,21 +200,52 @@ class IdempotencyService:
 
     Provides both cache-based (fast) and database-based (reliable)
     idempotency checking.
+
+    For framework-agnostic usage, provide lookup callbacks for each domain
+    you need to check. If not provided, the service will try to import
+    from shopping.models (Django fallback).
+
+    Example:
+        # Framework-agnostic usage
+        service = IdempotencyService(
+            payment_lookup=my_payment_lookup_func,
+            webhook_lookup=my_webhook_lookup_func,
+        )
+
+        # Django fallback (default)
+        service = IdempotencyService()
     """
 
-    def __init__(self, cache_ttl: int | None = None):
+    def __init__(
+        self,
+        cache_ttl: int | None = None,
+        payment_lookup: Optional[Callable[[int, int], Any]] = None,
+        payment_confirm_lookup: Optional[Callable[[str, int, int], Any]] = None,
+        webhook_lookup: Optional[Callable[[str], bool]] = None,
+        point_lookup: Optional[Callable[[int, str, int], Any]] = None,
+    ):
         """
         Initialize the idempotency service.
 
         Args:
             cache_ttl: Custom cache TTL in seconds
+            payment_lookup: Callback(order_id, amount) -> Payment or None
+            payment_confirm_lookup: Callback(payment_key, order_id, amount) -> Payment or None
+            webhook_lookup: Callback(event_id) -> bool (exists)
+            point_lookup: Callback(order_id, point_type, amount) -> PointHistory or None
         """
-        from selfhealing.config import get_idempotency_config
+        from selfhealing.core.config import get_config
 
-        config = get_idempotency_config()
-        self._default_cache_ttl = config.default_cache_ttl
-        self._payment_cache_ttl = config.payment_cache_ttl
+        config = get_config()
+        self._default_cache_ttl = config.idempotency.default_cache_ttl
+        self._payment_cache_ttl = config.idempotency.payment_cache_ttl
         self.cache_ttl = cache_ttl or self._default_cache_ttl
+
+        # Store lookup callbacks
+        self._payment_lookup = payment_lookup
+        self._payment_confirm_lookup = payment_confirm_lookup
+        self._webhook_lookup = webhook_lookup
+        self._point_lookup = point_lookup
 
     @property
     def DEFAULT_CACHE_TTL(self) -> int:
@@ -232,7 +261,7 @@ class IdempotencyService:
         self,
         order_id: int,
         amount: int,
-    ) -> IdempotencyResult["Payment"]:
+    ) -> IdempotencyResult:
         """
         Check if a payment for this order/amount already exists.
 
@@ -247,35 +276,43 @@ class IdempotencyService:
             Gracefully degrades to DB-only check if Redis is unavailable.
             This ensures the service works even during cache failures.
         """
-        from shopping.models.payment import Payment
-
         key = IdempotencyKey.for_payment(order_id, amount)
+
+        # Get lookup function (injected or Django fallback)
+        lookup = self._payment_lookup
+        if lookup is None:
+            try:
+                from shopping.models.payment import Payment
+                def lookup(oid: int, amt: int):
+                    return Payment.objects.filter(
+                        order_id=oid,
+                        amount=amt,
+                        status__in=["done", "in_progress", "ready"],
+                    ).first()
+            except ImportError:
+                logger.warning("[Idempotency] No payment lookup configured and shopping module not available")
+                return IdempotencyResult(
+                    is_duplicate=False,
+                    message="Payment check skipped - no lookup configured",
+                )
 
         # Check cache first (fast path) with graceful degradation
         try:
             cached_payment_id = cache.get(key.cache_key)
             if cached_payment_id:
-                try:
-                    payment = Payment.objects.get(pk=cached_payment_id)
-                    logger.debug(f"[Idempotency] Cache hit for payment: {key.key}")
-                    return IdempotencyResult(
-                        is_duplicate=True,
-                        existing_record=payment,
-                        message="Payment found in cache",
-                    )
-                except Payment.DoesNotExist:
-                    # Cache is stale, delete it
-                    cache.delete(key.cache_key)
+                # Cache hit - verify record still exists
+                logger.debug(f"[Idempotency] Cache hit for payment: {key.key}")
+                return IdempotencyResult(
+                    is_duplicate=True,
+                    existing_record=cached_payment_id,
+                    message="Payment found in cache",
+                )
         except Exception as e:
             # Redis unavailable - fall back to DB-only check
             logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
 
         # Check database (reliable path)
-        existing = Payment.objects.filter(
-            order_id=order_id,
-            amount=amount,
-            status__in=["done", "in_progress", "ready"],
-        ).first()
+        existing = lookup(order_id, amount)
 
         if existing:
             # Update cache for future lookups (best-effort)
@@ -300,7 +337,7 @@ class IdempotencyService:
         payment_key: str,
         order_id: int,
         amount: int,
-    ) -> IdempotencyResult["Payment"]:
+    ) -> IdempotencyResult:
         """
         Check if a payment confirmation already succeeded.
 
@@ -315,39 +352,47 @@ class IdempotencyService:
         Note:
             Gracefully degrades to DB-only check if Redis is unavailable.
         """
-        from shopping.models.payment import Payment
-
         key = IdempotencyKey.for_payment_confirm(payment_key, order_id, amount)
+
+        # Get lookup function (injected or Django fallback)
+        lookup = self._payment_confirm_lookup
+        if lookup is None:
+            try:
+                from shopping.models.payment import Payment
+                def lookup(pkey: str, oid: int, amt: int):
+                    return Payment.objects.filter(
+                        payment_key=pkey,
+                        order_id=oid,
+                        amount=amt,
+                        status="done",
+                    ).first()
+            except ImportError:
+                logger.warning("[Idempotency] No payment confirm lookup configured and shopping module not available")
+                return IdempotencyResult(
+                    is_duplicate=False,
+                    message="Payment confirm check skipped - no lookup configured",
+                )
 
         # Check cache first with graceful degradation
         try:
             cached_payment_id = cache.get(key.cache_key)
             if cached_payment_id:
-                try:
-                    payment = Payment.objects.get(pk=cached_payment_id, status="done")
-                    logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
-                    return IdempotencyResult(
-                        is_duplicate=True,
-                        existing_record=payment,
-                        message="Payment already confirmed (cached)",
-                    )
-                except Payment.DoesNotExist:
-                    cache.delete(key.cache_key)
+                logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
+                return IdempotencyResult(
+                    is_duplicate=True,
+                    existing_record=cached_payment_id,
+                    message="Payment already confirmed (cached)",
+                )
         except Exception as e:
             # Redis unavailable - fall back to DB-only check
             logger.warning(f"[Idempotency] Cache unavailable for confirm check, falling back to DB: {e}")
 
         # Check database
-        existing = Payment.objects.filter(
-            payment_key=payment_key,
-            order_id=order_id,
-            amount=amount,
-            status="done",
-        ).first()
+        existing = lookup(payment_key, order_id, amount)
 
         if existing:
             try:
-                cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
+                cache.set(key.cache_key, getattr(existing, 'id', existing), timeout=self.PAYMENT_CACHE_TTL)
             except Exception:
                 pass  # Cache update is optional
             logger.info(f"[Idempotency] Duplicate confirm detected (DB): {key.key}")
@@ -375,9 +420,21 @@ class IdempotencyService:
         Note:
             Gracefully degrades to DB-only check if Redis is unavailable.
         """
-        from shopping.models.webhook_event import WebhookEvent
-
         key = IdempotencyKey.for_webhook(event_id)
+
+        # Get lookup function (injected or Django fallback)
+        lookup = self._webhook_lookup
+        if lookup is None:
+            try:
+                from shopping.models.webhook_event import WebhookEvent
+                def lookup(eid: str) -> bool:
+                    return WebhookEvent.objects.filter(event_id=eid).exists()
+            except ImportError:
+                logger.warning("[Idempotency] No webhook lookup configured and shopping module not available")
+                return IdempotencyResult(
+                    is_duplicate=False,
+                    message="Webhook check skipped - no lookup configured",
+                )
 
         # Check cache with graceful degradation
         try:
@@ -392,7 +449,7 @@ class IdempotencyService:
             logger.warning(f"[Idempotency] Cache unavailable for webhook check, falling back to DB: {e}")
 
         # Check database
-        exists = WebhookEvent.objects.filter(event_id=event_id).exists()
+        exists = lookup(event_id)
 
         if exists:
             # Cache for future lookups (best-effort)
@@ -416,7 +473,7 @@ class IdempotencyService:
         order_id: int,
         point_type: str,
         amount: int,
-    ) -> IdempotencyResult["PointHistory"]:
+    ) -> IdempotencyResult:
         """
         Check if a point operation has already been processed.
 
@@ -431,38 +488,46 @@ class IdempotencyService:
         Note:
             Gracefully degrades to DB-only check if Redis is unavailable.
         """
-        from shopping.models.point import PointHistory
-
         key = IdempotencyKey.for_point_operation(order_id, point_type, amount)
+
+        # Get lookup function (injected or Django fallback)
+        lookup = self._point_lookup
+        if lookup is None:
+            try:
+                from shopping.models.point import PointHistory
+                def lookup(oid: int, ptype: str, amt: int):
+                    return PointHistory.objects.filter(
+                        order_id=oid,
+                        change_type=ptype,
+                        amount=amt,
+                    ).first()
+            except ImportError:
+                logger.warning("[Idempotency] No point lookup configured and shopping module not available")
+                return IdempotencyResult(
+                    is_duplicate=False,
+                    message="Point check skipped - no lookup configured",
+                )
 
         # Check cache with graceful degradation
         try:
             cached_id = cache.get(key.cache_key)
             if cached_id:
-                try:
-                    record = PointHistory.objects.get(pk=cached_id)
-                    logger.info(f"[Idempotency] Duplicate point op detected: {key.key}")
-                    return IdempotencyResult(
-                        is_duplicate=True,
-                        existing_record=record,
-                        message="Point operation already processed (cached)",
-                    )
-                except PointHistory.DoesNotExist:
-                    cache.delete(key.cache_key)
+                logger.info(f"[Idempotency] Duplicate point op detected: {key.key}")
+                return IdempotencyResult(
+                    is_duplicate=True,
+                    existing_record=cached_id,
+                    message="Point operation already processed (cached)",
+                )
         except Exception as e:
             # Redis unavailable - fall back to DB-only check
             logger.warning(f"[Idempotency] Cache unavailable for point check, falling back to DB: {e}")
 
         # Check database
-        existing = PointHistory.objects.filter(
-            order_id=order_id,
-            change_type=point_type,
-            amount=amount,
-        ).first()
+        existing = lookup(order_id, point_type, amount)
 
         if existing:
             try:
-                cache.set(key.cache_key, existing.id, timeout=self.cache_ttl)
+                cache.set(key.cache_key, getattr(existing, 'id', existing), timeout=self.cache_ttl)
             except Exception:
                 pass  # Cache update is optional
             return IdempotencyResult(

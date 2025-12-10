@@ -17,16 +17,15 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Callable
 
-from django.conf import settings
-from django.db import transaction
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
-    from shopping.models.failed_operation import FailedOperation
     from selfhealing.interfaces.repositories import (
         FailedOperationRepository,
+        FailedOperationData,
     )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +79,10 @@ class ReplayHandler(ABC):
 
     Each domain (payment, point, inventory, etc.) should implement
     its own replay logic by subclassing this.
+
+    Note: Handlers should work with FailedOperationData (a simple dataclass)
+    not Django models. The handler receives operation data and should
+    use injected services for actual operations.
     """
 
     @property
@@ -89,12 +92,12 @@ class ReplayHandler(ABC):
         pass
 
     @abstractmethod
-    def replay(self, failed_op: "FailedOperation") -> ReplayResult:
+    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
         """
         Execute replay for a single failed operation.
 
         Args:
-            failed_op: The FailedOperation to replay
+            failed_op: The FailedOperationData to replay
 
         Returns:
             ReplayResult indicating success or failure
@@ -102,12 +105,12 @@ class ReplayHandler(ABC):
         pass
 
     @abstractmethod
-    def can_replay(self, failed_op: "FailedOperation") -> tuple[bool, str]:
+    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
         """
         Check if the operation can be replayed.
 
         Args:
-            failed_op: The FailedOperation to check
+            failed_op: The FailedOperationData to check
 
         Returns:
             Tuple of (can_replay: bool, reason: str)
@@ -115,21 +118,65 @@ class ReplayHandler(ABC):
         pass
 
 
+class DefaultReplayHandler(ReplayHandler):
+    """
+    Default replay handler that returns an error.
+
+    This handler is used when no specific handler is registered for a domain.
+    Users should register their own handlers for each domain they need.
+    """
+
+    def __init__(self, domain_name: str):
+        self._domain = domain_name
+
+    @property
+    def domain(self) -> str:
+        return self._domain
+
+    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
+        return False, f"No replay handler registered for domain '{self._domain}'"
+
+    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
+        return ReplayResult.failed(
+            failed_op.id,
+            f"No replay handler registered for domain '{self._domain}'. "
+            "Please register a handler using register_replay_handler()."
+        )
+
+
 class PaymentReplayHandler(ReplayHandler):
-    """Replay handler for payment domain failures."""
+    """
+    Replay handler for payment domain failures.
+
+    This is a configurable handler that can use an injected
+    payment recovery service or callback.
+    """
+
+    def __init__(self, recovery_callback: Callable[[int, int, int], str] | None = None):
+        """
+        Initialize payment replay handler.
+
+        Args:
+            recovery_callback: Optional callback(payment_id, order_id, attempt) -> task_id
+                               If not provided, will try to import from shopping.services
+        """
+        self._recovery_callback = recovery_callback
 
     @property
     def domain(self) -> str:
         return "payment"
 
-    def can_replay(self, failed_op: "FailedOperation") -> tuple[bool, str]:
+    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
         """Check if payment operation can be replayed."""
+        # Check snapshot_data for payment/order status
+        snapshot = failed_op.snapshot_data or {}
+
         # Cannot replay if original payment is already completed
-        if failed_op.payment and failed_op.payment.is_paid:
+        if snapshot.get("payment_is_paid"):
             return False, "Payment is already completed"
 
         # Cannot replay if order is cancelled
-        if failed_op.order and failed_op.order.status == "cancelled":
+        if snapshot.get("order_status") == "cancelled":
             return False, "Order is cancelled"
 
         # Cannot replay certain failure types
@@ -143,32 +190,44 @@ class PaymentReplayHandler(ReplayHandler):
 
         return True, ""
 
-    def replay(self, failed_op: "FailedOperation") -> ReplayResult:
+    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
         """Replay a payment operation."""
-        from shopping.services.payment_recovery_service import get_payment_recovery_handler
-
         can_replay, reason = self.can_replay(failed_op)
         if not can_replay:
             return ReplayResult.failed(failed_op.id, reason)
 
         try:
-            recovery_handler = get_payment_recovery_handler()
+            # Use injected callback or try to import from shopping
+            callback = self._recovery_callback
+            if callback is None:
+                try:
+                    from shopping.services.payment_recovery_service import get_payment_recovery_handler
+                    recovery_handler = get_payment_recovery_handler()
+                    callback = lambda pid, oid, att: recovery_handler.schedule_retry(
+                        payment_id=pid, order_id=oid, attempt=att
+                    )
+                except ImportError:
+                    return ReplayResult.failed(
+                        failed_op.id,
+                        "No payment recovery callback configured and shopping module not available"
+                    )
 
             # Use snapshot data if original records are missing
-            payment_id = failed_op.payment_id or failed_op.snapshot_data.get("payment_id")
-            order_id = failed_op.order_id or failed_op.snapshot_data.get("order_id")
+            snapshot = failed_op.snapshot_data or {}
+            payment_id = failed_op.payment_id or snapshot.get("payment_id")
+            order_id = failed_op.order_id or snapshot.get("order_id")
 
             if not payment_id or not order_id:
                 return ReplayResult.failed(failed_op.id, "Missing payment_id or order_id for replay")
 
             # Schedule retry through recovery handler
-            task_id = recovery_handler.schedule_retry(
-                payment_id=payment_id,
-                order_id=order_id,
-                attempt=0,  # Fresh attempt
-            )
+            task_id = callback(payment_id, order_id, 0)  # Fresh attempt
 
-            return ReplayResult.succeeded(failed_op.id, f"Replay scheduled with task_id={task_id}", data={"task_id": task_id})
+            return ReplayResult.succeeded(
+                failed_op.id,
+                f"Replay scheduled with task_id={task_id}",
+                data={"task_id": task_id}
+            )
 
         except Exception as e:
             logger.error(f"[PaymentReplayHandler] Replay failed: {e}")
@@ -176,45 +235,75 @@ class PaymentReplayHandler(ReplayHandler):
 
 
 class PointReplayHandler(ReplayHandler):
-    """Replay handler for point domain failures."""
+    """
+    Replay handler for point domain failures.
+
+    This is a configurable handler that can use an injected
+    point service callback.
+    """
+
+    def __init__(self, add_point_callback: Callable[[int, int, str], None] | None = None):
+        """
+        Initialize point replay handler.
+
+        Args:
+            add_point_callback: Optional callback(user_id, amount, reason) -> None
+                               If not provided, will try to import from shopping.services
+        """
+        self._add_point_callback = add_point_callback
 
     @property
     def domain(self) -> str:
         return "point"
 
-    def can_replay(self, failed_op: "FailedOperation") -> tuple[bool, str]:
+    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
         """Check if point operation can be replayed."""
-        # Cannot replay if user doesn't exist
-        if not failed_op.user:
+        # Check user_id in snapshot
+        snapshot = failed_op.snapshot_data or {}
+        if not failed_op.user_id and not snapshot.get("user_id"):
             return False, "User not found"
 
         return True, ""
 
-    def replay(self, failed_op: "FailedOperation") -> ReplayResult:
+    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
         """Replay a point operation."""
         can_replay, reason = self.can_replay(failed_op)
         if not can_replay:
             return ReplayResult.failed(failed_op.id, reason)
 
         try:
-            from shopping.services.point_service import add_point
-
-            snapshot = failed_op.snapshot_data
-            user = failed_op.user
+            snapshot = failed_op.snapshot_data or {}
+            user_id = failed_op.user_id or snapshot.get("user_id")
 
             # Extract point operation details from snapshot
             amount = snapshot.get("amount", 0)
             reason_text = snapshot.get("reason", "Replay from DLQ")
 
-            if amount > 0:
-                add_point(
-                    user=user,
-                    amount=amount,
-                    reason=f"[DLQ Replay] {reason_text}",
-                )
-                return ReplayResult.succeeded(failed_op.id, f"Added {amount} points to user {user.id}")
-            else:
+            if amount <= 0:
                 return ReplayResult.failed(failed_op.id, "Invalid point amount in snapshot")
+
+            # Use injected callback or try to import from shopping
+            callback = self._add_point_callback
+            if callback is None:
+                try:
+                    from shopping.services.point_service import add_point
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    user = User.objects.get(id=user_id)
+                    add_point(
+                        user=user,
+                        amount=amount,
+                        reason=f"[DLQ Replay] {reason_text}",
+                    )
+                except ImportError:
+                    return ReplayResult.failed(
+                        failed_op.id,
+                        "No point service callback configured and shopping module not available"
+                    )
+            else:
+                callback(user_id, amount, f"[DLQ Replay] {reason_text}")
+
+            return ReplayResult.succeeded(failed_op.id, f"Added {amount} points to user {user_id}")
 
         except Exception as e:
             logger.error(f"[PointReplayHandler] Replay failed: {e}")
@@ -222,13 +311,28 @@ class PointReplayHandler(ReplayHandler):
 
 
 class WebhookReplayHandler(ReplayHandler):
-    """Replay handler for webhook domain failures."""
+    """
+    Replay handler for webhook domain failures.
+
+    This is a configurable handler that can use an injected
+    webhook task callback.
+    """
+
+    def __init__(self, webhook_callback: Callable[[str, str, int], str] | None = None):
+        """
+        Initialize webhook replay handler.
+
+        Args:
+            webhook_callback: Optional callback(payment_key, order_id, amount) -> task_id
+                             If not provided, will try to import from shopping.tasks
+        """
+        self._webhook_callback = webhook_callback
 
     @property
     def domain(self) -> str:
         return "webhook"
 
-    def can_replay(self, failed_op: "FailedOperation") -> tuple[bool, str]:
+    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
         """Check if webhook operation can be replayed."""
         # Check if request data is available
         if not failed_op.request_data:
@@ -236,16 +340,14 @@ class WebhookReplayHandler(ReplayHandler):
 
         return True, ""
 
-    def replay(self, failed_op: "FailedOperation") -> ReplayResult:
+    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
         """Replay a webhook operation."""
         can_replay, reason = self.can_replay(failed_op)
         if not can_replay:
             return ReplayResult.failed(failed_op.id, reason)
 
         try:
-            from shopping.tasks.payment_tasks import call_toss_confirm_api
-
-            request_data = failed_op.request_data
+            request_data = failed_op.request_data or {}
             payment_key = request_data.get("payment_key")
             order_id = request_data.get("order_id")
             amount = request_data.get("amount")
@@ -253,39 +355,34 @@ class WebhookReplayHandler(ReplayHandler):
             if not all([payment_key, order_id, amount]):
                 return ReplayResult.failed(failed_op.id, "Missing required fields in request_data")
 
-            # Queue the webhook processing task
-            task = call_toss_confirm_api.delay(
-                payment_key=payment_key,
-                order_id=order_id,
-                amount=amount,
-            )
+            # Use injected callback or try to import from shopping
+            callback = self._webhook_callback
+            if callback is None:
+                try:
+                    from shopping.tasks.payment_tasks import call_toss_confirm_api
+                    task = call_toss_confirm_api.delay(
+                        payment_key=payment_key,
+                        order_id=order_id,
+                        amount=amount,
+                    )
+                    task_id = task.id
+                except ImportError:
+                    return ReplayResult.failed(
+                        failed_op.id,
+                        "No webhook callback configured and shopping module not available"
+                    )
+            else:
+                task_id = callback(payment_key, order_id, amount)
 
             return ReplayResult.succeeded(
-                failed_op.id, f"Webhook replay scheduled with task_id={task.id}", data={"task_id": task.id}
+                failed_op.id,
+                f"Webhook replay scheduled with task_id={task_id}",
+                data={"task_id": task_id}
             )
 
         except Exception as e:
             logger.error(f"[WebhookReplayHandler] Replay failed: {e}")
             return ReplayResult.failed(failed_op.id, str(e))
-
-
-class DefaultReplayHandler(ReplayHandler):
-    """Default replay handler for domains without specific handlers."""
-
-    def __init__(self, domain_name: str = "default"):
-        self._domain = domain_name
-
-    @property
-    def domain(self) -> str:
-        return self._domain
-
-    def can_replay(self, failed_op: "FailedOperation") -> tuple[bool, str]:
-        """Default: cannot replay without specific handler."""
-        return False, f"No specific replay handler for domain '{self.domain}'"
-
-    def replay(self, failed_op: "FailedOperation") -> ReplayResult:
-        """Default replay is not supported."""
-        return ReplayResult.failed(failed_op.id, f"No replay handler implemented for domain '{self.domain}'")
 
 
 # =============================================================================
@@ -379,20 +476,22 @@ class ReplayService:
         return self._repository
 
     def _load_config(self) -> dict[str, Any]:
-        """Load replay configuration from settings."""
-        self_healing = getattr(settings, "SELF_HEALING", {})
+        """Load replay configuration from config system."""
+        config = get_config()
         return {
-            "max_replay_attempts": self_healing.get("DLQ", {}).get("MAX_REPLAY_ATTEMPTS", 2),
+            "max_replay_attempts": config.dlq.max_replay_attempts,
         }
 
     # =========================================================================
     # Single Replay
     # =========================================================================
 
-    @transaction.atomic
     def replay_single(self, dlq_id: int) -> ReplayResult:
         """
         Replay a single DLQ entry.
+        
+        This method uses atomic acquisition to prevent race conditions when
+        multiple workers try to replay the same entry simultaneously.
 
         Args:
             dlq_id: ID of the FailedOperation to replay
@@ -400,58 +499,55 @@ class ReplayService:
         Returns:
             ReplayResult indicating success or failure
         """
-        from shopping.models.failed_operation import FailedOperation
-
-        try:
-            failed_op = FailedOperation.objects.select_for_update().get(id=dlq_id)
-        except FailedOperation.DoesNotExist:
-            return ReplayResult.failed(dlq_id, "DLQ entry not found")
-
-        # Check replay eligibility - use the minimum of config and model's max_retries
+        # Atomically try to acquire the entry for replay
+        # This prevents race conditions where two workers process the same entry
         config_max = self.config["max_replay_attempts"]
-        model_max = failed_op.max_retries
-        max_replays = min(config_max, model_max)
-
-        if failed_op.retry_count >= max_replays:
-            failed_op.mark_as_rejected(note=f"Maximum replay attempts ({max_replays}) exceeded")
-            return ReplayResult.failed(dlq_id, "max_replays_exceeded")
-
-        # Mark as replaying
-        try:
-            failed_op.queue_for_replay()
-        except ValueError as e:
-            # queue_for_replay also checks max_retries - mark as rejected
-            failed_op.mark_as_rejected(note=str(e))
-            return ReplayResult.failed(dlq_id, "max_replays_exceeded")
+        
+        failed_op_data = self.repository.try_acquire_for_replay(dlq_id, config_max)
+        
+        if failed_op_data is None:
+            # Entry not found, not eligible, or already being processed
+            # Check if it exists to provide appropriate error message
+            existing = self.repository.get_by_id(dlq_id)
+            if existing is None:
+                return ReplayResult.failed(dlq_id, "DLQ entry not found")
+            elif existing.status != "pending":
+                return ReplayResult.failed(dlq_id, f"Cannot replay: status is '{existing.status}'")
+            else:
+                return ReplayResult.failed(dlq_id, "max_replays_exceeded")
 
         # Get appropriate handler and execute replay
-        handler = get_replay_handler(failed_op.domain)
+        handler = get_replay_handler(failed_op_data.domain)
 
         try:
-            result = handler.replay(failed_op)
+            result = handler.replay(failed_op_data)
         except Exception as e:
             # Handler raised an unexpected exception - escalate to REQUIRES_REVIEW
             logger.error(f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}", exc_info=True)
-            failed_op.mark_as_requires_review(note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}")
-            # Store exception details in metadata for forensics
-            failed_op.metadata["handler_exception"] = {
-                "type": type(e).__name__,
-                "message": str(e)[:500],
-                "occurred_at": timezone.now().isoformat(),
-            }
-            failed_op.save(update_fields=["metadata", "updated_at"])
+            self.repository.complete_replay(
+                id=dlq_id,
+                success=False,
+                note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}",
+                error_details={
+                    "type": type(e).__name__,
+                    "message": str(e)[:500],
+                    "occurred_at": now().isoformat(),
+                    "escalated_to": "requires_review",
+                }
+            )
             return ReplayResult.failed(dlq_id, f"internal_error: {type(e).__name__}")
 
-        # Update DLQ entry based on result
+        # Complete the replay operation with final status
+        self.repository.complete_replay(
+            id=dlq_id,
+            success=result.success,
+            resolution_type="auto_replay" if result.success else "",
+            note=result.message if result.success else (result.error or "Replay failed"),
+        )
+        
         if result.success:
-            failed_op.mark_as_resolved(
-                resolved_by=None,  # System
-                resolution_type=FailedOperation.ResolutionType.AUTO_REPLAY,
-                note=result.message,
-            )
             logger.info(f"[ReplayService] DLQ entry {dlq_id} replayed successfully")
         else:
-            failed_op.revert_to_pending(note=result.error or "Replay failed")
             logger.warning(f"[ReplayService] DLQ entry {dlq_id} replay failed: {result.error}")
 
         return result
@@ -477,22 +573,15 @@ class ReplayService:
         Returns:
             BatchReplayResult with summary and individual results
         """
-        from shopping.models.failed_operation import FailedOperation
-
         max_replays = self.config["max_replay_attempts"]
 
-        # Get eligible entries
-        qs = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING,
-            retry_count__lt=max_replays,
+        # Get eligible entries using repository
+        entries = self.repository.get_pending_entries(
+            domain=domain,
+            failure_type=failure_type,
+            max_retry_count=max_replays,
+            limit=max_items,
         )
-
-        if domain:
-            qs = qs.filter(domain=domain)
-        if failure_type:
-            qs = qs.filter(failure_type=failure_type)
-
-        entries = list(qs.order_by("created_at")[:max_items])
 
         batch_result = BatchReplayResult(
             total=len(entries),
@@ -556,18 +645,15 @@ class ReplayService:
             logger.info(f"[ReplayService] No failure types mapped for service '{service_name}'")
             return BatchReplayResult()
 
-        # Replay entries with matching failure types
-        from shopping.models.failed_operation import FailedOperation
-
+        # Replay entries with matching failure types using repository
         max_replays = self.config["max_replay_attempts"]
 
-        qs = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING,
-            failure_type__in=failure_types,
-            retry_count__lt=max_replays,
-        ).order_by("created_at")[:max_items]
+        entries = self.repository.get_pending_by_failure_types(
+            failure_types=failure_types,
+            max_retry_count=max_replays,
+            limit=max_items,
+        )
 
-        entries = list(qs)
         batch_result = BatchReplayResult(
             total=len(entries),
             results=[],
@@ -585,18 +671,17 @@ class ReplayService:
                 # Escalate failures to REQUIRES_REVIEW when triggered by forced close
                 # This ensures operator attention for operator-initiated recoveries
                 if escalate_failures:
-                    try:
-                        failed_entry = FailedOperation.objects.get(id=entry.id)
-                        if failed_entry.status == FailedOperation.Status.PENDING:
-                            failed_entry.mark_as_requires_review(
-                                note=f"Conditional replay failed after circuit close for {service_name}: {result.error}"
-                            )
-                            logger.warning(
-                                f"[ReplayService] Escalated DLQ {entry.id} to REQUIRES_REVIEW "
-                                f"after conditional replay failure"
-                            )
-                    except FailedOperation.DoesNotExist:
-                        pass
+                    # Check if still in pending status before escalating
+                    current_entry = self.repository.get_by_id(entry.id)
+                    if current_entry and current_entry.status == "pending":
+                        self.repository.mark_as_requires_review(
+                            entry.id,
+                            note=f"Conditional replay failed after circuit close for {service_name}: {result.error}"
+                        )
+                        logger.warning(
+                            f"[ReplayService] Escalated DLQ {entry.id} to REQUIRES_REVIEW "
+                            f"after conditional replay failure"
+                        )
 
         logger.info(
             f"[ReplayService] Circuit close replay for {service_name}: "

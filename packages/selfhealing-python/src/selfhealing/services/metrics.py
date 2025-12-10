@@ -24,7 +24,10 @@ from typing import TYPE_CHECKING, Callable, Generator
 from prometheus_client import Counter, Gauge, Histogram
 
 if TYPE_CHECKING:
-    from shopping.models.failed_operation import FailedOperation
+    from selfhealing.interfaces.repositories import (
+        FailedOperationRepository,
+        CircuitBreakerStateRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -320,27 +323,27 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
 # =============================================================================
 
 
-def update_dlq_pending_gauges() -> dict[str, int]:
+def update_dlq_pending_gauges(
+    repository: "FailedOperationRepository | None" = None,
+) -> dict[str, int]:
     """
     Update DLQ pending gauges from database.
 
     Should be called periodically by a scheduled task.
 
+    Args:
+        repository: Optional repository instance (uses factory if not provided)
+
     Returns:
         Dictionary of domain -> pending count
     """
     try:
-        from django.db.models import Count
-
-        from shopping.models.failed_operation import FailedOperation
-
-        # Get pending counts by domain
-        pending_by_domain = dict(
-            FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
-            .values("domain")
-            .annotate(count=Count("id"))
-            .values_list("domain", "count")
-        )
+        if repository is None:
+            from selfhealing.factory import ProviderRegistry
+            repository = ProviderRegistry.get_failed_operation_repo()
+        
+        stats = repository.get_statistics()
+        pending_by_domain = stats.get("pending_by_domain", {})
 
         # Update gauges for all domains
         for domain in DOMAINS:
@@ -355,19 +358,30 @@ def update_dlq_pending_gauges() -> dict[str, int]:
         return {}
 
 
-def update_dlq_status_gauges() -> dict[str, int]:
+def update_dlq_status_gauges(
+    repository: "FailedOperationRepository | None" = None,
+) -> dict[str, int]:
     """
     Update DLQ status distribution gauges.
+
+    Args:
+        repository: Optional repository instance (uses factory if not provided)
 
     Returns:
         Dictionary of status -> count
     """
     try:
-        from django.db.models import Count
-
-        from shopping.models.failed_operation import FailedOperation
-
-        by_status = dict(FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
+        if repository is None:
+            from selfhealing.factory import ProviderRegistry
+            repository = ProviderRegistry.get_failed_operation_repo()
+        
+        stats = repository.get_statistics()
+        by_status = {
+            "pending": stats.get("pending_count", 0),
+            "reviewing": stats.get("reviewing_count", 0),
+            "resolved": stats.get("resolved_count", 0),
+            "rejected": stats.get("rejected_count", 0),
+        }
 
         for status, count in by_status.items():
             dlq_by_status_gauge.labels(status=status).set(count)
@@ -380,18 +394,26 @@ def update_dlq_status_gauges() -> dict[str, int]:
         return {}
 
 
-def update_circuit_breaker_gauges() -> dict[str, str]:
+def update_circuit_breaker_gauges(
+    repository: "CircuitBreakerStateRepository | None" = None,
+) -> dict[str, str]:
     """
     Update circuit breaker state gauges from database.
+
+    Args:
+        repository: Optional repository instance (uses factory if not provided)
 
     Returns:
         Dictionary of service -> state
     """
     try:
-        from shopping.models.failed_payment import CircuitBreakerState
-
+        if repository is None:
+            from selfhealing.factory import ProviderRegistry
+            repository = ProviderRegistry.get_circuit_breaker_repo()
+        
+        all_states = repository.get_all()
         states = {}
-        for cb in CircuitBreakerState.objects.all():
+        for cb in all_states:
             state_value = {"closed": 0, "open": 1, "half_open": 2}.get(cb.state, 0)
             circuit_breaker_state.labels(service=cb.service_name).set(state_value)
             states[cb.service_name] = cb.state
@@ -404,33 +426,36 @@ def update_circuit_breaker_gauges() -> dict[str, str]:
         return {}
 
 
-def update_retry_success_rates() -> dict[str, float]:
+def update_retry_success_rates(
+    repository: "FailedOperationRepository | None" = None,
+) -> dict[str, float]:
     """
     Calculate and update retry success rate gauges.
+
+    Args:
+        repository: Optional repository instance (uses factory if not provided)
 
     Returns:
         Dictionary of domain -> success_rate_percentage
     """
     try:
-        from django.db.models import Count, Q
-
-        from shopping.models.failed_operation import FailedOperation
-
+        if repository is None:
+            from selfhealing.factory import ProviderRegistry
+            repository = ProviderRegistry.get_failed_operation_repo()
+        
+        stats = repository.get_statistics()
         rates = {}
-
+        
+        # Get success rates from repository statistics if available
+        success_rates = stats.get("success_rates_by_domain", {})
+        
         for domain in DOMAINS:
-            # Count resolved vs total for this domain
-            total = FailedOperation.objects.filter(domain=domain).count()
-            resolved = FailedOperation.objects.filter(
-                domain=domain,
-                status__in=[FailedOperation.Status.RESOLVED],
-            ).count()
-
-            if total > 0:
-                rate = (resolved / total) * 100
+            if domain in success_rates:
+                rate = success_rates[domain]
             else:
-                rate = 100.0  # No failures = 100% success
-
+                # Default to 100% if no data
+                rate = 100.0
+            
             retry_success_rate.labels(domain=domain).set(rate)
             rates[domain] = rate
 
@@ -457,13 +482,13 @@ def track_recovery_time(domain: str, resolution_type: str) -> Generator[None, No
             # perform recovery operation
             pass
     """
-    from django.utils import timezone as tz
+    from selfhealing.core.timezone import now
 
-    start = tz.now()
+    start = now()
     try:
         yield
     finally:
-        end = tz.now()
+        end = now()
         duration = (end - start).total_seconds()
         recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
 

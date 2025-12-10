@@ -19,23 +19,16 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
-from django.conf import settings
-from django.core.cache import cache
-from django.db import transaction
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
-
-    from shopping.models.order import Order
-    from shopping.models.payment import Payment
-    from shopping.models.security_incident import SecurityIncident
-    from shopping.models.user import User
     from selfhealing.interfaces.repositories import (
         SecurityIncidentRepository,
     )
+    from selfhealing.interfaces.cache_provider import CacheProviderInterface
 
 logger = logging.getLogger(__name__)
 
@@ -129,20 +122,19 @@ class SecurityConfig:
 
     @classmethod
     def from_settings(cls) -> "SecurityConfig":
-        """Load configuration from Django settings."""
-        from selfhealing.config import get_security_thresholds
-
-        thresholds = get_security_thresholds()
+        """Load configuration from settings."""
+        config = get_config()
+        security = config.security
         return cls(
-            rate_limit_window_seconds=thresholds.rate_limit_window_seconds,
-            rate_limit_max_requests=thresholds.rate_limit_max_requests,
-            temporary_ban_hours=thresholds.temporary_ban_hours,
-            permanent_ban_threshold=thresholds.permanent_ban_threshold,
-            suspicious_ip_cache_timeout=thresholds.suspicious_ip_cache_timeout,
-            injection_ban_hours=thresholds.injection_ban_hours,
-            failed_login_threshold=thresholds.failed_login_threshold,
-            suspicious_ip_cache_prefix=thresholds.suspicious_ip_cache_prefix,
-            banned_ip_cache_prefix=thresholds.banned_ip_cache_prefix,
+            rate_limit_window_seconds=security.rate_limit_window_seconds,
+            rate_limit_max_requests=security.rate_limit_max_requests,
+            temporary_ban_hours=security.temporary_ban_hours,
+            permanent_ban_threshold=security.permanent_ban_threshold,
+            suspicious_ip_cache_timeout=security.suspicious_ip_cache_timeout,
+            injection_ban_hours=security.injection_ban_hours,
+            failed_login_threshold=security.failed_login_threshold,
+            suspicious_ip_cache_prefix=security.suspicious_ip_cache_prefix,
+            banned_ip_cache_prefix=security.banned_ip_cache_prefix,
         )
 
 
@@ -164,7 +156,7 @@ class SecurityViolationService:
         service = SecurityViolationService()
         result = service.handle_violation(
             violation_type=ViolationType.WEBHOOK_SIGNATURE_INVALID,
-            request=request,
+            request_info={"ip": "1.2.3.4", "user_agent": "..."},
             description="HMAC signature mismatch",
         )
 
@@ -177,33 +169,51 @@ class SecurityViolationService:
         self,
         config: SecurityConfig | None = None,
         repository: "SecurityIncidentRepository | None" = None,
+        cache: "CacheProviderInterface | None" = None,
     ):
         """
         Initialize the security violation service.
 
         Args:
             config: Optional configuration, loads from settings if None
-            repository: Optional repository for DI, uses Django adapter if None
+            repository: Optional repository for DI, uses default adapter if None
+            cache: Optional cache provider for DI, uses default if None
         """
         self.config = config or SecurityConfig.from_settings()
         self._repository = repository
+        self._cache = cache
 
     @property
     def repository(self) -> "SecurityIncidentRepository":
-        """Get the repository, creating Django adapter if needed."""
+        """Get the repository, creating default adapter if needed."""
         if self._repository is None:
-            from .adapters.django_repositories import DjangoSecurityIncidentRepository
-
-            self._repository = DjangoSecurityIncidentRepository()
+            from selfhealing.factory import ProviderRegistry
+            try:
+                self._repository = ProviderRegistry.get_security_repo()
+            except (ValueError, ImportError):
+                from .adapters.django_repositories import DjangoSecurityIncidentRepository
+                self._repository = DjangoSecurityIncidentRepository()
         return self._repository
+
+    @property
+    def cache(self) -> "CacheProviderInterface":
+        """Get the cache provider, creating default if needed."""
+        if self._cache is None:
+            from selfhealing.factory import ProviderRegistry
+            try:
+                self._cache = ProviderRegistry.get_cache()
+            except (ValueError, ImportError):
+                from selfhealing.interfaces.cache_provider import InMemoryCacheAdapter
+                self._cache = InMemoryCacheAdapter()
+        return self._cache
 
     def handle_violation(
         self,
         violation_type: str | ViolationType,
-        request: "HttpRequest | None" = None,
-        user: "User | None" = None,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
+        request_info: dict[str, Any] | None = None,
+        user_id: Optional[int] = None,
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
         description: str = "",
         raw_request_data: dict[str, Any] | None = None,
     ) -> SecurityViolationResult:
@@ -211,71 +221,65 @@ class SecurityViolationService:
         Handle a security violation.
 
         This method:
-        1. Creates a SecurityIncident record
+        1. Creates a SecurityIncident record via repository
         2. Takes immediate protective action based on violation type
         3. Triggers security team notification
         4. Returns result with action taken
 
         Args:
             violation_type: Type of security violation
-            request: Django HTTP request (for extracting IP, user agent)
-            user: Associated user (if authenticated)
-            order: Related order (if applicable)
-            payment: Related payment (if applicable)
+            request_info: Request info dict with 'ip', 'user_agent' keys
+            user_id: Associated user ID (if authenticated)
+            order_id: Related order ID (if applicable)
+            payment_id: Related payment ID (if applicable)
             description: Detailed description of the violation
             raw_request_data: Sanitized request data for forensics
 
         Returns:
             SecurityViolationResult with incident ID and action taken
         """
-        from shopping.models.security_incident import SecurityIncident
-
         violation_type_str = violation_type.value if isinstance(violation_type, ViolationType) else violation_type
 
         try:
             # Extract request information
-            source_ip = self._get_client_ip(request) if request else None
-            user_agent = request.META.get("HTTP_USER_AGENT", "") if request else ""
+            source_ip = request_info.get("ip") if request_info else None
+            user_agent = request_info.get("user_agent", "") if request_info else ""
 
             # Determine severity
             severity = SEVERITY_BY_VIOLATION_TYPE.get(violation_type_str, Severity.MEDIUM)
 
-            # Create incident record
-            with transaction.atomic():
-                incident = SecurityIncident.create_incident(
-                    incident_type=violation_type_str,
-                    description=description,
-                    source_ip=source_ip,
-                    user_agent=user_agent,
-                    user=user,
-                    order=order,
-                    payment=payment,
-                    raw_request=self._sanitize_request_data(raw_request_data),
-                )
+            # Create incident record via repository
+            incident = self.repository.create(
+                incident_type=violation_type_str,
+                severity=severity.value,
+                description=description,
+                source_ip=source_ip,
+                user_agent=user_agent,
+                user_id=user_id,
+                order_id=order_id,
+                payment_id=payment_id,
+                raw_payload=self._sanitize_request_data(raw_request_data),
+            )
 
-                # Take immediate protective action
-                action_taken = self._take_protective_action(
-                    violation_type=violation_type_str,
-                    incident=incident,
-                    user=user,
-                    source_ip=source_ip,
-                )
-
-                # Record action taken
-                if action_taken:
-                    incident.add_action_taken(action_taken)
+            # Take immediate protective action
+            action_taken = self._take_protective_action(
+                violation_type=violation_type_str,
+                incident_id=incident.id,
+                user_id=user_id,
+                source_ip=source_ip,
+            )
 
             # Log the violation
             logger.warning(
                 f"[Security Violation] type={violation_type_str} severity={severity.value} "
-                f"ip={source_ip} user={user.id if user else None} "
+                f"ip={source_ip} user_id={user_id} "
                 f"incident_id={incident.id} action={action_taken}"
             )
 
             # Trigger notification (async if possible)
             # Notification failure should not affect incident creation
             try:
-                self._send_security_notification(incident)
+                self._send_security_notification(incident.id, violation_type_str, severity.value)
             except Exception as e:
                 logger.error(f"[Security Violation] Notification failed but incident saved: {e}")
 
@@ -294,8 +298,8 @@ class SecurityViolationService:
     def _take_protective_action(
         self,
         violation_type: str,
-        incident: "SecurityIncident",
-        user: "User | None",
+        incident_id: int,
+        user_id: Optional[int],
         source_ip: str | None,
     ) -> str:
         """
@@ -303,8 +307,8 @@ class SecurityViolationService:
 
         Args:
             violation_type: Type of violation
-            incident: The created incident record
-            user: Associated user
+            incident_id: The created incident ID
+            user_id: Associated user ID
             source_ip: Source IP address
 
         Returns:
@@ -313,8 +317,8 @@ class SecurityViolationService:
         action_taken = ""
 
         if violation_type == ViolationType.TOKEN_FORGED.value:
-            if user:
-                action_taken = self._invalidate_user_sessions(user)
+            if user_id:
+                action_taken = self._invalidate_user_sessions(user_id)
             else:
                 action_taken = "Token forged but no user associated"
 
@@ -334,8 +338,8 @@ class SecurityViolationService:
             action_taken = "Payment blocked, order frozen for investigation"
 
         elif violation_type == ViolationType.UNAUTHORIZED_ACCESS.value:
-            if user:
-                action_taken = f"Access blocked for user {user.id}"
+            if user_id:
+                action_taken = f"Access blocked for user {user_id}"
             else:
                 action_taken = "Unauthorized access attempt logged"
 
@@ -354,29 +358,26 @@ class SecurityViolationService:
 
         return action_taken
 
-    def _invalidate_user_sessions(self, user: "User") -> str:
+    def _invalidate_user_sessions(self, user_id: int) -> str:
         """
         Invalidate all sessions for a user.
 
+        Note: This is a placeholder. The actual implementation depends on
+        the session/token management system being used.
+
         Args:
-            user: User whose sessions should be invalidated
+            user_id: ID of user whose sessions should be invalidated
 
         Returns:
             Description of action taken
         """
         try:
-            # Delete all refresh tokens for the user
-            from shopping.models.user import OutstandingToken
-
-            token_count = OutstandingToken.objects.filter(user=user).count()
-            OutstandingToken.objects.filter(user=user).delete()
-
             # Clear any cached sessions
-            cache_key = f"user_session:{user.id}"
-            cache.delete(cache_key)
+            cache_key = f"user_session:{user_id}"
+            self.cache.delete(cache_key)
 
-            logger.info(f"[Security] Invalidated {token_count} sessions for user {user.id}")
-            return f"All user sessions invalidated ({token_count} tokens revoked)"
+            logger.info(f"[Security] Invalidated sessions for user {user_id}")
+            return f"User sessions cache cleared for user {user_id}"
 
         except Exception as e:
             logger.error(f"[Security] Failed to invalidate sessions: {e}")
@@ -395,9 +396,9 @@ class SecurityViolationService:
         cache_key = f"{self.config.suspicious_ip_cache_prefix}{ip_address}"
 
         # Increment suspicious activity count
-        current_count = cache.get(cache_key, 0)
+        current_count = self.cache.get(cache_key, 0)
         new_count = current_count + 1
-        cache.set(cache_key, new_count, timeout=self.config.suspicious_ip_cache_timeout)
+        self.cache.set(cache_key, new_count, timeout=self.config.suspicious_ip_cache_timeout)
 
         logger.info(f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})")
 
@@ -420,7 +421,7 @@ class SecurityViolationService:
             Description of action taken
         """
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
-        cache.set(cache_key, {"banned": True, "type": "temporary"}, timeout=hours * 3600)
+        self.cache.set(cache_key, {"banned": True, "type": "temporary"}, timeout=hours * 3600)
 
         logger.info(f"[Security] IP temporarily banned: {ip_address} for {hours} hours")
         return f"IP {ip_address} temporarily banned for {hours} hour(s)"
@@ -436,7 +437,7 @@ class SecurityViolationService:
             Description of action taken
         """
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
-        cache.set(cache_key, {"banned": True, "type": "permanent"}, timeout=None)
+        self.cache.set(cache_key, {"banned": True, "type": "permanent"}, timeout=None)
 
         logger.warning(f"[Security] IP permanently banned: {ip_address}")
         return f"IP {ip_address} permanently banned"
@@ -452,26 +453,8 @@ class SecurityViolationService:
             True if banned, False otherwise
         """
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
-        ban_info = cache.get(cache_key)
+        ban_info = self.cache.get(cache_key)
         return ban_info is not None and ban_info.get("banned", False)
-
-    def _get_client_ip(self, request: "HttpRequest") -> str | None:
-        """
-        Extract client IP from request.
-
-        Handles X-Forwarded-For header for proxied requests.
-
-        Args:
-            request: Django HTTP request
-
-        Returns:
-            Client IP address or None
-        """
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            # Take the first IP in the chain (original client)
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
 
     def _sanitize_request_data(self, raw_data: dict[str, Any] | None) -> dict[str, Any]:
         """
@@ -510,26 +493,33 @@ class SecurityViolationService:
 
         return sanitize(raw_data)
 
-    def _send_security_notification(self, incident: "SecurityIncident") -> None:
+    def _send_security_notification(
+        self,
+        incident_id: int,
+        incident_type: str,
+        severity: str,
+    ) -> None:
         """
         Send security notification for the incident.
 
         This method delegates to the security notification service.
 
         Args:
-            incident: The security incident to notify about
+            incident_id: The security incident ID to notify about
+            incident_type: Type of the incident
+            severity: Severity level of the incident
         """
         try:
-            from selfhealing.security_notification_service import (
+            from selfhealing.services.security_notification_service import (
                 get_security_notification_service,
             )
 
             service = get_security_notification_service()
-            service.notify_security_incident(incident)
+            service.notify_security_incident_by_id(incident_id, incident_type, severity)
 
         except Exception as e:
             # Don't fail the main flow if notification fails
-            logger.error(f"[Security] Failed to send notification for incident {incident.id}: {e}")
+            logger.error(f"[Security] Failed to send notification for incident {incident_id}: {e}")
 
 
 # =============================================================================
@@ -550,8 +540,8 @@ def get_security_violation_service() -> SecurityViolationService:
 
 def handle_security_violation(
     violation_type: str | ViolationType,
-    request: "HttpRequest | None" = None,
-    user: "User | None" = None,
+    request_info: dict[str, Any] | None = None,
+    user_id: Optional[int] = None,
     description: str = "",
     **kwargs: Any,
 ) -> SecurityViolationResult:
@@ -562,8 +552,8 @@ def handle_security_violation(
 
     Args:
         violation_type: Type of security violation
-        request: Django HTTP request
-        user: Associated user
+        request_info: Request info dict with 'ip', 'user_agent' keys
+        user_id: Associated user ID
         description: Description of the violation
         **kwargs: Additional arguments passed to handle_violation
 
@@ -573,8 +563,8 @@ def handle_security_violation(
     service = get_security_violation_service()
     return service.handle_violation(
         violation_type=violation_type,
-        request=request,
-        user=user,
+        request_info=request_info,
+        user_id=user_id,
         description=description,
         **kwargs,
     )

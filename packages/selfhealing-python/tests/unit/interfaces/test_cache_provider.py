@@ -16,7 +16,7 @@ from selfhealing.interfaces.cache_provider import (
 )
 from selfhealing.adapters.cache.memory_adapter import (
     InMemoryCacheAdapter,
-    InMemoryDistributedLock,
+    InMemoryLock,  # Renamed from InMemoryDistributedLock
 )
 
 
@@ -334,20 +334,20 @@ class TestInMemoryCacheAdapter:
         assert cache.get("key2") is None
 
 
-class TestInMemoryDistributedLock:
-    """Tests for InMemoryDistributedLock implementation."""
+class TestInMemoryLock:
+    """Tests for InMemoryLock implementation."""
 
     def test_lock_repr(self):
         """Test lock has proper representation."""
         lock = threading.Lock()
-        dist_lock = InMemoryDistributedLock(lock, "test", 10.0)
+        dist_lock = InMemoryLock(lock, "test", 10.0)
         # Just verify it doesn't raise
         repr(dist_lock)
 
     def test_double_release(self):
         """Test double release doesn't raise."""
         lock = threading.Lock()
-        dist_lock = InMemoryDistributedLock(lock, "test", 10.0)
+        dist_lock = InMemoryLock(lock, "test", 10.0)
         dist_lock.acquire()
         dist_lock.release()
         # Second release should not raise

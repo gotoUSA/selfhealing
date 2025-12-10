@@ -19,13 +19,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
-from django.conf import settings
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 from .backoff_calculator import BackoffCalculator, BackoffConfig
 
 if TYPE_CHECKING:
-    from shopping.models.failed_operation import FailedOperation
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class RetryConfig:
     @classmethod
     def from_settings(cls, domain: str = "default") -> "RetryConfig":
         """
-        Load configuration from Django settings via centralized config.
+        Load configuration from core config.
 
         Args:
             domain: Domain name for per-domain overrides
@@ -81,19 +81,17 @@ class RetryConfig:
         Returns:
             RetryConfig instance
         """
-        from selfhealing.config import get_retry_settings, get_dlq_settings
+        config = get_config()
+        retry_settings = config.retry
+        dlq_settings = config.dlq
 
-        retry_settings = get_retry_settings()
-        dlq_settings = get_dlq_settings()
-
-        # Per-domain overrides
-        self_healing = getattr(settings, "SELF_HEALING", {})
-        domain_config = self_healing.get("DOMAIN_CONFIG", {}).get(domain, {})
+        # Per-domain overrides from domain_configs
+        domain_config = config.domain_configs.get(domain, {}).get("retry", {})
 
         return cls(
             max_attempts=domain_config.get("max_attempts", retry_settings.max_attempts),
             backoff_base=domain_config.get("backoff_base", retry_settings.backoff_base),
-            backoff_max=domain_config.get("backoff_max", retry_settings.backoff_max),
+            backoff_max=domain_config.get("max_delay", retry_settings.max_delay),
             jitter_percent=retry_settings.jitter_percent,
             enable_dlq=dlq_settings.enabled,
             domain=domain,
@@ -300,18 +298,18 @@ class RetryHandler:
         Returns:
             DLQ record ID or None if DLQ is disabled
         """
-        from shopping.models.failed_operation import FailedOperation
+        from .dlq_service import store_to_dlq
 
         try:
             context = context or {}
             error_type = type(last_error).__name__ if last_error else "Unknown"
 
-            failed_op = FailedOperation.create_from_failure(
+            result = store_to_dlq(
                 domain=self.config.domain,
                 failure_type=f"MAX_RETRIES_{error_type.upper()}",
-                order=context.get("order"),
-                payment=context.get("payment"),
-                user=context.get("user"),
+                order_id=context.get("order_id"),
+                payment_id=context.get("payment_id"),
+                user_id=context.get("user_id"),
                 error_code=error_type,
                 error_message=str(last_error)[:1000] if last_error else "",
                 snapshot_data=context.get("snapshot_data", {}),
@@ -324,11 +322,15 @@ class RetryHandler:
                     "final_attempt": attempt,
                 },
                 next_action_hint="Review error and retry if transient",
-                recommended_action=FailedOperation.RecommendedAction.MANUAL_CHECK,
+                recommended_action="manual_check",
             )
 
-            logger.info(f"[RetryHandler] Created DLQ entry: id={failed_op.id}")
-            return failed_op.id
+            if result.success:
+                logger.info(f"[RetryHandler] Created DLQ entry: id={result.dlq_id}")
+                return result.dlq_id
+            else:
+                logger.error(f"[RetryHandler] Failed to create DLQ entry: {result.error}")
+                return None
 
         except Exception as dlq_error:
             logger.error(f"[RetryHandler] Failed to create DLQ entry: {dlq_error}")

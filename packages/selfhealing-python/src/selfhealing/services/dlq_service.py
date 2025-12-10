@@ -17,21 +17,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List, Optional
 
-from django.conf import settings
-from django.db import transaction
-from django.db.models import QuerySet
-from django.utils import timezone
+from selfhealing.core.timezone import now
+from selfhealing.core.config import get_config
 
 if TYPE_CHECKING:
-    from shopping.models.failed_operation import FailedOperation
-    from shopping.models.order import Order
-    from shopping.models.payment import Payment
-    from shopping.models.user import User
-    from selfhealing.forensic_context import ForensicContext
     from selfhealing.interfaces.repositories import (
         FailedOperationRepository,
+        FailedOperationData,
     )
 
 logger = logging.getLogger(__name__)
@@ -52,10 +46,8 @@ class DLQConfig:
 
     @classmethod
     def from_settings(cls) -> "DLQConfig":
-        """Load configuration from Django settings via centralized config."""
-        from selfhealing.config import get_dlq_settings
-
-        dlq_settings = get_dlq_settings()
+        """Load configuration from core config."""
+        dlq_settings = get_config().dlq
         return cls(
             enabled=dlq_settings.enabled,
             retention_days=dlq_settings.retention_days,
@@ -158,9 +150,9 @@ class DLQService:
         self,
         domain: str,
         failure_type: str,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        user_id: Optional[int] = None,
         error_code: str = "",
         error_message: str = "",
         snapshot_data: dict[str, Any] | None = None,
@@ -176,9 +168,9 @@ class DLQService:
         Args:
             domain: Business domain (payment, point, inventory, webhook, notification)
             failure_type: Specific failure type (e.g., PG_TIMEOUT, AMOUNT_MISMATCH)
-            order: Related Order instance
-            payment: Related Payment instance
-            user: Related User instance
+            order_id: Related Order ID
+            payment_id: Related Payment ID
+            user_id: Related User ID
             error_code: Error code from external system
             error_message: Human-readable error message
             snapshot_data: State snapshot for recovery
@@ -196,14 +188,12 @@ class DLQService:
             return DLQEntryResult.failed("DLQ is disabled")
 
         try:
-            from shopping.models.failed_operation import FailedOperation
-
-            failed_op = FailedOperation.create_from_failure(
+            failed_op = self.repository.create(
                 domain=domain,
                 failure_type=failure_type,
-                order=order,
-                payment=payment,
-                user=user,
+                order_id=order_id,
+                payment_id=payment_id,
+                user_id=user_id,
                 error_code=error_code,
                 error_message=error_message,
                 snapshot_data=snapshot_data,
@@ -212,7 +202,6 @@ class DLQService:
                 metadata=metadata,
                 next_action_hint=next_action_hint,
                 recommended_action=recommended_action,
-                retention_days=self.config.retention_days,
             )
 
             logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
@@ -227,10 +216,10 @@ class DLQService:
         self,
         domain: str,
         failure_type: str,
-        forensic_context: "ForensicContext",
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
+        forensic_context: Any,
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        user_id: Optional[int] = None,
         error_code: str = "",
         error_message: str = "",
         next_action_hint: str = "",
@@ -245,9 +234,9 @@ class DLQService:
             domain: Business domain
             failure_type: Specific failure type
             forensic_context: ForensicContext instance with full debug info
-            order: Related Order instance
-            payment: Related Payment instance
-            user: Related User instance
+            order_id: Related Order ID
+            payment_id: Related Payment ID
+            user_id: Related User ID
             error_code: Error code
             error_message: Human-readable error message
             next_action_hint: Guidance for operators
@@ -262,14 +251,18 @@ class DLQService:
             raise TypeError("forensic_context must be a ForensicContext instance")
 
         # Build snapshot data from forensic context
-        snapshot_data = self._build_snapshot_data(order, payment, user)
+        snapshot_data = {
+            "order_id": order_id,
+            "payment_id": payment_id,
+            "user_id": user_id,
+        }
 
         return self.store_failure(
             domain=domain,
             failure_type=failure_type,
-            order=order,
-            payment=payment,
-            user=user,
+            order_id=order_id,
+            payment_id=payment_id,
+            user_id=user_id,
             error_code=error_code,
             error_message=error_message,
             snapshot_data=snapshot_data,
@@ -283,33 +276,6 @@ class DLQService:
             recommended_action=recommended_action,
         )
 
-    def _build_snapshot_data(
-        self,
-        order: "Order | None",
-        payment: "Payment | None",
-        user: "User | None",
-    ) -> dict[str, Any]:
-        """Build snapshot data from related entities."""
-        snapshot = {}
-
-        if order:
-            snapshot["order_id"] = order.id
-            snapshot["order_number"] = getattr(order, "order_number", None)
-            snapshot["order_status"] = order.status
-
-        if payment:
-            snapshot["payment_id"] = payment.id
-            snapshot["payment_key"] = getattr(payment, "payment_key", None)
-            snapshot["amount"] = str(payment.amount) if payment.amount else None
-            snapshot["payment_status"] = payment.status
-
-        if user:
-            snapshot["user_id"] = user.id
-            snapshot["user_email"] = user.email
-            snapshot["user_points"] = getattr(user, "point_balance", None)
-
-        return snapshot
-
     # =========================================================================
     # Query Operations
     # =========================================================================
@@ -319,7 +285,7 @@ class DLQService:
         domain: str | None = None,
         failure_type: str | None = None,
         limit: int = 100,
-    ) -> QuerySet["FailedOperation"]:
+    ) -> List["FailedOperationData"]:
         """
         Get pending DLQ entries.
 
@@ -329,25 +295,21 @@ class DLQService:
             limit: Maximum number of entries to return
 
         Returns:
-            QuerySet of pending FailedOperation entries
+            List of pending FailedOperationData entries
         """
-        from shopping.models.failed_operation import FailedOperation
-
-        qs = FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
-
-        if domain:
-            qs = qs.filter(domain=domain)
-        if failure_type:
-            qs = qs.filter(failure_type=failure_type)
-
-        return qs.order_by("created_at")[:limit]
+        return self.repository.find_by_status(
+            status="pending",
+            domain=domain,
+            failure_type=failure_type,
+            limit=limit,
+        )
 
     def get_replayable_entries(
         self,
         domain: str | None = None,
         failure_type: str | None = None,
         limit: int = 100,
-    ) -> QuerySet["FailedOperation"]:
+    ) -> List["FailedOperationData"]:
         """
         Get entries that can be replayed.
 
@@ -361,23 +323,16 @@ class DLQService:
             limit: Maximum number of entries to return
 
         Returns:
-            QuerySet of replayable FailedOperation entries
+            List of replayable FailedOperationData entries
         """
-        from shopping.models.failed_operation import FailedOperation
-
-        qs = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING,
-            retry_count__lt=self.config.max_replay_attempts,
+        return self.repository.find_replayable(
+            max_retries=self.config.max_replay_attempts,
+            domain=domain,
+            failure_type=failure_type,
+            limit=limit,
         )
 
-        if domain:
-            qs = qs.filter(domain=domain)
-        if failure_type:
-            qs = qs.filter(failure_type=failure_type)
-
-        return qs.order_by("created_at")[:limit]
-
-    def get_sla_breached_entries(self) -> QuerySet["FailedOperation"]:
+    def get_sla_breached_entries(self) -> List["FailedOperationData"]:
         """
         Get entries that have breached their SLA.
 
@@ -385,53 +340,35 @@ class DLQService:
         See config.SLAThresholds for default values.
 
         Returns:
-            QuerySet of SLA-breached FailedOperation entries
+            List of SLA-breached FailedOperationData entries
         """
-        from django.db.models import Q
+        from selfhealing.core.config import get_config
+        
+        current_time = now()
+        sla_config = get_config().sla
+        
+        return self.repository.find_sla_breached(
+            current_time=current_time,
+            sla_thresholds={
+                "payment": sla_config.get_threshold("payment"),
+                "point": sla_config.get_threshold("point"),
+                "inventory": sla_config.get_threshold("inventory"),
+                "webhook": sla_config.get_threshold("webhook"),
+                "notification": sla_config.get_threshold("notification"),
+            }
+        )
 
-        from shopping.models.failed_operation import FailedOperation
-        from selfhealing.config import get_sla_thresholds
-
-        now = timezone.now()
-        sla_config = get_sla_thresholds()
-
-        # Map domain choices to config thresholds
-        sla_thresholds = {
-            FailedOperation.Domain.PAYMENT: sla_config.get_threshold("payment"),
-            FailedOperation.Domain.POINT: sla_config.get_threshold("point"),
-            FailedOperation.Domain.INVENTORY: sla_config.get_threshold("inventory"),
-            FailedOperation.Domain.WEBHOOK: sla_config.get_threshold("webhook"),
-            FailedOperation.Domain.NOTIFICATION: sla_config.get_threshold("notification"),
-        }
-
-        # Build OR conditions for each domain
-        conditions = Q()
-        for domain, threshold in sla_thresholds.items():
-            conditions |= Q(domain=domain, created_at__lt=now - threshold)
-
-        return FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING,
-        ).filter(conditions)
-
-    def get_expired_entries(self) -> QuerySet["FailedOperation"]:
+    def get_expired_entries(self) -> List["FailedOperationData"]:
         """
         Get entries that have passed their retention period.
 
         Returns:
-            QuerySet of expired FailedOperation entries
+            List of expired FailedOperationData entries
         """
-        from shopping.models.failed_operation import FailedOperation
+        current_time = now()
+        return self.repository.find_expired(current_time=current_time)
 
-        now = timezone.now()
-        return FailedOperation.objects.filter(
-            expires_at__lt=now,
-            status__in=[
-                FailedOperation.Status.PENDING,
-                FailedOperation.Status.REJECTED,
-            ],
-        )
-
-    def get_entry_by_id(self, dlq_id: int) -> "FailedOperation | None":
+    def get_entry_by_id(self, dlq_id: int) -> Optional["FailedOperationData"]:
         """
         Get a single DLQ entry by ID.
 
@@ -439,14 +376,9 @@ class DLQService:
             dlq_id: The DLQ entry ID
 
         Returns:
-            FailedOperation instance or None
+            FailedOperationData or None
         """
-        from shopping.models.failed_operation import FailedOperation
-
-        try:
-            return FailedOperation.objects.get(id=dlq_id)
-        except FailedOperation.DoesNotExist:
-            return None
+        return self.repository.get_by_id(dlq_id)
 
     # =========================================================================
     # Statistics
@@ -459,26 +391,7 @@ class DLQService:
         Returns:
             Dictionary with DLQ statistics
         """
-        from django.db.models import Count
-
-        from shopping.models.failed_operation import FailedOperation
-
-        by_status = dict(FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
-
-        by_domain = dict(
-            FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
-            .values("domain")
-            .annotate(count=Count("id"))
-            .values_list("domain", "count")
-        )
-
-        return {
-            "pending_count": by_status.get(FailedOperation.Status.PENDING, 0),
-            "reviewing_count": by_status.get(FailedOperation.Status.REVIEWING, 0),
-            "resolved_count": by_status.get(FailedOperation.Status.RESOLVED, 0),
-            "rejected_count": by_status.get(FailedOperation.Status.REJECTED, 0),
-            "pending_by_domain": by_domain,
-        }
+        return self.repository.get_statistics()
 
 
 # =============================================================================
@@ -500,9 +413,9 @@ def get_dlq_service() -> DLQService:
 def store_to_dlq(
     domain: str,
     failure_type: str,
-    order=None,
-    payment=None,
-    user=None,
+    order_id: Optional[int] = None,
+    payment_id: Optional[int] = None,
+    user_id: Optional[int] = None,
     error_code: str = "",
     error_message: str = "",
     snapshot_data: dict[str, Any] | None = None,
@@ -520,9 +433,9 @@ def store_to_dlq(
     return get_dlq_service().store_failure(
         domain=domain,
         failure_type=failure_type,
-        order=order,
-        payment=payment,
-        user=user,
+        order_id=order_id,
+        payment_id=payment_id,
+        user_id=user_id,
         error_code=error_code,
         error_message=error_message,
         snapshot_data=snapshot_data,

@@ -31,29 +31,46 @@ warnings.warn(
     stacklevel=2,
 )
 
-from .config import (
+from ..core.config import (
     SelfHealingConfig,
-    SLAThresholds,
+    SLAConfig as SLAThresholds,  # Legacy alias
     IdempotencyConfig,
-    SecurityThresholds,
-    NotificationLimits,
-    SlackChannels,
-    RetrySettings,
-    CircuitBreakerSettings,
-    DLQSettings,
-    ForensicSettings,
+    SecurityConfig as SecurityThresholds,  # Legacy alias
+    NotificationConfig as NotificationLimits,  # Legacy alias
+    RetryConfig as RetrySettings,  # Legacy alias
+    CircuitBreakerConfig as CircuitBreakerSettings,  # Legacy alias
+    DLQConfig as DLQSettings,  # Legacy alias
+    ForensicConfig as ForensicSettings,  # Legacy alias
     get_config,
     reload_config,
     get_sla_thresholds,
-    get_idempotency_config,
     get_security_thresholds,
-    get_notification_limits,
-    get_slack_channels,
     get_retry_settings,
     get_circuit_breaker_settings,
     get_dlq_settings,
     get_forensic_settings,
 )
+
+# Compatibility aliases for removed configs
+def get_idempotency_config():
+    """Get idempotency configuration."""
+    return get_config().idempotency
+
+def get_notification_limits():
+    """Get notification limits configuration."""
+    return get_config().notification
+
+def get_slack_channels():
+    """Get slack channels from notification config."""
+    config = get_config().notification
+    return {
+        "critical": config.critical_channel,
+        "high": config.high_channel,
+        "medium": config.medium_channel,
+    }
+
+# Legacy alias
+SlackChannels = dict
 from .retry_handler import (
     RetryHandler,
     RetryConfig,
@@ -136,7 +153,7 @@ from .security_notification_service import (
     NotificationConfig,
     NotificationChannel,
     get_security_notification_service,
-    notify_security_incident,
+    notify_security_incident_by_id as notify_security_incident,  # Legacy alias
 )
 from .factory import (
     # Repository factory functions

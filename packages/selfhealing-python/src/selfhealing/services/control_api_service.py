@@ -20,11 +20,8 @@ from datetime import timedelta
 from enum import Enum
 from typing import Any
 
-from django.conf import settings
-from django.db import transaction
-from django.utils import timezone
-
-from shopping.serializers.self_healing_serializers import (
+from selfhealing.core.timezone import now
+from selfhealing.core.constants import (
     ControlAPIActions,
     ControlAPIEnvironments,
     RiskLevels,
@@ -329,10 +326,10 @@ class ControlAPIService:
         # Calculate effective_until
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (timezone.now() + timedelta(minutes=request.ttl_minutes)).isoformat()
+            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
         elif request.environment == ControlAPIEnvironments.OPS:
             # Default 90 minutes in ops
-            effective_until = (timezone.now() + timedelta(minutes=90)).isoformat()
+            effective_until = (now() + timedelta(minutes=90)).isoformat()
 
         if result.success:
             return ControlResponse(
@@ -363,7 +360,7 @@ class ControlAPIService:
 
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (timezone.now() + timedelta(minutes=request.ttl_minutes)).isoformat()
+            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
 
         if result.success:
             return ControlResponse(
@@ -425,7 +422,7 @@ class ControlAPIService:
         }
 
         if request.ttl_minutes:
-            failure_config["expires_at"] = timezone.now() + timedelta(minutes=request.ttl_minutes)
+            failure_config["expires_at"] = now() + timedelta(minutes=request.ttl_minutes)
 
         self._failure_injections[request.service_name] = failure_config
 
@@ -539,7 +536,7 @@ class ControlAPIService:
         """
         states = self.circuit_breaker.get_all_states()
 
-        return {"services": states, "environment": environment, "timestamp": timezone.now().isoformat()}
+        return {"services": states, "environment": environment, "timestamp": now().isoformat()}
 
     def get_service_status(self, service_name: str) -> dict:
         """
@@ -578,7 +575,7 @@ class ControlAPIService:
             return False
 
         # Check expiration
-        if config.get("expires_at") and timezone.now() > config["expires_at"]:
+        if config.get("expires_at") and now() > config["expires_at"]:
             del self._failure_injections[service_name]
             return False
 
@@ -618,19 +615,17 @@ class ControlAPIService:
 
         start_time = time.time()
 
-        from django.db.models import Avg, Count, Q
-        from django.utils import timezone
-        from shopping.models.failed_operation import FailedOperation
-        from shopping.models.failed_payment import CircuitBreakerState
-        from selfhealing.metrics import (
+        from selfhealing.core.timezone import now as get_now
+        from selfhealing.services.metrics import (
             DOMAINS,
             update_dlq_pending_gauges,
             update_retry_success_rates,
         )
+        from selfhealing.registry import ProviderRegistry
 
-        now = timezone.now()
-        five_min_ago = now - timedelta(minutes=5)
-        twenty_four_h_ago = now - timedelta(hours=24)
+        current_time = get_now()
+        five_min_ago = current_time - timedelta(minutes=5)
+        twenty_four_h_ago = current_time - timedelta(hours=24)
 
         # Collect DLQ pending counts
         dlq_pending = update_dlq_pending_gauges()
@@ -639,11 +634,14 @@ class ControlAPIService:
         # Collect retry success rates
         retry_rates = update_retry_success_rates()
 
-        # Get circuit breaker states
+        # Get circuit breaker states from repository
         cb_states = {}
         try:
-            for cb in CircuitBreakerState.objects.all():
-                cb_states[cb.service_name] = cb.state
+            cb_repo = ProviderRegistry.get_circuit_breaker_repository()
+            if cb_repo:
+                all_states = cb_repo.get_all_states()
+                for cb in all_states:
+                    cb_states[cb.service_name] = cb.state
         except Exception:
             pass
 
@@ -652,35 +650,22 @@ class ControlAPIService:
         healthy_services = sum(1 for s in cb_states.values() if s == "closed")
         degraded_services = sum(1 for s in cb_states.values() if s in ("open", "half_open"))
 
-        # Calculate 5-minute failure rate
-        try:
-            recent_total = FailedOperation.objects.filter(created_at__gte=five_min_ago).count()
-            recent_failed = FailedOperation.objects.filter(
-                created_at__gte=five_min_ago, status=FailedOperation.Status.PENDING
-            ).count()
-            last_5m_failure_rate = recent_failed / max(recent_total, 1)
-            last_5m_request_count = recent_total
-        except Exception:
-            last_5m_failure_rate = 0.0
-            last_5m_request_count = 0
+        # Calculate 5-minute failure rate from repository
+        last_5m_failure_rate = 0.0
+        last_5m_request_count = 0
+        avg_time_to_recovery = None
 
-        # Calculate average time to recovery (last 24h)
         try:
-            resolved = FailedOperation.objects.filter(
-                status=FailedOperation.Status.RESOLVED, updated_at__gte=twenty_four_h_ago
-            ).exclude(created_at__isnull=True)
-
-            if resolved.exists():
-                # Calculate duration manually since DB may not support F() subtraction
-                durations = []
-                for op in resolved[:100]:  # Sample max 100
-                    if op.updated_at and op.created_at:
-                        durations.append((op.updated_at - op.created_at).total_seconds())
-                avg_time_to_recovery = sum(durations) / len(durations) if durations else None
-            else:
-                avg_time_to_recovery = None
+            failed_op_repo = ProviderRegistry.get_failed_operation_repository()
+            if failed_op_repo:
+                stats = failed_op_repo.get_statistics()
+                # Use statistics if available
+                if stats:
+                    last_5m_failure_rate = stats.get("pending_count", 0) / max(stats.get("total_count", 1), 1)
+                    last_5m_request_count = stats.get("total_count", 0)
+                    avg_time_to_recovery = stats.get("avg_resolution_time_seconds")
         except Exception:
-            avg_time_to_recovery = None
+            pass
 
         # Count auto-allowed/blocked in last 24h
         # Note: SelfHealingLog model is not implemented yet.
@@ -700,18 +685,6 @@ class ControlAPIService:
                 "circuit_state": cb_states.get(domain, "closed"),
                 "avg_recovery_time_seconds": None,
             }
-
-            # Calculate per-service 5m failure rate
-            try:
-                domain_total = FailedOperation.objects.filter(domain=domain, created_at__gte=five_min_ago).count()
-                domain_failed = FailedOperation.objects.filter(
-                    domain=domain, created_at__gte=five_min_ago, status=FailedOperation.Status.PENDING
-                ).count()
-                if domain_total > 0:
-                    service_metric["failure_rate_5m"] = domain_failed / domain_total
-            except Exception:
-                pass
-
             services_metrics.append(service_metric)
 
         collection_duration_ms = int((time.time() - start_time) * 1000)
@@ -728,7 +701,7 @@ class ControlAPIService:
             "total_dlq_pending": total_dlq_pending,
             "dlq_by_service": dlq_pending,
             "services": services_metrics,
-            "timestamp": now,
+            "timestamp": current_time,
             "collection_duration_ms": collection_duration_ms,
         }
 
