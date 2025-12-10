@@ -134,15 +134,15 @@ SELF_HEALING = {
     "RETRY": {
         "MAX_RETRIES": 3,
         "BACKOFF_BASE": 2,
-        "BACKOFF_MAX": 10,        # Very short for test speed
-        "JITTER_PERCENT": 0.0,    # No jitter for deterministic tests
+        "BACKOFF_MAX": 10,  # Very short for test speed
+        "JITTER_PERCENT": 0.0,  # No jitter for deterministic tests
     },
     # Circuit Breaker - Enabled but with short timeout
     "CIRCUIT_BREAKER": {
         "ENABLED": True,
         "FAILURE_THRESHOLD": 5,
         "SUCCESS_THRESHOLD": 3,
-        "RECOVERY_TIMEOUT": 5,    # Very short for fast tests
+        "RECOVERY_TIMEOUT": 5,  # Very short for fast tests
     },
     # Dead Letter Queue - Minimal delays
     "DLQ": {

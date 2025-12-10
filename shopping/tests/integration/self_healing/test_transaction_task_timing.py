@@ -54,10 +54,7 @@ class TestTransactionTaskCoordination:
 
         def mock_task_dispatch(obj_id):
             """Simulates task dispatch - records when it's called."""
-            task_calls.append({
-                "id": obj_id,
-                "can_read_db": FailedOperation.objects.filter(id=obj_id).exists()
-            })
+            task_calls.append({"id": obj_id, "can_read_db": FailedOperation.objects.filter(id=obj_id).exists()})
 
         # Create object and schedule task inside transaction
         with transaction.atomic():
@@ -102,7 +99,7 @@ class TestTransactionTaskCoordination:
             try:
                 op = FailedOperation.objects.get(id=op_id)
                 result_container["data_visible"] = True
-                result_container["data_correct"] = (op.failure_type == expected_type)
+                result_container["data_correct"] = op.failure_type == expected_type
             except FailedOperation.DoesNotExist:
                 result_container["data_visible"] = False
 
@@ -119,9 +116,7 @@ class TestTransactionTaskCoordination:
             op_id = failed_op.id
 
             # Schedule verification after commit
-            transaction.on_commit(
-                lambda: verify_data_visible(op_id, failure_type)
-            )
+            transaction.on_commit(lambda: verify_data_visible(op_id, failure_type))
 
         # Verify task saw the data correctly
         assert result_container["data_visible"] is True
@@ -155,9 +150,7 @@ class TestTransactionTaskCoordination:
                     error_message="This will be rolled back",
                 )
 
-                transaction.on_commit(
-                    lambda: should_not_be_called(failed_op.id)
-                )
+                transaction.on_commit(lambda: should_not_be_called(failed_op.id))
 
                 # Force rollback by raising an exception
                 raise ValueError("Intentional rollback for testing")
@@ -169,9 +162,7 @@ class TestTransactionTaskCoordination:
         assert len(task_calls) == 0
 
         # Data should not exist in DB
-        assert not FailedOperation.objects.filter(
-            failure_type="WILL_ROLLBACK"
-        ).exists()
+        assert not FailedOperation.objects.filter(failure_type="WILL_ROLLBACK").exists()
 
     def test_nested_transaction_on_commit_timing(self):
         """
@@ -201,9 +192,7 @@ class TestTransactionTaskCoordination:
                 )
 
                 # This on_commit is inside inner block
-                transaction.on_commit(
-                    lambda: callback_order.append("inner_on_commit")
-                )
+                transaction.on_commit(lambda: callback_order.append("inner_on_commit"))
                 callback_order.append("inner_end")
 
             # Inner block done, but outer not committed yet
@@ -213,12 +202,7 @@ class TestTransactionTaskCoordination:
             assert "inner_on_commit" not in callback_order
 
         # Now outer transaction committed
-        assert callback_order == [
-            "outer_start",
-            "inner_end",
-            "after_inner",
-            "inner_on_commit"  # Runs after outermost commit
-        ]
+        assert callback_order == ["outer_start", "inner_end", "after_inner", "inner_on_commit"]  # Runs after outermost commit
 
 
 @pytest.mark.django_db(transaction=True)
@@ -249,9 +233,8 @@ class TestDLQTransactionPatterns:
         """
         dispatched_tasks = []
 
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_task:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_task:
+
             def capture_dispatch(*args, **kwargs):
                 dispatched_tasks.append({"args": args, "kwargs": kwargs})
                 mock_result = MagicMock()
@@ -274,10 +257,7 @@ class TestDLQTransactionPatterns:
 
                 # Schedule task after commit
                 transaction.on_commit(
-                    lambda: replay_single_dlq_entry.apply_async(
-                        args=[dlq_entry.id],
-                        countdown=60  # Delay before retry
-                    )
+                    lambda: replay_single_dlq_entry.apply_async(args=[dlq_entry.id], countdown=60)  # Delay before retry
                 )
 
                 # Task should NOT be dispatched yet
@@ -402,18 +382,12 @@ class TestEagerVsAsyncDifferences:
             )
 
             # CORRECT: Use on_commit
-            transaction.on_commit(
-                lambda: setattr(
-                    TestEagerVsAsyncDifferences,
-                    '_pattern_verified',
-                    True
-                )
-            )
+            transaction.on_commit(lambda: setattr(TestEagerVsAsyncDifferences, "_pattern_verified", True))
             correct_pattern_used = True
 
         assert correct_pattern_used is True
-        assert getattr(TestEagerVsAsyncDifferences, '_pattern_verified', False) is True
+        assert getattr(TestEagerVsAsyncDifferences, "_pattern_verified", False) is True
 
         # Cleanup
-        if hasattr(TestEagerVsAsyncDifferences, '_pattern_verified'):
-            delattr(TestEagerVsAsyncDifferences, '_pattern_verified')
+        if hasattr(TestEagerVsAsyncDifferences, "_pattern_verified"):
+            delattr(TestEagerVsAsyncDifferences, "_pattern_verified")

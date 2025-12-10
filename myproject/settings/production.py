@@ -140,27 +140,27 @@ SELF_HEALING = {
     # SLA (Service Level Agreement) - Maximum hours before escalation
     # Each operation type has different urgency levels
     "SLA": {
-        "PAYMENT_HOURS": 1,       # Critical: Payment failures need fast resolution
-        "POINT_HOURS": 4,         # Medium: Points can wait a bit longer
-        "INVENTORY_HOURS": 2,     # High: Inventory sync is important for orders
-        "WEBHOOK_HOURS": 8,       # Low: Webhooks can be retried later
-        "NOTIFICATION_HOURS": 24, # Lowest: Notifications are not critical
+        "PAYMENT_HOURS": 1,  # Critical: Payment failures need fast resolution
+        "POINT_HOURS": 4,  # Medium: Points can wait a bit longer
+        "INVENTORY_HOURS": 2,  # High: Inventory sync is important for orders
+        "WEBHOOK_HOURS": 8,  # Low: Webhooks can be retried later
+        "NOTIFICATION_HOURS": 24,  # Lowest: Notifications are not critical
     },
     # Retry Policy - Exponential backoff with jitter
     # Production uses more retries with longer max delay
     "RETRY": {
-        "MAX_RETRIES": 5,         # More retries in production than dev
-        "BACKOFF_BASE": 2,        # Exponential base: delay = base^attempt
-        "BACKOFF_MAX": 300,       # Maximum delay cap: 5 minutes
-        "JITTER_PERCENT": 0.25,   # Random jitter to prevent thundering herd
+        "MAX_RETRIES": 5,  # More retries in production than dev
+        "BACKOFF_BASE": 2,  # Exponential base: delay = base^attempt
+        "BACKOFF_MAX": 300,  # Maximum delay cap: 5 minutes
+        "JITTER_PERCENT": 0.25,  # Random jitter to prevent thundering herd
     },
     # Circuit Breaker - Prevents cascading failures
     # Opens circuit after threshold failures, allows test requests after timeout
     "CIRCUIT_BREAKER": {
         "ENABLED": True,
-        "FAILURE_THRESHOLD": 5,   # Number of failures before opening circuit
-        "SUCCESS_THRESHOLD": 3,   # Successes needed to close from half-open
-        "RECOVERY_TIMEOUT": 60,   # Seconds before trying half-open (longer in prod)
+        "FAILURE_THRESHOLD": 5,  # Number of failures before opening circuit
+        "SUCCESS_THRESHOLD": 3,  # Successes needed to close from half-open
+        "RECOVERY_TIMEOUT": 60,  # Seconds before trying half-open (longer in prod)
     },
     # Dead Letter Queue - Failed operation storage and replay
     # Auto-replay attempts to recover failed operations automatically
@@ -172,8 +172,8 @@ SELF_HEALING = {
     # Idempotency - Prevents duplicate operations
     # Longer TTLs in production to handle delayed retries
     "IDEMPOTENCY": {
-        "DEFAULT_CACHE_TTL": 60,      # Default: 1 minute
-        "PAYMENT_CACHE_TTL": 600,     # Payment: 10 minutes (critical operations)
-        "WEBHOOK_CACHE_TTL": 120,     # Webhook: 2 minutes
+        "DEFAULT_CACHE_TTL": 60,  # Default: 1 minute
+        "PAYMENT_CACHE_TTL": 600,  # Payment: 10 minutes (critical operations)
+        "WEBHOOK_CACHE_TTL": 120,  # Webhook: 2 minutes
     },
 }

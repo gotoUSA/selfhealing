@@ -60,9 +60,7 @@ class TestCeleryAsyncBehavior:
         - AsyncResult is returned with PENDING state
         - apply_async is called with correct arguments
         """
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Configure mock to return a pending task result
             mock_result = MagicMock()
             mock_result.id = "test-task-id-12345"
@@ -92,9 +90,7 @@ class TestCeleryAsyncBehavior:
         - apply_async is called with countdown parameter
         - The countdown value matches the requested delay
         """
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "delayed-task-id"
             mock_result.state = states.PENDING
@@ -109,8 +105,7 @@ class TestCeleryAsyncBehavior:
             # Verify countdown was passed to apply_async
             mock_apply.assert_called_once()
             call_kwargs = mock_apply.call_args
-            assert call_kwargs[1].get("countdown") == delay_seconds or \
-                   call_kwargs.kwargs.get("countdown") == delay_seconds
+            assert call_kwargs[1].get("countdown") == delay_seconds or call_kwargs.kwargs.get("countdown") == delay_seconds
 
     def test_broker_connection_failure_raises_operational_error(self):
         """
@@ -126,9 +121,7 @@ class TestCeleryAsyncBehavior:
         - OperationalError is raised when broker is unavailable
         - Calling code can catch and handle the exception
         """
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Simulate broker connection failure
             mock_apply.side_effect = OperationalError("Connection refused")
 
@@ -152,9 +145,7 @@ class TestCeleryAsyncBehavior:
         - Task uses the queue specified in its decorator
         - Queue routing is applied correctly
         """
-        with patch(
-            "shopping.tasks.self_healing_tasks.conditional_replay_on_circuit_close.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.self_healing_tasks.conditional_replay_on_circuit_close.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "cb-recovery-task"
             mock_result.state = states.PENDING
@@ -164,15 +155,12 @@ class TestCeleryAsyncBehavior:
 
             # Trigger task with queue specification
             conditional_replay_on_circuit_close.apply_async(
-                args=["toss_payment"],
-                kwargs={"max_items": 50},
-                queue="dlq_processing"
+                args=["toss_payment"], kwargs={"max_items": 50}, queue="dlq_processing"
             )
 
             mock_apply.assert_called_once()
             call_kwargs = mock_apply.call_args
-            assert call_kwargs[1].get("queue") == "dlq_processing" or \
-                   call_kwargs.kwargs.get("queue") == "dlq_processing"
+            assert call_kwargs[1].get("queue") == "dlq_processing" or call_kwargs.kwargs.get("queue") == "dlq_processing"
 
 
 @pytest.mark.django_db
@@ -281,9 +269,7 @@ class TestBrokerFailureRecovery:
 
         This test ensures the error type is correct for proper handling.
         """
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Simulate various broker failure scenarios
             broker_errors = [
                 OperationalError("Connection refused"),
@@ -310,9 +296,7 @@ class TestBrokerFailureRecovery:
         - Timeout or connection errors when fetching results
         - Application can continue without blocking
         """
-        with patch(
-            "shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async"
-        ) as mock_apply:
+        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "queued-task-id"
             mock_result.state = states.PENDING

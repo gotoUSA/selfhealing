@@ -79,6 +79,9 @@ Location: `shopping/tests/integration/self_healing/`
 | `test_chaos_engineering.py` | ~20 | Fault injection |
 | `test_observability_metrics.py` | ~15 | Metrics emission |
 | `test_architectural_resilience_e2e.py` | ~25 | E2E flows |
+| `test_celery_async_mode.py` | 9 | Celery async behavior simulation |
+| `test_redis_failure_scenarios.py` | 13 | Redis failure graceful degradation |
+| `test_transaction_task_timing.py` | ~10 | Transaction-task coordination |
 
 ### Other Related Tests
 
@@ -519,14 +522,76 @@ pytest shopping/tests/integration/self_healing/test_celery_async_mode.py \
        --cov-report=term-missing -v
 ```
 
-### A.4 Future Work
+### A.4 Redis Failure Scenarios (Added 2025-12-10)
+
+**Issue**: Redis is used as both Celery broker and cache backend. Failures in Redis can cascade to critical operations if not handled properly.
+
+**Resolution**: Created `test_redis_failure_scenarios.py` to verify graceful degradation:
+
+1. **`TestCircuitBreakerRedisFailure`** - Circuit Breaker cache resilience:
+   - Defaults to CLOSED (available) on cache miss
+   - Falls back to database state when cache is unavailable
+   - `force_open` persists to DB even when cache fails
+
+2. **`TestIdempotencyServiceRedisFailure`** - Idempotency service gaps:
+   - **GAP IDENTIFIED**: Currently raises `RedisConnectionError` instead of fallback
+   - Tests document current behavior for future improvement
+   - Happy path with working cache verified
+
+3. **`TestDLQServiceRedisFailure`** - DLQ database-first design:
+   - Store operations succeed without cache
+   - Retrieve works with database-only fallback
+   - Pending count uses DB query on cache miss
+
+4. **`TestRateLimitTrackerCacheIndependence`** - Memory-based tracking:
+   - Rate limit tracking uses in-memory storage, not Redis
+   - Continues working during Redis outages
+   - Backoff level management is Redis-independent
+
+5. **`TestCascadePreventionDuringRedisOutage`** - Critical path protection:
+   - Payment flow continues during Redis outage (verified)
+   - Multiple Redis error types handled gracefully
+
+**Running Redis Failure Tests**:
+```bash
+# Run Redis failure scenarios
+pytest shopping/tests/integration/self_healing/test_redis_failure_scenarios.py -v
+
+# Run with verbose output for debugging
+pytest shopping/tests/integration/self_healing/test_redis_failure_scenarios.py -v -s
+```
+
+**Key Findings**:
+
+| Component | Redis Failure Handling | Status |
+|-----------|----------------------|--------|
+| CircuitBreakerService | ✅ Graceful DB fallback | Implemented |
+| DLQService | ✅ DB-first design | Implemented |
+| RateLimitTracker | ✅ Memory-based, no Redis | Implemented |
+| IdempotencyService | 🔴 Exception raised | **Needs Improvement** |
+| PaymentService | ✅ Continues operation | Implemented |
+
+**Recommended Improvement for IdempotencyService**:
+```python
+# Current (problematic):
+cached_payment_id = cache.get(key.cache_key)  # Raises on Redis failure
+
+# Recommended (resilient):
+try:
+    cached_payment_id = cache.get(key.cache_key)
+except (RedisConnectionError, RedisTimeoutError):
+    logger.warning(f"Cache unavailable, falling back to DB: {key.cache_key}")
+    cached_payment_id = None  # Fall through to DB check
+```
+
+### A.5 Future Work
 
 The following test gaps are planned for future resolution:
 
 | Priority | Test File | Focus |
 |----------|-----------|-------|
-| 🟠 Medium | `test_redis_failure_scenarios.py` | Redis connection failure handling |
 | 🟠 Medium | `test_time_based_behaviors.py` | Time-dependent logic with freezegun |
 | 🟠 Medium | `test_external_api_failures.py` | External API timeout/failure recovery |
+| 🟡 Low | `IdempotencyService` refactor | Add Redis failure graceful degradation |
 
 See `docs/SELF_HEALING_TEST_GAP_ANALYSIS.md` for full details.

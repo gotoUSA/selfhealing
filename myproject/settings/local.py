@@ -148,9 +148,9 @@ SELF_HEALING = {
     },
     # Retry Policy - Fewer retries and shorter delays for dev
     "RETRY": {
-        "MAX_RETRIES": 3,         # Fewer retries for faster dev feedback
+        "MAX_RETRIES": 3,  # Fewer retries for faster dev feedback
         "BACKOFF_BASE": 2,
-        "BACKOFF_MAX": 60,        # Shorter max delay in dev: 1 minute
+        "BACKOFF_MAX": 60,  # Shorter max delay in dev: 1 minute
         "JITTER_PERCENT": 0.25,
     },
     # Circuit Breaker - Shorter timeout for faster dev cycles
@@ -158,7 +158,7 @@ SELF_HEALING = {
         "ENABLED": True,
         "FAILURE_THRESHOLD": 5,
         "SUCCESS_THRESHOLD": 3,
-        "RECOVERY_TIMEOUT": 30,   # Shorter timeout in dev: 30 seconds
+        "RECOVERY_TIMEOUT": 30,  # Shorter timeout in dev: 30 seconds
     },
     # Dead Letter Queue - Same as production
     "DLQ": {
@@ -169,7 +169,7 @@ SELF_HEALING = {
     # Idempotency - Shorter TTLs for dev testing
     "IDEMPOTENCY": {
         "DEFAULT_CACHE_TTL": 60,
-        "PAYMENT_CACHE_TTL": 300,    # 5 minutes in dev
+        "PAYMENT_CACHE_TTL": 300,  # 5 minutes in dev
         "WEBHOOK_CACHE_TTL": 120,
     },
 }
