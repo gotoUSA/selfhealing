@@ -1,16 +1,31 @@
 """
-Web Framework Interface for the self-healing system.
+Web Framework Interface for Self-Healing System
 
-This module defines the abstract interface for web framework adapters,
-allowing framework-independent HTTP handling (Django, FastAPI, Flask, etc.)
+Abstract interface for HTTP routing and request/response handling.
+Enables framework migration (Django REST -> FastAPI, Flask, etc.).
+
+Design Principles:
+1. Pure Python - no framework dependencies
+2. Dataclasses for immutable request/response contexts
+3. ABC for framework adapter contracts
+4. OpenAPI/documentation support
+
+Reference: docs/PLUGGABLE_ARCHITECTURE.md Section 3.4
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Type, TypeVar
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Callable, Optional, Type, TypeVar
 
 T = TypeVar("T")
+
+
+# ============================================================================
+# Enums
+# ============================================================================
 
 
 class HttpMethod(str, Enum):
@@ -25,12 +40,44 @@ class HttpMethod(str, Enum):
     OPTIONS = "OPTIONS"
 
 
+class ContentType(str, Enum):
+    """Common content types"""
+
+    JSON = "application/json"
+    FORM = "application/x-www-form-urlencoded"
+    MULTIPART = "multipart/form-data"
+    TEXT = "text/plain"
+    HTML = "text/html"
+    XML = "application/xml"
+
+
+# ============================================================================
+# Data Transfer Objects (DTOs)
+# ============================================================================
+
+
 @dataclass
 class RequestContext:
     """
     Framework-independent request context.
 
-    Adapters convert framework-specific requests to this format.
+    Adapters convert framework-specific requests to this format,
+    enabling handlers to work with any web framework.
+
+    Attributes:
+        method: HTTP method
+        path: Request path (without query string)
+        headers: Request headers (case-insensitive keys)
+        query_params: Query string parameters
+        path_params: URL path parameters (e.g., {id})
+        body: Raw request body bytes
+        json_body: Parsed JSON body (if applicable)
+        user: Authenticated user object (framework-specific)
+        is_authenticated: Whether user is authenticated
+        client_ip: Client IP address
+        user_agent: User-Agent header value
+        request_id: Unique request identifier for tracing
+        content_type: Content-Type header value
     """
 
     method: HttpMethod
@@ -47,6 +94,57 @@ class RequestContext:
     client_ip: Optional[str] = None
     user_agent: Optional[str] = None
     request_id: Optional[str] = None
+    content_type: Optional[str] = None
+
+    def get_header(self, name: str, default: Optional[str] = None) -> Optional[str]:
+        """
+        Get header value (case-insensitive).
+
+        Args:
+            name: Header name
+            default: Default value if not found
+
+        Returns:
+            Header value or default
+        """
+        # Headers are case-insensitive per HTTP spec
+        name_lower = name.lower()
+        for key, value in self.headers.items():
+            if key.lower() == name_lower:
+                return value
+        return default
+
+    def get_query(self, name: str, default: Any = None) -> Any:
+        """
+        Get query parameter value.
+
+        Args:
+            name: Parameter name
+            default: Default value if not found
+
+        Returns:
+            Parameter value or default
+        """
+        return self.query_params.get(name, default)
+
+    def get_path_param(self, name: str, default: Any = None) -> Any:
+        """
+        Get path parameter value.
+
+        Args:
+            name: Parameter name
+            default: Default value if not found
+
+        Returns:
+            Parameter value or default
+        """
+        return self.path_params.get(name, default)
+
+    @property
+    def is_json(self) -> bool:
+        """Check if request has JSON content."""
+        content_type = self.content_type or self.get_header("Content-Type", "")
+        return "application/json" in content_type.lower()
 
 
 @dataclass
@@ -55,75 +153,307 @@ class ResponseContext:
     Framework-independent response context.
 
     Handlers return this, adapters convert to framework responses.
+
+    Attributes:
+        status_code: HTTP status code
+        body: Response body (will be JSON-encoded if dict/list)
+        headers: Response headers
+        content_type: Content-Type header
     """
 
     status_code: int = 200
     body: Any = None
     headers: dict[str, str] = field(default_factory=dict)
+    content_type: str = ContentType.JSON.value
+
+    # =========================================================================
+    # Factory Methods
+    # =========================================================================
 
     @classmethod
-    def json(cls, data: Any, status_code: int = 200) -> "ResponseContext":
-        """Create JSON response"""
-        return cls(status_code=status_code, body=data)
+    def json(
+        cls,
+        data: Any,
+        status_code: int = 200,
+        headers: Optional[dict[str, str]] = None,
+    ) -> "ResponseContext":
+        """
+        Create JSON response.
+
+        Args:
+            data: Data to JSON-encode
+            status_code: HTTP status code
+            headers: Additional headers
+
+        Returns:
+            ResponseContext with JSON content
+        """
+        return cls(
+            status_code=status_code,
+            body=data,
+            headers=headers or {},
+            content_type=ContentType.JSON.value,
+        )
 
     @classmethod
-    def error(cls, message: str, status_code: int = 400, code: Optional[str] = None) -> "ResponseContext":
-        """Create error response"""
-        error_body = {"error": message, "success": False}
-        if code:
-            error_body["code"] = code
-        return cls(status_code=status_code, body=error_body)
+    def error(
+        cls,
+        message: str,
+        status_code: int = 400,
+        error_code: Optional[str] = None,
+        details: Optional[dict] = None,
+    ) -> "ResponseContext":
+        """
+        Create error response.
+
+        Args:
+            message: Error message
+            status_code: HTTP status code
+            error_code: Machine-readable error code
+            details: Additional error details
+
+        Returns:
+            ResponseContext with error body
+        """
+        body = {
+            "success": False,
+            "error": message,
+        }
+        if error_code:
+            body["error_code"] = error_code
+        if details:
+            body["details"] = details
+
+        return cls(status_code=status_code, body=body)
+
+    @classmethod
+    def success(
+        cls,
+        data: Any = None,
+        message: Optional[str] = None,
+        status_code: int = 200,
+    ) -> "ResponseContext":
+        """
+        Create success response.
+
+        Args:
+            data: Response data
+            message: Success message
+            status_code: HTTP status code
+
+        Returns:
+            ResponseContext with success body
+        """
+        body = {"success": True}
+        if data is not None:
+            body["data"] = data
+        if message:
+            body["message"] = message
+
+        return cls(status_code=status_code, body=body)
 
     @classmethod
     def created(cls, data: Any, location: Optional[str] = None) -> "ResponseContext":
-        """Create 201 Created response"""
-        headers = {"Location": location} if location else {}
+        """
+        Create 201 Created response.
+
+        Args:
+            data: Created resource data
+            location: Location header value (URL of new resource)
+
+        Returns:
+            ResponseContext with 201 status
+        """
+        headers = {}
+        if location:
+            headers["Location"] = location
         return cls(status_code=201, body=data, headers=headers)
 
     @classmethod
     def no_content(cls) -> "ResponseContext":
-        """Create 204 No Content response"""
+        """
+        Create 204 No Content response.
+
+        Returns:
+            ResponseContext with 204 status and no body
+        """
         return cls(status_code=204, body=None)
 
     @classmethod
-    def not_found(cls, message: str = "Not found") -> "ResponseContext":
-        """Create 404 Not Found response"""
-        return cls.error(message, status_code=404, code="NOT_FOUND")
+    def not_found(cls, message: str = "Resource not found") -> "ResponseContext":
+        """
+        Create 404 Not Found response.
+
+        Args:
+            message: Error message
+
+        Returns:
+            ResponseContext with 404 status
+        """
+        return cls.error(message, status_code=404, error_code="NOT_FOUND")
 
     @classmethod
-    def unauthorized(cls, message: str = "Unauthorized") -> "ResponseContext":
-        """Create 401 Unauthorized response"""
-        return cls.error(message, status_code=401, code="UNAUTHORIZED")
+    def unauthorized(cls, message: str = "Authentication required") -> "ResponseContext":
+        """
+        Create 401 Unauthorized response.
+
+        Args:
+            message: Error message
+
+        Returns:
+            ResponseContext with 401 status
+        """
+        return cls.error(message, status_code=401, error_code="UNAUTHORIZED")
 
     @classmethod
-    def forbidden(cls, message: str = "Forbidden") -> "ResponseContext":
-        """Create 403 Forbidden response"""
-        return cls.error(message, status_code=403, code="FORBIDDEN")
+    def forbidden(cls, message: str = "Permission denied") -> "ResponseContext":
+        """
+        Create 403 Forbidden response.
+
+        Args:
+            message: Error message
+
+        Returns:
+            ResponseContext with 403 status
+        """
+        return cls.error(message, status_code=403, error_code="FORBIDDEN")
 
     @classmethod
-    def internal_error(cls, message: str = "Internal server error") -> "ResponseContext":
-        """Create 500 Internal Server Error response"""
-        return cls.error(message, status_code=500, code="INTERNAL_ERROR")
+    def bad_request(
+        cls,
+        message: str = "Bad request",
+        errors: Optional[dict] = None,
+    ) -> "ResponseContext":
+        """
+        Create 400 Bad Request response.
+
+        Args:
+            message: Error message
+            errors: Validation errors dict
+
+        Returns:
+            ResponseContext with 400 status
+        """
+        return cls.error(
+            message,
+            status_code=400,
+            error_code="BAD_REQUEST",
+            details=errors,
+        )
+
+    @classmethod
+    def server_error(cls, message: str = "Internal server error") -> "ResponseContext":
+        """
+        Create 500 Internal Server Error response.
+
+        Args:
+            message: Error message
+
+        Returns:
+            ResponseContext with 500 status
+        """
+        return cls.error(message, status_code=500, error_code="INTERNAL_ERROR")
+
+    @classmethod
+    def redirect(
+        cls,
+        url: str,
+        permanent: bool = False,
+    ) -> "ResponseContext":
+        """
+        Create redirect response.
+
+        Args:
+            url: Redirect URL
+            permanent: If True, use 301, else 302
+
+        Returns:
+            ResponseContext with redirect
+        """
+        status = 301 if permanent else 302
+        return cls(
+            status_code=status,
+            body=None,
+            headers={"Location": url},
+        )
 
 
 # Type alias for handler functions
 HandlerFunc = Callable[[RequestContext], ResponseContext]
 
 
+# ============================================================================
+# Exceptions
+# ============================================================================
+
+
+class WebFrameworkError(Exception):
+    """Base exception for web framework errors."""
+
+    pass
+
+
+class RouteNotFoundError(WebFrameworkError):
+    """Raised when a route is not found."""
+
+    pass
+
+
+class AuthenticationError(WebFrameworkError):
+    """Raised when authentication fails."""
+
+    pass
+
+
+class PermissionDeniedError(WebFrameworkError):
+    """Raised when permission check fails."""
+
+    pass
+
+
+# ============================================================================
+# Web Framework Interface
+# ============================================================================
+
+
 class WebFrameworkInterface(ABC):
     """
     Abstract interface for web framework adapters.
+
+    This interface defines the contract for HTTP framework
+    adapters, enabling the self-healing system to work with
+    different web frameworks interchangeably.
 
     Implementations:
         - DjangoRESTAdapter (current)
         - FastAPIAdapter (planned)
         - FlaskAdapter (planned)
+
+    Example:
+        >>> framework = ProviderRegistry.get_framework()
+        >>> router = framework.create_router(prefix="/api/v1")
+        >>>
+        >>> def handle_status(request: RequestContext) -> ResponseContext:
+        ...     return ResponseContext.json({"status": "healthy"})
+        >>>
+        >>> framework.add_route(
+        ...     router=router,
+        ...     path="/health",
+        ...     method=HttpMethod.GET,
+        ...     handler=handle_status,
+        ...     auth_required=False,
+        ... )
     """
 
     @property
     @abstractmethod
     def framework_name(self) -> str:
-        """Return the framework name (e.g., 'django', 'fastapi')"""
+        """
+        Return the framework name.
+
+        Returns:
+            Framework identifier (e.g., 'django', 'fastapi', 'flask')
+        """
         pass
 
     # =========================================================================
@@ -140,11 +470,17 @@ class WebFrameworkInterface(ABC):
         Create a router/blueprint for grouping routes.
 
         Args:
-            prefix: URL prefix for all routes
+            prefix: URL prefix for all routes in this router
             tags: OpenAPI tags for documentation
 
         Returns:
             Framework-specific router object
+
+        Example:
+            >>> router = framework.create_router(
+            ...     prefix="/api/v1/payments",
+            ...     tags=["payments"],
+            ... )
         """
         pass
 
@@ -160,6 +496,7 @@ class WebFrameworkInterface(ABC):
         description: Optional[str] = None,
         auth_required: bool = True,
         permissions: Optional[list[str]] = None,
+        deprecated: bool = False,
     ) -> None:
         """
         Add a route to the router.
@@ -170,10 +507,21 @@ class WebFrameworkInterface(ABC):
             method: HTTP method
             handler: Handler function (RequestContext -> ResponseContext)
             response_model: Pydantic/Serializer model for response
-            summary: OpenAPI summary
-            description: OpenAPI description
+            summary: OpenAPI summary (short description)
+            description: OpenAPI description (detailed)
             auth_required: Require authenticated user
             permissions: Required permission codes
+            deprecated: Mark route as deprecated
+
+        Example:
+            >>> framework.add_route(
+            ...     router=router,
+            ...     path="/{id}",
+            ...     method=HttpMethod.GET,
+            ...     handler=get_payment,
+            ...     summary="Get payment by ID",
+            ...     permissions=["payments.view"],
+            ... )
         """
         pass
 
@@ -188,9 +536,13 @@ class WebFrameworkInterface(ABC):
         Include a child router in parent.
 
         Args:
-            parent: Parent router or app
+            parent: Parent router or application
             child: Child router to include
             prefix: Additional URL prefix
+
+        Example:
+            >>> app = framework.create_app()
+            >>> framework.include_router(app, payment_router, prefix="/payments")
         """
         pass
 
@@ -224,6 +576,26 @@ class WebFrameworkInterface(ABC):
         """
         pass
 
+    def wrap_handler(self, handler: HandlerFunc) -> Callable:
+        """
+        Wrap a handler function for the framework.
+
+        Converts between framework request/response and our contexts.
+
+        Args:
+            handler: Handler using RequestContext/ResponseContext
+
+        Returns:
+            Framework-compatible handler function
+        """
+
+        def wrapped(request: Any) -> Any:
+            request_ctx = self.to_request_context(request)
+            response_ctx = handler(request_ctx)
+            return self.from_response_context(response_ctx)
+
+        return wrapped
+
     # =========================================================================
     # Middleware
     # =========================================================================
@@ -241,7 +613,30 @@ class WebFrameworkInterface(ABC):
         Args:
             app: Application instance
             middleware_class: Middleware class
-            options: Middleware configuration
+            **options: Middleware configuration options
+
+        Example:
+            >>> framework.add_middleware(
+            ...     app,
+            ...     CORSMiddleware,
+            ...     allow_origins=["*"],
+            ... )
+        """
+        pass
+
+    def add_exception_handler(
+        self,
+        app: Any,
+        exception_class: Type[Exception],
+        handler: Callable[[Any, Exception], ResponseContext],
+    ) -> None:
+        """
+        Add exception handler to application.
+
+        Args:
+            app: Application instance
+            exception_class: Exception type to handle
+            handler: Handler function (request, exception) -> ResponseContext
         """
         pass
 
@@ -269,6 +664,11 @@ class WebFrameworkInterface(ABC):
 
         Returns:
             Callable that enforces authentication
+
+        Usage depends on framework:
+            - Django: Permission class
+            - FastAPI: Dependency
+            - Flask: Decorator
         """
         pass
 
@@ -285,6 +685,29 @@ class WebFrameworkInterface(ABC):
         """
         pass
 
+    def check_permission(
+        self,
+        user: Any,
+        permission: str,
+    ) -> bool:
+        """
+        Check if user has a specific permission.
+
+        Args:
+            user: User object
+            permission: Permission code to check
+
+        Returns:
+            True if user has permission
+        """
+        if user is None:
+            return False
+
+        # Default implementation - override for framework-specific
+        if hasattr(user, "has_perm"):
+            return user.has_perm(permission)
+        return False
+
     # =========================================================================
     # OpenAPI/Documentation
     # =========================================================================
@@ -294,31 +717,59 @@ class WebFrameworkInterface(ABC):
         """
         Get OpenAPI schema for the application.
 
+        Args:
+            app: Application instance
+
         Returns:
             OpenAPI 3.0 schema dictionary
         """
         pass
 
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
-
-    def wrap_handler(self, handler: HandlerFunc) -> Callable:
+    def get_routes(self, app: Any) -> list[dict]:
         """
-        Wrap a framework-independent handler for use with the framework.
-
-        Default implementation - subclasses may override.
+        Get list of registered routes.
 
         Args:
-            handler: Framework-independent handler
+            app: Application instance
 
         Returns:
-            Framework-compatible handler
+            List of route info dicts with path, method, name
         """
+        return []
 
-        def wrapped(request: Any) -> Any:
-            ctx = self.to_request_context(request)
-            response = handler(ctx)
-            return self.from_response_context(response)
+    # =========================================================================
+    # Utilities
+    # =========================================================================
 
-        return wrapped
+    def create_app(self, **options) -> Any:
+        """
+        Create a new application instance.
+
+        Args:
+            **options: Framework-specific options
+
+        Returns:
+            Application instance
+        """
+        raise NotImplementedError(f"{self.framework_name} adapter does not support create_app")
+
+    def run_server(
+        self,
+        app: Any,
+        host: str = "0.0.0.0",
+        port: int = 8000,
+        debug: bool = False,
+    ) -> None:
+        """
+        Run development server.
+
+        Args:
+            app: Application instance
+            host: Host to bind
+            port: Port to listen on
+            debug: Enable debug mode
+
+        Note:
+            For development only. Use proper WSGI/ASGI server in production.
+        """
+        raise NotImplementedError(f"{self.framework_name} adapter does not support run_server")

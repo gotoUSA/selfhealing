@@ -1,29 +1,284 @@
 """
-Repository interfaces for the self-healing system.
+Repository Interfaces for Self-Healing System
 
-These abstract base classes define the contract for data access,
-allowing different implementations (Django ORM, SQLAlchemy, in-memory, etc.)
+Abstract interfaces that define the contract for data access.
+These interfaces allow the self-healing core to be decoupled from
+specific ORM implementations (Django, SQLAlchemy, etc.)
+
+Design Principles:
+1. Pure Python - no framework dependencies
+2. Data classes for transfer objects
+3. ABC for repository contracts
+4. Optional fields use None, not Django's blank=True
+
+Reference: docs/SELF_HEALING_EXTRACTION_PLAN.md Phase 1
 """
 
-from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Optional, List, Dict, Any
+from __future__ import annotations
 
-from selfhealing.core.types import (
-    FailedOperationData,
-    CircuitBreakerStateData,
-    SecurityIncidentData,
-    OperationStatus,
-    CircuitState,
-)
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Optional
+
+
+# ============================================================================
+# Enums (Framework-independent)
+# ============================================================================
+
+
+class FailedOperationDomain(str, Enum):
+    """Domain classification for failed operations"""
+
+    PAYMENT = "payment"
+    POINT = "point"
+    INVENTORY = "inventory"
+    WEBHOOK = "webhook"
+    NOTIFICATION = "notification"
+
+
+class FailedOperationStatus(str, Enum):
+    """State machine for DLQ item lifecycle"""
+
+    PENDING = "pending"
+    REVIEWING = "reviewing"
+    REPLAYED = "replayed"
+    REQUIRES_REVIEW = "requires_review"
+    RESOLVED = "resolved"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+    EXPIRED = "expired"
+
+
+class CircuitBreakerStateEnum(str, Enum):
+    """Circuit breaker states"""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class SecurityIncidentType(str, Enum):
+    """Types of security incidents"""
+
+    WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
+    PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered"
+    TOKEN_FORGED = "token_forged"
+    UNAUTHORIZED_ACCESS = "unauthorized_access"
+    RATE_LIMIT_ABUSE = "rate_limit_abuse"
+    SUSPICIOUS_ACTIVITY = "suspicious_activity"
+    REPLAY_ATTACK = "replay_attack"
+    INJECTION_ATTEMPT = "injection_attempt"
+
+
+class SecuritySeverity(str, Enum):
+    """Severity levels for security incidents"""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+
+
+class SecurityIncidentStatus(str, Enum):
+    """Investigation status for security incidents"""
+
+    OPEN = "open"
+    INVESTIGATING = "investigating"
+    RESOLVED = "resolved"
+    FALSE_POSITIVE = "false_positive"
+
+
+# ============================================================================
+# Data Transfer Objects (DTOs)
+# ============================================================================
+
+
+@dataclass
+class FailedOperationData:
+    """
+    Data transfer object for FailedOperation model.
+
+    Contains all necessary fields for DLQ operations without
+    Django model dependencies.
+    """
+
+    # Identity
+    id: int
+
+    # Domain & Classification
+    domain: str
+    failure_type: str
+    status: str
+
+    # References (IDs only - no model instances)
+    order_id: Optional[int] = None
+    payment_id: Optional[int] = None
+    user_id: Optional[int] = None
+
+    # Snapshot Data
+    snapshot_data: dict[str, Any] = field(default_factory=dict)
+
+    # Error Information
+    error_code: str = ""
+    error_message: str = ""
+
+    # Retry Tracking
+    retry_count: int = 0
+    max_retries: int = 2
+    last_retry_at: Optional[datetime] = None
+
+    # Forensic Context
+    request_data: dict[str, Any] = field(default_factory=dict)
+    response_data: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    # Resolution
+    resolved_at: Optional[datetime] = None
+    resolved_by_id: Optional[int] = None
+    resolution_type: str = ""
+    resolution_note: str = ""
+
+    # Recovery Hints
+    next_action_hint: str = ""
+    recommended_action: str = ""
+
+    # Lifecycle
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+    @property
+    def is_pending(self) -> bool:
+        """Check if operation is pending review"""
+        return self.status == FailedOperationStatus.PENDING.value
+
+    @property
+    def is_resolved(self) -> bool:
+        """Check if operation is resolved"""
+        return self.status == FailedOperationStatus.RESOLVED.value
+
+    @property
+    def can_retry(self) -> bool:
+        """Check if operation can be retried"""
+        return self.retry_count < self.max_retries
+
+
+@dataclass
+class CircuitBreakerStateData:
+    """
+    Data transfer object for CircuitBreakerState model.
+
+    Represents the current state of a circuit breaker for a service.
+    """
+
+    # Identity
+    service_name: str
+    id: Optional[int] = None
+
+    # State
+    state: str = CircuitBreakerStateEnum.CLOSED.value
+    failure_count: int = 0
+    success_count: int = 0
+
+    # Timing
+    last_failure_at: Optional[datetime] = None
+    opened_at: Optional[datetime] = None
+
+    # Manual Control
+    manually_controlled: bool = False
+    controlled_by_id: Optional[int] = None
+    control_reason: str = ""
+    manual_override_expires_at: Optional[datetime] = None
+
+    # Half-Open Tracking
+    half_open_request_count: int = 0
+
+    # Lifecycle
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @property
+    def is_open(self) -> bool:
+        """Check if circuit is open (blocking requests)"""
+        return self.state == CircuitBreakerStateEnum.OPEN.value
+
+    @property
+    def is_closed(self) -> bool:
+        """Check if circuit is closed (allowing requests)"""
+        return self.state == CircuitBreakerStateEnum.CLOSED.value
+
+    @property
+    def is_half_open(self) -> bool:
+        """Check if circuit is half-open (testing)"""
+        return self.state == CircuitBreakerStateEnum.HALF_OPEN.value
+
+
+@dataclass
+class SecurityIncidentData:
+    """
+    Data transfer object for SecurityIncident model.
+
+    Security incidents are NEVER auto-healed and require human intervention.
+    """
+
+    # Identity
+    id: int
+
+    # Classification
+    incident_type: str
+    severity: str
+    status: str
+
+    # Source Information
+    source_ip: Optional[str] = None
+    user_agent: str = ""
+    user_id: Optional[int] = None
+
+    # References
+    order_id: Optional[int] = None
+    payment_id: Optional[int] = None
+
+    # Details
+    description: str = ""
+    raw_payload: dict[str, Any] = field(default_factory=dict)
+
+    # Investigation
+    assigned_to_id: Optional[int] = None
+    investigation_notes: str = ""
+    resolved_at: Optional[datetime] = None
+
+    # Lifecycle
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @property
+    def is_critical(self) -> bool:
+        """Check if incident is critical severity"""
+        return self.severity == SecuritySeverity.CRITICAL.value
+
+    @property
+    def needs_investigation(self) -> bool:
+        """Check if incident needs investigation"""
+        return self.status in [
+            SecurityIncidentStatus.OPEN.value,
+            SecurityIncidentStatus.INVESTIGATING.value,
+        ]
+
+
+# ============================================================================
+# Repository Interfaces
+# ============================================================================
 
 
 class FailedOperationRepository(ABC):
     """
-    Repository interface for failed operations (DLQ).
+    Abstract repository for FailedOperation (DLQ) data access.
 
-    Implementations should handle persistence of failed operations
-    for later retry or manual review.
+    Implementations:
+    - DjangoFailedOperationRepository: Uses Django ORM
+    - (Future) SQLAlchemyFailedOperationRepository: Uses SQLAlchemy
     """
 
     @abstractmethod
@@ -31,205 +286,161 @@ class FailedOperationRepository(ABC):
         self,
         domain: str,
         failure_type: str,
-        context: Dict[str, Any],
-        error_message: str,
-        max_retries: int = 3,
+        error_message: str = "",
+        error_code: str = "",
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        snapshot_data: Optional[dict[str, Any]] = None,
+        request_data: Optional[dict[str, Any]] = None,
+        response_data: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        retry_count: int = 0,
+        max_retries: int = 2,
+        next_action_hint: str = "",
+        recommended_action: str = "",
     ) -> FailedOperationData:
-        """
-        Create a new failed operation record.
-
-        Args:
-            domain: The business domain (e.g., 'payment', 'order')
-            failure_type: Type of failure
-            context: Operation context for replay
-            error_message: The error message
-            max_retries: Maximum retry attempts
-
-        Returns:
-            The created FailedOperationData
-        """
-        pass
+        """Create a new failed operation record"""
+        ...
 
     @abstractmethod
-    def get_by_id(self, operation_id: int) -> Optional[FailedOperationData]:
-        """Get a failed operation by its ID."""
-        pass
+    def get_by_id(self, id: int) -> Optional[FailedOperationData]:
+        """Get a failed operation by ID"""
+        ...
 
     @abstractmethod
-    def get_pending(
+    def get_pending_by_domain(
         self,
-        domain: Optional[str] = None,
-        limit: int = 10,
-    ) -> List[FailedOperationData]:
-        """
-        Get pending operations ready for retry.
-
-        Args:
-            domain: Optional domain filter
-            limit: Maximum number of operations to return
-
-        Returns:
-            List of pending operations
-        """
-        pass
+        domain: str,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Get pending operations for a specific domain"""
+        ...
 
     @abstractmethod
-    def get_by_status(
-        self,
-        status: OperationStatus,
-        domain: Optional[str] = None,
-    ) -> List[FailedOperationData]:
-        """Get operations by status."""
-        pass
+    def get_pending_count_by_domain(self, domain: str) -> int:
+        """Get count of pending operations for a domain"""
+        ...
 
     @abstractmethod
     def update_status(
         self,
-        operation_id: int,
-        status: OperationStatus,
-        error_message: Optional[str] = None,
-    ) -> Optional[FailedOperationData]:
-        """Update the status of an operation."""
-        pass
+        id: int,
+        status: str,
+        resolution_type: str = "",
+        resolution_note: str = "",
+        resolved_by_id: Optional[int] = None,
+    ) -> bool:
+        """Update the status of a failed operation"""
+        ...
 
     @abstractmethod
-    def increment_retry(
-        self,
-        operation_id: int,
-        error_message: str,
-        next_retry_at: Optional[datetime] = None,
-    ) -> Optional[FailedOperationData]:
-        """Increment retry count and update error message."""
-        pass
+    def increment_retry_count(self, id: int) -> bool:
+        """Increment retry count and update last_retry_at"""
+        ...
 
     @abstractmethod
-    def mark_completed(
+    def mark_as_resolved(
         self,
-        operation_id: int,
-    ) -> Optional[FailedOperationData]:
-        """Mark an operation as successfully completed."""
-        pass
+        id: int,
+        resolution_type: str,
+        resolution_note: str = "",
+        resolved_by_id: Optional[int] = None,
+    ) -> bool:
+        """Mark a failed operation as resolved"""
+        ...
 
     @abstractmethod
-    def mark_failed(
+    def get_expired_operations(
         self,
-        operation_id: int,
-        error_message: str,
-    ) -> Optional[FailedOperationData]:
-        """Mark an operation as permanently failed."""
-        pass
+        before_date: datetime,
+        limit: int = 100,
+    ) -> list[FailedOperationData]:
+        """Get operations that have expired"""
+        ...
 
     @abstractmethod
-    def count_by_status(
+    def bulk_update_status(
         self,
-        status: Optional[OperationStatus] = None,
-        domain: Optional[str] = None,
+        ids: list[int],
+        status: str,
     ) -> int:
-        """Count operations by status and optionally domain."""
-        pass
-
-    @abstractmethod
-    def delete_expired(
-        self,
-        older_than: datetime,
-    ) -> int:
-        """Delete expired operations. Returns count of deleted."""
-        pass
+        """Bulk update status for multiple operations"""
+        ...
 
 
 class CircuitBreakerStateRepository(ABC):
     """
-    Repository interface for circuit breaker state.
+    Abstract repository for CircuitBreakerState data access.
 
-    Implementations should handle persistence of circuit breaker state,
-    allowing state sharing across processes/instances.
+    Manages circuit breaker state persistence and retrieval.
     """
 
     @abstractmethod
-    def get_state(
-        self,
-        service_name: str,
-    ) -> Optional[CircuitBreakerStateData]:
-        """Get the current state of a circuit breaker."""
-        pass
+    def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
+        """Get existing state or create new one for a service"""
+        ...
 
     @abstractmethod
-    def get_or_create(
-        self,
-        service_name: str,
-        defaults: Optional[Dict[str, Any]] = None,
-    ) -> CircuitBreakerStateData:
-        """Get existing state or create a new one with defaults."""
-        pass
+    def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
+        """Get circuit breaker state by service name"""
+        ...
 
     @abstractmethod
     def update_state(
         self,
         service_name: str,
-        state: CircuitState,
+        state: str,
         failure_count: Optional[int] = None,
         success_count: Optional[int] = None,
-    ) -> Optional[CircuitBreakerStateData]:
-        """Update the state of a circuit breaker."""
-        pass
+        opened_at: Optional[datetime] = None,
+    ) -> bool:
+        """Update circuit breaker state"""
+        ...
 
     @abstractmethod
-    def record_failure(
+    def record_failure(self, service_name: str) -> CircuitBreakerStateData:
+        """Record a failure and return updated state"""
+        ...
+
+    @abstractmethod
+    def record_success(self, service_name: str) -> CircuitBreakerStateData:
+        """Record a success and return updated state"""
+        ...
+
+    @abstractmethod
+    def set_manual_control(
         self,
         service_name: str,
-    ) -> CircuitBreakerStateData:
-        """Record a failure and update failure count."""
-        pass
+        state: str,
+        controlled_by_id: Optional[int] = None,
+        reason: str = "",
+        expires_at: Optional[datetime] = None,
+    ) -> bool:
+        """Set manual control on a circuit breaker"""
+        ...
 
     @abstractmethod
-    def record_success(
-        self,
-        service_name: str,
-    ) -> CircuitBreakerStateData:
-        """Record a success and update success count."""
-        pass
+    def clear_manual_control(self, service_name: str) -> bool:
+        """Clear manual control from a circuit breaker"""
+        ...
 
     @abstractmethod
-    def reset(
-        self,
-        service_name: str,
-    ) -> Optional[CircuitBreakerStateData]:
-        """Reset a circuit breaker to closed state."""
-        pass
+    def get_all_states(self) -> list[CircuitBreakerStateData]:
+        """Get all circuit breaker states"""
+        ...
 
     @abstractmethod
-    def open_circuit(
-        self,
-        service_name: str,
-    ) -> Optional[CircuitBreakerStateData]:
-        """Open a circuit breaker."""
-        pass
-
-    @abstractmethod
-    def half_open_circuit(
-        self,
-        service_name: str,
-    ) -> Optional[CircuitBreakerStateData]:
-        """Transition a circuit breaker to half-open state."""
-        pass
-
-    @abstractmethod
-    def list_all(self) -> List[CircuitBreakerStateData]:
-        """List all circuit breaker states."""
-        pass
-
-    @abstractmethod
-    def list_open(self) -> List[CircuitBreakerStateData]:
-        """List all open circuit breakers."""
-        pass
+    def reset(self, service_name: str) -> bool:
+        """Reset circuit breaker to initial closed state"""
+        ...
 
 
 class SecurityIncidentRepository(ABC):
     """
-    Repository interface for security incidents.
+    Abstract repository for SecurityIncident data access.
 
-    Implementations should handle persistence of security-related
-    incidents for monitoring and response.
+    Security incidents are stored separately and NEVER auto-replayed.
     """
 
     @abstractmethod
@@ -237,61 +448,83 @@ class SecurityIncidentRepository(ABC):
         self,
         incident_type: str,
         severity: str,
-        description: str,
-        context: Optional[Dict[str, Any]] = None,
+        description: str = "",
         source_ip: Optional[str] = None,
+        user_agent: str = "",
         user_id: Optional[int] = None,
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
+        raw_payload: Optional[dict[str, Any]] = None,
     ) -> SecurityIncidentData:
-        """Create a new security incident record."""
-        pass
+        """Create a new security incident"""
+        ...
 
     @abstractmethod
-    def get_by_id(
-        self,
-        incident_id: int,
-    ) -> Optional[SecurityIncidentData]:
-        """Get an incident by ID."""
-        pass
+    def get_by_id(self, id: int) -> Optional[SecurityIncidentData]:
+        """Get a security incident by ID"""
+        ...
 
     @abstractmethod
-    def get_recent(
+    def get_open_incidents(
         self,
-        hours: int = 24,
-        severity: Optional[str] = None,
         limit: int = 100,
-    ) -> List[SecurityIncidentData]:
-        """Get recent incidents."""
-        pass
+    ) -> list[SecurityIncidentData]:
+        """Get all open (unresolved) incidents"""
+        ...
 
     @abstractmethod
-    def get_unresolved(
+    def get_by_type(
         self,
-        severity: Optional[str] = None,
-    ) -> List[SecurityIncidentData]:
-        """Get unresolved incidents."""
-        pass
+        incident_type: str,
+        limit: int = 100,
+    ) -> list[SecurityIncidentData]:
+        """Get incidents by type"""
+        ...
 
     @abstractmethod
-    def resolve(
+    def get_by_severity(
         self,
-        incident_id: int,
-    ) -> Optional[SecurityIncidentData]:
-        """Mark an incident as resolved."""
-        pass
+        severity: str,
+        limit: int = 100,
+    ) -> list[SecurityIncidentData]:
+        """Get incidents by severity"""
+        ...
 
     @abstractmethod
-    def count_by_type(
+    def update_status(
         self,
-        hours: int = 24,
-    ) -> Dict[str, int]:
-        """Count incidents by type in the given time window."""
-        pass
+        id: int,
+        status: str,
+        investigation_notes: str = "",
+        assigned_to_id: Optional[int] = None,
+    ) -> bool:
+        """Update incident status"""
+        ...
 
     @abstractmethod
-    def count_by_source_ip(
+    def mark_as_resolved(
+        self,
+        id: int,
+        investigation_notes: str = "",
+    ) -> bool:
+        """Mark incident as resolved"""
+        ...
+
+    @abstractmethod
+    def get_recent_by_ip(
         self,
         source_ip: str,
-        hours: int = 1,
+        hours: int = 24,
+        limit: int = 100,
+    ) -> list[SecurityIncidentData]:
+        """Get recent incidents from a specific IP"""
+        ...
+
+    @abstractmethod
+    def count_by_type_since(
+        self,
+        incident_type: str,
+        since: datetime,
     ) -> int:
-        """Count incidents from a specific IP in the given time window."""
-        pass
+        """Count incidents of a type since a given time"""
+        ...

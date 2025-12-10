@@ -1,124 +1,244 @@
 """
-In-Memory Cache Adapter for the self-healing system.
+In-Memory Cache Adapter for Self-Healing System
 
-Implements CacheProviderInterface using in-memory storage.
-Intended for testing and development environments.
+Thread-safe in-memory implementation of CacheProviderInterface.
+Designed for testing and development - NOT for production use.
+
+Features:
+    - Thread-safe operations with locks
+    - TTL support with automatic expiration
+    - Distributed lock simulation (single-process only)
+    - Full interface compliance
+
+Warning:
+    This adapter is for TESTING ONLY. It does not persist data
+    and locks are only effective within a single process.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import logging
 import threading
 import time
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Optional
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
     DistributedLock,
+    LockAcquisitionError,
+    LockNotOwnedError,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class InMemoryDistributedLock(DistributedLock):
-    """
-    In-memory distributed lock implementation.
+@dataclass
+class CacheEntry:
+    """Internal cache entry with value and expiration."""
 
-    Uses threading.Lock for single-process synchronization.
-    NOT suitable for multi-process/multi-server deployments.
+    value: Any
+    expires_at: Optional[float] = None  # Unix timestamp
+
+    def is_expired(self) -> bool:
+        """Check if entry has expired."""
+        if self.expires_at is None:
+            return False
+        return time.time() > self.expires_at
+
+
+class InMemoryLock(DistributedLock):
+    """
+    In-memory distributed lock simulation.
+
+    WARNING: Only works within a single process.
+    For multi-process scenarios, use RedisDistributedLock.
     """
 
-    def __init__(self, lock: threading.Lock, name: str, timeout: float):
+    # Class-level lock registry
+    _locks: dict[str, "InMemoryLock"] = {}
+    _registry_lock = threading.Lock()
+
+    def __init__(
+        self,
+        name: str,
+        timeout: timedelta = timedelta(seconds=10),
+        blocking_timeout: Optional[float] = None,
+    ) -> None:
         """
-        Initialize the in-memory lock.
+        Initialize in-memory lock.
 
         Args:
-            lock: threading.Lock instance
-            name: Lock name for logging
-            timeout: Lock auto-release timeout in seconds
+            name: Lock name
+            timeout: Lock auto-release timeout
+            blocking_timeout: Max time to wait when acquiring
         """
-        self._lock = lock
         self._name = name
         self._timeout = timeout
+        self._blocking_timeout = blocking_timeout
+        self._owner_id = f"{threading.get_ident()}:{id(self)}"
+        self._lock = threading.Lock()
         self._acquired = False
-        self._acquired_at: Optional[float] = None
+        self._expires_at: Optional[float] = None
 
-    def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
-        """Acquire the lock."""
-        try:
-            if timeout is not None:
-                result = self._lock.acquire(blocking=blocking, timeout=timeout)
-            elif blocking:
-                result = self._lock.acquire(blocking=True)
-            else:
-                result = self._lock.acquire(blocking=False)
+    def acquire(
+        self,
+        blocking: bool = True,
+        timeout: Optional[float] = None,
+    ) -> bool:
+        """
+        Acquire the lock.
 
-            if result:
-                self._acquired = True
-                self._acquired_at = time.time()
-            return result
-        except Exception as e:
-            logger.error(f"[InMemoryLock] Failed to acquire lock '{self._name}': {e}")
-            return False
+        Args:
+            blocking: If True, retry until acquired or timeout
+            timeout: Override blocking_timeout
+
+        Returns:
+            True if lock was acquired
+        """
+        blocking_timeout = timeout if timeout is not None else self._blocking_timeout
+        stop_time = None
+
+        if blocking and blocking_timeout is not None:
+            stop_time = time.time() + blocking_timeout
+
+        while True:
+            with InMemoryLock._registry_lock:
+                # Check for existing lock
+                existing = InMemoryLock._locks.get(self._name)
+
+                if existing is None or existing._is_expired():
+                    # Clean up expired lock
+                    if existing is not None:
+                        del InMemoryLock._locks[self._name]
+
+                    # Acquire lock
+                    self._expires_at = time.time() + self._timeout.total_seconds()
+                    self._acquired = True
+                    InMemoryLock._locks[self._name] = self
+                    logger.debug(f"[InMemoryLock] Acquired lock: {self._name}")
+                    return True
+
+            if not blocking:
+                return False
+
+            if stop_time is not None and time.time() >= stop_time:
+                logger.debug(f"[InMemoryLock] Timeout acquiring lock: {self._name}")
+                return False
+
+            time.sleep(0.01)  # Short sleep between retries
+
+    def _is_expired(self) -> bool:
+        """Check if lock has expired."""
+        if self._expires_at is None:
+            return True
+        return time.time() > self._expires_at
 
     def release(self) -> None:
         """Release the lock."""
-        try:
-            if self._acquired:
-                self._lock.release()
+        with InMemoryLock._registry_lock:
+            if self._name in InMemoryLock._locks:
+                current = InMemoryLock._locks[self._name]
+                if current._owner_id == self._owner_id:
+                    del InMemoryLock._locks[self._name]
+                    self._acquired = False
+                    logger.debug(f"[InMemoryLock] Released lock: {self._name}")
+                else:
+                    logger.warning(f"[InMemoryLock] Lock not owned: {self._name}")
+            else:
                 self._acquired = False
-                self._acquired_at = None
-        except RuntimeError:
-            # Lock not held, ignore
-            pass
-        except Exception as e:
-            logger.warning(f"[InMemoryLock] Failed to release lock '{self._name}': {e}")
 
     def locked(self) -> bool:
-        """Check if lock is currently held."""
-        return self._lock.locked()
+        """Check if lock is currently held by anyone."""
+        with InMemoryLock._registry_lock:
+            existing = InMemoryLock._locks.get(self._name)
+            if existing is None:
+                return False
+            if existing._is_expired():
+                del InMemoryLock._locks[self._name]
+                return False
+            return True
+
+    def owned(self) -> bool:
+        """Check if lock is held by this instance."""
+        with InMemoryLock._registry_lock:
+            existing = InMemoryLock._locks.get(self._name)
+            if existing is None:
+                return False
+            if existing._is_expired():
+                del InMemoryLock._locks[self._name]
+                return False
+            return existing._owner_id == self._owner_id
+
+    def extend(self, additional_time: timedelta) -> bool:
+        """Extend the lock's TTL."""
+        with InMemoryLock._registry_lock:
+            if not self.owned():
+                return False
+            self._expires_at = time.time() + additional_time.total_seconds()
+            return True
+
+    @classmethod
+    def clear_all_locks(cls) -> None:
+        """Clear all locks (for testing cleanup)."""
+        with cls._registry_lock:
+            cls._locks.clear()
 
 
 class InMemoryCacheAdapter(CacheProviderInterface):
     """
-    In-memory implementation of CacheProviderInterface.
+    Thread-safe in-memory cache implementation.
 
-    Stores data in a Python dictionary with TTL support.
-    Uses threading.Lock for thread safety.
+    This adapter provides a complete cache implementation using
+    Python dictionaries with thread-safe operations.
 
-    WARNING: This adapter is intended for testing only.
-    Data is lost when the process restarts.
-    Does not support multi-process/multi-server deployments.
+    Features:
+        - Full CacheProviderInterface compliance
+        - Thread-safe operations
+        - TTL support with lazy expiration
+        - Mock distributed locks (single-process only)
+
+    Example:
+        >>> cache = InMemoryCacheAdapter()
+        >>> cache.set("key", {"data": "value"}, ttl=timedelta(minutes=5))
+        >>> data = cache.get("key")
+        >>> with cache.get_lock("my_lock") as lock:
+        ...     # Critical section (only within single process!)
+        ...     pass
+
+    Warning:
+        This is for TESTING ONLY. Data is not persisted and
+        locks only work within a single process.
     """
 
-    def __init__(self, key_prefix: str = "selfhealing:"):
+    def __init__(self, key_prefix: str = "test:") -> None:
         """
-        Initialize the in-memory cache adapter.
+        Initialize in-memory cache.
 
         Args:
-            key_prefix: Prefix for all cache keys (default: "selfhealing:")
+            key_prefix: Prefix for all cache keys
         """
         self._key_prefix = key_prefix
-        self._store: dict[str, tuple[Any, Optional[float]]] = {}  # key -> (value, expires_at)
+        self._store: dict[str, CacheEntry] = {}
         self._lock = threading.Lock()
-        self._named_locks: dict[str, threading.Lock] = {}
-        self._named_locks_lock = threading.Lock()
+        self._healthy = True
 
     def _make_key(self, key: str) -> str:
         """Add prefix to key."""
         return f"{self._key_prefix}{key}"
 
     def _cleanup_expired(self) -> None:
-        """Remove expired entries (called internally)."""
-        now = time.time()
-        expired_keys = [k for k, (_, expires_at) in self._store.items() if expires_at is not None and expires_at <= now]
+        """Remove expired entries (should be called periodically)."""
+        current_time = time.time()
+        expired_keys = [k for k, v in self._store.items() if v.expires_at is not None and v.expires_at < current_time]
         for key in expired_keys:
             del self._store[key]
 
     @property
     def provider_name(self) -> str:
-        """Return the provider name."""
+        """Return 'memory' as the provider identifier."""
         return "memory"
 
     # =========================================================================
@@ -128,18 +248,17 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def get(self, key: str) -> Optional[Any]:
         """Get value by key."""
         with self._lock:
-            prefixed_key = self._make_key(key)
-            if prefixed_key not in self._store:
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
+
+            if entry is None:
                 return None
 
-            value, expires_at = self._store[prefixed_key]
-
-            # Check if expired
-            if expires_at is not None and expires_at <= time.time():
-                del self._store[prefixed_key]
+            if entry.is_expired():
+                del self._store[full_key]
                 return None
 
-            return value
+            return entry.value
 
     def set(
         self,
@@ -149,34 +268,34 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     ) -> bool:
         """Set value with optional TTL."""
         with self._lock:
-            prefixed_key = self._make_key(key)
+            full_key = self._make_key(key)
             expires_at = None
-            if ttl:
+            if ttl is not None:
                 expires_at = time.time() + ttl.total_seconds()
-            self._store[prefixed_key] = (value, expires_at)
+
+            self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
             return True
 
     def delete(self, key: str) -> bool:
         """Delete key from cache."""
         with self._lock:
-            prefixed_key = self._make_key(key)
-            if prefixed_key in self._store:
-                del self._store[prefixed_key]
+            full_key = self._make_key(key)
+            if full_key in self._store:
+                del self._store[full_key]
                 return True
             return False
 
     def exists(self, key: str) -> bool:
         """Check if key exists in cache."""
         with self._lock:
-            prefixed_key = self._make_key(key)
-            if prefixed_key not in self._store:
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
+
+            if entry is None:
                 return False
 
-            _, expires_at = self._store[prefixed_key]
-
-            # Check if expired
-            if expires_at is not None and expires_at <= time.time():
-                del self._store[prefixed_key]
+            if entry.is_expired():
+                del self._store[full_key]
                 return False
 
             return True
@@ -188,24 +307,17 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def incr(self, key: str, amount: int = 1) -> int:
         """Atomically increment a counter."""
         with self._lock:
-            prefixed_key = self._make_key(key)
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
 
-            if prefixed_key in self._store:
-                value, expires_at = self._store[prefixed_key]
-                # Check if expired
-                if expires_at is not None and expires_at <= time.time():
-                    value = 0
-                    expires_at = None
-            else:
-                value = 0
-                expires_at = None
+            if entry is None or entry.is_expired():
+                # Create new counter
+                self._store[full_key] = CacheEntry(value=amount)
+                return amount
 
-            try:
-                new_value = int(value) + amount
-            except (ValueError, TypeError):
-                new_value = amount
-
-            self._store[prefixed_key] = (new_value, expires_at)
+            # Increment existing
+            new_value = int(entry.value) + amount
+            entry.value = new_value
             return new_value
 
     def decr(self, key: str, amount: int = 1) -> int:
@@ -215,33 +327,49 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def expire(self, key: str, ttl: timedelta) -> bool:
         """Set expiration on existing key."""
         with self._lock:
-            prefixed_key = self._make_key(key)
-            if prefixed_key not in self._store:
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
+
+            if entry is None or entry.is_expired():
                 return False
 
-            value, _ = self._store[prefixed_key]
-            expires_at = time.time() + ttl.total_seconds()
-            self._store[prefixed_key] = (value, expires_at)
+            entry.expires_at = time.time() + ttl.total_seconds()
             return True
 
     def ttl(self, key: str) -> Optional[int]:
         """Get remaining TTL in seconds."""
         with self._lock:
-            prefixed_key = self._make_key(key)
-            if prefixed_key not in self._store:
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
+
+            if entry is None:
+                return -2  # Key doesn't exist
+
+            if entry.is_expired():
+                del self._store[full_key]
                 return -2
 
-            _, expires_at = self._store[prefixed_key]
+            if entry.expires_at is None:
+                return None  # No expiration
 
-            if expires_at is None:
-                return None
+            remaining = entry.expires_at - time.time()
+            return max(0, int(remaining))
 
-            remaining = int(expires_at - time.time())
-            if remaining <= 0:
-                del self._store[prefixed_key]
-                return -2
+    def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+        """Set value only if key does not exist."""
+        with self._lock:
+            full_key = self._make_key(key)
+            entry = self._store.get(full_key)
 
-            return remaining
+            if entry is not None and not entry.is_expired():
+                return False
+
+            expires_at = None
+            if ttl is not None:
+                expires_at = time.time() + ttl.total_seconds()
+
+            self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
+            return True
 
     # =========================================================================
     # Distributed Locking
@@ -254,17 +382,10 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         blocking_timeout: Optional[float] = None,
     ) -> DistributedLock:
         """Get a distributed lock instance."""
-        lock_key = self._make_key(f"lock:{name}")
-
-        with self._named_locks_lock:
-            if lock_key not in self._named_locks:
-                self._named_locks[lock_key] = threading.Lock()
-            lock = self._named_locks[lock_key]
-
-        return InMemoryDistributedLock(
-            lock=lock,
+        return InMemoryLock(
             name=name,
-            timeout=timeout.total_seconds(),
+            timeout=timeout,
+            blocking_timeout=blocking_timeout,
         )
 
     # =========================================================================
@@ -274,10 +395,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def mget(self, keys: list[str]) -> dict[str, Any]:
         """Get multiple values at once."""
         result = {}
-        for key in keys:
-            value = self.get(key)
-            if value is not None:
-                result[key] = value
+        with self._lock:
+            for key in keys:
+                full_key = self._make_key(key)
+                entry = self._store.get(full_key)
+                if entry is not None and not entry.is_expired():
+                    result[key] = entry.value
         return result
 
     def mset(
@@ -286,17 +409,38 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         ttl: Optional[timedelta] = None,
     ) -> bool:
         """Set multiple values at once."""
-        for key, value in mapping.items():
-            self.set(key, value, ttl)
+        with self._lock:
+            expires_at = None
+            if ttl is not None:
+                expires_at = time.time() + ttl.total_seconds()
+
+            for key, value in mapping.items():
+                full_key = self._make_key(key)
+                self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
         return True
+
+    def mdelete(self, keys: list[str]) -> int:
+        """Delete multiple keys at once."""
+        deleted = 0
+        with self._lock:
+            for key in keys:
+                full_key = self._make_key(key)
+                if full_key in self._store:
+                    del self._store[full_key]
+                    deleted += 1
+        return deleted
 
     # =========================================================================
     # Health Check
     # =========================================================================
 
     def health_check(self) -> bool:
-        """Check if cache is operational (always True for in-memory)."""
-        return True
+        """Check if cache is healthy."""
+        return self._healthy
+
+    def set_health_status(self, healthy: bool) -> None:
+        """Set health status for testing."""
+        self._healthy = healthy
 
     def flush_all(self) -> bool:
         """Clear all keys."""
@@ -305,10 +449,51 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             keys_to_delete = [k for k in self._store.keys() if k.startswith(self._key_prefix)]
             for key in keys_to_delete:
                 del self._store[key]
+            logger.info(f"[InMemoryCache] Flushed {len(keys_to_delete)} keys")
+
+        # Also clear locks
+        InMemoryLock.clear_all_locks()
         return True
 
-    def size(self) -> int:
-        """Get number of entries in cache (for testing)."""
+    # =========================================================================
+    # Key Pattern Operations
+    # =========================================================================
+
+    def keys(self, pattern: str = "*") -> list[str]:
+        """Find keys matching a pattern."""
+        with self._lock:
+            self._cleanup_expired()
+            full_pattern = self._make_key(pattern)
+            prefix_len = len(self._key_prefix)
+
+            matching = []
+            for key in self._store.keys():
+                if fnmatch.fnmatch(key, full_pattern):
+                    matching.append(key[prefix_len:])
+
+            return matching
+
+    def scan(
+        self,
+        pattern: str = "*",
+        count: int = 100,
+    ) -> tuple[int, list[str]]:
+        """Incrementally iterate keys matching a pattern."""
+        # In-memory implementation just returns all matching keys
+        return (0, self.keys(pattern)[:count])
+
+    # =========================================================================
+    # Testing Utilities
+    # =========================================================================
+
+    def get_store_size(self) -> int:
+        """Get number of entries in store (for testing)."""
         with self._lock:
             self._cleanup_expired()
             return len(self._store)
+
+    def clear_all(self) -> None:
+        """Clear entire store including all prefixes (for testing cleanup)."""
+        with self._lock:
+            self._store.clear()
+        InMemoryLock.clear_all_locks()

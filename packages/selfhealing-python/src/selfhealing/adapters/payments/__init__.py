@@ -1,19 +1,22 @@
 """
 Payment provider adapters for the self-healing system.
 
-This package contains implementations of PaymentProviderInterface.
+This module contains concrete implementations of PaymentProviderInterface
+for different payment gateways.
+
+Available Adapters:
+    - TossPaymentAdapter: Toss Payments (Korean PG)
+    - MockPaymentAdapter: Mock adapter for testing
 """
 
-from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
+from selfhealing.adapters.payments.toss_adapter import (
+    TossPaymentAdapter,
+)
+from selfhealing.adapters.payments.mock_adapter import (
+    MockPaymentAdapter,
+)
 
 __all__ = [
+    "TossPaymentAdapter",
     "MockPaymentAdapter",
 ]
-
-# Conditionally import adapters based on available dependencies
-try:
-    from selfhealing.adapters.payments.stripe_adapter import StripePaymentAdapter
-
-    __all__.append("StripePaymentAdapter")
-except ImportError:
-    pass

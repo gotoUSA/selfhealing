@@ -1,8 +1,18 @@
 """
-Synchronous Task Queue Adapter for the self-healing system.
+Synchronous Task Queue Adapter for Self-Healing System
 
-Implements TaskQueueInterface with synchronous execution.
-Intended for testing and development environments.
+Synchronous implementation of TaskQueueInterface for testing.
+Executes tasks immediately in the same process.
+
+Warning:
+    This adapter is for TESTING ONLY. Tasks are executed
+    synchronously and there is no distributed processing.
+
+Features:
+    - Immediate task execution
+    - Full result tracking
+    - Configurable failure injection
+    - No external dependencies
 """
 
 from __future__ import annotations
@@ -10,40 +20,101 @@ from __future__ import annotations
 import logging
 import traceback
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 
 from selfhealing.interfaces.task_queue import (
     TaskQueueInterface,
-    TaskStatus,
     TaskResult,
+    TaskStatus,
     TaskOptions,
+    TaskPriority,
+    ScheduleInfo,
+    TaskNotFoundError,
+    TaskTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
+
 F = TypeVar("F", bound=Callable)
+
+
+@dataclass
+class TaskRecord:
+    """Internal record of a task execution."""
+
+    task_id: str
+    task_name: str
+    args: tuple
+    kwargs: dict
+    status: TaskStatus
+    result: Any = None
+    error: Optional[str] = None
+    traceback: Optional[str] = None
+    retries: int = 0
+    created_at: datetime = field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+@dataclass
+class RegisteredTask:
+    """Metadata for a registered task."""
+
+    name: str
+    func: Callable
+    bind: bool = False
+    max_retries: int = 3
+    autoretry_for: tuple[type[Exception], ...] = ()
 
 
 class SyncTaskAdapter(TaskQueueInterface):
     """
-    Synchronous implementation of TaskQueueInterface.
+    Synchronous implementation of TaskQueueInterface for testing.
 
-    Executes tasks immediately in the calling thread.
-    Useful for testing and debugging without task queue infrastructure.
+    Tasks are executed immediately when enqueued, making this
+    adapter ideal for unit tests and development.
 
-    WARNING: This adapter is intended for testing only.
-    Tasks are executed synchronously and do not provide true async behavior.
+    Features:
+        - Immediate synchronous execution
+        - Complete result tracking
+        - Failure injection for testing retries
+        - No external dependencies required
+
+    Example:
+        >>> queue = SyncTaskAdapter()
+        >>>
+        >>> @queue.task(name="process_payment")
+        >>> def process_payment(payment_id: int) -> str:
+        ...     return f"Processed {payment_id}"
+        >>>
+        >>> task_id = queue.enqueue("process_payment", args=(123,))
+        >>> result = queue.get_result(task_id)
+        >>> assert result.is_successful
+        >>> assert result.result == "Processed 123"
+
+    Warning:
+        This is for TESTING ONLY. Not suitable for production.
     """
 
-    def __init__(self):
-        """Initialize the synchronous task adapter."""
-        self._tasks: dict[str, Callable] = {}
-        self._results: dict[str, TaskResult] = {}
-        self._periodic_schedules: dict[str, dict] = {}
+    def __init__(self) -> None:
+        """Initialize synchronous task adapter."""
+        self._tasks: dict[str, RegisteredTask] = {}
+        self._results: dict[str, TaskRecord] = {}
+        self._schedules: dict[str, ScheduleInfo] = {}
+        self._pending_queue: list[str] = []
+
+        # Testing controls
+        self._should_fail_next: bool = False
+        self._fail_error: str = "Injected failure"
+        self._delay_execution: bool = False
+        self._healthy: bool = True
 
     @property
     def provider_name(self) -> str:
-        """Return the provider name."""
+        """Return 'sync' as the provider identifier."""
         return "sync"
 
     # =========================================================================
@@ -57,87 +128,51 @@ class SyncTaskAdapter(TaskQueueInterface):
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
+        retry_backoff_max: int = 600,
+        retry_jitter: bool = True,
         rate_limit: Optional[str] = None,
+        time_limit: Optional[int] = None,
+        soft_time_limit: Optional[int] = None,
     ) -> Callable[[F], F]:
-        """Decorator to register a function as a task."""
+        """
+        Decorator to register a function as a task.
+
+        In sync mode, most options are ignored but stored for compatibility.
+        """
 
         def decorator(func: F) -> F:
-            task_name = name or func.__name__
+            task_name = name or f"{func.__module__}.{func.__qualname__}"
 
-            # Create wrapper that stores task metadata
+            # Register the task
+            self._tasks[task_name] = RegisteredTask(
+                name=task_name,
+                func=func,
+                bind=bind,
+                max_retries=max_retries,
+                autoretry_for=autoretry_for,
+            )
+
+            logger.debug(f"[SyncAdapter] Registered task: {task_name}")
+
+            # Return wrapper that allows .delay() calls
+            @wraps(func)
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
 
-            wrapper.__name__ = func.__name__
-            wrapper.__doc__ = func.__doc__
-            wrapper._task_name = task_name
-            wrapper._max_retries = max_retries
-            wrapper._autoretry_for = autoretry_for
-
             # Add delay method for Celery compatibility
-            def delay(*args, **kwargs):
-                return self._execute_task(task_name, args, kwargs)
-
-            wrapper.delay = delay
-
-            # Add apply_async for Celery compatibility
-            def apply_async(args=(), kwargs=None, **options):
-                kwargs = kwargs or {}
-                return self._execute_task(task_name, args, kwargs)
-
-            wrapper.apply_async = apply_async
-
-            # Store reference
-            self._tasks[task_name] = wrapper
+            wrapper.delay = lambda *a, **kw: self.enqueue(task_name, args=a, kwargs=kw)
+            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(task_name, args=args, kwargs=kwargs or {})
+            wrapper.name = task_name
 
             return wrapper
 
         return decorator
 
-    def _execute_task(
-        self,
-        task_name: str,
-        args: tuple,
-        kwargs: dict,
-    ) -> "SyncAsyncResult":
-        """Execute a task synchronously and store result."""
-        task_id = str(uuid.uuid4())
-        started_at = datetime.now()
-
-        task_func = self._tasks.get(task_name)
-        if task_func is None:
-            result = TaskResult(
-                task_id=task_id,
-                status=TaskStatus.FAILURE,
-                error=f"Task not found: {task_name}",
-                started_at=started_at,
-                completed_at=datetime.now(),
-            )
-            self._results[task_id] = result
-            return SyncAsyncResult(task_id, result)
-
-        try:
-            result_value = task_func(*args, **kwargs)
-            result = TaskResult(
-                task_id=task_id,
-                status=TaskStatus.SUCCESS,
-                result=result_value,
-                started_at=started_at,
-                completed_at=datetime.now(),
-            )
-        except Exception as e:
-            result = TaskResult(
-                task_id=task_id,
-                status=TaskStatus.FAILURE,
-                error=str(e),
-                traceback=traceback.format_exc(),
-                started_at=started_at,
-                completed_at=datetime.now(),
-            )
-            logger.error(f"[SyncAdapter] Task {task_name} failed: {e}")
-
-        self._results[task_id] = result
-        return SyncAsyncResult(task_id, result)
+    def _get_task(self, task_name: str) -> RegisteredTask:
+        """Get a registered task by name."""
+        if task_name not in self._tasks:
+            raise TaskNotFoundError(f"Task not found: {task_name}")
+        return self._tasks[task_name]
 
     # =========================================================================
     # Task Execution
@@ -150,20 +185,98 @@ class SyncTaskAdapter(TaskQueueInterface):
         kwargs: Optional[dict] = None,
         options: Optional[TaskOptions] = None,
     ) -> str:
-        """Enqueue a task for sync execution."""
+        """
+        Enqueue and immediately execute a task.
+
+        In sync mode, tasks are executed synchronously.
+        """
+        registered = self._get_task(task_name)
         kwargs = kwargs or {}
-        result = self._execute_task(task_name, args, kwargs)
-        return result.id
+        options = options or TaskOptions()
+
+        # Generate task ID
+        task_id = str(uuid.uuid4())
+
+        # Create task record
+        record = TaskRecord(
+            task_id=task_id,
+            task_name=task_name,
+            args=args,
+            kwargs=kwargs,
+            status=TaskStatus.PENDING,
+        )
+
+        logger.debug(f"[SyncAdapter] Executing task: {task_name} ({task_id})")
+
+        # Handle delayed execution (just mark as pending, don't execute)
+        if self._delay_execution or options.countdown is not None or options.eta is not None:
+            self._results[task_id] = record
+            self._pending_queue.append(task_id)
+            return task_id
+
+        # Execute immediately
+        self._execute_task(record, registered)
+        self._results[task_id] = record
+
+        return task_id
+
+    def _execute_task(
+        self,
+        record: TaskRecord,
+        registered: RegisteredTask,
+    ) -> None:
+        """Execute a task and update the record."""
+        record.status = TaskStatus.STARTED
+        record.started_at = datetime.now()
+
+        # Check for injected failure
+        if self._should_fail_next:
+            self._should_fail_next = False
+            record.status = TaskStatus.FAILURE
+            record.error = self._fail_error
+            record.completed_at = datetime.now()
+            return
+
+        try:
+            # Execute the task
+            result = registered.func(*record.args, **record.kwargs)
+
+            record.status = TaskStatus.SUCCESS
+            record.result = result
+            record.completed_at = datetime.now()
+
+            logger.debug(f"[SyncAdapter] Task succeeded: {record.task_id}")
+
+        except registered.autoretry_for as e:
+            # Auto-retry for configured exceptions
+            if record.retries < registered.max_retries:
+                record.retries += 1
+                record.status = TaskStatus.RETRY
+                logger.debug(f"[SyncAdapter] Retrying task: {record.task_id} (attempt {record.retries})")
+                self._execute_task(record, registered)
+            else:
+                record.status = TaskStatus.FAILURE
+                record.error = str(e)
+                record.traceback = traceback.format_exc()
+                record.completed_at = datetime.now()
+
+        except Exception as e:
+            record.status = TaskStatus.FAILURE
+            record.error = str(e)
+            record.traceback = traceback.format_exc()
+            record.completed_at = datetime.now()
+
+            logger.error(f"[SyncAdapter] Task failed: {record.task_id} - {e}")
 
     def enqueue_many(
         self,
         tasks: list[tuple[str, tuple, dict]],
         options: Optional[TaskOptions] = None,
     ) -> list[str]:
-        """Enqueue multiple tasks."""
+        """Enqueue and execute multiple tasks."""
         task_ids = []
         for task_name, args, kwargs in tasks:
-            task_id = self.enqueue(task_name, args, kwargs, options)
+            task_id = self.enqueue(task_name, args=args, kwargs=kwargs, options=options)
             task_ids.append(task_id)
         return task_ids
 
@@ -176,13 +289,28 @@ class SyncTaskAdapter(TaskQueueInterface):
         task_id: str,
         timeout: Optional[float] = None,
     ) -> TaskResult:
-        """Get task result (always immediate in sync mode)."""
-        return self._results.get(
-            task_id,
-            TaskResult(
+        """
+        Get task result.
+
+        Since tasks execute synchronously, this always returns immediately.
+        """
+        if task_id not in self._results:
+            return TaskResult(
                 task_id=task_id,
                 status=TaskStatus.PENDING,
-            ),
+            )
+
+        record = self._results[task_id]
+
+        return TaskResult(
+            task_id=task_id,
+            status=record.status,
+            result=record.result,
+            error=record.error,
+            traceback=record.traceback,
+            retries=record.retries,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
         )
 
     def revoke(
@@ -191,9 +319,18 @@ class SyncTaskAdapter(TaskQueueInterface):
         terminate: bool = False,
         signal: str = "SIGTERM",
     ) -> bool:
-        """Cancel a task (no-op in sync mode since tasks execute immediately)."""
-        logger.warning(f"[SyncAdapter] Revoke called on sync adapter (no-op): {task_id}")
-        return True
+        """
+        Revoke a pending task.
+
+        In sync mode, only pending (delayed) tasks can be revoked.
+        """
+        if task_id in self._pending_queue:
+            self._pending_queue.remove(task_id)
+            if task_id in self._results:
+                self._results[task_id].status = TaskStatus.REVOKED
+            logger.debug(f"[SyncAdapter] Revoked task: {task_id}")
+            return True
+        return False
 
     def retry(
         self,
@@ -201,14 +338,30 @@ class SyncTaskAdapter(TaskQueueInterface):
         countdown: Optional[int] = None,
         max_retries: Optional[int] = None,
     ) -> str:
-        """Retry a failed task."""
-        original = self._results.get(task_id)
-        if original is None:
-            raise ValueError(f"Task not found: {task_id}")
+        """
+        Retry a task by re-executing it.
 
-        # We don't have the original args/kwargs stored, so we can't retry
-        logger.warning(f"[SyncAdapter] Retry not fully supported in sync mode")
-        return task_id
+        Creates a new task with the same arguments.
+        """
+        if task_id not in self._results:
+            raise TaskNotFoundError(f"Task not found: {task_id}")
+
+        record = self._results[task_id]
+        options = TaskOptions(countdown=countdown)
+
+        return self.enqueue(
+            record.task_name,
+            args=record.args,
+            kwargs=record.kwargs,
+            options=options,
+        )
+
+    def forget(self, task_id: str) -> bool:
+        """Remove a task result from memory."""
+        if task_id in self._results:
+            del self._results[task_id]
+            return True
+        return False
 
     # =========================================================================
     # Scheduling
@@ -222,59 +375,74 @@ class SyncTaskAdapter(TaskQueueInterface):
         kwargs: Optional[dict] = None,
         name: Optional[str] = None,
     ) -> str:
-        """Schedule a periodic task (stored but not executed automatically)."""
-        schedule_name = name or f"periodic_{task_name}"
-        kwargs = kwargs or {}
+        """
+        Register a periodic task.
 
-        self._periodic_schedules[schedule_name] = {
-            "task": task_name,
-            "schedule": schedule,
-            "args": args,
-            "kwargs": kwargs,
-        }
+        Note: In sync mode, periodic tasks are just registered but not
+        automatically executed. Call run_scheduled() to execute them.
+        """
+        schedule_id = name or f"schedule_{task_name}_{id(schedule)}"
 
-        logger.info(f"[SyncAdapter] Periodic task registered: {schedule_name} " f"(will not run automatically in sync mode)")
-        return schedule_name
+        self._schedules[schedule_id] = ScheduleInfo(
+            schedule_id=schedule_id,
+            task_name=task_name,
+            interval=schedule,
+            args=args,
+            kwargs=kwargs or {},
+            enabled=True,
+        )
+
+        logger.debug(f"[SyncAdapter] Scheduled periodic task: {schedule_id}")
+        return schedule_id
 
     def unschedule(self, schedule_id: str) -> bool:
         """Remove a periodic schedule."""
-        if schedule_id in self._periodic_schedules:
-            del self._periodic_schedules[schedule_id]
+        if schedule_id in self._schedules:
+            del self._schedules[schedule_id]
             return True
         return False
 
-    def run_periodic_task(self, schedule_id: str) -> Optional[str]:
+    def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
+        """Get information about a periodic schedule."""
+        return self._schedules.get(schedule_id)
+
+    def list_schedules(self) -> list[ScheduleInfo]:
+        """List all periodic schedules."""
+        return list(self._schedules.values())
+
+    def run_scheduled(self) -> list[str]:
         """
-        Manually trigger a periodic task (for testing).
+        Execute all scheduled tasks once (for testing).
 
-        Args:
-            schedule_id: Schedule ID from schedule_periodic
-
-        Returns:
-            Task ID if executed, None if schedule not found
+        Returns list of task IDs that were executed.
         """
-        schedule = self._periodic_schedules.get(schedule_id)
-        if schedule is None:
-            return None
-
-        return self.enqueue(
-            schedule["task"],
-            schedule["args"],
-            schedule["kwargs"],
-        )
+        task_ids = []
+        for schedule in self._schedules.values():
+            if schedule.enabled:
+                task_id = self.enqueue(
+                    schedule.task_name,
+                    args=schedule.args,
+                    kwargs=dict(schedule.kwargs),
+                )
+                task_ids.append(task_id)
+        return task_ids
 
     # =========================================================================
     # Queue Management
     # =========================================================================
 
     def purge_queue(self, queue_name: str = "default") -> int:
-        """Purge queue (clears stored results)."""
-        count = len(self._results)
-        self._results.clear()
+        """Clear pending queue."""
+        count = len(self._pending_queue)
+        self._pending_queue.clear()
         return count
 
     def queue_length(self, queue_name: str = "default") -> int:
-        """Get queue length (always 0 in sync mode)."""
+        """Get number of pending tasks."""
+        return len(self._pending_queue)
+
+    def active_count(self) -> int:
+        """In sync mode, no tasks are ever 'active' (they complete immediately)."""
         return 0
 
     # =========================================================================
@@ -282,66 +450,86 @@ class SyncTaskAdapter(TaskQueueInterface):
     # =========================================================================
 
     def health_check(self) -> bool:
-        """Check if adapter is operational (always True for sync)."""
-        return True
+        """Check if adapter is healthy."""
+        return self._healthy
+
+    def set_health_status(self, healthy: bool) -> None:
+        """Set health status for testing."""
+        self._healthy = healthy
+
+    def worker_count(self) -> int:
+        """In sync mode, there is always 1 'worker' (the main thread)."""
+        return 1 if self._healthy else 0
 
     # =========================================================================
-    # Test Helpers
+    # Testing Utilities
     # =========================================================================
 
-    def clear_results(self) -> None:
-        """Clear all stored results (for testing)."""
+    def fail_next(self, error_message: str = "Injected failure") -> "SyncTaskAdapter":
+        """
+        Make the next task execution fail.
+
+        Useful for testing error handling and retries.
+
+        Example:
+            >>> queue.fail_next("Database connection failed")
+            >>> task_id = queue.enqueue("my_task", args=(1,))
+            >>> result = queue.get_result(task_id)
+            >>> assert result.status == TaskStatus.FAILURE
+        """
+        self._should_fail_next = True
+        self._fail_error = error_message
+        return self
+
+    def enable_delayed_execution(self) -> "SyncTaskAdapter":
+        """
+        Enable delayed execution mode.
+
+        Tasks will be queued but not executed until run_pending() is called.
+        """
+        self._delay_execution = True
+        return self
+
+    def disable_delayed_execution(self) -> "SyncTaskAdapter":
+        """Disable delayed execution mode."""
+        self._delay_execution = False
+        return self
+
+    def run_pending(self) -> list[str]:
+        """
+        Execute all pending tasks.
+
+        Returns list of task IDs that were executed.
+        """
+        executed = []
+        while self._pending_queue:
+            task_id = self._pending_queue.pop(0)
+            record = self._results[task_id]
+            registered = self._get_task(record.task_name)
+            self._execute_task(record, registered)
+            executed.append(task_id)
+        return executed
+
+    def reset(self) -> "SyncTaskAdapter":
+        """Reset all state (for test cleanup)."""
         self._results.clear()
+        self._pending_queue.clear()
+        self._schedules.clear()
+        self._should_fail_next = False
+        self._delay_execution = False
+        self._healthy = True
+        # Keep task registrations
+        return self
 
-    def clear_tasks(self) -> None:
-        """Clear all registered tasks (for testing)."""
+    def clear_all(self) -> "SyncTaskAdapter":
+        """Clear everything including task registrations."""
         self._tasks.clear()
+        return self.reset()
 
-    def get_registered_tasks(self) -> list[str]:
-        """Get list of registered task names (for testing)."""
-        return list(self._tasks.keys())
+    def get_all_results(self) -> dict[str, TaskResult]:
+        """Get all task results (for testing inspection)."""
+        return {task_id: self.get_result(task_id) for task_id in self._results.keys()}
 
-
-class SyncAsyncResult:
-    """
-    Mock AsyncResult for sync adapter.
-
-    Provides Celery-compatible interface for sync execution.
-    """
-
-    def __init__(self, task_id: str, result: TaskResult):
-        """
-        Initialize with task result.
-
-        Args:
-            task_id: Task ID
-            result: TaskResult instance
-        """
-        self.id = task_id
-        self._result = result
-
-    @property
-    def status(self) -> str:
-        """Get task status."""
-        return self._result.status.value.upper()
-
-    @property
-    def result(self) -> Any:
-        """Get task result value."""
-        if self._result.status == TaskStatus.SUCCESS:
-            return self._result.result
-        elif self._result.status == TaskStatus.FAILURE:
-            raise Exception(self._result.error)
-        return None
-
-    def successful(self) -> bool:
-        """Check if task completed successfully."""
-        return self._result.status == TaskStatus.SUCCESS
-
-    def failed(self) -> bool:
-        """Check if task failed."""
-        return self._result.status == TaskStatus.FAILURE
-
-    def get(self, timeout: Optional[float] = None) -> Any:
-        """Get result (blocking in real Celery, immediate here)."""
-        return self.result
+    def get_call_count(self, task_name: str) -> int:
+        """Get number of times a task was called."""
+        return sum(1 for record in self._results.values() if record.task_name == task_name)

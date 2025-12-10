@@ -1,23 +1,37 @@
 """
-Celery Task Queue Adapter for the self-healing system.
+Celery Task Queue Adapter for Self-Healing System
 
-Implements TaskQueueInterface using Celery as the backend.
+Concrete implementation of TaskQueueInterface using Celery.
+Provides full distributed task queue functionality.
+
+Requirements:
+    - celery>=5.0.0
+    - redis (for broker/backend)
+
+Related:
+    - interfaces/task_queue.py: Interface definition
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 
 from selfhealing.interfaces.task_queue import (
     TaskQueueInterface,
-    TaskStatus,
     TaskResult,
+    TaskStatus,
     TaskOptions,
+    TaskPriority,
+    ScheduleInfo,
+    TaskNotFoundError,
+    TaskTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
+
 F = TypeVar("F", bound=Callable)
 
 
@@ -25,34 +39,52 @@ class CeleryTaskAdapter(TaskQueueInterface):
     """
     Celery implementation of TaskQueueInterface.
 
-    Wraps Celery's task registration and execution APIs.
+    This adapter wraps Celery's task functionality to provide
+    a standardized interface for the self-healing system.
+
+    Configuration:
+        Uses the Django project's Celery app instance.
+
+    Example:
+        >>> from selfhealing.factory import ProviderRegistry
+        >>> queue = ProviderRegistry.get_queue("celery")
+        >>>
+        >>> # Register a task
+        >>> @queue.task(max_retries=3)
+        >>> def process_payment(payment_id: int):
+        ...     # Process payment
+        ...     pass
+        >>>
+        >>> # Enqueue task
+        >>> task_id = queue.enqueue("process_payment", args=(123,))
     """
 
-    def __init__(self, app=None):
+    def __init__(
+        self,
+        app: Optional[Any] = None,
+        default_queue: str = "default",
+    ) -> None:
         """
-        Initialize the Celery task adapter.
+        Initialize Celery task adapter.
 
         Args:
-            app: Celery app instance. If None, uses the default app.
+            app: Celery app instance (defaults to project's celery app)
+            default_queue: Default queue name for tasks
         """
-        self._app = app
-        self._tasks: dict[str, Any] = {}
+        if app is None:
+            from myproject.celery import app as celery_app
 
-    @property
-    def app(self):
-        """Get Celery app, importing default if needed."""
-        if self._app is None:
-            try:
-                from celery import current_app
+            self._app = celery_app
+        else:
+            self._app = app
 
-                self._app = current_app
-            except ImportError:
-                raise ImportError("Celery is required for CeleryTaskAdapter")
-        return self._app
+        self._default_queue = default_queue
+        self._registered_tasks: dict[str, Callable] = {}
+        self._schedules: dict[str, ScheduleInfo] = {}
 
     @property
     def provider_name(self) -> str:
-        """Return the provider name."""
+        """Return 'celery' as the provider identifier."""
         return "celery"
 
     # =========================================================================
@@ -66,40 +98,61 @@ class CeleryTaskAdapter(TaskQueueInterface):
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
+        retry_backoff_max: int = 600,
+        retry_jitter: bool = True,
         rate_limit: Optional[str] = None,
+        time_limit: Optional[int] = None,
+        soft_time_limit: Optional[int] = None,
     ) -> Callable[[F], F]:
-        """Decorator to register a function as a task."""
+        """
+        Decorator to register a function as a Celery task.
+
+        This wraps the Celery @app.task decorator with our interface.
+        """
 
         def decorator(func: F) -> F:
-            task_name = name or func.__name__
+            task_name = name or f"{func.__module__}.{func.__qualname__}"
+
+            # Build Celery task options
+            celery_options = {
+                "name": task_name,
+                "bind": bind,
+                "max_retries": max_retries,
+                "autoretry_for": autoretry_for,
+                "retry_backoff": retry_backoff,
+                "retry_backoff_max": retry_backoff_max,
+                "retry_jitter": retry_jitter,
+            }
+
+            if rate_limit:
+                celery_options["rate_limit"] = rate_limit
+            if time_limit:
+                celery_options["time_limit"] = time_limit
+            if soft_time_limit:
+                celery_options["soft_time_limit"] = soft_time_limit
 
             # Register with Celery
-            celery_task = self.app.task(
-                bind=bind,
-                name=task_name,
-                max_retries=max_retries,
-                autoretry_for=autoretry_for,
-                retry_backoff=retry_backoff,
-                rate_limit=rate_limit,
-            )(func)
+            celery_task = self._app.task(**celery_options)(func)
 
             # Store reference
-            self._tasks[task_name] = celery_task
+            self._registered_tasks[task_name] = celery_task
 
+            logger.debug(f"[CeleryAdapter] Registered task: {task_name}")
             return celery_task
 
         return decorator
 
-    def register_celery_task(self, celery_task, name: Optional[str] = None) -> None:
-        """
-        Register an existing Celery task.
+    def _get_task(self, task_name: str) -> Any:
+        """Get a registered Celery task by name."""
+        # First check our local registry
+        if task_name in self._registered_tasks:
+            return self._registered_tasks[task_name]
 
-        Args:
-            celery_task: Celery task instance
-            name: Optional override for task name
-        """
-        task_name = name or celery_task.name
-        self._tasks[task_name] = celery_task
+        # Then check Celery's registry
+        if task_name in self._app.tasks:
+            return self._app.tasks[task_name]
+
+        raise TaskNotFoundError(f"Task not found: {task_name}")
 
     # =========================================================================
     # Task Execution
@@ -112,24 +165,18 @@ class CeleryTaskAdapter(TaskQueueInterface):
         kwargs: Optional[dict] = None,
         options: Optional[TaskOptions] = None,
     ) -> str:
-        """Enqueue a task for async execution."""
+        """
+        Enqueue a task for async execution.
+
+        Converts TaskOptions to Celery's apply_async arguments.
+        """
+        task = self._get_task(task_name)
         kwargs = kwargs or {}
         options = options or TaskOptions()
 
-        # Get task
-        task = self._tasks.get(task_name)
-        if task is None:
-            # Try to get from Celery app
-            try:
-                task = self.app.tasks.get(task_name)
-            except KeyError:
-                pass
+        # Build Celery apply_async options
+        celery_options: dict[str, Any] = {}
 
-        if task is None:
-            raise ValueError(f"Task not found: {task_name}")
-
-        # Build apply_async options
-        celery_options = {}
         if options.countdown is not None:
             celery_options["countdown"] = options.countdown
         if options.eta is not None:
@@ -138,10 +185,20 @@ class CeleryTaskAdapter(TaskQueueInterface):
             celery_options["expires"] = options.expires
         if options.queue is not None:
             celery_options["queue"] = options.queue
-        if options.priority != 0:
-            celery_options["priority"] = options.priority
+        else:
+            celery_options["queue"] = self._default_queue
 
-        # Execute
+        # Priority mapping (Celery uses 0-9, we use enum)
+        if options.priority != TaskPriority.NORMAL:
+            # Map our priority to Celery's (inverted: lower = higher priority)
+            celery_options["priority"] = 10 - options.priority.value
+
+        # Retry settings
+        if not options.retry:
+            celery_options["retry"] = False
+
+        logger.debug(f"[CeleryAdapter] Enqueueing task: {task_name}")
+
         result = task.apply_async(args=args, kwargs=kwargs, **celery_options)
         return result.id
 
@@ -150,11 +207,38 @@ class CeleryTaskAdapter(TaskQueueInterface):
         tasks: list[tuple[str, tuple, dict]],
         options: Optional[TaskOptions] = None,
     ) -> list[str]:
-        """Enqueue multiple tasks atomically."""
+        """
+        Enqueue multiple tasks using Celery's group.
+
+        For atomicity, this uses a transaction if the broker supports it.
+        """
+        from celery import group
+
+        options = options or TaskOptions()
         task_ids = []
+
+        # Build signatures for group
+        signatures = []
         for task_name, args, kwargs in tasks:
-            task_id = self.enqueue(task_name, args, kwargs, options)
-            task_ids.append(task_id)
+            task = self._get_task(task_name)
+            sig = task.s(*args, **kwargs)
+
+            if options.countdown is not None:
+                sig = sig.set(countdown=options.countdown)
+            if options.queue is not None:
+                sig = sig.set(queue=options.queue)
+
+            signatures.append(sig)
+
+        # Execute as group
+        job = group(signatures)
+        result = job.apply_async()
+
+        # Collect task IDs
+        for child_result in result.children:
+            task_ids.append(child_result.id)
+
+        logger.debug(f"[CeleryAdapter] Enqueued {len(task_ids)} tasks")
         return task_ids
 
     # =========================================================================
@@ -166,59 +250,60 @@ class CeleryTaskAdapter(TaskQueueInterface):
         task_id: str,
         timeout: Optional[float] = None,
     ) -> TaskResult:
-        """Get task result (may block if timeout provided)."""
+        """
+        Get task result from Celery result backend.
+
+        If timeout is provided, blocks until task completes.
+        """
         from celery.result import AsyncResult
 
-        async_result = AsyncResult(task_id, app=self.app)
+        result = AsyncResult(task_id, app=self._app)
 
-        if timeout is not None:
-            try:
-                result = async_result.get(timeout=timeout)
-                return TaskResult(
-                    task_id=task_id,
-                    status=TaskStatus.SUCCESS,
-                    result=result,
-                )
-            except Exception as e:
-                return TaskResult(
-                    task_id=task_id,
-                    status=self._map_celery_status(async_result.status),
-                    error=str(e),
-                )
+        try:
+            if timeout is not None:
+                # Block until ready or timeout
+                try:
+                    result_value = result.get(timeout=timeout, propagate=False)
+                except Exception as e:
+                    if "timeout" in str(e).lower():
+                        raise TaskTimeoutError(f"Task {task_id} timed out")
+                    raise
+            else:
+                result_value = result.result if result.ready() else None
 
-        # Non-blocking status check
-        status = self._map_celery_status(async_result.status)
+            # Map Celery state to TaskStatus
+            status_map = {
+                "PENDING": TaskStatus.PENDING,
+                "STARTED": TaskStatus.STARTED,
+                "SUCCESS": TaskStatus.SUCCESS,
+                "FAILURE": TaskStatus.FAILURE,
+                "RETRY": TaskStatus.RETRY,
+                "REVOKED": TaskStatus.REVOKED,
+            }
 
-        if async_result.successful():
-            return TaskResult(
-                task_id=task_id,
-                status=TaskStatus.SUCCESS,
-                result=async_result.result,
-            )
-        elif async_result.failed():
-            return TaskResult(
-                task_id=task_id,
-                status=TaskStatus.FAILURE,
-                error=str(async_result.result),
-                traceback=async_result.traceback,
-            )
-        else:
-            return TaskResult(
+            status = status_map.get(result.state, TaskStatus.PENDING)
+
+            # Build result
+            task_result = TaskResult(
                 task_id=task_id,
                 status=status,
+                result=result_value if status == TaskStatus.SUCCESS else None,
+                error=str(result.result) if status == TaskStatus.FAILURE else None,
+                traceback=result.traceback if status == TaskStatus.FAILURE else None,
+                retries=result.retries if hasattr(result, "retries") else 0,
             )
 
-    def _map_celery_status(self, celery_status: str) -> TaskStatus:
-        """Map Celery status to TaskStatus."""
-        mapping = {
-            "PENDING": TaskStatus.PENDING,
-            "STARTED": TaskStatus.STARTED,
-            "SUCCESS": TaskStatus.SUCCESS,
-            "FAILURE": TaskStatus.FAILURE,
-            "RETRY": TaskStatus.RETRY,
-            "REVOKED": TaskStatus.REVOKED,
-        }
-        return mapping.get(celery_status, TaskStatus.PENDING)
+            return task_result
+
+        except TaskTimeoutError:
+            raise
+        except Exception as e:
+            logger.error(f"[CeleryAdapter] Error getting result for {task_id}: {e}")
+            return TaskResult(
+                task_id=task_id,
+                status=TaskStatus.PENDING,
+                error=str(e),
+            )
 
     def revoke(
         self,
@@ -226,16 +311,21 @@ class CeleryTaskAdapter(TaskQueueInterface):
         terminate: bool = False,
         signal: str = "SIGTERM",
     ) -> bool:
-        """Cancel a pending or running task."""
+        """
+        Revoke a pending or running Celery task.
+
+        Uses Celery's control.revoke for cancellation.
+        """
         try:
-            self.app.control.revoke(
+            self._app.control.revoke(
                 task_id,
                 terminate=terminate,
                 signal=signal,
             )
+            logger.info(f"[CeleryAdapter] Revoked task: {task_id}")
             return True
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Failed to revoke task {task_id}: {e}")
+            logger.error(f"[CeleryAdapter] Error revoking task {task_id}: {e}")
             return False
 
     def retry(
@@ -244,18 +334,42 @@ class CeleryTaskAdapter(TaskQueueInterface):
         countdown: Optional[int] = None,
         max_retries: Optional[int] = None,
     ) -> str:
-        """Retry a failed task."""
+        """
+        Retry a failed task by re-enqueueing it.
+
+        Note: This creates a new task based on the original's arguments.
+        """
         from celery.result import AsyncResult
 
-        async_result = AsyncResult(task_id, app=self.app)
+        result = AsyncResult(task_id, app=self._app)
 
         # Get original task info
-        task_name = async_result.name
-        args = async_result.args or ()
-        kwargs = async_result.kwargs or {}
+        task_name = result.name
+        if task_name is None:
+            raise TaskNotFoundError(f"Cannot find original task for {task_id}")
 
+        # Get args/kwargs from result backend (if available)
+        args = result.args or ()
+        kwargs = result.kwargs or {}
+
+        # Re-enqueue with updated options
         options = TaskOptions(countdown=countdown)
-        return self.enqueue(task_name, args, kwargs, options)
+        if max_retries is not None:
+            options.max_retries = max_retries
+
+        return self.enqueue(task_name, args=args, kwargs=kwargs, options=options)
+
+    def forget(self, task_id: str) -> bool:
+        """Forget a task result."""
+        from celery.result import AsyncResult
+
+        try:
+            result = AsyncResult(task_id, app=self._app)
+            result.forget()
+            return True
+        except Exception as e:
+            logger.error(f"[CeleryAdapter] Error forgetting task {task_id}: {e}")
+            return False
 
     # =========================================================================
     # Scheduling
@@ -269,55 +383,98 @@ class CeleryTaskAdapter(TaskQueueInterface):
         kwargs: Optional[dict] = None,
         name: Optional[str] = None,
     ) -> str:
-        """Schedule a periodic task."""
-        schedule_name = name or f"periodic_{task_name}"
-        kwargs = kwargs or {}
+        """
+        Schedule a periodic task.
 
-        try:
-            from celery.schedules import timedelta as celery_timedelta
+        Note: This modifies Celery's beat schedule dynamically.
+        For production use, prefer configuring beat schedule in settings.
+        """
+        schedule_name = name or f"schedule_{task_name}_{id(schedule)}"
 
-            # Add to beat schedule
-            self.app.conf.beat_schedule[schedule_name] = {
-                "task": task_name,
-                "schedule": schedule,
-                "args": args,
-                "kwargs": kwargs,
-            }
-            return schedule_name
-        except Exception as e:
-            logger.error(f"[CeleryAdapter] Failed to schedule periodic task: {e}")
-            raise
+        # Add to Celery beat schedule
+        self._app.conf.beat_schedule[schedule_name] = {
+            "task": task_name,
+            "schedule": schedule,
+            "args": args,
+            "kwargs": kwargs or {},
+        }
+
+        # Store in our registry
+        self._schedules[schedule_name] = ScheduleInfo(
+            schedule_id=schedule_name,
+            task_name=task_name,
+            interval=schedule,
+            args=args,
+            kwargs=kwargs or {},
+            enabled=True,
+        )
+
+        logger.info(f"[CeleryAdapter] Scheduled periodic task: {schedule_name}")
+        return schedule_name
 
     def unschedule(self, schedule_id: str) -> bool:
         """Remove a periodic schedule."""
-        try:
-            if schedule_id in self.app.conf.beat_schedule:
-                del self.app.conf.beat_schedule[schedule_id]
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"[CeleryAdapter] Failed to unschedule task: {e}")
-            return False
+        if schedule_id in self._app.conf.beat_schedule:
+            del self._app.conf.beat_schedule[schedule_id]
+
+        if schedule_id in self._schedules:
+            del self._schedules[schedule_id]
+            logger.info(f"[CeleryAdapter] Unscheduled: {schedule_id}")
+            return True
+
+        return False
+
+    def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
+        """Get information about a periodic schedule."""
+        return self._schedules.get(schedule_id)
+
+    def list_schedules(self) -> list[ScheduleInfo]:
+        """List all periodic schedules."""
+        return list(self._schedules.values())
 
     # =========================================================================
     # Queue Management
     # =========================================================================
 
     def purge_queue(self, queue_name: str = "default") -> int:
-        """Remove all pending tasks from a queue."""
+        """Purge all tasks from a queue."""
         try:
-            return self.app.control.purge()
+            purged = self._app.control.purge()
+            logger.warning(f"[CeleryAdapter] Purged {purged} tasks from {queue_name}")
+            return purged or 0
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Failed to purge queue: {e}")
+            logger.error(f"[CeleryAdapter] Error purging queue: {e}")
             return 0
 
     def queue_length(self, queue_name: str = "default") -> int:
         """Get number of pending tasks in queue."""
         try:
-            with self.app.connection_or_acquire() as conn:
-                return conn.default_channel.queue_declare(queue=queue_name, passive=True).message_count
+            # This requires broker inspection
+            with self._app.connection() as conn:
+                queue = conn.default_channel.queue_declare(queue_name, passive=True)
+                return queue.message_count
         except Exception as e:
-            logger.warning(f"[CeleryAdapter] Failed to get queue length: {e}")
+            logger.error(f"[CeleryAdapter] Error getting queue length: {e}")
+            return 0
+
+    def list_queues(self) -> list[str]:
+        """List all known queue names."""
+        # Return configured queues from Celery
+        queues = self._app.conf.get("task_queues", [])
+        if queues:
+            return [q.name for q in queues]
+        return [self._default_queue]
+
+    def active_count(self) -> int:
+        """Get number of currently executing tasks."""
+        try:
+            inspect = self._app.control.inspect()
+            active = inspect.active()
+            if active:
+                return sum(len(tasks) for tasks in active.values())
+            return 0
+        except Exception as e:
+            logger.error(f"[CeleryAdapter] Error getting active count: {e}")
             return 0
 
     # =========================================================================
@@ -325,10 +482,24 @@ class CeleryTaskAdapter(TaskQueueInterface):
     # =========================================================================
 
     def health_check(self) -> bool:
-        """Check if Celery workers are reachable."""
+        """Check if Celery broker and backend are healthy."""
         try:
-            inspect = self.app.control.inspect()
-            return bool(inspect.ping())
+            # Ping workers
+            inspect = self._app.control.inspect(timeout=2)
+            ping_result = inspect.ping()
+            return ping_result is not None and len(ping_result) > 0
         except Exception as e:
             logger.error(f"[CeleryAdapter] Health check failed: {e}")
             return False
+
+    def worker_count(self) -> int:
+        """Get number of active workers."""
+        try:
+            inspect = self._app.control.inspect(timeout=2)
+            ping_result = inspect.ping()
+            if ping_result:
+                return len(ping_result)
+            return 0
+        except Exception as e:
+            logger.error(f"[CeleryAdapter] Error getting worker count: {e}")
+            return 0

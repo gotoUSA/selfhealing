@@ -1,72 +1,185 @@
 """
-Cache Provider Interface for the self-healing system.
+Cache Provider Interface for Self-Healing System
 
-This module defines the abstract interface for cache/state storage operations,
-allowing different implementations (Redis, Memcached, In-Memory, DynamoDB, etc.)
+Abstract interface for cache and distributed state management.
+Supports distributed locking critical for circuit breakers.
+
+Design Principles:
+1. Pure Python - no framework dependencies
+2. ABC for provider contracts
+3. Context manager support for locks
+4. Atomic operations for counters
+
+Reference: docs/PLUGGABLE_ARCHITECTURE.md Section 3.2
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Optional, TypeVar
-from datetime import timedelta
-from contextlib import contextmanager
+from __future__ import annotations
 
-T = TypeVar("T")
+from abc import ABC, abstractmethod
+from datetime import timedelta
+from typing import Any, Optional
+
+
+# ============================================================================
+# Distributed Lock Interface
+# ============================================================================
 
 
 class DistributedLock(ABC):
     """
     Distributed lock interface for cross-process synchronization.
 
-    Used by CircuitBreaker for state transitions.
+    Used by CircuitBreaker for state transitions and other
+    critical sections that require mutual exclusion across
+    multiple processes or servers.
+
+    Supports context manager protocol for safe usage:
+
+        with cache.get_lock("circuit_breaker:payment") as lock:
+            # Critical section - only one process can execute
+            circuit_breaker.transition_state()
+
+    Implementations:
+        - RedisDistributedLock (Redis-based)
+        - InMemoryLock (for testing - single process only)
     """
 
     @abstractmethod
-    def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
+    def acquire(
+        self,
+        blocking: bool = True,
+        timeout: Optional[float] = None,
+    ) -> bool:
         """
         Acquire the lock.
 
         Args:
-            blocking: If True, block until lock acquired
+            blocking: If True, block until lock is acquired
             timeout: Max seconds to wait (None = infinite)
 
         Returns:
-            True if lock acquired, False otherwise
+            True if lock was acquired, False otherwise
+
+        Note:
+            If blocking=False and lock is held, returns False immediately.
+            If blocking=True and timeout expires, returns False.
         """
         pass
 
     @abstractmethod
     def release(self) -> None:
-        """Release the lock."""
+        """
+        Release the lock.
+
+        Raises:
+            LockNotOwnedError: If lock is not held by current owner
+        """
         pass
 
     @abstractmethod
     def locked(self) -> bool:
-        """Check if lock is currently held."""
+        """
+        Check if lock is currently held by anyone.
+
+        Returns:
+            True if lock is held, False if available
+        """
         pass
 
+    @abstractmethod
+    def owned(self) -> bool:
+        """
+        Check if lock is held by current owner.
+
+        Returns:
+            True if lock is held by this instance
+        """
+        pass
+
+    def extend(self, additional_time: timedelta) -> bool:
+        """
+        Extend the lock's TTL.
+
+        Args:
+            additional_time: Time to add to current TTL
+
+        Returns:
+            True if extension was successful
+
+        Note:
+            Default implementation returns False (not supported).
+            Override in implementations that support TTL extension.
+        """
+        return False
+
     def __enter__(self) -> "DistributedLock":
-        self.acquire()
+        """Enter context manager, acquiring the lock."""
+        acquired = self.acquire()
+        if not acquired:
+            raise LockAcquisitionError("Failed to acquire lock")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit context manager, releasing the lock."""
         self.release()
+
+
+class LockAcquisitionError(Exception):
+    """Raised when lock acquisition fails."""
+
+    pass
+
+
+class LockNotOwnedError(Exception):
+    """Raised when trying to release a lock not owned by current instance."""
+
+    pass
+
+
+# ============================================================================
+# Cache Provider Interface
+# ============================================================================
 
 
 class CacheProviderInterface(ABC):
     """
     Abstract interface for cache/state storage.
 
+    This interface abstracts cache operations including basic
+    get/set, atomic counters, and distributed locking.
+
     Implementations:
-        - RedisCacheAdapter (current)
-        - MemcachedCacheAdapter (planned)
+        - RedisCacheAdapter (current - Redis)
         - InMemoryCacheAdapter (for testing)
-        - DynamoDBCacheAdapter (planned)
+        - MemcachedCacheAdapter (planned)
+        - DynamoDBCacheAdapter (planned - AWS serverless)
+
+    Example:
+        >>> cache = ProviderRegistry.get_cache()
+        >>>
+        >>> # Basic operations
+        >>> cache.set("key", "value", ttl=timedelta(minutes=5))
+        >>> value = cache.get("key")
+        >>>
+        >>> # Atomic counter (for rate limiting)
+        >>> count = cache.incr("request_count")
+        >>> if count == 1:
+        ...     cache.expire("request_count", timedelta(minutes=1))
+        >>>
+        >>> # Distributed locking
+        >>> with cache.get_lock("payment:process") as lock:
+        ...     process_payment()
     """
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Return the provider name (e.g., 'redis', 'memcached')"""
+        """
+        Return the provider name.
+
+        Returns:
+            Provider identifier (e.g., 'redis', 'memcached', 'memory')
+        """
         pass
 
     # =========================================================================
@@ -121,8 +234,39 @@ class CacheProviderInterface(ABC):
 
     @abstractmethod
     def exists(self, key: str) -> bool:
-        """Check if key exists in cache."""
+        """
+        Check if key exists in cache.
+
+        Args:
+            key: Cache key to check
+
+        Returns:
+            True if key exists and is not expired
+        """
         pass
+
+    def get_or_set(
+        self,
+        key: str,
+        default_factory: callable,
+        ttl: Optional[timedelta] = None,
+    ) -> Any:
+        """
+        Get value or compute and cache it if missing.
+
+        Args:
+            key: Cache key
+            default_factory: Callable to compute value if missing
+            ttl: Time-to-live for new value
+
+        Returns:
+            Cached or newly computed value
+        """
+        value = self.get(key)
+        if value is None:
+            value = default_factory()
+            self.set(key, value, ttl)
+        return value
 
     # =========================================================================
     # Atomic Operations (Critical for Circuit Breaker)
@@ -142,6 +286,7 @@ class CacheProviderInterface(ABC):
 
         Note:
             Creates key with value 0 if not exists, then increments.
+            This is an atomic operation - safe for concurrent access.
         """
         pass
 
@@ -178,10 +323,31 @@ class CacheProviderInterface(ABC):
         """
         Get remaining TTL in seconds.
 
+        Args:
+            key: Cache key
+
         Returns:
-            Seconds until expiration, None if no TTL, -2 if key missing
+            - Positive int: seconds until expiration
+            - None: key has no expiration
+            - -2: key does not exist
         """
         pass
+
+    def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+        """
+        Set value only if key does not exist (SET if Not eXists).
+
+        Args:
+            key: Cache key
+            value: Value to set
+            ttl: Optional time-to-live
+
+        Returns:
+            True if key was set (didn't exist), False otherwise
+        """
+        if not self.exists(key):
+            return self.set(key, value, ttl)
+        return False
 
     # =========================================================================
     # Distributed Locking
@@ -199,16 +365,21 @@ class CacheProviderInterface(ABC):
 
         Args:
             name: Lock name (should be unique across application)
-            timeout: Lock auto-release timeout
+            timeout: Lock auto-release timeout (prevents deadlocks)
             blocking_timeout: Max time to wait when acquiring
 
         Returns:
             DistributedLock instance
 
         Example:
-            with cache.get_lock("circuit_breaker:payment") as lock:
-                # Critical section
-                pass
+            >>> with cache.get_lock("circuit_breaker:payment") as lock:
+            ...     # Critical section - only one process executes this
+            ...     transition_circuit_breaker_state()
+
+        Note:
+            Always use locks with context manager to ensure release.
+            The timeout parameter prevents deadlocks if a process
+            crashes while holding the lock.
         """
         pass
 
@@ -247,6 +418,71 @@ class CacheProviderInterface(ABC):
         """
         pass
 
+    def mdelete(self, keys: list[str]) -> int:
+        """
+        Delete multiple keys at once.
+
+        Args:
+            keys: List of cache keys to delete
+
+        Returns:
+            Number of keys that were deleted
+        """
+        deleted = 0
+        for key in keys:
+            if self.delete(key):
+                deleted += 1
+        return deleted
+
+    # =========================================================================
+    # Hash Operations (for structured data)
+    # =========================================================================
+
+    def hget(self, name: str, key: str) -> Optional[Any]:
+        """
+        Get a field from a hash.
+
+        Args:
+            name: Hash name
+            key: Field key within the hash
+
+        Returns:
+            Field value or None
+        """
+        hash_data = self.get(name)
+        if isinstance(hash_data, dict):
+            return hash_data.get(key)
+        return None
+
+    def hset(self, name: str, key: str, value: Any) -> bool:
+        """
+        Set a field in a hash.
+
+        Args:
+            name: Hash name
+            key: Field key within the hash
+            value: Field value
+
+        Returns:
+            True if successful
+        """
+        hash_data = self.get(name) or {}
+        hash_data[key] = value
+        return self.set(name, hash_data)
+
+    def hgetall(self, name: str) -> dict[str, Any]:
+        """
+        Get all fields from a hash.
+
+        Args:
+            name: Hash name
+
+        Returns:
+            Dict of all fields and values
+        """
+        hash_data = self.get(name)
+        return hash_data if isinstance(hash_data, dict) else {}
+
     # =========================================================================
     # Health Check
     # =========================================================================
@@ -257,7 +493,7 @@ class CacheProviderInterface(ABC):
         Check if cache backend is reachable.
 
         Returns:
-            True if healthy
+            True if healthy and connected
         """
         pass
 
@@ -268,5 +504,59 @@ class CacheProviderInterface(ABC):
 
         Returns:
             True if successful
+
+        Warning:
+            This will delete ALL data in the cache. Only use
+            in testing environments or with explicit confirmation.
         """
         pass
+
+    def ping(self) -> bool:
+        """
+        Simple connectivity check.
+
+        Returns:
+            True if connection is alive
+        """
+        return self.health_check()
+
+    # =========================================================================
+    # Key Pattern Operations
+    # =========================================================================
+
+    def keys(self, pattern: str = "*") -> list[str]:
+        """
+        Find keys matching a pattern.
+
+        Args:
+            pattern: Glob-style pattern (e.g., "circuit_breaker:*")
+
+        Returns:
+            List of matching keys
+
+        Warning:
+            Use with caution in production - may be slow with many keys.
+            Default implementation returns empty list.
+        """
+        return []
+
+    def scan(
+        self,
+        pattern: str = "*",
+        count: int = 100,
+    ) -> tuple[int, list[str]]:
+        """
+        Incrementally iterate keys matching a pattern.
+
+        Args:
+            pattern: Glob-style pattern
+            count: Approximate number of keys per iteration
+
+        Returns:
+            Tuple of (cursor, keys) - cursor 0 means scan complete
+
+        Note:
+            Default implementation returns (0, []).
+            Override for implementations that support scanning.
+        """
+        return (0, [])
