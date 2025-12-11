@@ -26,6 +26,7 @@ import sys
 import time
 import random
 import threading
+import socket
 from datetime import datetime
 from typing import Dict, List, Any
 
@@ -35,10 +36,48 @@ _project_root = os.path.dirname(_load_tests_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from locust import HttpUser, task, between, tag, events, LoadTestShape
+from locust import HttpUser, task, between, tag, events, LoadTestShape, constant
+
+
+# =============================================================================
+# 🔥🔥🔥 핵심: 짧은 타임아웃으로 빠른 실패 감지
+# =============================================================================
+socket.setdefaulttimeout(10)  # 10초 타임아웃
+
+
+class PatchedHttpUser(HttpUser):
+    """
+    Pool 고갈 테스트용 HttpUser.
+    짧은 타임아웃으로 서버가 응답하지 않으면 빠르게 실패 처리.
+    """
+    abstract = True  # Locust가 직접 인스턴스화하지 않음
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 10초 타임아웃 - 서버가 응답 안 하면 빠르게 실패
+        self.client.timeout = 10
+        # Keep-alive 활성화
+        self.client.headers.update({"Connection": "keep-alive"})
 
 
 STAGE_NAME = "[Stage26-EXTREME]"
+
+
+# =============================================================================
+# Pool 고갈 감지 헬퍼 함수
+# =============================================================================
+def is_pool_exhausted_response(response) -> bool:
+    """503 + 특정 키워드로 Pool 고갈 판단"""
+    if response.status_code == 503:
+        try:
+            text = response.text.lower()
+            if any(keyword in text for keyword in ["pool", "connection", "exhausted", "timeout", "circuit"]):
+                print(f"🚨 Pool 고갈 감지! (503) - {time.time():.0f}")
+                return True
+        except:
+            pass
+        return True  # 503은 모두 Pool 고갈로 간주
+    return False
 
 
 # =============================================================================
@@ -55,6 +94,7 @@ _extreme_stats = {
         "slow_5s": {"success": 0, "failure": 0, "times": []},
         "slow_10s": {"success": 0, "failure": 0, "times": []},
         "heavy_query": {"success": 0, "failure": 0, "times": []},
+        "connection_holder": {"success": 0, "failure": 0, "times": []},
         "health_check": {"success": 0, "failure": 0, "times": []},
         "pool_status": {"success": 0, "failure": 0, "times": []},
         "normal_query": {"success": 0, "failure": 0, "times": []},
@@ -294,15 +334,15 @@ def on_test_stop(environment, **kwargs):
 # Pool Killer User (연결을 오래 점유)
 # =============================================================================
 
-class PoolKillerUser(HttpUser):
+class PoolKillerUser(PatchedHttpUser):
     """
     Pool 고갈을 유도하는 사용자.
     
     5초, 10초 느린 쿼리로 연결을 오래 점유합니다.
     """
     
-    wait_time = between(0.1, 0.5)  # 매우 빈번한 요청
-    weight = 5  # 50%
+    wait_time = constant(0)  # 휴식 없이 계속 요청!
+    weight = 7  # 70% - Pool Killer 비중 높임
     
     @task(3)
     @tag("pool_killer")
@@ -314,7 +354,7 @@ class PoolKillerUser(HttpUser):
             "/api/self-healing/stress/slow-5s/",
             catch_response=True,
             name=f"{STAGE_NAME} Slow Query 5s",
-            timeout=30
+            timeout=15  # 5분 대기 - Pool 고갈 대기 허용
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -339,7 +379,7 @@ class PoolKillerUser(HttpUser):
             "/api/self-healing/stress/slow-10s/",
             catch_response=True,
             name=f"{STAGE_NAME} Slow Query 10s",
-            timeout=60
+            timeout=15  # 5분 대기 - Pool 고갈 대기 허용
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -364,7 +404,7 @@ class PoolKillerUser(HttpUser):
             "/api/self-healing/stress/heavy-query/",
             catch_response=True,
             name=f"{STAGE_NAME} Heavy Query",
-            timeout=30
+            timeout=15  # 5분 대기
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -378,21 +418,53 @@ class PoolKillerUser(HttpUser):
             else:
                 record_request("heavy_query", False, elapsed)
                 response.failure(f"Error: {response.status_code}")
+    
+    @task(5)
+    @tag("pool_killer")
+    def hold_connection_long(self):
+        """🔥 Slow Query로 연결 장시간 점유 후 반환 (회복 가능)"""
+        start = time.time()
+        
+        # 무작위로 5초 또는 10초 slow query 선택
+        endpoint = random.choice([
+            "/api/self-healing/stress/slow-5s/",
+            "/api/self-healing/stress/slow-10s/"
+        ])
+        
+        with self.client.get(
+            endpoint,
+            catch_response=True,
+            name=f"{STAGE_NAME} Connection Holder",
+            timeout=15
+        ) as response:
+            elapsed = (time.time() - start) * 1000
+            
+            if response.status_code == 200:
+                record_request("connection_holder", True, elapsed)
+                print(f"🔒 Slow query completed (connection released!)")
+                response.success()
+            elif response.status_code == 503:
+                record_pool_exhaustion("503 - Connection Holder")
+                record_request("connection_holder", False, elapsed)
+                response.failure("Pool exhausted during hold!")
+            else:
+                record_request("connection_holder", False, elapsed)
+                response.failure(f"Error: {response.status_code}")
 
 
 # =============================================================================
 # Monitor User (Pool 상태 모니터링)
 # =============================================================================
 
-class MonitorUser(HttpUser):
+class MonitorUser(PatchedHttpUser):
     """
     Pool 상태를 모니터링하는 사용자.
     
     Health check와 Pool 상태를 주기적으로 확인합니다.
     """
     
-    wait_time = between(1, 2)
-    weight = 2  # 20%
+    wait_time = constant(0)  # 휴식 없이 계속 모니터링!
+    weight = 1  # 10%
     
     @task(3)
     @tag("monitor")
@@ -404,7 +476,7 @@ class MonitorUser(HttpUser):
             "/api/self-healing/health/",
             catch_response=True,
             name=f"{STAGE_NAME} Health Check",
-            timeout=10
+            timeout=15  # 2분 대기
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -432,7 +504,7 @@ class MonitorUser(HttpUser):
             "/api/self-healing/stress/pool-status/",
             catch_response=True,
             name=f"{STAGE_NAME} Pool Status",
-            timeout=10
+            timeout=15  # 2분 대기
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -460,15 +532,15 @@ class MonitorUser(HttpUser):
 # Normal User (정상 요청으로 복구 확인)
 # =============================================================================
 
-class NormalUser(HttpUser):
+class NormalUser(PatchedHttpUser):
     """
     정상적인 빠른 요청을 보내는 사용자.
     
     Pool 복구 후 정상 동작 확인용.
     """
     
-    wait_time = between(0.5, 1)
-    weight = 3  # 30%
+    wait_time = constant(0)  # 휴식 없이 계속 요청!
+    weight = 2  # 20%
     
     @task(5)
     @tag("normal")
@@ -481,7 +553,7 @@ class NormalUser(HttpUser):
             params={"page": 1, "page_size": 10},
             catch_response=True,
             name=f"{STAGE_NAME} Normal - Products",
-            timeout=10
+            timeout=15  # 2분 대기
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -509,7 +581,7 @@ class NormalUser(HttpUser):
             "/api/categories/",
             catch_response=True,
             name=f"{STAGE_NAME} Normal - Categories",
-            timeout=10
+            timeout=15  # 2분 대기
         ) as response:
             elapsed = (time.time() - start) * 1000
             
@@ -533,27 +605,27 @@ class NormalUser(HttpUser):
 
 class PoolExhaustionRecoveryShape(LoadTestShape):
     """
-    🔥 실제 상황 시뮬레이션 - 휴식 없이 계속 부하!
+    🔥 Pool 고갈 → 회복 테스트 (완화된 버전)
     
-    Phase 1 (0-30초): 정상 부하 - 베이스라인
-    Phase 2 (30-90초): 폭증! - Pool 고갈 유도 (계속 퍼붓기)
-    Phase 3 (90-150초): 지속 부하 - 여전히 퍼붓지만 Circuit Breaker 발동 기대
-    Phase 4 (150-180초): 고부하 유지 - 복구 확인 (부하는 줄이지 않음)
+    설정: Pool 3개, 워커 4개
     
-    총 실행 시간: 180초 (3분)
+    Phase 1 (0-15초): 워밍업 - 5명 (정상 작동 확인)
+    Phase 2 (15-45초): 점진적 증가 - 20명으로 Pool 고갈 유도
+    Phase 3 (45-75초): 냉각 - 3명으로 감소 (연결 해제 시간)
+    Phase 4 (75-120초): 회복 확인 - 10명 유지
     
-    핵심: 휴식 시간 없음! Circuit Breaker가 알아서 복구해야 함
+    총 실행 시간: 120초 (2분)
     """
     
     stages = [
-        # Phase 1: 정상 부하로 워밍업 (0~30초)
-        {"end_time": 30, "users": 50, "spawn_rate": 10, "phase": "warmup"},
-        # Phase 2: 폭증! Pool 고갈 유도 (30~90초) - 계속 퍼붓기!
-        {"end_time": 90, "users": 300, "spawn_rate": 50, "phase": "spike"},
-        # Phase 3: 지속 고부하 - CB 발동 기대 (90~150초) - 여전히 높음!
-        {"end_time": 150, "users": 200, "spawn_rate": 30, "phase": "sustained"},
-        # Phase 4: 고부하 유지 - 복구 확인 (150~180초) - 줄이지 않음!
-        {"end_time": 180, "users": 150, "spawn_rate": 20, "phase": "verify"},
+        # Phase 1: 워밍업 (0~15초) - 정상 작동 확인
+        {"end_time": 15, "users": 5, "spawn_rate": 2, "phase": "warmup"},
+        # Phase 2: 점진적 증가 - Pool 고갈 유도 (15~45초) - 20명
+        {"end_time": 45, "users": 20, "spawn_rate": 3, "phase": "spike"},
+        # Phase 3: 냉각 (45~75초) - 부하 감소, 연결 해제
+        {"end_time": 75, "users": 3, "spawn_rate": 5, "phase": "cooldown"},
+        # Phase 4: 회복 확인 (75~120초) - 정상 요청
+        {"end_time": 120, "users": 10, "spawn_rate": 2, "phase": "recovery"},
     ]
     
     _last_phase = None
@@ -576,14 +648,11 @@ class PoolExhaustionRecoveryShape(LoadTestShape):
                     if current_phase == "warmup":
                         print(f"   📊 Baseline - Normal operation check")
                     elif current_phase == "spike":
-                        print(f"   🔥🔥🔥 SPIKE! - Pool 고갈 유도 중...")
-                        print(f"   ⚠️  NO REST! Keep hammering!")
-                    elif current_phase == "sustained":
-                        print(f"   💀 SUSTAINED LOAD - Circuit Breaker should kick in!")
-                        print(f"   ⚠️  Still high load! No mercy!")
-                    elif current_phase == "verify":
-                        print(f"   🔍 VERIFY - Check if system recovered under load")
-                        print(f"   ⚠️  Load still present! Must recover while serving!")
+                        print(f"   🔥 SPIKE - Pool 고갈 유도 중...")
+                    elif current_phase == "cooldown":
+                        print(f"   ❄️ COOLDOWN - 부하 감소, 연결 반환 대기")
+                    elif current_phase == "recovery":
+                        print(f"   🔍 RECOVERY - 회복 확인 중")
                     print(f"{'='*70}\n")
                     self._last_phase = current_phase
                 

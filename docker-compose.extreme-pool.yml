@@ -63,11 +63,7 @@ services:
   # Django 웹 서버 - SQLAlchemy Pool 활성화
   web:
     build: .
-    command: >
-      sh -c "pip install gevent && 
-             python manage.py migrate --noinput &&
-             python manage.py collectstatic --noinput &&
-             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --worker-class gevent --workers 1 --worker-connections 50 --timeout 120 --log-level debug"
+    command: sh -c "pip install gevent && python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --worker-class gevent --workers 4 --worker-connections 1000 --timeout 120 --keep-alive 60 --log-level info"
     volumes:
       - .:/code
     expose:
@@ -82,12 +78,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=False
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      # ⚠️ SQLAlchemy Connection Pool 활성화 - Pool 크기 극소화
+      # ⚠️ 극단적 Pool 설정 - 고갈 100% 보장!
       - USE_CONNECTION_POOL=TRUE
       - DB_POOL_SIZE=3
-      - DB_MAX_OVERFLOW=2
-      - DB_POOL_TIMEOUT=5
-      - DB_POOL_RECYCLE=1800
+      - DB_MAX_OVERFLOW=0
+      - DB_POOL_TIMEOUT=1
+      - DB_POOL_RECYCLE=300
       # 🛡️ Pool Circuit Breaker 활성화 - Pool 고갈 시 Fail Fast!
       - USE_POOL_CIRCUIT_BREAKER=TRUE
     depends_on:
@@ -98,7 +94,7 @@ services:
       test-data-init:
         condition: service_completed_successfully
 
-  # Locust Master - Phase 기반 부하 테스트
+  # Locust Master - Pool 고갈 테스트
   locust-master:
     build: .
     command: >
@@ -106,7 +102,7 @@ services:
       --master
       --host=http://web:8000
       --headless
-      --html=/code/reports/stage26_extreme_report.html
+      --html=/code/reports/stage26_pool_exhaustion_report.html
     volumes:
       - .:/code
       - ./reports:/code/reports
@@ -117,7 +113,7 @@ services:
     ports:
       - "8089:8089"
 
-  # Locust Workers
+  # Locust Workers - 4개 (로컬에서 안전)
   locust-worker:
     build: .
     command: >
