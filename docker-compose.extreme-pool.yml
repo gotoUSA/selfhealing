@@ -77,6 +77,8 @@ services:
       - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=False
+      - DJANGO_SECRET_KEY=test-secret-key-for-stage26-testing
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1,*
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
       # ⚠️ 극단적 Pool 설정 - 고갈 100% 보장!
       - USE_CONNECTION_POOL=TRUE
