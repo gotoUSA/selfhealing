@@ -169,9 +169,46 @@ class PoolCircuitBreaker:
                         "_is_no_available": is_no_available,
                     }
                 else:
-                    # Pool이 아직 초기화되지 않음 - 연결 시도 없이 반환
-                    # ensure_connection() 하면 Pool 고갈 시 블로킹됨!
-                    logger.debug(f"[PoolCircuitBreaker] pool_container empty - no pool yet")
+                    # pool_container가 비어있음 - Django connection에서 직접 접근 시도
+                    # 단, ensure_connection()은 호출하지 않음 (블로킹 방지)
+                    logger.debug(f"[PoolCircuitBreaker] pool_container empty, trying direct access...")
+                    
+                    conn = connections["default"]
+                    # 이미 연결이 있는 경우에만 Pool 접근
+                    if hasattr(conn, "connection") and conn.connection is not None:
+                        raw_conn = conn.connection
+                        if hasattr(raw_conn, "_pool"):
+                            pool = raw_conn._pool
+                            pool_size = pool.size()
+                            checkedout = pool.checkedout()
+                            checkedin = pool.checkedin()
+                            overflow = pool.overflow()
+                            max_overflow = getattr(pool, "_max_overflow", 0)
+                            total_capacity = pool_size + max_overflow
+                            
+                            is_exhausted = checkedin == 0 and checkedout >= pool_size
+                            is_near_exhaustion = checkedout >= total_capacity * 0.66
+                            
+                            logger.info(f"[PoolCircuitBreaker] Direct access: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}")
+                            
+                            if is_exhausted:
+                                logger.warning(f"[PoolCircuitBreaker] EXHAUSTED! checkedout={checkedout}, checkedin={checkedin}, pool_size={pool_size}")
+                            
+                            return {
+                                "available": True,
+                                "pool_size": pool_size,
+                                "checkedout": checkedout,
+                                "checkedin": checkedin,
+                                "overflow": overflow,
+                                "max_overflow": max_overflow,
+                                "total_capacity": total_capacity,
+                                "usage_percent": (checkedout / total_capacity * 100) if total_capacity > 0 else 0,
+                                "is_exhausted": is_exhausted,
+                                "is_near_exhaustion": is_near_exhaustion,
+                            }
+                    
+                    # 연결이 아직 없음 - Pool도 없음 (정상, 첫 요청 전)
+                    logger.debug(f"[PoolCircuitBreaker] No connection yet - pool not initialized")
                     return {
                         "available": False,
                         "reason": "Pool not initialized yet",
