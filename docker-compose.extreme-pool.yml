@@ -68,6 +68,13 @@ services:
       - .:/code
     expose:
       - "8000"
+    # 🔧 Healthcheck 추가 - Locust가 web 준비 완료 후 시작하도록
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
     environment:
       - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
       - DATABASE_NAME=shopping_db
@@ -101,29 +108,34 @@ services:
   # Locust Master - Pool 고갈 테스트
   locust-master:
     build: .
+    # 🔧 웹 서버 준비 후 10초 대기 후 시작
     command: >
+      sh -c "echo '⏳ Waiting 15s for web server...' && sleep 15 &&
       locust -f /code/load_tests/scenarios/stage26_extreme_pool_test.py
       --master
       --host=http://web:8000
       --headless
-      --html=/code/reports/stage26_pool_exhaustion_report.html
+      --html=/code/reports/stage26_pool_exhaustion_report.html"
     volumes:
       - .:/code
       - ./reports:/code/reports
     environment:
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     ports:
       - "8089:8089"
 
-  # Locust Workers - 4개 (로컬에서 안전)
+  # Locust Workers - 4개
   locust-worker:
     build: .
+    # 🔧 Master 시작 후 5초 대기
     command: >
+      sh -c "echo '⏳ Waiting 20s for master...' && sleep 20 &&
       locust -f /code/load_tests/scenarios/stage26_extreme_pool_test.py
       --worker
-      --master-host=locust-master
+      --master-host=locust-master"
     volumes:
       - .:/code
     environment:
