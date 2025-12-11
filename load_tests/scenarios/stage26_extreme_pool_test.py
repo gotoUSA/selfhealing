@@ -612,20 +612,20 @@ class PoolExhaustionRecoveryShape(LoadTestShape):
     Phase 1 (0-15초): 워밍업 - 5명 (정상 작동 확인)
     Phase 2 (15-45초): 점진적 증가 - 20명으로 Pool 고갈 유도
     Phase 3 (45-75초): 냉각 - 3명으로 감소 (연결 해제 시간)
-    Phase 4 (75-120초): 회복 확인 - 10명 유지
+    Phase 4 (60-90초): 회복 확인 - 20명 유지
     
-    총 실행 시간: 120초 (2분)
+    총 실행 시간: 90초
     """
     
     stages = [
-        # Phase 1: 워밍업 (0~15초) - 정상 작동 확인
-        {"end_time": 15, "users": 5, "spawn_rate": 2, "phase": "warmup"},
-        # Phase 2: 점진적 증가 - Pool 고갈 유도 (15~45초) - 20명
-        {"end_time": 45, "users": 20, "spawn_rate": 3, "phase": "spike"},
-        # Phase 3: 냉각 (45~75초) - 부하 감소, 연결 해제
-        {"end_time": 75, "users": 3, "spawn_rate": 5, "phase": "cooldown"},
-        # Phase 4: 회복 확인 (75~120초) - 정상 요청
-        {"end_time": 120, "users": 10, "spawn_rate": 2, "phase": "recovery"},
+        # Phase 1: 워밍업 (0~10초) - 정상 작동 확인
+        {"end_time": 10, "users": 10, "spawn_rate": 5, "phase": "warmup"},
+        # Phase 2: 폭증! Pool 고갈 유도 (10~40초) - 100명!
+        {"end_time": 40, "users": 100, "spawn_rate": 10, "phase": "spike"},
+        # Phase 3: 냉각 (40~60초) - 부하 감소
+        {"end_time": 60, "users": 5, "spawn_rate": 10, "phase": "cooldown"},
+        # Phase 4: 회복 확인 (60~90초) - 정상 요청
+        {"end_time": 90, "users": 20, "spawn_rate": 5, "phase": "recovery"},
     ]
     
     _last_phase = None
