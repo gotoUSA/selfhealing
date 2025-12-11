@@ -84,6 +84,17 @@ def get_logging_config(debug: bool = False) -> dict:
                 "level": "INFO",
                 "propagate": False,
             },
+            # Self-healing 패키지 로깅 (Pool Circuit Breaker 등)
+            "selfhealing": {
+                "handlers": ["console"],
+                "level": "DEBUG" if debug else "INFO",
+                "propagate": False,
+            },
+            "selfhealing.api.django.pool_circuit_breaker": {
+                "handlers": ["console"],
+                "level": "DEBUG",  # 항상 DEBUG로 상세 로그 출력
+                "propagate": False,
+            },
         },
     }
 
