@@ -24,15 +24,17 @@ INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
 MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")  # noqa: F405
 
 # ==========================================================================
-# Pool Circuit Breaker Middleware (Connection Pool 고갈 방지)
-# Pool이 고갈되면 즉시 503 반환하여 시스템 멈춤 방지 (Fail Fast)
+# Pool Timeout Middleware (Connection Pool 고갈 시 503 반환)
+# SQLAlchemy Pool Timeout 발생 시 즉시 503 반환
 # ==========================================================================
 
 USE_POOL_CIRCUIT_BREAKER = os.getenv("USE_POOL_CIRCUIT_BREAKER", "FALSE") == "TRUE"
 
 if USE_POOL_CIRCUIT_BREAKER:
-    # SecurityMiddleware 바로 뒤에 추가 (가능한 빨리 차단)
-    MIDDLEWARE.insert(1, "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware")  # noqa: F405
+    # Pool Timeout 미들웨어 추가 (예외 잡아서 503 반환)
+    MIDDLEWARE.insert(1, "myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware")  # noqa: F405
+    # 기존 Circuit Breaker도 추가 (Pool 상태 기반 사전 차단)
+    MIDDLEWARE.insert(2, "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware")  # noqa: F405
 
 INTERNAL_IPS = [
     "127.0.0.1",
