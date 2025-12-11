@@ -133,31 +133,39 @@ def main():
     
     # 백그라운드에서 slow query 실행 (Pool 점유)
     slow_futures = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         # 10개 slow query 시작
         for i in range(10):
             future = executor.submit(make_request, "/api/self-healing/stress/slow-5s/", 30)
             slow_futures.append(future)
             print(f"   🚀 Slow query {i+1} 시작")
-            time.sleep(0.1)  # 약간의 간격
+            time.sleep(0.05)  # 더 빠르게 시작!
         
-        # 1초 대기 (Pool이 꽉 찰 시간)
-        print("\n   ⏳ 1초 대기 (Pool 고갈 유도)...")
-        time.sleep(1)
+        # 0.5초 대기 (Pool이 꽉 찰 시간)
+        print("\n   ⏳ 0.5초 대기 (Pool 고갈 유도)...")
+        time.sleep(0.5)
         
-        # Pool 고갈 상태에서 추가 요청 시도
-        print("\n   🎯 Pool 고갈 상태에서 추가 요청 시도...")
-        for i in range(5):
-            result = make_request("/api/products/", timeout=5)
-            status_icon = "✅" if result["status"] == 200 else "🔴" if result["status"] == 503 else "❌"
-            
-            if result["status"] == 503:
-                circuit_state = result.get("circuit_state", "?")
-                print(f"   {status_icon} 추가요청 {i+1}: {result['status']} (Circuit: {circuit_state}) - {result['time_ms']:.0f}ms")
-            else:
-                print(f"   {status_icon} 추가요청 {i+1}: {result['status']} - {result['time_ms']:.0f}ms")
-            
-            time.sleep(0.5)
+        # Pool 고갈 상태에서 추가 요청 시도 - 더 많이, 더 빠르게!
+        print("\n   🎯 Pool 고갈 상태에서 추가 요청 시도 (20개)...")
+        additional_futures = []
+        for i in range(20):
+            future = executor.submit(make_request, "/api/products/", 2)  # timeout 2초
+            additional_futures.append((i, future))
+            time.sleep(0.1)  # 0.1초 간격으로 연속 요청
+        
+        # 추가 요청 결과 확인
+        for i, future in additional_futures:
+            try:
+                result = future.result(timeout=5)
+                status_icon = "✅" if result["status"] == 200 else "🔴" if result["status"] == 503 else "❌"
+                
+                if result["status"] == 503:
+                    circuit_state = result.get("circuit_state", "?")
+                    print(f"   {status_icon} 추가요청 {i+1}: {result['status']} (Circuit: {circuit_state}) - {result['time_ms']:.0f}ms")
+                else:
+                    print(f"   {status_icon} 추가요청 {i+1}: {result['status']} - {result['time_ms']:.0f}ms")
+            except Exception as e:
+                print(f"   ❌ 추가요청 {i+1}: Exception - {e}")
         
         # slow query 완료 대기
         print("\n   ⏳ Slow query 완료 대기...")
