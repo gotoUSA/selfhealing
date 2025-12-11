@@ -166,6 +166,8 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Pool Timeout 시 503 반환
+    "EXCEPTION_HANDLER": "myproject.exception_handlers.custom_exception_handler",
 }
 
 # drf-spectacular 설정
