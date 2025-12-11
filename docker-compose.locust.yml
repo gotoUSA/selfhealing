@@ -1,0 +1,83 @@
+# Docker Compose for Locust Load Testing (Stage 26, 27)
+services:
+  # 데이터베이스
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Django 웹 서버
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 60"
+    volumes:
+      - .:/code
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Locust Master
+  locust-master:
+    build: .
+    command: >
+      locust -f /code/load_tests/scenarios/stage27_graceful_shutdown.py
+      --master
+      --host=http://web:8000
+      --users=100
+      --spawn-rate=20
+      --run-time=2m
+      --headless
+      --html=/code/reports/stage27_locust_report.html
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    depends_on:
+      - web
+    ports:
+      - "8089:8089"
+
+  # Locust Worker (스케일 가능)
+  locust-worker:
+    build: .
+    command: >
+      locust -f /code/load_tests/scenarios/stage27_graceful_shutdown.py
+      --worker
+      --master-host=locust-master
+    volumes:
+      - .:/code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    depends_on:
+      - locust-master
+    deploy:
+      replicas: 2

@@ -1,0 +1,16 @@
+# Docker Compose for testing Stage 26, 27
+services:
+  # Test runner for selfhealing package
+  test:
+    build: .
+    command: >
+      sh -c "cd /code/packages/selfhealing-python && 
+             pip install -e . &&
+             python -m pytest tests/unit/test_connection_pool.py tests/unit/test_graceful_shutdown.py -v --tb=short"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1

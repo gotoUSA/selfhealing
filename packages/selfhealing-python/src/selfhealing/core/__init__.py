@@ -69,6 +69,33 @@ from selfhealing.core.forensic import (
     create_snapshot_data,
     set_time_provider,
 )
+from selfhealing.core.pool_monitor import (
+    PoolHealthStatus,
+    PoolStats,
+    ConnectionInfo,
+    LeakReport,
+    PoolStatsProvider,
+    ConnectionPoolMonitor,
+)
+from selfhealing.core.pool_watchdog import (
+    RecoveryAction,
+    RecoveryResult,
+    PoolRecoveryHandler,
+    PoolWatchdog,
+)
+from selfhealing.core.shutdown_coordinator import (
+    ShutdownPhase,
+    RequestState,
+    TrackedRequest,
+    ShutdownStats,
+    ShutdownHandler,
+    RequestTracker,
+    GracefulShutdownCoordinator,
+)
+from selfhealing.core.request_context import (
+    RequestContext,
+    track_request,
+)
 
 __all__ = [
     # Types
@@ -124,4 +151,27 @@ __all__ = [
     "capture_forensic_context",
     "create_snapshot_data",
     "set_time_provider",
+    # Pool Monitor (Stage 26)
+    "PoolHealthStatus",
+    "PoolStats",
+    "ConnectionInfo",
+    "LeakReport",
+    "PoolStatsProvider",
+    "ConnectionPoolMonitor",
+    # Pool Watchdog (Stage 26)
+    "RecoveryAction",
+    "RecoveryResult",
+    "PoolRecoveryHandler",
+    "PoolWatchdog",
+    # Shutdown Coordinator (Stage 27)
+    "ShutdownPhase",
+    "RequestState",
+    "TrackedRequest",
+    "ShutdownStats",
+    "ShutdownHandler",
+    "RequestTracker",
+    "GracefulShutdownCoordinator",
+    # Request Context (Stage 27)
+    "RequestContext",
+    "track_request",
 ]
