@@ -169,96 +169,32 @@ class PoolCircuitBreaker:
                         "_is_no_available": is_no_available,
                     }
                 else:
-                    # Pool이 아직 초기화되지 않음 - fallback으로 계속 진행
-                    logger.info(f"[PoolCircuitBreaker] pool_container empty, trying fallback...")
+                    # Pool이 아직 초기화되지 않음 - 연결 시도 없이 반환
+                    # ensure_connection() 하면 Pool 고갈 시 블로킹됨!
+                    logger.debug(f"[PoolCircuitBreaker] pool_container empty - no pool yet")
+                    return {
+                        "available": False,
+                        "reason": "Pool not initialized yet",
+                        "is_exhausted": False,
+                        "is_near_exhaustion": False,
+                    }
             except ImportError as e:
                 # django-db-connection-pool 미설치
                 logger.warning(f"[PoolCircuitBreaker] dj_db_conn_pool not available: {e}")
-
-            # Fallback 방식 1: Django connections를 통한 접근
-            conn = connections["default"]
-            
-            # 중요: Pool 상태를 확인하려면 먼저 연결이 있어야 함
-            conn.ensure_connection()
-            
-            logger.info(f"[PoolCircuitBreaker] Fallback: conn type={type(conn).__name__}")
-
-            # dj-db-conn-pool은 connection 객체에 pool 속성을 추가함
-            # 또는 connection.connection이 SQLAlchemy engine일 수 있음
-            pool = None
-
-            # 방법 1: conn.pool.pool (일부 버전)
-            if hasattr(conn, "pool") and conn.pool:
-                if hasattr(conn.pool, "pool"):
-                    pool = conn.pool.pool
-                    logger.info(f"[PoolCircuitBreaker] Found pool via conn.pool.pool")
-                elif hasattr(conn.pool, "size"):
-                    pool = conn.pool
-                    logger.info(f"[PoolCircuitBreaker] Found pool via conn.pool")
-
-            # 방법 2: conn.connection._pool (SQLAlchemy connection)
-            if not pool and hasattr(conn, "connection") and conn.connection:
-                raw_conn = conn.connection
-                if hasattr(raw_conn, "_pool"):
-                    pool = raw_conn._pool
-                    logger.info(f"[PoolCircuitBreaker] Found pool via conn.connection._pool")
-                elif hasattr(raw_conn, "engine") and hasattr(raw_conn.engine, "pool"):
-                    pool = raw_conn.engine.pool
-                    logger.info(f"[PoolCircuitBreaker] Found pool via conn.connection.engine.pool")
-
-            # 방법 3: Database wrapper의 내부 속성
-            if not pool:
-                for attr in ["_pool", "pool", "connection_pool"]:
-                    if hasattr(conn, attr):
-                        candidate = getattr(conn, attr)
-                        if candidate and hasattr(candidate, "checkedout"):
-                            pool = candidate
-                            logger.info(f"[PoolCircuitBreaker] Found pool via conn.{attr}")
-                            break
-
-            if pool and hasattr(pool, "checkedout"):
-                pool_size = pool.size() if hasattr(pool, "size") else 5
-                checkedout = pool.checkedout()
-                checkedin = pool.checkedin() if hasattr(pool, "checkedin") else 0
-                overflow = pool.overflow() if hasattr(pool, "overflow") else 0
-                max_overflow = getattr(pool, "_max_overflow", 0)
-                total_capacity = pool_size + max_overflow
-
-                is_exhausted = checkedin == 0 and checkedout >= pool_size
-
-                logger.info(
-                    f"[PoolCircuitBreaker] Pool stats: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}"
-                )
-
-                if is_exhausted:
-                    logger.warning(f"[PoolCircuitBreaker] EXHAUSTED detected via fallback!")
-
                 return {
-                    "available": True,
-                    "pool_size": pool_size,
-                    "checkedout": checkedout,
-                    "checkedin": checkedin,
-                    "overflow": overflow,
-                    "max_overflow": max_overflow,
-                    "total_capacity": total_capacity,
-                    "usage_percent": (checkedout / total_capacity * 100) if total_capacity > 0 else 0,
-                    "is_exhausted": is_exhausted,
-                    "is_near_exhaustion": checkedout >= total_capacity * 0.66,
+                    "available": False,
+                    "reason": "dj_db_conn_pool not installed",
+                    "is_exhausted": False,
+                    "is_near_exhaustion": False,
                 }
 
-            # Pool을 찾지 못함 - django-db-connection-pool이 사용되지 않는 경우
-            # 또는 아직 첫 DB 연결이 발생하지 않은 경우 (정상 상황)
-            # DEBUG 레벨로 낮춤 - 이는 에러가 아님
-            logger.debug(
-                f"[PoolCircuitBreaker] No pool found (normal if using standard Django DB backend). "
-                f"conn type: {type(conn).__name__}"
-            )
-            # Pool이 없으면 Circuit Breaker를 비활성화 상태로 처리
-            # (표준 Django 연결은 Pool Circuit Breaker가 필요 없음)
+            # Fallback: pool_container가 없고 import도 실패한 경우
+            # 연결 시도 없이 바로 반환 (ensure_connection 제거!)
+            logger.debug(f"[PoolCircuitBreaker] No pool_container available")
             return {
                 "available": False,
-                "reason": "No SQLAlchemy pool detected (standard Django connection)",
-                "is_exhausted": False,  # Pool이 없으면 고갈도 없음
+                "reason": "No pool available",
+                "is_exhausted": False,
                 "is_near_exhaustion": False,
             }
 
