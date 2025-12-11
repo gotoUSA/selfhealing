@@ -134,6 +134,21 @@ from selfhealing.interfaces.config_provider import (
     EnvConfigProvider,
 )
 
+# =============================================================================
+# Rate Limit Storage Interface (Distributed Self-DDoS Prevention)
+# =============================================================================
+from selfhealing.interfaces.rate_limit_storage import (
+    # Enums
+    RateLimitStorageType,
+    # Data Classes
+    RateLimitState,
+    # Interface
+    RateLimitStorageInterface,
+    # Exceptions
+    RateLimitStorageError,
+    RateLimitStorageUnavailableError,
+)
+
 
 __all__ = [
     # =========================================================================
@@ -217,4 +232,16 @@ __all__ = [
     # Default implementations
     "DictConfigProvider",
     "EnvConfigProvider",
+    # =========================================================================
+    # Rate Limit Storage Interface (Distributed Self-DDoS Prevention)
+    # =========================================================================
+    # Enums
+    "RateLimitStorageType",
+    # Data Classes
+    "RateLimitState",
+    # Interface
+    "RateLimitStorageInterface",
+    # Exceptions
+    "RateLimitStorageError",
+    "RateLimitStorageUnavailableError",
 ]

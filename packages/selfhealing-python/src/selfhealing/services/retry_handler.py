@@ -7,6 +7,7 @@ Provides a reusable retry mechanism with:
 - Idempotency checking
 - DLQ routing on exhaustion
 - Forensic context capture
+- Rate limit awareness (Self-DDoS prevention)
 
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7, §8
 """
@@ -17,7 +18,7 @@ import functools
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
 
 from selfhealing.core.timezone import now
 from selfhealing.core.config import get_config
@@ -25,7 +26,7 @@ from selfhealing.core.config import get_config
 from .backoff_calculator import BackoffCalculator, BackoffConfig
 
 if TYPE_CHECKING:
-    pass
+    from .rate_limit_coordinator import RateLimitCoordinator
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,10 @@ class RetryConfig:
     non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     enable_dlq: bool = True
     domain: str = "default"
+    
+    # Rate limit awareness settings
+    rate_limit_aware: bool = True  # Enable Self-DDoS prevention
+    rate_limit_key: str | None = None  # Custom key, defaults to domain
 
     @classmethod
     def from_settings(cls, domain: str = "default") -> "RetryConfig":
@@ -125,6 +130,11 @@ class RetryHandler:
     """
     Handles retry logic with exponential backoff.
 
+    Now includes Rate Limit Awareness to prevent Self-DDoS:
+    - Detects 429 responses
+    - Coordinates cooldown across all workers
+    - Uses distributed storage (Redis/DB)
+
     Usage:
         handler = RetryHandler(domain="payment")
         result = handler.execute(my_function, arg1, arg2, kwarg=value)
@@ -139,6 +149,7 @@ class RetryHandler:
         self,
         config: RetryConfig | None = None,
         domain: str = "default",
+        rate_limit_coordinator: Optional["RateLimitCoordinator"] = None,
     ):
         """
         Initialize the retry handler.
@@ -146,6 +157,7 @@ class RetryHandler:
         Args:
             config: RetryConfig instance, or None to load from settings
             domain: Domain for per-domain configuration
+            rate_limit_coordinator: Optional coordinator for rate limiting
         """
         self.config = config or RetryConfig.from_settings(domain)
         self.backoff = BackoffCalculator(
@@ -155,6 +167,66 @@ class RetryHandler:
                 jitter_percent=self.config.jitter_percent,
             )
         )
+        
+        # Rate limit coordinator for Self-DDoS prevention
+        self._rate_limit_coordinator = rate_limit_coordinator
+        self._rate_limit_key = self.config.rate_limit_key or self.config.domain
+    
+    @property
+    def rate_limit_coordinator(self) -> Optional["RateLimitCoordinator"]:
+        """Get rate limit coordinator, lazily initialized."""
+        if self._rate_limit_coordinator is None and self.config.rate_limit_aware:
+            try:
+                from .rate_limit_coordinator import get_rate_limit_coordinator
+                self._rate_limit_coordinator = get_rate_limit_coordinator()
+            except Exception as e:
+                logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
+        return self._rate_limit_coordinator
+
+    def is_rate_limit_error(self, exception: Exception) -> tuple[bool, float | None]:
+        """
+        Check if an exception indicates a rate limit (429) error.
+        
+        Args:
+            exception: The exception to check
+            
+        Returns:
+            Tuple of (is_rate_limited, retry_after_seconds)
+        """
+        # Check for common rate limit exception patterns
+        error_str = str(exception).lower()
+        error_type = type(exception).__name__.lower()
+        
+        # Common indicators
+        rate_limit_indicators = [
+            "429",
+            "rate limit",
+            "ratelimit",
+            "too many requests",
+            "throttle",
+            "quota exceeded",
+        ]
+        
+        is_rate_limited = any(
+            indicator in error_str or indicator in error_type
+            for indicator in rate_limit_indicators
+        )
+        
+        # Try to extract retry-after from exception
+        retry_after = None
+        if hasattr(exception, "retry_after"):
+            retry_after = getattr(exception, "retry_after")
+        elif hasattr(exception, "response"):
+            response = getattr(exception, "response")
+            if hasattr(response, "headers"):
+                retry_after_header = response.headers.get("Retry-After")
+                if retry_after_header:
+                    try:
+                        retry_after = float(retry_after_header)
+                    except ValueError:
+                        pass
+        
+        return is_rate_limited, retry_after
 
     def should_retry(self, exception: Exception, attempt: int) -> bool:
         """
@@ -181,6 +253,31 @@ class RetryHandler:
 
         return False
 
+    def _wait_for_rate_limit(self) -> None:
+        """Wait if currently rate limited (Self-DDoS prevention)."""
+        coordinator = self.rate_limit_coordinator
+        if coordinator:
+            result = coordinator.wait_if_needed(self._rate_limit_key)
+            if result.waited:
+                logger.info(
+                    f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown"
+                )
+
+    def _handle_rate_limit_error(self, exception: Exception) -> None:
+        """Handle rate limit error by setting global cooldown."""
+        is_rate_limited, retry_after = self.is_rate_limit_error(exception)
+        
+        if is_rate_limited:
+            coordinator = self.rate_limit_coordinator
+            if coordinator:
+                cooldown = coordinator.on_rate_limited(
+                    key=self._rate_limit_key,
+                    retry_after=retry_after,
+                )
+                logger.warning(
+                    f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s"
+                )
+
     def get_next_delay(self, attempt: int) -> int:
         """
         Get the delay before the next retry attempt.
@@ -203,6 +300,11 @@ class RetryHandler:
         """
         Execute a function with retry logic.
 
+        Now includes Self-DDoS prevention:
+        - Waits for rate limit cooldown before each attempt
+        - Sets global cooldown on 429 errors
+        - Coordinates across all workers via distributed storage
+
         Note: This is a synchronous implementation. For async tasks,
         use the Celery-based retry mechanism.
 
@@ -221,9 +323,17 @@ class RetryHandler:
 
         while attempt < self.config.max_attempts:
             attempt += 1
+            
+            # Self-DDoS prevention: Wait if rate limited
+            self._wait_for_rate_limit()
 
             try:
                 result = func(*args, **kwargs)
+                
+                # Notify coordinator of success
+                if self.rate_limit_coordinator:
+                    self.rate_limit_coordinator.on_success(self._rate_limit_key)
+                
                 logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
                 return RetryResult(
                     success=True,
@@ -239,11 +349,14 @@ class RetryHandler:
                         "attempt": attempt,
                         "error_type": type(e).__name__,
                         "error_message": str(e)[:500],
-                        "timestamp": timezone.now().isoformat(),
+                        "timestamp": now().isoformat(),
                     }
                 )
 
                 logger.warning(f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}")
+                
+                # Self-DDoS prevention: Handle rate limit errors
+                self._handle_rate_limit_error(e)
 
                 if self.should_retry(e, attempt):
                     delay = self.get_next_delay(attempt)

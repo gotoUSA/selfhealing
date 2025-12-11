@@ -138,6 +138,12 @@ from .circuit_breaker_service import (
     should_allow_with_protection as should_allow_with_ddos_protection,  # Alias
     get_protection_status,
 )
+from .rate_limit_coordinator import (
+    RateLimitCoordinator,
+    RateLimitConfig,
+    RateLimitResult,
+    get_rate_limit_coordinator,
+)
 from .metrics import (
     # Constants
     DOMAINS,
@@ -276,6 +282,11 @@ __all__ = [
     "should_allow_with_protection",
     "should_allow_with_ddos_protection",  # Alias
     "get_protection_status",
+    # Rate Limit Coordinator (Distributed Self-DDoS Prevention)
+    "RateLimitCoordinator",
+    "RateLimitConfig",
+    "RateLimitResult",
+    "get_rate_limit_coordinator",
     # Metrics (Phase 5 Observability)
     "DOMAINS",
     "ALERTING_RULES",

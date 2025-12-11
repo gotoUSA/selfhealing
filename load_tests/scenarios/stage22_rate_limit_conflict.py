@@ -107,6 +107,62 @@ BASE_BACKOFF_S = 0.5
 MAX_BACKOFF_S = 5.0
 BACKOFF_MULTIPLIER = 2.0
 
+# =============================================================================
+# Global Rate Limit Coordinator (Self-DDoS Prevention)
+# =============================================================================
+# This simulates the distributed RateLimitCoordinator from selfhealing package
+# In production, this would use Redis/DB for cross-process coordination
+
+_global_rate_limit_lock = threading.Lock()
+_global_cooldown_until = 0.0  # Unix timestamp when cooldown ends
+_global_consecutive_429s = 0
+
+
+def _set_global_cooldown(retry_after: float = None):
+    """Set global cooldown for all users (Self-DDoS prevention)."""
+    global _global_cooldown_until, _global_consecutive_429s
+    
+    with _global_rate_limit_lock:
+        _global_consecutive_429s += 1
+        
+        # Calculate backoff with exponential increase
+        if retry_after and retry_after > 0:
+            base_delay = retry_after
+        else:
+            base_delay = 1.0
+        
+        # Exponential backoff: base * (2 ^ consecutive_429s)
+        delay = base_delay * (BACKOFF_MULTIPLIER ** (_global_consecutive_429s - 1))
+        delay = min(delay, MAX_BACKOFF_S)
+        
+        # Add jitter to prevent thundering herd (±30%)
+        jitter = delay * random.uniform(-0.3, 0.3)
+        delay = max(0.1, delay + jitter)
+        
+        _global_cooldown_until = time.time() + delay
+        
+        return delay
+
+
+def _wait_for_global_cooldown() -> float:
+    """Wait if currently in global cooldown period."""
+    global _global_cooldown_until
+    
+    with _global_rate_limit_lock:
+        now = time.time()
+        if now < _global_cooldown_until:
+            wait_time = _global_cooldown_until - now
+            return wait_time
+        return 0.0
+
+
+def _reset_global_cooldown():
+    """Reset on successful request."""
+    global _global_consecutive_429s
+    
+    with _global_rate_limit_lock:
+        _global_consecutive_429s = max(0, _global_consecutive_429s - 1)
+
 
 # =============================================================================
 # Rate Limit Statistics
@@ -586,6 +642,11 @@ class RateLimitConflictUser(HttpUser):
         """
         Test payment endpoint with rate limit simulation.
         Simulates rate limiting behavior on payment requests.
+        
+        Uses Global Cooldown pattern to prevent Self-DDoS:
+        - When one user gets 429, ALL users wait
+        - Exponential backoff with jitter
+        - Prevents cascade of retries
         """
         phase = _get_current_phase()
 
@@ -593,6 +654,14 @@ class RateLimitConflictUser(HttpUser):
             return
 
         product_id = random.choice(TARGET_PRODUCT_IDS)
+
+        # *** Self-DDoS Prevention: Check global cooldown first ***
+        wait_time = _wait_for_global_cooldown()
+        if wait_time > 0:
+            # Record that we're respecting the global cooldown
+            _record_backoff(duration_ms=wait_time * 1000, respected=True, retry_after_respected=True)
+            time.sleep(wait_time)
+            # After waiting, continue with the request
 
         # Check simulated rate limit
         is_limited, retry_after = _check_simulated_rate_limit()
@@ -604,15 +673,18 @@ class RateLimitConflictUser(HttpUser):
 
             self.consecutive_429s += 1
 
+            # *** Self-DDoS Prevention: Set GLOBAL cooldown ***
+            # This makes ALL users wait, not just this one
+            cooldown = _set_global_cooldown(retry_after)
+
             # Check for self-DDoS
             _check_self_ddos()
 
-            # Proper backoff behavior
-            backoff_s = self._calculate_backoff(self.consecutive_429s, retry_after)
-            _record_backoff(duration_ms=backoff_s * 1000, respected=True, retry_after_respected=bool(retry_after))
+            # Proper backoff behavior (now uses global cooldown)
+            _record_backoff(duration_ms=cooldown * 1000, respected=True, retry_after_respected=bool(retry_after))
 
-            # Sleep for backoff
-            time.sleep(min(backoff_s, 2.0))  # Cap at 2s for testing
+            # Sleep for the global cooldown
+            time.sleep(min(cooldown, 2.0))  # Cap at 2s for testing
 
             # Check if CB should open
             if self.consecutive_429s >= 5:
@@ -626,6 +698,7 @@ class RateLimitConflictUser(HttpUser):
         if self.consecutive_429s > 0:
             self.consecutive_429s = 0
             self.current_backoff = BASE_BACKOFF_S
+            _reset_global_cooldown()  # Notify global coordinator of success
 
         # Actual request
         response = self.client.post(
@@ -641,17 +714,21 @@ class RateLimitConflictUser(HttpUser):
             retry_after, remaining = self._handle_rate_limit_response(response)
 
             self.consecutive_429s += 1
+            
+            # *** Self-DDoS Prevention: Set GLOBAL cooldown ***
+            cooldown = _set_global_cooldown(retry_after)
+            
             _check_self_ddos()
 
-            # Apply backoff
-            backoff_s = self._calculate_backoff(self.consecutive_429s, retry_after)
-            _record_backoff(duration_ms=backoff_s * 1000, respected=True, retry_after_respected=bool(retry_after))
+            # Apply global backoff
+            _record_backoff(duration_ms=cooldown * 1000, respected=True, retry_after_respected=bool(retry_after))
 
-            time.sleep(min(backoff_s, 2.0))
+            time.sleep(min(cooldown, 2.0))
 
         elif response.status_code in [200, 201]:
             _record_request(success=True, rate_limited=False, phase=phase)
             self.consecutive_429s = 0
+            _reset_global_cooldown()  # Success - gradually reset
         else:
             _record_request(success=False, rate_limited=False, phase=phase)
 
@@ -674,6 +751,14 @@ class RateLimitConflictUser(HttpUser):
 
         # Attempt with retries
         for attempt in range(MAX_RETRY_ATTEMPTS):
+            # *** GLOBAL COOLDOWN CHECK (Self-DDoS Prevention) ***
+            cooldown_wait = _wait_for_global_cooldown()
+            if cooldown_wait > 0:
+                _record_backoff(duration_ms=cooldown_wait * 1000, respected=True, retry_after_respected=True)
+                time.sleep(min(cooldown_wait, 2.0))
+                # After cooldown, check again before proceeding
+                continue
+            
             # Check simulated rate limit
             is_limited, retry_after = _check_simulated_rate_limit()
 
@@ -684,11 +769,13 @@ class RateLimitConflictUser(HttpUser):
                     caused_cascade=(attempt > 0 and phase == "retry_cascade"),
                 )
 
-                # Calculate and apply backoff
-                backoff_s = self._calculate_backoff(attempt, retry_after)
-                _record_backoff(duration_ms=backoff_s * 1000, respected=True)
+                # *** Set GLOBAL cooldown for all users ***
+                cooldown = _set_global_cooldown(retry_after)
+                _check_self_ddos()
+                
+                _record_backoff(duration_ms=cooldown * 1000, respected=True)
 
-                time.sleep(min(backoff_s, 1.5))
+                time.sleep(min(cooldown, 2.0))
                 continue
 
             # Actual request
@@ -707,14 +794,19 @@ class RateLimitConflictUser(HttpUser):
                 )
 
                 retry_after, _ = self._handle_rate_limit_response(response)
-                backoff_s = self._calculate_backoff(attempt, retry_after)
-                _record_backoff(duration_ms=backoff_s * 1000, respected=True)
+                
+                # *** Set GLOBAL cooldown for all users ***
+                cooldown = _set_global_cooldown(retry_after)
+                _check_self_ddos()
+                
+                _record_backoff(duration_ms=cooldown * 1000, respected=True)
 
-                time.sleep(min(backoff_s, 1.5))
+                time.sleep(min(cooldown, 2.0))
                 continue
 
             elif response.status_code in [200, 201]:
                 _record_retry(success=True, after_rate_limit=False)
+                _reset_global_cooldown()  # Success - reset global state
                 break
 
             else:
@@ -732,6 +824,13 @@ class RateLimitConflictUser(HttpUser):
         phase = _get_current_phase()
         if phase != "retry_cascade":
             return
+
+        # *** GLOBAL COOLDOWN CHECK (Self-DDoS Prevention) ***
+        cooldown_wait = _wait_for_global_cooldown()
+        if cooldown_wait > 0:
+            _record_backoff(duration_ms=cooldown_wait * 1000, respected=True, retry_after_respected=True)
+            time.sleep(min(cooldown_wait, 2.0))
+            return  # Skip this iteration
 
         # Check CB state
         cb_state = self._check_cb_state()
@@ -756,7 +855,11 @@ class RateLimitConflictUser(HttpUser):
         if response.status_code == 429:
             # Still rate limited - CB should consider opening
             _record_request(success=False, rate_limited=True, phase=phase)
+            # *** Set GLOBAL cooldown ***
+            _set_global_cooldown()
             _check_self_ddos()
+        elif response.status_code == 200:
+            _reset_global_cooldown()
 
     @task(2)
     @tag("recovery")
@@ -768,6 +871,13 @@ class RateLimitConflictUser(HttpUser):
         if phase != "recovery":
             return
 
+        # *** GLOBAL COOLDOWN CHECK (Self-DDoS Prevention) ***
+        cooldown_wait = _wait_for_global_cooldown()
+        if cooldown_wait > 0:
+            _record_backoff(duration_ms=cooldown_wait * 1000, respected=True, retry_after_respected=True)
+            time.sleep(min(cooldown_wait, 2.0))
+            return  # Skip this iteration
+
         # Light request to check if rate limit has lifted
         response = self.client.get(
             "/api/products/",
@@ -777,6 +887,7 @@ class RateLimitConflictUser(HttpUser):
 
         if response.status_code == 200:
             _record_request(success=True, rate_limited=False, phase=phase)
+            _reset_global_cooldown()  # Success - reset global state
 
             # Check if CB has closed
             cb_state = self._check_cb_state()
@@ -785,6 +896,9 @@ class RateLimitConflictUser(HttpUser):
 
         elif response.status_code == 429:
             _record_request(success=False, rate_limited=True, phase=phase)
+            # *** Set GLOBAL cooldown ***
+            _set_global_cooldown()
+            _check_self_ddos()
 
 
 # =============================================================================
