@@ -166,12 +166,8 @@ class PoolCircuitBreaker:
                         "_is_no_available": is_no_available,
                     }
                 else:
-                    # Pool이 아직 초기화되지 않음
-                    logger.warning(f"[PoolCircuitBreaker] Pool not yet initialized in pool_container")
-                    return {
-                        "available": False,
-                        "reason": "Pool not yet initialized",
-                    }
+                    # Pool이 아직 초기화되지 않음 - fallback으로 계속 진행
+                    logger.info(f"[PoolCircuitBreaker] pool_container empty, trying fallback...")
             except ImportError as e:
                 # django-db-connection-pool 미설치
                 logger.warning(f"[PoolCircuitBreaker] dj_db_conn_pool not available: {e}")
