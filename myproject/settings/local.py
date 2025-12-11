@@ -31,10 +31,9 @@ MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")  # noqa:
 USE_POOL_CIRCUIT_BREAKER = os.getenv("USE_POOL_CIRCUIT_BREAKER", "FALSE") == "TRUE"
 
 if USE_POOL_CIRCUIT_BREAKER:
-    # Pool Timeout 미들웨어 추가 (예외 잡아서 503 반환)
+    # Pool Timeout 미들웨어만 추가 (예외 잡아서 503 반환)
+    # PoolCircuitBreakerMiddleware는 check_pool_status()에서 블로킹 발생하므로 제거
     MIDDLEWARE.insert(1, "myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware")  # noqa: F405
-    # 기존 Circuit Breaker도 추가 (Pool 상태 기반 사전 차단)
-    MIDDLEWARE.insert(2, "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware")  # noqa: F405
 
 INTERNAL_IPS = [
     "127.0.0.1",
