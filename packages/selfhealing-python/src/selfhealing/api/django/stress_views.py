@@ -28,6 +28,33 @@ logger = logging.getLogger(__name__)
 def get_pool_info():
     """SQLAlchemy Pool 정보 조회"""
     try:
+        # 방법 1: django-db-connection-pool의 pool_container 사용 (권장)
+        try:
+            from dj_db_conn_pool.core.mixins.core import pool_container
+            
+            if pool_container.has('default'):
+                pool = pool_container.get('default')
+                pool_size = pool.size()
+                checkedout = pool.checkedout()
+                checkedin = pool.checkedin()
+                overflow = pool.overflow()
+                max_overflow = getattr(pool, '_max_overflow', 0)
+                
+                return {
+                    "pool_type": type(pool).__name__,
+                    "pool_size": pool_size,
+                    "max_overflow": max_overflow,
+                    "checkedin": checkedin,
+                    "checkedout": checkedout,
+                    "overflow": overflow,
+                    "total_capacity": pool_size + max_overflow,
+                    "available": checkedin,
+                    "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
+                }
+        except ImportError:
+            pass  # dj_db_conn_pool 미설치
+        
+        # 방법 2: Django connection에서 직접 접근
         conn = connections['default']
         
         # django-db-connection-pool 사용 시 SQLAlchemy engine에 접근
