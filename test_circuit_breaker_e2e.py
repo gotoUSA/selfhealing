@@ -113,7 +113,7 @@ def main():
     else:
         print(f"   ⚠️ Pool Status 조회 실패: {result['status']}")
     
-    result = make_request("/api/self-healing/circuit-breaker/status/")
+    result = make_request("/api/self-healing/circuit-breaker/pool/status/")
     if result["status"] == 200:
         cb_info = result["body"]
         print(f"   ✅ Circuit Breaker: {cb_info.get('circuit_breaker', {}).get('state', '?')}")
@@ -177,7 +177,7 @@ def main():
     print("🔍 Phase 3: Circuit Breaker 상태 확인")
     print("=" * 70)
     
-    result = make_request("/api/self-healing/circuit-breaker/status/")
+    result = make_request("/api/self-healing/circuit-breaker/pool/status/")
     if result["status"] == 200:
         cb_info = result["body"]
         cb = cb_info.get("circuit_breaker", {})
