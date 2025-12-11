@@ -9,7 +9,7 @@ services:
       - POSTGRES_USER=shopping_user
       - POSTGRES_PASSWORD=shopping_pass
     command: >
-      postgres 
+      postgres
       -c max_connections=15
       -c shared_buffers=32MB
     healthcheck:

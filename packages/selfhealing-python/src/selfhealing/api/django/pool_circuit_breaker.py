@@ -24,22 +24,22 @@ logger = logging.getLogger(__name__)
 class PoolCircuitBreaker:
     """
     Pool 상태 기반 Circuit Breaker.
-    
+
     상태:
     - CLOSED: 정상 - 모든 요청 허용
     - OPEN: 고갈 - 모든 요청 즉시 거부 (503)
     - HALF_OPEN: 복구 테스트 중 - 일부 요청만 허용
     """
-    
+
     # 싱글톤 인스턴스
     _instance = None
     _lock = threading.Lock()
-    
+
     # 상태 상수
-    CLOSED = "CLOSED"      # 정상
-    OPEN = "OPEN"          # 차단 중
+    CLOSED = "CLOSED"  # 정상
+    OPEN = "OPEN"  # 차단 중
     HALF_OPEN = "HALF_OPEN"  # 복구 테스트 중
-    
+
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:
@@ -47,29 +47,30 @@ class PoolCircuitBreaker:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-            
+
         self._initialized = True
         self._state = self.CLOSED
         self._state_lock = threading.Lock()
-        
+
         # 설정값 (환경 변수로 오버라이드 가능)
         import os
+
         self._failure_threshold = int(os.getenv("POOL_CB_FAILURE_THRESHOLD", "3"))  # 3회 실패 시 OPEN
         self._success_threshold = int(os.getenv("POOL_CB_SUCCESS_THRESHOLD", "2"))  # 2회 성공 시 CLOSED
         self._recovery_timeout = int(os.getenv("POOL_CB_RECOVERY_TIMEOUT", "10"))  # 10초 후 HALF_OPEN
         self._half_open_max_requests = int(os.getenv("POOL_CB_HALF_OPEN_MAX", "3"))
-        
+
         # 상태 추적
         self._failure_count = 0
         self._success_count = 0
         self._last_failure_time = None
         self._open_time = None
         self._half_open_requests = 0
-        
+
         # 통계
         self._stats = {
             "total_requests": 0,
@@ -78,60 +79,60 @@ class PoolCircuitBreaker:
             "recovery_count": 0,
             "state_changes": [],
         }
-        
+
         logger.info("[PoolCircuitBreaker] Initialized - Fail Fast enabled!")
-    
+
     @property
     def state(self) -> str:
         """현재 상태"""
         with self._state_lock:
             return self._state
-    
+
     def _set_state(self, new_state: str):
         """상태 변경"""
         with self._state_lock:
             if self._state != new_state:
                 old_state = self._state
                 self._state = new_state
-                
+
                 timestamp = time.time()
-                self._stats["state_changes"].append({
-                    "from": old_state,
-                    "to": new_state,
-                    "time": timestamp,
-                })
-                
-                logger.warning(
-                    f"[PoolCircuitBreaker] State: {old_state} → {new_state}"
+                self._stats["state_changes"].append(
+                    {
+                        "from": old_state,
+                        "to": new_state,
+                        "time": timestamp,
+                    }
                 )
-                
+
+                logger.warning(f"[PoolCircuitBreaker] State: {old_state} → {new_state}")
+
                 if new_state == self.OPEN:
                     self._open_time = timestamp
                     self._stats["pool_exhaustion_count"] += 1
                 elif new_state == self.CLOSED and old_state != self.CLOSED:
                     self._stats["recovery_count"] += 1
-    
+
     def check_pool_status(self) -> dict:
         """Pool 상태 조회 (non-blocking)"""
         try:
             # django-db-connection-pool의 pool_container를 통해 접근
             try:
                 from dj_db_conn_pool.core.mixins.core import pool_container
-                
-                has_pool = pool_container.has('default')
+
+                has_pool = pool_container.has("default")
                 logger.info(f"[PoolCircuitBreaker] pool_container.has('default') = {has_pool}")
-                
+
                 if has_pool:
-                    pool = pool_container.get('default')
+                    pool = pool_container.get("default")
                     pool_size = pool.size()
                     checkedout = pool.checkedout()
                     checkedin = pool.checkedin()
                     overflow = pool.overflow()
-                    max_overflow = getattr(pool, '_max_overflow', 2)
+                    max_overflow = getattr(pool, "_max_overflow", 2)
                     total_capacity = pool_size + max_overflow
-                    
+
                     logger.info(f"[PoolCircuitBreaker] Pool: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}")
-                    
+
                     # Pool 고갈 판단:
                     # Pool 크기 3, max_overflow 0일 때:
                     # - checkedout >= 3 이면 완전 고갈
@@ -139,16 +140,18 @@ class PoolCircuitBreaker:
                     is_at_capacity = checkedout >= total_capacity
                     is_overflow_maxed = overflow >= max_overflow if max_overflow > 0 else True
                     is_no_available = checkedin == 0
-                    
+
                     # 더 적극적인 고갈 감지: 사용 가능 연결이 0이고 모든 연결이 사용 중
                     is_exhausted = is_no_available and checkedout >= pool_size
-                    
+
                     # 66% 이상 사용 시 near exhaustion (Pool 3개면 2개 사용 시)
                     is_near_exhaustion = checkedout >= total_capacity * 0.66
-                    
+
                     if is_exhausted:
-                        logger.warning(f"[PoolCircuitBreaker] EXHAUSTED! checkedout={checkedout}, checkedin={checkedin}, pool_size={pool_size}")
-                    
+                        logger.warning(
+                            f"[PoolCircuitBreaker] EXHAUSTED! checkedout={checkedout}, checkedin={checkedin}, pool_size={pool_size}"
+                        )
+
                     return {
                         "available": True,
                         "pool_size": pool_size,
@@ -171,59 +174,61 @@ class PoolCircuitBreaker:
             except ImportError as e:
                 # django-db-connection-pool 미설치
                 logger.warning(f"[PoolCircuitBreaker] dj_db_conn_pool not available: {e}")
-            
+
             # Fallback 방식 1: Django connections를 통한 접근
-            conn = connections['default']
+            conn = connections["default"]
             logger.info(f"[PoolCircuitBreaker] Fallback: conn type={type(conn).__name__}")
-            
+
             # dj-db-conn-pool은 connection 객체에 pool 속성을 추가함
             # 또는 connection.connection이 SQLAlchemy engine일 수 있음
             pool = None
-            
+
             # 방법 1: conn.pool.pool (일부 버전)
-            if hasattr(conn, 'pool') and conn.pool:
-                if hasattr(conn.pool, 'pool'):
+            if hasattr(conn, "pool") and conn.pool:
+                if hasattr(conn.pool, "pool"):
                     pool = conn.pool.pool
                     logger.info(f"[PoolCircuitBreaker] Found pool via conn.pool.pool")
-                elif hasattr(conn.pool, 'size'):
+                elif hasattr(conn.pool, "size"):
                     pool = conn.pool
                     logger.info(f"[PoolCircuitBreaker] Found pool via conn.pool")
-            
+
             # 방법 2: conn.connection._pool (SQLAlchemy connection)
-            if not pool and hasattr(conn, 'connection') and conn.connection:
+            if not pool and hasattr(conn, "connection") and conn.connection:
                 raw_conn = conn.connection
-                if hasattr(raw_conn, '_pool'):
+                if hasattr(raw_conn, "_pool"):
                     pool = raw_conn._pool
                     logger.info(f"[PoolCircuitBreaker] Found pool via conn.connection._pool")
-                elif hasattr(raw_conn, 'engine') and hasattr(raw_conn.engine, 'pool'):
+                elif hasattr(raw_conn, "engine") and hasattr(raw_conn.engine, "pool"):
                     pool = raw_conn.engine.pool
                     logger.info(f"[PoolCircuitBreaker] Found pool via conn.connection.engine.pool")
-            
+
             # 방법 3: Database wrapper의 내부 속성
             if not pool:
-                for attr in ['_pool', 'pool', 'connection_pool']:
+                for attr in ["_pool", "pool", "connection_pool"]:
                     if hasattr(conn, attr):
                         candidate = getattr(conn, attr)
-                        if candidate and hasattr(candidate, 'checkedout'):
+                        if candidate and hasattr(candidate, "checkedout"):
                             pool = candidate
                             logger.info(f"[PoolCircuitBreaker] Found pool via conn.{attr}")
                             break
-            
-            if pool and hasattr(pool, 'checkedout'):
-                pool_size = pool.size() if hasattr(pool, 'size') else 5
+
+            if pool and hasattr(pool, "checkedout"):
+                pool_size = pool.size() if hasattr(pool, "size") else 5
                 checkedout = pool.checkedout()
-                checkedin = pool.checkedin() if hasattr(pool, 'checkedin') else 0
-                overflow = pool.overflow() if hasattr(pool, 'overflow') else 0
-                max_overflow = getattr(pool, '_max_overflow', 0)
+                checkedin = pool.checkedin() if hasattr(pool, "checkedin") else 0
+                overflow = pool.overflow() if hasattr(pool, "overflow") else 0
+                max_overflow = getattr(pool, "_max_overflow", 0)
                 total_capacity = pool_size + max_overflow
-                
+
                 is_exhausted = checkedin == 0 and checkedout >= pool_size
-                
-                logger.info(f"[PoolCircuitBreaker] Pool stats: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}")
-                
+
+                logger.info(
+                    f"[PoolCircuitBreaker] Pool stats: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}"
+                )
+
                 if is_exhausted:
                     logger.warning(f"[PoolCircuitBreaker] EXHAUSTED detected via fallback!")
-                
+
                 return {
                     "available": True,
                     "pool_size": pool_size,
@@ -236,37 +241,46 @@ class PoolCircuitBreaker:
                     "is_exhausted": is_exhausted,
                     "is_near_exhaustion": checkedout >= total_capacity * 0.66,
                 }
-            
-            # Pool을 찾지 못함
-            logger.warning(f"[PoolCircuitBreaker] No pool found. conn attrs: {[a for a in dir(conn) if not a.startswith('_')][:20]}")
+
+            # Pool을 찾지 못함 - django-db-connection-pool이 사용되지 않는 경우
+            # 또는 아직 첫 DB 연결이 발생하지 않은 경우 (정상 상황)
+            # DEBUG 레벨로 낮춤 - 이는 에러가 아님
+            logger.debug(
+                f"[PoolCircuitBreaker] No pool found (normal if using standard Django DB backend). "
+                f"conn type: {type(conn).__name__}"
+            )
+            # Pool이 없으면 Circuit Breaker를 비활성화 상태로 처리
+            # (표준 Django 연결은 Pool Circuit Breaker가 필요 없음)
             return {
                 "available": False,
-                "reason": "No SQLAlchemy pool detected",
+                "reason": "No SQLAlchemy pool detected (standard Django connection)",
+                "is_exhausted": False,  # Pool이 없으면 고갈도 없음
+                "is_near_exhaustion": False,
             }
-            
+
         except Exception as e:
             logger.error(f"[PoolCircuitBreaker] Pool status check failed: {e}")
             return {
                 "available": False,
                 "reason": str(e),
             }
-    
+
     def should_allow_request(self) -> tuple[bool, Optional[str]]:
         """
         요청 허용 여부 판단.
-        
+
         Returns:
             (allow: bool, reason: Optional[str])
         """
         self._stats["total_requests"] += 1
-        
+
         with self._state_lock:
             current_state = self._state
-            
+
             if current_state == self.CLOSED:
                 # 정상 상태 - Pool 상태 체크
                 pool_status = self.check_pool_status()
-                
+
                 if pool_status.get("is_exhausted"):
                     # Pool 고갈 감지! 즉시 OPEN으로 전환
                     logger.error(
@@ -277,36 +291,37 @@ class PoolCircuitBreaker:
                     self._stats["rejected_requests"] += 1
                     self._stats["pool_exhaustion_count"] += 1
                     return (False, "Pool exhausted - Circuit OPEN")
-                
+
                 elif pool_status.get("is_near_exhaustion"):
                     # 80% 이상 사용 중 - 경고 및 failure count 증가
                     self._failure_count += 1
-                    usage = pool_status.get('usage_percent', 0)
+                    usage = pool_status.get("usage_percent", 0)
                     logger.warning(
                         f"[PoolCircuitBreaker] Pool usage HIGH: {usage:.1f}% "
                         f"Failures: {self._failure_count}/{self._failure_threshold}"
                     )
-                    
+
                     # Threshold 도달 시 OPEN
                     if self._failure_count >= self._failure_threshold:
                         self._set_state(self.OPEN)
                         self._stats["rejected_requests"] += 1
                         return (False, f"Pool near exhaustion ({usage:.1f}%) - Circuit OPEN")
-                    
+
                     # 90% 이상이면 50% 확률로 거부 (부하 분산)
                     if usage >= 90:
                         import random
+
                         if random.random() < 0.5:
                             self._stats["rejected_requests"] += 1
                             return (False, f"Pool critical ({usage:.1f}%) - load shedding")
-                    
+
                     return (True, None)
-                
+
                 else:
                     # 정상 - failure count 리셋
                     self._failure_count = 0
                     return (True, None)
-            
+
             elif current_state == self.OPEN:
                 # 차단 상태 - 복구 timeout 체크
                 if self._open_time:
@@ -319,12 +334,12 @@ class PoolCircuitBreaker:
                         # 첫 번째 요청 허용
                         self._half_open_requests += 1
                         return (True, "Testing recovery (HALF_OPEN)")
-                
+
                 # 여전히 차단
                 self._stats["rejected_requests"] += 1
                 remaining = self._recovery_timeout - (time.time() - (self._open_time or 0))
                 return (False, f"Circuit OPEN - retry in {remaining:.1f}s")
-            
+
             elif current_state == self.HALF_OPEN:
                 # 복구 테스트 중
                 if self._half_open_requests < self._half_open_max_requests:
@@ -334,45 +349,42 @@ class PoolCircuitBreaker:
                     # 테스트 요청 수 초과 - 대기
                     self._stats["rejected_requests"] += 1
                     return (False, "HALF_OPEN test in progress - wait")
-        
+
         return (True, None)
-    
+
     def record_success(self):
         """요청 성공 기록"""
         with self._state_lock:
             if self._state == self.HALF_OPEN:
                 self._success_count += 1
-                logger.info(
-                    f"[PoolCircuitBreaker] HALF_OPEN success: "
-                    f"{self._success_count}/{self._success_threshold}"
-                )
-                
+                logger.info(f"[PoolCircuitBreaker] HALF_OPEN success: " f"{self._success_count}/{self._success_threshold}")
+
                 if self._success_count >= self._success_threshold:
                     # 충분히 성공 - 복구 완료!
                     self._set_state(self.CLOSED)
                     self._failure_count = 0
                     self._success_count = 0
                     logger.info("[PoolCircuitBreaker] 🎉 RECOVERED! Circuit CLOSED")
-            
+
             elif self._state == self.CLOSED:
                 # 정상 상태에서 성공 - 실패 카운터 리셋
                 self._failure_count = 0
-    
+
     def record_failure(self):
         """요청 실패 기록"""
         with self._state_lock:
             self._last_failure_time = time.time()
-            
+
             if self._state == self.HALF_OPEN:
                 # 복구 테스트 실패 - 다시 OPEN
                 self._set_state(self.OPEN)
                 logger.warning("[PoolCircuitBreaker] Recovery failed - back to OPEN")
-            
+
             elif self._state == self.CLOSED:
                 self._failure_count += 1
                 if self._failure_count >= self._failure_threshold:
                     self._set_state(self.OPEN)
-    
+
     def get_stats(self) -> dict:
         """통계 반환"""
         return {
@@ -382,7 +394,7 @@ class PoolCircuitBreaker:
             "stats": self._stats.copy(),
             "pool_status": self.check_pool_status(),
         }
-    
+
     def reset(self):
         """상태 초기화 (테스트용)"""
         with self._state_lock:
@@ -401,7 +413,7 @@ pool_circuit_breaker = PoolCircuitBreaker()
 class PoolCircuitBreakerMiddleware:
     """
     Django Middleware: Pool 고갈 시 즉시 503 반환.
-    
+
     사용법:
     MIDDLEWARE = [
         ...
@@ -409,30 +421,30 @@ class PoolCircuitBreakerMiddleware:
         ...
     ]
     """
-    
+
     # Circuit Breaker 적용 제외 경로
     EXCLUDED_PATHS = [
-        '/health/',
-        '/api/self-healing/health/',
-        '/api/self-healing/circuit-breaker/',  # CB 관리 API는 제외
-        '/admin/',
-        '/static/',
-        '/media/',
+        "/health/",
+        "/api/self-healing/health/",
+        "/api/self-healing/circuit-breaker/",  # CB 관리 API는 제외
+        "/admin/",
+        "/static/",
+        "/media/",
     ]
-    
+
     def __init__(self, get_response):
         self.get_response = get_response
         self._request_count = 0
         self._log_interval = 50  # 50 요청마다 Pool 상태 로깅
         logger.info("[PoolCircuitBreakerMiddleware] Initialized - Fail Fast enabled!")
-    
+
     def __call__(self, request):
         # 제외 경로 체크
         path = request.path
         for excluded in self.EXCLUDED_PATHS:
             if path.startswith(excluded):
                 return self.get_response(request)
-        
+
         # 주기적 Pool 상태 로깅
         self._request_count += 1
         if self._request_count % self._log_interval == 0:
@@ -443,16 +455,14 @@ class PoolCircuitBreakerMiddleware:
                 f"({pool_status.get('usage_percent', 0):.1f}%) "
                 f"exhausted={pool_status.get('is_exhausted', False)}"
             )
-        
+
         # Circuit Breaker 체크
         cb = pool_circuit_breaker
         allow, reason = cb.should_allow_request()
-        
+
         if not allow:
             # 즉시 거부! (Fail Fast)
-            logger.warning(
-                f"[PoolCircuitBreakerMiddleware] Rejected: {path} - {reason}"
-            )
+            logger.warning(f"[PoolCircuitBreakerMiddleware] Rejected: {path} - {reason}")
             return JsonResponse(
                 {
                     "error": "Service temporarily unavailable",
@@ -463,11 +473,11 @@ class PoolCircuitBreakerMiddleware:
                 status=503,
                 headers={"Retry-After": str(cb._recovery_timeout)},
             )
-        
+
         # 요청 처리
         try:
             response = self.get_response(request)
-            
+
             # 성공 여부 판단
             if response.status_code < 500:
                 cb.record_success()
@@ -488,13 +498,13 @@ class PoolCircuitBreakerMiddleware:
                         cb.record_failure()
                 except Exception:
                     cb.record_failure()
-            
+
             return response
-            
+
         except Exception as e:
             # Pool Timeout 또는 DB 연결 오류 감지
             error_str = str(e).lower()
-            
+
             # Pool 고갈 관련 예외 패턴
             pool_exhaustion_patterns = [
                 "timeout",
@@ -505,17 +515,15 @@ class PoolCircuitBreakerMiddleware:
                 "can't get connection",
                 "no connections available",
             ]
-            
+
             is_pool_exhaustion = any(p in error_str for p in pool_exhaustion_patterns)
-            
+
             if is_pool_exhaustion:
                 # Pool 고갈 예외! 즉시 OPEN 전환
-                logger.error(
-                    f"[PoolCircuitBreakerMiddleware] Pool exhaustion detected! {e}"
-                )
+                logger.error(f"[PoolCircuitBreakerMiddleware] Pool exhaustion detected! {e}")
                 cb._failure_count = cb._failure_threshold  # 즉시 threshold 도달
                 cb.record_failure()
-                
+
                 # Pool 상태 로깅
                 pool_status = cb.check_pool_status()
                 logger.error(
@@ -523,7 +531,7 @@ class PoolCircuitBreakerMiddleware:
                     f"checkedout={pool_status.get('checkedout', '?')}/{pool_status.get('total_capacity', '?')} "
                     f"overflow={pool_status.get('overflow', '?')}"
                 )
-                
+
                 # 503 반환 (재시도 유도)
                 return JsonResponse(
                     {
@@ -547,30 +555,34 @@ def circuit_breaker_status(request):
     """Circuit Breaker 상태 조회 API"""
     cb = pool_circuit_breaker
     stats = cb.get_stats()
-    
-    return JsonResponse({
-        "circuit_breaker": {
-            "state": stats["state"],
-            "failure_count": stats["failure_count"],
-            "success_count": stats["success_count"],
-            "failure_threshold": cb._failure_threshold,
-            "success_threshold": cb._success_threshold,
-            "recovery_timeout_seconds": cb._recovery_timeout,
-        },
-        "pool": stats["pool_status"],
-        "statistics": stats["stats"],
-    })
+
+    return JsonResponse(
+        {
+            "circuit_breaker": {
+                "state": stats["state"],
+                "failure_count": stats["failure_count"],
+                "success_count": stats["success_count"],
+                "failure_threshold": cb._failure_threshold,
+                "success_threshold": cb._success_threshold,
+                "recovery_timeout_seconds": cb._recovery_timeout,
+            },
+            "pool": stats["pool_status"],
+            "statistics": stats["stats"],
+        }
+    )
 
 
 def circuit_breaker_reset(request):
     """Circuit Breaker 리셋 API (관리용)"""
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
-    
+
     cb = pool_circuit_breaker
     cb.reset()
-    
-    return JsonResponse({
-        "message": "Circuit Breaker reset to CLOSED",
-        "state": cb.state,
-    })
+
+    return JsonResponse(
+        {
+            "message": "Circuit Breaker reset to CLOSED",
+            "state": cb.state,
+        }
+    )
