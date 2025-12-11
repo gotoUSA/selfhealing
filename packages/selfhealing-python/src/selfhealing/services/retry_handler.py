@@ -70,7 +70,7 @@ class RetryConfig:
     non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     enable_dlq: bool = True
     domain: str = "default"
-    
+
     # Rate limit awareness settings
     rate_limit_aware: bool = True  # Enable Self-DDoS prevention
     rate_limit_key: str | None = None  # Custom key, defaults to domain
@@ -167,17 +167,18 @@ class RetryHandler:
                 jitter_percent=self.config.jitter_percent,
             )
         )
-        
+
         # Rate limit coordinator for Self-DDoS prevention
         self._rate_limit_coordinator = rate_limit_coordinator
         self._rate_limit_key = self.config.rate_limit_key or self.config.domain
-    
+
     @property
     def rate_limit_coordinator(self) -> Optional["RateLimitCoordinator"]:
         """Get rate limit coordinator, lazily initialized."""
         if self._rate_limit_coordinator is None and self.config.rate_limit_aware:
             try:
                 from .rate_limit_coordinator import get_rate_limit_coordinator
+
                 self._rate_limit_coordinator = get_rate_limit_coordinator()
             except Exception as e:
                 logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
@@ -186,17 +187,17 @@ class RetryHandler:
     def is_rate_limit_error(self, exception: Exception) -> tuple[bool, float | None]:
         """
         Check if an exception indicates a rate limit (429) error.
-        
+
         Args:
             exception: The exception to check
-            
+
         Returns:
             Tuple of (is_rate_limited, retry_after_seconds)
         """
         # Check for common rate limit exception patterns
         error_str = str(exception).lower()
         error_type = type(exception).__name__.lower()
-        
+
         # Common indicators
         rate_limit_indicators = [
             "429",
@@ -206,12 +207,9 @@ class RetryHandler:
             "throttle",
             "quota exceeded",
         ]
-        
-        is_rate_limited = any(
-            indicator in error_str or indicator in error_type
-            for indicator in rate_limit_indicators
-        )
-        
+
+        is_rate_limited = any(indicator in error_str or indicator in error_type for indicator in rate_limit_indicators)
+
         # Try to extract retry-after from exception
         retry_after = None
         if hasattr(exception, "retry_after"):
@@ -225,7 +223,7 @@ class RetryHandler:
                         retry_after = float(retry_after_header)
                     except ValueError:
                         pass
-        
+
         return is_rate_limited, retry_after
 
     def should_retry(self, exception: Exception, attempt: int) -> bool:
@@ -259,14 +257,12 @@ class RetryHandler:
         if coordinator:
             result = coordinator.wait_if_needed(self._rate_limit_key)
             if result.waited:
-                logger.info(
-                    f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown"
-                )
+                logger.info(f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown")
 
     def _handle_rate_limit_error(self, exception: Exception) -> None:
         """Handle rate limit error by setting global cooldown."""
         is_rate_limited, retry_after = self.is_rate_limit_error(exception)
-        
+
         if is_rate_limited:
             coordinator = self.rate_limit_coordinator
             if coordinator:
@@ -274,9 +270,7 @@ class RetryHandler:
                     key=self._rate_limit_key,
                     retry_after=retry_after,
                 )
-                logger.warning(
-                    f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s"
-                )
+                logger.warning(f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s")
 
     def get_next_delay(self, attempt: int) -> int:
         """
@@ -323,17 +317,17 @@ class RetryHandler:
 
         while attempt < self.config.max_attempts:
             attempt += 1
-            
+
             # Self-DDoS prevention: Wait if rate limited
             self._wait_for_rate_limit()
 
             try:
                 result = func(*args, **kwargs)
-                
+
                 # Notify coordinator of success
                 if self.rate_limit_coordinator:
                     self.rate_limit_coordinator.on_success(self._rate_limit_key)
-                
+
                 logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
                 return RetryResult(
                     success=True,
@@ -354,7 +348,7 @@ class RetryHandler:
                 )
 
                 logger.warning(f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}")
-                
+
                 # Self-DDoS prevention: Handle rate limit errors
                 self._handle_rate_limit_error(e)
 

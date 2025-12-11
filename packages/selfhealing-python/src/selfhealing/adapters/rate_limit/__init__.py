@@ -15,10 +15,10 @@ Usage:
         DatabaseRateLimitStorage,
         InMemoryRateLimitStorage,
     )
-    
+
     # Auto-detect best available backend
     storage = get_rate_limit_storage()
-    
+
     # Or explicitly choose
     storage = RedisRateLimitStorage(redis_client)
 """

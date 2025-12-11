@@ -121,33 +121,33 @@ _global_consecutive_429s = 0
 def _set_global_cooldown(retry_after: float = None):
     """Set global cooldown for all users (Self-DDoS prevention)."""
     global _global_cooldown_until, _global_consecutive_429s
-    
+
     with _global_rate_limit_lock:
         _global_consecutive_429s += 1
-        
+
         # Calculate backoff with exponential increase
         if retry_after and retry_after > 0:
             base_delay = retry_after
         else:
             base_delay = 1.0
-        
+
         # Exponential backoff: base * (2 ^ consecutive_429s)
         delay = base_delay * (BACKOFF_MULTIPLIER ** (_global_consecutive_429s - 1))
         delay = min(delay, MAX_BACKOFF_S)
-        
+
         # Add jitter to prevent thundering herd (±30%)
         jitter = delay * random.uniform(-0.3, 0.3)
         delay = max(0.1, delay + jitter)
-        
+
         _global_cooldown_until = time.time() + delay
-        
+
         return delay
 
 
 def _wait_for_global_cooldown() -> float:
     """Wait if currently in global cooldown period."""
     global _global_cooldown_until
-    
+
     with _global_rate_limit_lock:
         now = time.time()
         if now < _global_cooldown_until:
@@ -159,7 +159,7 @@ def _wait_for_global_cooldown() -> float:
 def _reset_global_cooldown():
     """Reset on successful request."""
     global _global_consecutive_429s
-    
+
     with _global_rate_limit_lock:
         _global_consecutive_429s = max(0, _global_consecutive_429s - 1)
 
@@ -642,7 +642,7 @@ class RateLimitConflictUser(HttpUser):
         """
         Test payment endpoint with rate limit simulation.
         Simulates rate limiting behavior on payment requests.
-        
+
         Uses Global Cooldown pattern to prevent Self-DDoS:
         - When one user gets 429, ALL users wait
         - Exponential backoff with jitter
@@ -714,10 +714,10 @@ class RateLimitConflictUser(HttpUser):
             retry_after, remaining = self._handle_rate_limit_response(response)
 
             self.consecutive_429s += 1
-            
+
             # *** Self-DDoS Prevention: Set GLOBAL cooldown ***
             cooldown = _set_global_cooldown(retry_after)
-            
+
             _check_self_ddos()
 
             # Apply global backoff
@@ -758,7 +758,7 @@ class RateLimitConflictUser(HttpUser):
                 time.sleep(min(cooldown_wait, 2.0))
                 # After cooldown, check again before proceeding
                 continue
-            
+
             # Check simulated rate limit
             is_limited, retry_after = _check_simulated_rate_limit()
 
@@ -772,7 +772,7 @@ class RateLimitConflictUser(HttpUser):
                 # *** Set GLOBAL cooldown for all users ***
                 cooldown = _set_global_cooldown(retry_after)
                 _check_self_ddos()
-                
+
                 _record_backoff(duration_ms=cooldown * 1000, respected=True)
 
                 time.sleep(min(cooldown, 2.0))
@@ -794,11 +794,11 @@ class RateLimitConflictUser(HttpUser):
                 )
 
                 retry_after, _ = self._handle_rate_limit_response(response)
-                
+
                 # *** Set GLOBAL cooldown for all users ***
                 cooldown = _set_global_cooldown(retry_after)
                 _check_self_ddos()
-                
+
                 _record_backoff(duration_ms=cooldown * 1000, respected=True)
 
                 time.sleep(min(cooldown, 2.0))

@@ -119,18 +119,18 @@ coordinator = get_rate_limit_coordinator()
 def call_external_api():
     # Wait if rate limited
     coordinator.wait_if_needed("external_api")
-    
+
     try:
         response = requests.post("https://api.example.com/...")
-        
+
         if response.status_code == 429:
             retry_after = float(response.headers.get("Retry-After", 5))
             coordinator.on_rate_limited("external_api", retry_after)
             raise RateLimitError()
-        
+
         coordinator.on_success("external_api")
         return response
-        
+
     except Exception as e:
         raise
 ```
@@ -309,7 +309,7 @@ config = RetryConfig(
 If you see warnings about storage unavailable:
 
 ```
-[RateLimitStorage] Falling back to in-memory storage. 
+[RateLimitStorage] Falling back to in-memory storage.
 Self-DDoS prevention will only work within this process!
 ```
 
