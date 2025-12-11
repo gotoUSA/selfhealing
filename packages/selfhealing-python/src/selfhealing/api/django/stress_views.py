@@ -28,7 +28,35 @@ logger = logging.getLogger(__name__)
 def get_pool_info():
     """SQLAlchemy Pool 정보 조회"""
     try:
-        # 방법 1: django-db-connection-pool의 pool_container 사용 (권장)
+        conn = connections['default']
+        
+        # 연결이 없으면 생성
+        conn.ensure_connection()
+        
+        # 방법 1: conn.connection._pool (dj_db_conn_pool 1.2.x)
+        if hasattr(conn, 'connection') and conn.connection is not None:
+            raw_conn = conn.connection
+            if hasattr(raw_conn, '_pool'):
+                pool = raw_conn._pool
+                pool_size = pool.size()
+                checkedout = pool.checkedout()
+                checkedin = pool.checkedin()
+                overflow = pool.overflow()
+                max_overflow = getattr(pool, '_max_overflow', 0)
+                
+                return {
+                    "pool_type": type(pool).__name__,
+                    "pool_size": pool_size,
+                    "max_overflow": max_overflow,
+                    "checkedin": checkedin,
+                    "checkedout": checkedout,
+                    "overflow": overflow,
+                    "total_capacity": pool_size + max_overflow,
+                    "available": checkedin,
+                    "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
+                }
+        
+        # 방법 2: pool_container 사용 (일부 버전)
         try:
             from dj_db_conn_pool.core.mixins.core import pool_container
             
@@ -52,13 +80,10 @@ def get_pool_info():
                     "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
                 }
         except ImportError:
-            pass  # dj_db_conn_pool 미설치
+            pass
         
-        # 방법 2: Django connection에서 직접 접근
-        conn = connections['default']
-        
-        # django-db-connection-pool 사용 시 SQLAlchemy engine에 접근
-        if hasattr(conn, 'pool') and hasattr(conn.pool, 'pool'):
+        # 방법 3: conn.pool.pool (구버전)
+        if hasattr(conn, 'pool') and conn.pool is not None and hasattr(conn.pool, 'pool'):
             pool = conn.pool.pool
             return {
                 "pool_type": type(pool).__name__,
@@ -67,15 +92,6 @@ def get_pool_info():
                 "checkedout": pool.checkedout(),
                 "overflow": pool.overflow(),
                 "pool_exhausted": pool.checkedout() >= pool.size() + pool._max_overflow,
-            }
-        
-        # SQLAlchemy engine이 있는 경우 (다른 방식)
-        if hasattr(conn, 'Database') and hasattr(conn.Database, 'pool'):
-            pool = conn.Database.pool
-            return {
-                "pool_type": type(pool).__name__,
-                "pool_size": getattr(pool, '_pool', {}).get('size', 'N/A'),
-                "note": "Alternative pool detection"
             }
             
         return {"pool_type": "django_default", "note": "No SQLAlchemy pool detected"}
