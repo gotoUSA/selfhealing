@@ -298,6 +298,85 @@ def call_external_api():
                연속 감지 시 → 백오프 2x, 3x, ... 증가
 ```
 
+#### 6.1 Rate Limit Coordinator (분산 환경 지원)
+
+> **신규 기능**: 다중 서버 환경에서도 100% Self-DDoS 방지를 보장하는 분산 Rate Limit 상태 관리 시스템
+
+**SaaS 철학**:
+- 외부 미들웨어에 의존하지 않음
+- 어떤 환경에서도 이식 가능 (Portable)
+- Database fallback으로 100% 커버리지 보장
+
+**아키텍처**:
+```
+┌────────────────────────────────────────────────────────────────┐
+│                   RateLimitCoordinator                          │
+│                   (Central Coordination)                        │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │   Server 1   │  │   Server 2   │  │   Server 3   │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│         │                 │                 │                   │
+│         └────────────────┼────────────────┘                   │
+│                          ▼                                      │
+│              ┌──────────────────────┐                          │
+│              │   Storage Adapter    │                          │
+│              │   (Auto-detected)    │                          │
+│              └──────────────────────┘                          │
+│                          │                                      │
+│         ┌───────────────┼───────────────┐                     │
+│         ▼               ▼               ▼                       │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐              │
+│  │    Redis    │ │  Database   │ │  In-Memory  │              │
+│  │   ~0.1ms    │ │   ~1-5ms    │ │   (local)   │              │
+│  │ (optional)  │ │  (always)   │ │  (fallback) │              │
+│  └─────────────┘ └─────────────┘ └─────────────┘              │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Storage 우선순위**:
+1. **Redis** (있으면): 가장 빠름 (~0.1ms), 다중 서버 완벽 지원
+2. **Database** (항상 가능): 보편적 (~1-5ms), 100% 커버리지 보장
+3. **In-Memory** (fallback): 단일 서버, 테스트용
+
+**사용 예시**:
+```python
+from selfhealing.services import RateLimitCoordinator
+
+# 1. 기본 생성 (자동 감지)
+coordinator = RateLimitCoordinator()
+
+# 2. RetryHandler와 통합
+from selfhealing.services import RetryHandler
+
+handler = RetryHandler(config={
+    "rate_limit_aware": True  # Rate Limit Coordinator 활성화
+})
+
+# 요청 실행 - 자동으로 429 처리 및 글로벌 쿨다운 적용
+result = await handler.execute(make_api_request)
+```
+
+**Django 모델 설정**:
+```python
+# shopping/models/rate_limit_state.py
+from django.db import models
+
+class RateLimitState(models.Model):
+    key = models.CharField(max_length=255, unique=True, db_index=True)
+    cooldown_until = models.DateTimeField(null=True, blank=True)
+    consecutive_429s = models.IntegerField(default=0)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'rate_limit_state'
+        verbose_name = 'Rate Limit State'
+```
+
+> 📚 **상세 문서**: [RATE_LIMIT_COORDINATOR.md](./RATE_LIMIT_COORDINATOR.md)
+
 **설정**:
 ```python
 from shopping.services.self_healing.config import self_healing_config
