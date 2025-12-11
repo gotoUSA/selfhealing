@@ -118,7 +118,10 @@ class PoolCircuitBreaker:
             try:
                 from dj_db_conn_pool.core.mixins.core import pool_container
                 
-                if pool_container.has('default'):
+                has_pool = pool_container.has('default')
+                logger.info(f"[PoolCircuitBreaker] pool_container.has('default') = {has_pool}")
+                
+                if has_pool:
                     pool = pool_container.get('default')
                     pool_size = pool.size()
                     checkedout = pool.checkedout()
@@ -127,17 +130,24 @@ class PoolCircuitBreaker:
                     max_overflow = getattr(pool, '_max_overflow', 2)
                     total_capacity = pool_size + max_overflow
                     
-                    # Pool 고갈 판단:
-                    # 1. checkedout이 total_capacity에 도달
-                    # 2. overflow가 max_overflow에 도달
-                    # 3. checkedin이 0이고 checkedout이 pool_size 이상
-                    is_at_capacity = checkedout >= total_capacity
-                    is_overflow_maxed = overflow >= max_overflow
-                    is_no_available = checkedin == 0 and checkedout >= pool_size
-                    is_exhausted = is_at_capacity or (is_overflow_maxed and is_no_available)
+                    logger.info(f"[PoolCircuitBreaker] Pool: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}")
                     
-                    # 80% 이상 사용 시 near exhaustion
-                    is_near_exhaustion = checkedout >= total_capacity * 0.8
+                    # Pool 고갈 판단:
+                    # Pool 크기 3, max_overflow 0일 때:
+                    # - checkedout >= 3 이면 완전 고갈
+                    # - checkedin == 0 이면 사용 가능한 연결 없음
+                    is_at_capacity = checkedout >= total_capacity
+                    is_overflow_maxed = overflow >= max_overflow if max_overflow > 0 else True
+                    is_no_available = checkedin == 0
+                    
+                    # 더 적극적인 고갈 감지: 사용 가능 연결이 0이고 모든 연결이 사용 중
+                    is_exhausted = is_no_available and checkedout >= pool_size
+                    
+                    # 66% 이상 사용 시 near exhaustion (Pool 3개면 2개 사용 시)
+                    is_near_exhaustion = checkedout >= total_capacity * 0.66
+                    
+                    if is_exhausted:
+                        logger.warning(f"[PoolCircuitBreaker] EXHAUSTED! checkedout={checkedout}, checkedin={checkedin}, pool_size={pool_size}")
                     
                     return {
                         "available": True,
@@ -157,12 +167,14 @@ class PoolCircuitBreaker:
                     }
                 else:
                     # Pool이 아직 초기화되지 않음
+                    logger.warning(f"[PoolCircuitBreaker] Pool not yet initialized in pool_container")
                     return {
                         "available": False,
                         "reason": "Pool not yet initialized",
                     }
-            except ImportError:
+            except ImportError as e:
                 # django-db-connection-pool 미설치
+                logger.warning(f"[PoolCircuitBreaker] dj_db_conn_pool not available: {e}")
                 pass
             
             # 기존 방식 (fallback)
