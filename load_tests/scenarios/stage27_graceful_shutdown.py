@@ -163,7 +163,7 @@ class FastRequestUser(HttpUser):
         """인증"""
         try:
             response = self.client.post("/api/auth/login/", json={
-                "username": f"fast_user_{random.randint(1, 100)}",
+                "username": f"load_test_user_{random.randint(0, 199)}",
                 "password": "testpass123"
             })
             if response.status_code == 200:
@@ -186,7 +186,7 @@ class FastRequestUser(HttpUser):
         
         try:
             with self.client.get(
-                "/api/health/",
+                "/api/self-healing/health/",
                 catch_response=True,
                 name="[Stage27] Fast - Health Check",
                 timeout=5
@@ -267,7 +267,7 @@ class MediumRequestUser(HttpUser):
     def _authenticate(self):
         try:
             response = self.client.post("/api/auth/login/", json={
-                "username": f"medium_user_{random.randint(1, 50)}",
+                "username": f"load_test_user_{random.randint(0, 199)}",
                 "password": "testpass123"
             })
             if response.status_code == 200:
@@ -369,7 +369,7 @@ class SlowRequestUser(HttpUser):
     def _authenticate(self):
         try:
             response = self.client.post("/api/auth/login/", json={
-                "username": f"slow_user_{random.randint(1, 30)}",
+                "username": f"load_test_user_{random.randint(0, 199)}",
                 "password": "testpass123"
             })
             if response.status_code == 200:

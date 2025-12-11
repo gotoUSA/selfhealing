@@ -23,6 +23,17 @@ INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
 
 MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")  # noqa: F405
 
+# ==========================================================================
+# Pool Circuit Breaker Middleware (Connection Pool 고갈 방지)
+# Pool이 고갈되면 즉시 503 반환하여 시스템 멈춤 방지 (Fail Fast)
+# ==========================================================================
+
+USE_POOL_CIRCUIT_BREAKER = os.getenv("USE_POOL_CIRCUIT_BREAKER", "FALSE") == "TRUE"
+
+if USE_POOL_CIRCUIT_BREAKER:
+    # SecurityMiddleware 바로 뒤에 추가 (가능한 빨리 차단)
+    MIDDLEWARE.insert(1, "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware")  # noqa: F405
+
 INTERNAL_IPS = [
     "127.0.0.1",
     "localhost",
@@ -33,25 +44,57 @@ hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS += [ip[: ip.rfind(".")] + ".1" for ip in ips]
 
 # ==========================================================================
-# Database (PostgreSQL - Dev/Prod parity)
+# Database (PostgreSQL with Connection Pool)
 # ==========================================================================
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DATABASE_NAME", "myproject_dev"),
-        "USER": os.getenv("DATABASE_USER", "postgres"),
-        "PASSWORD": os.getenv("DATABASE_PASSWORD", "postgres"),
-        "HOST": os.getenv("DATABASE_HOST", "localhost"),
-        "PORT": os.getenv("DATABASE_PORT", "5432"),
-        "CONN_MAX_AGE": 600,
-        "CONN_HEALTH_CHECKS": True,
-        "OPTIONS": {
-            "connect_timeout": 10,
-            "options": "-c statement_timeout=30000",
-        },
+# Connection Pool 설정 (환경변수로 제어 가능)
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+USE_CONNECTION_POOL = os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE"
+
+if USE_CONNECTION_POOL:
+    # SQLAlchemy 기반 Connection Pool 사용
+    DATABASES = {
+        "default": {
+            "ENGINE": "dj_db_conn_pool.backends.postgresql",
+            "NAME": os.getenv("DATABASE_NAME", "myproject_dev"),
+            "USER": os.getenv("DATABASE_USER", "postgres"),
+            "PASSWORD": os.getenv("DATABASE_PASSWORD", "postgres"),
+            "HOST": os.getenv("DATABASE_HOST", "localhost"),
+            "PORT": os.getenv("DATABASE_PORT", "5432"),
+            "POOL_OPTIONS": {
+                "POOL_SIZE": DB_POOL_SIZE,
+                "MAX_OVERFLOW": DB_MAX_OVERFLOW,
+                "RECYCLE": DB_POOL_RECYCLE,
+                "TIMEOUT": DB_POOL_TIMEOUT,  # 연결 대기 timeout (소문자 사용!)
+                "PRE_PING": True,  # 연결 상태 확인
+                "ECHO": True,  # SQL 로깅 (디버그용)
+            },
+            "OPTIONS": {
+                "connect_timeout": 10,
+            },
+        }
     }
-}
+else:
+    # 기본 Django 연결 (Pool 미사용)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DATABASE_NAME", "myproject_dev"),
+            "USER": os.getenv("DATABASE_USER", "postgres"),
+            "PASSWORD": os.getenv("DATABASE_PASSWORD", "postgres"),
+            "HOST": os.getenv("DATABASE_HOST", "localhost"),
+            "PORT": os.getenv("DATABASE_PORT", "5432"),
+            "CONN_MAX_AGE": 600,
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "connect_timeout": 10,
+                "options": "-c statement_timeout=30000",
+            },
+        }
+    }
 
 # ==========================================================================
 # Cache (Redis)

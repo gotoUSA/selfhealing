@@ -719,21 +719,145 @@ class SelfHealingHealthView(APIView):
     def get(self, request):
         """Get self-healing system health."""
         try:
+            from django.db import connection
+            
+            # DB 연결 확인
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
             services_count = CircuitBreakerState.objects.count()
             health_status = "healthy"
+            db_status = "healthy"
         except Exception as e:
             logger.error(f"[SelfHealing] Health check failed: {e}")
             services_count = 0
             health_status = "degraded"
+            db_status = "unhealthy"
 
         return Response(
             {
                 "status": health_status,
-                "circuit_breaker_enabled": True,
+                "checks": {
+                    "database": db_status,
+                    "circuit_breaker": "enabled",
+                },
                 "services_count": services_count,
                 "timestamp": timezone.now().isoformat(),
             }
         )
+
+
+class LivenessView(APIView):
+    """
+    Kubernetes-style Liveness Probe.
+    
+    GET /api/self-healing/health/live/
+    
+    Returns 200 if the application is running.
+    """
+    
+    permission_classes = []  # Public endpoint
+    
+    def get(self, request):
+        """Return liveness status."""
+        return Response({"status": "alive"})
+
+
+class ReadinessView(APIView):
+    """
+    Kubernetes-style Readiness Probe.
+    
+    GET /api/self-healing/health/ready/
+    
+    Returns 200 if the application is ready to serve traffic.
+    """
+    
+    permission_classes = []  # Public endpoint
+    
+    def get(self, request):
+        """Check if application is ready to serve traffic."""
+        from django.db import connections
+        
+        ready = True
+        checks = {}
+        
+        # Database readiness
+        for alias in connections:
+            try:
+                conn = connections[alias]
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    cursor.fetchone()
+                checks[f"database_{alias}"] = "ready"
+            except Exception as e:
+                logger.error(f"Database {alias} readiness check failed: {e}")
+                checks[f"database_{alias}"] = "not_ready"
+                ready = False
+        
+        response_data = {
+            "status": "ready" if ready else "not_ready",
+            "checks": checks,
+        }
+        
+        if not ready:
+            return Response(response_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        return Response(response_data)
+
+
+class ConnectionPoolHealthView(APIView):
+    """
+    Connection Pool Health Status.
+    
+    GET /api/self-healing/health/pool/
+    
+    Returns connection pool statistics if available.
+    """
+    
+    permission_classes = []  # Public endpoint
+    
+    def get(self, request):
+        """Get connection pool health status."""
+        from django.db import connections
+        
+        pool_data = {
+            "status": "healthy",
+            "pool_info": {}
+        }
+        
+        try:
+            conn = connections["default"]
+            
+            pool_data["pool_info"] = {
+                "alias": "default",
+                "vendor": conn.vendor,
+                "is_usable": conn.is_usable(),
+            }
+            
+            if not conn.is_usable():
+                pool_data["status"] = "degraded"
+                return Response(pool_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                
+        except Exception as e:
+            logger.error(f"Connection pool health check failed: {e}")
+            pool_data["status"] = "error"
+            pool_data["error"] = str(e)
+            return Response(pool_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        return Response(pool_data)
+
+
+def simple_health_ping(request):
+    """
+    Minimal health check with lowest overhead.
+    
+    GET /api/self-healing/health/ping/
+    
+    Just returns 'pong' - useful for load balancer checks.
+    """
+    from django.http import JsonResponse
+    return JsonResponse({"ping": "pong"})
 
 
 class SelfHealingMetricsView(APIView):

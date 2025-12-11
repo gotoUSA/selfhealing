@@ -1,12 +1,17 @@
-# Docker Compose for Locust Load Testing (Stage 26, 27)
+# Docker Compose for EXTREME Pool Exhaustion Test
+# SQLAlchemy Connection Pool 사용, Pool 크기를 3개로 제한하고 극단적 부하를 가함
 services:
-  # 데이터베이스
+  # 데이터베이스 - 연결 수 제한
   db:
     image: postgres:15-alpine
     environment:
       - POSTGRES_DB=shopping_db
       - POSTGRES_USER=shopping_user
       - POSTGRES_PASSWORD=shopping_pass
+    command: >
+      postgres 
+      -c max_connections=15
+      -c shared_buffers=32MB
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
       interval: 5s
@@ -22,7 +27,7 @@ services:
       timeout: 3s
       retries: 5
 
-  # 테스트 데이터 초기화 서비스
+  # 테스트 데이터 초기화
   test-data-init:
     build: .
     command: >
@@ -34,32 +39,57 @@ services:
       - .:/code
     environment:
       - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - DATABASE_NAME=shopping_db
+      - DATABASE_USER=shopping_user
+      - DATABASE_PASSWORD=shopping_pass
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=False
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
       - TEST_USER_PASSWORD=testpass123
+      # ⚠️ SQLAlchemy Connection Pool 활성화
+      - USE_CONNECTION_POOL=TRUE
+      - DB_POOL_SIZE=3
+      - DB_MAX_OVERFLOW=2
+      - DB_POOL_TIMEOUT=5
+      - DB_POOL_RECYCLE=1800
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  # Django 웹 서버
+  # Django 웹 서버 - SQLAlchemy Pool 활성화
   web:
     build: .
     command: >
-      sh -c "python manage.py migrate --noinput &&
+      sh -c "pip install gevent && 
+             python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
-             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 60"
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --worker-class gevent --workers 1 --worker-connections 50 --timeout 120 --log-level debug"
     volumes:
       - .:/code
     expose:
       - "8000"
     environment:
       - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - DATABASE_NAME=shopping_db
+      - DATABASE_USER=shopping_user
+      - DATABASE_PASSWORD=shopping_pass
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=False
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      # ⚠️ SQLAlchemy Connection Pool 활성화 - Pool 크기 극소화
+      - USE_CONNECTION_POOL=TRUE
+      - DB_POOL_SIZE=3
+      - DB_MAX_OVERFLOW=2
+      - DB_POOL_TIMEOUT=5
+      - DB_POOL_RECYCLE=1800
+      # 🛡️ Pool Circuit Breaker 활성화 - Pool 고갈 시 Fail Fast!
+      - USE_POOL_CIRCUIT_BREAKER=TRUE
     depends_on:
       db:
         condition: service_healthy
@@ -68,18 +98,15 @@ services:
       test-data-init:
         condition: service_completed_successfully
 
-  # Locust Master
+  # Locust Master - Phase 기반 부하 테스트
   locust-master:
     build: .
     command: >
-      locust -f /code/load_tests/scenarios/stage27_graceful_shutdown.py
+      locust -f /code/load_tests/scenarios/stage26_extreme_pool_test.py
       --master
       --host=http://web:8000
-      --users=100
-      --spawn-rate=20
-      --run-time=2m
       --headless
-      --html=/code/reports/stage27_locust_report.html
+      --html=/code/reports/stage26_extreme_report.html
     volumes:
       - .:/code
       - ./reports:/code/reports
@@ -90,11 +117,11 @@ services:
     ports:
       - "8089:8089"
 
-  # Locust Worker (스케일 가능)
+  # Locust Workers
   locust-worker:
     build: .
     command: >
-      locust -f /code/load_tests/scenarios/stage27_graceful_shutdown.py
+      locust -f /code/load_tests/scenarios/stage26_extreme_pool_test.py
       --worker
       --master-host=locust-master
     volumes:
@@ -104,4 +131,4 @@ services:
     depends_on:
       - locust-master
     deploy:
-      replicas: 2
+      replicas: 4

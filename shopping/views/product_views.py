@@ -451,6 +451,105 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = ProductListSerializer(low_stock_products, many=True, context={"request": request})
         return Response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="q",
+                description="검색어 (상품명, 설명에서 검색)",
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
+                name="category",
+                description="카테고리 ID로 필터링",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="min_price",
+                description="최소 가격",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="max_price",
+                description="최대 가격",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="ordering",
+                description="정렬 (created_at, -created_at, price, -price, name)",
+                required=False,
+                type=str,
+            ),
+        ],
+        responses={200: ProductListSerializer(many=True)},
+        summary="상품을 검색한다.",
+        description="""처리 내용:
+- 검색어로 상품명, 설명에서 검색한다.
+- 카테고리, 가격 범위로 필터링할 수 있다.
+- 정렬 조건을 지정할 수 있다.
+- 페이지네이션을 적용한다.""",
+        tags=["Products"],
+    )
+    @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
+    def search(self, request: Request) -> Response:
+        """
+        상품 검색 엔드포인트.
+        
+        GET /api/products/search/?q=검색어&category=1&min_price=1000&max_price=50000
+        """
+        queryset = self.get_queryset()
+        
+        # 검색어 필터
+        q = request.query_params.get("q", "").strip()
+        if q:
+            queryset = queryset.filter(
+                Q(name__icontains=q) | Q(description__icontains=q)
+            )
+        
+        # 카테고리 필터
+        category_id = request.query_params.get("category")
+        if category_id:
+            try:
+                category = Category.objects.get(id=category_id)
+                # 하위 카테고리도 포함
+                categories = category.get_descendants(include_self=True)
+                queryset = queryset.filter(category__in=categories)
+            except Category.DoesNotExist:
+                pass
+        
+        # 가격 범위 필터
+        min_price = request.query_params.get("min_price")
+        if min_price:
+            try:
+                queryset = queryset.filter(price__gte=int(min_price))
+            except ValueError:
+                pass
+        
+        max_price = request.query_params.get("max_price")
+        if max_price:
+            try:
+                queryset = queryset.filter(price__lte=int(max_price))
+            except ValueError:
+                pass
+        
+        # 정렬
+        ordering = request.query_params.get("ordering", "-created_at")
+        valid_orderings = ["created_at", "-created_at", "price", "-price", "name", "-name"]
+        if ordering in valid_orderings:
+            queryset = queryset.order_by(ordering)
+        
+        # 페이지네이션 적용
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = ProductListSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = ProductListSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
+
 
 @extend_schema_view(
     list=extend_schema(

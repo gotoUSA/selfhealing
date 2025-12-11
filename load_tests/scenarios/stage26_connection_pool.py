@@ -121,7 +121,7 @@ class NormalDBUser(HttpUser):
         """인증 토큰 획득"""
         try:
             response = self.client.post("/api/auth/login/", json={
-                "username": f"test_user_{random.randint(1, 100)}",
+                "username": f"load_test_user_{random.randint(0, 199)}",
                 "password": "testpass123"
             }, catch_response=True)
             
@@ -184,6 +184,29 @@ class NormalDBUser(HttpUser):
             else:
                 record_query("fast", False, elapsed)
 
+    @task(3)
+    @tag("health_check")
+    def health_check(self):
+        """헬스체크 (DB Connection 확인)"""
+        start = time.time()
+        with self.client.get(
+            "/api/self-healing/health/",
+            catch_response=True,
+            name="[Stage26] Health Check"
+        ) as response:
+            elapsed = (time.time() - start) * 1000
+            
+            if response.status_code == 200:
+                record_query("fast", True, elapsed)
+                response.success()
+            elif response.status_code == 503:
+                _pool_stats["errors"]["pool_exhausted"] += 1
+                record_query("fast", False, elapsed)
+                response.failure("Health check failed - Pool exhausted")
+            else:
+                record_query("fast", False, elapsed)
+                response.failure(f"Health check error: {response.status_code}")
+
 
 # =============================================================================
 # Heavy DB User (Pool 스트레스 유발)
@@ -209,7 +232,7 @@ class HeavyDBUser(HttpUser):
         """인증"""
         try:
             response = self.client.post("/api/auth/login/", json={
-                "username": f"heavy_user_{random.randint(1, 50)}",
+                "username": f"load_test_user_{random.randint(0, 199)}",
                 "password": "testpass123"
             })
             if response.status_code == 200:
