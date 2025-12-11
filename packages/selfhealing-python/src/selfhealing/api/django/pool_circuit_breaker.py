@@ -177,6 +177,10 @@ class PoolCircuitBreaker:
 
             # Fallback 방식 1: Django connections를 통한 접근
             conn = connections["default"]
+            
+            # 중요: Pool 상태를 확인하려면 먼저 연결이 있어야 함
+            conn.ensure_connection()
+            
             logger.info(f"[PoolCircuitBreaker] Fallback: conn type={type(conn).__name__}")
 
             # dj-db-conn-pool은 connection 객체에 pool 속성을 추가함
