@@ -112,6 +112,7 @@ services:
       - LOCUST_HOST=http://web:8000
       - LOCUST_LOCUSTFILE=/mnt/locust/scenarios/stage32_retry_storm_extended.py
       - LOCUST_TEST_DURATION=60
+      - PYTHONPATH=/mnt/locust:/mnt
     command: >
       -f /mnt/locust/scenarios/stage32_retry_storm_extended.py
       --master
@@ -128,6 +129,7 @@ services:
     environment:
       - LOCUST_HOST=http://web:8000
       - LOCUST_LOCUSTFILE=/mnt/locust/scenarios/stage32_retry_storm_extended.py
+      - PYTHONPATH=/mnt/locust:/mnt
     command: >
       -f /mnt/locust/scenarios/stage32_retry_storm_extended.py
       --worker

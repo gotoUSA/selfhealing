@@ -58,11 +58,17 @@ _load_tests_dir = os.path.dirname(_current_dir)
 _project_root = os.path.dirname(_load_tests_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
+if _load_tests_dir not in sys.path:
+    sys.path.insert(0, _load_tests_dir)
 
 from locust import HttpUser, task, between, tag, events, LoadTestShape
 
-from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
-from load_tests.metrics import setup_event_hooks
+try:
+    from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
+    from load_tests.metrics import setup_event_hooks
+except ImportError:
+    from utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
+    from metrics import setup_event_hooks
 
 
 STAGE_NAME = "[Stage32-RetryStormExtended]"
@@ -94,24 +100,33 @@ TOTAL_DURATION = (
     + PHASE_6_VERIFICATION
 )
 
-# Memory thresholds
-MEMORY_PEAK_THRESHOLD_MB = 500
-MEMORY_SAMPLE_INTERVAL_S = 1.0
+# =============================================================================
+# STRICT Production Thresholds (엄격한 프로덕션 기준)
+# =============================================================================
 
-# DLQ configuration
-DLQ_MAX_INPUT_RATE = 500  # per second
-DLQ_MAX_SIZE = 10000
-DLQ_THROTTLE_THRESHOLD = 0.8  # Start throttling at 80% capacity
+# Memory thresholds - 엄격: Retry 객체는 경량이어야 함
+MEMORY_PEAK_THRESHOLD_MB = 50  # 50MB 이하 (더 엄격)
+MEMORY_LEAK_THRESHOLD_PERCENT = 95  # GC 수거율 95% 이상
+MEMORY_SAMPLE_INTERVAL_S = 0.5  # 더 빠른 샘플링
 
-# Retry configuration
-MAX_RETRY_ATTEMPTS = 5
-BASE_BACKOFF_S = 0.5
-MAX_BACKOFF_S = 5.0
+# DLQ configuration - 실제 부하 테스트
+# 스로틀 한도를 실제 부하보다 낮게 설정하여 스로틀 동작 확인
+DLQ_MAX_INPUT_RATE = 80  # 스로틀 한도 (80/sec 초과시 차단)
+DLQ_TARGET_RATE = 50  # 목표 평균 속도 (이 이하면 양호)
+DLQ_MAX_SIZE = 2000  # 더 작은 큐 (빠른 포화 테스트)
+DLQ_THROTTLE_THRESHOLD = 0.5  # 50%에서 스로틀 시작 (더 일찍)
+DLQ_PROCESS_RATE_MIN = 0.9  # 처리율 90% 이상
+
+# Retry configuration - 엄격: 빠른 실패
+MAX_RETRY_ATTEMPTS = 3  # 3회 이하
+BASE_BACKOFF_S = 0.05  # 더 짧은 백오프
+MAX_BACKOFF_S = 1.0  # 최대 1초 (더 엄격)
 BACKOFF_MULTIPLIER = 2.0
 
-# Clock skew configuration
-CLOCK_SKEW_TOLERANCE_S = 30
-SIMULATED_CLOCK_SKEW_S = 300  # 5 minutes drift for testing
+# Clock skew configuration - 엄격: NTP 동기화 기준
+CLOCK_SKEW_TOLERANCE_S = 5  # 5초 이하
+SIMULATED_CLOCK_SKEW_SMALL_S = 3  # 허용 범위 내
+SIMULATED_CLOCK_SKEW_LARGE_S = 10  # 허용 범위 초과
 
 
 # =============================================================================
@@ -162,13 +177,18 @@ class RetryStormStats:
     clock_skew_within_tolerance: int = 0
     clock_skew_exceeded: int = 0
 
-    # Verification results
-    verification: Dict[str, Optional[bool]] = field(
+    # Verification results with explanation
+    # Format: (passed: bool, is_critical: bool, explanation: str)
+    # is_critical=True: 실제 문제 (빨간색 ❌)
+    # is_critical=False: 의도된 동작 (노란색 ⚠️ INFO)
+    verification: Dict[str, Optional[tuple]] = field(
         default_factory=lambda: {
-            "memory_peak_under_500mb": None,
-            "dlq_rate_under_500_sec": None,
+            "memory_peak_under_limit": None,
+            "gc_rate_above_threshold": None,
+            "dlq_throttle_effective": None,  # 스로틀이 실제로 동작해야 함
+            "dlq_processing_rate": None,
             "duplicate_payments_zero": None,
-            "clock_skew_tolerance_30s": None,
+            "clock_skew_handling": None,
         }
     )
 
@@ -501,8 +521,11 @@ def _update_phase():
             print(f"\n⏰ Phase 5: Retry + Clock Skew Compound Test")
             print(f"   - Unique webhooks: {_storm_stats.webhooks_unique}")
             print(f"   - Duplicates prevented: {_storm_stats.webhooks_duplicate}")
-            print(f"   - Simulating +5 minute clock drift")
-            _set_clock_skew(SIMULATED_CLOCK_SKEW_S)
+            print(
+                f"   - Testing clock skew: within tolerance ({SIMULATED_CLOCK_SKEW_SMALL_S}s) and exceeds ({SIMULATED_CLOCK_SKEW_LARGE_S}s)"
+            )
+            # Start with small skew (within tolerance)
+            _set_clock_skew(SIMULATED_CLOCK_SKEW_SMALL_S)
 
         elif phase == "verification":
             print(f"\n✅ Phase 6: Verification")
@@ -514,8 +537,10 @@ def _update_phase():
 
 
 def _perform_final_verification():
-    """Perform final verification of retry storm handling"""
-    print(f"\n📊 Final Verification:")
+    """Perform final verification of retry storm handling with clear explanations"""
+    print(f"\n{'='*70}")
+    print(f"📊 STAGE 32 FINAL VERIFICATION")
+    print(f"{'='*70}")
 
     # Force GC and get final memory stats
     gc.collect()
@@ -527,47 +552,146 @@ def _perform_final_verification():
         _storm_stats.retry_objects_collected = collected
         _storm_stats.gc_collections = gc.get_count()[0]
 
-    # Memory check
-    _storm_stats.verification["memory_peak_under_500mb"] = _storm_stats.memory_peak_mb < MEMORY_PEAK_THRESHOLD_MB
-    print(f"   - Memory peak < 500MB: {'✓' if _storm_stats.verification['memory_peak_under_500mb'] else '✗'}")
-    print(f"     (Peak: {_storm_stats.memory_peak_mb:.1f}MB, Active objects: {active})")
+    # Calculate GC collection rate
+    gc_rate = collected / max(created, 1) * 100
 
-    # DLQ rate check
-    if _storm_stats.dlq_input_rates:
-        max_rate = max(_storm_stats.dlq_input_rates)
-        avg_rate = sum(_storm_stats.dlq_input_rates) / len(_storm_stats.dlq_input_rates)
+    # =========================================================================
+    # CHECK 1: Memory Peak
+    # =========================================================================
+    mem_passed = _storm_stats.memory_peak_mb < MEMORY_PEAK_THRESHOLD_MB
+    _storm_stats.verification["memory_peak_under_limit"] = (mem_passed, True, "")
+
+    print(f"\n{'─'*70}")
+    print(f"🧠 CHECK 1: Memory Leak Prevention")
+    print(f"{'─'*70}")
+    print(f"   Peak Memory: {_storm_stats.memory_peak_mb:.1f}MB (Limit: {MEMORY_PEAK_THRESHOLD_MB}MB)")
+    print(f"   Result: {'✅ PASS' if mem_passed else '❌ FAIL - 메모리 누수 의심!'}")
+    if mem_passed:
+        print(f"   💡 설명: Retry 객체가 경량으로 유지됨, 메모리 누수 없음")
+
+    # =========================================================================
+    # CHECK 2: GC Collection Rate
+    # =========================================================================
+    gc_passed = gc_rate >= MEMORY_LEAK_THRESHOLD_PERCENT
+    _storm_stats.verification["gc_rate_above_threshold"] = (gc_passed, True, "")
+
+    print(f"\n{'─'*70}")
+    print(f"♻️  CHECK 2: Garbage Collection Rate")
+    print(f"{'─'*70}")
+    print(f"   Created: {created}, Collected: {collected}, Active: {active}")
+    print(f"   GC Rate: {gc_rate:.1f}% (Threshold: {MEMORY_LEAK_THRESHOLD_PERCENT}%)")
+    print(f"   Result: {'✅ PASS' if gc_passed else '❌ FAIL - GC 수거율 부족!'}")
+    if gc_passed and active > 0:
+        print(f"   💡 설명: Active={active}개는 테스트 종료 시점의 진행 중인 요청")
+        print(f"           → 정상 동작, 프로세스 종료 시 자동 정리됨")
+
+    # =========================================================================
+    # CHECK 3: DLQ Throttle Effectiveness (핵심!)
+    # =========================================================================
+    throttle_works = _storm_stats.dlq_throttle_events > 0
+    throttle_ratio = (
+        _storm_stats.dlq_throttle_events / max(_storm_stats.dlq_items_added + _storm_stats.dlq_throttle_events, 1) * 100
+    )
+    _storm_stats.verification["dlq_throttle_effective"] = (throttle_works, True, "")
+
+    print(f"\n{'─'*70}")
+    print(f"🚦 CHECK 3: DLQ Throttle Effectiveness")
+    print(f"{'─'*70}")
+    print(f"   Throttle Events: {_storm_stats.dlq_throttle_events}")
+    print(f"   Throttle Ratio: {throttle_ratio:.1f}%")
+    print(f"   Result: {'✅ PASS' if throttle_works else '❌ FAIL - 스로틀 미작동!'}")
+    if throttle_works:
+        print(f"   💡 설명: 의도적으로 한도(80/sec)를 낮게 설정하여 스로틀 동작을 검증")
+        print(f"           → 스로틀이 {_storm_stats.dlq_throttle_events}회 발동 = 과부하 방어 정상 작동")
+
+    # =========================================================================
+    # CHECK 4: DLQ Processing Rate
+    # =========================================================================
+    if _storm_stats.dlq_items_added > 0:
+        dlq_process_rate = _storm_stats.dlq_items_processed / _storm_stats.dlq_items_added * 100
     else:
-        max_rate = 0
-        avg_rate = 0
+        dlq_process_rate = 100.0
 
-    _storm_stats.verification["dlq_rate_under_500_sec"] = max_rate < DLQ_MAX_INPUT_RATE * 1.1  # 10% tolerance
-    print(f"   - DLQ rate < 500/sec: {'✓' if _storm_stats.verification['dlq_rate_under_500_sec'] else '✗'}")
-    print(f"     (Max: {max_rate:.0f}/sec, Avg: {avg_rate:.1f}/sec, Throttles: {_storm_stats.dlq_throttle_events})")
+    process_passed = dlq_process_rate >= DLQ_PROCESS_RATE_MIN * 100
+    _storm_stats.verification["dlq_processing_rate"] = (process_passed, True, "")
 
-    # Duplicate payments check
-    _storm_stats.verification["duplicate_payments_zero"] = (
-        _storm_stats.duplicate_payments_prevented == _storm_stats.webhooks_duplicate
-    )
-    print(f"   - Duplicate payments = 0: {'✓' if _storm_stats.verification['duplicate_payments_zero'] else '✗'}")
-    print(
-        f"     (Duplicates received: {_storm_stats.webhooks_duplicate}, All prevented: {_storm_stats.duplicate_payments_prevented})"
-    )
+    print(f"\n{'─'*70}")
+    print(f"📤 CHECK 4: DLQ Processing Rate")
+    print(f"{'─'*70}")
+    print(f"   Added: {_storm_stats.dlq_items_added}, Processed: {_storm_stats.dlq_items_processed}")
+    print(f"   Processing Rate: {dlq_process_rate:.1f}% (Threshold: {DLQ_PROCESS_RATE_MIN*100:.0f}%)")
+    print(f"   Result: {'✅ PASS' if process_passed else '❌ FAIL - 처리 적체 발생!'}")
 
-    # Clock skew tolerance check
+    # =========================================================================
+    # CHECK 5: Duplicate Payment Prevention (무관용)
+    # =========================================================================
+    dup_passed = _storm_stats.duplicate_payments_prevented == _storm_stats.webhooks_duplicate
+    _storm_stats.verification["duplicate_payments_zero"] = (dup_passed, True, "")
+
+    print(f"\n{'─'*70}")
+    print(f"💳 CHECK 5: Duplicate Payment Prevention (Zero Tolerance)")
+    print(f"{'─'*70}")
+    print(f"   Duplicate Attempts: {_storm_stats.webhooks_duplicate}")
+    print(f"   Prevented: {_storm_stats.duplicate_payments_prevented}")
+    print(f"   Result: {'✅ PASS' if dup_passed else '❌ CRITICAL FAIL - 중복 결제 발생!'}")
+    if dup_passed and _storm_stats.webhooks_duplicate > 0:
+        print(f"   💡 설명: {_storm_stats.webhooks_duplicate}건의 중복 결제 시도를 100% 차단")
+        print(f"           → Idempotency Key 시스템 정상 작동")
+
+    # =========================================================================
+    # CHECK 6: Clock Skew Handling
+    # =========================================================================
     if _storm_stats.timestamp_validations > 0:
-        skew_accuracy = _storm_stats.clock_skew_within_tolerance / max(_storm_stats.timestamp_validations, 1)
-        _storm_stats.verification["clock_skew_tolerance_30s"] = _storm_stats.clock_skew_exceeded == 0 or skew_accuracy >= 0.95
+        rejection_works = _storm_stats.clock_skew_exceeded > 0 and _storm_stats.timestamp_rejected > 0
+        acceptance_works = _storm_stats.clock_skew_within_tolerance > 0 and _storm_stats.timestamp_accepted > 0
+        clock_passed = acceptance_works and rejection_works
     else:
-        _storm_stats.verification["clock_skew_tolerance_30s"] = True
+        clock_passed = True
 
-    print(f"   - Clock skew ±30s tolerance: {'✓' if _storm_stats.verification['clock_skew_tolerance_30s'] else '✗'}")
-    print(f"     (Within: {_storm_stats.clock_skew_within_tolerance}, Exceeded: {_storm_stats.clock_skew_exceeded})")
+    _storm_stats.verification["clock_skew_handling"] = (clock_passed, True, "")
 
-    # Overall pass/fail
-    all_passed = all(v for v in _storm_stats.verification.values() if v is not None)
-    print(f"\n{'='*60}")
-    print(f"   Stage 32 Result: {'✅ PASSED' if all_passed else '❌ FAILED'}")
-    print(f"{'='*60}")
+    print(f"\n{'─'*70}")
+    print(f"⏰ CHECK 6: Clock Skew Handling (±{CLOCK_SKEW_TOLERANCE_S}s tolerance)")
+    print(f"{'─'*70}")
+    print(
+        f"   Within Tolerance ({SIMULATED_CLOCK_SKEW_SMALL_S}s): {_storm_stats.clock_skew_within_tolerance} → Accepted: {_storm_stats.timestamp_accepted}"
+    )
+    print(
+        f"   Exceeded ({SIMULATED_CLOCK_SKEW_LARGE_S}s): {_storm_stats.clock_skew_exceeded} → Rejected: {_storm_stats.timestamp_rejected}"
+    )
+    print(f"   Result: {'✅ PASS' if clock_passed else '❌ FAIL - Clock Skew 처리 오류!'}")
+    if clock_passed:
+        print(f"   💡 설명: 허용 범위 내 요청은 수락, 초과 요청은 거부 → 정상 작동")
+
+    # =========================================================================
+    # FINAL SUMMARY
+    # =========================================================================
+    results = [(k, v[0]) for k, v in _storm_stats.verification.items() if v is not None]
+    passed_count = sum(1 for _, passed in results if passed)
+    total_count = len(results)
+    all_passed = passed_count == total_count
+
+    print(f"\n{'='*70}")
+    print(f"🏁 STAGE 32 FINAL RESULT")
+    print(f"{'='*70}")
+    print(f"   Score: {passed_count}/{total_count} checks passed")
+    print()
+
+    if all_passed:
+        print(f"   ✅✅✅ ALL TESTS PASSED ✅✅✅")
+        print()
+        print(f"   🎯 Retry Storm Extended 시나리오 모두 통과:")
+        print(f"      • 메모리 누수 방지 ✓")
+        print(f"      • DLQ 폭발 방지 (스로틀 정상 작동) ✓")
+        print(f"      • 중복 결제 100% 차단 ✓")
+        print(f"      • Clock Skew 처리 ✓")
+    else:
+        failed = [k for k, passed in results if not passed]
+        print(f"   ❌ FAILED CHECKS: {', '.join(failed)}")
+        print()
+        print(f"   ⚠️  위 실패 항목을 확인하세요.")
+
+    print(f"{'='*70}")
 
 
 # =============================================================================
@@ -758,13 +882,15 @@ class DLQThrottleUser(HttpUser):
 
             if not added:
                 # Throttled - this is good!
-                self.client.post(
+                with self.client.post(
                     "/api/orders/", json={"item": "test"}, name=f"{STAGE_NAME} dlq_throttled", catch_response=True
-                ).failure("DLQ throttled (expected)")
+                ) as response:
+                    response.failure("DLQ throttled (expected)")
             else:
-                self.client.post(
+                with self.client.post(
                     "/api/orders/", json={"item": "test"}, name=f"{STAGE_NAME} dlq_queued", catch_response=True
-                ).failure("Added to DLQ")
+                ) as response:
+                    response.failure("Added to DLQ")
         else:
             # Successful operation
             with self.client.get("/api/products/", name=f"{STAGE_NAME} dlq_success", catch_response=True) as response:
@@ -958,6 +1084,15 @@ class ClockSkewUser(HttpUser):
         with _stats_lock:
             _storm_stats.timestamp_validations += 1
 
+        # Alternate between small skew (within tolerance) and large skew (exceeds tolerance)
+        # This tests both acceptance and rejection paths
+        use_small_skew = random.random() < 0.7  # 70% within tolerance, 30% exceeds
+
+        if use_small_skew:
+            _set_clock_skew(SIMULATED_CLOCK_SKEW_SMALL_S)
+        else:
+            _set_clock_skew(SIMULATED_CLOCK_SKEW_LARGE_S)
+
         # Get timestamp with simulated clock skew
         request_timestamp = _get_simulated_time()
 
@@ -991,12 +1126,13 @@ class ClockSkewUser(HttpUser):
             # Clock skew exceeded tolerance - return clear error
             skew = abs(time.time() - request_timestamp)
 
-            self.client.get(
+            with self.client.get(
                 "/api/products/",
                 headers={"X-Timestamp": str(request_timestamp)},
                 name=f"{STAGE_NAME} timestamp_skew_rejected",
                 catch_response=True,
-            ).failure(f"Clock skew {skew:.0f}s exceeds {CLOCK_SKEW_TOLERANCE_S}s tolerance")
+            ) as response:
+                response.failure(f"Clock skew {skew:.0f}s exceeds {CLOCK_SKEW_TOLERANCE_S}s tolerance")
 
 
 # =============================================================================
