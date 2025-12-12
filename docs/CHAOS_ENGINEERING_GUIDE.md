@@ -154,14 +154,14 @@ client.enable_proxy("redis")
 ```python
 def test_redis_partition():
     client = ToxiproxyClient("http://localhost:8474")
-    
+
     # Redis 차단
     client.simulate_redis_down()
-    
+
     # 앱은 DB fallback으로 동작해야 함
     response = requests.get("http://localhost:8000/api/products/")
     assert response.status_code == 200
-    
+
     # 복구
     client.recover_all()
 ```
@@ -171,15 +171,15 @@ def test_redis_partition():
 ```python
 def test_gradual_degradation():
     client = ToxiproxyClient("http://localhost:8474")
-    
+
     for latency in [100, 500, 1000, 2000, 3000]:
         client.recover_all()
         client.simulate_redis_slow(latency_ms=latency)
-        
+
         start = time.time()
         response = requests.get("http://localhost:8000/api/products/", timeout=10)
         elapsed = time.time() - start
-        
+
         print(f"Latency: {latency}ms → Response time: {elapsed:.2f}s")
 ```
 
@@ -188,10 +188,10 @@ def test_gradual_degradation():
 ```python
 def test_flapping_connection():
     client = ToxiproxyClient("http://localhost:8474")
-    
+
     # 50% 확률로 연결 리셋
     client.add_toxic("redis", ToxicType.RESET_PEER, {"timeout": 0}, toxicity=0.5)
-    
+
     success = 0
     for _ in range(20):
         try:
@@ -200,7 +200,7 @@ def test_flapping_connection():
                 success += 1
         except:
             pass
-    
+
     print(f"Success rate: {success}/20 ({success/20*100:.0f}%)")
 ```
 

@@ -544,12 +544,13 @@ class TestTLSResilientClient:
 
 ## ✅ 완료 기준
 
-- [ ] TLSErrorClassifier 구현
-- [ ] TLSResilientClient 구현
-- [ ] CertificateExpiryMonitor 구현
-- [ ] 모든 TLS 에러 타입 분류 테스트 통과
-- [ ] 재시도 가능/불가능 구분 테스트 통과
-- [ ] 인증서 만료 감지 테스트 통과
+- [x] TLSErrorClassifier 구현
+- [x] TLSResilientClient 구현
+- [x] CertificateExpiryMonitor 구현
+- [x] 모든 TLS 에러 타입 분류 테스트 통과
+- [x] 재시도 가능/불가능 구분 테스트 통과
+- [x] 인증서 만료 감지 테스트 통과
+- [x] Locust 부하 테스트 시나리오 작성 (stage25_tls_failure.py)
 
 ---
 

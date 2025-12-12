@@ -37,7 +37,7 @@ services:
   # =========================================================================
   # 실제 백엔드 서비스들
   # =========================================================================
-  
+
   # PostgreSQL (실제 DB)
   db:
     image: postgres:15-alpine
@@ -87,27 +87,27 @@ services:
     command:
       - |
         echo "Setting up Toxiproxy proxies..."
-        
+
         # Redis 프록시 생성 (App → Toxiproxy:26379 → Redis:6379)
         curl -s -X POST http://toxiproxy:8474/proxies -d '{
           "name": "redis",
           "listen": "0.0.0.0:26379",
           "upstream": "redis:6379"
         }' && echo " ✓ Redis proxy created"
-        
+
         # PostgreSQL 프록시 생성 (App → Toxiproxy:25432 → DB:5432)
         curl -s -X POST http://toxiproxy:8474/proxies -d '{
           "name": "postgres",
           "listen": "0.0.0.0:25432",
           "upstream": "db:5432"
         }' && echo " ✓ PostgreSQL proxy created"
-        
+
         echo "Toxiproxy setup complete!"
-        
+
         # 프록시 목록 확인
         echo "=== Active Proxies ==="
         curl -s http://toxiproxy:8474/proxies | python3 -c "import sys,json; [print(f'  - {k}: {v[\"listen\"]} → {v[\"upstream\"]}') for k,v in json.load(sys.stdin).items()]" 2>/dev/null || curl -s http://toxiproxy:8474/proxies
-        
+
         echo "Setup completed successfully!"
 
   # =========================================================================
