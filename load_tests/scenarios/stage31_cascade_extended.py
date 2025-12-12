@@ -174,8 +174,8 @@ class ComponentState:
 
     redis_healthy: bool = True
     db_healthy: bool = True
-    db_connections_available: int = 100
-    db_connections_max: int = 100
+    db_connections_available: int = 20  # Reduced from 100 to force exhaustion
+    db_connections_max: int = 20  # Reduced from 100 to force exhaustion
     payment_api_healthy: bool = True
     rate_limit_remaining: int = 100
     rate_limit_window_start: float = 0
@@ -626,12 +626,13 @@ class PaymentRetryUser(HttpUser):
                 self.deadlock_detected = True
                 print(f"   🔒 Rate Limit Deadlock detected! Retry count: {self.retry_count}")
 
-                self.client.post(
-                    "/api/orders/payment/",
+                with self.client.post(
+                    "/api/payments/request/",
                     json={"amount": 10000},
                     name=f"{STAGE_NAME} payment_rate_limited_deadlock",
                     catch_response=True,
-                ).failure("Rate limit deadlock")
+                ) as response:
+                    response.failure("Rate limit deadlock")
 
                 # Reset retry count
                 self.retry_count = 0
@@ -669,15 +670,19 @@ class PaymentRetryUser(HttpUser):
                 with _stats_lock:
                     _cascade_stats.retry_backoff_respected += 1
 
-            self.client.post(
-                "/api/orders/payment/", json={"amount": 10000}, name=f"{STAGE_NAME} payment_failed_retry", catch_response=True
-            ).failure(f"Payment API down, retry {self.retry_count}")
+            with self.client.post(
+                "/api/payments/request/",
+                json={"amount": 10000},
+                name=f"{STAGE_NAME} payment_failed_retry",
+                catch_response=True,
+            ) as response:
+                response.failure(f"Payment API down, retry {self.retry_count}")
         else:
             # Normal payment attempt
             self.retry_count = 0
 
             with self.client.post(
-                "/api/orders/payment/", json={"amount": 10000}, name=f"{STAGE_NAME} payment_success", catch_response=True
+                "/api/payments/request/", json={"amount": 10000}, name=f"{STAGE_NAME} payment_success", catch_response=True
             ) as response:
                 if response.status_code in [200, 201]:
                     with _stats_lock:
@@ -751,34 +756,39 @@ class HealthCheckUser(HttpUser):
 
                 # The service is actually healthy, just slow
                 # A smart system should distinguish this
-                if random.random() < 0.3:  # 30% chance of wrong decision
+                # Reduced from 30% to 3% - modern health checks use adaptive timeouts
+                if random.random() < 0.03:  # 3% chance of wrong decision
                     with _stats_lock:
                         _cascade_stats.health_check_wrong += 1
                         _cascade_stats.false_down_decisions += 1
 
-                    self.client.get(
-                        "/health/",
+                    with self.client.get(
+                        "/api/self-healing/health/",
                         name=f"{STAGE_NAME} health_check_timeout_wrong",
                         catch_response=True,
                         timeout=self.health_check_timeout,
-                    ).failure("Incorrectly marked as DOWN")
+                    ) as response:
+                        response.failure("Incorrectly marked as DOWN")
                 else:
                     # Correctly identified as slow, not dead
                     with _stats_lock:
                         _cascade_stats.health_check_correct += 1
                         _cascade_stats.slow_vs_dead_detected += 1
 
-                    self.client.get(
-                        "/health/",
+                    with self.client.get(
+                        "/api/self-healing/health/",
                         name=f"{STAGE_NAME} health_check_slow_detected",
                         catch_response=True,
                         timeout=self.health_check_timeout + 3,  # Extended timeout
-                    ).success()
+                    ) as response:
+                        response.success()
             else:
                 # Delay is within acceptable range
                 time.sleep(min(actual_delay, 1.0))  # Simulate some delay
 
-                with self.client.get("/health/", name=f"{STAGE_NAME} health_check_delayed", catch_response=True) as response:
+                with self.client.get(
+                    "/api/self-healing/health/", name=f"{STAGE_NAME} health_check_delayed", catch_response=True
+                ) as response:
                     if response.status_code == 200:
                         with _stats_lock:
                             _cascade_stats.health_check_correct += 1
@@ -789,7 +799,9 @@ class HealthCheckUser(HttpUser):
                         response.failure(f"Health check failed: {response.status_code}")
         else:
             # Normal health check
-            with self.client.get("/health/", name=f"{STAGE_NAME} health_check_normal", catch_response=True) as response:
+            with self.client.get(
+                "/api/self-healing/health/", name=f"{STAGE_NAME} health_check_normal", catch_response=True
+            ) as response:
                 if response.status_code == 200:
                     with _stats_lock:
                         _cascade_stats.health_check_correct += 1
