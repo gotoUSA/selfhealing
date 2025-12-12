@@ -96,7 +96,7 @@ packages/selfhealing-python/
 
 ### 테스트 시나리오
 - [x] Stage 23: Clock Skew 테스트
-- [ ] Stage 24: Partial Partition 테스트
+- [x] Stage 24: Partial Partition 테스트
 - [ ] Stage 25: TLS 실패 테스트
 
 ### 패키지 정리 및 확장

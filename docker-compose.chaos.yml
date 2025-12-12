@@ -1,0 +1,191 @@
+# Docker Compose for Chaos Engineering Tests (Stage 24)
+# Uses Toxiproxy for realistic network partition simulation
+#
+# Usage:
+#   # 1. 서비스 시작
+#   docker-compose -f docker-compose.chaos.yml up -d
+#
+#   # 2. Toxiproxy 프록시 설정
+#   docker-compose -f docker-compose.chaos.yml exec toxiproxy-setup sh /setup-proxies.sh
+#
+#   # 3. Chaos 테스트 실행
+#   docker-compose -f docker-compose.chaos.yml run --rm chaos-test
+#
+#   # 4. 정리
+#   docker-compose -f docker-compose.chaos.yml down -v
+
+services:
+  # =========================================================================
+  # Toxiproxy - Network Chaos Proxy (Shopify 오픈소스)
+  # =========================================================================
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:latest
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"   # Toxiproxy API (장애 주입용)
+      - "26379:26379" # Redis 프록시 포트
+      - "25432:25432" # PostgreSQL 프록시 포트
+    networks:
+      - chaos-net
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # =========================================================================
+  # 실제 백엔드 서비스들
+  # =========================================================================
+  
+  # PostgreSQL (실제 DB)
+  db:
+    image: postgres:15-alpine
+    container_name: chaos-db
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    networks:
+      - chaos-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis (실제 Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: chaos-redis
+    networks:
+      - chaos-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # =========================================================================
+  # Toxiproxy 프록시 설정 (초기화)
+  # =========================================================================
+  toxiproxy-setup:
+    image: curlimages/curl:latest
+    container_name: toxiproxy-setup
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chaos-net
+    volumes:
+      - ./scripts/chaos:/scripts:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Setting up Toxiproxy proxies..."
+        
+        # Redis 프록시 생성 (App → Toxiproxy:26379 → Redis:6379)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{
+          "name": "redis",
+          "listen": "0.0.0.0:26379",
+          "upstream": "redis:6379"
+        }' && echo " ✓ Redis proxy created"
+        
+        # PostgreSQL 프록시 생성 (App → Toxiproxy:25432 → DB:5432)
+        curl -s -X POST http://toxiproxy:8474/proxies -d '{
+          "name": "postgres",
+          "listen": "0.0.0.0:25432",
+          "upstream": "db:5432"
+        }' && echo " ✓ PostgreSQL proxy created"
+        
+        echo "Toxiproxy setup complete!"
+        
+        # 프록시 목록 확인
+        echo "=== Active Proxies ==="
+        curl -s http://toxiproxy:8474/proxies | python3 -c "import sys,json; [print(f'  - {k}: {v[\"listen\"]} → {v[\"upstream\"]}') for k,v in json.load(sys.stdin).items()]" 2>/dev/null || curl -s http://toxiproxy:8474/proxies
+        
+        echo "Setup completed successfully!"
+
+  # =========================================================================
+  # Django 웹 서버 (Toxiproxy를 통해 DB/Redis 접속)
+  # =========================================================================
+  web:
+    build: .
+    container_name: chaos-web
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 60"
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      # Toxiproxy를 통해 연결 (핵심!)
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@toxiproxy:25432/shopping_db
+      - REDIS_URL=redis://toxiproxy:26379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    networks:
+      - chaos-net
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+      toxiproxy-setup:
+        condition: service_completed_successfully
+
+  # =========================================================================
+  # Chaos 테스트 러너 (Locust + Toxiproxy 장애 주입)
+  # =========================================================================
+  chaos-test:
+    build: .
+    container_name: chaos-test
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TOXIPROXY_URL=http://toxiproxy:8474
+      - TARGET_HOST=http://web:8000
+    networks:
+      - chaos-net
+    depends_on:
+      - web
+    working_dir: /code
+    command: >
+      python -m pytest load_tests/chaos/test_partial_partition_chaos.py -v --tb=short --no-cov
+
+  # =========================================================================
+  # Locust 부하 테스트 (Chaos 시나리오)
+  # =========================================================================
+  locust-chaos:
+    build: .
+    container_name: locust-chaos
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    ports:
+      - "8089:8089"
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TOXIPROXY_URL=http://toxiproxy:8474
+    networks:
+      - chaos-net
+    depends_on:
+      - web
+    command: >
+      locust -f /code/load_tests/scenarios/stage24_partial_partition.py
+      --host=http://web:8000
+      --users=50
+      --spawn-rate=5
+      --run-time=3m
+      --headless
+      --html=/code/reports/stage24_chaos_report.html
+
+networks:
+  chaos-net:
+    driver: bridge

@@ -617,12 +617,12 @@ class TestExternalAPIPartitionScenario:
 
 ## ✅ 완료 기준
 
-- [ ] ConnectionHealthMonitor 인터페이스 구현
-- [ ] PartitionState 감지 로직 구현
-- [ ] FallbackStrategy 구현
-- [ ] Cache down → DB fallback 테스트 통과
-- [ ] External API down 처리 테스트 통과
-- [ ] Partial partition 감지 테스트 통과
+- [x] ConnectionHealthMonitor 인터페이스 구현
+- [x] PartitionState 감지 로직 구현
+- [x] FallbackStrategy 구현
+- [x] Cache down → DB fallback 테스트 통과
+- [x] External API down 처리 테스트 통과
+- [x] Partial partition 감지 테스트 통과
 
 ---
 
