@@ -20,18 +20,23 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-stage33
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py create_load_test_users --count 100 --prefix testuser --password testpass123 2>/dev/null || true &&
+             python manage.py runserver 0.0.0.0:8000"
+    env_file:
+      - .env
     environment:
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
-      - REDIS_URL=redis://redis:6379/0
       - STAGE=33
       - JWT_CASCADE_TEST_ENABLED=true
       - JWT_EXPIRY_S=3600
       - JWT_REFRESH_THRESHOLD_S=300
       - REAUTH_THROTTLE_LIMIT=100
       - REAUTH_THROTTLE_WINDOW_S=1
-      - REPLAY_QUEUE_MAX_SIZE=10000
+      - REPLAY_QUEUE_MAX_SIZE=1000
       - AUTH_SERVER_ROLE=primary
+      - DATABASE_HOST=db
+      - REDIS_HOST=redis
     depends_on:
       db:
         condition: service_healthy
@@ -42,10 +47,11 @@ services:
     networks:
       - jwt_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
     labels:
       - "stage=33"
       - "test=jwt-cascade-extended"
@@ -56,13 +62,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-secondary-stage33
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    env_file:
+      - .env
     environment:
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
-      - REDIS_URL=redis://redis:6379/1
       - STAGE=33
       - JWT_CASCADE_TEST_ENABLED=true
       - AUTH_SERVER_ROLE=secondary
+      - DATABASE_HOST=db
+      - REDIS_HOST=redis
     depends_on:
       db:
         condition: service_healthy
@@ -73,10 +83,11 @@ services:
     networks:
       - jwt_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
     labels:
       - "stage=33"
       - "role=secondary"
@@ -86,15 +97,15 @@ services:
     image: postgres:15-alpine
     container_name: db-stage33
     environment:
-      - POSTGRES_DB=myproject
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
     volumes:
       - db_stage33_data:/var/lib/postgresql/data
     networks:
       - jwt_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -121,17 +132,26 @@ services:
     ports:
       - "8089:8089"
     volumes:
-      - ./load_tests:/mnt/locust
+      - ./load_tests:/mnt/locust/load_tests
+    entrypoint: /bin/sh
     command: >
-      -f /mnt/locust/scenarios/stage33_jwt_cascade.py
+      -c "echo 'Waiting 15s for web server...' && sleep 15 &&
+      locust -f /mnt/locust/load_tests/scenarios/stage33_jwt_cascade.py
       --host=http://web:8000
-      --users=100
-      --spawn-rate=20
+      --users=400
+      --spawn-rate=100
+      --headless
+      --run-time=120s
+      --html=/mnt/locust/load_tests/stage33_excellence_report.html"
     environment:
-      - LOCUST_TEST_DURATION=300
+      - LOCUST_TEST_DURATION=120
+      - EXCELLENCE_MODE=true
+      - PYTHONPATH=/mnt/locust
     depends_on:
-      - web
-      - web-secondary
+      web:
+        condition: service_healthy
+      web-secondary:
+        condition: service_healthy
     networks:
       - jwt_net
 
