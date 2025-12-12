@@ -7,8 +7,6 @@
 #
 # 대량 DLQ 재처리 테스트 환경
 
-version: '3.8'
-
 services:
   # 메인 웹 애플리케이션
   web:
@@ -16,9 +14,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-stage29
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 60"
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - DATABASE_HOST=db
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - DLQ_BATCH_SIZE=1000
@@ -78,11 +84,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: celery-worker-stage29
+    # Note: container_name removed to allow replicas
     command: celery -A myproject worker -l INFO -c 4
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - DATABASE_HOST=db
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - DLQ_BATCH_SIZE=1000
@@ -95,7 +105,7 @@ services:
     networks:
       - stage29_network
     deploy:
-      replicas: 2
+      replicas: 1
       resources:
         limits:
           memory: 512M
@@ -111,7 +121,11 @@ services:
     command: python manage.py run_dlq_replay --batch-size=1000 --throttle-tps=1000
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - DATABASE_HOST=db
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:

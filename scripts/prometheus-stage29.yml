@@ -1,0 +1,26 @@
+# Prometheus Configuration for Stage 29
+# Bulk DLQ Replay Test Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'django'
+    static_configs:
+      - targets: ['web:8000']
+    metrics_path: '/api/metrics/'
+    scrape_interval: 5s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  - job_name: 'locust'
+    static_configs:
+      - targets: ['locust:8089']
+    metrics_path: '/stats/requests'
