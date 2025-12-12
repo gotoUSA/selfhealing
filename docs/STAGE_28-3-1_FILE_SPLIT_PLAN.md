@@ -14,7 +14,7 @@
 | `services/circuit_breaker_service.py` | 1,168 → ✅ | 🟢 완료 | 7개 파일로 분리 |
 | `adapters/django_repositories.py` | 1,051 | 🔴 높음 | 대기 중 |
 | `services/factory.py` | 966 → ✅ | 🟢 완료 | 6개 파일로 분리 |
-| `api/django/views.py` | 955 | 🟡 중간 | 대기 중 |
+| `api/django/views.py` | 956 → ✅ | 🟢 완료 | 4개 파일로 분리 |
 
 ---
 
@@ -105,18 +105,31 @@ services/factory/
 
 ## 📋 Phase 3: API 분리
 
-### 3.1 api/django/views.py (955줄)
+### 3.1 api/django/views.py (955줄) - ✅ 완료
 
-**분리 계획:**
+**결과:**
 ```
 api/django/
-├── __init__.py
-├── views/
-│   ├── __init__.py          # exports
-│   ├── circuit_breaker.py   # Circuit Breaker 뷰 (~300줄)
-│   ├── dlq.py               # DLQ 관리 뷰 (~300줄)
-│   └── security.py          # 보안 인시던트 뷰 (~300줄)
+├── views.py                    # 85줄 - re-exports (하위 호환성)
+└── views/
+    ├── __init__.py             # 67줄 - exports
+    ├── circuit_breaker.py      # 693줄 - Control API Service + Views
+    ├── dlq.py                  # 86줄 - DLQ Replay View
+    └── health.py               # 204줄 - Health Check Views
 ```
+
+**변경사항:**
+- 956줄 → 4개 파일로 분리
+- 테스트 512개 통과
+- 하위 호환성 유지:
+  - `from selfhealing.api.django.views import ControlActionView, ...`
+  - `from selfhealing.api.django.views.circuit_breaker import ControlAPIService`
+  - `from selfhealing.api.django.views.health import SelfHealingHealthView`
+
+**구성 요소:**
+- `circuit_breaker.py`: ControlRequest, ControlResponse, ControlAPIService, Control Views
+- `dlq.py`: DLQReplayView
+- `health.py`: SelfHealingHealthView, LivenessView, ReadinessView, ConnectionPoolHealthView, SelfHealingMetricsView
 
 ---
 
@@ -131,7 +144,7 @@ api/django/
 - [x] `services/factory.py` 분리
 
 ### Phase 3: API
-- [ ] `api/django/views.py` 분리
+- [x] `api/django/views.py` 분리 (✅ 완료 - 2025.12.12)
 
 ---
 
