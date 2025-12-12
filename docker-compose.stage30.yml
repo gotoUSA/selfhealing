@@ -16,9 +16,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-stage30
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_PORT=5432
+      - DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -77,11 +85,15 @@ services:
     command: celery -A myproject beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_PORT=5432
+      - DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      # 드리프트 테스트용
       - CELERY_BEAT_MAX_LOOP_INTERVAL=5
     depends_on:
       db:
@@ -97,11 +109,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: celery-worker-stage30
     command: celery -A myproject worker -l INFO -c 5 --max-tasks-per-child=1000
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_PORT=5432
+      - DATABASE_HOST=db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -115,7 +131,7 @@ services:
     networks:
       - stage30_network
     deploy:
-      replicas: 2
+      replicas: 1
       resources:
         limits:
           memory: 512M
@@ -143,22 +159,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: clock-drift-stage30
-    command: python -c "
-      import time
-      import redis
-      import os
-      r = redis.Redis.from_url(os.environ['REDIS_URL'])
-      drift_minutes = 0
-      while True:
-          # 드리프트 상태 Redis에 저장
-          r.set('clock_drift_minutes', drift_minutes)
-          print(f'Clock drift: {drift_minutes} minutes')
-          time.sleep(60)
-          # 랜덤하게 드리프트 변경
-          import random
-          if random.random() < 0.1:
-              drift_minutes = random.randint(0, 15)
-      "
+    command: >
+      python -c "import time; import redis; import os; import random;
+      r = redis.Redis.from_url(os.environ.get('REDIS_URL', 'redis://redis:6379/0'));
+      drift_minutes = 0;
+      [print(f'Clock drift simulator started') or True];
+      exec('while True:\\n    r.set(\"clock_drift_minutes\", drift_minutes)\\n    print(f\"Clock drift: {drift_minutes} minutes\")\\n    time.sleep(60)\\n    if random.random() < 0.1:\\n        drift_minutes = random.randint(0, 15)')"
     environment:
       - REDIS_URL=redis://redis:6379/0
     networks:
