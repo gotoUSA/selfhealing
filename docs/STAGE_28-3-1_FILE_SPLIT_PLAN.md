@@ -13,7 +13,7 @@
 | `adapters/memory/repositories.py` | 1,074 → ✅ | 🟢 완료 | 5개 파일로 분리 |
 | `services/circuit_breaker_service.py` | 1,168 → ✅ | 🟢 완료 | 7개 파일로 분리 |
 | `adapters/django_repositories.py` | 1,051 | 🔴 높음 | 대기 중 |
-| `services/factory.py` | 966 | 🟡 중간 | 대기 중 |
+| `services/factory.py` | 966 → ✅ | 🟢 완료 | 6개 파일로 분리 |
 | `api/django/views.py` | 955 | 🟡 중간 | 대기 중 |
 
 ---
@@ -80,22 +80,26 @@ services/circuit_breaker/
   - `from selfhealing.services.circuit_breaker import ...`
   - `from shopping.services.self_healing.circuit_breaker_service import ...`
 
-### 2.2 services/factory.py (966줄)
+### 2.2 services/factory.py (966줄) - ✅ 완료
 
-**분석 필요 항목:**
-- ServiceFactory 클래스
-- 의존성 주입 로직
-- 프레임워크별 설정
-
-**분리 계획:**
+**결과:**
 ```
 services/factory/
-├── __init__.py              # exports
-├── base.py                  # ServiceFactory 베이스 (~300줄)
-├── django.py                # Django 설정 (~200줄)
-├── fastapi.py               # FastAPI 설정 (~200줄)
-└── standalone.py            # 독립 실행 설정 (~200줄)
+├── __init__.py              # 86줄 - exports
+├── base.py                  # 260줄 - FrameworkType, ServiceFactory, 글로벌 팩토리 함수
+├── registry.py              # 511줄 - ProviderRegistry (플러거블 아키텍처)
+├── repository.py            # 59줄 - Repository Factory Functions
+├── service.py               # 85줄 - Service Factory Functions
+└── singleton.py             # 99줄 - Singleton Service Accessors
 ```
+
+**변경사항:**
+- 967줄 → 6개 파일 (모두 500줄 이하 또는 약간 초과)
+- 테스트 512개 통과
+- 하위 호환성 유지:
+  - `from selfhealing.services.factory import ...`
+  - `from selfhealing.services.factory.base import ServiceFactory`
+  - `from selfhealing.services.factory.registry import ProviderRegistry`
 
 ---
 
@@ -124,7 +128,7 @@ api/django/
 
 ### Phase 2: 서비스
 - [x] `services/circuit_breaker_service.py` 분리
-- [ ] `services/factory.py` 분리
+- [x] `services/factory.py` 분리
 
 ### Phase 3: API
 - [ ] `api/django/views.py` 분리
