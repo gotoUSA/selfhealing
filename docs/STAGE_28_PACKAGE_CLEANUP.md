@@ -731,8 +731,8 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
 - [x] Docker Compose PostgreSQL 통합 테스트
 
 ### Phase 28-4
-- [ ] In-memory repositories 구현
-- [ ] 단위 테스트에서 활용
+- [x] In-memory repositories 구현
+- [x] 단위 테스트에서 활용
 
 ---
 

@@ -79,6 +79,9 @@ class FailedOperationAdmin(admin.ModelAdmin):
         "mark_as_resolved",
         "mark_as_rejected",
         "mark_as_requires_review",
+        "archive_selected",
+        "archive_old_resolved",
+        "purge_selected_archived",
     ]
 
     fieldsets = (
@@ -183,6 +186,54 @@ class FailedOperationAdmin(admin.ModelAdmin):
         """Mark selected entries as requiring review."""
         count = queryset.update(status=FailedOperation.Status.REQUIRES_REVIEW)
         self.message_user(request, f"{count} entries marked as requires review.")
+
+    @admin.action(description="Archive selected (resolved only)")
+    def archive_selected(self, request, queryset):
+        """Archive selected entries (only resolved entries can be archived)."""
+        resolved_queryset = queryset.filter(status=FailedOperation.Status.RESOLVED)
+        count = resolved_queryset.update(status=FailedOperation.Status.ARCHIVED)
+        skipped = queryset.count() - count
+        if skipped > 0:
+            self.message_user(
+                request,
+                f"{count} entries archived. {skipped} skipped (not resolved).",
+                level="warning",
+            )
+        else:
+            self.message_user(request, f"{count} entries archived.")
+
+    @admin.action(description="Archive all resolved older than 30 days")
+    def archive_old_resolved(self, request, queryset):
+        """Archive all resolved entries older than 30 days."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        cutoff = timezone.now() - timedelta(days=30)
+        count = FailedOperation.objects.filter(
+            status=FailedOperation.Status.RESOLVED,
+            resolved_at__lt=cutoff,
+        ).update(status=FailedOperation.Status.ARCHIVED)
+        self.message_user(request, f"{count} entries archived (resolved > 30 days ago).")
+
+    @admin.action(description="⚠️ PERMANENTLY DELETE selected archived")
+    def purge_selected_archived(self, request, queryset):
+        """Permanently delete selected archived entries."""
+        archived_queryset = queryset.filter(status=FailedOperation.Status.ARCHIVED)
+        count = archived_queryset.count()
+        non_archived = queryset.count() - count
+
+        if count > 0:
+            archived_queryset.delete()
+            msg = f"⚠️ {count} archived entries permanently deleted."
+            if non_archived > 0:
+                msg += f" {non_archived} skipped (not archived)."
+            self.message_user(request, msg)
+        else:
+            self.message_user(
+                request,
+                "No archived entries selected. Only archived entries can be purged.",
+                level="error",
+            )
 
 
 @admin.register(CircuitBreakerState)

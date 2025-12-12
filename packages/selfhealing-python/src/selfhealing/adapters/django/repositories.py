@@ -231,6 +231,109 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         result = FailedOperation.objects.filter(expires_at__lt=older_than).delete()
         return result[0] if result else 0
 
+    # =========================================================================
+    # Cleanup Operations
+    # =========================================================================
+
+    def archive_old_resolved(
+        self,
+        older_than_days: int = 30,
+    ) -> int:
+        """Archive resolved entries older than N days."""
+        FailedOperation = self._get_model()
+        cutoff = timezone.now() - timedelta(days=older_than_days)
+
+        # Update resolved entries to archived
+        count = FailedOperation.objects.filter(
+            status=OperationStatus.COMPLETED.value,
+            resolved_at__lt=cutoff,
+        ).update(
+            status=OperationStatus.ARCHIVED.value if hasattr(OperationStatus, "ARCHIVED") else "archived",
+            updated_at=timezone.now(),
+        )
+        return count
+
+    def purge_archived(
+        self,
+        ids: Optional[List[int]] = None,
+        older_than_days: Optional[int] = None,
+    ) -> int:
+        """Permanently delete archived entries."""
+        FailedOperation = self._get_model()
+        archived_status = OperationStatus.ARCHIVED.value if hasattr(OperationStatus, "ARCHIVED") else "archived"
+
+        if ids is not None and older_than_days is not None:
+            raise ValueError("Specify either ids or older_than_days, not both")
+
+        if ids is not None:
+            # Verify all are archived before deleting
+            non_archived = (
+                FailedOperation.objects.filter(id__in=ids).exclude(status=archived_status).values_list("id", "status")
+            )
+
+            if non_archived:
+                first_bad = list(non_archived)[0]
+                raise ValueError(
+                    f"Entry {first_bad[0]} is not archived (status: {first_bad[1]}). " "Only archived entries can be purged."
+                )
+
+            result = FailedOperation.objects.filter(
+                id__in=ids,
+                status=archived_status,
+            ).delete()
+            return result[0] if result else 0
+
+        elif older_than_days is not None:
+            cutoff = timezone.now() - timedelta(days=older_than_days)
+            result = FailedOperation.objects.filter(
+                status=archived_status,
+                updated_at__lt=cutoff,
+            ).delete()
+            return result[0] if result else 0
+
+        else:
+            # Purge all archived
+            result = FailedOperation.objects.filter(
+                status=archived_status,
+            ).delete()
+            return result[0] if result else 0
+
+    def get_cleanup_stats(self) -> Dict[str, Any]:
+        """Get statistics for cleanup operations."""
+        FailedOperation = self._get_model()
+        now = timezone.now()
+        day_30_ago = now - timedelta(days=30)
+        day_90_ago = now - timedelta(days=90)
+
+        archived_status = OperationStatus.ARCHIVED.value if hasattr(OperationStatus, "ARCHIVED") else "archived"
+        completed_status = OperationStatus.COMPLETED.value
+
+        # Count by status
+        from django.db.models import Count
+
+        status_counts = dict(
+            FailedOperation.objects.values("status").annotate(count=Count("id")).values_list("status", "count")
+        )
+
+        # Count resolved older than 30 days
+        resolved_older_than_30_days = FailedOperation.objects.filter(
+            status=completed_status,
+            resolved_at__lt=day_30_ago,
+        ).count()
+
+        # Count archived older than 90 days
+        archived_older_than_90_days = FailedOperation.objects.filter(
+            status=archived_status,
+            updated_at__lt=day_90_ago,
+        ).count()
+
+        return {
+            "total": FailedOperation.objects.count(),
+            "by_status": status_counts,
+            "resolved_older_than_30_days": resolved_older_than_30_days,
+            "archived_older_than_90_days": archived_older_than_90_days,
+        }
+
 
 class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """

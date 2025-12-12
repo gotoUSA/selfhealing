@@ -505,6 +505,74 @@ class FailedOperationRepository(ABC):
         """
         ...
 
+    # =========================================================================
+    # Cleanup Operations (Manual - No Auto-Delete)
+    # =========================================================================
+
+    @abstractmethod
+    def archive_old_resolved(
+        self,
+        older_than_days: int = 30,
+    ) -> int:
+        """
+        Archive resolved entries older than N days.
+
+        Changes status from RESOLVED to ARCHIVED.
+        This is a soft-delete operation - data is preserved.
+
+        Args:
+            older_than_days: Archive entries resolved more than this many days ago
+
+        Returns:
+            Number of entries archived
+        """
+        ...
+
+    @abstractmethod
+    def purge_archived(
+        self,
+        ids: Optional[list[int]] = None,
+        older_than_days: Optional[int] = None,
+    ) -> int:
+        """
+        Permanently delete archived entries.
+
+        IMPORTANT: This is a destructive operation. Only archived entries
+        can be purged. Either specify IDs or older_than_days, not both.
+
+        Args:
+            ids: Specific entry IDs to purge (must be ARCHIVED status)
+            older_than_days: Purge archived entries older than N days
+
+        Returns:
+            Number of entries permanently deleted
+
+        Raises:
+            ValueError: If trying to purge non-archived entries
+        """
+        ...
+
+    @abstractmethod
+    def get_cleanup_stats(self) -> dict[str, Any]:
+        """
+        Get statistics for cleanup operations.
+
+        Returns:
+            Dict with counts by status, age distributions, etc.
+            Example:
+            {
+                "total": 1500,
+                "by_status": {
+                    "pending": 50,
+                    "resolved": 1200,
+                    "archived": 250,
+                },
+                "resolved_older_than_30_days": 800,
+                "archived_older_than_90_days": 100,
+            }
+        """
+        ...
+
 
 class CircuitBreakerStateRepository(ABC):
     """

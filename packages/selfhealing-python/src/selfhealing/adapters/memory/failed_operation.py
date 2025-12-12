@@ -456,3 +456,127 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         with self._lock:
             self._storage.clear()
             self._next_id = 1
+
+    # =========================================================================
+    # Cleanup Operations
+    # =========================================================================
+
+    def archive_old_resolved(
+        self,
+        older_than_days: int = 30,
+    ) -> int:
+        """Archive resolved entries older than N days."""
+        cutoff = _now() - timedelta(days=older_than_days)
+        archived_count = 0
+
+        with self._lock:
+            for id, entry in list(self._storage.items()):
+                if entry.status == FailedOperationStatus.RESOLVED.value and entry.resolved_at and entry.resolved_at < cutoff:
+                    updated = FailedOperationData(
+                        id=entry.id,
+                        domain=entry.domain,
+                        failure_type=entry.failure_type,
+                        status=FailedOperationStatus.ARCHIVED.value,
+                        order_id=entry.order_id,
+                        payment_id=entry.payment_id,
+                        user_id=entry.user_id,
+                        snapshot_data=entry.snapshot_data,
+                        error_code=entry.error_code,
+                        error_message=entry.error_message,
+                        retry_count=entry.retry_count,
+                        max_retries=entry.max_retries,
+                        last_retry_at=entry.last_retry_at,
+                        request_data=entry.request_data,
+                        response_data=entry.response_data,
+                        metadata=entry.metadata,
+                        resolved_at=entry.resolved_at,
+                        resolved_by_id=entry.resolved_by_id,
+                        resolution_type=entry.resolution_type,
+                        resolution_note=entry.resolution_note,
+                        next_action_hint=entry.next_action_hint,
+                        recommended_action=entry.recommended_action,
+                        created_at=entry.created_at,
+                        updated_at=_now(),
+                        expires_at=entry.expires_at,
+                    )
+                    self._storage[id] = updated
+                    archived_count += 1
+
+        return archived_count
+
+    def purge_archived(
+        self,
+        ids: Optional[list[int]] = None,
+        older_than_days: Optional[int] = None,
+    ) -> int:
+        """Permanently delete archived entries."""
+        if ids is not None and older_than_days is not None:
+            raise ValueError("Specify either ids or older_than_days, not both")
+
+        purged_count = 0
+
+        with self._lock:
+            if ids is not None:
+                # Purge specific IDs (must be ARCHIVED)
+                for id in ids:
+                    entry = self._storage.get(id)
+                    if entry and entry.status == FailedOperationStatus.ARCHIVED.value:
+                        del self._storage[id]
+                        purged_count += 1
+                    elif entry:
+                        raise ValueError(
+                            f"Entry {id} is not archived (status: {entry.status}). " "Only archived entries can be purged."
+                        )
+            elif older_than_days is not None:
+                # Purge archived entries older than N days
+                cutoff = _now() - timedelta(days=older_than_days)
+                to_delete = []
+                for id, entry in self._storage.items():
+                    if entry.status == FailedOperationStatus.ARCHIVED.value and entry.updated_at and entry.updated_at < cutoff:
+                        to_delete.append(id)
+                for id in to_delete:
+                    del self._storage[id]
+                    purged_count += 1
+            else:
+                # Purge all archived entries
+                to_delete = [id for id, entry in self._storage.items() if entry.status == FailedOperationStatus.ARCHIVED.value]
+                for id in to_delete:
+                    del self._storage[id]
+                    purged_count += 1
+
+        return purged_count
+
+    def get_cleanup_stats(self) -> dict[str, Any]:
+        """Get statistics for cleanup operations."""
+        now = _now()
+        day_30_ago = now - timedelta(days=30)
+        day_90_ago = now - timedelta(days=90)
+
+        with self._lock:
+            total = len(self._storage)
+            by_status: dict[str, int] = {}
+            resolved_older_than_30_days = 0
+            archived_older_than_90_days = 0
+
+            for entry in self._storage.values():
+                # Count by status
+                by_status[entry.status] = by_status.get(entry.status, 0) + 1
+
+                # Count resolved older than 30 days
+                if (
+                    entry.status == FailedOperationStatus.RESOLVED.value
+                    and entry.resolved_at
+                    and entry.resolved_at < day_30_ago
+                ):
+                    resolved_older_than_30_days += 1
+
+                # Count archived older than 90 days
+                if entry.status == FailedOperationStatus.ARCHIVED.value and entry.updated_at and entry.updated_at < day_90_ago:
+                    archived_older_than_90_days += 1
+
+            return {
+                "total": total,
+                "by_status": by_status,
+                "resolved_older_than_30_days": resolved_older_than_30_days,
+                "archived_older_than_90_days": archived_older_than_90_days,
+            }

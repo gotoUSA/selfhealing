@@ -27,6 +27,18 @@ from selfhealing.api.django.views.circuit_breaker import (
 # DLQ Views
 from selfhealing.api.django.views.dlq import (
     DLQReplayView,
+    DLQCleanupStatsView,
+    DLQArchiveView,
+    DLQPurgeView,
+    DLQListView,
+    DLQDetailView,
+    DLQRetryView,
+    DLQResolveView,
+)
+
+# Dashboard Views
+from selfhealing.api.django.views.dashboard import (
+    DashboardSummaryView,
 )
 
 # Health & Metrics Views
@@ -57,6 +69,15 @@ __all__ = [
     "QuickResetView",
     # DLQ Views
     "DLQReplayView",
+    "DLQCleanupStatsView",
+    "DLQArchiveView",
+    "DLQPurgeView",
+    "DLQListView",
+    "DLQDetailView",
+    "DLQRetryView",
+    "DLQResolveView",
+    # Dashboard Views
+    "DashboardSummaryView",
     # Health Views
     "SelfHealingHealthView",
     "LivenessView",

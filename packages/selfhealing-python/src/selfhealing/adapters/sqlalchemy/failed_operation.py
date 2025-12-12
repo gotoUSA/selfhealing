@@ -466,3 +466,116 @@ class SQLAlchemyFailedOperationRepository(BaseRepository, FailedOperationReposit
             return count
         finally:
             session.close()
+
+    # =========================================================================
+    # DLQ Cleanup Methods
+    # =========================================================================
+
+    def archive_old_resolved(
+        self,
+        older_than_days: int = 30,
+    ) -> int:
+        """Archive resolved entries older than specified days."""
+        session = self._get_session()
+        try:
+            cutoff = _now() - timedelta(days=older_than_days)
+            count = (
+                session.query(FailedOperationModel)
+                .filter_by(status=FailedOperationStatus.RESOLVED.value)
+                .filter(FailedOperationModel.resolved_at < cutoff)
+                .update(
+                    {
+                        FailedOperationModel.status: FailedOperationStatus.ARCHIVED.value,
+                        FailedOperationModel.updated_at: _now(),
+                    },
+                    synchronize_session=False,
+                )
+            )
+            session.commit()
+            return count
+        finally:
+            session.close()
+
+    def purge_archived(
+        self,
+        older_than_days: int = 90,
+        ids: Optional[list[int]] = None,
+    ) -> int:
+        """Permanently delete archived entries."""
+        session = self._get_session()
+        try:
+            if ids is not None:
+                # Delete specific archived entries by ID
+                count = (
+                    session.query(FailedOperationModel)
+                    .filter(
+                        FailedOperationModel.id.in_(ids),
+                        FailedOperationModel.status == FailedOperationStatus.ARCHIVED.value,
+                    )
+                    .delete(synchronize_session=False)
+                )
+            else:
+                # Delete archived older than days
+                cutoff = _now() - timedelta(days=older_than_days)
+                count = (
+                    session.query(FailedOperationModel)
+                    .filter_by(status=FailedOperationStatus.ARCHIVED.value)
+                    .filter(FailedOperationModel.updated_at < cutoff)
+                    .delete(synchronize_session=False)
+                )
+            session.commit()
+            return count
+        finally:
+            session.close()
+
+    def get_cleanup_stats(self) -> dict[str, Any]:
+        """Get cleanup-related statistics."""
+        session = self._get_session()
+        try:
+            from sqlalchemy import func
+
+            now = _now()
+            day_30_ago = now - timedelta(days=30)
+            day_90_ago = now - timedelta(days=90)
+
+            # Count by status
+            status_counts_raw = (
+                session.query(
+                    FailedOperationModel.status,
+                    func.count(FailedOperationModel.id),
+                )
+                .group_by(FailedOperationModel.status)
+                .all()
+            )
+            status_counts = {s: c for s, c in status_counts_raw}
+
+            total = sum(status_counts.values())
+
+            # Count resolved older than 30 days
+            resolved_older_than_30_days = (
+                session.query(FailedOperationModel)
+                .filter_by(status=FailedOperationStatus.RESOLVED.value)
+                .filter(FailedOperationModel.resolved_at < day_30_ago)
+                .count()
+            )
+
+            # Count archived older than 90 days
+            archived_older_than_90_days = (
+                session.query(FailedOperationModel)
+                .filter_by(status=FailedOperationStatus.ARCHIVED.value)
+                .filter(FailedOperationModel.updated_at < day_90_ago)
+                .count()
+            )
+
+            return {
+                "total": total,
+                "by_status": status_counts,
+                "resolved_older_than_30_days": resolved_older_than_30_days,
+                "archived_older_than_90_days": archived_older_than_90_days,
+                "recommendations": {
+                    "can_archive": resolved_older_than_30_days,
+                    "can_purge": archived_older_than_90_days,
+                },
+            }
+        finally:
+            session.close()
