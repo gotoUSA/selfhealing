@@ -371,6 +371,102 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             self._storage[id] = updated
             return updated
 
+    def complete_replay(
+        self,
+        id: int,
+        success: bool,
+        resolution_type: str = "",
+        note: str = "",
+        resolved_by_id: Optional[int] = None,
+        error_details: Optional[dict[str, Any]] = None,
+    ) -> bool:
+        """Complete a replay operation by updating the final status."""
+        with self._lock:
+            entry = self._storage.get(id)
+            if entry is None:
+                return False
+
+            if success:
+                new_status = FailedOperationStatus.RESOLVED.value
+                resolved_at = _now()
+            else:
+                # Revert to pending for retry
+                new_status = FailedOperationStatus.PENDING.value
+                resolved_at = entry.resolved_at
+
+            updated = FailedOperationData(
+                id=entry.id,
+                domain=entry.domain,
+                failure_type=entry.failure_type,
+                status=new_status,
+                order_id=entry.order_id,
+                payment_id=entry.payment_id,
+                user_id=entry.user_id,
+                snapshot_data=entry.snapshot_data,
+                error_code=entry.error_code,
+                error_message=note or entry.error_message,
+                retry_count=entry.retry_count,
+                max_retries=entry.max_retries,
+                last_retry_at=entry.last_retry_at,
+                request_data=entry.request_data,
+                response_data=entry.response_data,
+                metadata={**(entry.metadata or {}), **(error_details or {})},
+                resolved_at=resolved_at,
+                resolved_by_id=resolved_by_id or entry.resolved_by_id,
+                resolution_type=resolution_type or entry.resolution_type,
+                resolution_note=note or entry.resolution_note,
+                next_action_hint=entry.next_action_hint,
+                recommended_action=entry.recommended_action,
+                created_at=entry.created_at,
+                updated_at=_now(),
+                expires_at=entry.expires_at,
+            )
+            self._storage[id] = updated
+            return True
+
+    def release_stale_replaying(
+        self,
+        older_than_minutes: int = 30,
+    ) -> int:
+        """Release DLQ entries stuck in REPLAYING state."""
+        cutoff = _now() - timedelta(minutes=older_than_minutes)
+        released = 0
+
+        with self._lock:
+            for id, entry in list(self._storage.items()):
+                if entry.status == "replaying" and entry.last_retry_at and entry.last_retry_at < cutoff:
+                    updated = FailedOperationData(
+                        id=entry.id,
+                        domain=entry.domain,
+                        failure_type=entry.failure_type,
+                        status=FailedOperationStatus.PENDING.value,
+                        order_id=entry.order_id,
+                        payment_id=entry.payment_id,
+                        user_id=entry.user_id,
+                        snapshot_data=entry.snapshot_data,
+                        error_code=entry.error_code,
+                        error_message=entry.error_message,
+                        retry_count=entry.retry_count,
+                        max_retries=entry.max_retries,
+                        last_retry_at=entry.last_retry_at,
+                        request_data=entry.request_data,
+                        response_data=entry.response_data,
+                        metadata=entry.metadata,
+                        resolved_at=entry.resolved_at,
+                        resolved_by_id=entry.resolved_by_id,
+                        resolution_type=entry.resolution_type,
+                        resolution_note=entry.resolution_note,
+                        next_action_hint=entry.next_action_hint,
+                        recommended_action=entry.recommended_action,
+                        created_at=entry.created_at,
+                        updated_at=_now(),
+                        expires_at=entry.expires_at,
+                    )
+                    self._storage[id] = updated
+                    released += 1
+
+        return released
+
     def clear(self) -> None:
         """Clear all entries (for testing)."""
         with self._lock:

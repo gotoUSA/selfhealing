@@ -101,7 +101,7 @@ packages/selfhealing-python/
 
 ### 패키지 정리 및 확장
 - [x] Stage 28-1: services/ Django fallback 정리
-- [ ] Stage 28-2: FastAPI 어댑터
+- [x] Stage 28-2: FastAPI 어댑터
 - [ ] Stage 28-3: SQLAlchemy 어댑터
 - [ ] Stage 28-4: In-Memory Repository
 
