@@ -2,7 +2,7 @@
 
 > 작성일: 2025-12-12
 > 기반 문서: STAGE_28_30_ADVANCED_CHAOS_PLAN.md Phase 2 섹션
-> 상태: **Stage 31-34 구현 완료** ✅
+> 상태: **Stage 31-36 전체 구현 완료** ✅
 
 ---
 
@@ -14,8 +14,8 @@
 | **32** | ✅ 완료 | `stage32_retry_storm_extended.py` | 34개 통과 |
 | **33** | ✅ 완료 | `stage33_jwt_cascade.py` | 31개 통과 |
 | **34** | ✅ 완료 | `stage34_db_deadlock.py` | 31개 통과 |
-| **35** | 📋 계획 | - | - |
-| **36** | 📋 계획 | - | - |
+| **35** | ✅ 완료 | `stage35_cache_stampede.py` | 30개 통과 |
+| **36** | ✅ 완료 | `stage36_memory_pressure.py` | 40개 통과 |
 
 ---
 
@@ -781,17 +781,17 @@ docker/
 - [x] Pool 복구 검증
 - [x] 테스트 통과 (31개 테스트)
 
-### Stage 35 (Cache Stampede)
-- [ ] 3개 시나리오 구현
-- [ ] Thundering Herd 방지
-- [ ] Probabilistic Refresh 검증
-- [ ] 테스트 통과
+### Stage 35 (Cache Stampede) ✅ 완료
+- [x] 3개 시나리오 구현 (Hot Key Expiry, Probabilistic Early Expiration, Multi-Key Batch)
+- [x] Thundering Herd 방지
+- [x] Probabilistic Refresh 검증
+- [x] 테스트 통과 (30개 테스트)
 
-### Stage 36 (Memory Pressure)
-- [ ] 4개 시나리오 구현
-- [ ] OOM 방지 검증
-- [ ] GC 영향 최소화
-- [ ] 테스트 통과
+### Stage 36 (Memory Pressure) ✅ 완료
+- [x] 4개 시나리오 구현 (Gradual Increase, Large Payload, Leak Detection, GC Impact)
+- [x] OOM 방지 검증
+- [x] GC 영향 최소화
+- [x] 테스트 통과 (40개 테스트)
 
 ---
 
@@ -811,3 +811,4 @@ docker/
 | 1.0 | 2025-12-12 | 초안 작성 |
 | 1.1 | 2025-12-12 | Stage 31, 32 구현 완료 (57개 테스트 통과) |
 | 1.2 | 2025-12-12 | Stage 33, 34 구현 완료 (62개 테스트 통과) |
+| 1.3 | 2025-12-12 | Stage 35, 36 구현 완료 (70개 테스트 통과) - 전체 완료 🎉 |

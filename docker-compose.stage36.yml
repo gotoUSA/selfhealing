@@ -1,0 +1,242 @@
+# Stage 36: Memory Pressure Test
+# Docker Compose 설정
+#
+# 사용법:
+#   docker-compose -f docker-compose.stage36.yml up -d
+#   docker-compose -f docker-compose.stage36.yml -f docker-compose.yml up -d
+#
+# 테스트 시나리오:
+#   1. Gradual Memory Increase
+#   2. Large Payload Handling
+#   3. Memory Leak Detection
+#   4. GC Pause Impact
+
+version: '3.8'
+
+services:
+  # 웹 애플리케이션 (메모리 제한 적용)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-stage36
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - STAGE=36
+      - MEMORY_PRESSURE_TEST_ENABLED=true
+      # Memory thresholds
+      - MEMORY_WARNING_THRESHOLD=0.70
+      - MEMORY_THROTTLE_THRESHOLD=0.85
+      - MEMORY_CRITICAL_THRESHOLD=0.95
+      - MEMORY_MAX_MB=1024
+      # GC configuration
+      - GC_PAUSE_TARGET_MS=100
+      # Large payload configuration
+      - LARGE_PAYLOAD_SIZE_MB=50
+      - STREAMING_CHUNK_SIZE_KB=64
+      # Python memory settings
+      - PYTHONMALLOC=pymalloc
+      - PYTHONTRACEMALLOC=1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - memory_net
+    # 메모리 제한 설정
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "stage=36"
+      - "test=memory-pressure"
+
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: db-stage36
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "work_mem=4MB"
+    volumes:
+      - db_stage36_data:/var/lib/postgresql/data
+    networks:
+      - memory_net
+    # DB도 메모리 제한
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "stage=36"
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis-stage36
+    command:
+      - "redis-server"
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    ports:
+      - "6379:6379"
+    networks:
+      - memory_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "stage=36"
+
+  # Locust 부하 테스트
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage36
+    environment:
+      - LOCUST_HOST=http://web:8000
+      - LOCUST_USERS=50
+      - LOCUST_SPAWN_RATE=10
+      - LOCUST_RUN_TIME=5m
+      - LOCUST_TEST_DURATION=300
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage36_memory_pressure.py
+      --headless
+      --html=/mnt/locust/reports/stage36_report.html
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - memory_net
+    labels:
+      - "stage=36"
+
+  # Pytest 유닛 테스트
+  pytest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pytest-stage36
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./tests:/app/tests
+      - ./load_tests:/app/load_tests
+    command: >
+      pytest tests/load/test_stage36_memory_pressure.py -v
+      --tb=short
+      --junit-xml=/app/reports/stage36_pytest.xml
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - memory_net
+    profiles:
+      - test
+    labels:
+      - "stage=36"
+
+  # 메모리 모니터링 (cAdvisor)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor-stage36
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - memory_net
+    profiles:
+      - monitoring
+    labels:
+      - "stage=36"
+
+  # Prometheus (메트릭 수집)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-stage36
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-stage36.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - memory_net
+    profiles:
+      - monitoring
+    labels:
+      - "stage=36"
+
+  # Grafana (시각화)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-stage36
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_stage36_data:/var/lib/grafana
+    networks:
+      - memory_net
+    profiles:
+      - monitoring
+    labels:
+      - "stage=36"
+
+networks:
+  memory_net:
+    driver: bridge
+    name: stage36_network
+
+volumes:
+  db_stage36_data:
+    name: stage36_db_data
+  grafana_stage36_data:
+    name: stage36_grafana_data

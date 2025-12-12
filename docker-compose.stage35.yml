@@ -1,0 +1,181 @@
+# Stage 35: Cache Stampede Prevention Test
+# Docker Compose 설정
+#
+# 사용법:
+#   docker-compose -f docker-compose.stage35.yml up -d
+#   docker-compose -f docker-compose.stage35.yml -f docker-compose.yml up -d
+#
+# 테스트 시나리오:
+#   1. Hot Key Expiry Stampede
+#   2. Probabilistic Early Expiration
+#   3. Multi-Key Batch Expiry
+
+version: '3.8'
+
+services:
+  # 웹 애플리케이션
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-stage35
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - STAGE=35
+      - CACHE_STAMPEDE_TEST_ENABLED=true
+      # Cache configuration
+      - CACHE_TTL_S=60
+      - CACHE_EARLY_EXPIRY_PROBABILITY=0.1
+      - CACHE_EARLY_EXPIRY_DELTA_S=10
+      - CACHE_LOCK_TIMEOUT_S=5
+      # Stampede prevention settings
+      - CACHE_STAMPEDE_PREVENTION=true
+      - CACHE_REFRESH_LOCK_ENABLED=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - stampede_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "stage=35"
+      - "test=cache-stampede"
+
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: db-stage35
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+    volumes:
+      - db_stage35_data:/var/lib/postgresql/data
+    networks:
+      - stampede_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "stage=35"
+
+  # Redis (Cache Stampede 테스트용)
+  redis:
+    image: redis:7-alpine
+    container_name: redis-stage35
+    command:
+      - "redis-server"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "volatile-lru"
+      - "--notify-keyspace-events"
+      - "Ex"  # Expired events
+    ports:
+      - "6379:6379"
+    networks:
+      - stampede_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "stage=35"
+
+  # Locust 부하 테스트
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage35
+    environment:
+      - LOCUST_HOST=http://web:8000
+      - LOCUST_USERS=100
+      - LOCUST_SPAWN_RATE=20
+      - LOCUST_RUN_TIME=5m
+      - LOCUST_TEST_DURATION=300
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage35_cache_stampede.py
+      --headless
+      --html=/mnt/locust/reports/stage35_report.html
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - stampede_net
+    labels:
+      - "stage=35"
+
+  # Pytest 유닛 테스트
+  pytest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pytest-stage35
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./tests:/app/tests
+      - ./load_tests:/app/load_tests
+    command: >
+      pytest tests/load/test_stage35_cache_stampede.py -v
+      --tb=short
+      --junit-xml=/app/reports/stage35_pytest.xml
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stampede_net
+    profiles:
+      - test
+    labels:
+      - "stage=35"
+
+  # Redis Exporter (모니터링)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter-stage35
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - stampede_net
+    depends_on:
+      - redis
+    profiles:
+      - monitoring
+    labels:
+      - "stage=35"
+
+networks:
+  stampede_net:
+    driver: bridge
+    name: stage35_network
+
+volumes:
+  db_stage35_data:
+    name: stage35_db_data
