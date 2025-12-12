@@ -5,26 +5,25 @@ Concrete implementations of repository interfaces using Django ORM.
 These adapters translate between the abstract interface methods and
 Django model operations.
 
-Design:
-- Each adapter wraps a Django model
-- Methods return data classes, not Django model instances
-- All database operations are encapsulated here
+Structure:
+    - failed_operation.py: DjangoFailedOperationRepository
+    - circuit_breaker.py: DjangoCircuitBreakerStateRepository
+    - security_incident.py: DjangoSecurityIncidentRepository
+    - rate_limit.py: DjangoRateLimitStateRepository
 
 Reference: docs/SELF_HEALING_EXTRACTION_PLAN.md Phase 1.2
-
-NOTE: This file has been refactored. Implementations are now in:
-    - selfhealing.adapters.django_repos.failed_operation
-    - selfhealing.adapters.django_repos.circuit_breaker
-    - selfhealing.adapters.django_repos.security_incident
-    - selfhealing.adapters.django_repos.rate_limit
-
-This file re-exports all classes for backward compatibility.
 """
 
-from selfhealing.adapters.django_repos import (
+from selfhealing.adapters.django_repos.failed_operation import (
     DjangoFailedOperationRepository,
+)
+from selfhealing.adapters.django_repos.circuit_breaker import (
     DjangoCircuitBreakerStateRepository,
+)
+from selfhealing.adapters.django_repos.security_incident import (
     DjangoSecurityIncidentRepository,
+)
+from selfhealing.adapters.django_repos.rate_limit import (
     DjangoRateLimitStateRepository,
 )
 
