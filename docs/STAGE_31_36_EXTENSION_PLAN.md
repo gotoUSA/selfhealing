@@ -2,7 +2,7 @@
 
 > 작성일: 2025-12-12
 > 기반 문서: STAGE_28_30_ADVANCED_CHAOS_PLAN.md Phase 2 섹션
-> 상태: **Stage 31-32 구현 완료** ✅
+> 상태: **Stage 31-34 구현 완료** ✅
 
 ---
 
@@ -12,8 +12,8 @@
 |-------|------|-----------|--------|
 | **31** | ✅ 완료 | `stage31_cascade_extended.py` | 23개 통과 |
 | **32** | ✅ 완료 | `stage32_retry_storm_extended.py` | 34개 통과 |
-| **33** | 📋 계획 | - | - |
-| **34** | 📋 계획 | - | - |
+| **33** | ✅ 완료 | `stage33_jwt_cascade.py` | 31개 통과 |
+| **34** | ✅ 완료 | `stage34_db_deadlock.py` | 31개 통과 |
 | **35** | 📋 계획 | - | - |
 | **36** | 📋 계획 | - | - |
 
@@ -769,17 +769,17 @@ docker/
 - [x] DLQ 폭주 방지 테스트
 - [x] 테스트 통과 (34개 테스트)
 
-### Stage 33 (JWT Cascade Extended)
-- [ ] 4개 시나리오 구현
-- [ ] JWT Stampede 방지
-- [ ] Auth Server Fallback 검증
-- [ ] 테스트 통과
+### Stage 33 (JWT Cascade Extended) ✅ 완료
+- [x] 4개 시나리오 구현 (JWT Stampede, Auth Fallback, Re-Auth Storm, Queue Growth)
+- [x] JWT Stampede 방지
+- [x] Auth Server Fallback 검증
+- [x] 테스트 통과 (31개 테스트)
 
-### Stage 34 (DB Deadlock Locust)
-- [ ] 3개 시나리오 구현
-- [ ] Deadlock 자동 탐지
-- [ ] Pool 복구 검증
-- [ ] 테스트 통과
+### Stage 34 (DB Deadlock Locust) ✅ 완료
+- [x] 3개 시나리오 구현 (Order Deadlock, Payment+Point, Pool+Deadlock)
+- [x] Deadlock 자동 탐지
+- [x] Pool 복구 검증
+- [x] 테스트 통과 (31개 테스트)
 
 ### Stage 35 (Cache Stampede)
 - [ ] 3개 시나리오 구현
@@ -810,3 +810,4 @@ docker/
 |------|------|-----------|
 | 1.0 | 2025-12-12 | 초안 작성 |
 | 1.1 | 2025-12-12 | Stage 31, 32 구현 완료 (57개 테스트 통과) |
+| 1.2 | 2025-12-12 | Stage 33, 34 구현 완료 (62개 테스트 통과) |

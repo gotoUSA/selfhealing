@@ -1,0 +1,175 @@
+# Stage 33: JWT Cascade Extended Test
+# Docker Compose 설정
+#
+# 사용법:
+#   docker-compose -f docker-compose.stage33.yml up -d
+#   docker-compose -f docker-compose.stage33.yml -f docker-compose.yml up -d
+#
+# 테스트 시나리오:
+#   1. JWT Expiry Stampede
+#   2. Auth Server Fallback
+#   3. Re-Auth Storm Throttling
+#   4. Replay Queue Growth
+
+version: '3.8'
+
+services:
+  # Primary Auth Server (웹 애플리케이션)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-stage33
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - STAGE=33
+      - JWT_CASCADE_TEST_ENABLED=true
+      - JWT_EXPIRY_S=3600
+      - JWT_REFRESH_THRESHOLD_S=300
+      - REAUTH_THROTTLE_LIMIT=100
+      - REAUTH_THROTTLE_WINDOW_S=1
+      - REPLAY_QUEUE_MAX_SIZE=10000
+      - AUTH_SERVER_ROLE=primary
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - jwt_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "stage=33"
+      - "test=jwt-cascade-extended"
+
+  # Secondary Auth Server (Fallback용)
+  web-secondary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-secondary-stage33
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/1
+      - STAGE=33
+      - JWT_CASCADE_TEST_ENABLED=true
+      - AUTH_SERVER_ROLE=secondary
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    networks:
+      - jwt_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "stage=33"
+      - "role=secondary"
+
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: db-stage33
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db_stage33_data:/var/lib/postgresql/data
+    networks:
+      - jwt_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 캐시 (JWT 토큰 블랙리스트 및 세션 저장소)
+  redis:
+    image: redis:7-alpine
+    container_name: redis-stage33
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_stage33_data:/data
+    networks:
+      - jwt_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Locust 부하 테스트
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage33
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage33_jwt_cascade.py
+      --host=http://web:8000
+      --users=100
+      --spawn-rate=20
+    environment:
+      - LOCUST_TEST_DURATION=300
+    depends_on:
+      - web
+      - web-secondary
+    networks:
+      - jwt_net
+
+  # Prometheus 메트릭 수집
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus-stage33
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus-stage33.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - jwt_net
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Grafana 대시보드
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana-stage33
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_stage33_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - jwt_net
+
+networks:
+  jwt_net:
+    driver: bridge
+
+volumes:
+  db_stage33_data:
+  redis_stage33_data:
+  grafana_stage33_data:
