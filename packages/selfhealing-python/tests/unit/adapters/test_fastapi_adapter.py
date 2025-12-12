@@ -19,16 +19,22 @@ class TestSelfHealingMiddleware:
     @pytest.fixture
     def mock_app(self):
         """Create mock ASGI app."""
+
         async def app(scope, receive, send):
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [(b"content-type", b"application/json")],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b'{"message": "ok"}',
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b'{"message": "ok"}',
+                }
+            )
+
         return app
 
     @pytest.fixture
@@ -44,11 +50,13 @@ class TestSelfHealingMiddleware:
         """Create mock shutdown coordinator."""
         coordinator = Mock()
         coordinator.is_accepting_requests = Mock(return_value=True)
-        coordinator.get_stats = Mock(return_value=Mock(
-            phase=Mock(value="running"),
-            in_flight_count=0,
-            remaining_drain_time=None,
-        ))
+        coordinator.get_stats = Mock(
+            return_value=Mock(
+                phase=Mock(value="running"),
+                in_flight_count=0,
+                remaining_drain_time=None,
+            )
+        )
         return coordinator
 
     @pytest.mark.asyncio
@@ -117,9 +125,7 @@ class TestSelfHealingMiddleware:
         assert send.call_count >= 2  # start and body
 
     @pytest.mark.asyncio
-    async def test_middleware_rejects_during_shutdown(
-        self, mock_app, mock_shutdown_coordinator
-    ):
+    async def test_middleware_rejects_during_shutdown(self, mock_app, mock_shutdown_coordinator):
         """Test that requests are rejected during shutdown."""
         from selfhealing.adapters.fastapi.middleware import SelfHealingMiddleware
 
@@ -178,16 +184,22 @@ class TestShutdownMiddleware:
     @pytest.fixture
     def mock_app(self):
         """Create mock ASGI app."""
+
         async def app(scope, receive, send):
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"ok",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"ok",
+                }
+            )
+
         return app
 
     @pytest.fixture
@@ -197,11 +209,13 @@ class TestShutdownMiddleware:
 
         coordinator = Mock()
         coordinator.is_accepting_requests = Mock(return_value=True)
-        coordinator.get_stats = Mock(return_value=Mock(
-            phase=ShutdownPhase.RUNNING,
-            in_flight_count=0,
-            remaining_drain_time=None,
-        ))
+        coordinator.get_stats = Mock(
+            return_value=Mock(
+                phase=ShutdownPhase.RUNNING,
+                in_flight_count=0,
+                remaining_drain_time=None,
+            )
+        )
         return coordinator
 
     @pytest.mark.asyncio
@@ -288,6 +302,7 @@ class TestRoutes:
 
         # Should be an APIRouter
         from fastapi import APIRouter
+
         assert isinstance(router, APIRouter)
 
     def test_router_has_health_routes(self):

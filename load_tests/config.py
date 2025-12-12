@@ -25,7 +25,7 @@ TEST_USER_PASSWORD = "testpass123"
 # Admin user for control API tests (Stage 14, 15)
 # Create via: python manage.py createsuperuser --username=admin --email=admin@test.com
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123!")
 
 # =============================================================================
 # User Behavior Weights

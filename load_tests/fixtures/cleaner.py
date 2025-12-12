@@ -24,7 +24,7 @@ class CleanerConfig:
 
     base_url: str = "http://localhost:8000"
     admin_username: str = "admin"
-    admin_password: str = "admin123"
+    admin_password: str = "admin123!"
     user_prefix: str = "loadtest_user_"
 
 
@@ -248,7 +248,7 @@ def main():
     parser = argparse.ArgumentParser(description="Load Test Data Cleaner")
     parser.add_argument("--host", default="http://localhost:8000", help="API base URL")
     parser.add_argument("--admin-user", default="admin", help="Admin username")
-    parser.add_argument("--admin-pass", default="admin123", help="Admin password")
+    parser.add_argument("--admin-pass", default="admin123!", help="Admin password")
     parser.add_argument("--orders", action="store_true", help="Clean orders only")
     parser.add_argument("--carts", action="store_true", help="Clean carts only")
     parser.add_argument("--delete-users", action="store_true", help="Delete test users (DESTRUCTIVE)")

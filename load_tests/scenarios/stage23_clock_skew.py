@@ -300,7 +300,7 @@ class ClockSkewTestUser(HttpUser):
         }
 
         with self.client.post(
-            "/api/v1/payments/prepare/",
+            "/api/payments/request/",
             json={
                 "order_id": self.user_id * 1000 + self.payment_count,
                 "amount": random.randint(10000, 100000),
@@ -331,7 +331,7 @@ class ClockSkewTestUser(HttpUser):
         headers["X-Request-Timestamp"] = skewed_timestamp
 
         with self.client.post(
-            "/api/v1/payments/prepare/",
+            "/api/payments/request/",
             json={
                 "order_id": self.user_id * 1000 + self.payment_count,
                 "amount": random.randint(10000, 100000),

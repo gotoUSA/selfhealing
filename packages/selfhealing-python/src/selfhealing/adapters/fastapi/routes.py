@@ -58,10 +58,7 @@ def create_selfhealing_router(
         from fastapi import APIRouter, Depends, HTTPException, Query, Body
         from pydantic import BaseModel, Field
     except ImportError:
-        raise ImportError(
-            "FastAPI and Pydantic are required. "
-            "Install with: pip install fastapi pydantic"
-        )
+        raise ImportError("FastAPI and Pydantic are required. " "Install with: pip install fastapi pydantic")
 
     router = APIRouter()
 
@@ -76,6 +73,7 @@ def create_selfhealing_router(
 
     class CircuitBreakerState(BaseModel):
         """Circuit breaker state response."""
+
         service_name: str
         state: str
         failure_count: int
@@ -86,11 +84,13 @@ def create_selfhealing_router(
 
     class CircuitBreakerList(BaseModel):
         """List of circuit breaker states."""
+
         items: List[CircuitBreakerState]
         total: int
 
     class FailedOperation(BaseModel):
         """Failed operation (DLQ entry)."""
+
         id: int
         domain: str
         failure_type: str
@@ -104,12 +104,14 @@ def create_selfhealing_router(
 
     class FailedOperationList(BaseModel):
         """List of failed operations."""
+
         items: List[FailedOperation]
         total: int
         pending_count: int
 
     class ShutdownStatus(BaseModel):
         """Shutdown status."""
+
         phase: str
         in_flight_requests: int
         completed_during_drain: int
@@ -119,6 +121,7 @@ def create_selfhealing_router(
 
     class HealthResponse(BaseModel):
         """Health check response."""
+
         status: str
         timestamp: datetime
         version: str = "1.0.0"
@@ -126,16 +129,19 @@ def create_selfhealing_router(
 
     class RetryRequest(BaseModel):
         """Request to retry a failed operation."""
+
         operation_id: int
 
     class RetryBatchRequest(BaseModel):
         """Request to retry multiple operations."""
+
         operation_ids: List[int] = Field(default_factory=list)
         domain: Optional[str] = None
         max_count: int = Field(default=10, ge=1, le=100)
 
     class ActionResponse(BaseModel):
         """Generic action response."""
+
         success: bool
         message: str
         data: Optional[dict] = None
@@ -145,6 +151,7 @@ def create_selfhealing_router(
     # ========================================================================
 
     if include_health:
+
         @router.get(
             "/health",
             response_model=HealthResponse,
@@ -170,7 +177,9 @@ def create_selfhealing_router(
                 }
 
             return HealthResponse(
-                status="healthy" if not _configured or components.get("shutdown", {}).get("status") == "healthy" else "degraded",
+                status=(
+                    "healthy" if not _configured or components.get("shutdown", {}).get("status") == "healthy" else "degraded"
+                ),
                 timestamp=datetime.now(timezone.utc),
                 components=components,
             )
@@ -206,6 +215,7 @@ def create_selfhealing_router(
     # ========================================================================
 
     if include_circuit_breaker:
+
         @router.get(
             "/circuit-breakers",
             response_model=CircuitBreakerList,
@@ -306,6 +316,7 @@ def create_selfhealing_router(
     # ========================================================================
 
     if include_dlq:
+
         @router.get(
             "/dlq",
             response_model=FailedOperationList,
@@ -418,7 +429,9 @@ def create_selfhealing_router(
 
                 return ActionResponse(
                     success=result.success,
-                    message=f"Operation {operation_id} replay initiated" if result.success else f"Replay failed: {result.error}",
+                    message=(
+                        f"Operation {operation_id} replay initiated" if result.success else f"Replay failed: {result.error}"
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Failed to retry operation: {e}")
@@ -465,6 +478,7 @@ def create_selfhealing_router(
     # ========================================================================
 
     if include_shutdown:
+
         @router.get(
             "/shutdown/status",
             response_model=ShutdownStatus,
@@ -534,6 +548,7 @@ def create_selfhealing_router(
 # ============================================================================
 # Utility Routes (standalone)
 # ============================================================================
+
 
 def create_health_router():
     """

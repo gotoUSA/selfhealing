@@ -163,19 +163,23 @@ class SelfHealingMiddleware:
         """Send 503 response when server is shutting down."""
         body = b'{"error": "Server is shutting down", "code": "SHUTDOWN_IN_PROGRESS"}'
 
-        await send({
-            "type": "http.response.start",
-            "status": 503,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"connection", b"close"),
-                (b"retry-after", b"30"),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 503,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"connection", b"close"),
+                    (b"retry-after", b"30"),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )
 
 
 class ShutdownMiddleware:
@@ -241,26 +245,32 @@ class ShutdownMiddleware:
         """Send 503 with shutdown details."""
         import json
 
-        body = json.dumps({
-            "error": "Service unavailable",
-            "code": "SHUTDOWN_IN_PROGRESS",
-            "phase": phase.value,
-            "message": "Server is shutting down. Please retry later.",
-        }).encode()
+        body = json.dumps(
+            {
+                "error": "Service unavailable",
+                "code": "SHUTDOWN_IN_PROGRESS",
+                "phase": phase.value,
+                "message": "Server is shutting down. Please retry later.",
+            }
+        ).encode()
 
-        await send({
-            "type": "http.response.start",
-            "status": 503,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"connection", b"close"),
-                (b"retry-after", b"30"),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 503,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"connection", b"close"),
+                    (b"retry-after", b"30"),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )
 
     async def _send_degraded_health(
         self,
@@ -273,21 +283,27 @@ class ShutdownMiddleware:
         import json
 
         stats = self._shutdown.get_stats()
-        body = json.dumps({
-            "status": "degraded",
-            "phase": phase.value,
-            "in_flight_requests": stats.in_flight_count,
-            "remaining_drain_time": stats.remaining_drain_time,
-        }).encode()
+        body = json.dumps(
+            {
+                "status": "degraded",
+                "phase": phase.value,
+                "in_flight_requests": stats.in_flight_count,
+                "remaining_drain_time": stats.remaining_drain_time,
+            }
+        ).encode()
 
-        await send({
-            "type": "http.response.start",
-            "status": 503,
-            "headers": [
-                (b"content-type", b"application/json"),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 503,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )

@@ -31,7 +31,7 @@ class SeederConfig:
     num_products: int = 50
     user_password: str = "TestPassword123!"
     admin_username: str = "admin"
-    admin_password: str = "admin123"
+    admin_password: str = "admin123!"
 
     # 유저 접두사 (load test 유저 식별용)
     user_prefix: str = "loadtest_user_"
@@ -218,7 +218,7 @@ def main():
     parser.add_argument("--users", type=int, default=100, help="Number of users to create")
     parser.add_argument("--products", type=int, default=50, help="Number of products to create")
     parser.add_argument("--admin-user", default="admin", help="Admin username")
-    parser.add_argument("--admin-pass", default="admin123", help="Admin password")
+    parser.add_argument("--admin-pass", default="admin123!", help="Admin password")
     parser.add_argument("--export", action="store_true", help="Export users to CSV")
 
     args = parser.parse_args()

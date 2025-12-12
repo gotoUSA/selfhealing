@@ -83,33 +83,34 @@ services:
   # Locust - Stage 테스트 실행
   locust:
     build: .
-    command: >
-      sh -c "
-        echo '=== Starting Locust Tests Stage 10-27 ===' &&
-        for stage in 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27; do
-          SCENARIO_FILE=/code/load_tests/scenarios/stage$${stage}_*.py
-          SCENARIO=\$$(ls \$$SCENARIO_FILE 2>/dev/null | head -1)
-          if [ -f \"\$$SCENARIO\" ]; then
-            echo '' &&
-            echo '========================================' &&
-            echo \"Running Stage \$$stage: \$$SCENARIO\" &&
-            echo '========================================' &&
-            locust -f \$$SCENARIO \
+    command:
+      - /bin/bash
+      - -c
+      - |
+        echo '=== Starting Locust Tests Stage 10-27 (excluding 26) ==='
+        for stage in 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 27; do
+          SCENARIO_FILE="/code/load_tests/scenarios/stage$${stage}_*.py"
+          SCENARIO=$$(ls $$SCENARIO_FILE 2>/dev/null | head -1)
+          if [ -f "$$SCENARIO" ]; then
+            echo ''
+            echo '========================================'
+            echo "Running Stage $$stage: $$SCENARIO"
+            echo '========================================'
+            locust -f "$$SCENARIO" \
               --host=http://web:8000 \
               --users=50 \
               --spawn-rate=10 \
               --run-time=30s \
               --headless \
               --only-summary \
-              --html=/code/reports/stage\$${stage}_report.html \
-              2>&1 | tail -20 || echo \"Stage \$$stage completed with warnings\"
+              --html="/code/reports/stage$${stage}_report.html" \
+              2>&1 | tail -30 || echo "Stage $$stage completed with warnings"
           else
-            echo \"Stage \$$stage: No scenario file found, skipping\"
+            echo "Stage $$stage: No scenario file found, skipping"
           fi
-        done &&
-        echo '' &&
-        echo '=== All Stage Tests Completed ===' 
-      "
+        done
+        echo ''
+        echo '=== All Stage Tests Completed ==='
     volumes:
       - .:/code
       - ./reports:/code/reports

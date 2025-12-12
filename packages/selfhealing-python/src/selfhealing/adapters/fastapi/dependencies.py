@@ -117,6 +117,7 @@ def configure_fastapi_selfhealing(
 # Dependency Functions
 # ============================================================================
 
+
 def get_factory() -> ProviderRegistry:
     """
     Get the ProviderRegistry for accessing all services.
@@ -138,10 +139,7 @@ def get_request_tracker() -> RequestTracker:
         RequestTracker instance
     """
     if _request_tracker is None:
-        raise RuntimeError(
-            "Self-healing not configured. "
-            "Call configure_fastapi_selfhealing(app) first."
-        )
+        raise RuntimeError("Self-healing not configured. " "Call configure_fastapi_selfhealing(app) first.")
     return _request_tracker
 
 
@@ -156,10 +154,7 @@ def get_shutdown_coordinator() -> ShutdownCoordinator:
         ShutdownCoordinator instance
     """
     if _shutdown_coordinator is None:
-        raise RuntimeError(
-            "Self-healing not configured. "
-            "Call configure_fastapi_selfhealing(app) first."
-        )
+        raise RuntimeError("Self-healing not configured. " "Call configure_fastapi_selfhealing(app) first.")
     return _shutdown_coordinator
 
 
@@ -234,6 +229,7 @@ def get_replay_service():
 # Dependency Factory (for custom configuration)
 # ============================================================================
 
+
 def create_circuit_breaker_dependency(
     repository_name: str = "memory",
 ) -> Callable:
@@ -253,6 +249,7 @@ def create_circuit_breaker_dependency(
         def get_status(cb = Depends(get_cb)):
             ...
     """
+
     def _dependency():
         from selfhealing.services.circuit_breaker_service import CircuitBreakerService
 
@@ -277,6 +274,7 @@ def create_dlq_dependency(
     Returns:
         Dependency function for FastAPI
     """
+
     def _dependency():
         from selfhealing.services.dlq_service import DLQService
 
