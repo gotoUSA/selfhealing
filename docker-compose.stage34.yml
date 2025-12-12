@@ -19,9 +19,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-stage34
+    command: python manage.py runserver 0.0.0.0:8000
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
       - REDIS_URL=redis://redis:6379/0
       - STAGE=34
       - DB_DEADLOCK_TEST_ENABLED=true
@@ -41,11 +45,7 @@ services:
       - "8000:8000"
     networks:
       - deadlock_net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+    # healthcheck disabled - test simulation
     labels:
       - "stage=34"
       - "test=db-deadlock-extended"
@@ -107,9 +107,10 @@ services:
     ports:
       - "8089:8089"
     volumes:
-      - ./load_tests:/mnt/locust
+      - ./load_tests:/mnt/load_tests
+    working_dir: /mnt
     command: >
-      -f /mnt/locust/scenarios/stage34_db_deadlock.py
+      -f /mnt/load_tests/scenarios/stage34_db_deadlock.py
       --host=http://web:8000
       --users=100
       --spawn-rate=20

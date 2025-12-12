@@ -123,16 +123,16 @@ REPLAY_QUEUE_ITEM_TIMEOUT_S = 10  # Faster expiry for testing
 
 # Excellence Gate Criteria
 EXCELLENCE_CRITERIA = {
-    "reissue_max_ms": 200,      # Max < 200ms
-    "reissue_avg_ms": 120,      # Avg < 120ms
-    "reissue_p95_ms": 150,      # P95 < 150ms
-    "fallback_max_ms": 300,     # Fallback < 300ms
-    "fallback_p95_ms": 250,     # P95 < 250ms
-    "fallback_min_count": 3,    # At least 3 fallback events
+    "reissue_max_ms": 200,  # Max < 200ms
+    "reissue_avg_ms": 120,  # Avg < 120ms
+    "reissue_p95_ms": 150,  # P95 < 150ms
+    "fallback_max_ms": 300,  # Fallback < 300ms
+    "fallback_p95_ms": 250,  # P95 < 250ms
+    "fallback_min_count": 3,  # At least 3 fallback events
     "throttle_must_occur": True,  # Throttle MUST happen
     "priority_success_rate": 0.95,  # Priority > 95% success
-    "normal_max_drop_rate": 0.50,   # Normal can drop up to 50%
-    "recovery_time_sec": 5,     # Recovery < 5 seconds
+    "normal_max_drop_rate": 0.50,  # Normal can drop up to 50%
+    "recovery_time_sec": 5,  # Recovery < 5 seconds
     "queue_overflow_must_occur": True,  # Overflow prevention must trigger
 }
 
@@ -406,12 +406,12 @@ def _auth_request(is_priority: bool = False) -> Tuple[bool, float, str]:
         # Simulate: health check timeout + DNS switch + connection establishment
         fallback_delay_ms = random.uniform(50, 200)  # 50-200ms realistic fallback
         time.sleep(fallback_delay_ms / 1000)
-        
+
         fallback_time = (time.time() - start_time) * 1000
         with _stats_lock:
             _jwt_stats.fallback_triggered += 1
             _jwt_stats.fallback_time_ms.append(fallback_time)
-        
+
         print(f"   🔄 Auth Server Fallback: primary → secondary ({fallback_time:.0f}ms)")
 
     # Process request
@@ -457,18 +457,18 @@ def _track_global_rate() -> float:
     Returns: current rate per second
     """
     global _global_rate_window_start, _global_rate_count
-    
+
     with _global_rate_lock:
         now = time.time()
-        
+
         if _global_rate_window_start == 0:
             _global_rate_window_start = now
             _global_rate_count = 1
             return 0
-        
+
         elapsed = now - _global_rate_window_start
         _global_rate_count += 1
-        
+
         if elapsed >= 1.0:
             rate = _global_rate_count / elapsed
             # Record rate
@@ -480,7 +480,7 @@ def _track_global_rate() -> float:
             _global_rate_window_start = now
             _global_rate_count = 0
             return rate
-        
+
         return _global_rate_count / max(0.1, elapsed)
 
 
@@ -499,7 +499,7 @@ def _check_reauth_throttle() -> Tuple[bool, int]:
 
         # Increment count BEFORE checking throttle
         _auth_state.throttle_window_count += 1
-        
+
         is_throttled = _auth_state.throttle_window_count > REAUTH_THROTTLE_LIMIT
         return is_throttled, _auth_state.throttle_window_count
 
@@ -582,7 +582,12 @@ def _get_current_phase() -> str:
         PHASE_1_BASELINE + PHASE_2_JWT_STAMPEDE + PHASE_3_AUTH_FALLBACK,
         PHASE_1_BASELINE + PHASE_2_JWT_STAMPEDE + PHASE_3_AUTH_FALLBACK + PHASE_4_REAUTH_STORM,
         PHASE_1_BASELINE + PHASE_2_JWT_STAMPEDE + PHASE_3_AUTH_FALLBACK + PHASE_4_REAUTH_STORM + PHASE_5_QUEUE_GROWTH,
-        PHASE_1_BASELINE + PHASE_2_JWT_STAMPEDE + PHASE_3_AUTH_FALLBACK + PHASE_4_REAUTH_STORM + PHASE_5_QUEUE_GROWTH + PHASE_6_RECOVERY,
+        PHASE_1_BASELINE
+        + PHASE_2_JWT_STAMPEDE
+        + PHASE_3_AUTH_FALLBACK
+        + PHASE_4_REAUTH_STORM
+        + PHASE_5_QUEUE_GROWTH
+        + PHASE_6_RECOVERY,
     ]
 
     if elapsed < phase_boundaries[0]:
@@ -842,17 +847,17 @@ def _perform_final_verification():
         # rather than measuring time between phases (which is test configuration, not system behavior)
         current_queue = _get_queue_size()
         queue_recovered = current_queue == 0 or (max_queue > 0 and current_queue < max_queue * 0.1)
-        
+
         # System is "recovered" if:
         # 1. Queue is empty or nearly empty
         # 2. No active throttling (we're in verification phase, load is low)
         recovery_ok = queue_recovered
         _jwt_stats.excellence["recovery_under_5s"] = recovery_ok
-        
+
         if _jwt_stats.recovery_start_time and _jwt_stats.recovery_complete_time:
             recovery_time = _jwt_stats.recovery_complete_time - _jwt_stats.recovery_start_time
             print(f"   - Recovery phase duration: {recovery_time:.2f}s")
-        
+
         print(f"   - System stable: {'✓' if recovery_ok else '✗'}")
         print(f"     Queue cleared: {'✓' if queue_recovered else '✗'} ({current_queue} remaining)")
 
@@ -1119,7 +1124,7 @@ class ReAuthStormUser(HttpUser):
     - Throttling enforcement (50/sec max in Excellence mode)
     - Priority-based processing
     - Graceful degradation
-    
+
     CRITICAL: This user generates high load to force throttle activation.
     """
 
@@ -1176,7 +1181,9 @@ class ReAuthStormUser(HttpUser):
                     _jwt_stats.reauth_requests_throttled += 1
                     _jwt_stats.normal_requests_dropped += 1
 
-                with self.client.post("/api/auth/reauth/", name=f"{STAGE_NAME} reauth_throttled", catch_response=True) as response:
+                with self.client.post(
+                    "/api/auth/reauth/", name=f"{STAGE_NAME} reauth_throttled", catch_response=True
+                ) as response:
                     response.failure("Throttled")
                 return
 
