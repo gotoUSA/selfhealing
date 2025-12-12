@@ -96,6 +96,46 @@ from selfhealing.core.request_context import (
     RequestContext,
     track_request,
 )
+from selfhealing.core.time_provider import (
+    TimeProvider,
+    SystemTimeProvider,
+    MockTimeProvider,
+    FrozenTime,
+    get_time_provider,
+    set_time_provider as set_global_time_provider,
+    reset_time_provider,
+    is_within_clock_skew,
+)
+from selfhealing.core.connection_health import (
+    ConnectionType,
+    ConnectionStatus,
+    ConnectionHealth,
+    PartitionState,
+    ConnectionHealthMonitor,
+    DefaultConnectionHealthMonitor,
+)
+from selfhealing.core.fallback_strategy import (
+    FallbackMode,
+    FallbackResult,
+    FallbackStrategy,
+    SimpleFallback,
+    PartitionAwareFallback,
+    CacheFirstFallback,
+)
+from selfhealing.core.tls_handler import (
+    TLSErrorType,
+    TLSErrorSeverity,
+    TLSErrorInfo,
+    TLSErrorClassifier,
+    TLSResilientClient,
+    SimpleTLSResilientClient,
+)
+from selfhealing.core.cert_monitor import (
+    CertificateStatus,
+    CertificateInfo,
+    CertificateExpiryMonitor,
+    CertificateAlertManager,
+)
 
 __all__ = [
     # Types
@@ -174,4 +214,39 @@ __all__ = [
     # Request Context (Stage 27)
     "RequestContext",
     "track_request",
+    # Time Provider (Stage 23 - Clock Skew)
+    "TimeProvider",
+    "SystemTimeProvider",
+    "MockTimeProvider",
+    "FrozenTime",
+    "get_time_provider",
+    "set_global_time_provider",
+    "reset_time_provider",
+    "is_within_clock_skew",
+    # Connection Health (Stage 24 - Partial Partition)
+    "ConnectionType",
+    "ConnectionStatus",
+    "ConnectionHealth",
+    "PartitionState",
+    "ConnectionHealthMonitor",
+    "DefaultConnectionHealthMonitor",
+    # Fallback Strategy (Stage 24 - Partial Partition)
+    "FallbackMode",
+    "FallbackResult",
+    "FallbackStrategy",
+    "SimpleFallback",
+    "PartitionAwareFallback",
+    "CacheFirstFallback",
+    # TLS Handler (Stage 25 - TLS Failure)
+    "TLSErrorType",
+    "TLSErrorSeverity",
+    "TLSErrorInfo",
+    "TLSErrorClassifier",
+    "TLSResilientClient",
+    "SimpleTLSResilientClient",
+    # Certificate Monitor (Stage 25 - TLS Failure)
+    "CertificateStatus",
+    "CertificateInfo",
+    "CertificateExpiryMonitor",
+    "CertificateAlertManager",
 ]

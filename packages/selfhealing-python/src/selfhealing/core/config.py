@@ -95,12 +95,24 @@ class SLAConfig:
 
 
 @dataclass
+class RateLimitConfig:
+    """Configuration for rate limit coordination."""
+
+    base_delay: float = 1.0  # Base delay in seconds
+    max_delay: float = 60.0  # Maximum delay cap
+    jitter_percent: float = 30.0  # ±30% random jitter
+    default_retry_after: float = 5.0  # Default if no Retry-After header
+    backoff_multiplier: float = 2.0  # Cooldown multiplier for consecutive 429s
+
+
+@dataclass
 class IdempotencyConfig:
     """Configuration for idempotency service."""
 
     default_cache_ttl: int = 60
     payment_cache_ttl: int = 300
     webhook_cache_ttl: int = 60
+    clock_skew_tolerance_seconds: float = 5.0  # Stage 23: Clock skew tolerance
 
 
 @dataclass
@@ -177,6 +189,7 @@ class SelfHealingConfig:
     forensic: ForensicConfig = field(default_factory=ForensicConfig)
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
     notification: NotificationConfig = field(default_factory=NotificationConfig)
+    rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
 
     # Domain-specific overrides
     domain_configs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -209,6 +222,7 @@ class SelfHealingConfig:
         forensic = ForensicConfig(**config_dict.get("forensic", {}))
         metrics = MetricsConfig(**config_dict.get("metrics", {}))
         notification = NotificationConfig(**config_dict.get("notification", {}))
+        rate_limit = RateLimitConfig(**config_dict.get("rate_limit", {}))
 
         return cls(
             circuit_breaker=circuit_breaker,
@@ -220,6 +234,7 @@ class SelfHealingConfig:
             forensic=forensic,
             metrics=metrics,
             notification=notification,
+            rate_limit=rate_limit,
             domain_configs=config_dict.get("domain_configs", {}),
             auto_replay_enabled=config_dict.get("auto_replay_enabled", True),
             security_monitoring_enabled=config_dict.get("security_monitoring_enabled", True),
@@ -311,6 +326,13 @@ class SelfHealingConfig:
                 "enabled": self.notification.enabled,
                 "channels": self.notification.channels,
             },
+            "rate_limit": {
+                "base_delay": self.rate_limit.base_delay,
+                "max_delay": self.rate_limit.max_delay,
+                "jitter_percent": self.rate_limit.jitter_percent,
+                "default_retry_after": self.rate_limit.default_retry_after,
+                "backoff_multiplier": self.rate_limit.backoff_multiplier,
+            },
             "domain_configs": self.domain_configs,
             "auto_replay_enabled": self.auto_replay_enabled,
             "security_monitoring_enabled": self.security_monitoring_enabled,
@@ -394,3 +416,8 @@ def get_forensic_settings() -> ForensicConfig:
 def get_notification_settings() -> NotificationConfig:
     """Get notification configuration."""
     return get_config().notification
+
+
+def get_rate_limit_settings() -> RateLimitConfig:
+    """Get rate limit configuration."""
+    return get_config().rate_limit

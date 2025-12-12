@@ -33,6 +33,7 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
     RateLimitStorageInterface,
 )
+from selfhealing.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class RateLimitConfig:
+class RateLimitCoordinatorConfig:
     """Configuration for rate limit coordination."""
 
     # Backoff settings
@@ -56,23 +57,17 @@ class RateLimitConfig:
     backoff_multiplier: float = 2.0
 
     @classmethod
-    def from_settings(cls) -> "RateLimitConfig":
-        """Load configuration from settings."""
-        try:
-            from django.conf import settings
+    def from_settings(cls) -> "RateLimitCoordinatorConfig":
+        """Load configuration from core config."""
+        rate_limit = get_config().rate_limit
 
-            self_healing = getattr(settings, "SELF_HEALING", {})
-            rate_limit = self_healing.get("RATE_LIMIT", {})
-
-            return cls(
-                base_delay=rate_limit.get("BASE_DELAY", 1.0),
-                max_delay=rate_limit.get("MAX_DELAY", 60.0),
-                jitter_percent=rate_limit.get("JITTER_PERCENT", 30.0),
-                default_retry_after=rate_limit.get("DEFAULT_RETRY_AFTER", 5.0),
-                backoff_multiplier=rate_limit.get("BACKOFF_MULTIPLIER", 2.0),
-            )
-        except Exception:
-            return cls()
+        return cls(
+            base_delay=rate_limit.base_delay,
+            max_delay=rate_limit.max_delay,
+            jitter_percent=rate_limit.jitter_percent,
+            default_retry_after=rate_limit.default_retry_after,
+            backoff_multiplier=rate_limit.backoff_multiplier,
+        )
 
 
 @dataclass
@@ -122,7 +117,7 @@ class RateLimitCoordinator:
     def __init__(
         self,
         storage: Optional[RateLimitStorageInterface] = None,
-        config: Optional[RateLimitConfig] = None,
+        config: Optional[RateLimitCoordinatorConfig] = None,
     ) -> None:
         """
         Initialize rate limit coordinator.
@@ -132,7 +127,7 @@ class RateLimitCoordinator:
             config: Rate limit configuration
         """
         self._storage = storage or get_rate_limit_storage()
-        self._config = config or RateLimitConfig.from_settings()
+        self._config = config or RateLimitCoordinatorConfig.from_settings()
         self._local_lock = threading.Lock()
 
     @classmethod

@@ -199,6 +199,16 @@ def configure_selfhealing_from_django() -> None:
             "notification_timeout_seconds": notif.get("LIMITS", {}).get("TIMEOUT_SECONDS", 10),
         }
 
+    if "RATE_LIMIT" in sh_settings:
+        rl = sh_settings["RATE_LIMIT"]
+        config_dict["rate_limit"] = {
+            "base_delay": rl.get("BASE_DELAY", 1.0),
+            "max_delay": rl.get("MAX_DELAY", 60.0),
+            "jitter_percent": rl.get("JITTER_PERCENT", 30.0),
+            "default_retry_after": rl.get("DEFAULT_RETRY_AFTER", 5.0),
+            "backoff_multiplier": rl.get("BACKOFF_MULTIPLIER", 2.0),
+        }
+
     # Additional top-level settings
     config_dict["auto_replay_enabled"] = sh_settings.get("AUTO_REPLAY_ENABLED", True)
     config_dict["security_monitoring_enabled"] = sh_settings.get("SECURITY_MONITORING_ENABLED", True)

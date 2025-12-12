@@ -140,10 +140,10 @@ from .circuit_breaker_service import (
 )
 from .rate_limit_coordinator import (
     RateLimitCoordinator,
-    RateLimitConfig,
     RateLimitResult,
     get_rate_limit_coordinator,
 )
+from selfhealing.core.config import RateLimitConfig
 from .metrics import (
     # Constants
     DOMAINS,

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # SQLAlchemy TimeoutError import
 try:
     from sqlalchemy.exc import TimeoutError as SATimeoutError
+
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SATimeoutError = Exception
@@ -22,7 +23,7 @@ except ImportError:
 class PoolTimeoutMiddleware:
     """
     Pool Timeout 발생 시 503 반환하는 단순 미들웨어.
-    
+
     SQLAlchemy Pool에서 연결을 가져오지 못하면 (timeout),
     즉시 503 Service Unavailable 반환.
     """
@@ -40,16 +41,16 @@ class PoolTimeoutMiddleware:
             # Pool Timeout 감지
             error_str = str(e).lower()
             error_type = type(e).__name__
-            
+
             is_pool_timeout = (
-                (SQLALCHEMY_AVAILABLE and isinstance(e, SATimeoutError)) or
-                "timeout" in error_str or
-                "queuepool limit" in error_str or
-                "pool exhausted" in error_str or
-                "no connections available" in error_str or
-                "can't get connection" in error_str
+                (SQLALCHEMY_AVAILABLE and isinstance(e, SATimeoutError))
+                or "timeout" in error_str
+                or "queuepool limit" in error_str
+                or "pool exhausted" in error_str
+                or "no connections available" in error_str
+                or "can't get connection" in error_str
             )
-            
+
             if is_pool_timeout:
                 self._timeout_count += 1
                 logger.error(
@@ -66,6 +67,6 @@ class PoolTimeoutMiddleware:
                     status=503,
                     headers={"Retry-After": "10"},
                 )
-            
+
             # 다른 예외는 그대로 전파
             raise

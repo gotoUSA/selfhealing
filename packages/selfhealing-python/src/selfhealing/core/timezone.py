@@ -4,6 +4,8 @@ Timezone Utilities for Self-Healing System
 Framework-agnostic timezone utilities that replace django.utils.timezone.
 Uses Python's standard library datetime and zoneinfo modules.
 
+Now integrated with TimeProvider for testable time operations.
+
 Usage:
     from selfhealing.core.timezone import now, make_aware, is_aware
 """
@@ -47,14 +49,30 @@ def now() -> datetime:
     """
     Return the current datetime with timezone info.
 
+    Uses the global TimeProvider if available for testability.
     Equivalent to django.utils.timezone.now()
     """
-    return datetime.now(_default_timezone)
+    try:
+        from selfhealing.core.time_provider import get_time_provider
+
+        return get_time_provider().now()
+    except ImportError:
+        # Fallback if time_provider not available
+        return datetime.now(_default_timezone)
 
 
 def utcnow() -> datetime:
-    """Return the current UTC datetime with timezone info."""
-    return datetime.now(tz.utc)
+    """
+    Return the current UTC datetime with timezone info.
+
+    Uses the global TimeProvider if available for testability.
+    """
+    try:
+        from selfhealing.core.time_provider import get_time_provider
+
+        return get_time_provider().utcnow()
+    except ImportError:
+        return datetime.now(tz.utc)
 
 
 def is_aware(value: datetime) -> bool:

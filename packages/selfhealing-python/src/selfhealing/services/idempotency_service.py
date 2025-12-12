@@ -19,15 +19,17 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Optional, Callable
 
 from selfhealing.core.timezone import now
 from selfhealing.core.config import get_config
+from selfhealing.core.time_provider import TimeProvider, get_time_provider
 
 if TYPE_CHECKING:
     from selfhealing.interfaces import CacheProviderInterface
+    from selfhealing.core.time_provider import TimeProvider
 
 logger = logging.getLogger(__name__)
 
@@ -206,10 +208,13 @@ class IdempotencyService:
     from shopping.models (Django fallback).
 
     Example:
-        # Framework-agnostic usage
+        # Framework-agnostic usage with TimeProvider
+        from selfhealing.core.time_provider import MockTimeProvider
+
         service = IdempotencyService(
             payment_lookup=my_payment_lookup_func,
             webhook_lookup=my_webhook_lookup_func,
+            time_provider=MockTimeProvider(),  # For testing
         )
 
         # Django fallback (default)
@@ -223,6 +228,8 @@ class IdempotencyService:
         payment_confirm_lookup: Optional[Callable[[str, int, int], Any]] = None,
         webhook_lookup: Optional[Callable[[str], bool]] = None,
         point_lookup: Optional[Callable[[int, str, int], Any]] = None,
+        time_provider: Optional["TimeProvider"] = None,
+        clock_skew_tolerance_seconds: Optional[float] = None,
     ):
         """
         Initialize the idempotency service.
@@ -233,13 +240,24 @@ class IdempotencyService:
             payment_confirm_lookup: Callback(payment_key, order_id, amount) -> Payment or None
             webhook_lookup: Callback(event_id) -> bool (exists)
             point_lookup: Callback(order_id, point_type, amount) -> PointHistory or None
+            time_provider: TimeProvider for testable time operations (Stage 23)
+            clock_skew_tolerance_seconds: Clock skew tolerance for distributed checks
         """
         from selfhealing.core.config import get_config
+        from selfhealing.core.time_provider import TimeProvider, get_time_provider
 
         config = get_config()
         self._default_cache_ttl = config.idempotency.default_cache_ttl
         self._payment_cache_ttl = config.idempotency.payment_cache_ttl
         self.cache_ttl = cache_ttl or self._default_cache_ttl
+
+        # Stage 23: Clock skew tolerance
+        self._clock_skew_tolerance = (
+            clock_skew_tolerance_seconds
+            if clock_skew_tolerance_seconds is not None
+            else config.idempotency.clock_skew_tolerance_seconds
+        )
+        self._time_provider: TimeProvider = time_provider or get_time_provider()
 
         # Store lookup callbacks
         self._payment_lookup = payment_lookup
@@ -256,6 +274,51 @@ class IdempotencyService:
     def PAYMENT_CACHE_TTL(self) -> int:
         """Extended TTL for payment operations (for backward compatibility)."""
         return self._payment_cache_ttl
+
+    @property
+    def clock_skew_tolerance(self) -> float:
+        """Clock skew tolerance in seconds for distributed checks."""
+        return self._clock_skew_tolerance
+
+    @property
+    def time_provider(self) -> "TimeProvider":
+        """Get the time provider for this service."""
+        return self._time_provider
+
+    def now(self) -> datetime:
+        """
+        Get current time using the configured TimeProvider.
+
+        Returns:
+            Current datetime from time provider
+        """
+        return self._time_provider.now()
+
+    def is_timestamp_valid(
+        self,
+        timestamp: datetime,
+        tolerance_seconds: Optional[float] = None,
+    ) -> bool:
+        """
+        Check if a timestamp is within acceptable clock skew tolerance.
+
+        Useful for validating incoming webhooks or API requests where
+        the timestamp may differ due to clock skew between systems.
+
+        Args:
+            timestamp: The timestamp to validate
+            tolerance_seconds: Override tolerance (uses config default if None)
+
+        Returns:
+            True if timestamp is within tolerance of current time
+        """
+        from datetime import timedelta
+
+        tolerance = tolerance_seconds if tolerance_seconds is not None else self._clock_skew_tolerance
+        return self._time_provider.is_within_tolerance(
+            timestamp,
+            timedelta(seconds=tolerance),
+        )
 
     def check_payment(
         self,
