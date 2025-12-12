@@ -1,0 +1,211 @@
+# Stage 30: Schedule Drift Test (CRON / Celery Beat)
+# Docker Compose 설정
+#
+# 사용법:
+#   docker-compose -f docker-compose.stage30.yml up -d
+#   docker-compose -f docker-compose.stage30.yml -f docker-compose.yml up -d
+#
+# 스케줄러 드리프트 테스트 환경
+
+version: '3.8'
+
+services:
+  # 메인 웹 애플리케이션
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-stage30
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MAX_CONCURRENT_JOBS=5
+      - JOB_TIMEOUT_SECONDS=60
+      - SKIP_STALE_JOBS_AFTER_MINUTES=30
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - stage30_network
+    labels:
+      - "stage=30"
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: db-stage30
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db_stage30_data:/var/lib/postgresql/data
+    networks:
+      - stage30_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis-stage30
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - stage30_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Celery Beat (스케줄러)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery-beat-stage30
+    command: celery -A myproject beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      # 드리프트 테스트용
+      - CELERY_BEAT_MAX_LOOP_INTERVAL=5
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stage30_network
+    restart: unless-stopped
+
+  # Celery Worker (작업 실행)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery-worker-stage30
+    command: celery -A myproject worker -l INFO -c 5 --max-tasks-per-child=1000
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MAX_CONCURRENT_JOBS=5
+      - CELERYD_PREFETCH_MULTIPLIER=1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stage30_network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  # Celery Flower (모니터링)
+  flower:
+    image: mher/flower:2.0
+    container_name: flower-stage30
+    command: celery --broker=redis://redis:6379/1 flower --port=5555
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - FLOWER_BASIC_AUTH=admin:admin123
+    ports:
+      - "5555:5555"
+    networks:
+      - stage30_network
+    depends_on:
+      - redis
+      - celery-worker
+
+  # Clock Drift Simulator (시간 드리프트 시뮬레이션)
+  clock-drift-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clock-drift-stage30
+    command: python -c "
+      import time
+      import redis
+      import os
+      r = redis.Redis.from_url(os.environ['REDIS_URL'])
+      drift_minutes = 0
+      while True:
+          # 드리프트 상태 Redis에 저장
+          r.set('clock_drift_minutes', drift_minutes)
+          print(f'Clock drift: {drift_minutes} minutes')
+          time.sleep(60)
+          # 랜덤하게 드리프트 변경
+          import random
+          if random.random() < 0.1:
+              drift_minutes = random.randint(0, 15)
+      "
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    networks:
+      - stage30_network
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Locust Load Tester
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage30
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage30_schedule_drift.py
+      --host=http://web:8000
+      --master
+    networks:
+      - stage30_network
+    depends_on:
+      - web
+      - celery-beat
+      - celery-worker
+
+  # Locust Workers
+  locust-worker:
+    image: locustio/locust:2.20.0
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage30_schedule_drift.py
+      --worker
+      --master-host=locust
+    networks:
+      - stage30_network
+    depends_on:
+      - locust
+    deploy:
+      replicas: 2
+
+networks:
+  stage30_network:
+    driver: bridge
+    name: stage30_network
+
+volumes:
+  db_stage30_data:

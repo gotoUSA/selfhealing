@@ -690,30 +690,35 @@ docs/
 
 ## ✅ 완료 기준
 
-### Stage 28 (Multi-Region)
-- [ ] Region A/B 비대칭 장애 시뮬레이션 구현
-- [ ] Cross-region failover 자동화
-- [ ] 데이터 일관성 검증 통과
-- [ ] Toxiproxy 통합 완료
+### Stage 28 (Multi-Region) ✅ 완료 (2025-12-12)
+- [x] Region A/B 비대칭 장애 시뮬레이션 구현
+- [x] Cross-region failover 자동화
+- [x] 데이터 일관성 검증 통과
+- [x] Toxiproxy 통합 완료
+- [x] **31개 테스트 통과**
 
-### Stage 29 (Bulk DLQ)
-- [ ] 10만건 DLQ 생성 스크립트
-- [ ] Throttling 메커니즘 구현
-- [ ] CB 상태 변화 대응 로직
-- [ ] Re-DLQ 로직 구현
-- [ ] 메모리 사용량 모니터링
+### Stage 29 (Bulk DLQ) ✅ 완료 (2025-12-12)
+- [x] 10만건 DLQ 생성 스크립트
+- [x] Throttling 메커니즘 구현
+- [x] CB 상태 변화 대응 로직
+- [x] Re-DLQ 로직 구현
+- [x] 메모리 사용량 모니터링
+- [x] **37개 테스트 통과**
 
-### Stage 30 (Schedule Drift)
-- [ ] Celery Beat 드리프트 주입 가능
-- [ ] Worker 재시작 시뮬레이션
-- [ ] 동시 실행 제한 검증
-- [ ] Stale 작업 스킵 로직
+### Stage 30 (Schedule Drift) ✅ 완료 (2025-12-12)
+- [x] Celery Beat 드리프트 주입 가능
+- [x] Worker 재시작 시뮬레이션
+- [x] 동시 실행 제한 검증
+- [x] Stale 작업 스킵 로직
+- [x] **38개 테스트 통과**
 
-### 기존 Stage 확장
-- [ ] Stage 18: 3개 추가 시나리오
-- [ ] Stage 22: 4개 추가 검증 항목
-- [ ] Stage 23: 4개 추가 시나리오
-- [ ] Stage 16: Locust 통합
+### 기존 Stage 확장 → [STAGE_31_36_EXTENSION_PLAN.md](./STAGE_31_36_EXTENSION_PLAN.md) 참조
+- [ ] Stage 31: Cascade Failure Extended (Stage 18 확장)
+- [ ] Stage 32: Retry Storm Extended (Stage 22 확장)
+- [ ] Stage 33: JWT Cascade Extended (Stage 23 확장)
+- [ ] Stage 34: DB Deadlock Locust (Stage 16 확장)
+- [ ] Stage 35: Cache Stampede (신규)
+- [ ] Stage 36: Memory Pressure (신규)
 
 ---
 

@@ -1,0 +1,189 @@
+# Stage 28: Multi-Region Latency Test
+# Docker Compose 설정
+#
+# 사용법:
+#   docker-compose -f docker-compose.stage28.yml up -d
+#   docker-compose -f docker-compose.stage28.yml -f docker-compose.yml up -d
+#
+# Toxiproxy로 리전 간 네트워크 장애 시뮬레이션
+
+version: '3.8'
+
+services:
+  # Toxiproxy - 네트워크 장애 주입
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.6.0
+    container_name: toxiproxy-stage28
+    ports:
+      - "8474:8474"  # Toxiproxy API
+      - "6380:6380"  # Redis proxy (Region A)
+      - "6381:6381"  # Redis proxy (Region B)
+      - "5433:5433"  # PostgreSQL proxy (Region A)
+      - "5434:5434"  # PostgreSQL proxy (Region B)
+    networks:
+      - region_a
+      - region_b
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8474/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Region A - Primary
+  web-region-a:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-region-a
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db-region-a:5432/myproject
+      - REDIS_URL=redis://redis-region-a:6379/0
+      - REGION=ap-northeast-2a
+      - IS_PRIMARY=true
+      - LATENCY_MS=5
+    depends_on:
+      - db-region-a
+      - redis-region-a
+      - toxiproxy
+    ports:
+      - "8001:8000"
+    networks:
+      - region_a
+    labels:
+      - "region=a"
+      - "stage=28"
+
+  db-region-a:
+    image: postgres:15-alpine
+    container_name: db-region-a
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db_region_a_data:/var/lib/postgresql/data
+    networks:
+      - region_a
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-region-a:
+    image: redis:7-alpine
+    container_name: redis-region-a
+    networks:
+      - region_a
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Region B - Secondary
+  web-region-b:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-region-b
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://postgres:postgres@db-region-b:5432/myproject
+      - REDIS_URL=redis://redis-region-b:6379/0
+      - REGION=ap-northeast-2b
+      - IS_PRIMARY=false
+      - LATENCY_MS=50
+    depends_on:
+      - db-region-b
+      - redis-region-b
+      - toxiproxy
+    ports:
+      - "8002:8000"
+    networks:
+      - region_b
+    labels:
+      - "region=b"
+      - "stage=28"
+
+  db-region-b:
+    image: postgres:15-alpine
+    container_name: db-region-b
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db_region_b_data:/var/lib/postgresql/data
+    networks:
+      - region_b
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-region-b:
+    image: redis:7-alpine
+    container_name: redis-region-b
+    networks:
+      - region_b
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Locust Load Tester
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage28
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./load_tests:/mnt/locust
+    environment:
+      - TOXIPROXY_URL=http://toxiproxy:8474
+    command: >
+      -f /mnt/locust/scenarios/stage28_multi_region.py
+      --host=http://web-region-a:8000
+      --master
+    networks:
+      - region_a
+      - region_b
+    depends_on:
+      - web-region-a
+      - web-region-b
+      - toxiproxy
+
+  # Locust Workers
+  locust-worker:
+    image: locustio/locust:2.20.0
+    volumes:
+      - ./load_tests:/mnt/locust
+    environment:
+      - TOXIPROXY_URL=http://toxiproxy:8474
+    command: >
+      -f /mnt/locust/scenarios/stage28_multi_region.py
+      --worker
+      --master-host=locust
+    networks:
+      - region_a
+      - region_b
+    depends_on:
+      - locust
+    deploy:
+      replicas: 2
+
+networks:
+  region_a:
+    driver: bridge
+    name: stage28_region_a
+  region_b:
+    driver: bridge
+    name: stage28_region_b
+
+volumes:
+  db_region_a_data:
+  db_region_b_data:
