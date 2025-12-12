@@ -103,6 +103,26 @@ class TimeProvider(ABC):
         """
         return (start - skew_tolerance, end + skew_tolerance)
 
+    def now_with_skew_tolerance(
+        self,
+        tolerance_seconds: float = 30.0,
+    ) -> tuple[datetime, datetime]:
+        """
+        Get time window for clock skew tolerance.
+
+        Returns a tuple of (lower_bound, upper_bound) representing the
+        acceptable time range considering clock skew.
+
+        Args:
+            tolerance_seconds: Clock skew tolerance in seconds (default 30s)
+
+        Returns:
+            Tuple of (lower_bound, upper_bound) datetimes
+        """
+        current = self.now()
+        delta = timedelta(seconds=tolerance_seconds)
+        return (current - delta, current + delta)
+
 
 class SystemTimeProvider(TimeProvider):
     """
@@ -210,6 +230,21 @@ class MockTimeProvider(TimeProvider):
         self._current_time = self._current_time - delta
         self._time_log.append(self._current_time)
         return self._current_time
+
+    def simulate_clock_skew(self, skew_seconds: float) -> datetime:
+        """
+        Simulate clock drift by specified seconds.
+
+        Positive values simulate a clock running ahead,
+        negative values simulate a clock running behind.
+
+        Args:
+            skew_seconds: Seconds to drift (positive=ahead, negative=behind)
+
+        Returns:
+            The new current time after drift
+        """
+        return self.advance(timedelta(seconds=skew_seconds))
 
     def freeze(self) -> "FrozenTime":
         """

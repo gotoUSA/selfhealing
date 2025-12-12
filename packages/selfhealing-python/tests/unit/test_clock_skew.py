@@ -230,6 +230,93 @@ class TestClockSkewTolerance:
         assert adj_start == start - timedelta(seconds=30)
         assert adj_end == end + timedelta(seconds=30)
 
+    def test_now_with_skew_tolerance_default(self):
+        """now_with_skew_tolerance returns 60 second window by default."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+        provider = MockTimeProvider(fixed_time=fixed)
+
+        lower, upper = provider.now_with_skew_tolerance()
+
+        assert lower == fixed - timedelta(seconds=30)
+        assert upper == fixed + timedelta(seconds=30)
+        assert (upper - lower).total_seconds() == 60.0
+
+    def test_now_with_skew_tolerance_custom(self):
+        """now_with_skew_tolerance accepts custom tolerance."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+        provider = MockTimeProvider(fixed_time=fixed)
+
+        lower, upper = provider.now_with_skew_tolerance(tolerance_seconds=10.0)
+
+        assert lower == fixed - timedelta(seconds=10)
+        assert upper == fixed + timedelta(seconds=10)
+        assert (upper - lower).total_seconds() == 20.0
+
+
+class TestSimulateClockSkew:
+    """Tests for simulate_clock_skew method."""
+
+    def test_simulate_clock_skew_positive(self):
+        """simulate_clock_skew with positive seconds advances time."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+        provider = MockTimeProvider(fixed_time=fixed)
+
+        provider.simulate_clock_skew(30)
+
+        assert provider.now() == fixed + timedelta(seconds=30)
+
+    def test_simulate_clock_skew_negative(self):
+        """simulate_clock_skew with negative seconds rewinds time."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+        provider = MockTimeProvider(fixed_time=fixed)
+
+        provider.simulate_clock_skew(-25)
+
+        assert provider.now() == fixed - timedelta(seconds=25)
+
+    def test_simulate_clock_skew_distributed_scenario(self):
+        """Simulate distributed servers with clock skew."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        base_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+
+        # Server A: Reference
+        server_a = MockTimeProvider(fixed_time=base_time)
+
+        # Server B: 25 seconds behind (within 30s tolerance)
+        server_b = MockTimeProvider(fixed_time=base_time)
+        server_b.simulate_clock_skew(-25)
+
+        # Check if Server B's time is within Server A's tolerance
+        a_lower, a_upper = server_a.now_with_skew_tolerance(30)
+        b_now = server_b.now()
+
+        assert a_lower <= b_now <= a_upper
+
+    def test_simulate_clock_skew_exceeds_tolerance(self):
+        """Detect when clock skew exceeds tolerance."""
+        from selfhealing.core.time_provider import MockTimeProvider
+
+        base_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
+
+        server_a = MockTimeProvider(fixed_time=base_time)
+        server_b = MockTimeProvider(fixed_time=base_time)
+        server_b.simulate_clock_skew(-60)  # 60 seconds behind
+
+        a_lower, a_upper = server_a.now_with_skew_tolerance(30)
+        b_now = server_b.now()
+
+        # Server B should be outside tolerance
+        assert not (a_lower <= b_now <= a_upper)
+
 
 class TestGlobalTimeProvider:
     """Tests for global time provider management."""

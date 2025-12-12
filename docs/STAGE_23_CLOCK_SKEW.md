@@ -330,11 +330,11 @@ class TestClockSkewIntegration:
 
 ## ✅ 완료 기준
 
-- [ ] TimeProvider 인터페이스 구현
-- [ ] MockTimeProvider 테스트 통과
-- [ ] IdempotencyService에 TimeProvider 주입
-- [ ] Clock skew 30초 허용 테스트 통과
-- [ ] 분산 환경 시뮬레이션 테스트 통과
+- [x] TimeProvider 인터페이스 구현
+- [x] MockTimeProvider 테스트 통과
+- [x] IdempotencyService에 TimeProvider 주입
+- [x] Clock skew 30초 허용 테스트 통과
+- [x] 분산 환경 시뮬레이션 테스트 통과
 
 ---
 

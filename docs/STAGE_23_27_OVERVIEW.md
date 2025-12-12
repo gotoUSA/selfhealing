@@ -91,16 +91,16 @@ packages/selfhealing-python/
 ## ✅ 완료 체크리스트
 
 ### 핵심 기능
-- [ ] Stage 26: Connection Pool Watchdog
-- [ ] Stage 27: Graceful Shutdown
+- [x] Stage 26: Connection Pool Watchdog
+- [x] Stage 27: Graceful Shutdown
 
 ### 테스트 시나리오
-- [ ] Stage 23: Clock Skew 테스트
+- [x] Stage 23: Clock Skew 테스트
 - [ ] Stage 24: Partial Partition 테스트
 - [ ] Stage 25: TLS 실패 테스트
 
 ### 패키지 정리 및 확장
-- [ ] Stage 28-1: services/ Django fallback 정리
+- [x] Stage 28-1: services/ Django fallback 정리
 - [ ] Stage 28-2: FastAPI 어댑터
 - [ ] Stage 28-3: SQLAlchemy 어댑터
 - [ ] Stage 28-4: In-Memory Repository
