@@ -45,7 +45,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     def __init__(self):
         self._storage: Dict[int, FailedOperationData] = {}
         self._next_id = 1
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock for reentrant calls
 
     def create(
         self,
@@ -484,7 +484,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def __init__(self):
         self._storage: Dict[str, CircuitBreakerStateData] = {}
         self._next_id = 1
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock for reentrant calls
 
     def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
         """Get circuit breaker state by service name."""
@@ -862,7 +862,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
     def __init__(self):
         self._storage: Dict[int, SecurityIncidentData] = {}
         self._next_id = 1
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock for reentrant calls
 
     def create(
         self,
