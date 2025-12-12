@@ -344,11 +344,32 @@ def record_error(error_type: str):
 # Locust User
 # =============================================================================
 
+# 테스트용 사용자 계정 (미리 생성되어 있어야 함)
+TEST_USERS = [
+    {"username": "testuser1", "password": "testpass123"},
+    {"username": "testuser2", "password": "testpass123"},
+    {"username": "testuser3", "password": "testpass123"},
+    {"username": "testuser4", "password": "testpass123"},
+    {"username": "testuser5", "password": "testpass123"},
+]
+
+# 사용 가능한 상품 ID 목록 (Region A와 B 공통)
+AVAILABLE_PRODUCT_IDS = [1, 3, 4, 5]
+
+# 리전별 호스트 URL
+REGION_HOSTS = {
+    "region_a": os.getenv("REGION_A_HOST", "http://web-region-a:8000"),
+    "region_b": os.getenv("REGION_B_HOST", "http://web-region-b:8000"),
+}
+
 
 class MultiRegionUser(HttpUser):
     """멀티 리전 테스트 사용자"""
 
     wait_time = between(1, 3)
+
+    # 기본 호스트 (Region A)
+    host = REGION_HOSTS.get("region_a", "http://web-region-a:8000")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -356,21 +377,67 @@ class MultiRegionUser(HttpUser):
         self.current_region = "region_a"
         self.user_id = None
         self.order_ids: List[str] = []
+        self.auth_token = None
+        self.auth_tokens: Dict[str, str] = {}  # 리전별 토큰 저장
+        self.username = None
 
     def on_start(self):
-        """테스트 시작 시 초기화"""
+        """테스트 시작 시 초기화 및 양쪽 리전에 로그인"""
         self.user_id = f"user_{random.randint(1, 1000)}"
-        print(f"{STAGE_NAME} User {self.user_id} started on {self.current_region}")
+
+        # 랜덤 사용자로 로그인
+        user_creds = random.choice(TEST_USERS)
+        self.username = user_creds["username"]
+
+        # 양쪽 리전에 모두 로그인 (Failover 대비)
+        for region_name, host in REGION_HOSTS.items():
+            self._login_to_region(region_name, host, user_creds)
+
+        # 현재 리전 토큰 설정
+        self.auth_token = self.auth_tokens.get(self.current_region)
+        print(f"{STAGE_NAME} User {self.username} ready on both regions")
+
+    def _login_to_region(self, region_name: str, host: str, user_creds: dict):
+        """특정 리전에 로그인"""
+        import requests
+
+        try:
+            r = requests.post(
+                f"{host}/api/auth/login/", json=user_creds, headers={"Content-Type": "application/json"}, timeout=10
+            )
+            if r.status_code == 200:
+                token = r.json().get("token", {}).get("access")
+                if token:
+                    self.auth_tokens[region_name] = token
+        except Exception as e:
+            print(f"{STAGE_NAME} Login to {region_name} failed: {e}")
+
+    def _switch_region(self, new_region: str):
+        """리전 전환 - 실제 호스트 변경"""
+        if new_region in REGION_HOSTS:
+            self.current_region = new_region
+            self.host = REGION_HOSTS[new_region]
+            self.auth_token = self.auth_tokens.get(new_region)
+            # Locust client의 base_url 변경
+            self.client.base_url = REGION_HOSTS[new_region]
+
+    def _get_current_host(self) -> str:
+        """현재 리전의 호스트 반환"""
+        return REGION_HOSTS.get(self.current_region, REGION_HOSTS["region_a"])
 
     def _get_region_header(self) -> Dict[str, str]:
-        """리전 헤더 생성"""
+        """리전 헤더 생성 (인증 토큰 포함)"""
         region = self.coordinator.get_active_region()
         timestamp = datetime.now(timezone.utc).isoformat()
-        return {
+        headers = {
             "X-Region": region.name,
             "X-Region-Latency-Ms": str(region.latency_ms),
             "X-Request-Timestamp": timestamp,
+            "Content-Type": "application/json",
         }
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        return headers
 
     def _simulate_region_latency(self):
         """리전 지연 시뮬레이션"""
@@ -393,18 +460,18 @@ class MultiRegionUser(HttpUser):
         if self.coordinator.simulate_packet_loss(self.current_region):
             record_error("packet_loss")
 
-            # Failover 시도
+            # Failover 시도 - 실제로 다른 리전으로 전환
             start_time = time.time()
             new_region = self.coordinator.perform_failover(self.current_region)
 
             if new_region and new_region != self.current_region:
                 failover_time_ms = (time.time() - start_time) * 1000
                 record_failover(True, failover_time_ms)
-                self.current_region = new_region
-                print(f"{STAGE_NAME} Failover completed in {failover_time_ms:.2f}ms")
+                self._switch_region(new_region)  # 실제 호스트 전환
+                print(f"{STAGE_NAME} Failover to {new_region} in {failover_time_ms:.2f}ms")
             else:
                 record_failover(False, 0)
-            return
+                return
 
         self._simulate_region_latency()
 
@@ -413,7 +480,7 @@ class MultiRegionUser(HttpUser):
         with self.client.get(
             "/api/products/",
             headers=headers,
-            name=f"{STAGE_NAME} TC-28-1: Asymmetric Failure - List Products",
+            name=f"{STAGE_NAME} TC-28-1: {self.current_region} - List Products",
             catch_response=True,
         ) as response:
             if response.status_code == 200:
@@ -422,7 +489,8 @@ class MultiRegionUser(HttpUser):
                 # 서비스 불가 - fallback 시도
                 fallback_region = self.coordinator.get_fallback_region()
                 if fallback_region:
-                    response.success()  # Fallback으로 처리됨
+                    self._switch_region(fallback_region.name.replace("ap-northeast-2", "region_"))
+                    response.success()
                 else:
                     response.failure("No fallback region available")
             else:
@@ -461,14 +529,48 @@ class MultiRegionUser(HttpUser):
             print(f"{STAGE_NAME} Idempotency hit: {idempotency_key[:8]}...")
             return
 
+        # 카트 비우기 (중복 방지) - POST /api/cart/clear/ with confirm=true
+        with self.client.post(
+            "/api/cart/clear/",
+            headers=headers,
+            json={"confirm": True},
+            name=f"{STAGE_NAME} TC-28-2: Clear Cart",
+            catch_response=True,
+        ) as response:
+            if response.status_code in (200, 400):  # 200=성공, 400=카트가 이미 비어있음
+                response.success()
+            else:
+                response.failure(f"Clear cart failed: {response.status_code}")
+
+        # 카트에 상품 추가 (랜덤 상품)
+        product_id = random.choice(AVAILABLE_PRODUCT_IDS)
+        with self.client.post(
+            "/api/cart-items/",
+            headers=headers,
+            json={"product_id": product_id, "quantity": 1},
+            name=f"{STAGE_NAME} TC-28-2: {self.current_region} - Add to Cart",
+            catch_response=True,
+        ) as response:
+            if response.status_code not in (200, 201):
+                response.failure(f"Add to cart failed: {response.status_code}")
+                return
+            response.success()
+
+        # 주문 생성 (배송 정보 포함)
+        order_data = {
+            "shipping_name": f"테스트 구매자 {self.user_id}",
+            "shipping_phone": "010-1234-5678",
+            "shipping_postal_code": "12345",
+            "shipping_address": "서울시 강남구 테스트동 123",
+        }
         with self.client.post(
             "/api/orders/",
             headers=headers,
-            json={"product_id": 1, "quantity": 1},
-            name=f"{STAGE_NAME} TC-28-2: Clock Skew - Create Order",
+            json=order_data,
+            name=f"{STAGE_NAME} TC-28-2: {self.current_region} - Create Order",
             catch_response=True,
         ) as response:
-            if response.status_code in (200, 201):
+            if response.status_code in (200, 201, 202):
                 self.coordinator.register_idempotency(idempotency_key, "success")
                 response.success()
             elif response.status_code == 409:
@@ -485,33 +587,30 @@ class MultiRegionUser(HttpUser):
         record_request(self.current_region)
 
         # 주문 ID와 idempotency 키 생성
-        order_id = str(uuid.uuid4())
-        idempotency_key = self._generate_idempotency_key(f"payment:{order_id}")
+        idempotency_key = self._generate_idempotency_key("payment")
 
+        # Step 1: Region A에서 시작
+        self._switch_region("region_a")
         headers = self._get_region_header()
         headers["X-Idempotency-Key"] = idempotency_key
-        headers["X-Order-Id"] = order_id
-
-        # Step 1: Region A에서 주문 생성 시작
-        self.current_region = "region_a"
 
         # Step 2: 장애 발생 시뮬레이션 (30% 확률)
         if random.random() < 0.3:
             self.coordinator.inject_region_failure("region_a", "packet_loss")
 
-            # Step 3: Region B로 failover
+            # Step 3: Region B로 failover - 실제 호스트 전환
             start_time = time.time()
             new_region = self.coordinator.perform_failover("region_a")
 
             if new_region:
-                self.current_region = new_region
                 failover_time_ms = (time.time() - start_time) * 1000
                 record_failover(True, failover_time_ms)
+                self._switch_region(new_region)  # 실제 호스트 전환
+                print(f"{STAGE_NAME} Failover to {new_region} for payment")
 
-                # 헤더 업데이트
+                # 헤더 업데이트 (새 리전 토큰 사용)
                 headers = self._get_region_header()
                 headers["X-Idempotency-Key"] = idempotency_key
-                headers["X-Order-Id"] = order_id
 
             # 잠시 후 복구
             time.sleep(0.5)
@@ -521,20 +620,78 @@ class MultiRegionUser(HttpUser):
         # Step 4: 동일 주문 처리 시도 (중복 방지 검증)
         is_duplicate, _ = self.coordinator.check_idempotency(idempotency_key)
         if is_duplicate:
-            record_duplicate_prevented(order=True)
-            print(f"{STAGE_NAME} Duplicate order prevented: {order_id[:8]}...")
+            record_duplicate_prevented(payment=True)
+            print(f"{STAGE_NAME} Duplicate payment prevented: {idempotency_key[:8]}...")
             return
 
+        # 카트 비우기 (중복 방지) - POST /api/cart/clear/ with confirm=true
+        with self.client.post(
+            "/api/cart/clear/",
+            headers=headers,
+            json={"confirm": True},
+            name=f"{STAGE_NAME} TC-28-3: Clear Cart",
+            catch_response=True,
+        ) as response:
+            if response.status_code in (200, 400):  # 200=성공, 400=카트가 이미 비어있음
+                response.success()
+            else:
+                response.failure(f"Clear cart failed: {response.status_code}")
+
+        # 카트에 상품 추가 (랜덤 상품)
+        product_id = random.choice(AVAILABLE_PRODUCT_IDS)
+        with self.client.post(
+            "/api/cart-items/",
+            headers=headers,
+            json={"product_id": product_id, "quantity": 1},
+            name=f"{STAGE_NAME} TC-28-3: {self.current_region} - Add to Cart",
+            catch_response=True,
+        ) as response:
+            if response.status_code not in (200, 201):
+                response.failure(f"Add to cart failed: {response.status_code}")
+                return
+            response.success()
+
+        # 주문 생성
+        order_data = {
+            "shipping_name": f"테스트 구매자 {self.user_id}",
+            "shipping_phone": "010-1234-5678",
+            "shipping_postal_code": "12345",
+            "shipping_address": "서울시 강남구 테스트동 123",
+        }
+        order_id = None
+        with self.client.post(
+            "/api/orders/",
+            headers=headers,
+            json=order_data,
+            name=f"{STAGE_NAME} TC-28-3: [{self.current_region}] Create Order",
+            catch_response=True,
+        ) as response:
+            if response.status_code in (200, 201, 202):
+                try:
+                    order_id = response.json().get("order_id")
+                    response.success()
+                except:
+                    response.failure("Failed to parse order response")
+                    return
+            else:
+                response.failure(f"Order creation failed: {response.status_code}")
+                return
+
+        if not order_id:
+            return
+
+        # 결제 요청
+        payment_data = {"order_id": order_id, "payment_method": "card"}
         with self.client.post(
             "/api/payments/request/",
             headers=headers,
-            json={"order_id": order_id, "amount": 10000, "payment_method": "card"},
-            name=f"{STAGE_NAME} TC-28-3: Cross-Region Fallback - Payment",
+            json=payment_data,
+            name=f"{STAGE_NAME} TC-28-3: {self.current_region} - Payment",
             catch_response=True,
         ) as response:
             if response.status_code in (200, 201):
-                self.coordinator.register_idempotency(idempotency_key, order_id)
-                self.order_ids.append(order_id)
+                self.coordinator.register_idempotency(idempotency_key, str(order_id))
+                self.order_ids.append(str(order_id))
                 response.success()
             elif response.status_code == 409:
                 record_duplicate_prevented(payment=True)

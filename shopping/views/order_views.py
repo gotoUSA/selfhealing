@@ -177,7 +177,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         tags=["Orders"],
     )
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """주문 생성 (이메일 인증 필요)"""
+        """주문 생성 (이메일 인증 필요, Idempotent)"""
         # 이메일 인증 체크
         if not request.user.is_email_verified:
             logger.warning(f"미인증 사용자 주문 생성 시도: user_id={request.user.id}, email={request.user.email}")
@@ -216,12 +216,63 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_202_ACCEPTED,
             )
         except ValidationError as e:
+            # Idempotency: 장바구니가 비어있으면 최근 주문 반환 시도
+            error_msg = str(e.detail) if hasattr(e, "detail") else str(e)
+            if "장바구니가 비어있습니다" in error_msg:
+                recent_order = (
+                    Order.objects.filter(user=request.user, status__in=["pending", "confirmed", "processing"])
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if recent_order:
+                    logger.info(
+                        f"Idempotent 주문 반환: order_id={recent_order.id}, "
+                        f"user_id={request.user.id} (장바구니 비어있음 - 이미 주문됨)"
+                    )
+                    return Response(
+                        {
+                            "order_id": recent_order.id,
+                            "order_number": recent_order.order_number,
+                            "status": recent_order.status,
+                            "message": "이미 주문이 완료되었습니다.",
+                            "status_url": f"/api/orders/{recent_order.id}/",
+                            "idempotent": True,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
             logger.error(f"주문 생성 실패 (ValidationError): user_id={request.user.id}, error={str(e)}")
             return Response(
                 e.detail if hasattr(e, "detail") else {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except OrderServiceError as e:
+            # Idempotency: 장바구니가 비어있거나 이미 처리 중이면 최근 주문 반환
+            error_msg = str(e)
+            if "장바구니가 비어있습니다" in error_msg or "이미 주문이 진행 중" in error_msg:
+                recent_order = (
+                    Order.objects.filter(user=request.user, status__in=["pending", "confirmed", "processing"])
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if recent_order:
+                    logger.info(
+                        f"Idempotent 주문 반환: order_id={recent_order.id}, " f"user_id={request.user.id} ({error_msg})"
+                    )
+                    return Response(
+                        {
+                            "order_id": recent_order.id,
+                            "order_number": recent_order.order_number,
+                            "status": recent_order.status,
+                            "message": "이미 주문이 완료되었습니다.",
+                            "status_url": f"/api/orders/{recent_order.id}/",
+                            "idempotent": True,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
             logger.error(f"주문 생성 실패 (OrderServiceError): user_id={request.user.id}, error={str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:

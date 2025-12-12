@@ -326,24 +326,25 @@ class CartService:
     @transaction.atomic
     def clear_cart(cart: Cart) -> int:
         """
-        장바구니 비우기
+        장바구니 비우기 (Idempotent)
 
         Args:
             cart: 장바구니
 
         Returns:
-            int: 삭제된 아이템 수
+            int: 삭제된 아이템 수 (이미 비어있으면 0)
 
-        Raises:
-            CartServiceError: 이미 비어있는 경우
+        Note:
+            Idempotent API 원칙에 따라 이미 비어있는 카트도 성공으로 처리합니다.
+            - 멀티 리전 Failover 시 안전한 재시도 지원
+            - 더블 클릭/네트워크 재시도 상황 처리
+            - Self-Healing Layer의 무한 재시도 안전성 보장
         """
         item_count = cart.items.count()
 
         if item_count == 0:
-            raise CartServiceError(
-                "장바구니가 이미 비어있습니다.",
-                code="CART_EMPTY",
-            )
+            logger.info("[Cart] 장바구니 이미 비어있음 (Idempotent OK) | cart_id=%d", cart.id)
+            return 0
 
         cart.items.all().delete()
 

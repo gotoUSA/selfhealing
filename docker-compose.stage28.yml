@@ -42,10 +42,17 @@ services:
       - REGION=ap-northeast-2a
       - IS_PRIMARY=true
       - LATENCY_MS=5
+      - SECRET_KEY=test-secret-key-for-stage28
+      - TEST_DATABASE_HOST=db-region-a
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web-region-a,web-region-b,web,*
     depends_on:
-      - db-region-a
-      - redis-region-a
-      - toxiproxy
+      db-region-a:
+        condition: service_healthy
+      redis-region-a:
+        condition: service_healthy
     ports:
       - "8001:8000"
     networks:
@@ -53,6 +60,14 @@ services:
     labels:
       - "region=a"
       - "stage=28"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db-region-a:
     image: postgres:15-alpine
@@ -95,10 +110,17 @@ services:
       - REGION=ap-northeast-2b
       - IS_PRIMARY=false
       - LATENCY_MS=50
+      - SECRET_KEY=test-secret-key-for-stage28
+      - TEST_DATABASE_HOST=db-region-b
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web-region-a,web-region-b,web,*
     depends_on:
-      - db-region-b
-      - redis-region-b
-      - toxiproxy
+      db-region-b:
+        condition: service_healthy
+      redis-region-b:
+        condition: service_healthy
     ports:
       - "8002:8000"
     networks:
@@ -106,6 +128,14 @@ services:
     labels:
       - "region=b"
       - "stage=28"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db-region-b:
     image: postgres:15-alpine

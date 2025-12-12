@@ -357,30 +357,31 @@ class CartViewSet(viewsets.GenericViewSet):
         summary="장바구니를 비운다.",
         description="""처리 내용:
 - 장바구니의 모든 아이템을 삭제한다.
-- 실수 방지를 위해 confirm=true가 필수이다.""",
+- 실수 방지를 위해 confirm=true가 필수이다.
+- Idempotent: 이미 비어있는 장바구니도 200 OK를 반환한다.""",
         tags=["Cart"],
     )
     @action(detail=False, methods=["post"])
     def clear(self, request: Request) -> Response:
-        """장바구니 비우기"""
+        """장바구니 비우기 (Idempotent)"""
         cart = self._get_cart()
 
         # 확인 검증
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            item_count = CartService.clear_cart(cart=cart)
+        item_count = CartService.clear_cart(cart=cart)
+
+        if item_count == 0:
             return Response(
-                {"message": f"{item_count}개의 상품이 장바구니에서 삭제되었습니다."},
+                {"message": "장바구니가 이미 비어있습니다."},
                 status=status.HTTP_200_OK,
             )
-        except CartServiceError as e:
 
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return Response(
+            {"message": f"{item_count}개의 상품이 장바구니에서 삭제되었습니다."},
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         request=CartBulkAddRequestSerializer,
