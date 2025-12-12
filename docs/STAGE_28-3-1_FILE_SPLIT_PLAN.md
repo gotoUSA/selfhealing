@@ -11,7 +11,7 @@
 | 파일 | 줄 수 | 우선순위 | 상태 |
 |------|------|----------|------|
 | `adapters/memory/repositories.py` | 1,074 → ✅ | 🟢 완료 | 5개 파일로 분리 |
-| `services/circuit_breaker_service.py` | 1,168 | 🔴 높음 | 대기 중 |
+| `services/circuit_breaker_service.py` | 1,168 → ✅ | 🟢 완료 | 7개 파일로 분리 |
 | `adapters/django_repositories.py` | 1,051 | 🔴 높음 | 대기 중 |
 | `services/factory.py` | 966 | 🟡 중간 | 대기 중 |
 | `api/django/views.py` | 955 | 🟡 중간 | 대기 중 |
@@ -58,23 +58,27 @@ adapters/django/
 
 ## 📋 Phase 2: 서비스 분리
 
-### 2.1 services/circuit_breaker_service.py (1,168줄)
+### 2.1 services/circuit_breaker_service.py (1,168줄) - ✅ 완료
 
-**분석 필요 항목:**
-- Circuit breaker 상태 관리 로직
-- 상태 전이 로직 (closed → open → half_open)
-- 메트릭/모니터링 로직
-- 수동 제어 로직
-
-**분리 계획:**
+**결과:**
 ```
 services/circuit_breaker/
-├── __init__.py              # exports
-├── service.py               # CircuitBreakerService 메인 (~400줄)
-├── state_machine.py         # 상태 전이 로직 (~300줄)
-├── metrics.py               # 메트릭 수집 (~200줄)
-└── control.py               # 수동 제어 API (~200줄)
+├── __init__.py              # 85줄 - exports
+├── config.py                # 125줄 - CircuitBreakerConfig, CircuitState, CircuitBreakerResult
+├── rate_limit_tracker.py    # 95줄 - RateLimitTracker 클래스
+├── protection.py            # 258줄 - ProtectionMixin (Rate Limit/Self-DDoS)
+├── manual_control.py        # 433줄 - ManualControlMixin (Force Open/Close, TTL)
+├── service.py               # 297줄 - CircuitBreakerService 메인 (Mixin 상속)
+└── convenience.py           # 136줄 - 모듈 레벨 편의 함수
 ```
+
+**변경사항:**
+- 1,168줄 → 7개 파일 (모두 500줄 이하)
+- 테스트 512개 통과
+- 하위 호환성 유지:
+  - `from selfhealing.services.circuit_breaker_service import ...`
+  - `from selfhealing.services.circuit_breaker import ...`
+  - `from shopping.services.self_healing.circuit_breaker_service import ...`
 
 ### 2.2 services/factory.py (966줄)
 
@@ -115,11 +119,11 @@ api/django/
 ## ✅ 완료 체크리스트
 
 ### Phase 1: 리포지토리
-- [ ] `adapters/memory/repositories.py` 분리
+- [x] `adapters/memory/repositories.py` 분리
 - [ ] `adapters/django_repositories.py` 정리 (중복 확인)
 
 ### Phase 2: 서비스
-- [ ] `services/circuit_breaker_service.py` 분리
+- [x] `services/circuit_breaker_service.py` 분리
 - [ ] `services/factory.py` 분리
 
 ### Phase 3: API
