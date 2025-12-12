@@ -1,10 +1,27 @@
-# Docker Compose for testing Stage 26, 27
+# Docker Compose for testing Stage 26, 27, 28
 services:
+  # PostgreSQL database for SQLAlchemy integration tests
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test_selfhealing
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # Test runner for selfhealing package
   test:
     build: .
     command: >
-      sh -c "cd /code/packages/selfhealing-python && 
+      sh -c "cd /code/packages/selfhealing-python &&
              pip install -e . &&
              python -m pytest tests/unit/test_connection_pool.py tests/unit/test_graceful_shutdown.py -v --tb=short"
     volumes:
@@ -14,3 +31,24 @@ services:
       - PYTHONPATH=/code:/code/packages/selfhealing-python/src
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+
+  # SQLAlchemy adapter integration test
+  test-sqlalchemy:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary sqlalchemy pytest -q &&
+             python scripts/test_sqlalchemy_postgres.py"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/test_selfhealing
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_test_data:

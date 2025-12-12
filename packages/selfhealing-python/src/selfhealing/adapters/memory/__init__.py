@@ -7,11 +7,9 @@ Provides in-memory implementations of repository interfaces for:
 - Development and prototyping
 """
 
-from .repositories import (
-    InMemoryFailedOperationRepository,
-    InMemoryCircuitBreakerStateRepository,
-    InMemorySecurityIncidentRepository,
-)
+from selfhealing.adapters.memory.failed_operation import InMemoryFailedOperationRepository
+from selfhealing.adapters.memory.circuit_breaker import InMemoryCircuitBreakerStateRepository
+from selfhealing.adapters.memory.security_incident import InMemorySecurityIncidentRepository
 
 __all__ = [
     "InMemoryFailedOperationRepository",

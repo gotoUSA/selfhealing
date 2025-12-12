@@ -477,6 +477,34 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
+    # SQLAlchemy repositories (for FastAPI, Flask, standalone)
+    try:
+        from selfhealing.adapters.sqlalchemy.repositories import (
+            SQLAlchemyFailedOperationRepository,
+            SQLAlchemyCircuitBreakerStateRepository,
+            SQLAlchemySecurityIncidentRepository,
+        )
+
+        ProviderRegistry.register_failed_operation_repo("sqlalchemy", SQLAlchemyFailedOperationRepository)
+        ProviderRegistry.register_circuit_breaker_repo("sqlalchemy", SQLAlchemyCircuitBreakerStateRepository)
+        ProviderRegistry.register_security_repo("sqlalchemy", SQLAlchemySecurityIncidentRepository)
+    except ImportError:
+        pass
+
+    # In-memory repositories (for testing, standalone)
+    try:
+        from selfhealing.adapters.memory import (
+            InMemoryFailedOperationRepository,
+            InMemoryCircuitBreakerStateRepository,
+            InMemorySecurityIncidentRepository,
+        )
+
+        ProviderRegistry.register_failed_operation_repo("memory", InMemoryFailedOperationRepository)
+        ProviderRegistry.register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)
+        ProviderRegistry.register_security_repo("memory", InMemorySecurityIncidentRepository)
+    except ImportError:
+        pass
+
 
 # Run auto-registration on module import
 _auto_register_adapters()

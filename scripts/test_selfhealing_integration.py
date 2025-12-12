@@ -137,7 +137,7 @@ class SelfHealingIntegrationTest:
                 CircuitBreakerService,
                 CircuitBreakerConfig,
             )
-            from selfhealing.adapters.memory.repositories import (
+            from selfhealing.adapters.memory import (
                 InMemoryCircuitBreakerStateRepository,
             )
 
@@ -178,7 +178,7 @@ class SelfHealingIntegrationTest:
             django.setup()
 
             from selfhealing.services.dlq_service import DLQService, DLQConfig
-            from selfhealing.adapters.memory.repositories import (
+            from selfhealing.adapters.memory import (
                 InMemoryFailedOperationRepository,
             )
 

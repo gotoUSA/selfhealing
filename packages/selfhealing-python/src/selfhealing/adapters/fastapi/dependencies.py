@@ -168,7 +168,7 @@ def get_circuit_breaker_service():
             return cb.get_all_states()
     """
     from selfhealing.services.circuit_breaker_service import CircuitBreakerService
-    from selfhealing.adapters.memory.repositories import InMemoryCircuitBreakerStateRepository
+    from selfhealing.adapters.memory import InMemoryCircuitBreakerStateRepository
 
     # Use in-memory repository by default for FastAPI (framework-independent)
     # For Django integration, use the Django-specific dependency
@@ -197,7 +197,7 @@ def get_dlq_service():
             return dlq.retry(operation_id)
     """
     from selfhealing.services.dlq_service import DLQService
-    from selfhealing.adapters.memory.repositories import InMemoryFailedOperationRepository
+    from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
     global _failed_operation_repo
     if _failed_operation_repo is None:
@@ -216,7 +216,7 @@ def get_replay_service():
             return dlq.replay_pending()
     """
     from selfhealing.services.replay_service import ReplayService
-    from selfhealing.adapters.memory.repositories import InMemoryFailedOperationRepository
+    from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
     global _failed_operation_repo
     if _failed_operation_repo is None:

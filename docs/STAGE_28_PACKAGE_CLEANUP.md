@@ -716,19 +716,19 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
 ## ✅ 완료 기준
 
 ### Phase 28-1
-- [ ] services/ 에서 Django fallback 제거
-- [ ] ServiceFactory 개선
-- [ ] 기존 테스트 통과
+- [x] services/ 에서 Django fallback 제거
+- [x] ServiceFactory 개선
+- [x] 기존 테스트 통과
 
 ### Phase 28-2
-- [ ] FastAPI middleware 구현
-- [ ] FastAPI dependencies 구현
-- [ ] FastAPI 예제 앱으로 테스트
+- [x] FastAPI middleware 구현
+- [x] FastAPI dependencies 구현
+- [x] FastAPI 예제 앱으로 테스트
 
 ### Phase 28-3
-- [ ] SQLAlchemy models 구현
-- [ ] SQLAlchemy repositories 구현
-- [ ] DB migration 스크립트
+- [x] SQLAlchemy models 구현
+- [x] SQLAlchemy repositories 구현
+- [x] Docker Compose PostgreSQL 통합 테스트
 
 ### Phase 28-4
 - [ ] In-memory repositories 구현

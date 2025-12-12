@@ -173,7 +173,7 @@ class ServiceFactory:
 
     def _create_inmemory_repository(self, repo_type: str) -> Any:
         """Create in-memory repository for testing/standalone."""
-        from selfhealing.adapters.memory.repositories import (
+        from selfhealing.adapters.memory import (
             InMemoryFailedOperationRepository,
             InMemoryCircuitBreakerStateRepository,
             InMemorySecurityIncidentRepository,
