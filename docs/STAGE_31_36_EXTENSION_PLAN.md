@@ -2,7 +2,20 @@
 
 > 작성일: 2025-12-12
 > 기반 문서: STAGE_28_30_ADVANCED_CHAOS_PLAN.md Phase 2 섹션
-> 상태: 계획 단계
+> 상태: **Stage 31-32 구현 완료** ✅
+
+---
+
+## 🚀 구현 현황
+
+| Stage | 상태 | 구현 파일 | 테스트 |
+|-------|------|-----------|--------|
+| **31** | ✅ 완료 | `stage31_cascade_extended.py` | 23개 통과 |
+| **32** | ✅ 완료 | `stage32_retry_storm_extended.py` | 34개 통과 |
+| **33** | 📋 계획 | - | - |
+| **34** | 📋 계획 | - | - |
+| **35** | 📋 계획 | - | - |
+| **36** | 📋 계획 | - | - |
 
 ---
 
@@ -744,17 +757,17 @@ docker/
 
 ## ✅ 완료 기준
 
-### Stage 31 (Cascade Failure Extended)
-- [ ] 3개 시나리오 구현
-- [ ] CB False Positive 방지 검증
-- [ ] 연쇄 장애 격리 테스트
-- [ ] 테스트 통과
+### Stage 31 (Cascade Failure Extended) ✅ 완료
+- [x] 3개 시나리오 구현 (Redis→DB→CB, Payment→Retry→Rate Limit, Health Check Delay)
+- [x] CB False Positive 방지 검증
+- [x] 연쇄 장애 격리 테스트
+- [x] 테스트 통과 (23개 테스트)
 
-### Stage 32 (Retry Storm Extended)
-- [ ] 4개 검증 항목 구현
-- [ ] 메모리 누수 방지 검증
-- [ ] DLQ 폭주 방지 테스트
-- [ ] 테스트 통과
+### Stage 32 (Retry Storm Extended) ✅ 완료
+- [x] 4개 검증 항목 구현 (Memory, DLQ, Webhook, Clock Skew)
+- [x] 메모리 누수 방지 검증
+- [x] DLQ 폭주 방지 테스트
+- [x] 테스트 통과 (34개 테스트)
 
 ### Stage 33 (JWT Cascade Extended)
 - [ ] 4개 시나리오 구현
@@ -796,3 +809,4 @@ docker/
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
 | 1.0 | 2025-12-12 | 초안 작성 |
+| 1.1 | 2025-12-12 | Stage 31, 32 구현 완료 (57개 테스트 통과) |
