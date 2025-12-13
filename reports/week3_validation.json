@@ -1,0 +1,129 @@
+{
+  "timestamp": "2025-12-13T22:57:29.108898",
+  "duration_seconds": 1.93254,
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "gap_id": "GAP-01",
+      "name": "Schema Compatibility",
+      "status": "PASSED",
+      "duration_ms": 1602.696180343628,
+      "details": {
+        "total_records": 40,
+        "v1_writes": 20,
+        "v2_writes": 20,
+        "cross_version_reads": 40,
+        "conversion_success": 40,
+        "conversion_failure": 0,
+        "data_corruption": 0
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-02",
+      "name": "Cache Poison Detection",
+      "status": "PASSED",
+      "duration_ms": 3.988504409790039,
+      "details": {
+        "poison_injected": 5,
+        "poison_detected": 5,
+        "poison_served": 0,
+        "auto_invalidations": 5,
+        "detection_rate": "100.0%"
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-03",
+      "name": "Outbox Pattern",
+      "status": "PASSED",
+      "duration_ms": 4.707574844360352,
+      "details": {
+        "transactions": 30,
+        "events_created": 30,
+        "events_published": 25,
+        "events_in_dlq": 5,
+        "events_replayed": 2,
+        "event_loss": 0,
+        "duplicates": 0
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-04",
+      "name": "Backpressure Policy",
+      "status": "PASSED",
+      "duration_ms": 2.5093555450439453,
+      "details": {
+        "accepted": 150,
+        "rejected": 0,
+        "state_changes": 0,
+        "final_queue_size": 0
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-05",
+      "name": "Worker Crash Recovery",
+      "status": "PASSED",
+      "duration_ms": 3.9997100830078125,
+      "details": {
+        "total_tasks": 30,
+        "completed": 30,
+        "recovered": 0,
+        "crashes": 1,
+        "in_progress": 0,
+        "pending": 0
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-06",
+      "name": "Event-based Invalidation",
+      "status": "PASSED",
+      "duration_ms": 301.90324783325195,
+      "details": {
+        "cache_hits": 10,
+        "cache_misses": 10,
+        "invalidations": 10,
+        "stale_reads": 0,
+        "avg_latency_ms": "0.00",
+        "max_latency_ms": "0.00"
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-07",
+      "name": "Cache Dead Protection",
+      "status": "PASSED",
+      "duration_ms": 2.512693405151367,
+      "details": {
+        "total_requests": 5,
+        "db_allowed": 50,
+        "db_rejected": 50,
+        "degraded": 50,
+        "cache_errors": 5
+      },
+      "error": null
+    },
+    {
+      "gap_id": "GAP-08",
+      "name": "Observability Contract",
+      "status": "PASSED",
+      "duration_ms": 2.000570297241211,
+      "details": {
+        "total_requests": 100,
+        "successes": 96,
+        "failures": 4,
+        "untraced": 0,
+        "unknown_stage": 0
+      },
+      "error": null
+    }
+  ]
+}
