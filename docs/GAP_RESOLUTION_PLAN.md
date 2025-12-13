@@ -495,6 +495,42 @@ observability_contract:
   - Rate Limiter Active: ✅
   - DB Rate Limit: 50/s (maintained)
 
+**GAP-08: Observability Contract**
+- 구현 파일: `load_tests/metrics/observability_contract.py`
+- HTTP 테스트: `load_tests/scenarios/stage08_observability.py`
+- 적용 대상: 전체 스테이지 (공통 모듈)
+- 테스트 방식: 시뮬레이션 + HTTP 통합
+- 검증 항목:
+  - 각 요청에 trace_id 필수 포함
+  - 실패 시 pipeline_stage 명시 (8칸 중 어디)
+  - 종료 리포트에 단계별 실패 분포 포함
+  - Prometheus 메트릭 포맷 지원
+- Pipeline Stages (8단계):
+  1. Ingress - 요청 수신, Load Balancer, Rate Limiting
+  2. Validation - 입력 검증, Schema 검증
+  3. Auth - 인증/인가, JWT 검증
+  4. Business - 비즈니스 로직 처리
+  5. Caching - 캐시 조회/저장
+  6. Persistence - DB 읽기/쓰기
+  7. Async - 비동기 작업, Celery, Webhook
+  8. Egress - 응답 반환, 외부 API 호출
+- Invariants: `untraced_failures == 0`, `unknown_stage_failures == 0`
+- **Standalone 테스트: ✅ PASSED (2025-12-13)**
+  - Total Requests: 501
+  - Successes: 478 (95.4%)
+  - Failures: 23 (4.6%)
+  - Pipeline Stage Distribution:
+    - ingress: 4.3%
+    - validation: 43.5%
+    - business: 13.0%
+    - caching: 8.7%
+    - persistence: 8.7%
+    - async: 21.7%
+  - **Invariant Checks:**
+    - untraced_failures == 0: ✅ PASSED
+    - unknown_stage_failures == 0: ✅ PASSED
+  - Reports Generated: TXT, HTML, JSON
+
 ### Week 3: Validation
 
 | Day | Task |
@@ -510,7 +546,7 @@ observability_contract:
 gap_resolution_complete:
   coverage_target: "> 95%" 95% of known real-world failure scenarios, not test/line coverage
   critical_gaps_resolved: 3/3  # ✅ Week 1 완료 (2025-12-13)
-  high_gaps_resolved: 4/5      # ✅ Week 2 Day 1-4 완료 (2025-12-13)
+  high_gaps_resolved: 5/5      # ✅ Week 2 완료 (2025-12-13)
 
   week1_results:
     GAP-01_schema_compat: "✅ PASSED"
@@ -522,7 +558,7 @@ gap_resolution_complete:
     GAP-05_worker_crash: "✅ PASSED"
     GAP-06_event_invalidation: "✅ PASSED"
     GAP-07_cache_dead_protection: "✅ PASSED"
-    GAP-08_observability: "⏳ Week 2 Day 5 예정"
+    GAP-08_observability: "✅ PASSED"
 
   verification:
     - "모든 신규 테스트 PASS"
