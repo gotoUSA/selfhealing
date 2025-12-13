@@ -363,6 +363,12 @@ observability_contract:
   - 데이터 무결성 검증
 - Invariants: `data_corruption == 0`, `conversion_success_rate >= 99%`
 - Standalone 테스트: ✅ PASSED
+- **HTTP 통합 테스트: ✅ PASSED (2025-12-13)**
+  - 실제 PostgreSQL + Redis + Django 환경
+  - 6개 테스트 케이스 모두 통과
+  - p95 응답시간: 70.57ms
+  - 에러율: 0.00%
+  - 동시 요청 테스트 완료
 
 **GAP-02: Cache Corruption Detection**
 - 구현 파일: `load_tests/scenarios/stage35_cache_poison.py`
@@ -377,7 +383,11 @@ observability_contract:
   - 바이너리 손상 감지
 - Invariants: `poison_detected >= poison_injected`, `poison_served == 0`, `auto_invalidation_triggered`
 - Standalone 테스트: ✅ PASSED (Detection Rate: 100%)
-
+- **HTTP 통합 테스트: ✅ PASSED (2025-12-13)**
+  - 실제 Redis 캐시 오염 주입 테스트
+  - 7개 테스트 케이스 모두 통과
+  - **CRITICAL**: poison_served == 0 (오염 데이터 미전달)
+  - Auto-invalidation 성공률: 100%
 ### Week 2: High Gaps
 
 | Day | Task |

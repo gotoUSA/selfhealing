@@ -1,0 +1,114 @@
+# Docker Compose for GAP-01 (Schema Compatibility) & GAP-02 (Cache Poison) Tests
+# 실제 인프라를 사용한 통합 테스트
+
+services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: gap_test_db
+      POSTGRES_USER: gap_user
+      POSTGRES_PASSWORD: gap_pass
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gap_user -d gap_test_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - gap_postgres_data:/var/lib/postgresql/data
+
+  # Redis 캐시 (Stage 35 Cache Poison 테스트용)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    command: redis-server --save "" --appendonly no
+
+  # Django 웹 애플리케이션
+  web:
+    build: .
+    command: ["sh", "-c", "python manage.py migrate --noinput && python scripts/create_test_data.py && gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
+    ports:
+      - "8001:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.local
+      - DJANGO_SECRET_KEY=test-secret-key-for-gap-tests-only
+      - DATABASE_NAME=gap_test_db
+      - DATABASE_USER=gap_user
+      - DATABASE_PASSWORD=gap_pass
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEBUG=True
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/code
+    working_dir: /code
+
+  # GAP-01: Schema Compatibility Test Runner
+  test-gap01:
+    build: .
+    command: ["sh", "-c", "echo 'Waiting for web service...' && sleep 15 && pip install locust requests -q && echo '=== GAP-01: Schema Compatibility Integration Test ===' && python load_tests/scenarios/stage37_schema_compat_http.py"]
+    environment:
+      - PYTHONPATH=/code
+      - TEST_HOST=http://web:8000
+      - DJANGO_SETTINGS_MODULE=myproject.settings.local
+    depends_on:
+      - web
+    volumes:
+      - .:/code
+    working_dir: /code
+    profiles:
+      - gap01
+
+  # GAP-02: Cache Poison Test Runner
+  test-gap02:
+    build: .
+    command: ["sh", "-c", "echo 'Waiting for web service...' && sleep 15 && pip install locust requests redis -q && echo '=== GAP-02: Cache Poison Integration Test ===' && python load_tests/scenarios/stage35_cache_poison_http.py"]
+    environment:
+      - PYTHONPATH=/code
+      - TEST_HOST=http://web:8000
+      - REDIS_URL=redis://redis:6379/1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.local
+    depends_on:
+      - web
+      - redis
+    volumes:
+      - .:/code
+    working_dir: /code
+    profiles:
+      - gap02
+
+  # Locust 기반 전체 테스트 (Web UI)
+  locust:
+    build: .
+    command: ["sh", "-c", "pip install locust requests redis -q && locust -f load_tests/scenarios/stage37_schema_compat_http.py --host=http://web:8000 --web-host=0.0.0.0"]
+    ports:
+      - "8089:8089"
+    environment:
+      - PYTHONPATH=/code
+      - TEST_HOST=http://web:8000
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      - web
+    volumes:
+      - .:/code
+    working_dir: /code
+    profiles:
+      - locust
+
+volumes:
+  gap_postgres_data:
