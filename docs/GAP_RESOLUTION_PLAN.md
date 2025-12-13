@@ -17,33 +17,33 @@
 stage37_schema_compat:
   name: "Partial Deployment Schema Compatibility"
   pipeline_stage: State Change
-  
+
   scenario:
     phase1_setup:
       - "V1 스키마로 Worker 50% 실행"
       - "V2 스키마로 Worker 50% 실행"
       - "동시 트랜잭션 발생 시작"
-    
+
     phase2_stress:
       - "V1 Worker가 V2 데이터 읽기"
       - "V2 Worker가 V1 데이터 읽기"
       - "Cross-version 트랜잭션 발생"
-    
+
     phase3_verify:
       - "데이터 일관성 검증"
       - "누락/손상 데이터 확인"
-  
+
   failure_types:
     - schema_mismatch_error
     - data_corruption
     - migration_conflict
     - backward_incompatible_change
-  
+
   invariants:
     - "data_corruption == 0"
     - "schema_mismatch_errors handled gracefully"
     - "no data loss during transition"
-  
+
   implementation_notes: |
     현재 프로젝트가 단일 인스턴스라면:
     - 시뮬레이션으로 대체 가능
@@ -89,33 +89,33 @@ class SchemaV2User(HttpUser):
 stage35_cache_poison:
   name: "Cache Poison Detection"
   pipeline_stage: Caching
-  
+
   scenario:
     phase1_inject:
       - "캐시에 의도적으로 잘못된 데이터 주입"
       - "checksum 불일치 데이터 생성"
       - "만료되지 않은 stale 데이터 주입"
-    
+
     phase2_detect:
       - "읽기 시 감지 여부 확인"
       - "자동 무효화 트리거 확인"
       - "fallback to DB 동작 확인"
-    
+
     phase3_recover:
       - "정상 데이터로 재캐싱"
       - "오염 확산 방지 확인"
-  
+
   failure_types:
     - cache_corruption
     - stale_data_served
     - checksum_mismatch
     - poison_propagation
-  
+
   invariants:
     - "poison_detected == poison_injected"
     - "poison_served_to_user == 0"
     - "auto_invalidation_triggered"
-  
+
   implementation_notes: |
     Redis 직접 접근으로 데이터 손상 시뮬레이션
     Application 레벨에서 감지 로직 필요
@@ -139,20 +139,20 @@ import json
 class CachePoisonUser(HttpUser):
     def on_start(self):
         self.redis = redis.Redis(host='localhost', port=6379)
-    
+
     @task
     def inject_and_detect_poison(self):
         # 1. 정상 데이터 캐싱
         product_id = random.randint(1, 100)
         self.client.get(f"/api/products/{product_id}/")
-        
+
         # 2. 캐시 직접 오염
         cache_key = f"product:{product_id}"
         self.redis.set(cache_key, '{"corrupted": true, "price": -999}')
-        
+
         # 3. 다시 조회 - 감지 여부 확인
         response = self.client.get(f"/api/products/{product_id}/")
-        
+
         # 4. 검증: 오염된 데이터가 반환되면 FAIL
         if response.json().get('price', 0) < 0:
             events.request.fire(
@@ -174,34 +174,34 @@ class CachePoisonUser(HttpUser):
 stage14_outbox:
   name: "Outbox Pattern Verification"
   pipeline_stage: Async Boundary
-  
+
   scenario:
     phase1_commit_event_fail:
       - "DB commit 성공"
       - "이벤트 발행 실패 시뮬레이션 (Celery down)"
       - "Outbox 테이블에 저장 확인"
-    
+
     phase2_poller_recovery:
       - "Outbox Poller 활성화"
       - "미발행 이벤트 재발행 확인"
       - "원래 순서 유지 확인"
-    
+
     phase3_idempotency:
       - "중복 발행 시도"
       - "수신 측 멱등성 확인"
       - "최종 일관성 검증"
-  
+
   failure_types:
     - event_loss
     - duplicate_event
     - out_of_order_event
     - poller_stuck
-  
+
   invariants:
     - "event_loss == 0"
     - "duplicate_events_processed == 0"
     - "order_preserved (if required)"
-  
+
   implementation_notes: |
     현재 시스템에 Outbox 테이블이 없다면:
     1. Celery task 실패 후 DLQ 재처리로 대체 검증
@@ -228,17 +228,17 @@ class OutboxVerificationUser(HttpUser):
         # 1. 주문 생성
         order_response = self.client.post("/api/orders/", json={...})
         order_id = order_response.json()['id']
-        
+
         # 2. 잠시 대기 (비동기 처리 시간)
         time.sleep(2)
-        
+
         # 3. 이벤트 처리 결과 확인
         result = self.client.get(f"/api/orders/{order_id}/events/")
-        
+
         # 4. 검증: 모든 이벤트가 정확히 1번 처리되었는지
         events_processed = result.json().get('events_processed', [])
         duplicates = len(events_processed) - len(set(events_processed))
-        
+
         if duplicates > 0:
             events.request.fire(
                 request_type="CRITICAL",
@@ -263,7 +263,7 @@ stage29_backpressure:
     - "큐 용량 80% 도달 시 새 요청에 503 반환"
     - "Retry-After 헤더 포함 확인"
     - "큐 여유 생기면 자동 수락 재개"
-  
+
   new_invariants:
     - "queue_overflow == 0"
     - "graceful_reject_rate > 0 when overloaded"
@@ -280,7 +280,7 @@ stage9_worker_crash:
     - "부하 중 Worker 강제 종료 (kill -9)"
     - "in-flight 작업 복구 확인"
     - "새 Worker 자동 시작 확인"
-  
+
   new_invariants:
     - "in_flight_tasks_recovered"
     - "no_permanent_task_loss"
@@ -297,7 +297,7 @@ stage17_event_invalidation:
     - "DB 업데이트 시 캐시 무효화 이벤트 발행"
     - "이벤트 수신 후 즉시 캐시 삭제 확인"
     - "TTL 만료 전 무효화 동작 확인"
-  
+
   new_invariants:
     - "stale_reads_after_event == 0"
     - "invalidation_latency < 100ms"
@@ -314,7 +314,7 @@ stage24_cache_dead_protection:
     - "Redis 완전 장애 시뮬레이션"
     - "DB로 요청 폭주 방지 확인"
     - "Rate Limit to DB 동작 확인"
-  
+
   new_invariants:
     - "db_query_rate < threshold when cache dead"
     - "graceful_degradation_active"
@@ -330,11 +330,11 @@ observability_contract:
     - "각 요청에 trace_id 필수 포함"
     - "실패 시 pipeline_stage 명시 (8칸 중 어디)"
     - "종료 리포트에 단계별 실패 분포 포함"
-  
+
   new_invariants:
     - "untraced_failures == 0"
     - "unknown_stage_failures == 0"
-  
+
   new_metrics:
     - "failure_by_pipeline_stage{stage='ingress|validation|...'}"
 ```
@@ -345,11 +345,38 @@ observability_contract:
 
 ### Week 1: Critical Gaps
 
-| Day | Task |
-|-----|------|
-| 1-2 | GAP-01 설계 + 시뮬레이션 방식 결정 |
-| 3-4 | GAP-02 Cache Poison 테스트 구현 |
-| 5 | GAP-03 Outbox/DLQ 검증 확장 |
+| Day | Task | Status |
+|-----|------|--------|
+| 1-2 | GAP-01 설계 + 시뮬레이션 방식 결정 | ✅ 완료 |
+| 3-4 | GAP-02 Cache Poison 테스트 구현 | ✅ 완료 |
+| 5 | GAP-03 Outbox/DLQ 검증 확장 | ⏳ 대기 |
+
+#### Week 1 Day 1-4 구현 결과
+
+**GAP-01: Schema Compatibility Test**
+- 구현 파일: `load_tests/scenarios/stage37_schema_compat.py`
+- 테스트 방식: 시뮬레이션 (V1/V2 스키마 Worker 시뮬레이션)
+- 검증 항목:
+  - V1 → V2 스키마 변환 (integer → decimal)
+  - V2 → V1 스키마 변환 (decimal → integer)
+  - Cross-version 트랜잭션 동시성
+  - 데이터 무결성 검증
+- Invariants: `data_corruption == 0`, `conversion_success_rate >= 99%`
+- Standalone 테스트: ✅ PASSED
+
+**GAP-02: Cache Corruption Detection**
+- 구현 파일: `load_tests/scenarios/stage35_cache_poison.py`
+- 테스트 방식: 시뮬레이션 (다양한 오염 유형 주입)
+- 검증 항목:
+  - Invalid JSON 감지
+  - Checksum 불일치 감지
+  - 비즈니스 규칙 위반 감지 (음수 가격)
+  - 만료 stale 데이터 감지
+  - 타입 불일치 감지
+  - 필수 필드 누락 감지
+  - 바이너리 손상 감지
+- Invariants: `poison_detected >= poison_injected`, `poison_served == 0`, `auto_invalidation_triggered`
+- Standalone 테스트: ✅ PASSED (Detection Rate: 100%)
 
 ### Week 2: High Gaps
 
@@ -372,10 +399,10 @@ observability_contract:
 
 ```yaml
 gap_resolution_complete:
-  coverage_target: "> 95%"
+  coverage_target: "> 95%" 95% of known real-world failure scenarios, not test/line coverage
   critical_gaps_resolved: 3/3
   high_gaps_resolved: 5/5
-  
+
   verification:
     - "모든 신규 테스트 PASS"
     - "기존 테스트 regression 없음"
