@@ -1,0 +1,235 @@
+# Stage 36 Real: 실제 HTTP 메모리 압박 테스트
+# Docker Compose 설정
+#
+# 핵심 차이점 (기존 Stage 36 대비):
+#   - 실제 HTTP 엔드포인트 사용 (/api/test/memory/*)
+#   - 컨테이너 메모리 제한 (512MB - 빡빡하게)
+#   - cAdvisor로 실제 RSS 모니터링
+#   - Locust가 실제 HTTP 요청 전송
+#
+# 사용법:
+#   # 전체 스택 실행
+#   docker-compose -f docker-compose.stage36-real.yml up -d
+#
+#   # Locust 결과 확인
+#   docker logs locust-stage36-real -f
+#
+#   # 메모리 모니터링 (cAdvisor)
+#   http://localhost:8080
+#
+#   # 정리
+#   docker-compose -f docker-compose.stage36-real.yml down -v
+
+services:
+  # ==========================================================================
+  # 웹 애플리케이션 (메모리 제한 512MB - 빡빡하게!)
+  # Phase 2: 서버 튜닝 적용
+  # ==========================================================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-stage36-real
+    command: >
+      sh -c "pip install psutil &&
+             python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 4 --timeout 120 --backlog 2048 --keep-alive 5 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100"
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      # Database settings
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      # Memory test enabled!
+      - MEMORY_TEST_ENABLED=true
+      # Memory thresholds (Stage 36 최종: 512MB 환경)
+      - MEMORY_WARNING_THRESHOLD=0.60
+      - MEMORY_THROTTLE_THRESHOLD=0.83
+      - MEMORY_CRITICAL_THRESHOLD=0.90
+      - MEMORY_MAX_MB=512
+      # Streaming chunk size
+      - STREAMING_CHUNK_SIZE_KB=64
+      # Stage 36 최종: 기본 Throttle 설정
+      - THROTTLE_MAX_CONCURRENT=3
+      - THROTTLE_REJECT_RATE=0.5
+      - FORCE_THROTTLE_MODE=false
+      # Python settings
+      - PYTHONUNBUFFERED=1
+    # Phase 2: ulimit 설정 (파일 디스크립터 증가)
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # Phase 2: 커널 파라미터 (listen backlog 증가)
+    sysctls:
+      net.core.somaxconn: 1024
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - memory_real_net
+    # Stage 36 최종: 512MB 메모리 제한
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    labels:
+      - "stage=36-real"
+      - "test=memory-pressure-real"
+
+  # ==========================================================================
+  # PostgreSQL
+  # ==========================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: db-stage36-real
+    environment:
+      - POSTGRES_DB=myproject
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=50"
+      - "-c"
+      - "shared_buffers=64MB"
+    volumes:
+      - db_stage36_real_data:/var/lib/postgresql/data
+    networks:
+      - memory_real_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "stage=36-real"
+
+  # ==========================================================================
+  # Redis
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis-stage36-real
+    command:
+      - "redis-server"
+      - "--maxmemory"
+      - "64mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    networks:
+      - memory_real_net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "stage=36-real"
+
+  # ==========================================================================
+  # Locust 부하 테스트 (실제 HTTP)
+  # Phase 2: 타임아웃 설정 개선
+  # ==========================================================================
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: locust-stage36-real
+    environment:
+      - LOCUST_HOST=http://web:8000
+      - LOCUST_USERS=20
+      - LOCUST_SPAWN_RATE=5
+      - LOCUST_RUN_TIME=5m
+      - LOCUST_TEST_DURATION=300
+      # Phase 2: 타임아웃 설정 (네트워크 에러 감소)
+      - LOCUST_STOP_TIMEOUT=60
+    volumes:
+      - ./load_tests:/mnt/locust
+    command: >
+      -f /mnt/locust/scenarios/stage36_real_http.py
+      --headless
+      --html=/mnt/locust/reports/stage36_real_report.html
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - memory_real_net
+    # Phase 2: ulimit 설정
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    labels:
+      - "stage=36-real"
+
+  # ==========================================================================
+  # cAdvisor (컨테이너 메모리 모니터링)
+  # ==========================================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor-stage36-real
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - memory_real_net
+    profiles:
+      - monitoring
+    labels:
+      - "stage=36-real"
+
+  # ==========================================================================
+  # Memory Stats Collector (docker stats 기반)
+  # ==========================================================================
+  stats-collector:
+    image: alpine:latest
+    container_name: stats-collector-stage36
+    entrypoint: >
+      sh -c "apk add --no-cache curl jq &&
+             while true; do
+               echo \"=== Memory Stats at $$(date) ===\"
+               curl -s http://web:8000/api/test/memory/status/ 2>/dev/null | jq . || echo 'Web not ready'
+               sleep 10
+             done"
+    depends_on:
+      - web
+    networks:
+      - memory_real_net
+    labels:
+      - "stage=36-real"
+
+networks:
+  memory_real_net:
+    driver: bridge
+    name: stage36_real_network
+
+volumes:
+  db_stage36_real_data:
+    name: stage36_real_db_data

@@ -20,9 +20,18 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-stage36
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 60"
     environment:
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/myproject
+      # Database settings (matching test.py)
+      - TEST_DATABASE_NAME=myproject
+      - TEST_DATABASE_USER=postgres
+      - TEST_DATABASE_PASSWORD=postgres
+      - TEST_DATABASE_HOST=db
+      - TEST_DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - STAGE=36
       - MEMORY_PRESSURE_TEST_ENABLED=true
@@ -56,10 +65,11 @@ services:
         reservations:
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
     labels:
       - "stage=36"
       - "test=memory-pressure"

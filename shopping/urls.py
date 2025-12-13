@@ -418,6 +418,13 @@ urlpatterns = [
     path("self-healing/", include("selfhealing.api.django.urls", namespace="selfhealing")),
 ]
 
+# ==========================================================================
+# Memory Test API (Stage 36 Real - 실제 HTTP 메모리 압박 테스트)
+# WARNING: 프로덕션에서는 MEMORY_TEST_ENABLED=false로 비활성화!
+# ==========================================================================
+from shopping.views.memory_test_views import memory_test_urlpatterns
+urlpatterns.append(path("test/memory/", include(memory_test_urlpatterns)))
+
 """
 생성되는 URL 패턴:
 
