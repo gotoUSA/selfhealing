@@ -102,7 +102,11 @@ MULTI_KEY_BATCH_SIZE = 100
 REQUESTS_PER_KEY = 100
 
 # Response time targets
-TARGET_RESPONSE_TIME_MS = 500
+# 시뮬레이션(in-memory): 응답시간은 의미 없음 (프로세스 내부 락)
+# Redis 연동 후: p95 < 50~100ms 목표
+TARGET_RESPONSE_TIME_MS_SIMULATION = 50  # 시뮬레이션용 (느슨)
+TARGET_RESPONSE_TIME_MS_REDIS = 100      # Redis 연동 후 실제 목표
+TARGET_RESPONSE_TIME_MS = TARGET_RESPONSE_TIME_MS_SIMULATION  # 현재 환경
 
 
 # =============================================================================
@@ -132,10 +136,19 @@ class CacheEntry:
 
     @property
     def should_early_refresh(self) -> bool:
-        """Check if should do probabilistic early refresh"""
+        """
+        Check if should do probabilistic early refresh.
+        
+        IMPORTANT: Early refresh는 "만료 전(pre-expiry)"에만 발생해야 함.
+        만료 후는 "miss recovery"이지 "early refresh"가 아님.
+        (Facebook XFetch 논문 정의 준수)
+        """
+        # 만료된 경우는 early refresh 대상이 아님 (miss recovery로 처리)
         if self.is_expired:
-            return True
-        # Random probability increases as TTL decreases
+            return False
+        
+        # TTL 만료 임박 시 확률적 early refresh
+        # 확률은 만료까지 남은 시간에 반비례하여 증가
         if self.time_to_expiry < CACHE_EARLY_EXPIRY_DELTA_S:
             probability = (CACHE_EARLY_EXPIRY_DELTA_S - self.time_to_expiry) / CACHE_EARLY_EXPIRY_DELTA_S
             return random.random() < probability * CACHE_EARLY_EXPIRY_PROBABILITY
@@ -379,8 +392,10 @@ class SimulatedCache:
 
     def get_with_early_refresh(self, key: str, fetch_fn: Callable[[], Any] = None) -> Tuple[Any, bool, float]:
         """
-        Get value with probabilistic early expiration.
+        Get value with probabilistic early expiration (XFetch pattern).
+        
         Background refresh before TTL expiry to prevent stampede.
+        Early refresh는 만료 전에만 발생하며, 만료 후는 일반 miss 경로로 처리.
         """
         start = time.time()
 
@@ -388,48 +403,69 @@ class SimulatedCache:
             entry = self._cache.get(key)
 
             if entry:
-                # Check for early refresh opportunity
+                # Early refresh는 만료 전(pre-expiry)에만 트리거
+                # should_early_refresh가 이미 is_expired=True면 False 반환하도록 수정됨
                 if entry.should_early_refresh and key not in self._refreshing_keys:
-                    _stats.early_refresh_triggers += 1
-                    # Trigger background refresh
+                    with _stats_lock:
+                        _stats.early_refresh_triggers += 1
+                    # Trigger background refresh (non-blocking)
                     self._trigger_background_refresh(key, fetch_fn)
 
+                # 만료되지 않았으면 캐시 히트
                 if not entry.is_expired:
                     entry.hit_count += 1
-                    _stats.cache_hits += 1
+                    with _stats_lock:
+                        _stats.cache_hits += 1
                     elapsed = time.time() - start
                     return entry.value, True, elapsed
 
-        # Cache miss - normal flow
-        _stats.cache_misses += 1
+        # Cache miss or expired - synchronous refresh
+        with _stats_lock:
+            _stats.cache_misses += 1
         return self._refresh_cache(key, fetch_fn, start)
 
     def _trigger_background_refresh(self, key: str, fetch_fn: Callable[[], Any] = None):
-        """Trigger background cache refresh"""
+        """
+        Trigger background cache refresh (pre-expiry).
+        
+        락 사용 및 통계 업데이트 시 thread-safety 보장.
+        """
 
         def refresh_task():
             try:
-                self._refreshing_keys.add(key)
+                # 락으로 보호하여 refreshing 상태 설정
+                with self._lock:
+                    if key in self._refreshing_keys:
+                        return  # 이미 다른 스레드가 갱신 중
+                    self._refreshing_keys.add(key)
+                
+                # DB 조회 (락 밖에서 - 블로킹 방지)
                 if fetch_fn:
                     value = fetch_fn()
                 else:
                     value = self._simulate_db_fetch(key)
 
+                # 캐시 업데이트 (락 안에서)
                 with self._lock:
                     now = time.time()
                     self._cache[key] = CacheEntry(
                         key=key, value=value, created_at=now, ttl_s=CACHE_TTL_S, expires_at=now + CACHE_TTL_S
                     )
 
-                _stats.early_refresh_success += 1
-                _stats.early_refresh_prevented_stampede += 1
+                # 통계 업데이트 (통계 락 사용)
+                with _stats_lock:
+                    _stats.early_refresh_success += 1
+                    _stats.early_refresh_prevented_stampede += 1
 
             finally:
-                self._refreshing_keys.discard(key)
+                # refreshing 상태 해제 (락으로 보호)
+                with self._lock:
+                    self._refreshing_keys.discard(key)
 
         # Start background thread
         thread = threading.Thread(target=refresh_task, daemon=True)
         thread.start()
+        return thread  # 테스트에서 완료 대기 가능하도록 반환
 
     def expire_key(self, key: str):
         """Force expire a cache key"""

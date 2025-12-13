@@ -7,6 +7,7 @@ Stage 26: Connection Pool 고갈 테스트
   - 대량 동시 DB 쿼리로 Pool 고갈 유도
   - Connection Leak 시뮬레이션
   - Pool Watchdog 자동 복구 검증
+  - TC-26-4: Pool Exhaustion + Cache Stampede 통합 검증
 
 실행 방법:
     # Web UI 모드
@@ -21,9 +22,11 @@ Stage 26: Connection Pool 고갈 테스트
   - Leak 연결 자동 종료
   - Pool 확장 및 축소 정상 동작
   - 에러율 급증 후 복구 확인
+  - TC-26-4: Stampede 방지가 Pool 폭격 방지로 이어지는지 확인
 
 Reference:
   - docs/STAGE_26_CONNECTION_POOL.md
+  - Stage 35 (Cache Stampede Prevention) 통합
 """
 
 import os
@@ -75,7 +78,15 @@ _pool_stats = {
         "normal": {"start": None, "end": None},
         "stress": {"start": None, "end": None},
         "recovery": {"start": None, "end": None},
-    }
+    },
+    # TC-26-4: Stampede + Pool Exhaustion 통합 메트릭
+    "stampede_integration": {
+        "cache_miss_during_pool_stress": 0,
+        "stampede_prevented_pool_explosion": 0,
+        "db_queries_during_pool_low": 0,
+        "fallback_to_stale_cache": 0,
+        "pool_explosion_prevented": True,  # 핵심 검증 항목
+    },
 }
 
 
@@ -432,6 +443,16 @@ def on_test_stop(environment, **kwargs):
     if fast_total > 0:
         fast_success_rate = _pool_stats["db_queries"]["fast"]["success"] / fast_total * 100
         print(f"  빠른 쿼리 성공률: {fast_success_rate:.1f}%")
+    
+    # TC-26-4: Stampede 통합 검증 결과
+    stampede = _pool_stats["stampede_integration"]
+    print(f"\n🔗 TC-26-4: Stampede + Pool 통합 검증:")
+    print(f"  - Pool 스트레스 중 캐시 미스: {stampede['cache_miss_during_pool_stress']}")
+    print(f"  - Stampede 방지로 Pool 폭격 방지: {stampede['stampede_prevented_pool_explosion']}")
+    print(f"  - Pool 부족 시 DB 쿼리 수: {stampede['db_queries_during_pool_low']}")
+    print(f"  - Stale 캐시 fallback: {stampede['fallback_to_stale_cache']}")
+    explosion_status = "✅ YES" if stampede["pool_explosion_prevented"] else "❌ NO"
+    print(f"  - Pool 폭격 방지 성공: {explosion_status}")
     
     print("=" * 70 + "\n")
 

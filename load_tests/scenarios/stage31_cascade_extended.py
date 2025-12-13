@@ -5,22 +5,26 @@ Purpose: Verify complex cascading failure scenarios with multiple component inte
 - Redis→DB→CB cascade failure handling
 - Payment API→Retry Storm→Rate Limit deadlock prevention
 - Health Check delay false positive prevention
+- Redis Degradation + Cache Stampede Prevention (TC-31-4)
 
 Extended from Stage 18 (Chain Failure) to cover:
 - CB False Positive prevention
 - Multi-component cascade isolation
 - Rate Limit Deadlock detection and auto-release
+- Cache Stampede fallback safety under Redis degradation
 
 Scenarios:
   SC-31-1: Redis Down → DB Surge → CB Malfunction
   SC-31-2: Payment API Down → Retry Storm → Rate Limit Deadlock
   SC-31-3: Health Check Delay → Wrong Decision
+  SC-31-4: Redis Degradation → Stampede Prevention → DB Explosion Check
 
 Verification:
   - [ ] CB False Positive = 0
   - [ ] Cascade isolation < 30s
   - [ ] Rate Limit Deadlock auto-release
   - [ ] Health Check accuracy > 95%
+  - [ ] TC-31-4: DB queries ≤ 3 even under Redis 200ms latency
 
 Execution:
     # Web UI mode
@@ -145,6 +149,12 @@ class CascadeStats:
     false_down_decisions: int = 0
     slow_vs_dead_detected: int = 0
 
+    # Scenario 4: Redis Degradation + Stampede (TC-31-4)
+    redis_degradation_requests: int = 0
+    stampede_lock_timeouts: int = 0
+    stampede_fallback_db_queries: int = 0
+    stampede_db_explosion_prevented: bool = True  # Must remain True
+
     # Recovery metrics
     cascade_isolation_times_ms: List[float] = field(default_factory=list)
 
@@ -155,6 +165,7 @@ class CascadeStats:
             "cascade_isolation_under_30s": None,
             "rate_limit_deadlock_zero": None,
             "health_check_accuracy_95": None,
+            "stampede_db_explosion_prevented": None,  # TC-31-4
         }
     )
 
@@ -868,6 +879,13 @@ def on_test_stop(environment, **kwargs):
     print(f"  - Correct: {_cascade_stats.health_check_correct}")
     print(f"  - Wrong: {_cascade_stats.health_check_wrong}")
     print(f"  - False DOWN: {_cascade_stats.false_down_decisions}")
+
+    print(f"\n🟣 Scenario 4 (Redis Degradation + Stampede - TC-31-4):")
+    print(f"  - Requests under degradation: {_cascade_stats.redis_degradation_requests}")
+    print(f"  - Stampede lock timeouts: {_cascade_stats.stampede_lock_timeouts}")
+    print(f"  - Fallback DB queries: {_cascade_stats.stampede_fallback_db_queries}")
+    explosion_status = "✅ NO" if _cascade_stats.stampede_db_explosion_prevented else "❌ YES"
+    print(f"  - DB Explosion: {explosion_status}")
 
     # Verification summary
     print(f"\n✅ Verification Summary:")

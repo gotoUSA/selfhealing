@@ -1,6 +1,7 @@
 # Stage 31-36: 기존 Stage 확장 및 고급 Chaos 테스트 계획서
 
 > 작성일: 2025-12-12
+> 업데이트: 2025-12-13 (TC-31-4, TC-26-4, Stage 35D 추가)
 > 기반 문서: STAGE_28_30_ADVANCED_CHAOS_PLAN.md Phase 2 섹션
 > 상태: **Stage 31-36 전체 구현 완료** ✅
 
@@ -10,12 +11,27 @@
 
 | Stage | 상태 | 구현 파일 | 테스트 |
 |-------|------|-----------|--------|
-| **31** | ✅ 완료 | `stage31_cascade_extended.py` | 23개 통과 |
+| **31** | ✅ 완료 | `stage31_cascade_extended.py` | 23개 통과 + TC-31-4 |
 | **32** | ✅ 완료 | `stage32_retry_storm_extended.py` | 34개 통과 |
 | **33** | ✅ 완료 | `stage33_jwt_cascade.py` | 31개 통과 |
 | **34** | ✅ 완료 | `stage34_db_deadlock.py` | 31개 통과 |
-| **35** | ✅ 완료 | `stage35_cache_stampede.py` | 30개 통과 |
+| **35** | ✅ 완료 | `stage35_cache_stampede.py` + `stage35_redis_stampede.py` + `stage35_distributed_test_v2.py` | 분산 락 검증 |
+| **35D** | ✅ 신규 | `STAGE_35D_OBSERVABILITY_CONTRACT.md` | 관측 가능성 계약 |
 | **36** | ✅ 완료 | `stage36_memory_pressure.py` | 40개 통과 |
+
+---
+
+## 🔗 Stage 35 Cross-Integration (2025-12-13 추가)
+
+Stage 35 (Cache Stampede)의 완성도를 높이기 위해 기존 Chaos 스테이지와 통합:
+
+| 통합 TC | 위치 | 목적 |
+|---------|------|------|
+| **TC-31-4** | Stage 31 | Redis Degradation + Stampede → DB 폭격 방지 검증 |
+| **TC-26-4** | Stage 26 | Pool Exhaustion + Stampede → Pool 폭격 방지 검증 |
+| **Stage 35D** | 별도 문서 | Observability Contract (메트릭/알림/로그/트레이스) |
+
+자세한 내용: [STAGE_35D_OBSERVABILITY_CONTRACT.md](./STAGE_35D_OBSERVABILITY_CONTRACT.md)
 
 ---
 
