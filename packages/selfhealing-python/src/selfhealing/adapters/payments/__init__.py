@@ -5,7 +5,7 @@ This module contains concrete implementations of PaymentProviderInterface
 for different payment gateways.
 
 Available Adapters:
-    - TossPaymentAdapter: Toss Payments (Korean PG)
+    - TossPaymentAdapter: Toss Payments integration (optional)
     - MockPaymentAdapter: Mock adapter for testing
 """
 

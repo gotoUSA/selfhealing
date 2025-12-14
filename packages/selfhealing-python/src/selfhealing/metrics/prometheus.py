@@ -27,16 +27,32 @@ except ImportError:
 
 
 # =============================================================================
-# Domain Constants (Single Source of Truth)
+# Domain Constants (Configurable)
 # =============================================================================
 
-DOMAINS: list = [
-    "payment",
-    "point",
-    "inventory",
-    "webhook",
+# Default domains - can be extended via register_domain()
+_registered_domains: list = [
+    "external_service",
+    "internal_process",
+    "async_task",
     "notification",
+    "data_sync",
 ]
+
+
+def get_domains() -> list:
+    """Get all registered domains."""
+    return _registered_domains.copy()
+
+
+def register_domain(domain: str) -> None:
+    """Register a new domain for metrics tracking."""
+    if domain not in _registered_domains:
+        _registered_domains.append(domain)
+
+
+# Backward compatibility alias
+DOMAINS = _registered_domains
 
 
 class SelfHealingMetrics:

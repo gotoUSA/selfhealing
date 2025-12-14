@@ -25,10 +25,6 @@ class FailureType(str, Enum):
     RATE_LIMIT = "rate_limit"
     UNKNOWN = "unknown"
 
-    # Legacy aliases for backward compatibility
-    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
-
 
 class OperationStatus(str, Enum):
     """Status of a failed operation in the DLQ."""
@@ -58,13 +54,6 @@ class DomainType(str, Enum):
     NOTIFICATION = "notification"
     DATA_SYNC = "data_sync"
     GENERAL = "general"
-
-    # Legacy aliases for backward compatibility
-    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-    ORDER = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
-    SHIPPING = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-    USER = "internal_process"  # @deprecated: use INTERNAL_PROCESS
 
 
 @dataclass

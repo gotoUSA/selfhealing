@@ -95,32 +95,6 @@ class SLAConfig:
             result["default"] = timedelta(hours=self.default_hours)
         return result
 
-    # Legacy property accessors for backward compatibility
-    @property
-    def payment_hours(self) -> int:
-        """@deprecated: use thresholds_by_domain.get('payment', default_hours)"""
-        return self.thresholds_by_domain.get("payment", self.default_hours)
-
-    @property
-    def point_hours(self) -> int:
-        """@deprecated: use thresholds_by_domain.get('point', default_hours)"""
-        return self.thresholds_by_domain.get("point", self.default_hours)
-
-    @property
-    def inventory_hours(self) -> int:
-        """@deprecated: use thresholds_by_domain.get('inventory', default_hours)"""
-        return self.thresholds_by_domain.get("inventory", self.default_hours)
-
-    @property
-    def webhook_hours(self) -> int:
-        """@deprecated: use thresholds_by_domain.get('webhook', default_hours)"""
-        return self.thresholds_by_domain.get("webhook", self.default_hours)
-
-    @property
-    def notification_hours(self) -> int:
-        """@deprecated: use thresholds_by_domain.get('notification', default_hours)"""
-        return self.thresholds_by_domain.get("notification", self.default_hours)
-
 
 @dataclass
 class RateLimitConfig:
@@ -138,8 +112,8 @@ class IdempotencyConfig:
     """Configuration for idempotency service."""
 
     default_cache_ttl: int = 60
-    payment_cache_ttl: int = 300
-    webhook_cache_ttl: int = 60
+    extended_cache_ttl: int = 300  # For operations requiring longer TTL
+    short_cache_ttl: int = 60  # For short-lived operations
     clock_skew_tolerance_seconds: float = 5.0  # Stage 23: Clock skew tolerance
 
 

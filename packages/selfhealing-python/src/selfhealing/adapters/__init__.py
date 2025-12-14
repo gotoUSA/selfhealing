@@ -12,7 +12,7 @@ Available Adapters:
         - DjangoSecurityIncidentRepository
 
     Payment Adapters:
-        - TossPaymentAdapter (Toss Payments - Korean PG)
+        - PaymentProviderAdapter (Base for payment integrations)
         - MockPaymentAdapter (Testing)
 
     Cache Adapters:

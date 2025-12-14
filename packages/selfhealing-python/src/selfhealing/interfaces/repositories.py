@@ -45,13 +45,6 @@ class FailedOperationDomain(str, Enum):
     DATA_SYNC = "data_sync"  # Data synchronization failures
     CUSTOM = "custom"  # Extension point for custom domains
 
-    # Legacy aliases for backward compatibility (deprecated)
-    # These map to the new domain-neutral values but retain old names
-    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-    POINT = "internal_process"  # @deprecated: use INTERNAL_PROCESS
-    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
-    WEBHOOK = "external_service"  # @deprecated: use EXTERNAL_SERVICE
-
 
 class FailedOperationStatus(str, Enum):
     """State machine for DLQ item lifecycle"""
@@ -86,10 +79,6 @@ class SecurityIncidentType(str, Enum):
     SUSPICIOUS_ACTIVITY = "suspicious_activity"
     REPLAY_ATTACK = "replay_attack"
     INJECTION_ATTEMPT = "injection_attempt"
-
-    # Legacy aliases for backward compatibility (deprecated)
-    WEBHOOK_SIGNATURE_INVALID = "signature_invalid"  # @deprecated: use SIGNATURE_INVALID
-    PAYMENT_AMOUNT_TAMPERED = "data_tampered"  # @deprecated: use DATA_TAMPERED
 
 
 class SecuritySeverity(str, Enum):
@@ -138,17 +127,6 @@ class FailedOperationData:
 
     # Snapshot Data
     snapshot_data: dict[str, Any] = field(default_factory=dict)
-
-    # Legacy accessors for backward compatibility
-    @property
-    def order_id(self) -> Optional[int]:
-        """@deprecated: use entity_refs.get('order_id')"""
-        return self.entity_refs.get("order_id")
-
-    @property
-    def payment_id(self) -> Optional[int]:
-        """@deprecated: use entity_refs.get('payment_id')"""
-        return self.entity_refs.get("payment_id")
 
     # Error Information
     error_code: str = ""
@@ -278,17 +256,6 @@ class SecurityIncidentData:
     investigation_notes: str = ""
     resolved_at: Optional[datetime] = None
 
-    # Legacy accessors for backward compatibility
-    @property
-    def order_id(self) -> Optional[int]:
-        """@deprecated: use entity_refs.get('order_id')"""
-        return self.entity_refs.get("order_id")
-
-    @property
-    def payment_id(self) -> Optional[int]:
-        """@deprecated: use entity_refs.get('payment_id')"""
-        return self.entity_refs.get("payment_id")
-
     # Lifecycle
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -328,8 +295,7 @@ class FailedOperationRepository(ABC):
         failure_type: str,
         error_message: str = "",
         error_code: str = "",
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, int]] = None,
         user_id: Optional[int] = None,
         snapshot_data: Optional[dict[str, Any]] = None,
         request_data: Optional[dict[str, Any]] = None,
@@ -792,8 +758,7 @@ class SecurityIncidentRepository(ABC):
         source_ip: Optional[str] = None,
         user_agent: str = "",
         user_id: Optional[int] = None,
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, int]] = None,
         raw_payload: Optional[dict[str, Any]] = None,
     ) -> SecurityIncidentData:
         """Create a new security incident"""

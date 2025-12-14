@@ -59,8 +59,8 @@ class ProviderRegistry:
     _cache_instances: Dict[str, Any] = {}
     _queue_instances: Dict[str, Any] = {}
 
-    # Default provider names
-    _default_payment: str = "toss"
+    # Default provider names (None = no default, must be configured)
+    _default_payment: Optional[str] = None
     _default_cache: str = "redis"
     _default_queue: str = "celery"
 

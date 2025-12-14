@@ -4,12 +4,15 @@ Idempotency Service
 Provides idempotency key management for safe retry operations.
 Ensures that retried operations produce the same result as the original.
 
-Idempotency Key Format by Domain:
-- Payment: `toss_order_id` + `payment_key`
-- Webhook: `event_id` from PG
-- Points: `order_id` + `type` + `timestamp`
-- Inventory: `order_item_id` + `action`
-- Notification: `user_id` + `type` + `reference_id`
+Idempotency Key Format Examples (domain-neutral):
+- Operation: `entity_type` + `entity_id` + `action`
+- Event: `event_id` or `event_type:entity_id`
+- Resource: `resource_type` + `resource_id` + `operation`
+
+Usage:
+    service = IdempotencyService()
+    key = IdempotencyKey.for_operation("order", 123, "process")
+    result = service.check(key, lookup_fn)
 
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7
 """
@@ -37,13 +40,13 @@ T = TypeVar("T")
 
 
 class IdempotencyDomain(Enum):
-    """Domains that support idempotency checking."""
+    """Domains that support idempotency checking (domain-neutral)."""
 
-    PAYMENT = "payment"
-    WEBHOOK = "webhook"
-    POINT = "point"
-    INVENTORY = "inventory"
-    NOTIFICATION = "notification"
+    EXTERNAL_SERVICE = "external_service"
+    INTERNAL_PROCESS = "internal_process"
+    ASYNC_TASK = "async_task"
+    EVENT = "event"
+    CUSTOM = "custom"
 
 
 @dataclass
@@ -70,115 +73,104 @@ class IdempotencyKey:
         return hashlib.sha256(self.cache_key.encode()).hexdigest()[:32]
 
     @classmethod
-    def for_payment(cls, order_id: int, amount: int) -> "IdempotencyKey":
+    def for_operation(
+        cls,
+        entity_type: str,
+        entity_id: int,
+        operation: str,
+        domain: IdempotencyDomain = IdempotencyDomain.EXTERNAL_SERVICE,
+    ) -> "IdempotencyKey":
         """
-        Create an idempotency key for payment operations.
+        Create an idempotency key for a generic operation.
 
         Args:
-            order_id: The order ID
-            amount: The payment amount in KRW
+            entity_type: Type of entity (e.g., "order", "user", "product")
+            entity_id: The entity ID
+            operation: The operation being performed (e.g., "process", "update")
+            domain: The domain category
 
         Returns:
-            IdempotencyKey for the payment
+            IdempotencyKey for the operation
         """
-        key = f"{order_id}:{amount}"
+        key = f"{entity_type}:{entity_id}:{operation}"
         return cls(
-            domain=IdempotencyDomain.PAYMENT,
-            key=key,
-            components={"order_id": order_id, "amount": amount},
-        )
-
-    @classmethod
-    def for_payment_confirm(cls, payment_key: str, order_id: int, amount: int) -> "IdempotencyKey":
-        """
-        Create an idempotency key for payment confirmation.
-
-        Args:
-            payment_key: Toss payment key
-            order_id: The order ID
-            amount: The payment amount
-
-        Returns:
-            IdempotencyKey for payment confirmation
-        """
-        key = f"confirm:{payment_key}:{order_id}:{amount}"
-        return cls(
-            domain=IdempotencyDomain.PAYMENT,
+            domain=domain,
             key=key,
             components={
-                "payment_key": payment_key,
-                "order_id": order_id,
-                "amount": amount,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "operation": operation,
             },
         )
 
     @classmethod
-    def for_webhook(cls, event_id: str) -> "IdempotencyKey":
+    def for_event(cls, event_id: str) -> "IdempotencyKey":
         """
-        Create an idempotency key for webhook processing.
+        Create an idempotency key for event processing.
 
         Args:
-            event_id: The unique event ID from the PG
+            event_id: The unique event ID
 
         Returns:
-            IdempotencyKey for the webhook
+            IdempotencyKey for the event
         """
         return cls(
-            domain=IdempotencyDomain.WEBHOOK,
+            domain=IdempotencyDomain.EVENT,
             key=event_id,
             components={"event_id": event_id},
         )
 
     @classmethod
-    def for_point_operation(
+    def for_resource_action(
         cls,
-        order_id: int,
-        point_type: str,
-        amount: int,
+        resource_type: str,
+        resource_id: int,
+        action: str,
+        amount: Optional[int] = None,
     ) -> "IdempotencyKey":
         """
-        Create an idempotency key for point operations.
+        Create an idempotency key for resource actions.
 
         Args:
-            order_id: The order ID
-            point_type: Type of point operation (earn, use, refund)
-            amount: Point amount
+            resource_type: Type of resource
+            resource_id: The resource ID
+            action: The action being performed
+            amount: Optional amount for the action
 
         Returns:
-            IdempotencyKey for the point operation
+            IdempotencyKey for the resource action
         """
-        key = f"{order_id}:{point_type}:{amount}"
+        if amount is not None:
+            key = f"{resource_type}:{resource_id}:{action}:{amount}"
+        else:
+            key = f"{resource_type}:{resource_id}:{action}"
         return cls(
-            domain=IdempotencyDomain.POINT,
+            domain=IdempotencyDomain.INTERNAL_PROCESS,
             key=key,
             components={
-                "order_id": order_id,
-                "point_type": point_type,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "action": action,
                 "amount": amount,
             },
         )
 
     @classmethod
-    def for_inventory(
-        cls,
-        order_item_id: int,
-        action: str,
-    ) -> "IdempotencyKey":
+    def custom(cls, key: str, **components: Any) -> "IdempotencyKey":
         """
-        Create an idempotency key for inventory operations.
+        Create a custom idempotency key.
 
         Args:
-            order_item_id: The order item ID
-            action: The action (deduct, restore)
+            key: The raw key string
+            **components: Key components for debugging
 
         Returns:
-            IdempotencyKey for the inventory operation
+            IdempotencyKey with custom domain
         """
-        key = f"{order_item_id}:{action}"
         return cls(
-            domain=IdempotencyDomain.INVENTORY,
+            domain=IdempotencyDomain.CUSTOM,
             key=key,
-            components={"order_item_id": order_item_id, "action": action},
+            components=components,
         )
 
 
@@ -203,31 +195,20 @@ class IdempotencyService:
     Provides both cache-based (fast) and database-based (reliable)
     idempotency checking.
 
-    For framework-agnostic usage, provide lookup callbacks for each domain
-    you need to check. If not provided, the service will try to import
-    from shopping.models (Django fallback).
+    For framework-agnostic usage, provide lookup callbacks when calling check().
 
     Example:
         # Framework-agnostic usage with TimeProvider
         from selfhealing.core.time_provider import MockTimeProvider
 
-        service = IdempotencyService(
-            payment_lookup=my_payment_lookup_func,
-            webhook_lookup=my_webhook_lookup_func,
-            time_provider=MockTimeProvider(),  # For testing
-        )
-
-        # Django fallback (default)
-        service = IdempotencyService()
+        service = IdempotencyService(time_provider=MockTimeProvider())
+        key = IdempotencyKey.for_operation("order", 123, "process")
+        result = service.check(key, lookup_fn=my_lookup)
     """
 
     def __init__(
         self,
         cache_ttl: int | None = None,
-        payment_lookup: Optional[Callable[[int, int], Any]] = None,
-        payment_confirm_lookup: Optional[Callable[[str, int, int], Any]] = None,
-        webhook_lookup: Optional[Callable[[str], bool]] = None,
-        point_lookup: Optional[Callable[[int, str, int], Any]] = None,
         time_provider: Optional["TimeProvider"] = None,
         clock_skew_tolerance_seconds: Optional[float] = None,
     ):
@@ -236,11 +217,7 @@ class IdempotencyService:
 
         Args:
             cache_ttl: Custom cache TTL in seconds
-            payment_lookup: Callback(order_id, amount) -> Payment or None
-            payment_confirm_lookup: Callback(payment_key, order_id, amount) -> Payment or None
-            webhook_lookup: Callback(event_id) -> bool (exists)
-            point_lookup: Callback(order_id, point_type, amount) -> PointHistory or None
-            time_provider: TimeProvider for testable time operations (Stage 23)
+            time_provider: TimeProvider for testable time operations
             clock_skew_tolerance_seconds: Clock skew tolerance for distributed checks
         """
         from selfhealing.core.config import get_config
@@ -248,10 +225,10 @@ class IdempotencyService:
 
         config = get_config()
         self._default_cache_ttl = config.idempotency.default_cache_ttl
-        self._payment_cache_ttl = config.idempotency.payment_cache_ttl
+        self._extended_cache_ttl = config.idempotency.extended_cache_ttl
         self.cache_ttl = cache_ttl or self._default_cache_ttl
 
-        # Stage 23: Clock skew tolerance
+        # Clock skew tolerance
         self._clock_skew_tolerance = (
             clock_skew_tolerance_seconds
             if clock_skew_tolerance_seconds is not None
@@ -259,21 +236,15 @@ class IdempotencyService:
         )
         self._time_provider: TimeProvider = time_provider or get_time_provider()
 
-        # Store lookup callbacks
-        self._payment_lookup = payment_lookup
-        self._payment_confirm_lookup = payment_confirm_lookup
-        self._webhook_lookup = webhook_lookup
-        self._point_lookup = point_lookup
-
     @property
     def DEFAULT_CACHE_TTL(self) -> int:
-        """Default TTL for cache-based idempotency (for backward compatibility)."""
+        """Default TTL for cache-based idempotency."""
         return self._default_cache_ttl
 
     @property
-    def PAYMENT_CACHE_TTL(self) -> int:
-        """Extended TTL for payment operations (for backward compatibility)."""
-        return self._payment_cache_ttl
+    def EXTENDED_CACHE_TTL(self) -> int:
+        """Extended TTL for operations requiring longer TTL."""
+        return self._extended_cache_ttl
 
     @property
     def clock_skew_tolerance(self) -> float:
@@ -302,7 +273,7 @@ class IdempotencyService:
         """
         Check if a timestamp is within acceptable clock skew tolerance.
 
-        Useful for validating incoming webhooks or API requests where
+        Useful for validating incoming events or API requests where
         the timestamp may differ due to clock skew between systems.
 
         Args:
@@ -320,296 +291,110 @@ class IdempotencyService:
             timedelta(seconds=tolerance),
         )
 
-    def check_payment(
+    def check(
         self,
-        order_id: int,
-        amount: int,
+        key: IdempotencyKey,
+        lookup_fn: Optional[Callable[..., Any]] = None,
+        cache_ttl: Optional[int] = None,
     ) -> IdempotencyResult:
         """
-        Check if a payment for this order/amount already exists.
+        Check if an operation has already been processed.
 
         Args:
-            order_id: The order ID
-            amount: The payment amount
+            key: The idempotency key to check
+            lookup_fn: Optional callback to check database
+            cache_ttl: Optional custom TTL for cache
 
         Returns:
             IdempotencyResult with duplicate status
 
         Note:
             Gracefully degrades to DB-only check if Redis is unavailable.
-            This ensures the service works even during cache failures.
         """
-        key = IdempotencyKey.for_payment(order_id, amount)
-
-        # Get lookup function (injected or Django fallback)
-        lookup = self._payment_lookup
-        if lookup is None:
-            try:
-                from shopping.models.payment import Payment
-
-                def lookup(oid: int, amt: int):
-                    return Payment.objects.filter(
-                        order_id=oid,
-                        amount=amt,
-                        status__in=["done", "in_progress", "ready"],
-                    ).first()
-
-            except ImportError:
-                logger.warning("[Idempotency] No payment lookup configured and shopping module not available")
-                return IdempotencyResult(
-                    is_duplicate=False,
-                    message="Payment check skipped - no lookup configured",
-                )
+        ttl = cache_ttl or self.cache_ttl
 
         # Check cache first (fast path) with graceful degradation
         try:
-            cached_payment_id = cache.get(key.cache_key)
-            if cached_payment_id:
-                # Cache hit - verify record still exists
-                logger.debug(f"[Idempotency] Cache hit for payment: {key.key}")
+            cached_value = cache.get(key.cache_key)
+            if cached_value:
+                logger.debug(f"[Idempotency] Cache hit: {key.key}")
                 return IdempotencyResult(
                     is_duplicate=True,
-                    existing_record=cached_payment_id,
-                    message="Payment found in cache",
+                    existing_record=cached_value,
+                    message="Found in cache",
                 )
         except Exception as e:
-            # Redis unavailable - fall back to DB-only check
             logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
 
-        # Check database (reliable path)
-        existing = lookup(order_id, amount)
-
-        if existing:
-            # Update cache for future lookups (best-effort)
+        # Check database if lookup provided
+        if lookup_fn:
             try:
-                cache.set(key.cache_key, existing.id, timeout=self.PAYMENT_CACHE_TTL)
-            except Exception:
-                pass  # Cache update is optional
-            logger.debug(f"[Idempotency] DB hit for payment: {key.key}")
-            return IdempotencyResult(
-                is_duplicate=True,
-                existing_record=existing,
-                message="Payment found in database",
-            )
+                existing = lookup_fn(**key.components)
+                if existing:
+                    # Update cache for future lookups (best-effort)
+                    try:
+                        record_id = getattr(existing, "id", existing)
+                        cache.set(key.cache_key, record_id, timeout=ttl)
+                    except Exception:
+                        pass
+                    logger.debug(f"[Idempotency] DB hit: {key.key}")
+                    return IdempotencyResult(
+                        is_duplicate=True,
+                        existing_record=existing,
+                        message="Found in database",
+                    )
+            except Exception as e:
+                logger.warning(f"[Idempotency] Lookup failed: {e}")
 
         return IdempotencyResult(
             is_duplicate=False,
-            message="No existing payment found",
+            message="Not found",
         )
 
-    def check_payment_confirm(
-        self,
-        payment_key: str,
-        order_id: int,
-        amount: int,
-    ) -> IdempotencyResult:
+    def check_event(self, event_id: str, exists_fn: Optional[Callable[[str], bool]] = None) -> IdempotencyResult:
         """
-        Check if a payment confirmation already succeeded.
+        Check if an event has already been processed.
 
         Args:
-            payment_key: Toss payment key
-            order_id: The order ID
-            amount: The payment amount
+            event_id: The unique event ID
+            exists_fn: Optional callback(event_id) -> bool to check if event exists
 
         Returns:
             IdempotencyResult with duplicate status
-
-        Note:
-            Gracefully degrades to DB-only check if Redis is unavailable.
         """
-        key = IdempotencyKey.for_payment_confirm(payment_key, order_id, amount)
-
-        # Get lookup function (injected or Django fallback)
-        lookup = self._payment_confirm_lookup
-        if lookup is None:
-            try:
-                from shopping.models.payment import Payment
-
-                def lookup(pkey: str, oid: int, amt: int):
-                    return Payment.objects.filter(
-                        payment_key=pkey,
-                        order_id=oid,
-                        amount=amt,
-                        status="done",
-                    ).first()
-
-            except ImportError:
-                logger.warning("[Idempotency] No payment confirm lookup configured and shopping module not available")
-                return IdempotencyResult(
-                    is_duplicate=False,
-                    message="Payment confirm check skipped - no lookup configured",
-                )
-
-        # Check cache first with graceful degradation
-        try:
-            cached_payment_id = cache.get(key.cache_key)
-            if cached_payment_id:
-                logger.info(f"[Idempotency] Duplicate confirm detected (cache): {key.key}")
-                return IdempotencyResult(
-                    is_duplicate=True,
-                    existing_record=cached_payment_id,
-                    message="Payment already confirmed (cached)",
-                )
-        except Exception as e:
-            # Redis unavailable - fall back to DB-only check
-            logger.warning(f"[Idempotency] Cache unavailable for confirm check, falling back to DB: {e}")
-
-        # Check database
-        existing = lookup(payment_key, order_id, amount)
-
-        if existing:
-            try:
-                cache.set(key.cache_key, getattr(existing, "id", existing), timeout=self.PAYMENT_CACHE_TTL)
-            except Exception:
-                pass  # Cache update is optional
-            logger.info(f"[Idempotency] Duplicate confirm detected (DB): {key.key}")
-            return IdempotencyResult(
-                is_duplicate=True,
-                existing_record=existing,
-                message="Payment already confirmed (database)",
-            )
-
-        return IdempotencyResult(
-            is_duplicate=False,
-            message="Payment confirmation not yet processed",
-        )
-
-    def check_webhook(self, event_id: str) -> IdempotencyResult:
-        """
-        Check if a webhook event has already been processed.
-
-        Args:
-            event_id: The unique event ID from the PG
-
-        Returns:
-            IdempotencyResult with duplicate status
-
-        Note:
-            Gracefully degrades to DB-only check if Redis is unavailable.
-        """
-        key = IdempotencyKey.for_webhook(event_id)
-
-        # Get lookup function (injected or Django fallback)
-        lookup = self._webhook_lookup
-        if lookup is None:
-            try:
-                from shopping.models.webhook_event import WebhookEvent
-
-                def lookup(eid: str) -> bool:
-                    return WebhookEvent.objects.filter(event_id=eid).exists()
-
-            except ImportError:
-                logger.warning("[Idempotency] No webhook lookup configured and shopping module not available")
-                return IdempotencyResult(
-                    is_duplicate=False,
-                    message="Webhook check skipped - no lookup configured",
-                )
+        key = IdempotencyKey.for_event(event_id)
 
         # Check cache with graceful degradation
         try:
             if cache.get(key.cache_key):
-                logger.info(f"[Idempotency] Duplicate webhook detected (cache): {event_id}")
+                logger.info(f"[Idempotency] Duplicate event detected (cache): {event_id}")
                 return IdempotencyResult(
                     is_duplicate=True,
-                    message="Webhook already processed (cached)",
+                    message="Event already processed (cached)",
                 )
         except Exception as e:
-            # Redis unavailable - fall back to DB-only check
-            logger.warning(f"[Idempotency] Cache unavailable for webhook check, falling back to DB: {e}")
+            logger.warning(f"[Idempotency] Cache unavailable for event check: {e}")
 
-        # Check database
-        exists = lookup(event_id)
-
-        if exists:
-            # Cache for future lookups (best-effort)
+        # Check database if lookup provided
+        if exists_fn:
             try:
-                cache.set(key.cache_key, True, timeout=self.cache_ttl)
-            except Exception:
-                pass  # Cache update is optional
-            logger.info(f"[Idempotency] Duplicate webhook detected (DB): {event_id}")
-            return IdempotencyResult(
-                is_duplicate=True,
-                message="Webhook already processed (database)",
-            )
+                exists = exists_fn(event_id)
+                if exists:
+                    try:
+                        cache.set(key.cache_key, True, timeout=self.cache_ttl)
+                    except Exception:
+                        pass
+                    logger.info(f"[Idempotency] Duplicate event detected (DB): {event_id}")
+                    return IdempotencyResult(
+                        is_duplicate=True,
+                        message="Event already processed (database)",
+                    )
+            except Exception as e:
+                logger.warning(f"[Idempotency] Event lookup failed: {e}")
 
         return IdempotencyResult(
             is_duplicate=False,
-            message="Webhook not yet processed",
-        )
-
-    def check_point_operation(
-        self,
-        order_id: int,
-        point_type: str,
-        amount: int,
-    ) -> IdempotencyResult:
-        """
-        Check if a point operation has already been processed.
-
-        Args:
-            order_id: The order ID
-            point_type: Type of point operation
-            amount: Point amount
-
-        Returns:
-            IdempotencyResult with duplicate status
-
-        Note:
-            Gracefully degrades to DB-only check if Redis is unavailable.
-        """
-        key = IdempotencyKey.for_point_operation(order_id, point_type, amount)
-
-        # Get lookup function (injected or Django fallback)
-        lookup = self._point_lookup
-        if lookup is None:
-            try:
-                from shopping.models.point import PointHistory
-
-                def lookup(oid: int, ptype: str, amt: int):
-                    return PointHistory.objects.filter(
-                        order_id=oid,
-                        change_type=ptype,
-                        amount=amt,
-                    ).first()
-
-            except ImportError:
-                logger.warning("[Idempotency] No point lookup configured and shopping module not available")
-                return IdempotencyResult(
-                    is_duplicate=False,
-                    message="Point check skipped - no lookup configured",
-                )
-
-        # Check cache with graceful degradation
-        try:
-            cached_id = cache.get(key.cache_key)
-            if cached_id:
-                logger.info(f"[Idempotency] Duplicate point op detected: {key.key}")
-                return IdempotencyResult(
-                    is_duplicate=True,
-                    existing_record=cached_id,
-                    message="Point operation already processed (cached)",
-                )
-        except Exception as e:
-            # Redis unavailable - fall back to DB-only check
-            logger.warning(f"[Idempotency] Cache unavailable for point check, falling back to DB: {e}")
-
-        # Check database
-        existing = lookup(order_id, point_type, amount)
-
-        if existing:
-            try:
-                cache.set(key.cache_key, getattr(existing, "id", existing), timeout=self.cache_ttl)
-            except Exception:
-                pass  # Cache update is optional
-            return IdempotencyResult(
-                is_duplicate=True,
-                existing_record=existing,
-                message="Point operation already processed (database)",
-            )
-
-        return IdempotencyResult(
-            is_duplicate=False,
-            message="Point operation not yet processed",
+            message="Event not yet processed",
         )
 
     def mark_as_processed(

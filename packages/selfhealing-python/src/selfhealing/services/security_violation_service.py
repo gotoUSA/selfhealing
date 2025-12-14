@@ -39,10 +39,10 @@ logger = logging.getLogger(__name__)
 
 
 class ViolationType(str, Enum):
-    """Types of security violations that never self-heal."""
+    """Types of security violations that never self-heal (domain-neutral)."""
 
-    WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
-    PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered"
+    SIGNATURE_INVALID = "signature_invalid"
+    DATA_TAMPERED = "data_tampered"
     TOKEN_FORGED = "token_forged"
     UNAUTHORIZED_ACCESS = "unauthorized_access"
     RATE_LIMIT_ABUSE = "rate_limit_abuse"
@@ -61,8 +61,8 @@ class Severity(str, Enum):
 
 # Severity mapping for each violation type
 SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
-    ViolationType.WEBHOOK_SIGNATURE_INVALID: Severity.CRITICAL,
-    ViolationType.PAYMENT_AMOUNT_TAMPERED: Severity.CRITICAL,
+    ViolationType.SIGNATURE_INVALID: Severity.CRITICAL,
+    ViolationType.DATA_TAMPERED: Severity.CRITICAL,
     ViolationType.TOKEN_FORGED: Severity.CRITICAL,
     ViolationType.REPLAY_ATTACK: Severity.CRITICAL,
     ViolationType.UNAUTHORIZED_ACCESS: Severity.HIGH,
@@ -216,8 +216,7 @@ class SecurityViolationService:
         violation_type: str | ViolationType,
         request_info: dict[str, Any] | None = None,
         user_id: Optional[int] = None,
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, int]] = None,
         description: str = "",
         raw_request_data: dict[str, Any] | None = None,
     ) -> SecurityViolationResult:
@@ -234,8 +233,7 @@ class SecurityViolationService:
             violation_type: Type of security violation
             request_info: Request info dict with 'ip', 'user_agent' keys
             user_id: Associated user ID (if authenticated)
-            order_id: Related order ID (if applicable)
-            payment_id: Related payment ID (if applicable)
+            entity_refs: Related entity references (e.g., {"order_id": 123})
             description: Detailed description of the violation
             raw_request_data: Sanitized request data for forensics
 
@@ -260,8 +258,7 @@ class SecurityViolationService:
                 source_ip=source_ip,
                 user_agent=user_agent,
                 user_id=user_id,
-                order_id=order_id,
-                payment_id=payment_id,
+                entity_refs=entity_refs or {},
                 raw_payload=self._sanitize_request_data(raw_request_data),
             )
 
@@ -326,11 +323,11 @@ class SecurityViolationService:
             else:
                 action_taken = "Token forged but no user associated"
 
-        elif violation_type == ViolationType.WEBHOOK_SIGNATURE_INVALID.value:
+        elif violation_type == ViolationType.SIGNATURE_INVALID.value:
             if source_ip:
                 action_taken = self._log_suspicious_ip(source_ip)
             else:
-                action_taken = "Invalid webhook signature logged"
+                action_taken = "Invalid signature logged"
 
         elif violation_type == ViolationType.RATE_LIMIT_ABUSE.value:
             if source_ip:
@@ -338,8 +335,8 @@ class SecurityViolationService:
             else:
                 action_taken = "Rate limit abuse detected but no IP"
 
-        elif violation_type == ViolationType.PAYMENT_AMOUNT_TAMPERED.value:
-            action_taken = "Payment blocked, order frozen for investigation"
+        elif violation_type == ViolationType.DATA_TAMPERED.value:
+            action_taken = "Request blocked, entity frozen for investigation"
 
         elif violation_type == ViolationType.UNAUTHORIZED_ACCESS.value:
             if user_id:
