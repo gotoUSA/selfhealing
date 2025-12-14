@@ -10,8 +10,8 @@
 
 | 항목 | 상태 |
 |------|------|
-| 전체 진행 | ⬜ 미시작 |
-| 예상 소요 | 1시간 |
+| 전체 진행 | ✅ 완료 |
+| 완료일 | 2025-12-14 |
 | 위험도 | 중간 |
 
 ---
@@ -48,11 +48,11 @@ class ViolationType(str, Enum):
 
 ### 작업 체크리스트
 
-- [ ] `ViolationType.WEBHOOK_SIGNATURE_INVALID` → `SIGNATURE_INVALID`
-- [ ] `ViolationType.PAYMENT_AMOUNT_TAMPERED` → `DATA_TAMPERED`
-- [ ] `SEVERITY_BY_VIOLATION_TYPE` 매핑 업데이트
-- [ ] `_take_protective_action()` 분기 조건 업데이트
-- [ ] 비즈니스 메시지 중립화: `"Payment blocked, order frozen"` → `"Request blocked, entity frozen for investigation"`
+- [x] `ViolationType.WEBHOOK_SIGNATURE_INVALID` → `SIGNATURE_INVALID`
+- [x] `ViolationType.PAYMENT_AMOUNT_TAMPERED` → `DATA_TAMPERED`
+- [x] `SEVERITY_BY_VIOLATION_TYPE` 매핑 업데이트
+- [x] `_take_protective_action()` 분기 조건 업데이트
+- [x] 비즈니스 메시지 중립화: `"Payment blocked, order frozen"` → `"Request blocked, entity frozen for investigation"`
 
 ---
 
@@ -91,10 +91,10 @@ class FailedOperationDomain(str, Enum):
 
 ### 작업 체크리스트
 
-- [ ] `repositories.py`: `PAYMENT`, `POINT`, `INVENTORY`, `WEBHOOK` alias 제거
-- [ ] `types.py`: `FailureType.PAYMENT`, `INVENTORY` alias 제거
-- [ ] `types.py`: `DomainType.PAYMENT`, `ORDER`, `INVENTORY`, `SHIPPING`, `USER` alias 제거
-- [ ] 사용처 검색 및 마이그레이션
+- [x] `repositories.py`: `PAYMENT`, `POINT`, `INVENTORY`, `WEBHOOK` alias 제거 (이미 완료됨)
+- [x] `types.py`: `FailureType.PAYMENT`, `INVENTORY` alias 제거 (이미 완료됨)
+- [x] `types.py`: `DomainType.PAYMENT`, `ORDER`, `INVENTORY`, `SHIPPING`, `USER` alias 제거 (이미 완료됨)
+- [x] 사용처 검색 및 마이그레이션 확인
 
 ---
 
@@ -106,7 +106,7 @@ class FailedOperationDomain(str, Enum):
 @dataclass
 class FailedOperationData:
     entity_refs: dict[str, int] = field(default_factory=dict)
-    
+
     @property
     def order_id(self) -> Optional[int]:           # ❌ 제거 대상
         """@deprecated: use entity_refs.get('order_id')"""
@@ -130,13 +130,13 @@ class FailedOperationData:
 
 ### 작업 체크리스트
 
-- [ ] `FailedOperationData`: `order_id`, `payment_id` property 제거
-- [ ] `SecurityIncidentData`: `order_id`, `payment_id` property 제거
-- [ ] `FailedOperationRepository.create()`: `order_id`, `payment_id` 파라미터 → `entity_refs` 변경
-- [ ] `SecurityIncidentRepository.create()`: `order_id`, `payment_id` 파라미터 → `entity_refs` 변경
-- [ ] `SecurityViolationService.handle_violation()`: `order_id`, `payment_id` 파라미터 → `entity_refs` 변경
-- [ ] FastAPI routes 업데이트
-- [ ] SQLAlchemy adapters 업데이트
+- [x] `FailedOperationData`: `order_id`, `payment_id` property 제거 (이미 완료됨)
+- [x] `SecurityIncidentData`: `order_id`, `payment_id` property 제거 (이미 완료됨)
+- [x] `FailedOperationRepository.create()`: `entity_refs` dict 사용 (이미 완료됨)
+- [x] `SecurityIncidentRepository.create()`: `entity_refs` dict 사용 (이미 완료됨)
+- [x] `SecurityViolationService.handle_violation()`: `entity_refs` 파라미터 사용 (이미 완료됨)
+- [x] FastAPI routes 확인 완료
+- [x] SQLAlchemy adapters 확인 완료
 
 ---
 
@@ -175,9 +175,9 @@ def get_domains() -> list[str]:
 
 ### 작업 체크리스트
 
-- [ ] `DOMAINS` 상수 제거
-- [ ] `register_domain()`, `get_domains()` 함수 추가
-- [ ] 메트릭 수집 코드에서 동적 도메인 사용
+- [x] `DOMAINS` 상수 제거 (prometheus.py에서 레거시 alias 제거)
+- [x] `register_domain()`, `get_domains()` 함수 추가 (이미 존재)
+- [x] 메트릭 수집 코드에서 동적 도메인 사용
 
 ---
 
@@ -207,15 +207,16 @@ class SLAConfig:
 class SLAConfig:
     default_hours: int = 24
     thresholds_by_domain: dict[str, int] = field(default_factory=dict)
-    
+
     # 도메인별 property 완전 제거
     # 사용: config.get_threshold("payment") 또는 config.thresholds_by_domain["payment"]
 ```
 
 ### 작업 체크리스트
 
-- [ ] `SLAConfig`: `payment_hours`, `point_hours`, `inventory_hours`, `webhook_hours`, `notification_hours` property 제거
-- [ ] `IdempotencyConfig`: `payment_cache_ttl`, `webhook_cache_ttl` → `cache_ttl_by_domain: dict` 변경
+- [x] `SLAConfig`: `payment_hours`, `point_hours`, `inventory_hours`, `webhook_hours`, `notification_hours` property 제거 (이미 완료됨 - thresholds_by_domain dict 방식 사용)
+- [x] `IdempotencyConfig`: 중립적 TTL 필드 사용 (default_cache_ttl, extended_cache_ttl, short_cache_ttl)
+- [x] Django config_provider.py: thresholds_by_domain 방식으로 변경
 
 ---
 
@@ -227,11 +228,11 @@ class SLAConfig:
 @dataclass
 class StateSnapshot:
     states: Dict[str, Any] = field(default_factory=dict)
-    
+
     @property
     def order_status(self) -> Optional[str]:      # ❌ 제거 대상
         return self.states.get("order_status")
-    
+
     @property
     def payment_status(self) -> Optional[str]:    # ❌ 제거 대상
         return self.states.get("payment_status")
@@ -243,15 +244,15 @@ class StateSnapshot:
 @dataclass
 class StateSnapshot:
     states: Dict[str, Any] = field(default_factory=dict)
-    
+
     # 쇼핑 property 완전 제거
     # 사용: snapshot.get_state("order_status")
 ```
 
 ### 작업 체크리스트
 
-- [ ] `StateSnapshot`: `order_status`, `payment_status`, `user_points`, `product_stock` property/setter 제거
-- [ ] `ForensicContext.capture_state_before/after()`: 쇼핑 파라미터 제거, `**extra`만 사용
+- [x] `StateSnapshot`: 쇼핑 property 제거됨 (이미 완료 - states dict와 get_state()/set_state() 만 사용)
+- [x] `ForensicContext.capture_state_before/after()`: 쇼핑 파라미터 제거, `**states` kwargs만 사용
 
 ---
 
@@ -287,10 +288,10 @@ class IdempotencyDomain(Enum):
 
 ### 작업 체크리스트
 
-- [ ] `IdempotencyDomain` enum 중립화 또는 제거
-- [ ] `IdempotencyKey.for_payment()`, `for_webhook()` 등 → 범용 `IdempotencyKey.create(domain, **components)` 변경
-- [ ] `IdempotencyService.check_payment()`, `check_webhook()` 등 → 범용 `check(key, lookup_fn)` 변경
-- [ ] shopping import fallback 제거
+- [x] `IdempotencyDomain` enum 중립화 (이미 완료 - EXTERNAL_SERVICE, INTERNAL_PROCESS, ASYNC_TASK, EVENT, CUSTOM)
+- [x] `IdempotencyKey.for_operation()`, `for_event()`, `for_resource_action()` 범용 메서드 사용 (이미 완료)
+- [x] `IdempotencyService.check()` 범용 메서드 사용 (이미 완료)
+- [x] shopping import fallback 없음 확인
 
 ---
 
@@ -344,16 +345,17 @@ grep -rn --include="*.py" "DOMAINS.*=.*\[" src/selfhealing/
 
 ## 완료 조건
 
-- [ ] `SecurityIncidentType`/`ViolationType`에 `PAYMENT_*`, `WEBHOOK_*` 없음
-- [ ] `FailedOperationDomain`/`DomainType`/`FailureType`에 쇼핑 alias 없음
-- [ ] DTO에 `order_id`, `payment_id` property 없음
-- [ ] Repository interface에 `order_id`, `payment_id` 파라미터 없음
-- [ ] Metrics에 고정 DOMAINS 목록 없음
-- [ ] SLA config에 `payment_hours` 등 property 없음
-- [ ] StateSnapshot에 쇼핑 property 없음
-- [ ] IdempotencyDomain에 쇼핑 값 없음
-- [ ] IdempotencyService에 도메인 특화 메서드 없음
+- [x] `SecurityIncidentType`/`ViolationType`에 `PAYMENT_*`, `WEBHOOK_*` 없음
+- [x] `FailedOperationDomain`/`DomainType`/`FailureType`에 쇼핑 alias 없음
+- [x] DTO에 `order_id`, `payment_id` property 없음
+- [x] Repository interface에 `order_id`, `payment_id` 파라미터 없음 (entity_refs dict 사용)
+- [x] Metrics에 고정 DOMAINS 목록 없음 (동적 등록 방식)
+- [x] SLA config에 `payment_hours` 등 property 없음 (thresholds_by_domain dict 사용)
+- [x] StateSnapshot에 쇼핑 property 없음 (get_state()/set_state() 사용)
+- [x] IdempotencyDomain에 쇼핑 값 없음 (EXTERNAL_SERVICE 등 중립 값)
+- [x] IdempotencyService에 도메인 특화 메서드 없음
 
 ---
 
 *문서 생성일: 2025-12-14*
+*완료일: 2025-12-14*
