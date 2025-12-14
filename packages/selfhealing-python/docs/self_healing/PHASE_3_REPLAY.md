@@ -42,12 +42,12 @@ shopping/services/self_healing/
 ```python
 class ReplayHandler(ABC):
     """Abstract base class for domain-specific replay handlers."""
-
+    
     @abstractmethod
     def can_handle(self, failed_operation: FailedOperationData) -> bool:
         """Check if this handler can handle the given operation."""
         pass
-
+    
     @abstractmethod
     def replay(self, failed_operation: FailedOperationData) -> ReplayResult:
         """Attempt to replay the failed operation."""
@@ -56,10 +56,10 @@ class ReplayHandler(ABC):
 
 class DefaultReplayHandler(ReplayHandler):
     """Default handler that marks operations as requiring review."""
-
+    
     def can_handle(self, failed_operation: FailedOperationData) -> bool:
         return True  # Catch-all handler
-
+    
     def replay(self, failed_operation: FailedOperationData) -> ReplayResult:
         return ReplayResult(
             success=False,
@@ -133,7 +133,7 @@ from .replay_handlers import (
 def register_shopping_handlers():
     """Register shopping domain replay handlers with the core service."""
     replay_service = ReplayService()
-
+    
     replay_service.register_handler(PaymentReplayHandler())
     replay_service.register_handler(PointReplayHandler())
     replay_service.register_handler(WebhookReplayHandler())
