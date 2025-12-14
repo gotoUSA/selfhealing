@@ -702,7 +702,7 @@ class ControlAPIService:
 
         from selfhealing.core.timezone import now as get_now
         from selfhealing.services.metrics import (
-            DOMAINS,
+            get_registered_domains,
             update_dlq_pending_gauges,
             update_retry_success_rates,
         )
@@ -731,7 +731,7 @@ class ControlAPIService:
             pass
 
         # Calculate aggregate service counts
-        total_services = len(set(list(dlq_pending.keys()) + list(cb_states.keys()) + DOMAINS))
+        total_services = len(set(list(dlq_pending.keys()) + list(cb_states.keys()) + get_registered_domains()))
         healthy_services = sum(1 for s in cb_states.values() if s == "closed")
         degraded_services = sum(1 for s in cb_states.values() if s in ("open", "half_open"))
 
@@ -761,7 +761,7 @@ class ControlAPIService:
 
         # Build per-service metrics
         services_metrics = []
-        for domain in DOMAINS:
+        for domain in get_registered_domains():
             service_metric = {
                 "service_name": domain,
                 "failure_rate_5m": 0.0,

@@ -11,19 +11,23 @@ from typing import Optional, Dict, Any, TypedDict
 
 
 class FailureType(str, Enum):
-    """Types of failures that can be tracked and recovered."""
+    """Types of failures that can be tracked and recovered (domain-neutral)."""
 
     NETWORK = "network"
     DATABASE = "database"
     TIMEOUT = "timeout"
     VALIDATION = "validation"
     EXTERNAL_SERVICE = "external_service"
-    PAYMENT = "payment"
-    INVENTORY = "inventory"
+    INTERNAL_PROCESS = "internal_process"
+    DATA_INTEGRITY = "data_integrity"
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     RATE_LIMIT = "rate_limit"
     UNKNOWN = "unknown"
+
+    # Legacy aliases for backward compatibility
+    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
+    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
 
 
 class OperationStatus(str, Enum):
@@ -46,15 +50,21 @@ class CircuitState(str, Enum):
 
 
 class DomainType(str, Enum):
-    """Business domains that can be protected by self-healing."""
+    """Business domains that can be protected by self-healing (domain-neutral)."""
 
-    PAYMENT = "payment"
-    ORDER = "order"
-    INVENTORY = "inventory"
+    EXTERNAL_SERVICE = "external_service"
+    INTERNAL_PROCESS = "internal_process"
+    ASYNC_TASK = "async_task"
     NOTIFICATION = "notification"
-    SHIPPING = "shipping"
-    USER = "user"
+    DATA_SYNC = "data_sync"
     GENERAL = "general"
+
+    # Legacy aliases for backward compatibility
+    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
+    ORDER = "external_service"  # @deprecated: use EXTERNAL_SERVICE
+    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
+    SHIPPING = "external_service"  # @deprecated: use EXTERNAL_SERVICE
+    USER = "internal_process"  # @deprecated: use INTERNAL_PROCESS
 
 
 @dataclass

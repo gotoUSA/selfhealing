@@ -66,37 +66,79 @@ class RetryAttempt:
 
 @dataclass
 class StateSnapshot:
-    """Snapshot of entity states for forensic analysis."""
+    """Snapshot of entity states for forensic analysis (domain-neutral).
+    
+    All state data is stored in a generic `states` dictionary.
+    Use `set_state()` and `get_state()` methods for access.
+    
+    Example:
+        snapshot = StateSnapshot()
+        snapshot.set_state("order_status", "pending")
+        snapshot.set_state("payment_status", "completed")
+    """
 
-    order_status: Optional[str] = None
-    payment_status: Optional[str] = None
-    user_points: Optional[int] = None
-    product_stock: Optional[Dict[int, int]] = None
+    states: Dict[str, Any] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    def set_state(self, key: str, value: Any) -> None:
+        """Set a state value."""
+        self.states[key] = value
+
+    def get_state(self, key: str, default: Any = None) -> Any:
+        """Get a state value."""
+        return self.states.get(key, default)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage."""
-        result = {
-            "order_status": self.order_status,
-            "payment_status": self.payment_status,
-            "user_points": self.user_points,
-            "product_stock": self.product_stock,
-        }
+        result = dict(self.states)
         result.update(self.extra)
         return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StateSnapshot":
         """Create from dictionary."""
-        known_keys = {"order_status", "payment_status", "user_points", "product_stock"}
-        extra = {k: v for k, v in data.items() if k not in known_keys}
-        return cls(
-            order_status=data.get("order_status"),
-            payment_status=data.get("payment_status"),
-            user_points=data.get("user_points"),
-            product_stock=data.get("product_stock"),
-            extra=extra,
-        )
+        return cls(states=dict(data), extra={})
+
+    # Legacy property accessors for backward compatibility
+    @property
+    def order_status(self) -> Optional[str]:
+        """@deprecated: use get_state('order_status')"""
+        return self.states.get("order_status")
+
+    @order_status.setter
+    def order_status(self, value: Optional[str]) -> None:
+        if value is not None:
+            self.states["order_status"] = value
+
+    @property
+    def payment_status(self) -> Optional[str]:
+        """@deprecated: use get_state('payment_status')"""
+        return self.states.get("payment_status")
+
+    @payment_status.setter
+    def payment_status(self, value: Optional[str]) -> None:
+        if value is not None:
+            self.states["payment_status"] = value
+
+    @property
+    def user_points(self) -> Optional[int]:
+        """@deprecated: use get_state('user_points')"""
+        return self.states.get("user_points")
+
+    @user_points.setter
+    def user_points(self, value: Optional[int]) -> None:
+        if value is not None:
+            self.states["user_points"] = value
+
+    @property
+    def product_stock(self) -> Optional[Dict[int, int]]:
+        """@deprecated: use get_state('product_stock')"""
+        return self.states.get("product_stock")
+
+    @product_stock.setter
+    def product_stock(self, value: Optional[Dict[int, int]]) -> None:
+        if value is not None:
+            self.states["product_stock"] = value
 
 
 @dataclass
@@ -207,14 +249,22 @@ class ForensicContext:
         product_stocks: Optional[Dict[int, int]] = None,
         **extra: Any,
     ) -> None:
-        """Capture state snapshot before operation."""
-        self.state_before = StateSnapshot(
-            order_status=order_status,
-            payment_status=payment_status,
-            user_points=user_points,
-            product_stock=product_stocks,
-            extra=extra,
-        )
+        """Capture state snapshot before operation.
+        
+        Note: Named parameters are for backward compatibility.
+        Use **extra for domain-neutral state capture.
+        """
+        states: Dict[str, Any] = {}
+        if order_status is not None:
+            states["order_status"] = order_status
+        if payment_status is not None:
+            states["payment_status"] = payment_status
+        if user_points is not None:
+            states["user_points"] = user_points
+        if product_stocks is not None:
+            states["product_stock"] = product_stocks
+        states.update(extra)
+        self.state_before = StateSnapshot(states=states)
 
     def capture_state_after(
         self,
@@ -224,14 +274,22 @@ class ForensicContext:
         product_stocks: Optional[Dict[int, int]] = None,
         **extra: Any,
     ) -> None:
-        """Capture state snapshot after operation (or failure)."""
-        self.state_after = StateSnapshot(
-            order_status=order_status,
-            payment_status=payment_status,
-            user_points=user_points,
-            product_stock=product_stocks,
-            extra=extra,
-        )
+        """Capture state snapshot after operation (or failure).
+        
+        Note: Named parameters are for backward compatibility.
+        Use **extra for domain-neutral state capture.
+        """
+        states: Dict[str, Any] = {}
+        if order_status is not None:
+            states["order_status"] = order_status
+        if payment_status is not None:
+            states["payment_status"] = payment_status
+        if user_points is not None:
+            states["user_points"] = user_points
+        if product_stocks is not None:
+            states["product_stock"] = product_stocks
+        states.update(extra)
+        self.state_after = StateSnapshot(states=states)
 
     @classmethod
     def from_metadata(cls, metadata: Dict[str, Any]) -> "ForensicContext":
@@ -489,7 +547,32 @@ def capture_forensic_context(
     return builder.build()
 
 
-def create_snapshot_data(
+def create_snapshot_data(**data: Any) -> Dict[str, Any]:
+    """
+    Create snapshot data for DLQ storage (domain-neutral).
+
+    This captures the essential data needed to recover the operation
+    without accessing the original records.
+
+    Args:
+        **data: Any key-value pairs to include in the snapshot
+
+    Returns:
+        Dictionary with snapshot data (only non-None values included)
+        
+    Example:
+        snapshot = create_snapshot_data(
+            entity_id=123,
+            entity_type="order",
+            status="pending",
+            amount="10000",
+        )
+    """
+    return {k: v for k, v in data.items() if v is not None}
+
+
+# Legacy function for backward compatibility
+def create_shopping_snapshot_data(
     order_id: Optional[int] = None,
     order_number: Optional[str] = None,
     order_status: Optional[str] = None,
@@ -509,13 +592,10 @@ def create_snapshot_data(
     **extra: Any,
 ) -> Dict[str, Any]:
     """
-    Create snapshot data for DLQ storage.
-
-    This captures the essential data needed to recover the operation
-    without accessing the original records.
-
-    Returns:
-        Dictionary with snapshot data
+    @deprecated: Use create_snapshot_data(**data) instead.
+    
+    Create snapshot data for DLQ storage (shopping domain specific).
+    Kept for backward compatibility.
     """
     snapshot: Dict[str, Any] = {}
 

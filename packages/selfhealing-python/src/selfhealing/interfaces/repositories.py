@@ -30,13 +30,27 @@ from typing import Any, Optional
 
 
 class FailedOperationDomain(str, Enum):
-    """Domain classification for failed operations"""
+    """
+    Domain classification for failed operations (domain-neutral).
+    
+    Core domains are framework-agnostic. Application-specific domains
+    (like 'payment', 'order') should be registered via adapter configuration.
+    """
 
-    PAYMENT = "payment"
-    POINT = "point"
-    INVENTORY = "inventory"
-    WEBHOOK = "webhook"
-    NOTIFICATION = "notification"
+    # Domain-neutral base types
+    EXTERNAL_SERVICE = "external_service"  # External API/service failures
+    INTERNAL_PROCESS = "internal_process"  # Internal processing failures
+    ASYNC_TASK = "async_task"  # Async/background task failures
+    NOTIFICATION = "notification"  # Notification delivery failures
+    DATA_SYNC = "data_sync"  # Data synchronization failures
+    CUSTOM = "custom"  # Extension point for custom domains
+
+    # Legacy aliases for backward compatibility (deprecated)
+    # These map to the new domain-neutral values but retain old names
+    PAYMENT = "external_service"  # @deprecated: use EXTERNAL_SERVICE
+    POINT = "internal_process"  # @deprecated: use INTERNAL_PROCESS
+    INVENTORY = "internal_process"  # @deprecated: use INTERNAL_PROCESS
+    WEBHOOK = "external_service"  # @deprecated: use EXTERNAL_SERVICE
 
 
 class FailedOperationStatus(str, Enum):
@@ -61,16 +75,21 @@ class CircuitBreakerStateEnum(str, Enum):
 
 
 class SecurityIncidentType(str, Enum):
-    """Types of security incidents"""
+    """Types of security incidents (domain-neutral)"""
 
-    WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
-    PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered"
+    # Domain-neutral incident types
+    SIGNATURE_INVALID = "signature_invalid"  # Generic signature validation failure
+    DATA_TAMPERED = "data_tampered"  # Generic data tampering detection
     TOKEN_FORGED = "token_forged"
     UNAUTHORIZED_ACCESS = "unauthorized_access"
     RATE_LIMIT_ABUSE = "rate_limit_abuse"
     SUSPICIOUS_ACTIVITY = "suspicious_activity"
     REPLAY_ATTACK = "replay_attack"
     INJECTION_ATTEMPT = "injection_attempt"
+
+    # Legacy aliases for backward compatibility (deprecated)
+    WEBHOOK_SIGNATURE_INVALID = "signature_invalid"  # @deprecated: use SIGNATURE_INVALID
+    PAYMENT_AMOUNT_TAMPERED = "data_tampered"  # @deprecated: use DATA_TAMPERED
 
 
 class SecuritySeverity(str, Enum):
@@ -112,13 +131,24 @@ class FailedOperationData:
     failure_type: str
     status: str
 
-    # References (IDs only - no model instances)
-    order_id: Optional[int] = None
-    payment_id: Optional[int] = None
+    # Generic entity references (domain-neutral)
+    # Usage: entity_refs={"order_id": 123, "payment_id": 456, "product_id": 789}
+    entity_refs: dict[str, int] = field(default_factory=dict)
     user_id: Optional[int] = None
 
     # Snapshot Data
     snapshot_data: dict[str, Any] = field(default_factory=dict)
+
+    # Legacy accessors for backward compatibility
+    @property
+    def order_id(self) -> Optional[int]:
+        """@deprecated: use entity_refs.get('order_id')"""
+        return self.entity_refs.get("order_id")
+
+    @property
+    def payment_id(self) -> Optional[int]:
+        """@deprecated: use entity_refs.get('payment_id')"""
+        return self.entity_refs.get("payment_id")
 
     # Error Information
     error_code: str = ""
@@ -236,9 +266,8 @@ class SecurityIncidentData:
     user_agent: str = ""
     user_id: Optional[int] = None
 
-    # References
-    order_id: Optional[int] = None
-    payment_id: Optional[int] = None
+    # Generic entity references (domain-neutral)
+    entity_refs: dict[str, int] = field(default_factory=dict)
 
     # Details
     description: str = ""
@@ -248,6 +277,17 @@ class SecurityIncidentData:
     assigned_to_id: Optional[int] = None
     investigation_notes: str = ""
     resolved_at: Optional[datetime] = None
+
+    # Legacy accessors for backward compatibility
+    @property
+    def order_id(self) -> Optional[int]:
+        """@deprecated: use entity_refs.get('order_id')"""
+        return self.entity_refs.get("order_id")
+
+    @property
+    def payment_id(self) -> Optional[int]:
+        """@deprecated: use entity_refs.get('payment_id')"""
+        return self.entity_refs.get("payment_id")
 
     # Lifecycle
     created_at: Optional[datetime] = None

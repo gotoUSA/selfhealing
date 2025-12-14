@@ -144,237 +144,37 @@ class DefaultReplayHandler(ReplayHandler):
         )
 
 
-class PaymentReplayHandler(ReplayHandler):
-    """
-    Replay handler for payment domain failures.
-
-    This is a configurable handler that can use an injected
-    payment recovery service or callback.
-    """
-
-    def __init__(self, recovery_callback: Callable[[int, int, int], str] | None = None):
-        """
-        Initialize payment replay handler.
-
-        Args:
-            recovery_callback: Optional callback(payment_id, order_id, attempt) -> task_id
-                               If not provided, will try to import from shopping.services
-        """
-        self._recovery_callback = recovery_callback
-
-    @property
-    def domain(self) -> str:
-        return "payment"
-
-    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
-        """Check if payment operation can be replayed."""
-        # Check snapshot_data for payment/order status
-        snapshot = failed_op.snapshot_data or {}
-
-        # Cannot replay if original payment is already completed
-        if snapshot.get("payment_is_paid"):
-            return False, "Payment is already completed"
-
-        # Cannot replay if order is cancelled
-        if snapshot.get("order_status") == "cancelled":
-            return False, "Order is cancelled"
-
-        # Cannot replay certain failure types
-        non_replayable_types = [
-            "AMOUNT_MISMATCH_PG_RESPONSE",
-            "SECURITY_SIGNATURE_INVALID",
-            "DUPLICATE_PAYMENT",
-        ]
-        if failed_op.failure_type in non_replayable_types:
-            return False, f"Failure type {failed_op.failure_type} cannot be replayed"
-
-        return True, ""
-
-    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
-        """Replay a payment operation."""
-        can_replay, reason = self.can_replay(failed_op)
-        if not can_replay:
-            return ReplayResult.failed(failed_op.id, reason)
-
-        try:
-            # Use injected callback or try to import from shopping
-            callback = self._recovery_callback
-            if callback is None:
-                try:
-                    from shopping.services.payment_recovery_service import get_payment_recovery_handler
-
-                    recovery_handler = get_payment_recovery_handler()
-                    callback = lambda pid, oid, att: recovery_handler.schedule_retry(payment_id=pid, order_id=oid, attempt=att)
-                except ImportError:
-                    return ReplayResult.failed(
-                        failed_op.id, "No payment recovery callback configured and shopping module not available"
-                    )
-
-            # Use snapshot data if original records are missing
-            snapshot = failed_op.snapshot_data or {}
-            payment_id = failed_op.payment_id or snapshot.get("payment_id")
-            order_id = failed_op.order_id or snapshot.get("order_id")
-
-            if not payment_id or not order_id:
-                return ReplayResult.failed(failed_op.id, "Missing payment_id or order_id for replay")
-
-            # Schedule retry through recovery handler
-            task_id = callback(payment_id, order_id, 0)  # Fresh attempt
-
-            return ReplayResult.succeeded(failed_op.id, f"Replay scheduled with task_id={task_id}", data={"task_id": task_id})
-
-        except Exception as e:
-            logger.error(f"[PaymentReplayHandler] Replay failed: {e}")
-            return ReplayResult.failed(failed_op.id, str(e))
-
-
-class PointReplayHandler(ReplayHandler):
-    """
-    Replay handler for point domain failures.
-
-    This is a configurable handler that can use an injected
-    point service callback.
-    """
-
-    def __init__(self, add_point_callback: Callable[[int, int, str], None] | None = None):
-        """
-        Initialize point replay handler.
-
-        Args:
-            add_point_callback: Optional callback(user_id, amount, reason) -> None
-                               If not provided, will try to import from shopping.services
-        """
-        self._add_point_callback = add_point_callback
-
-    @property
-    def domain(self) -> str:
-        return "point"
-
-    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
-        """Check if point operation can be replayed."""
-        # Check user_id in snapshot
-        snapshot = failed_op.snapshot_data or {}
-        if not failed_op.user_id and not snapshot.get("user_id"):
-            return False, "User not found"
-
-        return True, ""
-
-    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
-        """Replay a point operation."""
-        can_replay, reason = self.can_replay(failed_op)
-        if not can_replay:
-            return ReplayResult.failed(failed_op.id, reason)
-
-        try:
-            snapshot = failed_op.snapshot_data or {}
-            user_id = failed_op.user_id or snapshot.get("user_id")
-
-            # Extract point operation details from snapshot
-            amount = snapshot.get("amount", 0)
-            reason_text = snapshot.get("reason", "Replay from DLQ")
-
-            if amount <= 0:
-                return ReplayResult.failed(failed_op.id, "Invalid point amount in snapshot")
-
-            # Use injected callback or try to import from shopping
-            callback = self._add_point_callback
-            if callback is None:
-                try:
-                    from shopping.services.point_service import add_point
-                    from django.contrib.auth import get_user_model
-
-                    User = get_user_model()
-                    user = User.objects.get(id=user_id)
-                    add_point(
-                        user=user,
-                        amount=amount,
-                        reason=f"[DLQ Replay] {reason_text}",
-                    )
-                except ImportError:
-                    return ReplayResult.failed(
-                        failed_op.id, "No point service callback configured and shopping module not available"
-                    )
-            else:
-                callback(user_id, amount, f"[DLQ Replay] {reason_text}")
-
-            return ReplayResult.succeeded(failed_op.id, f"Added {amount} points to user {user_id}")
-
-        except Exception as e:
-            logger.error(f"[PointReplayHandler] Replay failed: {e}")
-            return ReplayResult.failed(failed_op.id, str(e))
-
-
-class WebhookReplayHandler(ReplayHandler):
-    """
-    Replay handler for webhook domain failures.
-
-    This is a configurable handler that can use an injected
-    webhook task callback.
-    """
-
-    def __init__(self, webhook_callback: Callable[[str, str, int], str] | None = None):
-        """
-        Initialize webhook replay handler.
-
-        Args:
-            webhook_callback: Optional callback(payment_key, order_id, amount) -> task_id
-                             If not provided, will try to import from shopping.tasks
-        """
-        self._webhook_callback = webhook_callback
-
-    @property
-    def domain(self) -> str:
-        return "webhook"
-
-    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
-        """Check if webhook operation can be replayed."""
-        # Check if request data is available
-        if not failed_op.request_data:
-            return False, "No request data available for replay"
-
-        return True, ""
-
-    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
-        """Replay a webhook operation."""
-        can_replay, reason = self.can_replay(failed_op)
-        if not can_replay:
-            return ReplayResult.failed(failed_op.id, reason)
-
-        try:
-            request_data = failed_op.request_data or {}
-            payment_key = request_data.get("payment_key")
-            order_id = request_data.get("order_id")
-            amount = request_data.get("amount")
-
-            if not all([payment_key, order_id, amount]):
-                return ReplayResult.failed(failed_op.id, "Missing required fields in request_data")
-
-            # Use injected callback or try to import from shopping
-            callback = self._webhook_callback
-            if callback is None:
-                try:
-                    from shopping.tasks.payment_tasks import call_toss_confirm_api
-
-                    task = call_toss_confirm_api.delay(
-                        payment_key=payment_key,
-                        order_id=order_id,
-                        amount=amount,
-                    )
-                    task_id = task.id
-                except ImportError:
-                    return ReplayResult.failed(
-                        failed_op.id, "No webhook callback configured and shopping module not available"
-                    )
-            else:
-                task_id = callback(payment_key, order_id, amount)
-
-            return ReplayResult.succeeded(
-                failed_op.id, f"Webhook replay scheduled with task_id={task_id}", data={"task_id": task_id}
-            )
-
-        except Exception as e:
-            logger.error(f"[WebhookReplayHandler] Replay failed: {e}")
-            return ReplayResult.failed(failed_op.id, str(e))
+# =============================================================================
+# Domain-Specific Handlers (MOVED TO ADAPTER LAYER)
+# =============================================================================
+# NOTE: Domain-specific handlers (PaymentReplayHandler, PointReplayHandler,
+# WebhookReplayHandler) have been moved to the adapter layer.
+#
+# For shopping/Django projects, import from:
+#   from shopping.services.self_healing.replay_handlers import (
+#       PaymentReplayHandler,
+#       PointReplayHandler,
+#       WebhookReplayHandler,
+#   )
+#
+# Or register your own handlers:
+#   from selfhealing.services.replay_service import register_replay_handler, ReplayHandler
+#
+#   class MyDomainHandler(ReplayHandler):
+#       @property
+#       def domain(self) -> str:
+#           return "my_domain"
+#
+#       def can_replay(self, failed_op) -> tuple[bool, str]:
+#           # Your validation logic
+#           return True, ""
+#
+#       def replay(self, failed_op) -> ReplayResult:
+#           # Your replay logic
+#           return ReplayResult.succeeded(failed_op.id, "Done")
+#
+#   register_replay_handler(MyDomainHandler())
+# =============================================================================
 
 
 # =============================================================================
@@ -407,10 +207,12 @@ def get_replay_handler(domain: str) -> ReplayHandler:
     return DefaultReplayHandler(domain)
 
 
-# Register default handlers
-register_replay_handler(PaymentReplayHandler())
-register_replay_handler(PointReplayHandler())
-register_replay_handler(WebhookReplayHandler())
+# NOTE: No default handlers registered in core package.
+# Domain-specific handlers should be registered by the adapter layer.
+# Example (in shopping adapter):
+#   from selfhealing.services.replay_service import register_replay_handler
+#   from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
+#   register_replay_handler(PaymentReplayHandler())
 
 
 # =============================================================================
@@ -606,6 +408,7 @@ class ReplayService:
         service_name: str,
         max_items: int = 50,
         escalate_failures: bool = True,
+        service_failure_type_map: dict[str, list[str]] | None = None,
     ) -> BatchReplayResult:
         """
         Replay entries when circuit breaker closes.
@@ -622,17 +425,17 @@ class ReplayService:
             service_name: Name of the service that recovered
             max_items: Maximum number of items to replay
             escalate_failures: If True, mark failed replays as REQUIRES_REVIEW
+            service_failure_type_map: Custom mapping of service names to failure types.
+                                      If None, uses empty mapping (no auto-mapping).
+                                      Example: {"my_service": ["TIMEOUT", "CONNECTION_ERROR"]}
 
         Returns:
             BatchReplayResult with summary
         """
-        # Map service names to failure types
-        service_failure_types = {
-            "toss_payment": ["PG_TIMEOUT", "PG_CONNECTION_ERROR", "PG_500_ERROR"],
-            "notification": ["SMTP_TIMEOUT", "FCM_ERROR"],
-        }
+        # Use provided mapping or empty (no default domain-specific mappings in core)
+        failure_type_map = service_failure_type_map or {}
 
-        failure_types = service_failure_types.get(service_name, [])
+        failure_types = failure_type_map.get(service_name, [])
         if not failure_types:
             logger.info(f"[ReplayService] No failure types mapped for service '{service_name}'")
             return BatchReplayResult()

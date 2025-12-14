@@ -60,38 +60,66 @@ class RetryConfig:
     jitter_percent: int = 25
 
 
-@dataclass(frozen=True)
+@dataclass
 class SLAConfig:
-    """SLA thresholds for each domain."""
+    """
+    SLA thresholds configuration (domain-neutral).
+    
+    Uses a dictionary-based approach for domain-specific thresholds,
+    allowing adapters to configure application-specific domains.
+    
+    Note: This dataclass is no longer frozen to support mutable thresholds_by_domain.
+    Use with care and avoid modifying after initialization in production.
+    """
 
-    payment_hours: int = 1
-    point_hours: int = 4
-    inventory_hours: int = 2
-    webhook_hours: int = 8
-    notification_hours: int = 24
+    # Default threshold for unregistered domains
     default_hours: int = 24
+    
+    # Domain-specific thresholds (configured by adapters)
+    # Example: {"payment": 1, "order": 2, "notification": 24}
+    thresholds_by_domain: dict[str, int] = field(default_factory=dict)
 
     def get_threshold(self, domain: str) -> timedelta:
         """Get the SLA threshold for a domain."""
-        domain_map = {
-            "payment": self.payment_hours,
-            "point": self.point_hours,
-            "inventory": self.inventory_hours,
-            "webhook": self.webhook_hours,
-            "notification": self.notification_hours,
-        }
-        hours = domain_map.get(domain.lower(), self.default_hours)
+        hours = self.thresholds_by_domain.get(domain.lower(), self.default_hours)
         return timedelta(hours=hours)
 
     def get_all_thresholds(self) -> dict[str, timedelta]:
-        """Get all SLA thresholds as a dictionary."""
-        return {
-            "payment": timedelta(hours=self.payment_hours),
-            "point": timedelta(hours=self.point_hours),
-            "inventory": timedelta(hours=self.inventory_hours),
-            "webhook": timedelta(hours=self.webhook_hours),
-            "notification": timedelta(hours=self.notification_hours),
+        """Get all configured SLA thresholds as a dictionary."""
+        result = {
+            domain: timedelta(hours=hours)
+            for domain, hours in self.thresholds_by_domain.items()
         }
+        # Add default if no domains configured
+        if not result:
+            result["default"] = timedelta(hours=self.default_hours)
+        return result
+
+    # Legacy property accessors for backward compatibility
+    @property
+    def payment_hours(self) -> int:
+        """@deprecated: use thresholds_by_domain.get('payment', default_hours)"""
+        return self.thresholds_by_domain.get("payment", self.default_hours)
+
+    @property
+    def point_hours(self) -> int:
+        """@deprecated: use thresholds_by_domain.get('point', default_hours)"""
+        return self.thresholds_by_domain.get("point", self.default_hours)
+
+    @property
+    def inventory_hours(self) -> int:
+        """@deprecated: use thresholds_by_domain.get('inventory', default_hours)"""
+        return self.thresholds_by_domain.get("inventory", self.default_hours)
+
+    @property
+    def webhook_hours(self) -> int:
+        """@deprecated: use thresholds_by_domain.get('webhook', default_hours)"""
+        return self.thresholds_by_domain.get("webhook", self.default_hours)
+
+    @property
+    def notification_hours(self) -> int:
+        """@deprecated: use thresholds_by_domain.get('notification', default_hours)"""
+        return self.thresholds_by_domain.get("notification", self.default_hours)
 
 
 @dataclass
@@ -312,9 +340,7 @@ class SelfHealingConfig:
                 "jitter_percent": self.retry.jitter_percent,
             },
             "sla": {
-                "payment_hours": self.sla.payment_hours,
-                "point_hours": self.sla.point_hours,
-                "inventory_hours": self.sla.inventory_hours,
+                "thresholds_by_domain": self.sla.thresholds_by_domain,
                 "default_hours": self.sla.default_hours,
             },
             "metrics": {

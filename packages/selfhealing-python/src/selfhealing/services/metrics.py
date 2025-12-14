@@ -76,17 +76,49 @@ def _get_or_create_histogram(name: str, description: str, labels: list[str], buc
 
 
 # =============================================================================
-# Domain Constants (Single Source of Truth)
+# Domain Registry (Dynamic Domain Registration)
 # =============================================================================
 
-# All self-healing domains - update this list when adding new domains
-DOMAINS: list[str] = [
-    "payment",
-    "point",
-    "inventory",
-    "webhook",
+# Registered domains - populated dynamically by adapters at initialization
+_registered_domains: set[str] = set()
+
+# Default domains (domain-neutral fallbacks)
+_DEFAULT_DOMAINS: list[str] = [
+    "external_service",
+    "internal_process",
+    "async_task",
     "notification",
+    "data_sync",
 ]
+
+
+def register_domain(domain: str) -> None:
+    """
+    Register a domain for metrics collection.
+    
+    Call this from adapters to register application-specific domains.
+    Example: register_domain("payment"), register_domain("order")
+    """
+    _registered_domains.add(domain.lower())
+
+
+def get_registered_domains() -> list[str]:
+    """Get all registered domains, including defaults."""
+    all_domains = _registered_domains | set(_DEFAULT_DOMAINS)
+    return sorted(all_domains)
+
+
+# Legacy compatibility: DOMAINS now returns registered domains
+@property
+def DOMAINS() -> list[str]:
+    """@deprecated: use get_registered_domains()"""
+    return get_registered_domains()
+
+
+# For backward compatibility, pre-register common domains
+# These can be overridden by adapter configuration
+for _domain in _DEFAULT_DOMAINS:
+    register_domain(_domain)
 
 
 # =============================================================================
@@ -389,8 +421,8 @@ def update_dlq_pending_gauges(
         stats = repository.get_statistics()
         pending_by_domain = stats.get("pending_by_domain", {})
 
-        # Update gauges for all domains
-        for domain in DOMAINS:
+        # Update gauges for all registered domains
+        for domain in get_registered_domains():
             count = pending_by_domain.get(domain, 0)
             dlq_pending_gauge.labels(domain=domain).set(count)
 
@@ -496,7 +528,7 @@ def update_retry_success_rates(
         # Get success rates from repository statistics if available
         success_rates = stats.get("success_rates_by_domain", {})
 
-        for domain in DOMAINS:
+        for domain in get_registered_domains():
             if domain in success_rates:
                 rate = success_rates[domain]
             else:

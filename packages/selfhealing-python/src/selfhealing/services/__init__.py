@@ -115,8 +115,9 @@ from .replay_service import (
     ReplayResult,
     BatchReplayResult,
     ReplayHandler,
-    PaymentReplayHandler,
+    DefaultReplayHandler,
     get_replay_handler,
+    register_replay_handler,
     get_replay_service,
     replay_failed_operation,
     batch_replay_by_failure_type,
@@ -145,8 +146,10 @@ from .rate_limit_coordinator import (
 )
 from selfhealing.core.config import RateLimitConfig
 from .metrics import (
+    # Domain registry (dynamic)
+    register_domain,
+    get_registered_domains,
     # Constants
-    DOMAINS,
     ALERTING_RULES,
     # Recording functions
     record_dlq_item_created,
@@ -288,7 +291,8 @@ __all__ = [
     "RateLimitResult",
     "get_rate_limit_coordinator",
     # Metrics (Phase 5 Observability)
-    "DOMAINS",
+    "register_domain",
+    "get_registered_domains",
     "ALERTING_RULES",
     "record_dlq_item_created",
     "record_retry_attempt",
