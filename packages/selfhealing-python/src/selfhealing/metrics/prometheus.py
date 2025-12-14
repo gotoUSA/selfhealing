@@ -51,8 +51,8 @@ def register_domain(domain: str) -> None:
         _registered_domains.append(domain)
 
 
-# Backward compatibility alias
-DOMAINS = _registered_domains
+# Note: DOMAINS constant removed in Phase 2 neutralization.
+# Use get_domains() or register_domain() instead.
 
 
 class SelfHealingMetrics:

@@ -202,53 +202,37 @@ class ForensicContext:
 
     def capture_state_before(
         self,
-        order_status: Optional[str] = None,
-        payment_status: Optional[str] = None,
-        user_points: Optional[int] = None,
-        product_stocks: Optional[Dict[int, int]] = None,
-        **extra: Any,
+        **states: Any,
     ) -> None:
         """Capture state snapshot before operation.
         
-        Note: Named parameters are for backward compatibility.
-        Use **extra for domain-neutral state capture.
+        Args:
+            **states: Key-value pairs of state data to capture
+            
+        Example:
+            context.capture_state_before(
+                entity_status="pending",
+                resource_count=100,
+            )
         """
-        states: Dict[str, Any] = {}
-        if order_status is not None:
-            states["order_status"] = order_status
-        if payment_status is not None:
-            states["payment_status"] = payment_status
-        if user_points is not None:
-            states["user_points"] = user_points
-        if product_stocks is not None:
-            states["product_stock"] = product_stocks
-        states.update(extra)
-        self.state_before = StateSnapshot(states=states)
+        self.state_before = StateSnapshot(states=dict(states))
 
     def capture_state_after(
         self,
-        order_status: Optional[str] = None,
-        payment_status: Optional[str] = None,
-        user_points: Optional[int] = None,
-        product_stocks: Optional[Dict[int, int]] = None,
-        **extra: Any,
+        **states: Any,
     ) -> None:
         """Capture state snapshot after operation (or failure).
         
-        Note: Named parameters are for backward compatibility.
-        Use **extra for domain-neutral state capture.
+        Args:
+            **states: Key-value pairs of state data to capture
+            
+        Example:
+            context.capture_state_after(
+                entity_status="completed",
+                resource_count=99,
+            )
         """
-        states: Dict[str, Any] = {}
-        if order_status is not None:
-            states["order_status"] = order_status
-        if payment_status is not None:
-            states["payment_status"] = payment_status
-        if user_points is not None:
-            states["user_points"] = user_points
-        if product_stocks is not None:
-            states["product_stock"] = product_stocks
-        states.update(extra)
-        self.state_after = StateSnapshot(states=states)
+        self.state_after = StateSnapshot(states=dict(states))
 
     @classmethod
     def from_metadata(cls, metadata: Dict[str, Any]) -> "ForensicContext":
@@ -392,38 +376,26 @@ class ForensicContextBuilder:
 
     def with_state_before(
         self,
-        order_status: Optional[str] = None,
-        payment_status: Optional[str] = None,
-        user_points: Optional[int] = None,
-        product_stocks: Optional[Dict[int, int]] = None,
-        **extra: Any,
+        **states: Any,
     ) -> "ForensicContextBuilder":
-        """Capture state before operation."""
-        self._context.capture_state_before(
-            order_status=order_status,
-            payment_status=payment_status,
-            user_points=user_points,
-            product_stocks=product_stocks,
-            **extra,
-        )
+        """Capture state before operation.
+        
+        Args:
+            **states: Key-value pairs of state data
+        """
+        self._context.capture_state_before(**states)
         return self
 
     def with_state_after(
         self,
-        order_status: Optional[str] = None,
-        payment_status: Optional[str] = None,
-        user_points: Optional[int] = None,
-        product_stocks: Optional[Dict[int, int]] = None,
-        **extra: Any,
+        **states: Any,
     ) -> "ForensicContextBuilder":
-        """Capture state after operation."""
-        self._context.capture_state_after(
-            order_status=order_status,
-            payment_status=payment_status,
-            user_points=user_points,
-            product_stocks=product_stocks,
-            **extra,
-        )
+        """Capture state after operation.
+        
+        Args:
+            **states: Key-value pairs of state data
+        """
+        self._context.capture_state_after(**states)
         return self
 
     def with_extra(self, **kwargs: Any) -> "ForensicContextBuilder":
@@ -458,27 +430,28 @@ def capture_forensic_context(
     session_id: str = "",
     task_id: str = "",
     task_name: str = "",
-    order_status: Optional[str] = None,
-    payment_status: Optional[str] = None,
-    user_points: Optional[int] = None,
     **extra: Any,
 ) -> ForensicContext:
     """
-    Convenience function to capture forensic context.
+    Convenience function to capture forensic context (domain-neutral).
 
     Args:
         client_ip: Client IP address
         user_agent: User agent string
         session_id: Session identifier
-        task_id: Celery task ID
-        task_name: Celery task name
-        order_status: Order status for state snapshot
-        payment_status: Payment status for state snapshot
-        user_points: User points for state snapshot
-        **extra: Additional context data
+        task_id: Async task ID
+        task_name: Async task name
+        **extra: Additional state data (domain-neutral key-value pairs)
 
     Returns:
         ForensicContext with captured data
+        
+    Example:
+        context = capture_forensic_context(
+            client_ip="192.168.1.1",
+            entity_status="pending",
+            resource_id=123,
+        )
     """
     builder = ForensicContextBuilder()
     builder.start_timing()
@@ -493,15 +466,8 @@ def capture_forensic_context(
     if task_id or task_name:
         builder.with_task(task_id=task_id, task_name=task_name)
 
-    if order_status or payment_status or user_points is not None:
-        builder.with_state_before(
-            order_status=order_status,
-            payment_status=payment_status,
-            user_points=user_points,
-        )
-
     if extra:
-        builder.with_extra(**extra)
+        builder.with_state_before(**extra)
 
     return builder.build()
 

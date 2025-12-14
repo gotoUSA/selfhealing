@@ -166,7 +166,7 @@ class SecurityNotificationService:
 
     Usage:
         service = SecurityNotificationService()
-        result = service.notify_security_incident_by_id(incident_id, "webhook_signature_invalid", "critical")
+        result = service.notify_security_incident_by_id(incident_id, "signature_invalid", "critical")
     """
 
     def __init__(self, config: NotificationConfig | None = None):
@@ -195,7 +195,7 @@ class SecurityNotificationService:
 
         Args:
             incident_id: The security incident ID
-            incident_type: Type of incident (e.g., 'webhook_signature_invalid')
+            incident_type: Type of incident (e.g., 'signature_invalid')
             severity: Severity level ('critical', 'high', 'medium')
             description: Description of the incident
             source_ip: Source IP address

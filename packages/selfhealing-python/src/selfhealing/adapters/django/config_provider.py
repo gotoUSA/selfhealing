@@ -40,7 +40,7 @@ class DjangoConfigProvider(ConfigProviderInterface):
         Get a configuration value using dot notation.
 
         Args:
-            key: Configuration key (e.g., "SELF_HEALING.SLA.PAYMENT_HOURS")
+            key: Configuration key (e.g., "SELF_HEALING.SLA.DEFAULT_HOURS")
             default: Default value if not found
         """
         keys = key.split(".")
@@ -149,21 +149,38 @@ def configure_selfhealing_from_django() -> None:
 
     if "SLA" in sh_settings:
         sla = sh_settings["SLA"]
+        # Domain-neutral: use thresholds_by_domain dict
+        thresholds = {}
+        if "PAYMENT_HOURS" in sla:
+            thresholds["payment"] = sla["PAYMENT_HOURS"]
+        if "POINT_HOURS" in sla:
+            thresholds["point"] = sla["POINT_HOURS"]
+        if "INVENTORY_HOURS" in sla:
+            thresholds["inventory"] = sla["INVENTORY_HOURS"]
+        if "WEBHOOK_HOURS" in sla:
+            thresholds["webhook"] = sla["WEBHOOK_HOURS"]
+        if "NOTIFICATION_HOURS" in sla:
+            thresholds["notification"] = sla["NOTIFICATION_HOURS"]
+        # Also support THRESHOLDS_BY_DOMAIN for direct dict config
+        thresholds.update(sla.get("THRESHOLDS_BY_DOMAIN", {}))
         config_dict["sla"] = {
-            "payment_hours": sla.get("PAYMENT_HOURS", 1),
-            "point_hours": sla.get("POINT_HOURS", 4),
-            "inventory_hours": sla.get("INVENTORY_HOURS", 2),
-            "webhook_hours": sla.get("WEBHOOK_HOURS", 8),
-            "notification_hours": sla.get("NOTIFICATION_HOURS", 24),
             "default_hours": sla.get("DEFAULT_HOURS", 24),
+            "thresholds_by_domain": thresholds,
         }
 
     if "IDEMPOTENCY" in sh_settings:
         idemp = sh_settings["IDEMPOTENCY"]
+        # Domain-neutral: use cache_ttl_by_domain dict
+        cache_ttls = {}
+        if "PAYMENT_CACHE_TTL" in idemp:
+            cache_ttls["payment"] = idemp["PAYMENT_CACHE_TTL"]
+        if "WEBHOOK_CACHE_TTL" in idemp:
+            cache_ttls["webhook"] = idemp["WEBHOOK_CACHE_TTL"]
+        cache_ttls.update(idemp.get("CACHE_TTL_BY_DOMAIN", {}))
         config_dict["idempotency"] = {
             "default_cache_ttl": idemp.get("DEFAULT_CACHE_TTL", 60),
-            "payment_cache_ttl": idemp.get("PAYMENT_CACHE_TTL", 300),
-            "webhook_cache_ttl": idemp.get("WEBHOOK_CACHE_TTL", 60),
+            "extended_cache_ttl": idemp.get("EXTENDED_CACHE_TTL", 300),
+            "short_cache_ttl": idemp.get("SHORT_CACHE_TTL", 60),
         }
 
     if "SECURITY" in sh_settings:

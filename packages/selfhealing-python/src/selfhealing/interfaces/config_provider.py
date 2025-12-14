@@ -45,7 +45,7 @@ class ConfigProviderInterface(ABC):
         Get a configuration value.
 
         Args:
-            key: Configuration key (dot notation supported, e.g., "SELF_HEALING.SLA.PAYMENT_HOURS")
+            key: Configuration key (dot notation supported, e.g., "SELF_HEALING.SLA.DEFAULT_HOURS")
             default: Default value if key not found
 
         Returns:
@@ -66,7 +66,7 @@ class ConfigProviderInterface(ABC):
             Configuration value or default
 
         Example:
-            provider.get_nested("SELF_HEALING", "SLA", "PAYMENT_HOURS", default=1)
+            provider.get_nested("SELF_HEALING", "SLA", "DEFAULT_HOURS", default=24)
         """
         pass
 
@@ -180,7 +180,7 @@ class EnvConfigProvider(ConfigProviderInterface):
     Environment variable based configuration provider.
 
     Converts nested keys to environment variable format:
-    - "SELF_HEALING.SLA.PAYMENT_HOURS" -> "SELF_HEALING__SLA__PAYMENT_HOURS"
+    - "SELF_HEALING.SLA.DEFAULT_HOURS" -> "SELF_HEALING__SLA__DEFAULT_HOURS"
 
     Supports JSON parsing for complex values.
     """

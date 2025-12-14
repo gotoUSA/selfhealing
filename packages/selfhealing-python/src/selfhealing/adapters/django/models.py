@@ -458,16 +458,22 @@ class SecurityIncident(models.Model):
     """
 
     class IncidentType(models.TextChoices):
-        """Types of security incidents"""
+        """Types of security incidents (domain-neutral core + legacy aliases)"""
 
-        WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
-        PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
+        # Domain-neutral core types
+        SIGNATURE_INVALID = "signature_invalid", "Signature Invalid"
+        DATA_TAMPERED = "data_tampered", "Data Tampered"
         TOKEN_FORGED = "token_forged", "Token Forged"
         UNAUTHORIZED_ACCESS = "unauthorized_access", "Unauthorized Access"
         RATE_LIMIT_ABUSE = "rate_limit_abuse", "Rate Limit Abuse"
         SUSPICIOUS_ACTIVITY = "suspicious_activity", "Suspicious Activity"
         REPLAY_ATTACK = "replay_attack", "Replay Attack Detected"
         INJECTION_ATTEMPT = "injection_attempt", "Injection Attempt"
+        
+        # Legacy aliases (for backward compatibility in shopping domain adapter)
+        # Note: These will be deprecated in future versions
+        WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
+        PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
 
     class Severity(models.TextChoices):
         """Severity levels"""

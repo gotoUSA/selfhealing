@@ -155,9 +155,9 @@ class SecurityViolationService:
     Usage:
         service = SecurityViolationService()
         result = service.handle_violation(
-            violation_type=ViolationType.WEBHOOK_SIGNATURE_INVALID,
+            violation_type=ViolationType.SIGNATURE_INVALID,
             request_info={"ip": "1.2.3.4", "user_agent": "..."},
-            description="HMAC signature mismatch",
+            description="Signature validation failed",
         )
 
     For testing with mock repository:
