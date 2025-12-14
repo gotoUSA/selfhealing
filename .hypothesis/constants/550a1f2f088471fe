@@ -1,0 +1,4 @@
+# file: /code/shopping/services/user_service.py
+# hypothesis_version: 6.148.6
+
+[',', '@', 'EMAIL_NOT_PROVIDED', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR', 'USER_SERVICE_ERROR', 'User', 'access', 'email', 'first_name', 'is_active', 'is_withdrawn', 'last_login', 'last_login_ip', 'message', 'name', 'provider_id', 'refresh', 'tokens', 'verification_code', 'verification_result', 'withdrawn_at', '인증 이메일을 발송했습니다.', '회원 탈퇴가 완료되었습니다.']

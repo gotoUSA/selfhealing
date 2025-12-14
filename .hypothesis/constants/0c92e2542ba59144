@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/point_tasks.py
+# hypothesis_version: 6.148.6
+
+[120, 730, '100', 'DEFAULT_FROM_EMAIL', 'approve', 'cutoff_date', 'deleted_count', 'earn', 'earn_rate', 'earned_points', 'error', 'executed_at', 'expire', 'expired_count', 'failed', 'membership_level', 'message', 'noreply@shopping.com', 'notification_count', 'notifications', 'order_id', 'order_number', 'payment', 'payment_amount', 'points', 'points_added', 'product_amount', 'shipping_fee', 'skipped', 'status', 'success', 'user', 'user_id', '적립할 포인트 없음', '포인트 전액 결제로 적립하지 않음']

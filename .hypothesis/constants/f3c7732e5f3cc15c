@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0009_passwordresettoken.py
+# hypothesis_version: 6.148.6
+
+['-created_at', 'ID', 'PasswordResetToken', 'created_at', 'db_table', 'id', 'indexes', 'is_used', 'ordering', 'shopping', 'token', 'used_at', 'user', 'verbose_name', 'verbose_name_plural', '비밀번호 재설정 토큰', '사용 여부', '사용일시', '사용자', '생성일시', '재설정 토큰']

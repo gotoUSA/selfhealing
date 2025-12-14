@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/payment_tasks.py
+# hypothesis_version: 6.148.6
+
+['NETWORK_ERROR', 'TIMEOUT', 'aborted', 'already_processed', 'approve', 'error', 'error_code', 'error_message', 'external_api', 'order_id', 'paid', 'payment_critical', 'payment_id', 'payment_method', 'sold_count', 'status', 'success', 'updated_at', '결제 승인 완료']

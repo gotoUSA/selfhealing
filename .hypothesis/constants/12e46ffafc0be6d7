@@ -1,0 +1,4 @@
+# file: /code/shopping/models/point.py
+# hypothesis_version: 6.148.6
+
+[255, 365, '-created_at', 'Order', 'admin_add', 'admin_deduct', 'balance', 'cancel_deduct', 'cancel_refund', 'created_at', 'earliest_expire_date', 'earn', 'earned', 'event', 'expire', 'expires_at', 'expiring_histories', 'metadata', 'order', 'point_histories', 'points', 'total', 'type', 'update_fields', 'use', 'used', 'user', '관련 주문', '관리자지급', '관리자차감', '만료', '만료일시', '메타데이터', '변경 후 포인트 잔액', '사용', '사용자', '생성일시', '설명', '양수는 적립, 음수는 사용/차감', '이벤트', '잔액', '잔액은 음수가 될 수 없습니다.', '적립', '적립 포인트의 유효기간', '추가 정보 (JSON)', '취소차감', '취소환불', '타입', '포인트', '포인트 변동 사유', '포인트 이력', '포인트 이력 목록']

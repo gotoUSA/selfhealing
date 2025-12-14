@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0002_order_earned_points_order_final_amount_and_more.py
+# hypothesis_version: 6.148.6
+
+[255, '-created_at', '0', '0001_initial', 'ID', 'PointHistory', 'admin_add', 'admin_deduct', 'balance', 'cancel_deduct', 'cancel_refund', 'created_at', 'db_table', 'description', 'earn', 'earned_points', 'event', 'expire', 'expires_at', 'final_amount', 'id', 'indexes', 'metadata', 'order', 'ordering', 'point_histories', 'points', 'shopping', 'shopping.order', 'type', 'use', 'used_points', 'user', 'verbose_name', 'verbose_name_plural', '관련 주문', '관리자지급', '관리자차감', '만료', '만료일시', '메타데이터', '변경 후 포인트 잔액', '사용', '사용 포인트', '사용자', '생성일시', '설명', '양수는 적립, 음수는 사용/차감', '이 주문에서 사용한 포인트', '이 주문으로 적립된 포인트', '이벤트', '잔액', '적립', '적립 포인트', '적립 포인트의 유효기간', '총 주문 금액 - 사용 포인트', '최종 결제금액', '추가 정보 (JSON)', '취소차감', '취소환불', '타입', '포인트', '포인트 변동 사유', '포인트 이력', '포인트 이력 목록']

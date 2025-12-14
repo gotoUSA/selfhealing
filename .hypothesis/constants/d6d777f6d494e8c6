@@ -1,0 +1,4 @@
+# file: /code/shopping/admin/__init__.py
+# hypothesis_version: 6.148.7
+
+['CartAdmin', 'CategoryAdmin', 'EmailLogAdmin', 'FailedOperationAdmin', 'NotificationAdmin', 'OrderAdmin', 'PaymentAdmin', 'PaymentLogAdmin', 'PointHistoryAdmin', 'ProductAdmin', 'ProductAnswerAdmin', 'ProductQuestionAdmin', 'ProductReviewAdmin', 'ReturnAdmin', 'ReturnItemAdmin', 'SellerProfileAdmin', 'Shopping Mall Admin', 'UserAdmin']

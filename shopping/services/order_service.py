@@ -1,18 +1,12 @@
 """주문 서비스 레이어"""
 
 import logging
-import time
 from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
 from django.db.models import F
-from django.db.models.functions import Greatest
 
-from ..constants import (
-    LOCK_CONTENTION_CRITICAL_THRESHOLD,
-    LOCK_CONTENTION_WARNING_THRESHOLD,
-)
 from ..models.cart import Cart
 from ..models.order import Order, OrderItem
 from ..models.product import Product
@@ -56,7 +50,9 @@ class OrderService:
 
         # 2. 보유 포인트 체크
         if use_points > user.points:
-            raise OrderServiceError(f"보유 포인트가 부족합니다. (보유: {user.points}P, 사용 요청: {use_points}P)")
+            raise OrderServiceError(
+                f"보유 포인트가 부족합니다. (보유: {user.points}P, 사용 요청: {use_points}P)"
+            )
 
         # 3. 배송비를 포함한 총 금액보다 많은 포인트 사용 불가
         if use_points > total_payment_amount:
@@ -117,13 +113,18 @@ class OrderService:
         if not cart.items.exists():
             raise OrderServiceError("장바구니가 비어있습니다.")
 
-        logger.info(f"장바구니 락 획득: cart_id={cart.id}, user_id={user.id}, " f"items_count={cart.items.count()}")
+        logger.info(
+            f"장바구니 락 획득: cart_id={cart.id}, user_id={user.id}, "
+            f"items_count={cart.items.count()}"
+        )
 
         # 2. 주문 총액 계산
         total_amount = cart.get_total_amount()
 
         # 3. 배송비 계산
-        shipping_result = ShippingService.calculate_fee(total_amount=total_amount, postal_code=shipping_postal_code)
+        shipping_result = ShippingService.calculate_fee(
+            total_amount=total_amount, postal_code=shipping_postal_code
+        )
         logger.info(
             f"배송비 계산 완료: total_amount={total_amount}, "
             f"shipping_fee={shipping_result['shipping_fee']}, "
@@ -132,13 +133,15 @@ class OrderService:
         )
 
         # 4. 포인트 사용 검증 (비즈니스 로직)
-        total_payment_amount = total_amount + shipping_result["shipping_fee"] + shipping_result["additional_fee"]
+        total_payment_amount = (
+            total_amount + shipping_result["shipping_fee"] + shipping_result["additional_fee"]
+        )
         OrderService._validate_point_usage(user, use_points, total_payment_amount)
 
         # 5. 최종 결제 금액 계산 (배송비 포함, 포인트 차감)
         final_amount = max(Decimal("0"), total_payment_amount - Decimal(str(use_points)))
 
-        # 6. 주문 생성 (적립률/등급 스냅샷 포함)
+        # 6. 주문 생성
         order = Order.objects.create(
             user=user,
             status="pending",  # 결제 대기 상태
@@ -154,8 +157,6 @@ class OrderService:
             shipping_address=shipping_address,
             shipping_address_detail=shipping_address_detail,
             order_memo=order_memo,
-            earn_rate_at_order=user.get_earn_rate(),  # 주문 시점 적립률 스냅샷
-            membership_at_order=user.membership_level,  # 주문 시점 회원 등급 스냅샷
         )
         logger.info(
             f"주문 생성 완료: order_id={order.id}, order_number={order.order_number}, "
@@ -173,7 +174,10 @@ class OrderService:
         cart.items.all().delete()
         logger.info(f"장바구니 비우기 완료: cart_id={cart.id}, user_id={user.id}")
 
-        logger.info(f"주문 생성 프로세스 완료: order_id={order.id}, order_number={order.order_number}, " f"user_id={user.id}")
+        logger.info(
+            f"주문 생성 프로세스 완료: order_id={order.id}, order_number={order.order_number}, "
+            f"user_id={user.id}"
+        )
 
         return order
 
@@ -221,10 +225,17 @@ class OrderService:
         total_amount = cart.get_total_amount()
 
         # 2. 배송비 계산
-        shipping_result = ShippingService.calculate_fee(total_amount=total_amount, postal_code=shipping_postal_code)
+        shipping_result = ShippingService.calculate_fee(
+            total_amount=total_amount,
+            postal_code=shipping_postal_code
+        )
 
         # 3. 포인트 사용 검증 (실제 차감은 나중에)
-        total_payment_amount = total_amount + shipping_result["shipping_fee"] + shipping_result["additional_fee"]
+        total_payment_amount = (
+            total_amount +
+            shipping_result["shipping_fee"] +
+            shipping_result["additional_fee"]
+        )
         OrderService._validate_point_usage(user, use_points, total_payment_amount)
 
         # 4. 최종 결제 금액
@@ -232,17 +243,6 @@ class OrderService:
 
         # 5. Order 레코드 생성 (트랜잭션 짧게)
         with transaction.atomic():
-            # ✅ Cart 락: 동시에 같은 장바구니로 여러 주문 생성 방지
-            locked_cart = Cart.objects.select_for_update().get(pk=cart.id)
-
-            # 멱등성 체크: 이미 비활성화된 장바구니는 중복 주문 방지
-            if not locked_cart.is_active:
-                raise OrderServiceError("이미 주문이 진행 중이거나 완료된 장바구니입니다.")
-
-            # 재검증: 트랜잭션 내에서 장바구니가 비어있지 않은지 다시 확인
-            if not locked_cart.items.exists():
-                raise OrderServiceError("장바구니가 비어있습니다.")
-
             order = Order.objects.create(
                 user=user,
                 status="pending",  # 아직 미확정
@@ -258,24 +258,23 @@ class OrderService:
                 shipping_address=shipping_address,
                 shipping_address_detail=shipping_address_detail,
                 order_memo=order_memo,
-                earn_rate_at_order=user.get_earn_rate(),  # 주문 시점 적립률 스냅샷
-                membership_at_order=user.membership_level,  # 주문 시점 회원 등급 스냅샷
             )
-
-            # ✅ 장바구니 즉시 비활성화 (동시 요청 중복 주문 방지)
-            locked_cart.is_active = False
-            locked_cart.save(update_fields=["is_active"])
 
         logger.info(f"Order 레코드 생성 완료: order_id={order.id}, order_number={order.order_number}")
 
         # 6. 무거운 작업은 비동기로 (재고, 포인트)
         from ..tasks.order_tasks import process_order_heavy_tasks
 
-        task_result = process_order_heavy_tasks.delay(order_id=order.id, cart_id=cart.id, use_points=use_points)
+        task_result = process_order_heavy_tasks.delay(
+            order_id=order.id,
+            cart_id=cart.id,
+            use_points=use_points
+        )
 
         logger.info(f"주문 비동기 처리 시작: order_id={order.id}, task_id={task_result.id}")
 
         return order, task_result.id
+
 
     @staticmethod
     def _create_order_items_and_decrease_stock(order: Order, cart: Cart) -> None:
@@ -289,23 +288,14 @@ class OrderService:
         Raises:
             OrderServiceError: 재고 부족
         """
-        start_time = time.time()
+        logger.info(
+            f"주문 아이템 생성 및 재고 차감 시작: order_id={order.id}, "
+            f"cart_items_count={cart.items.count()}"
+        )
 
-        logger.info(f"주문 아이템 생성 및 재고 차감 시작: order_id={order.id}, " f"cart_items_count={cart.items.count()}")
-
-        items_processed = 0
         for cart_item in cart.items.all():
-            item_start_time = time.time()
-
             # 재고 최종 확인 (select_for_update로 동시성 제어)
             product = Product.objects.select_for_update().get(pk=cart_item.product.pk)
-
-            item_lock_elapsed = time.time() - item_start_time
-            if item_lock_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
-                logger.warning(
-                    f"재고 락 획득 지연 감지: order_id={order.id}, product_id={product.pk}, "
-                    f"elapsed={item_lock_elapsed:.2f}s, possible_lock_contention=True"
-                )
 
             if product.stock < cart_item.quantity:
                 logger.error(
@@ -313,7 +303,8 @@ class OrderService:
                     f"requested={cart_item.quantity}, available={product.stock}"
                 )
                 raise OrderServiceError(
-                    f"{product.name}의 재고가 부족합니다. " f"(요청: {cart_item.quantity}개, 재고: {product.stock}개)"
+                    f"{product.name}의 재고가 부족합니다. "
+                    f"(요청: {cart_item.quantity}개, 재고: {product.stock}개)"
                 )
 
             # F() 객체를 사용한 안전한 재고 차감
@@ -336,29 +327,12 @@ class OrderService:
                 f"product_name={product.name}, quantity={cart_item.quantity}, price={cart_item.product.price}"
             )
 
-            items_processed += 1
-
-        total_elapsed = time.time() - start_time
-
-        # 동시성 모니터링: 전체 처리 시간 체크
-        if total_elapsed > LOCK_CONTENTION_CRITICAL_THRESHOLD:
-            logger.error(
-                f"재고 차감 심각한 지연: order_id={order.id}, elapsed={total_elapsed:.2f}s, "
-                f"items_count={items_processed}, possible_deadlock=True"
-            )
-        elif total_elapsed > LOCK_CONTENTION_WARNING_THRESHOLD:
-            logger.warning(
-                f"재고 차감 지연: order_id={order.id}, elapsed={total_elapsed:.2f}s, "
-                f"items_count={items_processed}, possible_lock_contention=True"
-            )
-
-        logger.info(
-            f"주문 아이템 생성 및 재고 차감 완료: order_id={order.id}, "
-            f"items_count={items_processed}, elapsed={total_elapsed:.2f}s"
-        )
+        logger.info(f"주문 아이템 생성 및 재고 차감 완료: order_id={order.id}")
 
     @staticmethod
-    def _process_point_usage(user, order: Order, use_points: int, total_amount: Decimal, final_amount: Decimal) -> None:
+    def _process_point_usage(
+        user, order: Order, use_points: int, total_amount: Decimal, final_amount: Decimal
+    ) -> None:
         """
         포인트 사용 처리
 
@@ -369,7 +343,10 @@ class OrderService:
             total_amount: 주문 총액
             final_amount: 최종 결제 금액
         """
-        logger.info(f"포인트 사용 처리 시작: user_id={user.id}, order_id={order.id}, " f"use_points={use_points}")
+        logger.info(
+            f"포인트 사용 처리 시작: user_id={user.id}, order_id={order.id}, "
+            f"use_points={use_points}"
+        )
 
         # 포인트 차감 (FIFO 방식)
         point_service = PointService()
@@ -390,7 +367,10 @@ class OrderService:
         if not result["success"]:
             raise ValueError(f"포인트 사용 실패: {result['message']}")
 
-        logger.info(f"포인트 사용 완료: user_id={user.id}, order_id={order.id}, " f"use_points={use_points}")
+        logger.info(
+            f"포인트 사용 완료: user_id={user.id}, order_id={order.id}, "
+            f"use_points={use_points}"
+        )
 
     @staticmethod
     @transaction.atomic
@@ -414,7 +394,8 @@ class OrderService:
         # 트랜잭션 내에서 취소 가능 여부 체크
         if not order.can_cancel:
             logger.warning(
-                f"취소 불가능한 주문 취소 시도: order_id={order.id}, " f"status={order.status}, user_id={order.user.id}"
+                f"취소 불가능한 주문 취소 시도: order_id={order.id}, "
+                f"status={order.status}, user_id={order.user.id}"
             )
             raise OrderServiceError("취소할 수 없는 주문입니다.")
 
@@ -427,17 +408,17 @@ class OrderService:
         for item in order.order_items.select_for_update():
             if item.product:
                 if order.status == "paid":
-                    # paid 상태: 재고 복구 + sold_count 차감 (음수 방지)
+                    # paid 상태: 재고 복구 + sold_count 차감
                     Product.objects.filter(pk=item.product.pk).update(
                         stock=F("stock") + item.quantity,
-                        sold_count=Greatest(F("sold_count") - item.quantity, 0),
+                        sold_count=F("sold_count") - item.quantity,
                     )
                     logger.info(
                         f"재고 및 판매량 복구: product_id={item.product.pk}, "
                         f"product_name={item.product_name}, quantity={item.quantity}"
                     )
-                elif order.status in ["pending", "confirmed"]:
-                    # pending/confirmed 상태: 재고만 복구 (sold_count는 아직 증가 안했음)
+                elif order.status == "pending":
+                    # pending 상태: 재고만 복구 (sold_count는 아직 증가 안했음)
                     Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
                     logger.info(
                         f"재고 복구: product_id={item.product.pk}, "
@@ -448,65 +429,7 @@ class OrderService:
         order.status = "canceled"
         order.save(update_fields=["status", "updated_at"])
 
-        # 포인트 처리
-        user = order.user
-        points_refunded = 0
-        points_deducted = 0
-
-        # 사용한 포인트 환불
-        if order.used_points > 0:
-            points_refunded = order.used_points
-            logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
-
-            PointService.add_points(
-                user=user,
-                amount=points_refunded,
-                type="cancel_refund",
-                order=order,
-                description=f"주문 #{order.order_number} 취소로 인한 포인트 환불",
-                metadata={
-                    "order_id": order.id,
-                    "order_number": order.order_number,
-                },
-            )
-
-            logger.info(f"포인트 환불 완료: user_id={user.id}, points={points_refunded}")
-
-        # 적립된 포인트 회수
-        if order.earned_points > 0:
-            user.refresh_from_db()
-            if user.points < order.earned_points:
-                logger.warning(
-                    f"포인트 부족으로 주문 취소 불가: user_id={user.id}, "
-                    f"required={order.earned_points}, available={user.points}"
-                )
-                raise OrderServiceError(
-                    f"포인트가 부족하여 주문을 취소할 수 없습니다. " f"(필요: {order.earned_points}P, 보유: {user.points}P)"
-                )
-
-            points_deducted = order.earned_points
-            logger.info(f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, " f"points={points_deducted}")
-
-            point_service = PointService()
-            result = point_service.use_points_fifo(
-                user=user,
-                amount=points_deducted,
-                type="cancel_deduct",
-                order=order,
-                description=f"주문 #{order.order_number} 취소로 인한 적립 포인트 회수",
-                metadata={
-                    "order_id": order.id,
-                    "order_number": order.order_number,
-                },
-            )
-
-            if not result["success"]:
-                raise OrderServiceError(f"포인트 회수 실패: {result['message']}")
-
-            logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
-
         logger.info(
             f"주문 취소 완료: order_id={order.id}, order_number={order.order_number}, "
-            f"user_id={order.user.id}, points_refunded={points_refunded}, "
-            f"points_deducted={points_deducted}"
+            f"user_id={order.user.id}"
         )

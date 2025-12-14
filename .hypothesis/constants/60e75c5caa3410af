@@ -1,0 +1,4 @@
+# file: /code/shopping/models/notification.py
+# hypothesis_version: 6.148.6
+
+[100, 200, '-created_at', 'is_read', 'notifications', 'order_status', 'point_earned', 'point_expiring', 'qa_answer', 'read_at', 'return', 'review_reply', 'user', '교환/환불', '내용', '리뷰 답글', '링크', '메타데이터', '사용자', '상품 문의 답변', '생성 시간', '알림', '알림 타입', '읽은 시간', '읽음 여부', '제목', '주문 상태 변경', '포인트 만료 예정', '포인트 적립']

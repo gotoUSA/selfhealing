@@ -1,0 +1,4 @@
+# file: /code/shopping/models/password_reset.py
+# hypothesis_version: 6.148.6
+
+[86400, '-created_at', 'created_at', 'is_used', 'used_at', 'user', '비밀번호 재설정 토큰', '비밀번호를 재설정할 사용자', '사용 여부', '사용일시', '사용자', '생성일시', '토큰 해시', '토큰이 생성된 시각', '토큰이 실제로 사용된 시각']

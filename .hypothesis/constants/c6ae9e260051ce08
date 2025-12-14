@@ -1,0 +1,4 @@
+# file: /code/myproject/settings/components/logging.py
+# hypothesis_version: 6.148.6
+
+['DEBUG', 'INFO', 'WARNING', 'celery', 'class', 'console', 'django.request', 'file', 'filename', 'format', 'formatter', 'formatters', 'handlers', 'level', 'loggers', 'logging.FileHandler', 'logs', 'payment.log', 'propagate', 'shopping.services', 'shopping.tasks', 'shopping.webhooks', 'simple', 'style', 'verbose', 'version', '{']

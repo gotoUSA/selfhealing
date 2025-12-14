@@ -1,0 +1,4 @@
+# file: /code/shopping/services/__init__.py
+# hypothesis_version: 6.148.6
+
+['CartService', 'CartServiceError', 'NotificationService', 'PointQueryService', 'PointService', 'ProductQAService', 'ProductService', 'ReturnService', 'ServiceError', 'TossWebhookService', 'UserService', 'WishlistFilter', 'WishlistService', 'WishlistServiceError', 'log_service_call']

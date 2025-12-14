@@ -1,0 +1,4 @@
+# file: /code/shopping/services/self_healing/dlq_service.py
+# hypothesis_version: 6.148.7
+
+[100, 'DLQ is disabled', 'DLQConfig', 'DLQEntryResult', 'FailedOperation', 'ForensicContext', 'Order | None', 'Payment | None', 'User | None', 'amount', 'count', 'created_at', 'domain', 'id', 'inventory', 'notification', 'order_id', 'order_number', 'order_status', 'payment', 'payment_id', 'payment_key', 'payment_status', 'pending_by_domain', 'pending_count', 'point', 'point_balance', 'rejected_count', 'request_data', 'resolved_count', 'reviewing_count', 'status', 'user_email', 'user_id', 'user_points', 'webhook']

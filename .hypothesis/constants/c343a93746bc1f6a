@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/payment_tasks.py
+# hypothesis_version: 6.148.6
+
+[180, 500, 'TIMEOUT', 'aborted', 'already_processed', 'approve', 'error', 'error_code', 'error_message', 'external_api', 'order_id', 'paid', 'payment_critical', 'payment_id', 'payment_method', 'sold_count', 'status', 'status_code', 'success', 'timeout', 'updated_at', '결제 승인 완료', '결제 처리 시간 초과']

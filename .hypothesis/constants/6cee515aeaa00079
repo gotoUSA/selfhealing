@@ -1,0 +1,4 @@
+# file: /code/shopping/admin/qa_admin.py
+# hypothesis_version: 6.148.7
+
+['-created_at', '...', 'Answer Content', 'Basic Information', 'Question Content', 'Status', 'Timestamps', 'Title', 'classes', 'collapse', 'content', 'content_preview', 'created_at', 'fields', 'id', 'is_answered', 'is_secret', 'product', 'product__name', 'question', 'question__title', 'seller', 'seller__username', 'title', 'title_preview', 'updated_at', 'user', 'user__username']

@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/payment_serializers.py
+# hypothesis_version: 6.148.6
+
+[100, 200, 500, 'PAYMENT.CANCELED', 'PAYMENT.DONE', 'PAYMENT.FAILED', 'aborted', 'amount', 'approved_at', 'cancel_reason', 'canceled', 'canceled_amount', 'canceled_at', 'card', 'card_company', 'card_number', 'confirmed', 'created_at', 'data', 'done', 'earned_points', 'existing_payment', 'expired', 'get_log_type_display', 'get_status_display', 'id', 'idempotency_key', 'is_canceled', 'log_type', 'log_type_display', 'message', 'method', 'order', 'order.earned_points', 'order.order_number', 'order.used_points', 'order__user', 'order_id', 'order_number', 'payment', 'payment_key', 'payment_method', 'receipt_url', 'request', 'status', 'status_display', 'updated_at', 'used_points', '결제 ID', '결제 금액', '결제 금액이 올바르지 않습니다.', '결제 정보를 찾을 수 없습니다.', '실패 사유', '우리 시스템의 주문 ID', '이미 결제된 주문입니다.', '이미 완료된 결제입니다.', '이미 취소된 결제입니다.', '이벤트 데이터', '이벤트 타입', '주문 ID', '주문을 찾을 수 없습니다.', '취소 사유', '토스페이먼츠 결제키']

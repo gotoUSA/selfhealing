@@ -1,0 +1,4 @@
+# file: /code/shopping/management/commands/cleanup_expired_tokens.py
+# hypothesis_version: 6.148.6
+
+[86400, '--dry-run', '--used-days', '[삭제 대상]', '[삭제 완료]', 'dry_run', 'store_true', 'used_days', '✓ 삭제할 토큰이 없습니다.']

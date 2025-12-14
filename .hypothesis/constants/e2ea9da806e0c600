@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0007_alter_order_status.py
+# hypothesis_version: 6.148.6
+
+['canceled', 'delivered', 'order', 'paid', 'pending', 'preparing', 'refunded', 'shipped', 'shopping', 'status', '결제대기', '결제완료', '배송완료', '배송준비중', '배송중', '주문상태', '주문취소', '환불완료']

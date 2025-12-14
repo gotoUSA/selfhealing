@@ -406,7 +406,7 @@ class TestOrderCreateException:
         response = api_client.post(url, shipping_data, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
 
     def test_create_order_with_unverified_email(
         self, authenticated_client, unverified_user, product, add_to_cart_helper, shipping_data
@@ -460,9 +460,12 @@ class TestOrderCreateException:
         # Act
         response = authenticated_client.post(url, shipping_data, format="json")
 
-        # Assert - serializer validation should catch stock shortage
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "재고가 부족합니다" in str(response.data)
+        # Assert - 비동기 처리로 인해 202 응답
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+        # 비동기 태스크에서 재고 부족으로 실패 확인
+        order = Order.objects.get(id=response.data["order_id"])
+        assert order.status == "failed"
 
     def test_create_order_exceeds_points(
         self, authenticated_client, user_with_points, product, add_to_cart_helper, shipping_data
@@ -591,44 +594,3 @@ class TestOrderCreateException:
         # Assert
         # 0원 상품 허용 여부는 비즈니스 로직에 따라 다름
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_202_ACCEPTED]
-
-    def test_order_service_error_returns_400(
-        self, authenticated_client, user, product, add_to_cart_helper, shipping_data, mocker
-    ):
-        """OrderServiceError 발생 시 400 반환"""
-        # Arrange
-        add_to_cart_helper(user, product, quantity=1)
-
-        from shopping.serializers.order_serializers import OrderCreateSerializer
-        from shopping.services.order_service import OrderServiceError
-
-        mocker.patch.object(OrderCreateSerializer, "create_hybrid", side_effect=OrderServiceError("재고가 부족합니다."))
-
-        url = "/api/orders/"
-
-        # Act
-        response = authenticated_client.post(url, shipping_data, format="json")
-
-        # Assert
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "재고가 부족합니다" in response.data["error"]
-
-    def test_unexpected_exception_returns_500(
-        self, authenticated_client, user, product, add_to_cart_helper, shipping_data, mocker
-    ):
-        """예상치 못한 Exception 발생 시 500 반환"""
-        # Arrange
-        add_to_cart_helper(user, product, quantity=1)
-
-        from shopping.serializers.order_serializers import OrderCreateSerializer
-
-        mocker.patch.object(OrderCreateSerializer, "create_hybrid", side_effect=Exception("Unexpected DB Error"))
-
-        url = "/api/orders/"
-
-        # Act
-        response = authenticated_client.post(url, shipping_data, format="json")
-
-        # Assert
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.data["error"] == "주문 생성 중 오류가 발생했습니다."

@@ -1,0 +1,4 @@
+# file: /code/shopping/views/email_verification_views.py
+# hypothesis_version: 6.148.6
+
+[200, 400, 401, 429, '1분', '6자리 코드로 이메일을 인증한다.', 'ALREADY_VERIFIED', 'Auth', 'CODE_EXPIRED', 'CODE_MISMATCH', 'CODE_MISSING', 'GET', 'NO_VALID_TOKEN', 'RESEND_COOLDOWN', 'TOKEN_EXPIRED', 'TOKEN_INVALID', 'TOKEN_MISSING', 'TOKEN_USED', 'UUID 토큰으로 이메일을 인증한다.', 'can_resend', 'code', 'email', 'error', 'is_verified', 'message', 'pending_verification', 'request', 'token', 'token_expired', '로그인이 필요합니다.', '이메일 인증 상태를 확인한다.', '이메일 인증이 완료되었습니다!', '이메일 인증이 완료되었습니다.', '인증 이메일을 발송한다.', '인증 이메일을 재발송한다.']

@@ -1,0 +1,4 @@
+# file: /code/shopping/services/self_healing/forensic_context.py
+# hypothesis_version: 6.148.7
+
+[1000, ',', 'HTTP_USER_AGENT', 'HTTP_X_FORWARDED_FOR', 'META', 'Order | None', 'Payment | None', 'REMOTE_ADDR', 'User | None', 'amount', 'attempt', 'attempted_at', 'backoff_seconds', 'client_ip', 'error_code', 'error_message', 'external_request_id', 'final_amount', 'items', 'latency_ms', 'order_id', 'order_number', 'order_status', 'payment_id', 'payment_key', 'payment_method', 'payment_status', 'price', 'product_id', 'product_stock', 'quantity', 'queue_name', 'request_timestamp', 'response_timestamp', 'retry_history', 'session', 'session_id', 'state_after', 'state_before', 'task_id', 'task_name', 'toss_order_id', 'total_amount', 'used_points', 'user_agent', 'user_email', 'user_id', 'user_points', 'worker_id']

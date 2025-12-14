@@ -1,0 +1,4 @@
+# file: /code/shopping/views/user_views.py
+# hypothesis_version: 6.148.6
+
+[200, 400, 500, 'POST', 'Users', 'error', 'message', 'partial', 'password', 'request', 'user', '내 프로필 정보를 조회한다.', '비밀번호가 변경되었습니다.', '비밀번호가 올바르지 않습니다.', '비밀번호를 변경한다.', '비밀번호를 입력해주세요.', '프로필 정보를 부분 수정한다.', '프로필 정보를 전체 수정한다.', '프로필이 수정되었습니다.', '현재 비밀번호', '회원 탈퇴를 처리한다.']

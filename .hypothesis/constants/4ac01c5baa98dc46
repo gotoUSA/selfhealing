@@ -1,0 +1,4 @@
+# file: /code/shopping/views/notification_views.py
+# hypothesis_version: 6.148.6
+
+[200, 400, 'Notifications', 'count', 'delete', 'error', 'get', 'list', 'message', 'notification_ids', 'notifications', 'post', 'request', 'unread', '내 알림 목록을 조회한다.', '알림 상세 정보를 조회한다.', '알림을 읽음 처리한다.', '읽은 알림을 전체 삭제한다.', '읽지 않은 알림을 조회한다.']

@@ -1,0 +1,4 @@
+# file: /code/shopping/management/commands/cleanup_old_carts.py
+# hypothesis_version: 6.148.6
+
+['--anonymous-days', '--dry-run', '--inactive-days', '[삭제 대상]', '[삭제 완료]', 'anonymous_days', 'dry_run', 'inactive_days', 'store_true', '실제 삭제하지 않고 삭제 대상만 출력']

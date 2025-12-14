@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/self_healing_serializers.py
+# hypothesis_version: 6.148.7
+
+[0.0, 1.0, 100, 500, 1440, 30000, 'Raise exception', 'Simulate timeout', 'action', 'allow', 'block', 'chaos', 'critical', 'environment', 'error', 'error_code', 'error_response', 'exception', 'forbidden', 'half_open', 'high', 'info', 'inject_failure', 'ops', 'override', 'rejected', 'reset', 'success', 'test', 'timeout', 'ttl_minutes', 'warning']

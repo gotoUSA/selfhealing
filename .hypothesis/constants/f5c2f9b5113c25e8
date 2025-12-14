@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/password_reset_serializers.py
+# hypothesis_version: 6.148.6
+
+[128, 'email', 'input_type', 'is_withdrawn', 'new_password', 'new_password2', 'password', 'token', 'token_obj', 'user', '가입한 이메일 주소', '비밀번호가 일치하지 않습니다.', '새 비밀번호 (최소 8자)', '새 비밀번호 확인', '유효하지 않은 토큰입니다.', '응답 메시지', '이메일로 받은 재설정 토큰']

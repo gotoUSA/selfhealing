@@ -1,0 +1,4 @@
+# file: /code/shopping/management/commands/delete_unverified_users.py
+# hypothesis_version: 6.148.6
+
+['\n❌ 삭제가 취소되었습니다.', '\n삭제된 계정:', '--days', '--dry-run', '--force', '--verbose', 'days', 'dry_run', 'email', 'force', 'joined', 'order_count', 'orders', 'store_true', 'username', 'verbose', 'yes', '✅ 삭제할 미인증 계정이 없습니다.', '미인증 계정 삭제 작업 시작', '삭제 대상 목록:', '상세 정보를 출력합니다', '실제로 삭제하지 않고 확인만 합니다', '유지 대상 목록:', '작업 완료']

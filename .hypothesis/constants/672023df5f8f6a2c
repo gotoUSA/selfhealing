@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0005_user_wishlist_products.py
+# hypothesis_version: 6.148.6
+
+['shopping', 'shopping.product', 'shopping_wishlist', 'user', 'wished_by_users', 'wishlist_products', '찜한 상품']

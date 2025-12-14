@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0019_webhookevent_remove_idempotency_unique.py
+# hypothesis_version: 6.148.6
+
+[100, 200, '-processed_at', 'ID', 'WebhookEvent', 'db_table', 'event_id', 'event_type', 'id', 'idempotency_key', 'order_id', 'ordering', 'payment', 'processed_at', 'shopping', 'source', 'toss', 'verbose_name', 'verbose_name_plural', 'webhookevent', '멱등성 키', '소스', '웹훅 이벤트', '웹훅 이벤트 목록', '이벤트 ID', '이벤트 타입', '주문 ID', '처리 시간']

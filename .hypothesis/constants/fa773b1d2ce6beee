@@ -1,0 +1,4 @@
+# file: /code/shopping/admin/user_admin.py
+# hypothesis_version: 6.148.7
+
+['-', '-date_joined', 'Business Information', 'Important Dates', 'Permissions', 'Personal Information', 'Seller Profile', 'Shipping Information', 'Shopping Information', 'Store Information', 'Timestamps', 'Wishlist', 'address', 'address_detail', 'bank_account', 'bank_holder', 'bank_name', 'business_address', 'business_number', 'classes', 'collapse', 'created_at', 'date_joined', 'email', 'fields', 'first_name', 'get_wishlist_count', 'groups', 'is_active', 'is_email_verified', 'is_seller', 'is_staff', 'is_superuser', 'last_login', 'last_name', 'membership_level', 'password', 'password1', 'password2', 'phone_number', 'points', 'postal_code', 'representative_name', 'seller_profile', 'store_description', 'store_name', 'updated_at', 'user', 'user__email', 'user__username', 'user_permissions', 'username', 'wide', 'wishlist_products']

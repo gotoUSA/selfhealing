@@ -1,0 +1,4 @@
+# file: /code/myproject/urls.py
+# hypothesis_version: 6.148.6
+
+['__debug__/', 'accounts/', 'admin/', 'allauth.urls', 'api-auth/', 'api/', 'api/docs/redoc/', 'api/docs/swagger/', 'api/schema/', 'redoc', 'rest_framework.urls', 'schema', 'shopping.urls', 'swagger-ui']

@@ -1,0 +1,4 @@
+# file: /code/shopping/services/payment_service.py
+# hypothesis_version: 6.148.6
+
+['100', 'DummyResult', 'aborted', 'amount', 'approve', 'cancel', 'cancel_deduct', 'cancel_reason', 'cancel_refund', 'canceled', 'canceled_amount', 'canceled_at', 'card', 'current_membership', 'done', 'earn', 'earn_rate', 'earned_points', 'error', 'error_code', 'error_message', 'expired', 'id', 'in_progress', 'membership_at_order', 'message', 'order_id', 'order_number', 'paid', 'payment', 'payment_amount', 'payment_id', 'payment_method', 'points', 'points_deducted', 'points_earned', 'points_refunded', 'processing', 'product_amount', 'ready', 'receipt_url', 'request', 'shipping_fee', 'sold_count', 'status', 'stock', 'success', 'sync-execution', 'task_id', 'total_amount', 'updated_at', 'used_points', '결제 승인 완료', '결제 요청 생성', '결제 정보를 찾을 수 없습니다.', '결제가 성공적으로 취소되었습니다.', '이미 완료된 결제입니다.', '이미 처리 중인 결제입니다.', '이미 취소된 결제입니다.']

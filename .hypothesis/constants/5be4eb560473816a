@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/category_serializers.py
+# hypothesis_version: 6.148.6
+
+[100, ' > ', 'children', 'children_count', 'created_at', 'description', 'full_path', 'id', 'is_active', 'is_leaf', 'name', 'parent', 'parent.id', 'parent.name', 'parent_id', 'parent_name', 'product_count', 'products_count', 'slug', 'updated_at', '부모 카테고리 ID', '직계 하위 카테고리 수', '최상위부터 현재까지의 전체 경로', '카테고리에 속한 활성 상품 수']

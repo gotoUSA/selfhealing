@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0025_circuit_breaker_ttl.py
+# hypothesis_version: 6.148.7
+
+['Archived', 'Automatic Replay', 'Expired', 'Half-Open 요청 횟수', 'Internal Error', 'Manual Fix', 'Pending Review', 'Rejected', 'Replay Queued', 'Resolution Type', 'Resolved', 'Retention Expired', 'Status', 'Under Review', 'archived', 'auto_replay', 'circuitbreakerstate', 'expired', 'failedoperation', 'internal_error', 'manual_fix', 'pending', 'rejected', 'replayed', 'requires_review', 'resolution_type', 'resolved', 'reviewing', 'shopping', 'status', '수동 제어 만료 시각']
