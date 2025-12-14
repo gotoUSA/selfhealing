@@ -1,0 +1,4 @@
+# file: /code/shopping/utils/encryption.py
+# hypothesis_version: 6.148.6
+
+['*', '-', 'ENCRYPTION_KEY', 'gAAAAA', '계좌번호가 비어있습니다.', '암호화된 계좌번호가 비어있습니다.']

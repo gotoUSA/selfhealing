@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/email_verification_serializers.py
+# hypothesis_version: 6.148.6
+
+['-created_at', '1분 후에 다시 시도해주세요.', 'clicked_at', 'created_at', 'email_type', 'error', 'error_message', 'id', 'is_email_verified', 'is_used', 'opened_at', 'recipient_email', 'request', 'sent_at', 'status', 'subject', 'token', 'used_at', 'user', 'verified', 'verified_at', '유효하지 않은 인증 코드입니다.', '유효하지 않은 토큰입니다.', '이미 이메일 인증이 완료되었습니다.', '인증 코드가 만료되었습니다.', '토큰이 만료되었습니다.']

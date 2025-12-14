@@ -1,0 +1,4 @@
+# file: /code/myproject/settings/components/social_auth.py
+# hypothesis_version: 6.148.6
+
+['1', '10', '3', 'APP', 'AUTH_PARAMS', 'DJANGO_ENV', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'JWT_AUTH_COOKIE', 'JWT_AUTH_HTTPONLY', 'JWT_AUTH_SAMESITE', 'JWT_AUTH_SECURE', 'KAKAO_CLIENT_SECRET', 'KAKAO_REST_API_KEY', 'Lax', 'NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET', 'OAUTH_CALLBACK_URI', 'OAUTH_RETRY_ATTEMPTS', 'SCOPE', 'USE_JWT', 'access_type', 'client_id', 'email', 'email*', 'google', 'kakao', 'key', 'local', 'naver', 'none', 'online', 'password1*', 'password2*', 'production', 'profile', 'secret', 'username*']

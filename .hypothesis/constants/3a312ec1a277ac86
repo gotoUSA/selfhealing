@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/user_serializers.py
+# hypothesis_version: 6.148.6
+
+[254, 'address', 'address_detail', 'agree_marketing_sms', 'birth_date', 'date_joined', 'detail', 'email', 'error', 'first_name', 'id', 'input_type', 'integrity_error', 'is_email_verified', 'is_phone_verified', 'last_login', 'last_name', 'membership_level', 'new_password', 'new_password2', 'password', 'password2', 'phone', 'phone_number', 'points', 'postal_code', 'request', 'required', 'shopping_user_email', 'shopping_user_phone', 'unique', 'user', 'username', '비밀번호', '비밀번호 확인', '비밀번호가 일치하지 않습니다.', '비활성화된 계정입니다.', '사용자명', '새 비밀번호', '새 비밀번호 확인', '새 비밀번호가 일치하지 않습니다', '이메일', '이미 사용중인 사용자명입니다.', '이미 사용중인 이메일입니다.', '이미 사용중인 전화번호입니다.', '탈퇴한 회원입니다.', '현재 비밀번호', '현재 비밀번호가 올바르지 않습니다.']

@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0003_order_additional_shipping_fee_order_is_free_shipping_and_more.py
+# hypothesis_version: 6.148.6
+
+['0', 'is_free_shipping', 'order', 'shipping_fee', 'shopping', '기본 배송비', '무료배송 여부', '무료배송 적용 여부', '배송비', '제주/도서산간 등 추가 배송비', '추가 배송비']

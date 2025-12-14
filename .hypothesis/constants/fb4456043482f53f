@@ -1,0 +1,4 @@
+# file: /code/shopping/views/mixins.py
+# hypothesis_version: 6.148.6
+
+['detail', 'error', 'message', 'verification_url', '이 작업을', '이메일 인증이 필요합니다.']

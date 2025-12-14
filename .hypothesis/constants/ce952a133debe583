@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/order_tasks.py
+# hypothesis_version: 6.148.6
+
+['already_processed', 'confirmed', 'failed', 'failure_reason', 'insufficient_stock', 'message', 'order_id', 'order_number', 'order_processing', 'pending', 'product', 'product_id', 'reason', 'status', 'stock', 'success', 'updated_at', 'use']

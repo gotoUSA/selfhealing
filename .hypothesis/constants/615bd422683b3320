@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/order_serializers.py
+# hypothesis_version: 6.148.6
+
+[', ', 'can_cancel', 'cart_items', 'created_at', 'earned_points', 'final_amount', 'get_status_display', 'id', 'is_free_shipping', 'item_count', 'order_items', 'order_memo', 'payment_method', 'price', 'product', 'product_info', 'product_name', 'quantity', 'request', 'shipping_address', 'shipping_fee', 'shipping_name', 'shipping_phone', 'shipping_postal_code', 'status', 'status_display', 'subtotal', 'total_amount', 'total_shipping_fee', 'updated_at', 'use_points', 'used_points', 'user', 'user.username', 'user_username', '사용할 포인트 (최소 100포인트)', '장바구니가 비어있습니다.']

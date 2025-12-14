@@ -1,0 +1,4 @@
+# file: /code/shopping/models/cart.py
+# hypothesis_version: 6.148.6
+
+[255, '-added_at', '-updated_at', '0', 'Product', 'cart', 'cart_items', 'carts', 'is_active', 'items', 'product', 'product__price', 'quantity', 'session_key', 'shopping_cart_items', 'shopping_carts', 'total', 'updated_at', 'user', '담은 시점 가격', '비회원 장바구니를 위한 세션 키', '사용자', '상품', '생성일시', '세션 키', '수량', '수정일시', '알 수 없음', '장바구니', '장바구니 목록', '장바구니 아이템', '장바구니 아이템 목록', '장바구니에 담을 때의 상품 가격', '추가일시', '현재 사용중인 장바구니인지 여부', '활성 상태', '회원 장바구니의 경우 사용자 정보']

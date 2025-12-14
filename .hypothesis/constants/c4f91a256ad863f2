@@ -1,0 +1,4 @@
+# file: /code/shopping/services/point_query_service.py
+# hypothesis_version: 6.148.6
+
+['%Y-%m', '%Y-%m-%d', '-created_at', 'earn', 'earned', 'end_date', 'expires_at', 'id', 'order', 'page', 'page_size', 'points', 'start_date', 'total_earned', 'total_used', 'type', 'used']

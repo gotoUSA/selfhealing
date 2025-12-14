@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/wishlist_serializers.py
+# hypothesis_version: 6.148.6
+
+[100, 'compare_price', 'created_at', 'discount_rate', 'id', 'is_available', 'name', 'price', 'primary_image', 'stock', 'url', 'wishlist_count', '상품 ID를 하나 이상 입력해주세요.', '존재하지 않는 상품입니다.', '찜하기/취소할 상품 ID', '찜할 상품 ID 리스트']

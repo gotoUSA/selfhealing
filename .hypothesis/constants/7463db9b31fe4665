@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/payment_recovery_tasks.py
+# hypothesis_version: 6.148.7
+
+[110, 120, 290, 300, 'NO_PAYMENT_KEY', 'PAYMENT_RECOVERY', 'Payment not found', 'SLA 위반 결제 없음', 'SLA_TIMEOUT_SECONDS', 'aborted', 'action', 'already_paid', 'approve', 'attempt', 'auto', 'circuit_breaker_open', 'close', 'closed', 'completed', 'created_at', 'current_state', 'default', 'deleted_count', 'detected', 'error', 'error_code', 'error_message', 'errors', 'expired', 'in_progress', 'manually_controlled', 'max_retries_exceeded', 'message', 'non_retryable_error', 'open', 'order', 'payment_critical', 'payment_id', 'pending', 'previous_state', 'processed', 'reason', 'rejected', 'resolved', 'retried', 'reviewing', 'service_name', 'skipped', 'state', 'status', 'success', 'toss_payment', 'updated_at', '만료된 DLQ 레코드 없음']

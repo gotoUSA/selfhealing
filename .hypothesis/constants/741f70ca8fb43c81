@@ -1,0 +1,4 @@
+# file: /code/shopping/services/payment_recovery_service.py
+# hypothesis_version: 6.148.7
+
+[0.25, 180, 300, 'CIRCUIT_BREAKER_OPEN', 'NOTIFY_ON_DLQ', 'PAYMENT_RECOVERY', 'RECOVERY_ERROR', 'RETRY_BACKOFF_BASE', 'RETRY_BACKOFF_MAX', 'RETRY_JITTER', 'RETRY_MAX_ATTEMPTS', 'SLA_ABORT_ENABLED', 'SLA_TIMEOUT', 'SLA_TIMEOUT_SECONDS', 'action', 'attempt', 'circuit_breaker_open', 'closed', 'critical', 'delay', 'dlq_entry', 'dlq_id', 'elapsed_seconds', 'error_code', 'max_retries_exceeded', 'missing_identifiers', 'moved_to_dlq', 'non_retryable_error', 'open', 'order__user', 'reason', 'retry_count', 'retry_scheduled', 'sla_abort', 'sla_timeout', 'sla_timeout_seconds', 'state', 'task_id', 'toss_payment', 'unknown', 'user', 'warning']

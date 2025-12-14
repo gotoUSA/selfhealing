@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/product_qa_serializers.py
+# hypothesis_version: 6.148.6
+
+[100, '...', 'answer', 'can_answer', 'can_edit', 'can_view', 'content', 'created_at', 'display_content', 'display_title', 'has_answer', 'id', 'is_answered', 'is_secret', 'product', 'product.name', 'product_name', 'question', 'request', 'seller', 'seller.username', 'seller_username', 'title', 'updated_at', 'user', 'user.username', 'user_username', '내용은 최소 5자 이상이어야 합니다.', '답변 권한이 없습니다.', '문의를 찾을 수 없습니다.', '비밀글입니다', '이미 답변이 등록되어 있습니다.', '제목은 최소 2자 이상이어야 합니다.']

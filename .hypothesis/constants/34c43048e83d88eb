@@ -1,0 +1,4 @@
+# file: /code/shopping/dtos/product_filter.py
+# hypothesis_version: 6.148.6
+
+['category', 'false', 'in_stock', 'max_price', 'min_price', 'seller', 'true']

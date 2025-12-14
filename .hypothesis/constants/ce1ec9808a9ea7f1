@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0014_notification_metadata.py
+# hypothesis_version: 6.148.6
+
+['metadata', 'notification', 'shopping', '메타데이터']

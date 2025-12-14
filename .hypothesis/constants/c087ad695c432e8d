@@ -1,0 +1,4 @@
+# file: /code/myproject/settings/__init__.py
+# hypothesis_version: 6.148.6
+
+['DJANGO_ENV', 'PYTEST_CURRENT_TEST', 'TESTING', 'True', 'local', 'production', 'pytest', 'test']

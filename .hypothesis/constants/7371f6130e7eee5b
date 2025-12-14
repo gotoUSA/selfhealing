@@ -1,0 +1,4 @@
+# file: /code/shopping/serializers/notification_serializers.py
+# hypothesis_version: 6.148.6
+
+[3600, 86400, 604800, '%Y-%m-%d', 'created_at', 'created_at_display', 'id', 'is_read', 'link', 'message', 'notification_ids', 'notification_type', 'read_at', 'request', 'title', '방금 전']

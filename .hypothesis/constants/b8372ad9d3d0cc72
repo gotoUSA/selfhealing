@@ -1,0 +1,4 @@
+# file: /code/myproject/celery.py
+# hypothesis_version: 6.148.6
+
+[300, 600, 1000, 3600, '*/5', 'Asia/Seoul', 'CELERY', 'CELERY_BROKER_URL', 'TESTING', 'cleanup-used-tokens', 'default', 'direct', 'django.conf:settings', 'exchange', 'exchange_type', 'expire-points-daily', 'expires', 'external.api', 'external_api', 'json', 'myproject', 'myproject.settings', 'notifications', 'options', 'order.process', 'order_processing', 'payment.critical', 'payment_critical', 'points', 'points.earn', 'queue', 'retry-failed-emails', 'routing_key', 'schedule', 'task']

@@ -1,0 +1,4 @@
+# file: /code/shopping/webhooks/toss_webhook_view.py
+# hypothesis_version: 6.148.6
+
+[200, 400, 401, 'Event ignored', 'Invalid signature', 'PAYMENT.CANCELED', 'PAYMENT.DONE', 'PAYMENT.FAILED', 'POST', 'Processing failed', 'Signature missing', 'Webhook processed', 'Webhooks', 'data', 'error', 'eventType', 'message', 'object', 'properties', 'string', 'type', '토스페이먼츠 결제 웹훅']

@@ -1,0 +1,4 @@
+# file: /code/shopping/tasks/dlq_replay_tasks.py
+# hypothesis_version: 6.148.7
+
+[100, 110, 120, 290, 300, 580, 600, 'archived_count', 'data', 'dlq_id', 'dlq_processing', 'domain', 'error', 'expired_count', 'failed_count', 'maintenance', 'message', 'service_name', 'skipped_count', 'success', 'success_count', 'total']

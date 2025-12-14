@@ -1,0 +1,4 @@
+# file: /code/myproject/settings/test.py
+# hypothesis_version: 6.148.6
+
+['/.dockerenv', '1000/hour', '1000/min', '10000/hour', '5432', 'BACKEND', 'CONN_HEALTH_CHECKS', 'CONN_MAX_AGE', 'DATABASE_HOST', 'ENGINE', 'HOST', 'NAME', 'OPTIONS', 'PASSWORD', 'PORT', 'TEST', 'TEST_DATABASE_HOST', 'TEST_DATABASE_NAME', 'TEST_DATABASE_PORT', 'TEST_DATABASE_USER', 'USER', 'UTF8', 'anon_global', 'cache+memory://', 'client_encoding', 'connect_timeout', 'db', 'default', 'email_verification', 'localhost', 'login', 'memory://', 'options', 'order_cancel', 'order_create', 'password_reset', 'payment_cancel', 'payment_confirm', 'payment_request', 'register', 'shopping_db', 'shopping_pass', 'shopping_user', 'test_shopping_db', 'token_refresh', 'user_global', 'webhook']

@@ -1,0 +1,4 @@
+# file: /code/shopping/admin/point_admin.py
+# hypothesis_version: 6.148.7
+
+['-created_at', 'Points', 'all', 'balance', 'created_at', 'description', 'expires_at', 'formatted_points', 'id', 'metadata', 'order', 'order__order_number', 'points', 'type', 'user', 'user__email', 'user__username']

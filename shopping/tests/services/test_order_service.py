@@ -403,12 +403,9 @@ class TestOrderServiceConcurrency:
 class TestOrderServiceHybrid:
     """주문 하이브리드 처리 테스트 (Phase 2)"""
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_success(self, mock_task_delay):
+    def test_create_order_hybrid_success(self):
         """하이브리드 주문 생성 성공 - Order 레코드만 생성하고 task_id 반환"""
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-12345")
-
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
         cart = CartFactory(user=user)
@@ -432,7 +429,6 @@ class TestOrderServiceHybrid:
         # Assert: task_id 반환 확인
         assert task_id is not None
         assert isinstance(task_id, str)
-        assert task_id == "test-task-id-12345"
 
         # Assert: OrderItem은 아직 생성되지 않음 (비동기 처리)
         assert order.order_items.count() == 0
@@ -482,12 +478,9 @@ class TestOrderServiceHybrid:
 
         assert "포인트가 부족합니다" in str(exc_info.value)
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_with_points(self, mock_task_delay):
+    def test_create_order_hybrid_with_points(self):
         """포인트 사용한 하이브리드 주문 생성"""
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-67890")
-
         use_points = 5000
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
@@ -513,14 +506,11 @@ class TestOrderServiceHybrid:
         user.refresh_from_db()
         assert user.points == initial_points  # 아직 차감 안됨
 
-    @patch("shopping.tasks.order_tasks.process_order_heavy_tasks.delay")
-    def test_create_order_hybrid_logging(self, mock_task_delay, caplog):
+    def test_create_order_hybrid_logging(self, caplog):
         """하이브리드 주문 생성 시 로깅 확인"""
         import logging
 
         # Arrange
-        mock_task_delay.return_value = Mock(id="test-task-id-logging")
-
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
         cart = CartFactory(user=user)

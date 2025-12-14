@@ -1,0 +1,4 @@
+# file: /code/myproject/settings/components/payment.py
+# hypothesis_version: 6.148.6
+
+['TOSS_BASE_URL', 'TOSS_CLIENT_KEY', 'TOSS_SECRET_KEY', 'TOSS_WEBHOOK_SECRET']

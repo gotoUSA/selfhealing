@@ -1,0 +1,42 @@
+{
+  "test_name": "Stage 15: Circuit Breaker Auto Transitions",
+  "timestamp": "2025-12-12T03:31:19.047558",
+  "configuration": {
+    "failure_threshold": 5,
+    "recovery_timeout": 60,
+    "success_threshold": 2,
+    "target_service": "stage15_test"
+  },
+  "transitions": [],
+  "timing": {
+    "open_time": null,
+    "half_open_time": null,
+    "closed_time": null
+  },
+  "requests_per_state": {
+    "closed": {
+      "success": 151,
+      "failure": 0
+    },
+    "open": {
+      "success": 0,
+      "failure": 0,
+      "rejected": 0
+    },
+    "half_open": {
+      "success": 0,
+      "failure": 0
+    },
+    "unknown": {
+      "success": 0,
+      "failure": 0
+    }
+  },
+  "verification": {
+    "closed_to_open": null,
+    "open_to_half_open": null,
+    "half_open_to_closed": null,
+    "recovery_timeout_accurate": null,
+    "all_transitions_valid": false
+  }
+}

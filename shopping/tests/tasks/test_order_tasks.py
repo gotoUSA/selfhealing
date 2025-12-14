@@ -19,7 +19,7 @@ class TestOrderTasksHappyPath:
     """주문 태스크 정상 케이스"""
 
     def test_process_order_heavy_tasks_success(
-        self, user, product, category, seller_user, order_factory
+        self, user, product, category, seller_user
     ):
         """무거운 작업 처리가 성공적으로 완료됨
 
@@ -32,11 +32,16 @@ class TestOrderTasksHappyPath:
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=2)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=product.price * 2,
             final_amount=product.price * 2,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         initial_stock = product.stock
@@ -71,7 +76,7 @@ class TestOrderTasksHappyPath:
         assert cart.items.count() == 0
 
     def test_process_order_heavy_tasks_with_points(
-        self, user, product, order_factory
+        self, user, product
     ):
         """포인트 사용이 포함된 주문 처리가 성공함"""
         # Arrange
@@ -81,12 +86,17 @@ class TestOrderTasksHappyPath:
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=1)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=product.price,
             used_points=1000,
             final_amount=product.price - 1000,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         # Act
@@ -111,17 +121,22 @@ class TestOrderTasksHappyPath:
 class TestOrderTasksBoundary:
     """주문 태스크 경계 케이스"""
 
-    def test_already_processed_order_ignored(self, user, product, order_factory):
+    def test_already_processed_order_ignored(self, user, product):
         """이미 처리된 주문은 무시됨 (멱등성)"""
         # Arrange: 이미 confirmed 상태인 주문
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=1)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="confirmed",  # 이미 처리됨
             total_amount=product.price,
             final_amount=product.price,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         initial_stock = product.stock
@@ -142,7 +157,7 @@ class TestOrderTasksBoundary:
         assert product.stock == initial_stock
 
     def test_multiple_products_in_cart(
-        self, user, product_factory, order_factory
+        self, user, product_factory
     ):
         """여러 상품이 담긴 장바구니 처리 성공"""
         # Arrange: 3개 상품
@@ -156,11 +171,16 @@ class TestOrderTasksBoundary:
             CartItem.objects.create(cart=cart, product=p, quantity=2)
 
         total = sum(p.price * 2 for p in products)
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=total,
             final_amount=total,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         # Act
@@ -185,7 +205,7 @@ class TestOrderTasksException:
     """주문 태스크 예외 케이스"""
 
     def test_insufficient_stock_fails_order(
-        self, user, product, order_factory
+        self, user, product
     ):
         """재고 부족 시 주문 실패 처리"""
         # Arrange: 재고가 1개인데 2개 주문
@@ -195,11 +215,16 @@ class TestOrderTasksException:
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=2)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=product.price * 2,
             final_amount=product.price * 2,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         # Act
@@ -224,7 +249,7 @@ class TestOrderTasksException:
         assert product.stock == 1
 
     def test_point_deduction_failure_rollback_stock(
-        self, user, product, order_factory
+        self, user, product
     ):
         """포인트 차감 실패 시 재고 롤백"""
         # Arrange: 포인트 부족
@@ -234,12 +259,17 @@ class TestOrderTasksException:
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=2)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=product.price * 2,
             used_points=1000,  # 보유량보다 많음
             final_amount=product.price * 2 - 1000,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         initial_stock = product.stock
@@ -269,7 +299,7 @@ class TestOrderTasksException:
         assert user.points == 500
 
     def test_point_deduction_with_minimum_amount(
-        self, user, product, order_factory
+        self, user, product
     ):
         """최소 포인트 사용 금액(100) 미만은 실패"""
         # Arrange
@@ -279,12 +309,17 @@ class TestOrderTasksException:
         cart = Cart.objects.create(user=user, is_active=True)
         CartItem.objects.create(cart=cart, product=product, quantity=1)
 
-        order = order_factory(
+        order = Order.objects.create(
             user=user,
             status="pending",
             total_amount=product.price,
             used_points=50,  # 최소 금액 미만
             final_amount=product.price - 50,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
         )
 
         initial_stock = product.stock

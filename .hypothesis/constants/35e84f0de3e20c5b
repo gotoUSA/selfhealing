@@ -1,0 +1,4 @@
+# file: /code/shopping/throttles.py
+# hypothesis_version: 6.148.6
+
+['anon_global', 'email_verification', 'login', 'order_cancel', 'order_create', 'password_reset', 'payment_cancel', 'payment_confirm', 'payment_request', 'register', 'token_refresh', 'user_global', 'webhook']

@@ -1,0 +1,4 @@
+# file: /code/shopping/permissions.py
+# hypothesis_version: 6.148.6
+
+['판매자만 접근 가능합니다.']

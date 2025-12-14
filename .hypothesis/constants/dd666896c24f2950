@@ -1,0 +1,4 @@
+# file: /code/shopping/admin/product_admin.py
+# hypothesis_version: 6.148.7
+
+['-created_at', '...', 'Basic Information', 'Details', 'Direct Products', 'Price', 'Price & Stock', 'Review', 'Timestamps', 'Total Products', 'alt_text', 'category', 'classes', 'collapse', 'comment', 'comment_preview', 'created_at', 'description', 'fields', 'formatted_price', 'image', 'indented_title', 'is_active', 'is_primary', 'name', 'order', 'price', 'product', 'product__name', 'rating', 'seller', 'sku', 'slug', 'stock', 'tree_actions', 'updated_at', 'user', 'user__username']

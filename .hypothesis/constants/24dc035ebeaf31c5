@@ -1,0 +1,4 @@
+# file: /code/shopping/adapters.py
+# hypothesis_version: 6.148.6
+
+['email', 'is_email_verified', 'kakao', 'kakao_account', 'naver', 'response']

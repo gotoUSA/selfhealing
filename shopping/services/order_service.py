@@ -243,13 +243,6 @@ class OrderService:
 
         # 5. Order 레코드 생성 (트랜잭션 짧게)
         with transaction.atomic():
-            # ✅ Cart 락: 동시에 같은 장바구니로 여러 주문 생성 방지
-            locked_cart = Cart.objects.select_for_update().get(pk=cart.id)
-
-            # 재검증: 트랜잭션 내에서 장바구니가 비어있지 않은지 다시 확인
-            if not locked_cart.items.exists():
-                raise OrderServiceError("장바구니가 비어있습니다.")
-
             order = Order.objects.create(
                 user=user,
                 status="pending",  # 아직 미확정

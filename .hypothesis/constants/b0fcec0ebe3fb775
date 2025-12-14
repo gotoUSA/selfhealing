@@ -1,0 +1,4 @@
+# file: /code/shopping/migrations/0006_productquestion_productanswer_notification_and_more.py
+# hypothesis_version: 6.148.6
+
+[100, 200, '-created_at', 'ID', 'Notification', 'ProductAnswer', 'ProductQuestion', 'answer', 'content', 'created_at', 'id', 'indexes', 'is_answered', 'is_read', 'is_secret', 'link', 'message', 'notification_type', 'notifications', 'order_status', 'ordering', 'point_earned', 'point_expiring', 'product', 'product_answers', 'product_questions', 'productquestion', 'qa_answer', 'question', 'questions', 'read_at', 'review_reply', 'seller', 'shopping', 'shopping.product', 'title', 'updated_at', 'user', 'verbose_name', 'verbose_name_plural', '내용', '답변 내용', '답변 완료', '답변일', '답변자', '리뷰 답글', '링크', '문의', '문의 내용', '문의 답변', '비밀글', '사용자', '상품', '상품 문의', '상품 문의 답변', '생성 시간', '수정일', '알림', '알림 타입', '읽은 시간', '읽음 여부', '작성일', '작성자', '제목', '주문 상태 변경', '포인트 만료 예정', '포인트 적립']

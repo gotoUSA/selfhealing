@@ -1,0 +1,4 @@
+# file: /code/shopping/services/self_healing/security_violation_service.py
+# hypothesis_version: 6.148.7
+
+[100, 3600, 86400, ',', 'HTTP_USER_AGENT', 'HTTP_X_FORWARDED_FOR', 'HttpRequest', 'HttpRequest | None', 'Order | None', 'Payment | None', 'REMOTE_ADDR', 'SecurityConfig', 'SecurityIncident', 'User', 'User | None', '[REDACTED]', 'access_token', 'api_key', 'banned', 'card_number', 'credit_card', 'critical', 'cvc', 'cvv', 'high', 'injection_attempt', 'medium', 'new_password', 'old_password', 'password', 'permanent', 'rate_limit_abuse', 'refresh_token', 'replay_attack', 'secret', 'security:banned_ip:', 'suspicious_activity', 'temporary', 'token', 'token_forged', 'type', 'unauthorized_access']

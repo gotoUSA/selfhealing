@@ -1,0 +1,4 @@
+# file: /code/shopping/services/token_service.py
+# hypothesis_version: 6.148.6
+
+['INVALID_FORMAT', 'Invalid token format', 'SIMPLE_JWT', 'TOKEN_BLACKLISTED', 'TOKEN_INVALID', 'TOKEN_REQUIRED', 'TOKEN_SERVICE_ERROR', 'Token is blacklisted', 'jti', 'verify_signature', '토큰 갱신 완료', '토큰 블랙리스트 추가 완료', '토큰 형식 오류: 잘못된 JWT 형식']
