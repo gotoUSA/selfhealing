@@ -17,9 +17,18 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shopping.models.failed_operation import FailedOperation
-
 logger = logging.getLogger(__name__)
+
+
+def _get_failed_operation_model():
+    """Lazy import FailedOperation model."""
+    try:
+        from shopping.models.failed_operation import FailedOperation
+        return FailedOperation
+    except ImportError:
+        # Fallback to selfhealing package model
+        from selfhealing.adapters.django.models import FailedOperation
+        return FailedOperation
 
 
 class DashboardSummaryView(APIView):
@@ -36,6 +45,7 @@ class DashboardSummaryView(APIView):
     def get(self, request):
         """Get dashboard summary statistics."""
         try:
+            FailedOperation = _get_failed_operation_model()
             now = timezone.now()
             last_24h = now - timedelta(hours=24)
             last_7d = now - timedelta(days=7)

@@ -29,10 +29,16 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
     """
 
     def _get_model(self):
-        """Lazy import to avoid circular dependencies"""
-        from shopping.models.failed_operation import FailedOperation
-
-        return FailedOperation
+        """Lazy import to avoid circular dependencies."""
+        try:
+            from shopping.models.failed_operation import FailedOperation
+            return FailedOperation
+        except ImportError:
+            raise ImportError(
+                "FailedOperation model not found. "
+                "Django adapter requires shopping app. "
+                "Install shopping app or use selfhealing.adapters.django.repositories instead."
+            )
 
     def _to_data(self, obj) -> FailedOperationData:
         """Convert Django model instance to data class"""

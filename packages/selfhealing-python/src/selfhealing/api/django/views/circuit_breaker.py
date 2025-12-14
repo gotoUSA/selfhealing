@@ -31,13 +31,29 @@ from selfhealing.api.django.serializers import (
     ControlAPIActions,
     ControlAPIEnvironments,
 )
-
-# Use shopping.models to ensure same tables as CircuitBreakerService repository
-from shopping.models import CircuitBreakerState
-from shopping.models.failed_operation import FailedOperation
 from selfhealing.core.types import CircuitState
 
 logger = logging.getLogger(__name__)
+
+
+def _get_circuit_breaker_model():
+    """Lazy import CircuitBreakerState model."""
+    try:
+        from shopping.models import CircuitBreakerState
+        return CircuitBreakerState
+    except ImportError:
+        from selfhealing.adapters.django.models import CircuitBreakerState
+        return CircuitBreakerState
+
+
+def _get_failed_operation_model():
+    """Lazy import FailedOperation model."""
+    try:
+        from shopping.models.failed_operation import FailedOperation
+        return FailedOperation
+    except ImportError:
+        from selfhealing.adapters.django.models import FailedOperation
+        return FailedOperation
 
 
 # =============================================================================
@@ -141,6 +157,7 @@ class ControlAPIService:
 
     def _execute_allow(self, request: ControlRequest) -> ControlResponse:
         """Execute allow action (close circuit breaker)."""
+        CircuitBreakerState = _get_circuit_breaker_model()
         cb, created = CircuitBreakerState.objects.get_or_create(
             service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
@@ -168,6 +185,7 @@ class ControlAPIService:
 
     def _execute_block(self, request: ControlRequest) -> ControlResponse:
         """Execute block action (open circuit breaker)."""
+        CircuitBreakerState = _get_circuit_breaker_model()
         cb, created = CircuitBreakerState.objects.get_or_create(
             service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
@@ -199,6 +217,7 @@ class ControlAPIService:
         """Execute reset action."""
         from selfhealing.services import get_circuit_breaker_service
 
+        CircuitBreakerState = _get_circuit_breaker_model()
         try:
             cb = CircuitBreakerState.objects.get(service_name=request.service_name)
             previous_state = cb.state
@@ -230,6 +249,7 @@ class ControlAPIService:
 
     def _execute_override(self, request: ControlRequest) -> ControlResponse:
         """Execute override action."""
+        CircuitBreakerState = _get_circuit_breaker_model()
         cb, created = CircuitBreakerState.objects.get_or_create(
             service_name=request.service_name, defaults={"state": CircuitState.CLOSED.value}
         )
@@ -367,6 +387,7 @@ class ControlAPIService:
 
     def get_status(self, environment: str = "ops") -> Dict[str, Any]:
         """Get status of all services."""
+        CircuitBreakerState = _get_circuit_breaker_model()
         circuits = CircuitBreakerState.objects.all().order_by("service_name")
 
         services = []
@@ -406,6 +427,7 @@ class ControlAPIService:
         # Call should_allow() to trigger automatic OPEN → HALF_OPEN transition
         is_allowed = cb_service.should_allow(service_name)
 
+        CircuitBreakerState = _get_circuit_breaker_model()
         try:
             cb = CircuitBreakerState.objects.get(service_name=service_name)
             return {
@@ -432,6 +454,9 @@ class ControlAPIService:
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive self-healing metrics."""
         start_time = time.time()
+
+        CircuitBreakerState = _get_circuit_breaker_model()
+        FailedOperation = _get_failed_operation_model()
 
         # Circuit breaker stats
         all_circuits = CircuitBreakerState.objects.all()

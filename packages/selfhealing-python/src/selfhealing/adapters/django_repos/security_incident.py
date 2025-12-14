@@ -30,10 +30,16 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
     """
 
     def _get_model(self):
-        """Lazy import to avoid circular dependencies"""
-        from shopping.models.security_incident import SecurityIncident
-
-        return SecurityIncident
+        """Lazy import to avoid circular dependencies."""
+        try:
+            from shopping.models.security_incident import SecurityIncident
+            return SecurityIncident
+        except ImportError:
+            raise ImportError(
+                "SecurityIncident model not found. "
+                "Django adapter requires shopping app. "
+                "Install shopping app or use selfhealing.adapters.django.repositories instead."
+            )
 
     def _to_data(self, obj) -> SecurityIncidentData:
         """Convert Django model instance to data class"""

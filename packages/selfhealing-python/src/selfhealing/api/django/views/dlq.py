@@ -20,9 +20,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
-from shopping.models.failed_operation import FailedOperation
 
 logger = logging.getLogger(__name__)
+
+
+def _get_failed_operation_model():
+    """Lazy import FailedOperation model."""
+    try:
+        from shopping.models.failed_operation import FailedOperation
+        return FailedOperation
+    except ImportError:
+        from selfhealing.adapters.django.models import FailedOperation
+        return FailedOperation
 
 
 class DLQReplayView(APIView):
@@ -44,6 +53,7 @@ class DLQReplayView(APIView):
         batch_size = serializer.validated_data.get("batch_size", 50)
 
         try:
+            FailedOperation = _get_failed_operation_model()
             # Get pending DLQ entries
             queryset = FailedOperation.objects.filter(status=FailedOperation.Status.PENDING)
             if domain:
@@ -105,6 +115,7 @@ class DLQCleanupStatsView(APIView):
         try:
             from django.db.models import Count
 
+            FailedOperation = _get_failed_operation_model()
             now = timezone.now()
             day_30_ago = now - timedelta(days=30)
             day_90_ago = now - timedelta(days=90)
@@ -164,6 +175,7 @@ class DLQArchiveView(APIView):
     def post(self, request):
         """Archive old resolved entries."""
         try:
+            FailedOperation = _get_failed_operation_model()
             older_than_days = int(request.data.get("older_than_days", 30))
 
             if older_than_days < 1:
@@ -240,6 +252,8 @@ class DLQPurgeView(APIView):
 
             ids = request.data.get("ids")
             older_than_days = request.data.get("older_than_days")
+
+            FailedOperation = _get_failed_operation_model()
 
             if ids is not None and older_than_days is not None:
                 return Response(
@@ -337,6 +351,8 @@ class DLQListView(APIView):
         try:
             from django.core.paginator import Paginator
 
+            FailedOperation = _get_failed_operation_model()
+
             # Filters
             status_filter = request.query_params.get("status")
             domain_filter = request.query_params.get("domain")
@@ -408,6 +424,7 @@ class DLQDetailView(APIView):
     def get(self, request, pk):
         """Get detailed info for a single DLQ entry."""
         try:
+            FailedOperation = _get_failed_operation_model()
             entry = FailedOperation.objects.get(pk=pk)
 
             return Response(
@@ -455,6 +472,7 @@ class DLQRetryView(APIView):
     def post(self, request, pk):
         """Retry a single DLQ entry."""
         try:
+            FailedOperation = _get_failed_operation_model()
             entry = FailedOperation.objects.get(pk=pk)
 
             if entry.status == FailedOperation.Status.RESOLVED:
@@ -524,6 +542,7 @@ class DLQResolveView(APIView):
     def post(self, request, pk):
         """Manually resolve a DLQ entry."""
         try:
+            FailedOperation = _get_failed_operation_model()
             entry = FailedOperation.objects.get(pk=pk)
 
             if entry.status == FailedOperation.Status.RESOLVED:

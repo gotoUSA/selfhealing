@@ -29,10 +29,16 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
 
     def _get_model(self):
-        """Lazy import to avoid circular dependencies"""
-        from shopping.models.failed_payment import CircuitBreakerState
-
-        return CircuitBreakerState
+        """Lazy import to avoid circular dependencies."""
+        try:
+            from shopping.models.failed_payment import CircuitBreakerState
+            return CircuitBreakerState
+        except ImportError:
+            raise ImportError(
+                "CircuitBreakerState model not found. "
+                "Django adapter requires shopping app. "
+                "Install shopping app or use selfhealing.adapters.django.repositories instead."
+            )
 
     def _to_data(self, obj) -> CircuitBreakerStateData:
         """Convert Django model instance to data class"""
