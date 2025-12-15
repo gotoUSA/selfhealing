@@ -144,6 +144,20 @@ from selfhealing.core.decision_logger import (
     log_intervention_evaluated,
     log_exit_pre_decision_zone,
 )
+from selfhealing.core.execution_mode import (
+    ExecutionModeType,
+    ExecutionMode,
+    get_execution_mode,
+    set_execution_mode,
+    clear_execution_mode_override,
+)
+from selfhealing.core.action_executor import (
+    Action,
+    ActionResult,
+    ActionExecutor,
+    get_action_executor,
+    execute_action,
+)
 
 __all__ = [
     # Types
@@ -264,4 +278,16 @@ __all__ = [
     "log_enter_pre_decision_zone",
     "log_intervention_evaluated",
     "log_exit_pre_decision_zone",
+    # Execution Mode (Shadow/Evaluation Mode Support)
+    "ExecutionModeType",
+    "ExecutionMode",
+    "get_execution_mode",
+    "set_execution_mode",
+    "clear_execution_mode_override",
+    # Action Executor (Central Execution Point)
+    "Action",
+    "ActionResult",
+    "ActionExecutor",
+    "get_action_executor",
+    "execute_action",
 ]
