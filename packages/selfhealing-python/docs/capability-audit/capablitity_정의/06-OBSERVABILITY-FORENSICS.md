@@ -466,3 +466,10 @@ def get_protection_status(self, service_name: str) -> dict[str, Any]:
 |-----------|----------|
 | State Visibility | `services/circuit_breaker/service.py::get_all_states` |
 | Protection Status | `services/circuit_breaker/protection.py::get_protection_status` |
+
+---
+
+## See Also
+
+- **Capability 30: OpenTelemetry Adapter** - Optional export to external APM platforms
+  - See [07-OPENTELEMETRY-ADAPTER.md](07-OPENTELEMETRY-ADAPTER.md)
