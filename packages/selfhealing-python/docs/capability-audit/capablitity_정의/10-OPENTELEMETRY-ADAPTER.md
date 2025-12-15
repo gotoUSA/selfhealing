@@ -83,15 +83,15 @@ class OpenTelemetryConfig:
     enabled: bool = False                    # Master switch, default OFF
     service_name: str = "selfhealing-service"
     environment: str = "development"
-    
+
     # Feature Toggles
     decision_span_enabled: bool = True       # Coarse-grained spans
     event_export_enabled: bool = True        # Structured events
-    
+
     # Export Configuration
     endpoint: Optional[str] = None           # OTLP endpoint
     export_timeout_seconds: int = 30
-    
+
     # Event Filtering
     export_circuit_breaker_events: bool = True
     export_retry_events: bool = True
@@ -99,7 +99,45 @@ class OpenTelemetryConfig:
     export_rate_limit_events: bool = True
     export_slo_events: bool = True
     export_policy_events: bool = True
+
 ```
+
+### Note on Exporter Configuration
+
+The OpenTelemetry adapter does NOT configure exporters, samplers,
+or OTLP endpoints directly.
+
+Configuration fields such as `endpoint` and export-related options
+exist for compatibility, documentation clarity, and future extensibility.
+
+Actual OpenTelemetry exporter configuration (including OTLP endpoints,
+authentication, batching, and retries) is fully owned by the application
+or platform-level OpenTelemetry setup.
+
+This adapter only emits self-healing decision signals into an existing
+OpenTelemetry environment and does not assume responsibility for
+telemetry delivery.
+
+### Note on Active Span Selection
+
+When emitting OpenTelemetry events, this adapter attaches events
+to the currently active span in the execution context, if one exists.
+
+This may include spans created by external instrumentation
+(e.g., HTTP request spans or APM-provided spans).
+
+This behavior is intentional and does NOT imply ownership of span
+lifecycle by the adapter.
+
+The adapter never creates, starts, or ends spans autonomously.
+Span boundaries for self-healing decision cycles must be explicitly
+managed by the self-healing engine.
+
+If no active span exists, the adapter silently drops events.
+
+This design favors practical observability integration while
+preserving strict separation of responsibilities.
+
 
 #### 30.5.2 Environment Variables
 
@@ -157,29 +195,29 @@ class SelfHealingEventType(str, Enum):
     CIRCUIT_BREAKER_CLOSED = "selfhealing.circuit_breaker.closed"
     CIRCUIT_BREAKER_HALF_OPENED = "selfhealing.circuit_breaker.half_opened"
     CIRCUIT_BREAKER_MANUAL_OVERRIDE = "selfhealing.circuit_breaker.manual_override"
-    
+
     # Retry
     RETRY_ATTEMPT = "selfhealing.retry.attempt"
     RETRY_EXHAUSTED = "selfhealing.retry.exhausted"
     RETRY_SUCCESS = "selfhealing.retry.success"
-    
+
     # DLQ
     DLQ_ENQUEUED = "selfhealing.dlq.enqueued"
     DLQ_REPLAY_STARTED = "selfhealing.dlq.replay_started"
     DLQ_REPLAY_SUCCESS = "selfhealing.dlq.replay_success"
     DLQ_REPLAY_FAILED = "selfhealing.dlq.replay_failed"
     DLQ_REPLAY_ABORTED = "selfhealing.dlq.replay_aborted"
-    
+
     # Rate Limit
     RATE_LIMIT_TRIGGERED = "selfhealing.rate_limit.triggered"
     RATE_LIMIT_CASCADE_DETECTED = "selfhealing.rate_limit.cascade_detected"
     SELF_DDOS_DETECTED = "selfhealing.rate_limit.self_ddos_detected"
-    
+
     # SLO
     SLO_THRESHOLD_APPROACHING = "selfhealing.slo.threshold_approaching"
     SLO_BREACHED = "selfhealing.slo.breached"
     SLO_RECOVERED = "selfhealing.slo.recovered"
-    
+
     # Policy
     POLICY_EVALUATED = "selfhealing.policy.evaluated"
     POLICY_AUTO_HEAL_ALLOWED = "selfhealing.policy.auto_heal_allowed"
@@ -215,7 +253,7 @@ class DecisionSpanContext:
     started_at: datetime
     is_active: bool = True
     domain: Optional[str] = None
-    
+
     def add_event(self, name: str, attributes: Dict) -> None: ...
     def set_attribute(self, key: str, value: Any) -> None: ...
     def set_outcome(self, outcome: str, attributes: Dict) -> None: ...
@@ -282,13 +320,13 @@ span_ctx = start_decision_span(
 try:
     # Perform policy evaluation
     span_ctx.add_event("policy_rule_checked", {"rule": "max_retries"})
-    
+
     # Simulate decision
     if should_auto_heal:
         span_ctx.set_outcome(DecisionOutcome.AUTO_HEALED)
     else:
         span_ctx.set_outcome(DecisionOutcome.MANUAL_INTERVENTION)
-        
+
 finally:
     end_decision_span(span_ctx)
 ```
@@ -452,7 +490,7 @@ except (ImportError, ImproperlyConfigured):
 
 **Why both exceptions:**
 - `ImportError`: Django package is not installed
-- `ImproperlyConfigured`: Django is installed but `DJANGO_SETTINGS_MODULE` is not set, 
+- `ImproperlyConfigured`: Django is installed but `DJANGO_SETTINGS_MODULE` is not set,
   or `settings.configure()` was not called (common in tests, CLI tools, standalone scripts)
 
 ### 30.14.4 Audit Compliance Checklist
