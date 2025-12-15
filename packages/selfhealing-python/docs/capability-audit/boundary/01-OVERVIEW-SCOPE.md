@@ -1,8 +1,8 @@
 # Self-Healing System – Functional Capability Overview
 
-**Document Version:** 1.0  
-**Audit Date:** 2025-12-15  
-**Auditor:** Automated Code Analysis  
+**Document Version:** 1.0
+**Audit Date:** 2025-12-15
+**Auditor:** Automated Code Analysis
 
 ---
 
@@ -29,7 +29,7 @@ The analysis covered:
 | `factory.py` | Provider registry for dependency injection |
 | `config.py` | Configuration management |
 
-Total files analyzed: ~80+ Python modules  
+Total files analyzed: ~80+ Python modules
 Lines of code examined: ~15,000+
 
 ### 1.2 Definition of "Self-Healing" Applied
@@ -130,3 +130,4 @@ This capability audit is split into multiple documents for readability:
 | [07-INTEGRATION-ADAPTERS.md](07-INTEGRATION-ADAPTERS.md) | Framework adapters and requirements |
 | [08-SUMMARY-NONGOALS.md](08-SUMMARY-NONGOALS.md) | Summary and explicit non-goals |
 | [09-REST-API-ENDPOINTS.md](09-REST-API-ENDPOINTS.md) | REST API, Health Probes, FastAPI 🆕 |
+| [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md) | Optional OpenTelemetry integration |

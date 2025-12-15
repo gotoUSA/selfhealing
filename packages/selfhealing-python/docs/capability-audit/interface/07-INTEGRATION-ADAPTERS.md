@@ -156,11 +156,11 @@ class FailedOperationRepository(ABC):
         recommended_action: str = "",
     ) -> FailedOperationData:
         ...
-    
+
     @abstractmethod
     def get_by_id(self, id: int) -> Optional[FailedOperationData]:
         ...
-    
+
     @abstractmethod
     def update_status(
         self,
@@ -171,7 +171,7 @@ class FailedOperationRepository(ABC):
         resolved_by_id: Optional[int] = None,
     ) -> bool:
         ...
-    
+
     @abstractmethod
     def find_by_status(
         self,
@@ -181,7 +181,7 @@ class FailedOperationRepository(ABC):
         limit: int = 100,
     ) -> list[FailedOperationData]:
         ...
-    
+
     @abstractmethod
     def find_replayable(
         self,
@@ -191,7 +191,7 @@ class FailedOperationRepository(ABC):
         limit: int = 100,
     ) -> list[FailedOperationData]:
         ...
-    
+
     @abstractmethod
     def try_acquire_for_replay(
         self,
@@ -200,7 +200,7 @@ class FailedOperationRepository(ABC):
     ) -> Optional[FailedOperationData]:
         """Atomic acquisition to prevent race conditions."""
         ...
-    
+
     @abstractmethod
     def complete_replay(
         self,
@@ -220,7 +220,7 @@ class CircuitBreakerStateRepository(ABC):
     @abstractmethod
     def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
         ...
-    
+
     @abstractmethod
     def update_state(
         self,
@@ -231,17 +231,17 @@ class CircuitBreakerStateRepository(ABC):
         opened_at: Optional[datetime] = None,
     ) -> bool:
         ...
-    
+
     @abstractmethod
     def record_failure(self, service_name: str) -> CircuitBreakerStateData:
         """Atomic failure count increment."""
         ...
-    
+
     @abstractmethod
     def record_success(self, service_name: str) -> CircuitBreakerStateData:
         """Atomic success count increment."""
         ...
-    
+
     @abstractmethod
     def atomic_force_open(
         self,
@@ -252,7 +252,7 @@ class CircuitBreakerStateRepository(ABC):
     ) -> tuple[bool, str, str]:
         """Atomic force open with race condition prevention."""
         ...
-    
+
     @abstractmethod
     def atomic_force_close(
         self,
@@ -287,12 +287,12 @@ class ReplayHandler(ABC):
     def domain(self) -> str:
         """Return the domain this handler handles."""
         pass
-    
+
     @abstractmethod
     def replay(self, failed_op: FailedOperationData) -> ReplayResult:
         """Execute replay for a single failed operation."""
         pass
-    
+
     @abstractmethod
     def can_replay(self, failed_op: FailedOperationData) -> tuple[bool, str]:
         """Check if the operation can be replayed."""
@@ -308,7 +308,7 @@ class PaymentReplayHandler(ReplayHandler):
     @property
     def domain(self) -> str:
         return "payment"
-    
+
     def can_replay(self, failed_op):
         # Check if payment can be retried
         payment = Payment.objects.filter(id=failed_op.payment_id).first()
@@ -317,7 +317,7 @@ class PaymentReplayHandler(ReplayHandler):
         if payment.status == "completed":
             return False, "Already completed"
         return True, ""
-    
+
     def replay(self, failed_op):
         # Execute payment retry logic
         try:
@@ -373,7 +373,7 @@ class TaskQueueInterface(ABC):
     ) -> str:
         """Enqueue a task and return task ID."""
         pass
-    
+
     @abstractmethod
     def get_task_status(self, task_id: str) -> str:
         """Get the status of a task."""
@@ -404,7 +404,7 @@ class CacheProviderInterface(ABC):
     def get(self, key: str) -> Optional[Any]:
         """Get a value from cache."""
         pass
-    
+
     @abstractmethod
     def set(
         self,
@@ -414,12 +414,12 @@ class CacheProviderInterface(ABC):
     ) -> bool:
         """Set a value in cache with optional TTL."""
         pass
-    
+
     @abstractmethod
     def delete(self, key: str) -> bool:
         """Delete a key from cache."""
         pass
-    
+
     @abstractmethod
     def exists(self, key: str) -> bool:
         """Check if a key exists."""
@@ -476,3 +476,16 @@ ProviderRegistry.register_circuit_breaker_repo("default", MyCircuitBreakerRepo)
 | Celery | Async DLQ replay, background tasks |
 | Prometheus | Metrics scraping |
 | Slack/PagerDuty | Security notifications |
+---
+
+## Optional: OpenTelemetry Adapter
+
+An **optional** OpenTelemetry adapter is available for exporting self-healing signals to external APM platforms (Datadog, New Relic, Elastic, etc.).
+
+**Important:**
+- This is **NOT** a required integration
+- Prometheus remains the primary metrics layer
+- The system functions identically without OpenTelemetry
+- Zero overhead when disabled or not installed
+
+For implementation details, see [10-OPENTELEMETRY-ADAPTER.md](../capablitity_정의/10-OPENTELEMETRY-ADAPTER.md).

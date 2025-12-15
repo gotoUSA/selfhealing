@@ -144,6 +144,8 @@ While it exports Prometheus metrics, this library is NOT:
 
 **What It Does Instead:** Provides hooks for integration with existing monitoring solutions.
 
+> **Note:** An [optional OpenTelemetry adapter](../capablitity_정의/10-OPENTELEMETRY-ADAPTER.md) exists for exporting decision events to external APM platforms, but it does NOT replace Prometheus metrics and is NOT required for system operation.
+
 ### ❌ 4. Provide Service Mesh Features
 
 This is NOT:
@@ -298,6 +300,7 @@ For complex decisions like:
 | [07-INTEGRATION-ADAPTERS.md](07-INTEGRATION-ADAPTERS.md) | Adapters, Interfaces |
 | **08-SUMMARY-NONGOALS.md** | Summary & Non-Goals (This Document) |
 | [09-REST-API-ENDPOINTS.md](09-REST-API-ENDPOINTS.md) | REST API & Health Probes 🆕 |
+| [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md) | Optional OpenTelemetry Integration |
 
 ---
 

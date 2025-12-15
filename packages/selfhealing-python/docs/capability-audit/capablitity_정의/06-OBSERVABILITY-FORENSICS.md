@@ -471,5 +471,14 @@ def get_protection_status(self, service_name: str) -> dict[str, Any]:
 
 ## See Also
 
-- **Capability 30: OpenTelemetry Adapter** - Optional export to external APM platforms
-  - See [07-OPENTELEMETRY-ADAPTER.md](07-OPENTELEMETRY-ADAPTER.md)
+### Optional: OpenTelemetry Adapter
+
+An **optional** OpenTelemetry adapter is available for exporting self-healing decision events to external APM platforms (Datadog, New Relic, Elastic, CloudWatch).
+
+**Key Points:**
+- This is **NOT** a replacement for Prometheus metrics
+- Prometheus remains the **primary** observability layer
+- The system functions identically without OpenTelemetry installed
+- OpenTelemetry is disabled by default and requires explicit enablement
+
+For detailed design, configuration, and usage, see [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md).
