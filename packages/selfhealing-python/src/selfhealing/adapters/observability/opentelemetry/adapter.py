@@ -3,22 +3,34 @@ OpenTelemetry Adapter Implementation
 
 Main adapter class that bridges self-healing signals to OpenTelemetry.
 
-ARCHITECTURE:
-- Uses lazy imports for OpenTelemetry SDK
-- Falls back to NO-OP when OTel not installed
-- Disabled by default, requires explicit enablement
-- Event-based emission (not request-based)
+CRITICAL DESIGN RULES:
+────────────────────────────────────────────────────────────────────────
+1. This adapter MUST NOT own or configure the OpenTelemetry environment
+2. This adapter MUST NOT alter global OpenTelemetry state
+3. This adapter MUST NOT call trace.set_tracer_provider()
+4. This adapter MUST NOT configure exporters, samplers, or resources
+5. All OpenTelemetry configuration is owned by the application/platform
+────────────────────────────────────────────────────────────────────────
 
-IMPORTANT:
-- This does NOT replace Prometheus metrics
-- This is an OPTIONAL extension for APM integration
+SPAN OWNERSHIP RULES:
+- The adapter NEVER autonomously creates spans
+- The adapter NEVER decides when a span starts or ends
+- Span lifecycle is owned exclusively by the self-healing engine
+- If no active span exists, events are silently dropped
+
+EVENT EMISSION RULES:
+- If there is an active decision span: attach events to that span
+- If there is NO active span: DO NOT create a span, silently drop
+- Optional DEBUG log when events are dropped (for troubleshooting)
+
+This adapter ONLY emits self-healing decision signals
+into an EXISTING OpenTelemetry environment, if one exists.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING
-from functools import lru_cache
 from datetime import datetime
 import threading
 
@@ -29,51 +41,33 @@ from .events import SelfHealingEventType, EventAttribute
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# OpenTelemetry SDK Detection
+# OpenTelemetry SDK Detection (Lazy Import)
 # =============================================================================
+#
+# WHY LAZY IMPORT:
+# - OpenTelemetry is an OPTIONAL dependency
+# - If not installed, the adapter becomes a complete NO-OP
+# - No ImportError may escape to the application
+# - The system MUST start and function identically without OTel
+#
 
 OPENTELEMETRY_AVAILABLE = False
-_otel_tracer = None
-_otel_event_logger = None
 
 try:
     from opentelemetry import trace
     from opentelemetry.trace import Status, StatusCode, SpanKind
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME, DEPLOYMENT_ENVIRONMENT
-
-    # Try to import OTLP exporter (optional)
-    try:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
-        OTLP_AVAILABLE = True
-    except ImportError:
-        OTLP_AVAILABLE = False
-        OTLPSpanExporter = None
-
-    # Try to import batch processor
-    try:
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    except ImportError:
-        BatchSpanProcessor = None
 
     OPENTELEMETRY_AVAILABLE = True
-    logger.debug("OpenTelemetry SDK detected and available")
+    logger.debug("OpenTelemetry API detected and available")
 
 except ImportError:
+    # OpenTelemetry not installed - adapter becomes NO-OP
     OPENTELEMETRY_AVAILABLE = False
     trace = None
     Status = None
     StatusCode = None
     SpanKind = None
-    TracerProvider = None
-    Resource = None
-    SERVICE_NAME = None
-    DEPLOYMENT_ENVIRONMENT = None
-    OTLPSpanExporter = None
-    BatchSpanProcessor = None
-    OTLP_AVAILABLE = False
-    logger.debug("OpenTelemetry SDK not installed, adapter will use NO-OP mode")
+    logger.debug("OpenTelemetry API not installed, adapter will use NO-OP mode")
 
 
 # =============================================================================
@@ -85,18 +79,26 @@ class OpenTelemetryAdapter:
     """
     OpenTelemetry Adapter for Self-Healing System.
 
-    Exports self-healing decision events and operational signals
-    to external APM platforms via OpenTelemetry protocol.
+    Emits self-healing decision events into an EXISTING OpenTelemetry
+    environment. This adapter does NOT configure OpenTelemetry.
 
-    DESIGN PRINCIPLES:
-    - Optional extension (graceful NO-OP when OTel not installed)
-    - Disabled by default
-    - Event-based emission only
-    - No per-request tracing
-    - No sensitive data export
+    CRITICAL CONSTRAINTS:
+    ─────────────────────────────────────────────────────────────────
+    ❌ NEVER calls trace.set_tracer_provider()
+    ❌ NEVER configures exporters, samplers, or resources
+    ❌ NEVER creates spans autonomously
+    ❌ NEVER emits events when no active span exists
+    ─────────────────────────────────────────────────────────────────
+    ✅ Attaches events to existing active spans
+    ✅ Silently drops events when no span exists
+    ✅ Uses application's existing TracerProvider
+    ✅ Becomes complete NO-OP when disabled or OTel not installed
+    ─────────────────────────────────────────────────────────────────
 
     Usage:
-        # Initialize with configuration
+        # The application/platform configures OpenTelemetry externally
+        # This adapter only emits events into that existing environment
+
         config = OpenTelemetryConfig(
             enabled=True,
             service_name="my-payment-service",
@@ -104,20 +106,20 @@ class OpenTelemetryAdapter:
         )
         adapter = OpenTelemetryAdapter(config)
 
-        # Emit events
-        adapter.emit_circuit_breaker_transition(
-            service_name="payment_api",
-            from_state="closed",
-            to_state="open",
-            reason="failure_threshold_exceeded",
-        )
-
-        # Use decision spans for coarse-grained cycles
+        # Start a decision span (owned by self-healing engine)
         span_ctx = adapter.start_decision_span(
             decision_type="policy_evaluation",
             domain="payment",
         )
-        # ... evaluation logic ...
+
+        # Events are attached to the active span
+        adapter.emit_circuit_breaker_transition(
+            service_name="payment_api",
+            from_state="closed",
+            to_state="open",
+        )
+
+        # End the decision span
         adapter.end_decision_span(span_ctx, outcome="auto_healed")
     """
 
@@ -128,63 +130,61 @@ class OpenTelemetryAdapter:
         """
         Initialize the OpenTelemetry adapter.
 
+        NOTE: This does NOT configure OpenTelemetry.
+        All OTel configuration is owned by the application/platform.
+
         Args:
             config: Optional configuration. If None, loads from environment.
         """
         self.config = config or OpenTelemetryConfig.from_env()
         self._tracer = None
         self._initialized = False
-        self._resource = None
+
+        # Active decision spans managed by the self-healing engine
+        # Key: span_id, Value: OTel span object
+        self._active_decision_spans: Dict[str, Any] = {}
+        self._spans_lock = threading.Lock()
 
         if self.config.enabled and OPENTELEMETRY_AVAILABLE:
-            self._initialize_otel()
+            self._initialize_tracer()
 
-    def _initialize_otel(self) -> None:
-        """Initialize OpenTelemetry tracer and exporter."""
+    def _initialize_tracer(self) -> None:
+        """
+        Get a tracer from the EXISTING TracerProvider.
+
+        CRITICAL: We do NOT call trace.set_tracer_provider().
+        We use whatever TracerProvider the application has configured.
+        If no TracerProvider is configured, we get a NO-OP tracer.
+        """
         if not OPENTELEMETRY_AVAILABLE:
             logger.warning(
-                "OpenTelemetry enabled in config but SDK not installed. " "Install opentelemetry-api and opentelemetry-sdk."
+                "OpenTelemetry enabled in config but API not installed. "
+                "Install opentelemetry-api to enable."
             )
             return
 
         try:
-            # Build resource attributes
-            resource_attrs = {
-                SERVICE_NAME: self.config.service_name,
-                DEPLOYMENT_ENVIRONMENT: self.config.environment,
-                "selfhealing.adapter.version": "1.0.0",
-            }
-            resource_attrs.update(self.config.additional_resource_attributes)
+            # WHY WE DON'T SET TRACER PROVIDER:
+            # ─────────────────────────────────────────────────────────
+            # The application/platform owns OpenTelemetry configuration.
+            # We only get a tracer from the existing provider.
+            # If no provider is configured, trace.get_tracer() returns
+            # a NO-OP tracer, which is the correct behavior.
+            # ─────────────────────────────────────────────────────────
 
-            self._resource = Resource.create(resource_attrs)
-
-            # Create tracer provider
-            provider = TracerProvider(resource=self._resource)
-
-            # Add OTLP exporter if endpoint is configured and available
-            if self.config.endpoint and OTLP_AVAILABLE and BatchSpanProcessor:
-                exporter = OTLPSpanExporter(
-                    endpoint=self.config.endpoint,
-                    timeout=self.config.export_timeout_seconds,
-                )
-                processor = BatchSpanProcessor(exporter)
-                provider.add_span_processor(processor)
-                logger.info(f"OpenTelemetry OTLP exporter configured: {self.config.endpoint}")
-
-            # Set as global tracer provider
-            trace.set_tracer_provider(provider)
-
-            # Get tracer
             self._tracer = trace.get_tracer(
-                "selfhealing.opentelemetry",
-                "1.0.0",
+                instrumenting_module_name="selfhealing.opentelemetry",
+                instrumenting_library_version="1.0.0",
             )
 
             self._initialized = True
-            logger.info(f"OpenTelemetry adapter initialized for service: {self.config.service_name}")
+            logger.info(
+                f"OpenTelemetry adapter initialized (service={self.config.service_name}). "
+                f"Using application's existing TracerProvider."
+            )
 
         except Exception as e:
-            logger.error(f"Failed to initialize OpenTelemetry: {e}")
+            logger.error(f"Failed to get OpenTelemetry tracer: {e}")
             self._initialized = False
 
     @property
@@ -194,7 +194,7 @@ class OpenTelemetryAdapter:
 
     @property
     def is_available(self) -> bool:
-        """Check if OpenTelemetry SDK is available."""
+        """Check if OpenTelemetry API is available."""
         return OPENTELEMETRY_AVAILABLE
 
     # =========================================================================
@@ -209,6 +209,22 @@ class OpenTelemetryAdapter:
     ) -> None:
         """
         Emit a self-healing event.
+
+        EVENT EMISSION RULES:
+        ─────────────────────────────────────────────────────────────────
+        1. If there is an active decision span → attach event to that span
+        2. If there is NO active span → silently drop the event
+        3. NEVER create a span just for an event
+        4. NEVER emit standalone OpenTelemetry events
+        ─────────────────────────────────────────────────────────────────
+
+        WHY EVENTS ARE DROPPED WHEN NO SPAN EXISTS:
+        - The adapter does NOT own span lifecycle
+        - Creating spans autonomously violates the design contract
+        - Standalone events without parent context are meaningless
+          for decision-trace analysis
+        - The self-healing engine must explicitly start spans
+          when decision cycles begin
 
         Args:
             event_type: Event type identifier
@@ -235,26 +251,61 @@ class OpenTelemetryAdapter:
             if attributes:
                 event_attrs.update(attributes)
 
-            # Get current span (if any) and add event
-            current_span = trace.get_current_span() if trace else None
-            if current_span and current_span.is_recording():
-                current_span.add_event(event_type, attributes=event_attrs)
-            else:
-                # Create a minimal span just for the event
-                with self._tracer.start_as_current_span(
-                    f"selfhealing.event.{event_type.split('.')[-1]}",
-                    kind=SpanKind.INTERNAL,
-                ) as span:
-                    span.add_event(event_type, attributes=event_attrs)
+            # Check for active decision span first (managed by us)
+            active_span = self._get_active_decision_span()
 
-            logger.debug(f"Emitted OTel event: {event_type}")
+            if active_span is not None and active_span.is_recording():
+                # Attach event to active decision span
+                active_span.add_event(event_type, attributes=event_attrs)
+                logger.debug(f"Emitted OTel event to decision span: {event_type}")
+                return
+
+            # Check for any current span in OTel context (managed by application)
+            current_span = trace.get_current_span() if trace else None
+
+            if current_span is not None and current_span.is_recording():
+                # Attach event to application's current span
+                current_span.add_event(event_type, attributes=event_attrs)
+                logger.debug(f"Emitted OTel event to current span: {event_type}")
+                return
+
+            # WHY WE DROP THE EVENT HERE:
+            # ─────────────────────────────────────────────────────────
+            # No active span exists. Per design rules:
+            # - We MUST NOT create a span just for this event
+            # - We MUST NOT emit standalone events
+            # - We silently drop the event
+            # - The self-healing engine should have started a span
+            #   if this event was part of a decision cycle
+            # ─────────────────────────────────────────────────────────
+            logger.debug(
+                f"Dropped OTel event (no active span): {event_type}. "
+                f"Start a decision span to capture events."
+            )
 
         except Exception as e:
             logger.debug(f"Failed to emit OTel event: {e}")
 
+    def _get_active_decision_span(self) -> Optional[Any]:
+        """Get the most recently started active decision span."""
+        with self._spans_lock:
+            for span in reversed(list(self._active_decision_spans.values())):
+                if span is not None and hasattr(span, "is_recording") and span.is_recording():
+                    return span
+        return None
+
     # =========================================================================
     # Decision Span Management
     # =========================================================================
+    #
+    # SPAN OWNERSHIP RULES:
+    # ─────────────────────────────────────────────────────────────────────
+    # - start_decision_span() and end_decision_span() are called ONLY
+    #   by the self-healing engine
+    # - The adapter does NOT decide when spans start or end
+    # - Spans represent coarse-grained decision cycles (seconds to minutes)
+    # - Per-request, per-transaction, or per-user spans are FORBIDDEN
+    # ─────────────────────────────────────────────────────────────────────
 
     def start_decision_span(
         self,
@@ -265,9 +316,17 @@ class OpenTelemetryAdapter:
         """
         Start a coarse-grained decision span.
 
+        This method is called by the SELF-HEALING ENGINE when a decision
+        cycle begins. The adapter does NOT autonomously decide to start spans.
+
+        SPAN SEMANTICS:
+        - Represents a self-healing decision cycle
+        - Duration: seconds to minutes
+        - NOT per-request or per-transaction
+
         Args:
-            decision_type: Type of decision cycle
-            attributes: Initial attributes
+            decision_type: Type of decision cycle (e.g., "policy_evaluation")
+            attributes: Initial span attributes
             domain: Business domain
 
         Returns:
@@ -279,6 +338,9 @@ class OpenTelemetryAdapter:
         )
 
         if not self.is_enabled or not self.config.decision_span_enabled:
+            return context
+
+        if self._tracer is None:
             return context
 
         try:
@@ -294,12 +356,16 @@ class OpenTelemetryAdapter:
             if attributes:
                 span_attrs.update(attributes)
 
-            # Start the span (but don't set as current - we manage it explicitly)
+            # Start the span
             span = self._tracer.start_span(
                 f"selfhealing.decision.{decision_type}",
                 kind=SpanKind.INTERNAL,
                 attributes=span_attrs,
             )
+
+            # Store the span reference
+            with self._spans_lock:
+                self._active_decision_spans[context.span_id] = span
 
             context._otel_span = span
             context.attributes = span_attrs
@@ -310,7 +376,7 @@ class OpenTelemetryAdapter:
                 attributes={"decision_type": decision_type},
             )
 
-            logger.debug(f"Started decision span: {decision_type}")
+            logger.debug(f"Started decision span: {decision_type} (id={context.span_id})")
 
         except Exception as e:
             logger.debug(f"Failed to start decision span: {e}")
@@ -326,6 +392,9 @@ class OpenTelemetryAdapter:
         """
         End a decision span.
 
+        This method is called by the SELF-HEALING ENGINE when a decision
+        cycle completes. The adapter does NOT autonomously end spans.
+
         Args:
             span_context: Context from start_decision_span
             outcome: Final outcome
@@ -335,6 +404,10 @@ class OpenTelemetryAdapter:
 
         if not self.is_enabled or not self.config.decision_span_enabled:
             return
+
+        # Remove from active spans
+        with self._spans_lock:
+            self._active_decision_spans.pop(span_context.span_id, None)
 
         if span_context._otel_span is None:
             return
@@ -372,7 +445,10 @@ class OpenTelemetryAdapter:
             # End the span
             span.end()
 
-            logger.debug(f"Ended decision span: {span_context.decision_type} -> {outcome}")
+            logger.debug(
+                f"Ended decision span: {span_context.decision_type} -> {outcome} "
+                f"(duration={duration_ms}ms)"
+            )
 
         except Exception as e:
             logger.debug(f"Failed to end decision span: {e}")
@@ -394,14 +470,7 @@ class OpenTelemetryAdapter:
         """
         Emit circuit breaker state transition event.
 
-        Args:
-            service_name: Affected service
-            from_state: Previous state
-            to_state: New state
-            reason: Transition reason
-            manually_controlled: Whether manually triggered
-            failure_count: Current failure count
-            success_count: Current success count
+        Only emitted on STATE TRANSITIONS, not on every request.
         """
         # Determine event type
         event_type = {
@@ -538,7 +607,11 @@ class OpenTelemetryAdapter:
         error: Optional[str] = None,
     ) -> None:
         """Emit DLQ replay completed event."""
-        event_type = SelfHealingEventType.DLQ_REPLAY_SUCCESS if success else SelfHealingEventType.DLQ_REPLAY_FAILED
+        event_type = (
+            SelfHealingEventType.DLQ_REPLAY_SUCCESS
+            if success
+            else SelfHealingEventType.DLQ_REPLAY_FAILED
+        )
 
         attributes = {EventAttribute.DLQ_ID: dlq_id}
         if error:
@@ -752,28 +825,24 @@ class OpenTelemetryAdapter:
     # =========================================================================
 
     def shutdown(self) -> None:
-        """Shutdown the adapter and flush pending telemetry."""
-        if not self.is_enabled:
-            return
+        """
+        Shutdown the adapter.
 
-        try:
-            if trace and hasattr(trace, "get_tracer_provider"):
-                provider = trace.get_tracer_provider()
-                if hasattr(provider, "shutdown"):
-                    provider.shutdown()
-                    logger.info("OpenTelemetry adapter shutdown complete")
-        except Exception as e:
-            logger.debug(f"Error during OTel shutdown: {e}")
+        NOTE: We do NOT shutdown the TracerProvider because we don't own it.
+        The application/platform is responsible for OTel lifecycle.
+        """
+        # Clear active spans
+        with self._spans_lock:
+            self._active_decision_spans.clear()
+
+        logger.debug("OpenTelemetry adapter shutdown complete")
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         """
-        Force flush pending telemetry.
+        Request flush of pending telemetry.
 
-        Args:
-            timeout_millis: Timeout in milliseconds
-
-        Returns:
-            True if flush succeeded
+        NOTE: We request flush but don't own the TracerProvider,
+        so we rely on the application's provider implementation.
         """
         if not self.is_enabled:
             return True
@@ -804,11 +873,11 @@ def get_opentelemetry_adapter(
     """
     Get the global OpenTelemetry adapter instance.
 
-    Returns a singleton adapter. If no adapter exists and config is not provided,
-    loads configuration from environment/settings.
+    Returns a singleton adapter. If OpenTelemetry is not installed
+    or adapter is disabled, returns a NO-OP adapter.
 
-    If OpenTelemetry SDK is not installed or adapter is disabled,
-    returns a NO-OP adapter.
+    The adapter does NOT configure OpenTelemetry - it uses whatever
+    TracerProvider the application has configured.
 
     Args:
         config: Optional configuration for first initialization
@@ -840,11 +909,10 @@ def get_opentelemetry_adapter(
             _adapter_instance = NoOpOpenTelemetryAdapter(config)
             logger.debug(
                 f"OpenTelemetry adapter created in NO-OP mode "
-                f"(enabled={config.enabled}, sdk_available={OPENTELEMETRY_AVAILABLE})"
+                f"(enabled={config.enabled}, api_available={OPENTELEMETRY_AVAILABLE})"
             )
         else:
             _adapter_instance = OpenTelemetryAdapter(config)
-            logger.info(f"OpenTelemetry adapter initialized " f"(service={config.service_name}, env={config.environment})")
 
         return _adapter_instance
 

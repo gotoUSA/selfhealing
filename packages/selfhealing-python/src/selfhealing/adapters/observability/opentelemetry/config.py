@@ -160,9 +160,16 @@ class OpenTelemetryConfig:
 
         Returns:
             OpenTelemetryConfig instance
+
+        Notes:
+            Catches both ImportError (Django not installed) and
+            ImproperlyConfigured (Django installed but not configured).
+            This ensures graceful fallback to environment variables in
+            non-Django contexts (tests, CLI tools, standalone scripts).
         """
         try:
             from django.conf import settings
+            from django.core.exceptions import ImproperlyConfigured
 
             config_dict = getattr(settings, "SELFHEALING_OPENTELEMETRY", {})
             if not config_dict:
@@ -183,7 +190,9 @@ class OpenTelemetryConfig:
                 export_policy_events=config_dict.get("export_policy_events", True),
                 additional_resource_attributes=config_dict.get("additional_resource_attributes", {}),
             )
-        except ImportError:
+        except (ImportError, ImproperlyConfigured):
+            # ImportError: Django not installed
+            # ImproperlyConfigured: Django installed but settings not configured
             return cls.from_env()
 
     def should_export_event(self, event_type: str) -> bool:

@@ -368,6 +368,106 @@ selfhealing/adapters/observability/
 
 ---
 
+## 30.14 Critical Design Rules (SRE Audit Compliance)
+
+Following an external SRE audit, the adapter strictly enforces these design rules:
+
+### 30.14.1 OpenTelemetry Environment Ownership
+
+```
+CRITICAL DESIGN RULES:
+────────────────────────────────────────────────────────────────────────
+1. This adapter MUST NOT own or configure the OpenTelemetry environment
+2. This adapter MUST NOT alter global OpenTelemetry state
+3. This adapter MUST NOT call trace.set_tracer_provider()
+4. This adapter MUST NOT configure exporters, samplers, or resources
+5. All OpenTelemetry configuration is owned by the application/platform
+────────────────────────────────────────────────────────────────────────
+```
+
+**Rationale:**
+- Production environments typically have APM agents (Datadog, New Relic) that own the TracerProvider
+- Calling `set_tracer_provider()` can conflict with existing instrumentation
+- The adapter is a **passive consumer** of an existing OTel environment, not an owner
+
+**Implementation:**
+```python
+# WRONG - Do not do this:
+trace.set_tracer_provider(provider)  # ❌ Modifies global state
+
+# CORRECT - Use existing provider:
+self._tracer = trace.get_tracer(
+    instrumenting_module_name="selfhealing.opentelemetry",
+    instrumenting_library_version="1.0.0",
+)  # ✅ Uses application's existing TracerProvider
+```
+
+### 30.14.2 Span Ownership Rules
+
+```
+SPAN OWNERSHIP RULES:
+────────────────────────────────────────────────────────────────────────
+- The adapter NEVER autonomously creates spans
+- The adapter NEVER decides when a span starts or ends
+- Span lifecycle is owned exclusively by the self-healing engine
+- If no active span exists, events are silently dropped
+────────────────────────────────────────────────────────────────────────
+```
+
+**Event Emission Rules:**
+- If there is an active decision span → attach events to that span
+- If there is NO active span → **DO NOT create a span**, silently drop the event
+- Optional DEBUG log when events are dropped (for troubleshooting)
+
+**Implementation:**
+```python
+# WRONG - Do not do this:
+else:
+    with self._tracer.start_as_current_span(...) as span:  # ❌ Creates span for event
+        span.add_event(event_type, attributes=event_attrs)
+
+# CORRECT - Silently drop when no span:
+else:
+    logger.debug(
+        f"Dropped OTel event (no active span): {event_type}. "
+        f"Start a decision span to capture events."
+    )  # ✅ No span creation, event dropped
+```
+
+### 30.14.3 Django Fallback Exception Handling
+
+The configuration module handles both Django installation and configuration states:
+
+```python
+try:
+    from django.conf import settings
+    from django.core.exceptions import ImproperlyConfigured
+    config_dict = getattr(settings, "SELFHEALING_OPENTELEMETRY", {})
+    ...
+except (ImportError, ImproperlyConfigured):
+    # ImportError: Django not installed
+    # ImproperlyConfigured: Django installed but settings not configured
+    return cls.from_env()
+```
+
+**Why both exceptions:**
+- `ImportError`: Django package is not installed
+- `ImproperlyConfigured`: Django is installed but `DJANGO_SETTINGS_MODULE` is not set, 
+  or `settings.configure()` was not called (common in tests, CLI tools, standalone scripts)
+
+### 30.14.4 Audit Compliance Checklist
+
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| No `trace.set_tracer_provider()` calls | ✅ PASS | Uses `trace.get_tracer()` only |
+| No autonomous span creation | ✅ PASS | Events dropped when no active span |
+| No exporter/sampler/resource configuration | ✅ PASS | Uses application's provider |
+| Graceful Django fallback | ✅ PASS | Catches `ImproperlyConfigured` |
+| NO-OP when OTel not installed | ✅ PASS | Import detection with fallback |
+| Zero overhead when disabled | ✅ PASS | Early return on disabled check |
+
+---
+
 ## Related Capabilities
 
 - **Capability 24: Prometheus Metrics** - Primary metrics layer (unchanged)
