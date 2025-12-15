@@ -136,6 +136,14 @@ from selfhealing.core.cert_monitor import (
     CertificateExpiryMonitor,
     CertificateAlertManager,
 )
+from selfhealing.core.decision_logger import (
+    ReasonCode,
+    EventType,
+    DecisionLogger,
+    log_enter_pre_decision_zone,
+    log_intervention_evaluated,
+    log_exit_pre_decision_zone,
+)
 
 __all__ = [
     # Types
@@ -249,4 +257,11 @@ __all__ = [
     "CertificateInfo",
     "CertificateExpiryMonitor",
     "CertificateAlertManager",
+    # Decision Logger (Skeleton - Observability)
+    "ReasonCode",
+    "EventType",
+    "DecisionLogger",
+    "log_enter_pre_decision_zone",
+    "log_intervention_evaluated",
+    "log_exit_pre_decision_zone",
 ]

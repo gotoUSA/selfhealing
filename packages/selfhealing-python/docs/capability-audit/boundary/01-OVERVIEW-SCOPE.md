@@ -131,3 +131,4 @@ This capability audit is split into multiple documents for readability:
 | [08-SUMMARY-NONGOALS.md](08-SUMMARY-NONGOALS.md) | Summary and explicit non-goals |
 | [09-REST-API-ENDPOINTS.md](09-REST-API-ENDPOINTS.md) | REST API, Health Probes, FastAPI 🆕 |
 | [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md) | Optional OpenTelemetry integration |
+| [11-DECISION-RECORD-LOGGING.md](11-DECISION-RECORD-LOGGING.md) | Decision boundary logging for explainability 🆕 |

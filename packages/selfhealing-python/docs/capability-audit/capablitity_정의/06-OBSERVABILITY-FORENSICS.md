@@ -154,30 +154,30 @@ class ForensicContext:
     request_timestamp: str = ""
     response_timestamp: str = ""
     latency_ms: int = 0
-    
+
     # Retry History
     retry_history: List[RetryAttempt] = field(default_factory=list)
-    
+
     # State Snapshots
     state_before: Optional[StateSnapshot] = None
     state_after: Optional[StateSnapshot] = None
-    
+
     # Request Context
     client_ip: str = ""
     user_agent: str = ""
     session_id: str = ""
-    
+
     # Task Context (async workers)
     task_name: str = ""
     task_id: str = ""
     queue_name: str = ""
     worker_id: str = ""
-    
+
     # External System
     external_request_id: str = ""
     external_response_code: Optional[int] = None
     external_response_body: str = ""
-    
+
     # Extension point
     extra: Dict[str, Any] = field(default_factory=dict)
 ```
@@ -201,10 +201,10 @@ class RetryAttempt:
 class StateSnapshot:
     states: Dict[str, Any] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
-    
+
     def set_state(self, key: str, value: Any) -> None:
         self.states[key] = value
-    
+
     def get_state(self, key: str, default: Any = None) -> Any:
         return self.states.get(key, default)
 ```
@@ -270,29 +270,29 @@ Maintains a structured record of security incidents for investigation, complianc
 class SecurityIncidentData:
     # Identity
     id: int
-    
+
     # Classification
     incident_type: str    # signature_invalid, data_tampered, etc.
     severity: str         # critical, high, medium
     status: str           # open, investigating, resolved, false_positive
-    
+
     # Source Information
     source_ip: Optional[str] = None
     user_agent: str = ""
     user_id: Optional[int] = None
-    
+
     # Entity references (domain-neutral)
     entity_refs: dict[str, int] = field(default_factory=dict)
-    
+
     # Details
     description: str = ""
     raw_payload: dict[str, Any] = field(default_factory=dict)
-    
+
     # Investigation
     assigned_to_id: Optional[int] = None
     investigation_notes: str = ""
     resolved_at: Optional[datetime] = None
-    
+
     # Lifecycle
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -351,7 +351,7 @@ For each Control API action:
 def _gather_evidence(self, service_name: str) -> dict:
     """Gather current system evidence for audit."""
     cb_state = self.circuit_breaker.get_or_create_state(service_name)
-    
+
     return {
         "circuit_breaker": {
             "state": cb_state.state,
@@ -482,3 +482,15 @@ An **optional** OpenTelemetry adapter is available for exporting self-healing de
 - OpenTelemetry is disabled by default and requires explicit enablement
 
 For detailed design, configuration, and usage, see [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md).
+
+### Decision Record Logging 🆕
+
+Decision Record Logging provides **observability-only** augmentation at decision boundaries. It records why interventions were allowed or not allowed, without modifying any existing behavior, thresholds, or control flow.
+
+**Key Points:**
+- Records decision outcomes with fixed reason codes
+- Logs ONLY on state transitions, not per-request
+- Does NOT add new decision logic or modify existing conditions
+- Provides explainability for post-incident analysis and compliance
+
+For complete specification, see [11-DECISION-RECORD-LOGGING.md](11-DECISION-RECORD-LOGGING.md).

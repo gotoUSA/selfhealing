@@ -489,3 +489,10 @@ An **optional** OpenTelemetry adapter is available for exporting self-healing si
 - Zero overhead when disabled or not installed
 
 For implementation details, see [10-OPENTELEMETRY-ADAPTER.md](../capablitity_정의/10-OPENTELEMETRY-ADAPTER.md).
+
+
+Decision Record Logging is defined as an evidence mechanism,
+not an integration adapter.
+See 11-DECISION-RECORD-LOGGING.md for details.
+
+For complete specification, see [11-DECISION-RECORD-LOGGING.md](../capablitity_정의/11-DECISION-RECORD-LOGGING.md).

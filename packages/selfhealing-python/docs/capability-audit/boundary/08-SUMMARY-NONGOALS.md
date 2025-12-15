@@ -71,7 +71,7 @@ This is a **Production-Grade Reliability Library** that provides automated recov
 | 23 | TTL Enforcement | Time-bounded control |
 | 24 | Conditional Replay | Recovery-triggered |
 
-### 5. Observability & Forensics (Capabilities 25-29)
+### 5. Observability & Forensics (Capabilities 25-30)
 
 | # | Capability | Data Type |
 |---|------------|-----------|
@@ -80,30 +80,31 @@ This is a **Production-Grade Reliability Library** that provides automated recov
 | 27 | Security Incident Records | Audit trail |
 | 28 | DLQ Statistics | Queue health |
 | 29 | Circuit Breaker State Visibility | System status |
+| 30 | Decision Record Logging 🆕 | Decision boundary records |
 
-### 6. Integration (Capabilities 30-35)
+### 6. Integration (Capabilities 31-36)
 
 | # | Capability | Integration Type |
 |---|------------|-----------------|
-| 30 | Provider Registry | Dependency injection |
-| 31 | Framework Adapters | ORM/Cache/Queue |
-| 32 | Repository Interfaces | Data access abstraction |
-| 33 | Replay Handler Registration | Domain logic hooks |
-| 34 | Task Queue Interface | Async execution |
-| 35 | Cache Provider Interface | State storage |
+| 31 | Provider Registry | Dependency injection |
+| 32 | Framework Adapters | ORM/Cache/Queue |
+| 33 | Repository Interfaces | Data access abstraction |
+| 34 | Replay Handler Registration | Domain logic hooks |
+| 35 | Task Queue Interface | Async execution |
+| 36 | Cache Provider Interface | State storage |
 
-### 7. REST API & Operations (Capabilities 36-43) 🆕
+### 7. REST API & Operations (Capabilities 37-44) 🆕
 
 | # | Capability | Type |
 |---|------------|------|
-| 36 | Control API REST Endpoints | HTTP API |
-| 37 | DLQ Management REST API | HTTP API |
-| 38 | Kubernetes Health Probes | Liveness/Readiness |
-| 39 | Metrics REST API | HTTP API |
-| 40 | Dashboard Summary API | HTTP API |
-| 41 | FastAPI ASGI Middleware | Framework Integration |
-| 42 | Service Factory Functions | Dependency Injection |
-| 43 | Celery Task Integration | Async Processing |
+| 37 | Control API REST Endpoints | HTTP API |
+| 38 | DLQ Management REST API | HTTP API |
+| 39 | Kubernetes Health Probes | Liveness/Readiness |
+| 40 | Metrics REST API | HTTP API |
+| 41 | Dashboard Summary API | HTTP API |
+| 42 | FastAPI ASGI Middleware | Framework Integration |
+| 43 | Service Factory Functions | Dependency Injection |
+| 44 | Celery Task Integration | Async Processing |
 
 ---
 
@@ -237,10 +238,10 @@ For complex decisions like:
 | Protection Mechanisms | 8 |
 | Recovery Mechanisms | 5 |
 | Operational Governance | 5 |
-| Observability & Forensics | 5 |
+| Observability & Forensics | 6 |
 | Integration | 6 |
 | REST API & Operations | 8 |
-| **Total** | **43** |
+| **Total** | **44** |
 
 ---
 
@@ -301,6 +302,7 @@ For complex decisions like:
 | **08-SUMMARY-NONGOALS.md** | Summary & Non-Goals (This Document) |
 | [09-REST-API-ENDPOINTS.md](09-REST-API-ENDPOINTS.md) | REST API & Health Probes 🆕 |
 | [10-OPENTELEMETRY-ADAPTER.md](10-OPENTELEMETRY-ADAPTER.md) | Optional OpenTelemetry Integration |
+| [11-DECISION-RECORD-LOGGING.md](11-DECISION-RECORD-LOGGING.md) | Decision Boundary Logging 🆕 |
 
 ---
 
@@ -308,12 +310,13 @@ For complex decisions like:
 
 The Self-Healing Reliability Library is a comprehensive, production-grade solution for handling transient failures in Python applications. It provides:
 
-- **43 distinct capabilities** across 7 categories
+- **44 distinct capabilities** across 7 categories
 - **Framework-agnostic** design with pluggable adapters
 - **Safety-first** approach that never auto-heals security issues
 - **Operator-friendly** governance with manual override capabilities
 - **Observable** behavior through Prometheus metrics and forensic context
 - **Full REST API** for operational control and monitoring
 - **Kubernetes-ready** health probes for container orchestration
+- **Decision Record Logging** for explainability and compliance 🆕
 
 This library is designed to handle the 90% of failures that can be recovered automatically, while ensuring the 10% that require human judgment are surfaced appropriately.
