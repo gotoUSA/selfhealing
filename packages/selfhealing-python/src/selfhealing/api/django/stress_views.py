@@ -8,6 +8,7 @@ Self-Healing Pool Stress Test Endpoints.
 import os
 import time
 import logging
+from django.conf import settings
 from django.http import JsonResponse
 from django.db import connection, connections
 from django.views.decorators.http import require_GET
@@ -298,15 +299,19 @@ def heavy_concurrent_query(request):
     start = time.time()
     try:
         with connection.cursor() as cursor:
-            # 무거운 집계 쿼리
+            # ⚠️ STRESS TEST ONLY: This query uses shopping_product table as an example.
+            # For standalone deployments without shopping app, replace with any available
+            # table or configure via SELFHEALING_STRESS_TEST_TABLE setting.
+            # The actual table doesn't matter - this is purely for connection pool testing.
+            stress_table = getattr(settings, 'SELFHEALING_STRESS_TEST_TABLE', 'shopping_product')
             cursor.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*) as total_products,
                     AVG(price) as avg_price,
                     MAX(price) as max_price,
                     MIN(price) as min_price
-                FROM shopping_product
+                FROM {stress_table}
                 WHERE is_active = true
             """
             )

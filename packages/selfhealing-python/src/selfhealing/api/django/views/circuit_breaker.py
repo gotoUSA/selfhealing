@@ -37,7 +37,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_circuit_breaker_model():
-    """Lazy import CircuitBreakerState model."""
+    """
+    Lazy import CircuitBreakerState model.
+
+    Model Resolution: Tries shopping app model first for integrated deployments,
+    falls back to selfhealing's own model for standalone deployments.
+    This allows the same API views to work in both scenarios.
+    """
     try:
         from shopping.models import CircuitBreakerState
         return CircuitBreakerState
@@ -47,7 +53,13 @@ def _get_circuit_breaker_model():
 
 
 def _get_failed_operation_model():
-    """Lazy import FailedOperation model."""
+    """
+    Lazy import FailedOperation model.
+
+    Model Resolution: Tries shopping app model first for integrated deployments,
+    falls back to selfhealing's own model for standalone deployments.
+    This allows the same API views to work in both scenarios.
+    """
     try:
         from shopping.models.failed_operation import FailedOperation
         return FailedOperation

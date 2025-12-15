@@ -6,7 +6,7 @@ retry mechanisms, and automatic recovery for distributed systems.
 """
 
 __version__ = "0.1.0"
-__author__ = "Shopping Mall Team"
+__author__ = "SelfHealing Contributors"
 
 from selfhealing.core.types import (
     FailureType,

@@ -30,15 +30,21 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
     """
 
     def _get_model(self):
-        """Lazy import to avoid circular dependencies."""
+        """
+        Lazy import to avoid circular dependencies.
+
+        Note: This adapter (django_repos) specifically requires shopping app models.
+        For standalone deployments, use selfhealing.adapters.django.repositories instead.
+        """
         try:
             from shopping.models.security_incident import SecurityIncident
             return SecurityIncident
         except ImportError:
             raise ImportError(
                 "SecurityIncident model not found. "
-                "Django adapter requires shopping app. "
-                "Install shopping app or use selfhealing.adapters.django.repositories instead."
+                "This adapter (django_repos) requires the shopping app models. "
+                "For standalone deployments, use selfhealing.adapters.django.repositories instead, "
+                "which uses selfhealing's own Django models."
             )
 
     def _to_data(self, obj) -> SecurityIncidentData:

@@ -1,15 +1,23 @@
 """
-Django ORM Repository Adapters
+Django ORM Repository Adapters (Shopping App Integration)
 
-Concrete implementations of repository interfaces using Django ORM.
-These adapters translate between the abstract interface methods and
-Django model operations.
+⚠️ LEGACY/REFERENCE ADAPTER MODULE
+
+These adapters require the shopping app models and are maintained for:
+1. Backward compatibility with existing shopping app integrations
+2. Reference implementation demonstrating selfhealing integration patterns
+3. Integration testing with a real application
+
+For standalone selfhealing deployments WITHOUT the shopping app, use:
+    selfhealing.adapters.django.repositories
+
+which uses selfhealing's own Django models (selfhealing.adapters.django.models).
 
 Structure:
-    - failed_operation.py: DjangoFailedOperationRepository
-    - circuit_breaker.py: DjangoCircuitBreakerStateRepository
-    - security_incident.py: DjangoSecurityIncidentRepository
-    - rate_limit.py: DjangoRateLimitStateRepository
+    - failed_operation.py: Uses shopping.models.failed_operation
+    - circuit_breaker.py: Uses shopping.models.failed_payment
+    - security_incident.py: Uses shopping.models.security_incident
+    - rate_limit.py: Uses shopping.models.rate_limit_state
 
 Reference: docs/SELF_HEALING_EXTRACTION_PLAN.md Phase 1.2
 """

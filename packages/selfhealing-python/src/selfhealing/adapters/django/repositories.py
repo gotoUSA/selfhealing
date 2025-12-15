@@ -37,7 +37,17 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
     """
 
     def _get_model(self):
-        """Lazy import to avoid circular dependencies."""
+        """
+        Lazy import to avoid circular dependencies.
+
+        Model Resolution Strategy:
+        1. First tries shopping app model (for integrated deployments where
+           shopping app coexists with selfhealing package)
+        2. Falls back to selfhealing's own model (for standalone deployments)
+
+        This dual-resolution allows the same codebase to work in both scenarios
+        without requiring separate package versions or configurations.
+        """
         # Try shopping app model first (for Django projects using shopping app)
         try:
             from shopping.models.failed_operation import FailedOperation
@@ -45,7 +55,7 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             return FailedOperation
         except ImportError:
             pass
-        # Fall back to selfhealing package model
+        # Fall back to selfhealing package model (standalone deployment)
         from selfhealing.adapters.django.models import FailedOperation
 
         return FailedOperation
