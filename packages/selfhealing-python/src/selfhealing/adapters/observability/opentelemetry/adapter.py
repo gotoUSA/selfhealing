@@ -157,10 +157,7 @@ class OpenTelemetryAdapter:
         If no TracerProvider is configured, we get a NO-OP tracer.
         """
         if not OPENTELEMETRY_AVAILABLE:
-            logger.warning(
-                "OpenTelemetry enabled in config but API not installed. "
-                "Install opentelemetry-api to enable."
-            )
+            logger.warning("OpenTelemetry enabled in config but API not installed. " "Install opentelemetry-api to enable.")
             return
 
         try:
@@ -278,10 +275,7 @@ class OpenTelemetryAdapter:
             # - The self-healing engine should have started a span
             #   if this event was part of a decision cycle
             # ─────────────────────────────────────────────────────────
-            logger.debug(
-                f"Dropped OTel event (no active span): {event_type}. "
-                f"Start a decision span to capture events."
-            )
+            logger.debug(f"Dropped OTel event (no active span): {event_type}. " f"Start a decision span to capture events.")
 
         except Exception as e:
             logger.debug(f"Failed to emit OTel event: {e}")
@@ -445,10 +439,7 @@ class OpenTelemetryAdapter:
             # End the span
             span.end()
 
-            logger.debug(
-                f"Ended decision span: {span_context.decision_type} -> {outcome} "
-                f"(duration={duration_ms}ms)"
-            )
+            logger.debug(f"Ended decision span: {span_context.decision_type} -> {outcome} " f"(duration={duration_ms}ms)")
 
         except Exception as e:
             logger.debug(f"Failed to end decision span: {e}")
@@ -607,11 +598,7 @@ class OpenTelemetryAdapter:
         error: Optional[str] = None,
     ) -> None:
         """Emit DLQ replay completed event."""
-        event_type = (
-            SelfHealingEventType.DLQ_REPLAY_SUCCESS
-            if success
-            else SelfHealingEventType.DLQ_REPLAY_FAILED
-        )
+        event_type = SelfHealingEventType.DLQ_REPLAY_SUCCESS if success else SelfHealingEventType.DLQ_REPLAY_FAILED
 
         attributes = {EventAttribute.DLQ_ID: dlq_id}
         if error:
