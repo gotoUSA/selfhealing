@@ -4,6 +4,19 @@ This document details the optional OpenTelemetry adapter for exporting self-heal
 
 ---
 
+## Decision Record Logging as Upstream Signal
+
+Decision Record Logging is a **stable upstream signal** for the OpenTelemetry Adapter.
+
+- The Decision Record payload schema is frozen (6 fields only)
+- The ReasonCode enum is frozen (4 values only)
+- Exporters MUST NOT extend, modify, or add fields to Decision Record payloads
+- Exporters MUST forward Decision Record events as-is without transformation
+
+Any schema change to Decision Record Logging requires cross-audit revalidation before OpenTelemetry export can be updated.
+
+---
+
 ## Capability 30: OpenTelemetry Integration
 
 ### 30.1 Purpose

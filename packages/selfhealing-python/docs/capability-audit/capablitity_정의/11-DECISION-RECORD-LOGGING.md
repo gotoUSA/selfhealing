@@ -313,15 +313,66 @@ After implementing Decision Record Logging, verify:
 
 ---
 
+## Implementation Status
+
+**Module Status:** FINALIZED AND FROZEN
+
+### Log Persistence Responsibility
+
+Decision Record Logging emits records to stdout only.
+
+Durable persistence of Decision Record Logs is intentionally delegated
+to the deployment infrastructure (e.g. centralized log aggregation,
+immutable object storage).
+
+The application itself does not persist Decision Record Logs to
+any database or internal storage.
+
+
+### Active Integration Points
+
+Decision Record Logging is connected at the following intervention execution boundaries:
+
+| Location | Method | Event Logged |
+|----------|--------|-------------|
+| `services/circuit_breaker/manual_control.py` | `force_open()` | `INTERVENTION_EVALUATED(allowed=True, reason=INTERVENTION_ALLOWED)` |
+| `services/circuit_breaker/manual_control.py` | `force_close()` | `INTERVENTION_EVALUATED(allowed=True, reason=INTERVENTION_ALLOWED)` |
+
+These are manual intervention boundaries where an operator explicitly triggers a state change.
+
+### Explicit Non-Integration Points
+
+Decision Record Logging is intentionally NOT connected at the following locations:
+
+| Location | Method | Reason for Exclusion |
+|----------|--------|---------------------|
+| `services/circuit_breaker/service.py` | `should_allow()` | Per-request hot path |
+| `services/circuit_breaker/protection.py` | `should_allow_with_ddos_protection()` | Per-request hot path |
+| `services/circuit_breaker/service.py` | `record_failure()` | Per-metric recording |
+| `services/circuit_breaker/service.py` | `record_success()` | Per-metric recording |
+| `services/retry_handler.py` | `execute()` | Per-request execution |
+
+This exclusion is intentional. Logging at per-request or per-metric paths would violate observability boundaries and generate excessive log volume.
+
+### Schema Freeze Declaration
+
+- The Decision Record Logging module is **finalized**
+- The payload schema is **frozen** (6 fields only: event, allowed, reason, service_name, policy_version, timestamp)
+- The ReasonCode enum is **frozen** (4 values only)
+- Any future change requires cross-audit revalidation
+
+---
+
 ## Code References
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| Decision Logger | `core/decision_logger.py` | ✅ Phase 1 Implemented |
-| Decision Logger Tests | `tests/core/test_decision_logger.py` | ✅ 18 tests passing |
-| Circuit Breaker Integration | `services/circuit_breaker/service.py` | ⏳ Pending |
-| Retry Handler Integration | `services/retry_handler.py` | ⏳ Pending |
-| Protection Mixin Integration | `services/circuit_breaker/protection.py` | ⏳ Pending |
+| Decision Logger | `core/decision_logger.py` | ✅ Implemented |
+| Decision Logger Tests | `tests/core/test_decision_logger.py` | ✅ Passing |
+| Manual Control Integration | `services/circuit_breaker/manual_control.py` | ✅ Implemented |
+| Circuit Breaker Service | `services/circuit_breaker/service.py` | ⛔ Not integrated (per-request path) |
+| Retry Handler | `services/retry_handler.py` | ⛔ Not integrated (per-request path) |
+| Protection Mixin | `services/circuit_breaker/protection.py` | ⛔ Not integrated (per-request path) |
 
 ### Phase 1 Implementation (Sink-Only)
 

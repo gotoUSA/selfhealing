@@ -4,6 +4,21 @@ This document details the observability, metrics, and forensic capabilities that
 
 ---
 
+## Decision Record Logging Boundary
+
+Decision Record Logging records **intervention permission boundaries** only. It logs when an operator explicitly triggers a state change (e.g., `force_open`, `force_close`).
+
+Decision Record Logging does NOT record:
+- Request-level allow/deny decisions
+- Per-metric thresholds or calculations
+- Automatic state transitions
+
+Decision Record Logs cannot be used to reconstruct per-request system behavior. For request-level visibility, use Prometheus Metrics or distributed tracing.
+
+See [11-DECISION-RECORD-LOGGING.md](11-DECISION-RECORD-LOGGING.md) for complete specification.
+
+---
+
 ## Capability 24: Prometheus Metrics
 
 ### 24.1 Purpose

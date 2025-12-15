@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
+from selfhealing.core.decision_logger import DecisionLogger, ReasonCode
 
 from .config import CircuitBreakerResult, CircuitState
 
@@ -68,6 +69,12 @@ class ManualControlMixin:
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
             controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+
+        decision_logger = DecisionLogger(service_name=service_name)
+        decision_logger.intervention_evaluated(
+            allowed=True,
+            reason=ReasonCode.INTERVENTION_ALLOWED,
+        )
 
         try:
             # Use atomic operation to prevent race conditions
@@ -140,6 +147,12 @@ class ManualControlMixin:
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
             controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+
+        decision_logger = DecisionLogger(service_name=service_name)
+        decision_logger.intervention_evaluated(
+            allowed=True,
+            reason=ReasonCode.INTERVENTION_ALLOWED,
+        )
 
         try:
             # Use atomic operation to prevent race conditions
