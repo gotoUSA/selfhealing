@@ -1,0 +1,5 @@
+Method,Name,Error,Occurrences
+POST,[Stage42-CompoundFailureChaos] Allow Service,HTTPError('401 Client Error: Unauthorized for url: [Stage42-CompoundFailureChaos] Allow Service'),2
+POST,[Stage42-CompoundFailureChaos] Inject Transient Failure,HTTPError('401 Client Error: Unauthorized for url: [Stage42-CompoundFailureChaos] Inject Transient Failure'),2
+POST,[Stage42-CompoundFailureChaos] Reset Service,HTTPError('401 Client Error: Unauthorized for url: [Stage42-CompoundFailureChaos] Reset Service'),4
+POST,[Stage42-CompoundFailureChaos] Block Service,HTTPError('401 Client Error: Unauthorized for url: [Stage42-CompoundFailureChaos] Block Service'),2

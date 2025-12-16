@@ -212,6 +212,78 @@ services:
     command: >
       sh -c "pip install docker pytest-html && python -m pytest load_tests/scenarios/stage42_compound_failure_deterministic.py load_tests/scenarios/stage42_compound_failure_chaos.py -v --tb=short --no-cov -s -n 0 --html=reports/stage42_full_report.html --self-contained-html || true"
 
+  # =========================================================================
+  # Stage 42 Locust Load Test Runner - Compound Failure Chaos
+  # =========================================================================
+  stage42-locust:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage42-locust
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - TARGET_HOST=http://web:8000
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123!
+      # Locust 환경변수
+      - LOCUST_HOST=http://web:8000
+      - LOCUST_USERS=75
+      - LOCUST_SPAWN_RATE=7
+      - LOCUST_RUN_TIME=6m
+    networks:
+      - stage42-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install locust && locust -f load_tests/scenarios/stage42_compound_failure_chaos_locust.py
+      --host=http://web:8000
+      --users=75
+      --spawn-rate=7
+      --run-time=6m
+      --headless
+      --html=reports/stage42_locust_report.html
+      --csv=reports/stage42_locust
+      --only-summary || true"
+
+  # =========================================================================
+  # Stage 42 Locust Web UI (Optional - for interactive testing)
+  # =========================================================================
+  stage42-locust-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage42-locust-ui
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    ports:
+      - "8089:8089"
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - TARGET_HOST=http://web:8000
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123!
+    networks:
+      - stage42-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install locust && locust -f load_tests/scenarios/stage42_compound_failure_chaos_locust.py
+      --host=http://web:8000
+      --web-host=0.0.0.0
+      --web-port=8089"
+
 networks:
   stage42-net:
     driver: bridge
