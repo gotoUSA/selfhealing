@@ -19,6 +19,21 @@ See [11-DECISION-RECORD-LOGGING.md](11-DECISION-RECORD-LOGGING.md) for complete 
 
 ---
 
+## Audit Trail Persistence Boundary
+
+Audit Trail (including Decision Record Logs and Control API audit records) is **not persisted within the application**. All audit records are emitted to stdout only.
+
+| Aspect | Application Responsibility | Infrastructure Responsibility |
+|--------|---------------------------|------------------------------|
+| Audit emission | ✅ Emit structured logs to stdout | — |
+| Durable storage | — | ✅ Centralized log aggregation |
+| Retention policy | — | ✅ Define and enforce retention |
+| Audit retrieval | ✅ Provide interface endpoint | ✅ Connect to log storage backend |
+
+The `/api/self-healing/audit/` REST endpoint exists as an **integration interface point** for external log aggregation systems. It does not serve as a standalone audit data source. This is an intentional architectural decision that delegates persistence concerns to deployment infrastructure.
+
+---
+
 ## Capability 24: Prometheus Metrics
 
 ### 24.1 Purpose

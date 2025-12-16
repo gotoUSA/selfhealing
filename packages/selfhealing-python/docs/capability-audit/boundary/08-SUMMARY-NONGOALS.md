@@ -99,12 +99,14 @@ This is a **Production-Grade Reliability Library** that provides automated recov
 |---|------------|------|
 | 37 | Control API REST Endpoints | HTTP API |
 | 38 | DLQ Management REST API | HTTP API |
-| 39 | Kubernetes Health Probes | Liveness/Readiness |
-| 40 | Metrics REST API | HTTP API |
-| 41 | Dashboard Summary API | HTTP API |
+| 39 | Kubernetes Health Probes | Operational |
+| 40 | Metrics REST API | Operational |
+| 41 | Dashboard Summary API | Operational |
 | 42 | FastAPI ASGI Middleware | Framework Integration |
 | 43 | Service Factory Functions | Dependency Injection |
 | 44 | Celery Task Integration | Async Processing |
+
+> **Note:** Capabilities 39-41 are **operational/infrastructure-facing endpoints** for health checks, lifecycle management, and monitoring integration. They are not part of the external-facing API surface.
 
 ---
 
@@ -204,7 +206,17 @@ If stored data is corrupted:
 
 **Reason:** Data corruption requires root cause analysis, not automated recovery.
 
-### ❌ 10. Replace Human Decision-Making
+### ❌ 10. Persist Audit Trails Internally
+
+Audit Trail (including Decision Record Logs and Control API audit records) is **not persisted within the application**.
+
+**What It Does Instead:**
+- Emits structured audit records to stdout
+- Provides an interface endpoint (`/api/self-healing/audit/`) for external log aggregation system integration
+
+**Reason:** Durable storage, retention policies, and audit retrieval are deployment infrastructure concerns. This is an intentional architectural boundary.
+
+### ❌ 11. Replace Human Decision-Making
 
 For complex decisions like:
 - Whether to refund a payment

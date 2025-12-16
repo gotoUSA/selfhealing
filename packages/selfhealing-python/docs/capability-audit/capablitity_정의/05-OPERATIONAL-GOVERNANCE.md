@@ -128,9 +128,12 @@ class ReasonClassification(str, Enum):
 ┌─────────────────────────────────────────┐
 │ 5. Record Audit                         │
 │    - Log for compliance                 │
-│    - Persist audit trail                │
+│    - Emit audit trail to stdout         │
 └─────────────────────────────────────────┘
 ```
+
+> **Audit Trail Persistence Boundary:**
+> Audit Trail is **not persisted within the application**. Audit records are emitted to stdout only. Durable storage and retrieval of audit data is the responsibility of the deployment infrastructure (e.g., centralized log aggregation systems). This is an intentional design decision, not a missing feature.
 
 ### 17.9 Failure Injection (Chaos Engineering Support)
 
@@ -174,13 +177,13 @@ Detects when DLQ entries have exceeded their Service Level Agreement thresholds,
 class SLAConfig:
     # Default threshold for unregistered domains
     default_hours: int = 24
-    
+
     # Domain-specific thresholds
     thresholds_by_domain: dict[str, int] = field(default_factory=dict)
-    
+
     # Example configuration:
     # {"payment": 1, "order": 2, "notification": 24}
-    
+
     def get_threshold(self, domain: str) -> timedelta:
         hours = self.thresholds_by_domain.get(domain.lower(), self.default_hours)
         return timedelta(hours=hours)
@@ -193,7 +196,7 @@ def get_sla_breached_entries() -> List[FailedOperationData]:
     """Get entries that have breached their SLA."""
     current_time = now()
     sla_config = get_config().sla
-    
+
     return repository.find_sla_breached(
         current_time=current_time,
         sla_thresholds={
@@ -329,18 +332,18 @@ class NotificationConfig:
     slack_critical_channel: str = "#critical-alerts"
     slack_high_channel: str = "#ops-alerts"
     slack_medium_channel: str = "#dev-alerts"
-    
+
     # Email
     email_critical_recipients: list[str] = []
     email_high_recipients: list[str] = []
-    
+
     # SMS
     sms_critical_recipients: list[str] = []
-    
+
     # PagerDuty
     pagerduty_service_key: str = ""
     pagerduty_enabled: bool = False
-    
+
     # General
     enabled: bool = True
     dry_run: bool = False  # Log only, don't send
@@ -474,7 +477,7 @@ Automatically initiates replay of related DLQ entries when a circuit breaker clo
 def force_close(service_name, trigger_replay=True):
     # Close circuit breaker
     result = repository.atomic_force_close(service_name, ...)
-    
+
     if result.success and trigger_replay:
         _trigger_conditional_replay(service_name)
 ```

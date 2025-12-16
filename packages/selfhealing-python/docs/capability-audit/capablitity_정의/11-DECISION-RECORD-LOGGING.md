@@ -319,14 +319,13 @@ After implementing Decision Record Logging, verify:
 
 ### Log Persistence Responsibility
 
-Decision Record Logging emits records to stdout only.
+> **Intentional Design: No Internal Persistence**
 
-Durable persistence of Decision Record Logs is intentionally delegated
-to the deployment infrastructure (e.g. centralized log aggregation,
-immutable object storage).
+Decision Record Logging emits records to stdout only. **Audit Trail is not persisted within the application.**
 
-The application itself does not persist Decision Record Logs to
-any database or internal storage.
+Durable persistence of Decision Record Logs is intentionally delegated to the deployment infrastructure (e.g., centralized log aggregation, immutable object storage). This is a deliberate architectural boundary, not an incomplete implementation.
+
+The application provides the **interface point** for audit data emission. Actual audit data preservation, retention, and retrieval is the responsibility of the deployment infrastructure.
 
 
 ### Active Integration Points

@@ -17,10 +17,20 @@ Provides a complete REST API for operational control of the self-healing system 
 | `/api/self-healing/control/` | POST | Execute control action |
 | `/api/self-healing/status/` | GET | Get all service states |
 | `/api/self-healing/status/{service_name}/` | GET | Get specific service state |
-| `/api/self-healing/audit/` | GET | Get audit logs |
-| `/api/self-healing/allow/{service_name}/` | POST | Quick allow (close CB) |
-| `/api/self-healing/block/{service_name}/` | POST | Quick block (open CB) |
-| `/api/self-healing/reset/{service_name}/` | POST | Quick reset |
+| `/api/self-healing/audit/` | GET | Audit log interface point (see note below) |
+
+> **Audit API Interface Boundary:**
+> The `/api/self-healing/audit/` endpoint serves as an **interface point for external log aggregation systems**. Audit Trail is not persisted within the application itself. Actual audit data preservation and retrieval is delegated to deployment infrastructure. This endpoint exists for integration purposes, not as a standalone data source.
+
+#### Internal / Ops Convenience Endpoints
+
+The following endpoints are **shorthand wrappers** around the Control API for internal operational use. They are not intended for external integration and provide no additional functionality beyond what the main Control API offers.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/self-healing/allow/{service_name}/` | POST | Control API shorthand: allow action |
+| `/api/self-healing/block/{service_name}/` | POST | Control API shorthand: block action |
+| `/api/self-healing/reset/{service_name}/` | POST | Control API shorthand: reset action |
 
 ### 36.3 Control Actions
 
@@ -82,9 +92,16 @@ REST endpoints for Dead Letter Queue management and replay operations.
 | `/api/self-healing/dlq/replay/` | POST | Trigger batch replay |
 | `/api/self-healing/dlq/{id}/retry/` | POST | Retry single entry |
 | `/api/self-healing/dlq/{id}/resolve/` | POST | Mark as resolved |
+
+#### Operational Lifecycle Endpoints
+
+The following endpoints support DLQ lifecycle management tasks and are intended for operational/infrastructure use:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/api/self-healing/dlq/cleanup/stats/` | GET | Get cleanup statistics |
 | `/api/self-healing/dlq/cleanup/archive/` | POST | Archive old resolved entries |
-| `/api/self-healing/dlq/cleanup/purge/` | POST | Permanently delete archived |
+| `/api/self-healing/dlq/cleanup/purge/` | POST | Permanently delete archived entries |
 
 ### 37.3 Batch Replay Request
 
@@ -135,6 +152,20 @@ REST endpoints for Dead Letter Queue management and replay operations.
 
 ---
 
+## Operational & Infrastructure-Facing Endpoints
+
+The following capabilities (38–40) describe **operational support endpoints** used for infrastructure integration, lifecycle management, and monitoring. These endpoints serve deployment infrastructure needs rather than application-level business logic.
+
+They include:
+- Health checks and liveness/readiness probes (Kubernetes orchestration)
+- Connection pool monitoring
+- Metrics and dashboard data aggregation
+- DLQ lifecycle management (cleanup, archive, purge)
+
+These endpoints are documented for infrastructure operators and are not part of the external-facing API surface.
+
+---
+
 ## Capability 38: Kubernetes Health Probes
 
 ### 38.1 Purpose
@@ -157,7 +188,7 @@ Provides Kubernetes-compatible health check endpoints for container orchestratio
 class LivenessView(APIView):
     """Returns 200 if the application is running."""
     permission_classes = []  # Public endpoint
-    
+
     def get(self, request):
         return Response({"status": "alive"})
 ```
@@ -177,7 +208,7 @@ livenessProbe:
 ```python
 class ReadinessView(APIView):
     """Returns 200 if ready to serve traffic."""
-    
+
     def get(self, request):
         # Checks all database connections
         for alias in connections:
@@ -436,7 +467,7 @@ class CeleryTaskQueueAdapter(TaskQueueInterface):
     def enqueue(self, task_name: str, *args, **kwargs):
         task = self._get_task(task_name)
         return task.delay(*args, **kwargs)
-    
+
     def get_task_status(self, task_id: str):
         result = AsyncResult(task_id)
         return result.status
