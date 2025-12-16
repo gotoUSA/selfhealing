@@ -1,0 +1,153 @@
+# Docker Compose for Stage 39: K8s/Cloud-Native Chaos Tests
+# 실제 컨테이너를 죽이고 재시작하면서 Self-Healing 시스템 검증
+#
+# Usage:
+#   # 1. 서비스 시작
+#   docker-compose -f docker-compose.stage39.yml up -d --build
+#
+#   # 2. Chaos 테스트 실행 (별도 터미널)
+#   docker-compose -f docker-compose.stage39.yml run --rm chaos-runner
+#
+#   # 3. 로그 확인
+#   docker-compose -f docker-compose.stage39.yml logs -f web celery_worker
+#
+#   # 4. 정리
+#   docker-compose -f docker-compose.stage39.yml down -v
+
+services:
+  # =========================================================================
+  # Infrastructure
+  # =========================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: stage39-db
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    networks:
+      - stage39-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    # 빠른 재시작을 위한 최소 설정
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c max_connections=200
+      -c log_statement=none
+
+  redis:
+    image: redis:7-alpine
+    container_name: stage39-redis
+    networks:
+      - stage39-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # =========================================================================
+  # Application - Web (Chaos Target #1)
+  # =========================================================================
+  web:
+    build: .
+    container_name: stage39-web
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 30 --graceful-timeout 5"
+    volumes:
+      - .:/code
+    ports:
+      - "9039:8000"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      # Chaos 테스트용 설정
+      - CIRCUIT_BREAKER_ENABLED=true
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3
+      - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=10
+    networks:
+      - stage39-net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 빠른 재시작 설정
+    restart: unless-stopped
+    stop_grace_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # OOMKill 시뮬레이션 가능
+        reservations:
+          memory: 256M
+
+  # =========================================================================
+  # Application - Celery Worker (Chaos Target #2)
+  # =========================================================================
+  celery_worker:
+    build: .
+    container_name: stage39-celery
+    command: >
+      celery -A myproject worker -l info --concurrency=2 -Q default,payment_critical
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    networks:
+      - stage39-net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # =========================================================================
+  # Chaos Runner - 실제 컨테이너 조작 + 테스트 실행
+  # =========================================================================
+  chaos-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage39-chaos-runner
+    volumes:
+      - .:/code
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker 소켓 마운트 (핵심!)
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TARGET_WEB_CONTAINER=stage39-web
+      - TARGET_CELERY_CONTAINER=stage39-celery
+      - TARGET_HOST=http://web:8000
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+    networks:
+      - stage39-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install docker && python -m pytest load_tests/chaos/test_stage39_docker_chaos.py -v --tb=short --no-cov -s -n 0"
+
+networks:
+  stage39-net:
+    driver: bridge
