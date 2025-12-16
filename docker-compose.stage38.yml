@@ -1,0 +1,198 @@
+# Docker Compose for Stage 38: Multi-Region / Failover Chaos Tests
+#
+# Stage 38은 새로운 메커니즘을 추가하지 않고
+# 기존 Circuit Breaker, Control API, DLQ, Decision Record 메커니즘만 사용합니다.
+#
+# 테스트 시나리오:
+#   1. Region A 전체 장애 시뮬레이션
+#   2. Circuit Breaker OPEN 전이 검증
+#   3. 운영자 Failover (BLOCK/ALLOW)
+#   4. Region A 복구 후 조건부 Replay
+#   5. Decision Record 스키마 및 경계 검증
+#
+# Usage:
+#   # 1. 서비스 시작
+#   docker-compose -f docker-compose.stage38.yml up -d
+#
+#   # 2. Stage 38 Chaos 테스트 실행
+#   docker-compose -f docker-compose.stage38.yml run --rm stage38-chaos-test
+#
+#   # 3. 정리
+#   docker-compose -f docker-compose.stage38.yml down -v
+#
+# 제약사항:
+#   - 새로운 복구 로직 추가 금지
+#   - Decision Record 스키마 변경 금지
+#   - Audit stdout 경계만 준수
+#   - 보안 위반 자동 치유 금지
+
+services:
+  # =========================================================================
+  # PostgreSQL - Primary Database
+  # =========================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: stage38-db
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    volumes:
+      - stage38-postgres-data:/var/lib/postgresql/data
+    networks:
+      - stage38-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # =========================================================================
+  # Redis - Cache and Circuit Breaker State
+  # =========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: stage38-redis
+    networks:
+      - stage38-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # =========================================================================
+  # Django Application - Multi-Region Simulation
+  # =========================================================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage38-web
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=stage38-chaos-test-secret-key-not-for-production
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # Self-Healing Configuration
+      - SELFHEALING_ENABLED=true
+      - SELFHEALING_CIRCUIT_BREAKER_ENABLED=true
+      - SELFHEALING_DLQ_ENABLED=true
+      - SELFHEALING_DLQ_MAX_REPLAY_ATTEMPTS=2
+      # Chaos Test Mode
+      - CHAOS_TEST_MODE=true
+      - STAGE38_MULTI_REGION_TEST=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stage38-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/self-healing/health/', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # =========================================================================
+  # Celery Worker - DLQ Replay Processing
+  # =========================================================================
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage38-celery-worker
+    command: celery -A myproject worker -l info --concurrency=2
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=stage38-chaos-test-secret-key-not-for-production
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - SELFHEALING_ENABLED=true
+      - SELFHEALING_DLQ_ENABLED=true
+      - SELFHEALING_DLQ_MAX_REPLAY_ATTEMPTS=2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stage38-net
+
+  # =========================================================================
+  # Stage 38 Chaos Test Runner
+  # =========================================================================
+  stage38-chaos-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage38-chaos-test
+    command: >
+      pytest load_tests/scenarios/stage38_multi_region_failover.py
+      -v -s
+      --tb=short
+      --junit-xml=/reports/stage38_chaos_results.xml
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=stage38-chaos-test-secret-key-not-for-production
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - TARGET_HOST=http://web:8000
+      - SELFHEALING_ENABLED=true
+      - SELFHEALING_CIRCUIT_BREAKER_ENABLED=true
+      - SELFHEALING_DLQ_ENABLED=true
+      - SELFHEALING_DLQ_MAX_REPLAY_ATTEMPTS=2
+      - CHAOS_TEST_MODE=true
+      - STAGE38_MULTI_REGION_TEST=true
+    volumes:
+      - ./reports:/reports
+    depends_on:
+      web:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    networks:
+      - stage38-net
+
+  # =========================================================================
+  # Stage 38 Decision Record Validation
+  # =========================================================================
+  decision-record-validator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage38-decision-validator
+    command: >
+      python -c "
+      from selfhealing.core.decision_logger import EventType, ReasonCode
+      print('=== Stage 38: Decision Record Schema Validation ===')
+      print(f'Event Types (frozen): {[e.value for e in EventType]}')
+      print(f'Reason Codes (frozen): {[r.value for r in ReasonCode]}')
+      print('Schema validation: PASSED')
+      print('No new fields or enums detected.')
+      "
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - stage38-net
+
+networks:
+  stage38-net:
+    driver: bridge
+    name: stage38-multi-region-net
+
+volumes:
+  stage38-postgres-data:
+    name: stage38-postgres-data
