@@ -1,0 +1,217 @@
+# Docker Compose for Stage 42: Compound Failure (Controlled Chaos) Tests
+# 복합 장애 시나리오를 Docker 환경에서 검증
+#
+# Usage:
+#   # 1. 서비스 시작
+#   docker-compose -f docker-compose.stage42.yml up -d --build
+#
+#   # 2. Deterministic 테스트 실행
+#   docker-compose -f docker-compose.stage42.yml run --rm test-deterministic
+#
+#   # 3. Chaos 테스트 실행
+#   docker-compose -f docker-compose.stage42.yml run --rm test-chaos
+#
+#   # 4. 전체 테스트 실행
+#   docker-compose -f docker-compose.stage42.yml run --rm test-all
+#
+#   # 5. 로그 확인
+#   docker-compose -f docker-compose.stage42.yml logs -f web celery_worker
+#
+#   # 6. 정리
+#   docker-compose -f docker-compose.stage42.yml down -v
+
+services:
+  # =========================================================================
+  # Infrastructure
+  # =========================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: stage42-db
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    networks:
+      - stage42-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    # 빠른 재시작을 위한 최소 설정
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c max_connections=200
+      -c log_statement=none
+
+  redis:
+    image: redis:7-alpine
+    container_name: stage42-redis
+    networks:
+      - stage42-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # =========================================================================
+  # Application - Web (Multi-instance for isolation testing)
+  # =========================================================================
+  web:
+    build: .
+    container_name: stage42-web
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 30 --graceful-timeout 5"
+    volumes:
+      - .:/code
+    ports:
+      - "9042:8000"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      # Compound Failure 테스트용 설정
+      - CIRCUIT_BREAKER_ENABLED=true
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=3
+      - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30
+      # Rate Limit 설정
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS_PER_SECOND=100
+      # Memory 모니터링
+      - MEMORY_WARNING_THRESHOLD=70
+      - MEMORY_THROTTLE_THRESHOLD=85
+    networks:
+      - stage42-net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # =========================================================================
+  # Application - Celery Worker (Background Processing)
+  # =========================================================================
+  celery_worker:
+    build: .
+    container_name: stage42-celery
+    command: >
+      celery -A myproject worker -l info --concurrency=4 -Q default,payment_critical,dlq_replay
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - CIRCUIT_BREAKER_ENABLED=true
+    networks:
+      - stage42-net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # =========================================================================
+  # Test Runner - Deterministic Scenarios (A1-A4)
+  # =========================================================================
+  test-deterministic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage42-test-deterministic
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+    networks:
+      - stage42-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install pytest-html && python -m pytest load_tests/scenarios/stage42_compound_failure_deterministic.py -v --tb=short --no-cov -s -n 0 --html=reports/stage42_deterministic_report.html --self-contained-html || true"
+
+  # =========================================================================
+  # Test Runner - Chaos Scenarios (B1-B4)
+  # =========================================================================
+  test-chaos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage42-test-chaos
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker 소켓 마운트 (컨테이너 조작용)
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - TARGET_WEB_CONTAINER=stage42-web
+      - TARGET_CELERY_CONTAINER=stage42-celery
+      - TARGET_HOST=http://web:8000
+    networks:
+      - stage42-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install docker pytest-html && python -m pytest load_tests/scenarios/stage42_compound_failure_chaos.py -v --tb=short --no-cov -s -n 0 --html=reports/stage42_chaos_report.html --self-contained-html || true"
+
+  # =========================================================================
+  # Test Runner - All Stage 42 Tests
+  # =========================================================================
+  test-all:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stage42-test-all
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - TARGET_WEB_CONTAINER=stage42-web
+      - TARGET_CELERY_CONTAINER=stage42-celery
+      - TARGET_HOST=http://web:8000
+    networks:
+      - stage42-net
+    depends_on:
+      - web
+      - celery_worker
+    working_dir: /code
+    command: >
+      sh -c "pip install docker pytest-html && python -m pytest load_tests/scenarios/stage42_compound_failure_deterministic.py load_tests/scenarios/stage42_compound_failure_chaos.py -v --tb=short --no-cov -s -n 0 --html=reports/stage42_full_report.html --self-contained-html || true"
+
+networks:
+  stage42-net:
+    driver: bridge

@@ -78,6 +78,7 @@ markers = [
     "negative: Negative tests - proper error handling for invalid inputs",
     "security: Security tests - SQL Injection, XSS, SSTI attack defense verification",
     "chaos: Chaos engineering tests - fault injection and recovery verification",
+    "compound: Compound failure tests - multiple failure modes simultaneously",
     # Self-Healing Test Tiers (Reference: docs/testing/SELF_HEALING_TEST_MATRICES.md)
     "tier1: Fast unit tests for PR validation (< 2 min, no external deps)",
     "tier2: Integration tests for merge to main (< 10 min, requires DB/Redis)",
