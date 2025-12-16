@@ -294,7 +294,13 @@ if manually_controlled or new_condition:  # FORBIDDEN
 | Span attributes | Reason codes |
 | External APM export | Local structured logging |
 
-**Decision Record Logs can be exported via OpenTelemetry if the adapter is enabled.**
+> **Responsibility Boundary:**
+> Decision Record Logging is the **upstream source**. OpenTelemetry Adapter is a **passive consumer** that may forward Decision Record events to external APM platforms.
+>
+> - Decision Record Logging **owns** the payload schema (frozen, 6 fields)
+> - OpenTelemetry Adapter **MUST NOT** modify, extend, or transform Decision Record payloads
+> - If OpenTelemetry is not installed or disabled, Decision Record Logging operates identically
+> - The adapter's role is **copy-forward only**, not interpretation or enrichment
 
 ---
 

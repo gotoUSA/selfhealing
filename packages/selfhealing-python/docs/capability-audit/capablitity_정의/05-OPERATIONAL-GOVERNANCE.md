@@ -170,6 +170,8 @@ service.execute(ControlRequest(
 
 Detects when DLQ entries have exceeded their Service Level Agreement thresholds, enabling escalation before customer impact becomes severe.
 
+> **Time-Axis Governance:** SLA Breach Detection is part of the system's **automatic time-based governance**. The system—not the operator—is responsible for detecting threshold violations. Operators do not need to "remember" when entries become stale; the system tracks time and triggers detection automatically.
+
 ### 18.2 SLA Threshold Configuration
 
 ```python
@@ -221,6 +223,9 @@ def get_sla_breached_entries() -> List[FailedOperationData]:
 ### 19.1 Purpose
 
 Handles security violations that should **NEVER** self-heal. Security incidents are immediately blocked and routed to the security team for human investigation.
+
+> **Absolute Boundary – Not Subject to Time-Axis Governance:**
+> Unlike SLA Breach, DLQ Expiry, and Manual Override TTL—which are all subject to automatic time-based cleanup—**Security Violations are permanently excluded from any automatic recovery**. Time passage does NOT heal security violations. They remain in blocked state indefinitely until explicit human resolution. This is a fundamental safety invariant, not a policy choice.
 
 ### 19.2 Security Violation Types
 
@@ -373,6 +378,8 @@ TITLE_MAX_LENGTH = 150
 
 Ensures manual circuit breaker overrides have a time limit to prevent "forgotten" blocks that could cause extended outages.
 
+> **Time-Axis Governance:** TTL expiration is **system-managed**, not operator-managed. The system automatically tracks override creation time and triggers expiration. Operators are not required to remember when overrides will expire—the system handles this automatically and transitions the circuit breaker state accordingly.
+
 ### 21.2 TTL Behavior
 
 ```
@@ -408,11 +415,14 @@ result = service.extend_manual_override(
 ### 21.4 Periodic Expiration Check
 
 ```python
-# Called periodically (e.g., via cron/scheduler)
+# Invoked by the system's internal time-tracking mechanism
+# No external scheduler configuration required by operators
 expired_services = service.check_and_expire_manual_overrides()
 for service_name in expired_services:
     logger.warning(f"Manual override expired for {service_name}")
 ```
+
+> **Note:** The expiration check is an internal system responsibility. The exact invocation mechanism is an implementation detail; what matters is that expiration is guaranteed by the system without operator intervention.
 
 ### 21.5 Code References
 
@@ -427,6 +437,8 @@ for service_name in expired_services:
 ### 22.1 Purpose
 
 Automatically archives DLQ entries that have exceeded their retention period, preventing indefinite storage growth.
+
+> **Time-Axis Governance:** DLQ Expiry is part of the system's **automatic time-based cleanup**. The system tracks entry age and transitions entries through PENDING → EXPIRED → ARCHIVED states automatically. Operators do not need to schedule cleanup tasks or remember retention deadlines—the system handles this as an internal responsibility.
 
 ### 22.2 Configuration
 

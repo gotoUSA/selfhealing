@@ -106,7 +106,10 @@ This is a **Production-Grade Reliability Library** that provides automated recov
 | 43 | Service Factory Functions | Dependency Injection |
 | 44 | Celery Task Integration | Async Processing |
 
-> **Note:** Capabilities 39-41 are **operational/infrastructure-facing endpoints** for health checks, lifecycle management, and monitoring integration. They are not part of the external-facing API surface.
+> **API Classification Note:**
+> - Capabilities 37-38 (Control API, DLQ Management): External / Integration APIs for operational control
+> - Capabilities 39-41 (Health Probes, Metrics, Dashboard): **Operational / Infrastructure-Facing** endpoints — NOT external-facing APIs. Designed for Kubernetes orchestration, internal monitoring, and infrastructure automation.
+> - Capabilities 42-44 (Middleware, Factory, Celery): Framework integration components, not REST endpoints
 
 ---
 
@@ -118,12 +121,20 @@ The Self-Healing Reliability Library deliberately does **NOT**:
 
 Security failures (authentication, authorization, fraud detection) are NEVER automatically retried or healed. This is by design.
 
+> **Fundamental Distinction from Time-Axis Governance:**
+> The system manages three time-based cleanup mechanisms—SLA Breach Detection, DLQ Entry Expiration, and Manual Override TTL. These are all subject to **automatic time-based transitions** by the system.
+>
+> Security Violations are **fundamentally different**. They are:
+> - **Not subject to time-based recovery** – no TTL, no expiry, no automatic state transition
+> - **Permanently excluded from self-healing** – this is an absolute boundary, not a configurable policy
+> - **Resolved only by explicit human action** – security team investigation is required
+
 **Reason:** Security violations may indicate active attacks. Automatic retry could:
 - Amplify credential stuffing attacks
 - Bypass rate limits on authentication
 - Enable brute-force attempts
 
-**What It Does Instead:** Records the incident, notifies security team, requires manual investigation.
+**What It Does Instead:** Records the incident, notifies security team, requires manual investigation. Time passage has no effect on resolution status.
 
 ### ❌ 2. Handle Application Logic Errors
 

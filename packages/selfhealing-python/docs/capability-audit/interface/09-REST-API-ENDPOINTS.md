@@ -26,6 +26,12 @@ Provides a complete REST API for operational control of the self-healing system 
 
 The following endpoints are **shorthand wrappers** around the Control API for internal operational use. They are not intended for external integration and provide no additional functionality beyond what the main Control API offers.
 
+> **Boundary Clarification:**
+> - These endpoints are **NOT external-facing APIs**
+> - They inherit all permission and environment restrictions from the main Control API
+> - Risk assessment and action validation are identical to the parent Control API
+> - Use for ops console or internal tooling only
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/self-healing/allow/{service_name}/` | POST | Control API shorthand: allow action |
@@ -155,6 +161,14 @@ The following endpoints support DLQ lifecycle management tasks and are intended 
 ## Operational & Infrastructure-Facing Endpoints
 
 The following capabilities (38–40) describe **operational support endpoints** used for infrastructure integration, lifecycle management, and monitoring. These endpoints serve deployment infrastructure needs rather than application-level business logic.
+
+> **API Classification:**
+> These endpoints are classified as **Operational / Infrastructure-Facing**, NOT as External / Integration APIs. They are designed for:
+> - Kubernetes orchestration (health probes)
+> - Internal monitoring dashboards
+> - Infrastructure automation
+>
+> They are NOT intended for external client consumption and are NOT part of the public API contract.
 
 They include:
 - Health checks and liveness/readiness probes (Kubernetes orchestration)
