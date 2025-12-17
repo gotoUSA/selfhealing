@@ -1,0 +1,254 @@
+# Docker Compose for Stage 20: Delayed / Out-of-Order Webhook Handling Test
+#
+# Purpose:
+#   Validate system behavior when webhooks arrive:
+#   - DELAYED: After order has timed out
+#   - OUT-OF-ORDER: CANCEL before CONFIRM
+#   - DUPLICATE: Same webhook sent multiple times
+#
+# Architecture:
+#   ┌─────────────┐      ┌──────────────────┐      ┌─────────────┐
+#   │   Locust    │──────│  webhook-sender  │──────│     Web     │
+#   │   (Users)   │      │  (Flask service) │      │  (Django)   │
+#   └─────────────┘      └──────────────────┘      └─────────────┘
+#          │                     │                       │
+#          └─────────────────────┼───────────────────────┘
+#                                │
+#                    ┌───────────┴───────────┐
+#                    │     Docker Network    │
+#                    └───────────┬───────────┘
+#                                │
+#              ┌─────────────────┼─────────────────┐
+#              │                 │                 │
+#       ┌──────┴──────┐   ┌──────┴──────┐   ┌──────┴──────┐
+#       │  PostgreSQL │   │    Redis    │   │   Reports   │
+#       └─────────────┘   └─────────────┘   └─────────────┘
+#
+# Key Design:
+#   - Locust drives user flows (order creation, payment initiation)
+#   - webhook-sender simulates external PG webhook delivery
+#   - Web service processes webhooks and manages state
+#   - State correlation via order_id/payment_key
+#
+# Execution:
+#   docker-compose -f docker-compose.stage20.yml up --abort-on-container-exit
+#
+# Results:
+#   - HTML Report: stage20_delayed_webhook_report.html
+#   - CSV Reports: reports/stage20_*
+#   - Console output for real-time monitoring
+
+services:
+  # ==========================================================================
+  # Infrastructure Services
+  # ==========================================================================
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stage20-network
+
+  # Redis - Caching, Idempotency Keys, State Coordination
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - stage20-network
+
+  # ==========================================================================
+  # Test Data Initialization
+  # ==========================================================================
+
+  test-data-init:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py create_test_data --preset full --clear &&
+             python manage.py create_load_test_users --count 50 --clear &&
+             echo '✅ Test data initialization complete!'"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stage20-network
+
+  # ==========================================================================
+  # Application Services
+  # ==========================================================================
+
+  # Django Web Server - Main Application
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 4 --timeout 60"
+    volumes:
+      - .:/code
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DJANGO_SETTINGS_MODULE=myproject.settings
+      # Webhook processing settings
+      - WEBHOOK_SIGNATURE_VALIDATION=false
+      - TOSS_SECRET_KEY=test_webhook_secret_key_12345
+      - TOSS_WEBHOOK_SECRET=test_webhook_secret_key_12345
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      test-data-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/products/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - stage20-network
+
+  # ==========================================================================
+  # Celery Worker - Async Order Processing
+  # ==========================================================================
+
+  # Celery worker processes async tasks (order confirmation, stock reservation)
+  # Required for orders to transition from "pending" to "confirmed"
+  celery-worker:
+    build: .
+    command: celery -A myproject worker -l info --concurrency=4
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DJANGO_SETTINGS_MODULE=myproject.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      test-data-init:
+        condition: service_completed_successfully
+    networks:
+      - stage20-network
+
+  # ==========================================================================
+  # Webhook Sender Service (External PG Simulator)
+  # ==========================================================================
+
+  # This service simulates an external Payment Gateway webhook sender.
+  # It receives simulation requests from Locust and delivers webhooks
+  # with various timing patterns (delayed, out-of-order, duplicate).
+  webhook-sender:
+    build:
+      context: ./load_tests/chaos/webhook_sender
+      dockerfile: Dockerfile
+    environment:
+      - WEB_SERVICE_URL=http://web:8000
+      - WEBHOOK_SECRET=test_webhook_secret_key_12345
+      - PORT=5001
+      - PYTHONUNBUFFERED=1
+    expose:
+      - "5001"
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stage20-network
+
+  # ==========================================================================
+  # Locust Load Test Service
+  # ==========================================================================
+
+  # Locust drives user flows:
+  # - Creates orders
+  # - Initiates payments
+  # - Requests webhook simulations from webhook-sender
+  # - Verifies final states
+  #
+  # IMPORTANT: Locust does NOT send webhooks directly!
+  stage20-locust-test:
+    build: .
+    command: >
+      locust
+      -f /code/load_tests/scenarios/stage20_delayed_webhook_locust.py
+      --host=http://web:8000
+      --users=30
+      --spawn-rate=5
+      --run-time=90s
+      --headless
+      --html=/code/stage20_delayed_webhook_report.html
+      --csv=/code/reports/stage20_delayed_webhook
+      --only-summary
+    volumes:
+      - .:/code
+      - ./reports:/code/reports
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONUNBUFFERED=1
+      # Webhook sender service URL
+      - WEBHOOK_SENDER_URL=http://webhook-sender:5001
+      - WEB_SERVICE_URL=http://web:8000
+      # Test configuration
+      - LOCUST_TEST_DURATION=90
+      - DELAYED_WEBHOOK_DELAY_S=3
+      - ORDER_TIMEOUT_CHECK_DELAY_S=1
+      - WEBHOOK_DELAY_THRESHOLD_S=2
+      # Auth
+      - TEST_USER_PASSWORD=testpass123
+    depends_on:
+      web:
+        condition: service_healthy
+      webhook-sender:
+        condition: service_healthy
+    networks:
+      - stage20-network
+
+# ==========================================================================
+# Network Configuration
+# ==========================================================================
+
+networks:
+  stage20-network:
+    driver: bridge
+    name: stage20-delayed-webhook-network

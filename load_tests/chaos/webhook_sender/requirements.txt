@@ -1,0 +1,4 @@
+# Requirements for Webhook Sender Service
+flask>=2.3.0
+requests>=2.31.0
+gunicorn>=21.0.0
