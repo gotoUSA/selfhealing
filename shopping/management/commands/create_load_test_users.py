@@ -77,6 +77,11 @@ class Command(BaseCommand):
                     points=initial_points,  # 포인트 직접 설정
                 )
 
+                # load_test_user_0은 admin 권한 부여 (Stage 10 Self-Healing API 테스트용)
+                if i == 0:
+                    user.is_staff = True
+                    user.save()
+
                 created_users.append(username)
 
                 # 진행 상황 표시 (100명 단위)
