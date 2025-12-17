@@ -1,0 +1,175 @@
+version: '3.8'
+
+# =============================================================================
+# Stage 16 - REPEATED Lock Contention Test
+# =============================================================================
+# 반복적인 락 획득/해제를 통해 Self-Healing 시스템의 일관된 대응을 검증합니다.
+#
+# 테스트 구조:
+# 1. 15회 반복 락 (각 5초 유지, 2초 쿨다운)
+# 2. 총 테스트 시간: ~105초 (15 * 7초)
+# 3. Locust: 130초 실행 (락 반복 + 여유)
+# =============================================================================
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: shopping_db
+      POSTGRES_USER: shopping_user
+      POSTGRES_PASSWORD: shopping_pass
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "lock_timeout=5000"
+      - "-c"
+      - "deadlock_timeout=1000"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_min_duration_statement=2000"
+    volumes:
+      - postgres_data_repeated:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Django migrations
+  migrations:
+    build: .
+    command: python manage.py migrate --noinput
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Test data initialization
+  test-data-init:
+    build: .
+    command: >
+      sh -c "python manage.py create_test_data --preset full --clear &&
+             python manage.py create_load_test_users --count 50 --clear &&
+             echo 'Test data initialization complete!'"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
+  # Django Web Application
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 30"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - SECRET_KEY=stage16-repeated-test-secret-key
+      - ALLOWED_HOSTS=*
+      - DISABLE_RATE_LIMITING=TRUE
+    depends_on:
+      test-data-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # REPEATED Lock Holder - 15회 반복 락
+  repeated-lock-holder:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/repeated_lock_holder.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      - PRODUCT_TABLE=shopping_product
+      - TARGET_PRODUCT_ID=0
+      - LOCK_ITERATIONS=15
+      - LOCK_HOLD_SECONDS=5
+      - COOLDOWN_SECONDS=2
+      - STARTUP_DELAY_SECONDS=15
+    depends_on:
+      web:
+        condition: service_healthy
+
+  # DB Lock Monitor - 전체 테스트 기간 모니터링
+  db-lock-monitor:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/monitor_db_locks.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      - MONITOR_DURATION_SECONDS=140
+      - MONITOR_INTERVAL_SECONDS=1
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Locust Load Test - 130초 실행
+  stage16-locust-repeated:
+    build: .
+    command: >
+      locust -f /load_tests/scenarios/stage16_db_lock_recovery_locust.py
+             --host=http://web:8000
+             --headless
+             --users 40
+             --spawn-rate 12
+             --run-time 130s
+    volumes:
+      - ./load_tests:/load_tests
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+      - DISABLE_RATE_LIMITING=TRUE
+      - FORCE_TARGET_PRODUCT_ID=
+      - LOCK_CONTENTION_TARGET_PRODUCTS=1
+    depends_on:
+      web:
+        condition: service_healthy
+      repeated-lock-holder:
+        condition: service_started
+
+volumes:
+  postgres_data_repeated:

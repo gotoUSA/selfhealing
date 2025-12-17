@@ -1,0 +1,206 @@
+# Docker Compose for Visibility-Focused Self-Healing Verification
+#
+# CHOKE POINT: User.points (shopping_users.points)
+#
+# 이 테스트는 모든 성공적인 결제 플로우가 반드시 통과해야 하는
+# User.points 필드에 대해 외부 락을 반복 주입하여
+# Self-Healing 시스템의 가시적인 동작을 검증합니다.
+#
+# 실행 방법:
+#   # 1. 인프라 시작
+#   docker-compose -f docker-compose.visibility-healing.yml up -d db redis
+#
+#   # 2. 테스트 데이터 초기화 (사용자에게 포인트 부여)
+#   docker-compose -f docker-compose.visibility-healing.yml run --rm test-data-init
+#
+#   # 3. 웹 서버 시작
+#   docker-compose -f docker-compose.visibility-healing.yml up -d web
+#
+#   # 4. 락 홀더와 Locust 동시 실행 (핵심 테스트)
+#   docker-compose -f docker-compose.visibility-healing.yml up product-stock-lock-holder visibility-locust-test
+#
+#   # 5. (선택) DB 락 모니터링
+#   docker-compose -f docker-compose.visibility-healing.yml up db-lock-monitor
+#
+# 예상 동작:
+#   - user-point-lock-holder: 10회 반복, 각 8-10초간 특정 사용자의 points 필드 락
+#   - visibility-locust-test: 포인트 사용/적립 작업 집중 수행
+#   - 락 윈도우 중: 해당 사용자에 대한 포인트 작업 지연/타임아웃 발생
+#   - Self-Healing: 재시도, 백오프, 409 응답 등 가시적 신호 관찰
+
+services:
+  # ==========================================================================
+  # 인프라 서비스
+  # ==========================================================================
+  
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c lock_timeout=10000
+      -c deadlock_timeout=1000
+      -c log_lock_waits=on
+      -c log_statement=none
+      -c max_connections=200
+      -c log_min_duration_statement=5000
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ==========================================================================
+  # 테스트 데이터 초기화
+  # ==========================================================================
+  
+  test-data-init:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py create_test_data --preset full --clear &&
+             python manage.py create_load_test_users --count 50 --clear --points 10000 &&
+             echo '✅ Test data initialization complete!'"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ==========================================================================
+  # 웹 애플리케이션
+  # ==========================================================================
+  
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120 --log-level debug"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=True
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - SECRET_KEY=visibility-healing-test-secret-key
+      - TEST_USER_PASSWORD=testpass123
+      - DISABLE_RATE_LIMITING=TRUE
+      # Self-Healing 로그 활성화
+      - SELF_HEALING_LOG_LEVEL=DEBUG
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      test-data-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ==========================================================================
+  # 외부 락 홀더 - Product.stock 필드 락 주입
+  # ==========================================================================
+  
+  product-stock-lock-holder:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/hold_product_stock_lock.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      # 락 설정
+      - TARGET_PRODUCT_ID=${TARGET_PRODUCT_ID:-0}
+      - LOCK_ITERATIONS=10
+      - LOCK_HOLD_MIN=8
+      - LOCK_HOLD_MAX=10
+      - COOLDOWN_MIN=1
+      - COOLDOWN_MAX=2
+      - STARTUP_DELAY=5
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  # ==========================================================================
+  # DB 락 모니터 - pg_locks 실시간 관찰
+  # ==========================================================================
+  
+  db-lock-monitor:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/monitor_db_locks.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      - MONITOR_DURATION_SECONDS=150
+      - MONITOR_INTERVAL_SECONDS=2
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ==========================================================================
+  # Locust 부하 테스트 - 재고 경합 시나리오
+  # ==========================================================================
+  
+  visibility-locust-test:
+    build: .
+    command: >
+      locust -f /load_tests/scenarios/visibility_self_healing_locust.py
+             --host=http://web:8000
+             --headless
+             --users 30
+             --spawn-rate 10
+             --run-time 120s
+             --html=/reports/visibility_healing_report.html
+    volumes:
+      - ./load_tests:/load_tests
+      - ./reports:/reports
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+      - DISABLE_RATE_LIMITING=TRUE
+      # 락 홀더와 동일한 상품 ID (0이면 자동 탐색)
+      - LOCK_TARGET_PRODUCT_ID=${TARGET_PRODUCT_ID:-0}
+    depends_on:
+      web:
+        condition: service_healthy
+      product-stock-lock-holder:
+        condition: service_started

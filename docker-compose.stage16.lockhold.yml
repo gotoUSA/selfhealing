@@ -1,0 +1,178 @@
+# Docker Compose for Stage 16: DB Lock / Deadlock Recovery Test with External Lock Holder
+#
+# 이 테스트는 외부에서 행 락을 강제로 생성하여 Self-Healing 시스템의 
+# 락 경합 처리 능력을 검증합니다.
+#
+# 실행 방법:
+#   # 1. 인프라 시작
+#   docker-compose -f docker-compose.stage16.lockhold.yml up -d db redis
+#   
+#   # 2. 테스트 데이터 초기화
+#   docker-compose -f docker-compose.stage16.lockhold.yml run --rm test-data-init
+#   
+#   # 3. 웹 서버 시작
+#   docker-compose -f docker-compose.stage16.lockhold.yml up -d web
+#   
+#   # 4. 락 홀더와 Locust 테스트 동시 실행
+#   docker-compose -f docker-compose.stage16.lockhold.yml up lock-holder stage16-locust-test
+#
+# 예상 동작:
+#   - lock-holder: 30초간 상품 ID=1의 행 락을 유지
+#   - stage16-locust-test: 동시에 트래픽 생성
+#   - 락 윈도우 중: 해당 상품에 대한 UPDATE 시도 시 지연/타임아웃 발생
+#   - 락 해제 후: 정상 처리 복구
+
+services:
+  # 데이터베이스 - PostgreSQL
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # 락 경합 테스트를 위한 설정
+    command: >
+      postgres
+      -c lock_timeout=5000
+      -c deadlock_timeout=1000
+      -c log_lock_waits=on
+      -c log_statement=none
+      -c max_connections=200
+
+  # Redis - 캐시 및 세션
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 테스트 데이터 초기화 서비스
+  test-data-init:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py create_test_data --preset full --clear &&
+             python manage.py create_load_test_users --count 50 --clear &&
+             echo 'Test data initialization complete!'"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Django 웹 애플리케이션
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=True
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - SECRET_KEY=test-secret-key-for-stage16
+      - TEST_USER_PASSWORD=testpass123
+      - DISABLE_RATE_LIMITING=TRUE
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      test-data-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/products/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 외부 락 홀더 - 행 락을 강제로 생성
+  lock-holder:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/hold_row_lock.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      - PRODUCT_TABLE=shopping_product
+      # 실제 존재하는 상품 ID - 테스트 전 확인 필수
+      - TARGET_PRODUCT_ID=${TARGET_PRODUCT_ID:-0}
+      - LOCK_HOLD_SECONDS=30
+      - STARTUP_DELAY_SECONDS=10
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  # DB 락 모니터 - pg_locks, pg_stat_activity 실시간 관찰
+  db-lock-monitor:
+    build: .
+    command: >
+      sh -c "pip install psycopg2-binary && python /code/tools/monitor_db_locks.py"
+    volumes:
+      - .:/code
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=shopping_db
+      - PGUSER=shopping_user
+      - PGPASSWORD=shopping_pass
+      - MONITOR_DURATION_SECONDS=70
+      - MONITOR_INTERVAL_SECONDS=1
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Stage 16 Locust 부하 테스트
+  stage16-locust-test:
+    build: .
+    command: >
+      locust -f /load_tests/scenarios/stage16_db_lock_recovery_locust.py
+             --host=http://web:8000
+             --headless
+             --users 40
+             --spawn-rate 12
+             --run-time 60s
+    volumes:
+      - ./load_tests:/load_tests
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+      - DISABLE_RATE_LIMITING=TRUE
+      # 락 경합 테스트용 설정 - 락 홀더와 동일한 상품 ID 지정
+      # 0 또는 빈값은 API에서 자동 탐색
+      - FORCE_TARGET_PRODUCT_ID=${TARGET_PRODUCT_ID:-}
+      - LOCK_CONTENTION_TARGET_PRODUCTS=1
+    depends_on:
+      web:
+        condition: service_healthy
+      lock-holder:
+        condition: service_started

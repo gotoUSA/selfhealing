@@ -1,0 +1,116 @@
+# Docker Compose for Stage 16: DB Lock / Deadlock Recovery Test
+#
+# 이 테스트는 높은 동시성 데이터베이스 락 압력 하에서의 시스템 동작을 검증합니다.
+#
+# 실행 방법:
+#   docker-compose -f docker-compose.stage16.yml up --abort-on-container-exit
+#
+# 결과 확인:
+#   - HTML 리포트: stage16_db_lock_report.html
+#   - 콘솔 출력에서 SUCCESS CRITERIA VERIFICATION 확인
+
+services:
+  # 데이터베이스 - PostgreSQL
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shopping_db
+      - POSTGRES_USER=shopping_user
+      - POSTGRES_PASSWORD=shopping_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # 락 경합 테스트를 위한 설정 (실제 락 동작 관찰)
+    command: >
+      postgres
+      -c lock_timeout=5000
+      -c deadlock_timeout=1000
+      -c log_lock_waits=on
+      -c log_statement=none
+      -c max_connections=200
+
+  # Redis - 캐시 및 세션
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 테스트 데이터 초기화 서비스
+  test-data-init:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py create_test_data --preset full --clear &&
+             python manage.py create_load_test_users --count 50 --clear &&
+             echo 'Test data initialization complete!'"
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - TEST_USER_PASSWORD=testpass123
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Django 웹 서버 - 락 경합 테스트용 설정
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 --workers 8 --threads 4 --timeout 60"
+    volumes:
+      - .:/code
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=False
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - DJANGO_SETTINGS_MODULE=myproject.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      test-data-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/products/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Stage 16 DB Lock Recovery Locust Test
+  stage16-locust-test:
+    build: .
+    command: >
+      locust 
+      -f /code/load_tests/scenarios/stage16_db_lock_recovery_locust.py
+      --host=http://web:8000
+      --users=40
+      --spawn-rate=4
+      --run-time=90s
+      --headless
+      --html=/code/stage16_db_lock_report.html
+      --csv=/code/reports/stage16_db_lock
+      --only-summary
+    volumes:
+      - .:/code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+    depends_on:
+      web:
+        condition: service_healthy
