@@ -16,6 +16,15 @@ from ..models.product import Product
 from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 from .point_service import PointService
 
+# Chaos injection imports
+from ..chaos.decorators import (
+    inject_payment_confirm_delay,
+    inject_partial_failure_after_pg,
+    inject_confirm_race_delay,
+    inject_cancel_race_delay,
+    PartialFailureException,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -163,6 +172,9 @@ class PaymentService:
             PaymentConfirmError: 결제 승인 실패
             TossPaymentError: 토스페이먼츠 API 에러
         """
+        # [CHAOS] Race condition amplification - delay before lock acquisition
+        inject_confirm_race_delay(payment_id=payment.pk)
+
         # 동시성 제어: 결제 객체를 락으로 보호하고 최신 상태 확인
         payment = Payment.objects.select_for_update().get(pk=payment.pk)
 
@@ -192,6 +204,17 @@ class PaymentService:
             amount=amount,
         )
         logger.info(f"토스페이먼츠 결제 승인 성공: payment_id={payment.id}, order_id={order_id}")
+
+        # [CHAOS] Partial failure after PG success - simulates internal failure
+        try:
+            inject_partial_failure_after_pg(payment_id=payment.id, pg_response=payment_data)
+        except PartialFailureException as e:
+            logger.error(f"[CHAOS] Partial failure injected after PG success: payment_id={payment.id}")
+            # PG succeeded but internal processing failed - this triggers rollback/DLQ
+            raise PaymentConfirmError(str(e))
+
+        # [CHAOS] Payment confirm delay - expands race window before DB commit
+        inject_payment_confirm_delay(payment_id=payment.id, order_id=order.id)
 
         # 2. Payment 정보 업데이트
         payment.mark_as_paid(payment_data)
@@ -398,6 +421,9 @@ class PaymentService:
             PaymentCancelError: 취소 불가능한 상태
         """
         logger.info(f"결제 취소 시작: payment_id={payment_id}, user_id={user.id}, " f"cancel_reason={cancel_reason}")
+
+        # [CHAOS] Cancel race window - delay to amplify race conditions with confirm
+        inject_cancel_race_delay(payment_id=payment_id)
 
         # 1. 동시성 제어: Payment를 락으로 보호하며 조회
         try:

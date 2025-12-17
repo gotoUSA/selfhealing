@@ -9,8 +9,8 @@ services:
       - POSTGRES_DB=shopping_db
       - POSTGRES_USER=shopping_user
       - POSTGRES_PASSWORD=shopping_pass
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
       interval: 5s
@@ -40,6 +40,18 @@ services:
       - "8000"
     env_file:
       - .env
+    environment:
+      # Chaos Mode Configuration (disabled by default)
+      - CHAOS_MODE=${CHAOS_MODE:-false}
+      - CHAOS_PAYMENT_CONFIRM_DELAY=${CHAOS_PAYMENT_CONFIRM_DELAY:-false}
+      - CHAOS_PARTIAL_FAILURE=${CHAOS_PARTIAL_FAILURE:-false}
+      - CHAOS_RACE_AMPLIFICATION=${CHAOS_RACE_AMPLIFICATION:-false}
+      - CHAOS_ASYNC_TASK_FAILURE=${CHAOS_ASYNC_TASK_FAILURE:-false}
+      - CHAOS_PAYMENT_CONFIRM_DELAY_MS=${CHAOS_PAYMENT_CONFIRM_DELAY_MS:-2000}
+      - CHAOS_RACE_DELAY_MS=${CHAOS_RACE_DELAY_MS:-500}
+      - CHAOS_PARTIAL_FAILURE_PROB=${CHAOS_PARTIAL_FAILURE_PROB:-0.3}
+      - CHAOS_ASYNC_TASK_FAILURE_PROB=${CHAOS_ASYNC_TASK_FAILURE_PROB:-0.2}
+      - CHAOS_RACE_TRIGGER_PROB=${CHAOS_RACE_TRIGGER_PROB:-0.4}
     depends_on:
       db:
         condition: service_healthy
@@ -66,6 +78,18 @@ services:
       - .:/code
     env_file:
       - .env
+    environment:
+      # Chaos Mode Configuration (disabled by default)
+      - CHAOS_MODE=${CHAOS_MODE:-false}
+      - CHAOS_PAYMENT_CONFIRM_DELAY=${CHAOS_PAYMENT_CONFIRM_DELAY:-false}
+      - CHAOS_PARTIAL_FAILURE=${CHAOS_PARTIAL_FAILURE:-false}
+      - CHAOS_RACE_AMPLIFICATION=${CHAOS_RACE_AMPLIFICATION:-false}
+      - CHAOS_ASYNC_TASK_FAILURE=${CHAOS_ASYNC_TASK_FAILURE:-false}
+      - CHAOS_PAYMENT_CONFIRM_DELAY_MS=${CHAOS_PAYMENT_CONFIRM_DELAY_MS:-2000}
+      - CHAOS_RACE_DELAY_MS=${CHAOS_RACE_DELAY_MS:-500}
+      - CHAOS_PARTIAL_FAILURE_PROB=${CHAOS_PARTIAL_FAILURE_PROB:-0.3}
+      - CHAOS_ASYNC_TASK_FAILURE_PROB=${CHAOS_ASYNC_TASK_FAILURE_PROB:-0.2}
+      - CHAOS_RACE_TRIGGER_PROB=${CHAOS_RACE_TRIGGER_PROB:-0.4}
     depends_on:
       db:
         condition: service_healthy

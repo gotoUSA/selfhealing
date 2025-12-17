@@ -21,6 +21,15 @@ from ..models.product import Product
 from ..services.point_service import PointService
 from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 
+# Chaos injection imports
+from ..chaos.decorators import (
+    inject_async_task_failure,
+    inject_rollback_failure,
+    inject_partial_failure_after_pg,
+    AsyncTaskChaosException,
+    PartialFailureException,
+)
+
 logger = get_task_logger(__name__)
 
 
@@ -168,6 +177,29 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
 
     logger.info(f"결제 최종 처리 시작: payment_id={payment_id}")
 
+    # [CHAOS] Async task failure injection - simulates task failure
+    try:
+        inject_async_task_failure(
+            task_name="finalize_payment_confirm",
+            task_id=self.request.id if self.request else None
+        )
+    except AsyncTaskChaosException as e:
+        logger.error(f"[CHAOS] Async task failure injected: payment_id={payment_id}")
+        # Re-raise to trigger retry mechanism
+        raise self.retry(exc=e, countdown=5)
+
+    # [CHAOS] Partial failure after PG success - simulate internal failure
+    try:
+        inject_partial_failure_after_pg(payment_id=payment_id, pg_response=toss_response)
+    except PartialFailureException as e:
+        logger.error(f"[CHAOS] Partial failure injected in finalize: payment_id={payment_id}")
+        # Trigger rollback
+        rollback_payment_failure.delay(
+            order_id=Payment.objects.get(pk=payment_id).order_id,
+            fail_reason="[CHAOS] Partial failure after PG success"
+        )
+        raise
+
     try:
         with transaction.atomic():
             start_time = time.time()
@@ -282,6 +314,13 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
         롤백 처리 결과
     """
     logger.info(f"결제 실패 롤백 시작: order_id={order_id}, reason={fail_reason}")
+
+    # [CHAOS] Rollback failure injection - test retry mechanism
+    try:
+        inject_rollback_failure(order_id=order_id)
+    except Exception as e:
+        logger.error(f"[CHAOS] Rollback failure injected: order_id={order_id}")
+        raise self.retry(exc=e, countdown=3)
 
     try:
         with transaction.atomic():
