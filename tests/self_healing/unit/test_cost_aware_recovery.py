@@ -29,6 +29,191 @@ from shopping.services.payment_recovery_service import CeleryPaymentRecovery
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
+# =============================================================================
+# Mock Objects and Fixtures
+# =============================================================================
+
+
+class MockCostTracker:
+    """Mock cost tracker for testing cost-aware recovery."""
+
+    def __init__(self, cost_per_call: Decimal = Decimal("500")):
+        self.cost_per_call = cost_per_call
+        self.total_cost = Decimal("0")
+        self.call_count = 0
+        self.call_history: list = []
+
+    def record_call(self, operation_name: str = ""):
+        """Record a call and accumulate cost."""
+        self.call_count += 1
+        self.total_cost += self.cost_per_call
+        
+        # Create a record with cumulative cost
+        record = type("CostRecord", (), {
+            "operation": operation_name,
+            "cost": self.cost_per_call,
+            "cumulative": self.total_cost,
+        })()
+        self.call_history.append(record)
+
+    def reset(self):
+        """Reset the tracker."""
+        self.total_cost = Decimal("0")
+        self.call_count = 0
+        self.call_history = []
+
+    def get_cost_analysis(self) -> dict:
+        """Get cost analysis report."""
+        return {
+            "total_calls": self.call_count,
+            "total_cost": str(self.total_cost),
+            "cost_per_call": str(self.cost_per_call),
+            "history": [
+                {"operation": r.operation, "cost": str(r.cost), "cumulative": str(r.cumulative)}
+                for r in self.call_history
+            ],
+        }
+
+    def would_exceed_threshold(self, threshold: Decimal) -> bool:
+        """Check if next call would exceed threshold."""
+        return self.total_cost + self.cost_per_call > threshold
+
+
+class MockRecoveryHandler:
+    """Mock recovery handler for testing cost-aware decisions."""
+
+    def __init__(self, cost_threshold_percent: Decimal = Decimal("10")):
+        self.cost_threshold_percent = cost_threshold_percent
+
+    def handle_failure_with_cost_awareness(
+        self,
+        payment,
+        error_code: str,
+        cost_tracker: MockCostTracker,
+        tenant=None,
+    ) -> dict:
+        """
+        Simulate cost-aware failure handling.
+
+        Returns action, reason, and audit information.
+        """
+        amount = payment.amount
+        threshold = amount * self.cost_threshold_percent / Decimal("100")
+
+        # Adjust threshold for tenant if provided
+        if tenant and hasattr(tenant, "cost_threshold_percent"):
+            threshold = amount * tenant.cost_threshold_percent / Decimal("100")
+
+        # Simulate retries until cost exceeds threshold
+        retry_count = 0
+        while cost_tracker.total_cost + cost_tracker.cost_per_call <= threshold:
+            cost_tracker.record_call()
+            retry_count += 1
+            # In real implementation, this would attempt recovery
+            # Here we just simulate the cost accumulation
+
+        return {
+            "action": "moved_to_dlq",
+            "reason": "cost_prohibitive",
+            "retry_count": retry_count,
+            "audit": {
+                "cost_estimate": str(cost_tracker.total_cost),
+                "threshold": str(int(threshold)),
+                "decision": "dlq_cost_prohibitive",
+            },
+        }
+
+
+class MockTenant:
+    """Mock tenant for testing tenant-specific cost thresholds."""
+
+    def __init__(self, cost_threshold_percent: Decimal):
+        self.cost_threshold_percent = cost_threshold_percent
+
+
+@pytest.fixture
+def sample_payment(db):
+    """Create a sample payment for testing."""
+    user = UserFactory()
+    order = OrderFactory(user=user)
+    return PaymentFactory(order=order, status="in_progress")
+
+
+@pytest.fixture
+def low_value_payment(db):
+    """Create a low-value payment for testing."""
+    user = UserFactory()
+    order = OrderFactory(user=user)
+    return PaymentFactory(order=order, status="in_progress", amount=Decimal("500"))
+
+
+@pytest.fixture
+def high_value_payment(db):
+    """Create a high-value payment for testing."""
+    user = UserFactory()
+    order = OrderFactory(user=user)
+    return PaymentFactory(order=order, status="in_progress", amount=Decimal("200000"))
+
+
+@pytest.fixture
+def recovery_handler():
+    """Create a mock recovery handler."""
+    return MockRecoveryHandler()
+
+
+@pytest.fixture
+def high_cost_tracker():
+    """Create a high-cost tracker."""
+    return MockCostTracker(cost_per_call=Decimal("500"))
+
+
+class MockAuditLogRepository:
+    """Mock audit log repository for testing."""
+
+    def __init__(self):
+        self.logs: list = []
+
+    def log(self, entry: dict):
+        """Store an audit log entry."""
+        self.logs.append(entry)
+
+    def get_all(self) -> list:
+        """Get all logged entries."""
+        return self.logs
+
+    def find_by_type(self, log_type: str) -> list:
+        """Find entries by type."""
+        return [e for e in self.logs if e.get("type") == log_type]
+
+    def find_by_action(self, action: str) -> list:
+        """Find entries by action."""
+        return [e for e in self.logs if e.get("action") == action]
+
+
+@pytest.fixture
+def audit_log_repository():
+    """Create a mock audit log repository."""
+    return MockAuditLogRepository()
+
+
+@pytest.fixture
+def cost_tracker():
+    """Create a standard cost tracker for testing."""
+    return MockCostTracker(cost_per_call=Decimal("100"))
+
+
+@pytest.fixture
+def tenant_a():
+    """Create tenant A with 10% cost threshold."""
+    return MockTenant(cost_threshold_percent=Decimal("10"))
+
+
+@pytest.fixture
+def tenant_b():
+    """Create tenant B with 15% cost threshold."""
+    return MockTenant(cost_threshold_percent=Decimal("15"))
+
+
 @pytest.mark.tier2
 @pytest.mark.cost_sensitive
 @pytest.mark.django_db(transaction=True)
@@ -475,7 +660,7 @@ class TestCostAwareTenantPolicies:
         Expected:
             - Tenant A may abort earlier than Tenant B
         """
-        from .conftest import MockCostTracker
+        # MockCostTracker is defined at the top of this file
 
         sample_payment.amount = Decimal("10000")
         sample_payment.save()

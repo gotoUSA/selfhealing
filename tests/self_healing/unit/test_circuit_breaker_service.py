@@ -568,7 +568,7 @@ class TestModuleLevelFunctions:
 
         assert service1 is service2
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_should_allow_request_delegates_to_service(self, mock_get_service):
         """
         Purpose:
@@ -583,7 +583,7 @@ class TestModuleLevelFunctions:
         assert result is True
         mock_service.should_allow.assert_called_once_with("test_service")
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_force_open_circuit_delegates_to_service(self, mock_get_service):
         """
         Purpose:
@@ -603,7 +603,7 @@ class TestModuleLevelFunctions:
         assert result.success is True
         mock_service.force_open.assert_called_once()
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_force_close_circuit_delegates_to_service(self, mock_get_service):
         """
         Purpose:
@@ -1210,7 +1210,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
         tracker = get_rate_limit_tracker()
         tracker.clear_service("test_convenience")
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_record_rate_limit_delegates_to_service(self, mock_get_service):
         """
         Purpose:
@@ -1228,7 +1228,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
 
         mock_service.record_rate_limit_response.assert_called_once_with("test_service")
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_should_allow_with_protection_delegates_to_service(self, mock_get_service):
         """
         Purpose:
@@ -1247,7 +1247,7 @@ class TestConvenienceFunctionsRateLimitDDoS:
         assert result == (True, 0.0)
         mock_service.should_allow_with_ddos_protection.assert_called_once_with("test_service")
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.convenience.get_circuit_breaker_service")
     def test_get_protection_status_delegates_to_service(self, mock_get_service):
         """
         Purpose:

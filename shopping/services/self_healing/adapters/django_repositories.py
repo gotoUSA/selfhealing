@@ -57,8 +57,8 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             domain=obj.domain,
             failure_type=obj.failure_type,
             status=obj.status,
-            order_id=obj.order_id,
-            payment_id=obj.payment_id,
+            entity_type=obj.entity_type or "",
+            entity_id=obj.entity_id or "",
             user_id=obj.user_id,
             snapshot_data=obj.snapshot_data or {},
             error_code=obj.error_code or "",
@@ -86,8 +86,8 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         failure_type: str,
         error_message: str = "",
         error_code: str = "",
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_type: str = "",
+        entity_id: str = "",
         user_id: Optional[int] = None,
         snapshot_data: Optional[dict[str, Any]] = None,
         request_data: Optional[dict[str, Any]] = None,
@@ -106,8 +106,8 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             failure_type=failure_type,
             error_message=error_message,
             error_code=error_code,
-            order_id=order_id,
-            payment_id=payment_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
             user_id=user_id,
             snapshot_data=snapshot_data or {},
             request_data=request_data or {},
@@ -349,6 +349,10 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
                 if obj.status != FailedOperationStatus.PENDING.value:
                     return None
                 if obj.retry_count >= max_retries:
+                    # Max retries exceeded - mark as rejected
+                    obj.status = FailedOperationStatus.REJECTED.value
+                    obj.resolution_note = f"Max retries ({max_retries}) exceeded"
+                    obj.save(update_fields=["status", "resolution_note", "updated_at"])
                     return None
 
                 # Acquire the entry
@@ -753,7 +757,8 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
             assigned_to_id=obj.assigned_to_id if hasattr(obj, "assigned_to_id") else None,
             investigation_notes=obj.investigation_notes if hasattr(obj, "investigation_notes") else "",
             resolved_at=obj.resolved_at if hasattr(obj, "resolved_at") else None,
-            created_at=obj.created_at,
+            # SecurityIncident uses 'detected_at' instead of 'created_at'
+            created_at=getattr(obj, "created_at", None) or getattr(obj, "detected_at", None),
             updated_at=obj.updated_at if hasattr(obj, "updated_at") else None,
         )
 
@@ -767,10 +772,18 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         user_id: Optional[int] = None,
         order_id: Optional[int] = None,
         payment_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, int]] = None,
         raw_payload: Optional[dict[str, Any]] = None,
     ) -> SecurityIncidentData:
         """Create a new security incident"""
         SecurityIncident = self._get_model()
+
+        # Extract order_id and payment_id from entity_refs if provided
+        if entity_refs:
+            if order_id is None:
+                order_id = entity_refs.get("order_id")
+            if payment_id is None:
+                payment_id = entity_refs.get("payment_id")
 
         create_kwargs = {
             "incident_type": incident_type,
@@ -791,11 +804,15 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
 
         if "description" in model_fields and description:
             create_kwargs["description"] = description
-        if "order_id" in model_fields and order_id:
+        # For ForeignKey fields, the field name is 'order'/'payment' but we assign via 'order_id'/'payment_id'
+        if "order" in model_fields and order_id:
             create_kwargs["order_id"] = order_id
-        if "payment_id" in model_fields and payment_id:
+        if "payment" in model_fields and payment_id:
             create_kwargs["payment_id"] = payment_id
-        if "raw_payload" in model_fields:
+        # raw_payload is named 'raw_request' in SecurityIncident model
+        if "raw_request" in model_fields:
+            create_kwargs["raw_request"] = raw_payload or {}
+        elif "raw_payload" in model_fields:
             create_kwargs["raw_payload"] = raw_payload or {}
 
         obj = SecurityIncident.objects.create(**create_kwargs)

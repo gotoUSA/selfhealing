@@ -66,8 +66,8 @@ class TestSecurityDLQSeparation:
 
         with patch.object(service, "_send_security_notification"):
             result = service.handle_violation(
-                violation_type=ViolationType.WEBHOOK_SIGNATURE_INVALID,
-                request=request,
+                violation_type=ViolationType.SIGNATURE_INVALID,
+                request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": ""},
                 description="HMAC signature mismatch",
             )
 
@@ -76,7 +76,7 @@ class TestSecurityDLQSeparation:
         # Verify SecurityIncident created
         incident = SecurityIncident.objects.get(id=result.incident_id)
         assert incident is not None
-        assert incident.incident_type == ViolationType.WEBHOOK_SIGNATURE_INVALID.value
+        assert incident.incident_type == ViolationType.SIGNATURE_INVALID.value
 
         # Verify NO DLQ entry created
         final_dlq_count = FailedOperation.objects.count()
@@ -103,8 +103,8 @@ class TestSecurityDLQSeparation:
             - Zero DLQ entries for any security violation
         """
         critical_violations = [
-            ViolationType.WEBHOOK_SIGNATURE_INVALID,
-            ViolationType.PAYMENT_AMOUNT_TAMPERED,
+            ViolationType.SIGNATURE_INVALID,
+            ViolationType.DATA_TAMPERED,
             ViolationType.TOKEN_FORGED,
             ViolationType.REPLAY_ATTACK,
         ]
@@ -120,7 +120,7 @@ class TestSecurityDLQSeparation:
             with patch.object(service, "_send_security_notification"):
                 result = service.handle_violation(
                     violation_type=violation_type,
-                    request=request,
+                    request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": ""},
                     description=f"Test violation: {violation_type.value}",
                 )
 
@@ -157,7 +157,7 @@ class TestSecurityDLQSeparation:
         with patch.object(service, "_send_security_notification"):
             result = service.handle_violation(
                 violation_type=ViolationType.UNAUTHORIZED_ACCESS,
-                request=request,
+                request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": ""},
                 description="Unauthorized access attempt",
             )
 
@@ -191,8 +191,8 @@ class TestSecurityDLQSeparation:
 
         with patch.object(service, "_send_security_notification"):
             result = service.handle_violation(
-                violation_type=ViolationType.PAYMENT_AMOUNT_TAMPERED,
-                request=request,
+                violation_type=ViolationType.DATA_TAMPERED,
+                request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": request.META.get("HTTP_USER_AGENT", "")},
                 description="Amount mismatch: expected 10000, got 1",
             )
 
@@ -200,7 +200,7 @@ class TestSecurityDLQSeparation:
 
         # Verify audit trail completeness
         assert incident.source_ip == "10.0.0.100"
-        assert incident.incident_type == "payment_amount_tampered"
+        assert incident.incident_type == "data_tampered"
         assert incident.severity == Severity.CRITICAL.value
         assert "Amount mismatch" in incident.description
         assert incident.updated_at is not None
@@ -228,8 +228,8 @@ class TestSecurityDLQSeparation:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             error_message="Connection timed out after 30s",
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
@@ -266,9 +266,9 @@ class TestSecurityDLQSeparation:
         with patch.object(service, "_send_security_notification"):
             result = service.handle_violation(
                 violation_type=ViolationType.INJECTION_ATTEMPT,
-                request=request,
+                request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": ""},
                 description="SQL injection attempt detected",
-                user=user,
+                user_id=user.id,
             )
 
         incident = SecurityIncident.objects.get(id=result.incident_id)
@@ -277,7 +277,7 @@ class TestSecurityDLQSeparation:
         assert incident.user_id == user.id
 
         # Verify no DLQ entry
-        dlq = FailedOperation.objects.filter(user=user, failure_type__icontains="INJECTION")
+        dlq = FailedOperation.objects.filter(failure_type__icontains="INJECTION")
         assert dlq.count() == 0
 
     def test_dlq_query_excludes_security_violations(self):
@@ -303,8 +303,8 @@ class TestSecurityDLQSeparation:
         dlq_entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id},
         )
 
@@ -315,8 +315,8 @@ class TestSecurityDLQSeparation:
 
         with patch.object(security_service, "_send_security_notification"):
             security_service.handle_violation(
-                violation_type=ViolationType.WEBHOOK_SIGNATURE_INVALID,
-                request=request,
+                violation_type=ViolationType.SIGNATURE_INVALID,
+                request_info={"ip": request.META.get("REMOTE_ADDR"), "user_agent": ""},
                 description="Invalid signature",
             )
 

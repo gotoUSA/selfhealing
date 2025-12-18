@@ -23,8 +23,10 @@ from selfhealing.services import (
     ControlAPIService,
     ControlRequest,
     ControlResponse,
-    classify_reason,
     assess_risk_level,
+)
+from shopping.services.self_healing import (
+    classify_reason,
 )
 from shopping.serializers.self_healing_serializers import (
     ControlRequestSerializer,

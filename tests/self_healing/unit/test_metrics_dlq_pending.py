@@ -20,6 +20,8 @@ from shopping.models.failed_operation import FailedOperation
 from selfhealing.services import (
     record_dlq_item_created,
     update_dlq_pending_gauges,
+)
+from shopping.services.self_healing import (
     dlq_pending_gauge,
     dlq_created_total,
 )
@@ -77,7 +79,8 @@ class TestDLQPendingMetric:
         entry = FailedOperation.create_from_failure(
             domain=domain,
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Connection timeout",
         )
@@ -113,7 +116,8 @@ class TestDLQPendingMetric:
         entry = FailedOperation.create_from_failure(
             domain=domain,
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Connection timeout",
         )
@@ -149,7 +153,8 @@ class TestDLQPendingMetric:
         payment_entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Payment timeout",
         )
@@ -201,7 +206,8 @@ class TestDLQPendingMetric:
         pending_entry = FailedOperation.create_from_failure(
             domain=domain,
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Pending entry",
         )
@@ -307,7 +313,8 @@ class TestDLQPendingMetric:
         entry = FailedOperation.create_from_failure(
             domain=domain,
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Test entry",
         )

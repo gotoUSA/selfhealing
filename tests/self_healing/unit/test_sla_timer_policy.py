@@ -13,99 +13,67 @@ from datetime import timedelta
 
 import pytest
 
-from selfhealing.core import SLAThresholds
+from selfhealing.core import SLAConfig
+
+
+# Shopping domain-specific SLA thresholds for testing
+SHOPPING_SLA_THRESHOLDS = {
+    "payment": 1,      # 1 hour - strictest (revenue impact)
+    "inventory": 2,    # 2 hours - stock accuracy
+    "point": 4,        # 4 hours - customer satisfaction
+    "webhook": 8,      # 8 hours - integration reliability
+    "notification": 24,  # 24 hours - informational only
+}
+
+
+def get_shopping_sla_config() -> SLAConfig:
+    """Create an SLAConfig with shopping-specific thresholds."""
+    return SLAConfig(
+        default_hours=24,
+        thresholds_by_domain=SHOPPING_SLA_THRESHOLDS.copy(),
+    )
 
 
 @pytest.mark.tier1
-class TestSLAThresholdDefaults:
+class TestSLAConfigDefaults:
     """
-    Tests for default SLA threshold configuration.
+    Tests for SLAConfig default configuration.
 
     Purpose:
-        Verify that default SLA thresholds match documented policy.
+        Verify that SLAConfig can be configured with domain-specific thresholds.
 
     Compliance:
         SOC 2 CC7.2 (Monitoring) - SLA tracking
     """
 
-    def test_payment_sla_is_1_hour(self):
+    def test_default_hours_is_24(self):
         """
         Purpose:
-            Verify payment domain has strictest SLA (1 hour).
-
-        Expected:
-            - payment_hours = 1
-
-        Risk Covered:
-            R-012: SLA breach detection
+            Verify default SLA for unregistered domains is 24 hours.
         """
-        thresholds = SLAThresholds()
-        assert thresholds.payment_hours == 1, (
-            "Policy Violation: Payment SLA must be 1 hour (strictest). " "Payment failures have immediate revenue impact."
-        )
+        config = SLAConfig()
+        assert config.default_hours == 24, "Default SLA should be 24 hours."
 
-    def test_point_sla_is_4_hours(self):
+    def test_empty_thresholds_by_default(self):
         """
         Purpose:
-            Verify point domain SLA matches policy.
-
-        Expected:
-            - point_hours = 4
+            Verify thresholds_by_domain is empty by default (framework-agnostic).
         """
-        thresholds = SLAThresholds()
-        assert thresholds.point_hours == 4, (
-            "Policy Violation: Point SLA must be 4 hours. " "Check SLA.POINT_HOURS configuration."
-        )
+        config = SLAConfig()
+        assert config.thresholds_by_domain == {}, "Default thresholds should be empty."
 
-    def test_inventory_sla_is_2_hours(self):
+    def test_custom_thresholds_can_be_configured(self):
         """
         Purpose:
-            Verify inventory domain SLA matches policy.
-
-        Expected:
-            - inventory_hours = 2
+            Verify custom thresholds can be set via constructor.
         """
-        thresholds = SLAThresholds()
-        assert thresholds.inventory_hours == 2, (
-            "Policy Violation: Inventory SLA must be 2 hours. " "Check SLA.INVENTORY_HOURS configuration."
-        )
-
-    def test_webhook_sla_is_8_hours(self):
-        """
-        Purpose:
-            Verify webhook domain SLA matches policy.
-
-        Expected:
-            - webhook_hours = 8
-        """
-        thresholds = SLAThresholds()
-        assert thresholds.webhook_hours == 8, (
-            "Policy Violation: Webhook SLA must be 8 hours. " "Check SLA.WEBHOOK_HOURS configuration."
-        )
-
-    def test_notification_sla_is_24_hours(self):
-        """
-        Purpose:
-            Verify notification domain has most lenient SLA.
-
-        Expected:
-            - notification_hours = 24 (least critical)
-        """
-        thresholds = SLAThresholds()
-        assert thresholds.notification_hours == 24, (
-            "Policy Violation: Notification SLA must be 24 hours. " "Notifications are non-blocking, lower priority."
-        )
-
-    def test_default_sla_is_24_hours(self):
-        """
-        Purpose:
-            Verify fallback SLA for unknown domains.
-
-        Expected:
-            - default_hours = 24
-        """
-        thresholds = SLAThresholds()
-        assert thresholds.default_hours == 24, "Policy Violation: Default SLA must be 24 hours for unknown domains."
+        config = get_shopping_sla_config()
+        
+        assert config.thresholds_by_domain["payment"] == 1
+        assert config.thresholds_by_domain["point"] == 4
+        assert config.thresholds_by_domain["inventory"] == 2
+        assert config.thresholds_by_domain["webhook"] == 8
+        assert config.thresholds_by_domain["notification"] == 24
 
 
 @pytest.mark.tier1
@@ -121,12 +89,9 @@ class TestSLAThresholdRetrieval:
         """
         Purpose:
             Verify threshold retrieval returns timedelta object.
-
-        Expected:
-            - Returns timedelta, not int
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("payment")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("payment")
 
         assert isinstance(result, timedelta), f"Expected timedelta, got {type(result).__name__}."
 
@@ -135,8 +100,8 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify payment threshold is 1 hour timedelta.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("payment")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("payment")
 
         assert result == timedelta(hours=1), f"Payment threshold incorrect: expected 1 hour, got {result}."
 
@@ -145,8 +110,8 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify point threshold is 4 hours timedelta.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("point")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("point")
 
         assert result == timedelta(hours=4), f"Point threshold incorrect: expected 4 hours, got {result}."
 
@@ -155,8 +120,8 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify inventory threshold is 2 hours timedelta.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("inventory")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("inventory")
 
         assert result == timedelta(hours=2), f"Inventory threshold incorrect: expected 2 hours, got {result}."
 
@@ -165,8 +130,8 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify webhook threshold is 8 hours timedelta.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("webhook")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("webhook")
 
         assert result == timedelta(hours=8), f"Webhook threshold incorrect: expected 8 hours, got {result}."
 
@@ -175,8 +140,8 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify notification threshold is 24 hours timedelta.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("notification")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("notification")
 
         assert result == timedelta(hours=24), f"Notification threshold incorrect: expected 24 hours, got {result}."
 
@@ -184,16 +149,9 @@ class TestSLAThresholdRetrieval:
         """
         Purpose:
             Verify unknown domains get default threshold.
-
-        Scenario:
-            1. Request threshold for non-existent domain "foobar"
-            2. Should return default_hours
-
-        Expected:
-            - Returns 24 hours (default)
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_threshold("foobar")
+        config = get_shopping_sla_config()
+        result = config.get_threshold("foobar")
 
         assert result == timedelta(hours=24), f"Unknown domain should return default: expected 24 hours, got {result}."
 
@@ -202,11 +160,11 @@ class TestSLAThresholdRetrieval:
         Purpose:
             Verify domain lookup is case-insensitive.
         """
-        thresholds = SLAThresholds()
+        config = get_shopping_sla_config()
 
-        assert thresholds.get_threshold("Payment") == timedelta(hours=1)
-        assert thresholds.get_threshold("PAYMENT") == timedelta(hours=1)
-        assert thresholds.get_threshold("payment") == timedelta(hours=1)
+        assert config.get_threshold("Payment") == timedelta(hours=1)
+        assert config.get_threshold("PAYMENT") == timedelta(hours=1)
+        assert config.get_threshold("payment") == timedelta(hours=1)
 
 
 @pytest.mark.tier1
@@ -223,8 +181,8 @@ class TestSLAThresholdAllDomains:
         Purpose:
             Verify all thresholds method returns dict.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        result = config.get_all_thresholds()
 
         assert isinstance(result, dict), f"Expected dict, got {type(result).__name__}."
 
@@ -233,8 +191,8 @@ class TestSLAThresholdAllDomains:
         Purpose:
             Verify all known domains are included.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        result = config.get_all_thresholds()
 
         expected_domains = {"payment", "point", "inventory", "webhook", "notification"}
         actual_domains = set(result.keys())
@@ -249,8 +207,8 @@ class TestSLAThresholdAllDomains:
         Purpose:
             Verify all values are timedelta objects.
         """
-        thresholds = SLAThresholds()
-        result = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        result = config.get_all_thresholds()
 
         for domain, td in result.items():
             assert isinstance(td, timedelta), f"Domain '{domain}' has non-timedelta value: {type(td).__name__}."
@@ -260,11 +218,11 @@ class TestSLAThresholdAllDomains:
         Purpose:
             Verify bulk retrieval matches individual lookups.
         """
-        thresholds = SLAThresholds()
-        all_thresholds = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        all_thresholds = config.get_all_thresholds()
 
         for domain, expected in all_thresholds.items():
-            individual = thresholds.get_threshold(domain)
+            individual = config.get_threshold(domain)
             assert individual == expected, f"Mismatch for domain '{domain}': " f"bulk={expected}, individual={individual}."
 
 
@@ -281,12 +239,9 @@ class TestSLAThresholdPriority:
         """
         Purpose:
             Verify payment has the shortest SLA (highest priority).
-
-        Expected:
-            - payment < point < inventory < webhook < notification
         """
-        thresholds = SLAThresholds()
-        all_thresholds = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        all_thresholds = config.get_all_thresholds()
 
         payment_sla = all_thresholds["payment"]
 
@@ -306,8 +261,8 @@ class TestSLAThresholdPriority:
             4. webhook (8h) - integration reliability
             5. notification (24h) - informational only
         """
-        thresholds = SLAThresholds()
-        all_thresholds = thresholds.get_all_thresholds()
+        config = get_shopping_sla_config()
+        all_thresholds = config.get_all_thresholds()
 
         expected_order = [
             ("payment", 1),
@@ -324,39 +279,45 @@ class TestSLAThresholdPriority:
 
 
 @pytest.mark.tier1
-class TestSLAThresholdImmutability:
+class TestSLAConfigModifiability:
     """
-    Tests for SLA threshold immutability.
+    Tests for SLAConfig modifiability.
 
     Purpose:
-        Verify thresholds are frozen (cannot be modified).
+        Verify that SLAConfig allows runtime configuration while recommending immutability.
     """
 
-    def test_sla_thresholds_is_frozen_dataclass(self):
+    def test_sla_config_is_dataclass(self):
         """
         Purpose:
-            Verify SLAThresholds cannot be modified after creation.
-
-        Expected:
-            - Attempting to modify raises FrozenInstanceError
+            Verify SLAConfig is a dataclass that can be instantiated.
         """
-        thresholds = SLAThresholds()
+        config = SLAConfig()
+        assert hasattr(config, 'default_hours')
+        assert hasattr(config, 'thresholds_by_domain')
+        assert hasattr(config, 'get_threshold')
+        assert hasattr(config, 'get_all_thresholds')
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            thresholds.payment_hours = 999
-
-    def test_immutability_prevents_accidental_modification(self):
+    def test_thresholds_can_be_updated_at_runtime(self):
         """
         Purpose:
-            Verify configuration safety - no runtime mutations.
+            Verify thresholds can be added/updated at runtime (for adapter configuration).
         """
-        thresholds = SLAThresholds()
-        original_payment = thresholds.payment_hours
+        config = SLAConfig()
+        
+        # Add custom thresholds
+        config.thresholds_by_domain["custom_domain"] = 12
+        
+        result = config.get_threshold("custom_domain")
+        assert result == timedelta(hours=12)
 
-        try:
-            thresholds.payment_hours = 999
-            pytest.fail("Should not be able to modify frozen dataclass")
-        except Exception:
-            pass  # Expected
-
-        assert thresholds.payment_hours == original_payment, "SLA threshold was modified despite being frozen."
+    def test_empty_config_returns_default_in_get_all(self):
+        """
+        Purpose:
+            Verify empty config returns default entry in get_all_thresholds.
+        """
+        config = SLAConfig()
+        result = config.get_all_thresholds()
+        
+        assert "default" in result
+        assert result["default"] == timedelta(hours=24)

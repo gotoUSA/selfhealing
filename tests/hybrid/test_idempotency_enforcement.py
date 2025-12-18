@@ -16,17 +16,16 @@ from django.core.cache import cache
 from django.test import RequestFactory
 
 from shopping.models.failed_operation import FailedOperation
-from selfhealing.services import (
+from shopping.services.self_healing.idempotency_service import (
     IdempotencyKey,
     IdempotencyResult,
     IdempotencyService,
-    get_idempotency_service,
 )
 from selfhealing.services import (
-    PaymentReplayHandler,
     ReplayResult,
     ReplayService,
 )
+from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
@@ -259,9 +258,13 @@ class TestReplayIdempotencyIntegration:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
-            snapshot_data={"payment_id": payment.id, "order_id": order.id},
+            entity_type="payment",
+            entity_id=str(payment.id),
+            snapshot_data={
+                "payment_id": payment.id,
+                "order_id": order.id,
+                "payment_is_paid": True,  # Payment already completed
+            },
         )
 
         handler = PaymentReplayHandler()
@@ -295,9 +298,13 @@ class TestReplayIdempotencyIntegration:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
-            snapshot_data={"payment_id": payment.id, "order_id": order.id},
+            entity_type="payment",
+            entity_id=str(payment.id),
+            snapshot_data={
+                "payment_id": payment.id,
+                "order_id": order.id,
+                "order_status": "cancelled",  # Order is cancelled
+            },
         )
 
         handler = PaymentReplayHandler()
@@ -334,8 +341,8 @@ class TestReplayIdempotencyIntegration:
             entry = FailedOperation.create_from_failure(
                 domain="payment",
                 failure_type=failure_type,
-                order=order,
-                payment=payment,
+                entity_type="payment",
+                entity_id=str(payment.id),
                 snapshot_data={"payment_id": payment.id, "order_id": order.id},
             )
 

@@ -58,7 +58,8 @@ class TestSQLAlchemyFailedOperationRepository:
             failure_type="timeout",
             error_message="Connection timed out",
             error_code="TIMEOUT_001",
-            order_id=123,
+            entity_type="order",
+            entity_id="123",
             user_id=456,
             snapshot_data={"amount": 10000},
         )
@@ -68,7 +69,8 @@ class TestSQLAlchemyFailedOperationRepository:
         assert operation.failure_type == "timeout"
         assert operation.error_message == "Connection timed out"
         assert operation.error_code == "TIMEOUT_001"
-        assert operation.order_id == 123
+        assert operation.entity_type == "order"
+        assert operation.entity_id == "123"
         assert operation.user_id == 456
         assert operation.snapshot_data == {"amount": 10000}
         assert operation.status == FailedOperationStatus.PENDING.value

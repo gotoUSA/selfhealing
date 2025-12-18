@@ -42,13 +42,15 @@ from selfhealing.core import (
     BackoffCalculator,
     BackoffConfig,
     calculate_backoff,
-    get_calculator_for_domain,
 )
+from selfhealing.services.backoff_calculator import get_calculator_for_domain
 from selfhealing.services import (
     ForensicContext,
+    create_snapshot_data,
+)
+from shopping.services.self_healing import (
     ForensicContextBuilder,
     capture_forensic_context,
-    create_snapshot_data,
 )
 from selfhealing.services import (
     IdempotencyKey,

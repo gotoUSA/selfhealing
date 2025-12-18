@@ -29,7 +29,7 @@ class FailedOperationAdmin(admin.ModelAdmin):
         "domain",
         "failure_type",
         "status_display",
-        "order_link",
+        "entity_display",
         "user_link",
         "retry_count",
         "created_at",
@@ -48,7 +48,8 @@ class FailedOperationAdmin(admin.ModelAdmin):
         "failure_type",
         "error_code",
         "error_message",
-        "order__id",
+        "entity_type",
+        "entity_id",
         "user__username",
         "user__email",
     ]
@@ -56,8 +57,8 @@ class FailedOperationAdmin(admin.ModelAdmin):
     readonly_fields = [
         "domain",
         "failure_type",
-        "order",
-        "payment",
+        "entity_type",
+        "entity_id",
         "user",
         "snapshot_data",
         "error_code",
@@ -92,7 +93,7 @@ class FailedOperationAdmin(admin.ModelAdmin):
         (
             "References",
             {
-                "fields": ("order", "payment", "user"),
+                "fields": ("entity_type", "entity_id", "user"),
             },
         ),
         (
@@ -167,14 +168,17 @@ class FailedOperationAdmin(admin.ModelAdmin):
     status_display.short_description = "Status"
     status_display.admin_order_field = "status"
 
-    def order_link(self, obj):
-        """Display order link."""
-        if obj.order:
-            url = reverse("admin:shopping_order_change", args=[obj.order.id])
-            return format_html('<a href="{}">{}</a>', url, f"Order #{obj.order.id}")
+    def entity_display(self, obj):
+        """Display entity type and ID."""
+        if obj.entity_type and obj.entity_id:
+            return format_html(
+                '<span style="font-weight: bold;">{}</span> #{}',
+                obj.entity_type.title(),
+                obj.entity_id,
+            )
         return "-"
 
-    order_link.short_description = "Order"
+    entity_display.short_description = "Entity"
 
     def user_link(self, obj):
         """Display user link."""

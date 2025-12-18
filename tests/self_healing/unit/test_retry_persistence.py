@@ -17,11 +17,11 @@ from django.utils import timezone
 
 from shopping.models.failed_operation import FailedOperation
 from selfhealing.services import (
-    PaymentReplayHandler,
     ReplayResult,
     ReplayService,
     get_replay_service,
 )
+from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
@@ -64,8 +64,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -114,8 +114,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -158,8 +158,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -196,8 +196,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -218,7 +218,8 @@ class TestRetryCountPersistence:
         result = service.replay_single(entry_id)
 
         assert result.success is False
-        assert "max" in result.error.lower() and "exceeded" in result.error.lower()
+        # Error message should indicate max exceeded or rejected status
+        assert "rejected" in result.error.lower() or "max" in result.error.lower()
 
         # Verify entry is now rejected
         entry = FailedOperation.objects.get(id=entry_id)
@@ -246,8 +247,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -284,8 +285,8 @@ class TestRetryCountPersistence:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 

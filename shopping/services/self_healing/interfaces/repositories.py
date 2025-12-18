@@ -112,9 +112,9 @@ class FailedOperationData:
     failure_type: str
     status: str
 
-    # References (IDs only - no model instances)
-    order_id: Optional[int] = None
-    payment_id: Optional[int] = None
+    # References (generic entity reference)
+    entity_type: str = ""
+    entity_id: str = ""
     user_id: Optional[int] = None
 
     # Snapshot Data

@@ -24,10 +24,12 @@ from shopping.models.failed_operation import FailedOperation
 from shopping.models.order import Order
 from shopping.models.payment import Payment
 from selfhealing.services import (
-    PaymentReplayHandler,
     ReplayService,
     ReplayResult,
     get_replay_handler,
+)
+from shopping.services.self_healing import (
+    PaymentReplayHandler,
 )
 from shopping.tests.factories import (
     OrderFactory,
@@ -115,8 +117,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             error_message="Payment gateway timeout after 30s",
             snapshot_data=snapshot,
@@ -160,8 +162,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -191,8 +193,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -222,8 +224,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -256,8 +258,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -275,11 +277,16 @@ class TestForensicSnapshotReplay:
         assert reloaded_entry.snapshot_data["user_id"] is not None
 
         # Handler should be able to get data from snapshot
-        payment_id = reloaded_entry.payment_id or reloaded_entry.snapshot_data.get("payment_id")
-        order_id = reloaded_entry.order_id or reloaded_entry.snapshot_data.get("order_id")
+        # entity_type/entity_id로 변경되었으므로 snapshot에서 fallback
+        payment_id = reloaded_entry.snapshot_data.get("payment_id")
+        order_id = reloaded_entry.snapshot_data.get("order_id")
 
         assert payment_id is not None
         assert order_id is not None
+
+        # entity_type/entity_id 검증
+        assert reloaded_entry.entity_type == "payment"
+        assert reloaded_entry.entity_id == str(sample_payment.id)
 
     def test_snapshot_includes_timestamp_for_audit(self, sample_order, sample_payment, sample_user):
         """
@@ -299,8 +306,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -339,8 +346,8 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
+            entity_type="payment",
+            entity_id=str(sample_payment.id),
             user=sample_user,
             snapshot_data=snapshot,
         )
@@ -379,14 +386,15 @@ class TestForensicSnapshotReplay:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            # No order or payment FK
+            entity_type="payment",
+            entity_id="",  # No payment FK available
             user=sample_user,
             snapshot_data=snapshot,
         )
 
-        # Verify no FK references
-        assert entry.order_id is None
-        assert entry.payment_id is None
+        # Verify entity_id is empty (no FK reference)
+        assert entry.entity_type == "payment"
+        assert entry.entity_id == ""
 
         # But snapshot has the data
         assert entry.snapshot_data["order_id"] == 999
@@ -396,9 +404,10 @@ class TestForensicSnapshotReplay:
         # Handler should be able to extract from snapshot
         handler = PaymentReplayHandler()
 
-        # In actual replay, handler would use:
-        payment_id = entry.payment_id or entry.snapshot_data.get("payment_id")
-        order_id = entry.order_id or entry.snapshot_data.get("order_id")
+        # In actual replay, handler would use snapshot fallback:
+        # entity_id가 비어있으므로 snapshot에서 가져옴
+        payment_id = int(entry.entity_id) if entry.entity_id else entry.snapshot_data.get("payment_id")
+        order_id = entry.snapshot_data.get("order_id")
 
         assert payment_id == 888
         assert order_id == 999

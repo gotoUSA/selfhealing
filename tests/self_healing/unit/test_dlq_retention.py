@@ -73,7 +73,8 @@ class TestDLQRetentionPolicy:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Connection timed out during payment processing",
         )
@@ -130,7 +131,8 @@ class TestDLQRetentionPolicy:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Test expired entry",
         )
@@ -172,7 +174,8 @@ class TestDLQRetentionPolicy:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Recently resolved entry",
         )
@@ -223,7 +226,8 @@ class TestDLQRetentionPolicy:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_code="ETIMEDOUT",
             error_message="Connection timed out after 30s",
@@ -250,8 +254,9 @@ class TestDLQRetentionPolicy:
         assert "Connection timed out" in entry.error_message
         assert entry.metadata == {"attempt": 3, "elapsed_ms": 30000}
 
-        # Verify FK references preserved
-        assert entry.order_id == sample_order.id
+        # Verify entity references preserved
+        assert entry.entity_type == "order"
+        assert entry.entity_id == str(sample_order.id)
         assert entry.user_id == sample_user.id
 
     def test_dlq_rejected_entries_archived_after_retention(self, sample_order, sample_user):
@@ -273,7 +278,8 @@ class TestDLQRetentionPolicy:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="AMOUNT_MISMATCH",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             user=sample_user,
             error_message="Amount mismatch - unrecoverable",
         )

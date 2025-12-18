@@ -71,7 +71,15 @@ from .idempotency_service import (
 )
 from .forensic_context import (
     ForensicContext,
+    ForensicContextBuilder,
     capture_forensic_context,
+)
+from .control_api_service import (
+    ControlAPIService,
+    ControlRequest,
+    ControlResponse,
+    classify_reason,
+    get_control_api_service,
 )
 from .dlq_service import (
     DLQService,
@@ -90,6 +98,12 @@ from .replay_service import (
     replay_failed_operation,
     batch_replay_by_failure_type,
 )
+from .replay_handlers import (
+    PaymentReplayHandler,
+    PointReplayHandler,
+    WebhookReplayHandler,
+    register_shopping_handlers,
+)
 from .circuit_breaker_service import (
     CircuitBreakerService,
     CircuitBreakerConfig,
@@ -103,6 +117,10 @@ from .circuit_breaker_service import (
 from .metrics import (
     # Constants
     DOMAINS,
+    ALERTING_RULES,
+    # Gauge objects
+    dlq_pending_gauge,
+    dlq_created_total,
     # Recording functions
     record_dlq_item_created,
     record_retry_attempt,
@@ -194,7 +212,14 @@ __all__ = [
     "IdempotencyResult",
     # Forensic
     "ForensicContext",
+    "ForensicContextBuilder",
     "capture_forensic_context",
+    # Control API Service
+    "ControlAPIService",
+    "ControlRequest",
+    "ControlResponse",
+    "classify_reason",
+    "get_control_api_service",
     # DLQ Service
     "DLQService",
     "DLQConfig",
@@ -210,6 +235,11 @@ __all__ = [
     "get_replay_service",
     "replay_failed_operation",
     "batch_replay_by_failure_type",
+    # Replay Handlers (shopping domain)
+    "PaymentReplayHandler",
+    "PointReplayHandler",
+    "WebhookReplayHandler",
+    "register_shopping_handlers",
     # Circuit Breaker Service
     "CircuitBreakerService",
     "CircuitBreakerConfig",
@@ -221,6 +251,9 @@ __all__ = [
     "force_close_circuit",
     # Metrics (Phase 5 Observability)
     "DOMAINS",
+    "ALERTING_RULES",
+    "dlq_pending_gauge",
+    "dlq_created_total",
     "record_dlq_item_created",
     "record_retry_attempt",
     "record_recovery_time",

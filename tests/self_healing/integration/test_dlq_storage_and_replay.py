@@ -53,10 +53,12 @@ from selfhealing.services import (
 from selfhealing.services import (
     BatchReplayResult,
     DefaultReplayHandler,
-    PaymentReplayHandler,
-    PointReplayHandler,
     ReplayResult,
     ReplayService,
+)
+from shopping.services.self_healing import (
+    PaymentReplayHandler,
+    PointReplayHandler,
     WebhookReplayHandler,
     batch_replay_by_failure_type,
     get_replay_handler,
@@ -115,9 +117,9 @@ class TestDLQService:
         result = dlq_service.store_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
-            payment=sample_payment,
-            user=sample_order.user,
+            entity_type="order",
+            entity_id=str(sample_order.id),
+            user_id=sample_order.user.id,
             error_code="TIMEOUT",
             error_message="Connection timed out after 30s",
             snapshot_data={"order_id": sample_order.id, "amount": "10000"},
@@ -136,9 +138,9 @@ class TestDLQService:
         assert entry.domain == "payment"
         assert entry.failure_type == "PG_TIMEOUT"
         assert entry.status == FailedOperation.Status.PENDING
-        assert entry.order == sample_order
-        assert entry.payment == sample_payment
-        assert entry.user == sample_order.user
+        assert entry.entity_type == "order"
+        assert entry.entity_id == str(sample_order.id)
+        assert entry.user_id == sample_order.user.id
         assert entry.error_code == "TIMEOUT"
         assert entry.error_message == "Connection timed out after 30s"
         assert entry.snapshot_data["order_id"] == sample_order.id
@@ -171,12 +173,14 @@ class TestDLQService:
         FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
         )
         resolved_entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
         )
         resolved_entry.mark_as_resolved(note="Fixed")
 
@@ -194,14 +198,16 @@ class TestDLQService:
         entry1 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
         )
 
         # Create entry with max retries (not replayable)
         entry2 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
         )
         entry2.retry_count = 3
         entry2.save()
@@ -220,7 +226,8 @@ class TestDLQService:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
         )
         # Backdate created_at to 2 hours ago
         entry.created_at = timezone.now() - timedelta(hours=2)
@@ -297,8 +304,8 @@ class TestReplayService:
         return FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             error_message="Test timeout error",
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
@@ -391,8 +398,8 @@ class TestReplayService:
         entry1 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order1,
-            payment=payment1,
+            entity_type="order",
+            entity_id=str(order1.id),
             snapshot_data={"payment_id": payment1.id, "order_id": order1.id},
         )
 
@@ -401,15 +408,16 @@ class TestReplayService:
         entry2 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order2,
-            payment=payment2,
+            entity_type="order",
+            entity_id=str(order2.id),
             snapshot_data={"payment_id": payment2.id, "order_id": order2.id},
         )
 
         entry3 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="OTHER_ERROR",
-            order=order1,
+            entity_type="order",
+            entity_id=str(order1.id),
         )
 
         with patch.object(PaymentReplayHandler, "replay") as mock_replay:
@@ -434,15 +442,16 @@ class TestReplayService:
         entry1 = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
         entry2 = FailedOperation.create_from_failure(
             domain="webhook",
             failure_type="WEBHOOK_ERROR",
-            order=order,
+            entity_type="order",
+            entity_id=str(order.id),
             request_data={"payment_key": "test", "order_id": order.id, "amount": 1000},
         )
 
@@ -520,8 +529,9 @@ class TestReplayHandlers:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
+            snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
         handler = PaymentReplayHandler()
@@ -542,8 +552,9 @@ class TestReplayHandlers:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
+            snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
         handler = PaymentReplayHandler()
@@ -564,8 +575,9 @@ class TestReplayHandlers:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="SECURITY_SIGNATURE_INVALID",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
+            snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
         handler = PaymentReplayHandler()
@@ -630,8 +642,8 @@ class TestDLQReplayTasks:
         return FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
@@ -766,8 +778,8 @@ class TestEdgeCasesAndErrorHandling:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=None,  # Simulate missing order reference
-            payment=payment,
+            entity_type="order",
+            entity_id=None,  # Simulate missing order reference
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -805,7 +817,8 @@ class TestEdgeCasesAndErrorHandling:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
+            entity_type="order",
+            entity_id=str(order.id),
         )
 
         # PENDING -> REVIEWING
@@ -937,8 +950,8 @@ class TestRequiresReviewEscalation:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
@@ -1258,8 +1271,8 @@ class TestReplayEscalationOnCircuitClose:
         security_entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="SECURITY_SIGNATURE_INVALID",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             error_message="Signature verification failed - possible tampering",
             snapshot_data={"payment_id": payment.id, "order_id": order.id},

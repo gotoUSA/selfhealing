@@ -320,83 +320,113 @@ class TestRetryHandlerGetNextDelay:
 
 
 class TestIdempotencyKey:
-    """Tests for IdempotencyKey generation."""
+    """Tests for IdempotencyKey generation using generic selfhealing API."""
 
-    def test_payment_key_format(self):
+    def test_operation_key_format(self):
         """
         Purpose:
-            Verify payment idempotency key format.
+            Verify generic operation idempotency key format.
         """
-        key = IdempotencyKey.for_payment(order_id=12345, amount=50000)
-
-        assert key.domain == IdempotencyDomain.PAYMENT
-        assert "12345" in key.key
-        assert "50000" in key.key
-        assert "idempotency:payment:" in key.cache_key
-
-    def test_payment_confirm_key_format(self):
-        """
-        Purpose:
-            Verify payment confirmation key format.
-        """
-        key = IdempotencyKey.for_payment_confirm(
-            payment_key="pay_abc123",
-            order_id=12345,
-            amount=50000,
+        key = IdempotencyKey.for_operation(
+            entity_type="order",
+            entity_id=12345,
+            operation="process",
         )
 
-        assert key.domain == IdempotencyDomain.PAYMENT
-        assert "pay_abc123" in key.key
+        assert key.domain == IdempotencyDomain.EXTERNAL_SERVICE
+        assert "order" in key.key
+        assert "12345" in key.key
+        assert "process" in key.key
+        assert "idempotency:external_service:" in key.cache_key
+
+    def test_operation_with_custom_domain(self):
+        """
+        Purpose:
+            Verify operation key with custom domain.
+        """
+        key = IdempotencyKey.for_operation(
+            entity_type="payment",
+            entity_id=12345,
+            operation="confirm",
+            domain=IdempotencyDomain.INTERNAL_PROCESS,
+        )
+
+        assert key.domain == IdempotencyDomain.INTERNAL_PROCESS
+        assert "payment" in key.key
         assert "confirm" in key.key
 
-    def test_webhook_key_format(self):
+    def test_event_key_format(self):
         """
         Purpose:
-            Verify webhook idempotency key format.
+            Verify event idempotency key format.
         """
-        key = IdempotencyKey.for_webhook(event_id="evt_webhook_123")
+        key = IdempotencyKey.for_event(event_id="evt_webhook_123")
 
-        assert key.domain == IdempotencyDomain.WEBHOOK
+        assert key.domain == IdempotencyDomain.EVENT
         assert key.key == "evt_webhook_123"
-        assert "idempotency:webhook:" in key.cache_key
+        assert "idempotency:event:" in key.cache_key
 
-    def test_point_operation_key_format(self):
+    def test_resource_action_key_format(self):
         """
         Purpose:
-            Verify point operation key format.
+            Verify resource action key format.
         """
-        key = IdempotencyKey.for_point_operation(
-            order_id=12345,
-            point_type="earn",
+        key = IdempotencyKey.for_resource_action(
+            resource_type="point",
+            resource_id=12345,
+            action="earn",
             amount=500,
         )
 
-        assert key.domain == IdempotencyDomain.POINT
+        assert key.domain == IdempotencyDomain.INTERNAL_PROCESS
+        assert "point" in key.key
         assert "12345" in key.key
         assert "earn" in key.key
         assert "500" in key.key
 
-    def test_inventory_key_format(self):
+    def test_resource_action_without_amount(self):
         """
         Purpose:
-            Verify inventory operation key format.
+            Verify resource action key without amount.
         """
-        key = IdempotencyKey.for_inventory(
-            order_item_id=999,
+        key = IdempotencyKey.for_resource_action(
+            resource_type="inventory",
+            resource_id=999,
             action="deduct",
         )
 
-        assert key.domain == IdempotencyDomain.INVENTORY
+        assert key.domain == IdempotencyDomain.INTERNAL_PROCESS
+        assert "inventory" in key.key
         assert "999" in key.key
         assert "deduct" in key.key
+
+    def test_custom_key_format(self):
+        """
+        Purpose:
+            Verify custom idempotency key format.
+        """
+        key = IdempotencyKey.custom(
+            key="custom:operation:12345",
+            entity_type="order",
+            entity_id=12345,
+        )
+
+        assert key.domain == IdempotencyDomain.CUSTOM
+        assert key.key == "custom:operation:12345"
+        assert "entity_type" in key.components
+        assert key.components["entity_id"] == 12345
 
     def test_key_hash_is_consistent(self):
         """
         Purpose:
             Verify same inputs produce same hash.
         """
-        key1 = IdempotencyKey.for_payment(order_id=123, amount=10000)
-        key2 = IdempotencyKey.for_payment(order_id=123, amount=10000)
+        key1 = IdempotencyKey.for_operation(
+            entity_type="order", entity_id=123, operation="process"
+        )
+        key2 = IdempotencyKey.for_operation(
+            entity_type="order", entity_id=123, operation="process"
+        )
 
         assert key1.hash == key2.hash
 
@@ -405,8 +435,12 @@ class TestIdempotencyKey:
         Purpose:
             Verify different inputs produce different hash.
         """
-        key1 = IdempotencyKey.for_payment(order_id=123, amount=10000)
-        key2 = IdempotencyKey.for_payment(order_id=124, amount=10000)
+        key1 = IdempotencyKey.for_operation(
+            entity_type="order", entity_id=123, operation="process"
+        )
+        key2 = IdempotencyKey.for_operation(
+            entity_type="order", entity_id=124, operation="process"
+        )
 
         assert key1.hash != key2.hash
 

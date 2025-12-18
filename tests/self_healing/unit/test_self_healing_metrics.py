@@ -12,8 +12,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services import (
-    ALERTING_RULES,
-    DOMAINS,
     collect_all_metrics,
     record_circuit_breaker_open_duration,
     record_circuit_breaker_state_change,
@@ -23,6 +21,10 @@ from selfhealing.services import (
     record_retry_attempt,
     record_sla_breach,
     track_recovery_time,
+)
+from shopping.services.self_healing import (
+    ALERTING_RULES,
+    DOMAINS,
 )
 
 
