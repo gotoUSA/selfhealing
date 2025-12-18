@@ -507,8 +507,9 @@ class TestReplayHandlers:
         entry = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
-            payment=payment,
+            entity_type="order",
+            entity_id=str(order.id),
+            snapshot_data={"payment_id": payment.id, "order_id": order.id},
         )
 
         handler = PaymentReplayHandler()

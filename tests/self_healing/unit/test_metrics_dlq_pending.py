@@ -17,11 +17,9 @@ import pytest
 from django.utils import timezone
 
 from shopping.models.failed_operation import FailedOperation
-from selfhealing.services import (
+from shopping.services.self_healing.metrics import (
     record_dlq_item_created,
     update_dlq_pending_gauges,
-)
-from shopping.services.self_healing import (
     dlq_pending_gauge,
     dlq_created_total,
 )

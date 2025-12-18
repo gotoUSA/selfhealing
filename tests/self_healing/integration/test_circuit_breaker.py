@@ -250,14 +250,15 @@ class TestCircuitBreakerWithDLQ:
             entry = FailedOperation.objects.create(
                 domain=FailedOperation.Domain.PAYMENT,
                 failure_type="PG_TIMEOUT",
-                order=order,
-                user=user,
+                entity_type="order",
+                entity_id=order.id,
                 error_code="TIMEOUT",
                 error_message=f"Connection timed out (attempt {i + 1})",
                 status=FailedOperation.Status.PENDING,
                 snapshot_data={
                     "order_id": order.id,
                     "amount": 50000,
+                    "user_id": user.id,
                 },
             )
             dlq_entries.append(entry)
@@ -298,12 +299,13 @@ class TestCircuitBreakerWithDLQ:
             FailedOperation.objects.create(
                 domain=FailedOperation.Domain.PAYMENT,
                 failure_type="PG_TIMEOUT",
-                order=order,
-                user=user,
+                entity_type="order",
+                entity_id=order.id,
                 error_code="TIMEOUT",
                 error_message="Simulated timeout",
                 status=FailedOperation.Status.PENDING,
                 retry_count=0,
+                snapshot_data={"user_id": user.id},
             )
 
         # Verify entries exist

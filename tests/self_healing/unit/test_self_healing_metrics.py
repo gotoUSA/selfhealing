@@ -271,10 +271,10 @@ class TestTrackRecoveryTimeContextManager:
 class TestCollectAllMetrics:
     """Tests for collect_all_metrics function."""
 
-    @patch("shopping.services.self_healing.metrics.update_retry_success_rates")
-    @patch("shopping.services.self_healing.metrics.update_circuit_breaker_gauges")
-    @patch("shopping.services.self_healing.metrics.update_dlq_status_gauges")
-    @patch("shopping.services.self_healing.metrics.update_dlq_pending_gauges")
+    @patch("selfhealing.services.metrics.update_retry_success_rates")
+    @patch("selfhealing.services.metrics.update_circuit_breaker_gauges")
+    @patch("selfhealing.services.metrics.update_dlq_status_gauges")
+    @patch("selfhealing.services.metrics.update_dlq_pending_gauges")
     def test_collect_all_metrics_aggregates_results(
         self,
         mock_pending,

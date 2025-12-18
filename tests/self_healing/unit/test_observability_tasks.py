@@ -11,10 +11,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.mark.django_db
 class TestCollectSelfHealingMetricsTask:
     """Tests for the collect_self_healing_metrics Celery task."""
 
-    @patch("shopping.services.self_healing.metrics.collect_all_metrics")
+    @patch("selfhealing.services.collect_all_metrics")
     def test_collect_metrics_success(self, mock_collect):
         """
         Purpose:
@@ -36,7 +37,7 @@ class TestCollectSelfHealingMetricsTask:
         assert "dlq_pending_by_domain" in result
         mock_collect.assert_called_once()
 
-    @patch("shopping.services.self_healing.metrics.collect_all_metrics")
+    @patch("selfhealing.services.collect_all_metrics")
     def test_collect_metrics_handles_exception(self, mock_collect):
         """
         Purpose:
@@ -52,11 +53,12 @@ class TestCollectSelfHealingMetricsTask:
         assert "error" in result
 
 
+@pytest.mark.django_db
 class TestCheckAndReportSLABreachesTask:
     """Tests for the check_and_report_sla_breaches Celery task."""
 
-    @patch("shopping.services.self_healing.metrics.record_sla_breach")
-    @patch("shopping.services.self_healing.dlq_service.get_dlq_service")
+    @patch("selfhealing.services.record_sla_breach")
+    @patch("selfhealing.services.get_dlq_service")
     def test_no_sla_breaches(self, mock_get_service, mock_record):
         """
         Purpose:
@@ -74,8 +76,8 @@ class TestCheckAndReportSLABreachesTask:
         assert result["total_breaches"] == 0
         mock_record.assert_not_called()
 
-    @patch("shopping.services.self_healing.metrics.record_sla_breach")
-    @patch("shopping.services.self_healing.dlq_service.get_dlq_service")
+    @patch("selfhealing.services.record_sla_breach")
+    @patch("selfhealing.services.get_dlq_service")
     def test_sla_breaches_detected(self, mock_get_service, mock_record):
         """
         Purpose:
@@ -109,7 +111,7 @@ class TestCheckAndReportSLABreachesTask:
         assert result["breaches_by_domain"]["point"] == 1
         assert mock_record.call_count == 3
 
-    @patch("shopping.services.self_healing.dlq_service.get_dlq_service")
+    @patch("selfhealing.services.get_dlq_service")
     def test_task_handles_exception(self, mock_get_service):
         """
         Purpose:

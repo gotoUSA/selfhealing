@@ -44,10 +44,8 @@ from selfhealing.core import (
     calculate_backoff,
 )
 from selfhealing.services.backoff_calculator import get_calculator_for_domain
-from selfhealing.services import (
-    ForensicContext,
-    create_snapshot_data,
-)
+from selfhealing.services import ForensicContext
+from selfhealing.core.forensic import create_snapshot_data
 from shopping.services.self_healing import (
     ForensicContextBuilder,
     capture_forensic_context,
@@ -63,8 +61,8 @@ from selfhealing.services import (
     RetryConfig,
     RetryHandler,
     RetryResult,
-    with_retry,
 )
+from selfhealing.services.retry_handler import with_retry
 from shopping.tests.factories import (
     OrderFactory,
     PaymentFactory,
@@ -741,7 +739,8 @@ class TestDLQIntegrationFlow:
         dlq = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             error_code="TIMEOUT",
             error_message="Connection timed out",
@@ -769,7 +768,8 @@ class TestDLQIntegrationFlow:
         dlq = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
-            order=order,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             error_code="TIMEOUT",
             error_message="Connection timed out",
@@ -802,7 +802,8 @@ class TestDLQIntegrationFlow:
         dlq = FailedOperation.create_from_failure(
             domain="payment",
             failure_type="AMOUNT_MISMATCH",
-            order=order,
+            entity_type="order",
+            entity_id=str(order.id),
             user=user,
             error_code="MISMATCH",
             error_message="Amount mismatch detected",

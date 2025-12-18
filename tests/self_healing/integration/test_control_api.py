@@ -23,8 +23,8 @@ from selfhealing.services import (
     ControlAPIService,
     ControlRequest,
     ControlResponse,
-    assess_risk_level,
 )
+from selfhealing.services.control_api_service import assess_risk_level
 from shopping.services.self_healing import (
     classify_reason,
 )

@@ -344,7 +344,8 @@ class TestDLQServiceRedisFailure:
             domain="payment",
             failure_type="test_retrieve",
             status="pending",
-            order=order,
+            entity_type="order",
+            entity_id=order.id,
             error_message="Test entry for retrieve test",
         )
 
@@ -384,7 +385,8 @@ class TestDLQServiceRedisFailure:
                 domain="payment",
                 failure_type="count_test",
                 status="pending",
-                order=order,
+                entity_type="order",
+                entity_id=order.id,
                 error_message=f"Test entry {i}",
             )
 
