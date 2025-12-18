@@ -506,17 +506,28 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         reason: str = "",
         controlled_by_id: Optional[int] = None,
         manually_controlled: bool = False,
+        opened_at: Optional[datetime] = None,
+        last_failure_at: Optional[datetime] = None,
     ) -> bool:
         """Update circuit breaker state."""
         current = self.get_or_create(service_name)
+        
+        # Determine opened_at value
+        if opened_at is not None:
+            new_opened_at = opened_at
+        elif state == CircuitBreakerStateEnum.OPEN.value:
+            new_opened_at = now()
+        else:
+            new_opened_at = current.opened_at
+        
         self._store[service_name] = CircuitBreakerStateData(
             service_name=service_name,
             id=current.id,
             state=state,
             failure_count=failure_count if failure_count is not None else current.failure_count,
             success_count=success_count if success_count is not None else current.success_count,
-            last_failure_at=current.last_failure_at,
-            opened_at=now() if state == CircuitBreakerStateEnum.OPEN.value else current.opened_at,
+            last_failure_at=last_failure_at if last_failure_at is not None else current.last_failure_at,
+            opened_at=new_opened_at,
             manually_controlled=manually_controlled,
             controlled_by_id=controlled_by_id,
             control_reason=reason,
