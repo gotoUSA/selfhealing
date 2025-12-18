@@ -176,7 +176,7 @@ class ForensicContext:
                 attempt=attempt,
                 error_code=error_code,
                 error_message=error_message[:max_length],
-                attempted_at=timezone.now().isoformat(),
+                attempted_at=now().isoformat(),
                 backoff_seconds=backoff_seconds,
             )
         )

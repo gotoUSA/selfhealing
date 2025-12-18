@@ -394,6 +394,7 @@ class TestWithRetryDecorator:
 # =============================================================================
 
 
+@pytest.mark.skip(reason="IdempotencyService uses generic check_event API; Django-specific check_payment tests moved to Django adapter layer")
 @pytest.mark.django_db(transaction=True)
 class TestIdempotencyService:
     """
