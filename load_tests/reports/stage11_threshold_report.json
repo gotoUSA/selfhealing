@@ -1,6 +1,6 @@
 {
   "test_name": "Stage 11: Ramp-up Threshold Discovery",
-  "timestamp": "2025-12-12T03:28:02.833188",
+  "timestamp": "2025-12-18T08:03:02.244489",
   "milestones": {
     "first_retry": null,
     "first_cb_open": null,
@@ -8,7 +8,7 @@
     "first_error_spike": {
       "user_count": 47,
       "minute": 0,
-      "error_rate": 17.12
+      "error_rate": 8.19
     },
     "breaking_point": null
   },
@@ -16,12 +16,12 @@
     {
       "minute": 0,
       "users": 47,
-      "requests": 222,
-      "errors": 38,
+      "requests": 171,
+      "errors": 14,
       "retries": 0,
-      "error_rate": 17.12,
-      "avg_response_time_ms": 32.0,
-      "timestamp": "2025-12-12T03:28:02.820622"
+      "error_rate": 8.19,
+      "avg_response_time_ms": 447.55,
+      "timestamp": "2025-12-18T08:03:02.222090"
     }
   ]
 }

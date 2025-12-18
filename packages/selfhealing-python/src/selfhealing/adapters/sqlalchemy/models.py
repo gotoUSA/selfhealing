@@ -60,9 +60,9 @@ class FailedOperationModel(Base):
         index=True,
     )
 
-    # References (foreign keys are not enforced to keep models decoupled)
-    order_id = Column(Integer, nullable=True, index=True)
-    payment_id = Column(Integer, nullable=True, index=True)
+    # Entity Reference (Generic - no FK dependencies)
+    entity_type = Column(String(100), nullable=True, index=True)
+    entity_id = Column(String(100), nullable=True, index=True)
     user_id = Column(Integer, nullable=True, index=True)
 
     # Snapshot Data (JSON for flexibility)
@@ -205,9 +205,9 @@ class SecurityIncidentModel(Base):
     user_agent = Column(Text, nullable=False, default="")
     user_id = Column(Integer, nullable=True, index=True)
 
-    # References
-    order_id = Column(Integer, nullable=True, index=True)
-    payment_id = Column(Integer, nullable=True, index=True)
+    # Entity Reference (Generic)
+    entity_type = Column(String(100), nullable=True, index=True)
+    entity_id = Column(String(100), nullable=True, index=True)
 
     # Details
     description = Column(Text, nullable=False, default="")

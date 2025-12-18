@@ -158,8 +158,8 @@ class DLQService:
         self,
         domain: str,
         failure_type: str,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
+        entity_type: str = "",
+        entity_id: str = "",
         user: "User | None" = None,
         error_code: str = "",
         error_message: str = "",
@@ -176,8 +176,8 @@ class DLQService:
         Args:
             domain: Business domain (payment, point, inventory, webhook, notification)
             failure_type: Specific failure type (e.g., PG_TIMEOUT, AMOUNT_MISMATCH)
-            order: Related Order instance
-            payment: Related Payment instance
+            entity_type: Type of related entity (e.g., 'order', 'payment', 'subscription')
+            entity_id: ID of related entity
             user: Related User instance
             error_code: Error code from external system
             error_message: Human-readable error message
@@ -201,8 +201,8 @@ class DLQService:
             failed_op = FailedOperation.create_from_failure(
                 domain=domain,
                 failure_type=failure_type,
-                order=order,
-                payment=payment,
+                entity_type=entity_type,
+                entity_id=entity_id,
                 user=user,
                 error_code=error_code,
                 error_message=error_message,
@@ -500,8 +500,8 @@ def get_dlq_service() -> DLQService:
 def store_to_dlq(
     domain: str,
     failure_type: str,
-    order=None,
-    payment=None,
+    entity_type: str = "",
+    entity_id: str = "",
     user=None,
     error_code: str = "",
     error_message: str = "",
@@ -520,8 +520,8 @@ def store_to_dlq(
     return get_dlq_service().store_failure(
         domain=domain,
         failure_type=failure_type,
-        order=order,
-        payment=payment,
+        entity_type=entity_type,
+        entity_id=entity_id,
         user=user,
         error_code=error_code,
         error_message=error_message,

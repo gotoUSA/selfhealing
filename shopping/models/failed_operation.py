@@ -93,26 +93,25 @@ class FailedOperation(models.Model):
     )
 
     # ========================================
-    # Original References
+    # Entity Reference (Generic - no FK dependencies)
     # ========================================
-    order = models.ForeignKey(
-        "Order",
-        on_delete=models.SET_NULL,
-        null=True,
+    entity_type = models.CharField(
+        max_length=100,
         blank=True,
-        related_name="failed_operations",
-        verbose_name="Order",
+        db_index=True,
+        verbose_name="Entity Type",
+        help_text="Type of related entity (e.g., 'order', 'payment', 'subscription')",
     )
 
-    payment = models.ForeignKey(
-        "Payment",
-        on_delete=models.SET_NULL,
-        null=True,
+    entity_id = models.CharField(
+        max_length=100,
         blank=True,
-        related_name="failed_operations",
-        verbose_name="Payment",
+        db_index=True,
+        verbose_name="Entity ID",
+        help_text="ID of related entity",
     )
 
+    # User reference (kept for DLQ resolution tracking)
     user = models.ForeignKey(
         "User",
         on_delete=models.SET_NULL,
@@ -470,8 +469,8 @@ class FailedOperation(models.Model):
         cls,
         domain: str,
         failure_type: str,
-        order=None,
-        payment=None,
+        entity_type: str = "",
+        entity_id: str = "",
         user=None,
         error_code: str = "",
         error_message: str = "",
@@ -489,9 +488,9 @@ class FailedOperation(models.Model):
         Args:
             domain: Business domain (payment, point, inventory, webhook, notification)
             failure_type: Specific failure type (e.g., PG_TIMEOUT, AMOUNT_MISMATCH)
-            order: Related Order instance
-            payment: Related Payment instance
-            user: Related User instance
+            entity_type: Type of related entity (e.g., 'order', 'payment', 'subscription')
+            entity_id: ID of related entity
+            user: Related User instance (for resolution tracking)
             error_code: Error code from external system
             error_message: Human-readable error message
             snapshot_data: State snapshot for recovery
@@ -510,8 +509,8 @@ class FailedOperation(models.Model):
         return cls.objects.create(
             domain=domain,
             failure_type=failure_type,
-            order=order,
-            payment=payment,
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id else "",
             user=user,
             error_code=error_code,
             error_message=error_message,

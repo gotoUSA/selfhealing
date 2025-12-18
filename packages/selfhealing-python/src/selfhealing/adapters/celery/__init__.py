@@ -6,6 +6,7 @@ This module provides Celery-specific implementations including:
 - Celery tasks for circuit breaker management
 - Celery tasks for metric collection
 - Celery beat schedule helpers
+- **Signal hooks for automatic self-healing integration**
 """
 
 from selfhealing.adapters.celery.tasks import (
@@ -24,6 +25,19 @@ from selfhealing.adapters.celery.tasks import (
     check_and_report_sla_breaches,
 )
 
+from selfhealing.adapters.celery.signal_hooks import (
+    # Setup functions
+    setup_selfhealing_signals,
+    disconnect_selfhealing_signals,
+    is_signals_connected,
+    reload_signal_hooks_config,
+    get_signal_hooks_config,
+    # Decorator
+    selfhealing_task,
+    # Configuration
+    SignalHooksConfig,
+)
+
 __all__ = [
     # Circuit Breaker Tasks
     "conditional_replay_on_circuit_close",
@@ -38,6 +52,14 @@ __all__ = [
     # Metrics Tasks
     "collect_self_healing_metrics",
     "check_and_report_sla_breaches",
+    # Signal Hooks (NEW)
+    "setup_selfhealing_signals",
+    "disconnect_selfhealing_signals",
+    "is_signals_connected",
+    "reload_signal_hooks_config",
+    "get_signal_hooks_config",
+    "selfhealing_task",
+    "SignalHooksConfig",
 ]
 
 

@@ -237,9 +237,9 @@ class TestDLQService:
             Verify statistics calculation.
         """
         # Create entries with different statuses
-        FailedOperation.create_from_failure(domain="payment", failure_type="A", order=sample_order)
-        FailedOperation.create_from_failure(domain="payment", failure_type="B", order=sample_order)
-        resolved = FailedOperation.create_from_failure(domain="point", failure_type="C", order=sample_order)
+        FailedOperation.create_from_failure(domain="payment", failure_type="A", entity_type="order", entity_id=str(sample_order.id))
+        FailedOperation.create_from_failure(domain="payment", failure_type="B", entity_type="order", entity_id=str(sample_order.id))
+        resolved = FailedOperation.create_from_failure(domain="point", failure_type="C", entity_type="order", entity_id=str(sample_order.id))
         resolved.mark_as_resolved(note="Fixed")
 
         stats = dlq_service.get_stats()
@@ -256,7 +256,8 @@ class TestDLQService:
         result = store_to_dlq(
             domain="webhook",
             failure_type="SIGNATURE_MISMATCH",
-            order=sample_order,
+            entity_type="order",
+            entity_id=str(sample_order.id),
             error_message="Invalid signature",
         )
 

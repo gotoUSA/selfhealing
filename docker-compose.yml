@@ -52,6 +52,20 @@ services:
       - CHAOS_PARTIAL_FAILURE_PROB=${CHAOS_PARTIAL_FAILURE_PROB:-0.3}
       - CHAOS_ASYNC_TASK_FAILURE_PROB=${CHAOS_ASYNC_TASK_FAILURE_PROB:-0.2}
       - CHAOS_RACE_TRIGGER_PROB=${CHAOS_RACE_TRIGGER_PROB:-0.4}
+      # Phase 2 Chaos Mode Configuration (ENABLED for testing)
+      - PHASE2_CHAOS_MODE=true
+      - PHASE2_ORPHAN_PG=true
+      - PHASE2_ROLLBACK_FAILURE=true
+      - PHASE2_SILENT_TASK=true
+      - PHASE2_POINT_ORPHAN=true
+      - PHASE2_RACE_AMPLIFY=true
+      - PHASE2_CACHE_DIVERGENCE=true
+      # Self-Healing Configuration (ENABLED for Phase 2 testing)
+      - PAYMENT_CIRCUIT_BREAKER_ENABLED=true
+      - PAYMENT_CB_FAILURE_THRESHOLD=5
+      - PAYMENT_CB_RECOVERY_TIMEOUT=60
+      - PAYMENT_CB_SUCCESS_THRESHOLD=2
+      - PAYMENT_DLQ_ENABLED=true
     depends_on:
       db:
         condition: service_healthy
@@ -90,6 +104,14 @@ services:
       - CHAOS_PARTIAL_FAILURE_PROB=${CHAOS_PARTIAL_FAILURE_PROB:-0.3}
       - CHAOS_ASYNC_TASK_FAILURE_PROB=${CHAOS_ASYNC_TASK_FAILURE_PROB:-0.2}
       - CHAOS_RACE_TRIGGER_PROB=${CHAOS_RACE_TRIGGER_PROB:-0.4}
+      # Phase 2 Chaos Mode Configuration (ENABLED for testing)
+      - PHASE2_CHAOS_MODE=true
+      - PHASE2_ORPHAN_PG=true
+      - PHASE2_ROLLBACK_FAILURE=true
+      - PHASE2_SILENT_TASK=true
+      - PHASE2_POINT_ORPHAN=true
+      - PHASE2_RACE_AMPLIFY=true
+      - PHASE2_CACHE_DIVERGENCE=true
     depends_on:
       db:
         condition: service_healthy

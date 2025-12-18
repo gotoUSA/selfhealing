@@ -31,6 +31,39 @@ if hasattr(settings, "CELERY_RESULT_BACKEND"):
 # 등록된 Django 앱에서 tasks.py 자동 로드
 app.autodiscover_tasks()
 
+# =============================================================================
+# Self-Healing Signal Hooks (Zero-Code Integration)
+# =============================================================================
+# This enables automatic Circuit Breaker, DLQ, Forensics, and Metrics tracking
+# for ALL Celery tasks without modifying individual task code.
+# =============================================================================
+try:
+    from selfhealing.adapters.celery import setup_selfhealing_signals
+
+    setup_selfhealing_signals(
+        enabled=True,
+        cb_enabled=True,
+        dlq_enabled=True,
+        metrics_enabled=True,
+        forensics_enabled=True,
+        # Map specific tasks to domains for better classification
+        task_domain_mapping={
+            "shopping.tasks.payment_tasks.confirm_toss_payment": "payment",
+            "shopping.tasks.payment_tasks.retry_failed_payment": "payment",
+            "shopping.tasks.payment_tasks.process_toss_payment_confirm": "payment",
+            "shopping.tasks.payment_tasks.detect_orphaned_orders": "order",
+            "shopping.tasks.order_tasks.process_order": "order",
+            "shopping.tasks.email_tasks.send_email_task": "notification",
+            "shopping.tasks.email_tasks.retry_failed_emails_task": "notification",
+        },
+    )
+    print("[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active")
+except ImportError:
+    # selfhealing package not installed - that's OK
+    print("[SelfHealing] Package not installed, signal hooks disabled")
+except Exception as e:
+    print(f"[SelfHealing] Failed to setup signal hooks: {e}")
+
 # Celery Beat 스케줄 설정
 app.conf.beat_schedule = {
     # 이메일 관련 태스크

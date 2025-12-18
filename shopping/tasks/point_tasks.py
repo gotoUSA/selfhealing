@@ -11,6 +11,12 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 
+# Phase 2 chaos injection
+from shopping.chaos.decorators import (
+    inject_phase2_point_orphan,
+    Phase2PointOrphanException,
+)
+
 logger = get_task_logger(__name__)
 
 
@@ -201,6 +207,20 @@ def add_points_after_payment(self, user_id: int, order_id: int) -> dict[str, Any
                 "message": "적립할 포인트 없음",
                 "order_id": order_id,
             }
+
+        # [CHAOS PHASE 2] BP-29: Point accumulation orphan
+        # Payment succeeded but points won't be accumulated
+        try:
+            inject_phase2_point_orphan(
+                user_id=user_id,
+                order_id=order_id,
+                points=points_to_add
+            )
+        except Phase2PointOrphanException as e:
+            logger.error(f"[CHAOS BP-29] Point orphan: user={user_id}, order={order_id}, points={points_to_add}")
+            # INTENTIONAL: Customer paid but won't get points
+            # Self-healing should detect missing points via reconciliation
+            raise self.retry(exc=e, countdown=3)
 
         logger.info(f"포인트 적립: user_id={user.id}, order_id={order.id}, " f"points={points_to_add}, earn_rate={earn_rate}%")
 

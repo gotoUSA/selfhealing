@@ -121,8 +121,11 @@ class FailedOperationData:
     status: str
 
     # Generic entity references (domain-neutral)
-    # Usage: entity_refs={"order_id": 123, "payment_id": 456, "product_id": 789}
-    entity_refs: dict[str, int] = field(default_factory=dict)
+    # For single entity: entity_type="order", entity_id="123"
+    # For multiple entities: use entity_refs dict
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+    entity_refs: dict[str, Any] = field(default_factory=dict)  # Legacy/extended refs
     user_id: Optional[int] = None
 
     # Snapshot Data

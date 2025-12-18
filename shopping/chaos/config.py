@@ -39,6 +39,29 @@ class ChaosConfig:
         default_factory=lambda: os.getenv("CHAOS_ASYNC_TASK_FAILURE", "").lower() in ("true", "1", "yes")
     )
     
+    # Phase 2 specific switches (BP-21 ~ BP-30)
+    phase2_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_CHAOS_MODE", "").lower() in ("true", "1", "yes")
+    )
+    phase2_orphan_pg_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_ORPHAN_PG", "").lower() in ("true", "1", "yes")
+    )
+    phase2_rollback_failure_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_ROLLBACK_FAILURE", "").lower() in ("true", "1", "yes")
+    )
+    phase2_silent_task_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_SILENT_TASK", "").lower() in ("true", "1", "yes")
+    )
+    phase2_point_orphan_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_POINT_ORPHAN", "").lower() in ("true", "1", "yes")
+    )
+    phase2_race_amplify_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_RACE_AMPLIFY", "").lower() in ("true", "1", "yes")
+    )
+    phase2_cache_divergence_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHASE2_CACHE_DIVERGENCE", "").lower() in ("true", "1", "yes")
+    )
+    
     # Timing configurations (milliseconds)
     payment_confirm_delay_ms: int = field(
         default_factory=lambda: int(os.getenv("CHAOS_PAYMENT_CONFIRM_DELAY_MS", "2000"))
@@ -90,6 +113,13 @@ class ChaosConfig:
             "partial_failure": self.partial_failure_enabled,
             "race_amplification": self.race_amplification_enabled,
             "async_task_failure": self.async_task_failure_enabled,
+            # Phase 2 scenarios
+            "phase2_orphan_pg": self.phase2_orphan_pg_enabled,
+            "phase2_rollback_failure": self.phase2_rollback_failure_enabled,
+            "phase2_silent_task": self.phase2_silent_task_enabled,
+            "phase2_point_orphan": self.phase2_point_orphan_enabled,
+            "phase2_race_amplify": self.phase2_race_amplify_enabled,
+            "phase2_cache_divergence": self.phase2_cache_divergence_enabled,
         }
         
         # If CHAOS_MODE is true but no individual flags set, enable all
@@ -99,6 +129,10 @@ class ChaosConfig:
             self.race_amplification_enabled,
             self.async_task_failure_enabled,
         ]):
+            return True
+        
+        # If PHASE2_CHAOS_MODE is true, enable all Phase 2 scenarios
+        if self.phase2_enabled and scenario.startswith("phase2_"):
             return True
             
         return scenario_map.get(scenario, False)

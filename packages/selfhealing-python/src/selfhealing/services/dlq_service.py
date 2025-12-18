@@ -150,8 +150,8 @@ class DLQService:
         self,
         domain: str,
         failure_type: str,
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
         user_id: Optional[int] = None,
         error_code: str = "",
         error_message: str = "",
@@ -168,8 +168,8 @@ class DLQService:
         Args:
             domain: Business domain (payment, point, inventory, webhook, notification)
             failure_type: Specific failure type (e.g., PG_TIMEOUT, AMOUNT_MISMATCH)
-            order_id: Related Order ID
-            payment_id: Related Payment ID
+            entity_type: Type of related entity (e.g., "order", "payment", "product")
+            entity_id: ID of related entity
             user_id: Related User ID
             error_code: Error code from external system
             error_message: Human-readable error message
@@ -191,8 +191,8 @@ class DLQService:
             failed_op = self.repository.create(
                 domain=domain,
                 failure_type=failure_type,
-                order_id=order_id,
-                payment_id=payment_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
                 user_id=user_id,
                 error_code=error_code,
                 error_message=error_message,
@@ -217,8 +217,8 @@ class DLQService:
         domain: str,
         failure_type: str,
         forensic_context: Any,
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
         user_id: Optional[int] = None,
         error_code: str = "",
         error_message: str = "",
@@ -234,8 +234,8 @@ class DLQService:
             domain: Business domain
             failure_type: Specific failure type
             forensic_context: ForensicContext instance with full debug info
-            order_id: Related Order ID
-            payment_id: Related Payment ID
+            entity_type: Type of related entity (e.g., "order", "payment")
+            entity_id: ID of related entity
             user_id: Related User ID
             error_code: Error code
             error_message: Human-readable error message
@@ -252,16 +252,16 @@ class DLQService:
 
         # Build snapshot data from forensic context
         snapshot_data = {
-            "order_id": order_id,
-            "payment_id": payment_id,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
             "user_id": user_id,
         }
 
         return self.store_failure(
             domain=domain,
             failure_type=failure_type,
-            order_id=order_id,
-            payment_id=payment_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
             user_id=user_id,
             error_code=error_code,
             error_message=error_message,
@@ -413,8 +413,8 @@ def get_dlq_service() -> DLQService:
 def store_to_dlq(
     domain: str,
     failure_type: str,
-    order_id: Optional[int] = None,
-    payment_id: Optional[int] = None,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
     user_id: Optional[int] = None,
     error_code: str = "",
     error_message: str = "",
@@ -433,8 +433,8 @@ def store_to_dlq(
     return get_dlq_service().store_failure(
         domain=domain,
         failure_type=failure_type,
-        order_id=order_id,
-        payment_id=payment_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
         user_id=user_id,
         error_code=error_code,
         error_message=error_message,

@@ -1,6 +1,6 @@
 {
   "test_name": "Stage 13: Repeated Spike (Backoff Tuning)",
-  "timestamp": "2025-12-12T03:28:37.402141",
+  "timestamp": "2025-12-18T08:03:57.482035",
   "num_cycles": 1,
   "cycles": [
     {
@@ -8,28 +8,28 @@
       "recovery_time_seconds": null,
       "phases": {
         "spike": {
-          "requests": 13,
-          "errors": 3,
-          "error_rate": 23.076923076923077,
-          "avg_response_ms": 94.62811396672176
+          "requests": 5,
+          "errors": 0,
+          "error_rate": 0.0,
+          "avg_response_ms": 219.5889949798584
         },
         "sustain": {
-          "requests": 109,
-          "errors": 19,
-          "error_rate": 17.431192660550458,
-          "avg_response_ms": 263.2622368838809
+          "requests": 24,
+          "errors": 0,
+          "error_rate": 0.0,
+          "avg_response_ms": 1002.2078653176626
         },
         "recovery": {
-          "requests": 107,
-          "errors": 16,
-          "error_rate": 14.953271028037381,
-          "avg_response_ms": 23.416325310680353
+          "requests": 57,
+          "errors": 0,
+          "error_rate": 0.0,
+          "avg_response_ms": 1166.9473146137439
         },
         "cool": {
-          "requests": 168,
-          "errors": 18,
-          "error_rate": 10.714285714285714,
-          "avg_response_ms": 24.523357550303142
+          "requests": 101,
+          "errors": 0,
+          "error_rate": 0.0,
+          "avg_response_ms": 569.8984802359402
         }
       }
     }

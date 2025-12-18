@@ -474,8 +474,31 @@ ProviderRegistry.register_circuit_breaker_repo("default", MyCircuitBreakerRepo)
 |-------------|-----------------|
 | Redis | Distributed rate limiting, faster cache |
 | Celery | Async DLQ replay, background tasks |
+| Celery Signal Hooks | **Zero-code** CB, DLQ, Forensics integration |
 | Prometheus | Metrics scraping |
 | Slack/PagerDuty | Security notifications |
+
+---
+
+## Capability 36: Celery Signal Hooks (Zero-Code Integration)
+
+For applications using Celery, signal hooks provide **automatic** self-healing without modifying task code:
+
+```python
+# One-line setup in celery.py
+from selfhealing.adapters.celery import setup_selfhealing_signals
+setup_selfhealing_signals()
+```
+
+This automatically enables:
+- Circuit Breaker tracking on task failure/success
+- DLQ storage for failed tasks (max retries exceeded)
+- Forensic context capture
+- Metrics recording
+- Conditional replay on circuit recovery
+
+For complete specification, see [12-CELERY-SIGNAL-HOOKS.md](12-CELERY-SIGNAL-HOOKS.md).
+
 ---
 
 ## Optional: OpenTelemetry Adapter

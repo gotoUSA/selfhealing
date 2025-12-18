@@ -23,6 +23,10 @@ from ..chaos.decorators import (
     inject_confirm_race_delay,
     inject_cancel_race_delay,
     PartialFailureException,
+    # Phase 2 injections
+    inject_phase2_orphan_pg,
+    inject_phase2_race_delay,
+    Phase2OrphanPGException,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,6 +216,19 @@ class PaymentService:
             logger.error(f"[CHAOS] Partial failure injected after PG success: payment_id={payment.id}")
             # PG succeeded but internal processing failed - this triggers rollback/DLQ
             raise PaymentConfirmError(str(e))
+
+        # [CHAOS PHASE 2] BP-21: Orphaned PG Transaction
+        # PG succeeded but internal DB commit will fail - creates PG/DB inconsistency
+        try:
+            inject_phase2_orphan_pg(payment_id=payment.id, pg_response=payment_data)
+        except Phase2OrphanPGException as e:
+            logger.error(f"[CHAOS BP-21] Orphan PG triggered: payment_id={payment.id}, pg_status={payment_data.get('status')}")
+            # Self-healing should detect this via DLQ and trigger reconciliation
+            # The PG has charged the customer, but our DB won't record it
+            raise PaymentConfirmError(str(e))
+
+        # [CHAOS PHASE 2] BP-27: Race window amplification
+        inject_phase2_race_delay(payment_id=payment.id, operation="confirm")
 
         # [CHAOS] Payment confirm delay - expands race window before DB commit
         inject_payment_confirm_delay(payment_id=payment.id, order_id=order.id)

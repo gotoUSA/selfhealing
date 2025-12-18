@@ -28,6 +28,11 @@ from ..chaos.decorators import (
     inject_partial_failure_after_pg,
     AsyncTaskChaosException,
     PartialFailureException,
+    # Phase 2 injections
+    inject_phase2_rollback_failure,
+    inject_phase2_silent_task_failure,
+    Phase2RollbackFailureException,
+    Phase2SilentTaskException,
 )
 
 logger = get_task_logger(__name__)
@@ -188,6 +193,19 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
         # Re-raise to trigger retry mechanism
         raise self.retry(exc=e, countdown=5)
 
+    # [CHAOS PHASE 2] BP-23: Silent task failure (no DLQ)
+    # This exception will exhaust retries WITHOUT proper DLQ routing
+    try:
+        inject_phase2_silent_task_failure(
+            task_name="finalize_payment_confirm",
+            task_id=self.request.id if self.request else None
+        )
+    except Phase2SilentTaskException as e:
+        logger.error(f"[CHAOS BP-23] Silent task failure: payment_id={payment_id}")
+        # INTENTIONAL: This re-raise does NOT route to DLQ
+        # Self-healing should detect orphaned tasks via forensic scans
+        raise self.retry(exc=e, countdown=2)
+
     # [CHAOS] Partial failure after PG success - simulate internal failure
     try:
         inject_partial_failure_after_pg(payment_id=payment_id, pg_response=toss_response)
@@ -321,6 +339,15 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
     except Exception as e:
         logger.error(f"[CHAOS] Rollback failure injected: order_id={order_id}")
         raise self.retry(exc=e, countdown=3)
+
+    # [CHAOS PHASE 2] BP-22: Secondary rollback failure
+    # Rollback itself fails, leaving order in stuck state
+    try:
+        inject_phase2_rollback_failure(order_id=order_id, rollback_type="stock_restore")
+    except Phase2RollbackFailureException as e:
+        logger.error(f"[CHAOS BP-22] Secondary rollback failure: order_id={order_id}")
+        # This should trigger escalation to DLQ with ROLLBACK_FAILURE type
+        raise self.retry(exc=e, countdown=5)
 
     try:
         with transaction.atomic():
