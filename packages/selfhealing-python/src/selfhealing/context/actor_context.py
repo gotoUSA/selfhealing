@@ -225,6 +225,80 @@ class ActorContext:
             )
         return actor
 
+    @classmethod
+    def is_anonymous_or_system(cls) -> bool:
+        """
+        Check if current actor is anonymous or system (potentially untracked).
+
+        Returns True if:
+        - No actor is set (will default to SYSTEM_ACTOR)
+        - Actor is anonymous
+        - Actor is system
+
+        Use this to detect potentially untracked operations.
+        """
+        actor = _current_actor.get()
+        if actor is None:
+            return True
+        return actor.actor_type in ("system", "anonymous")
+
+
+class ActorTrackingWarning(UserWarning):
+    """Warning for untracked sensitive operations."""
+
+    pass
+
+
+def warn_if_untracked(operation: str) -> None:
+    """
+    Emit warning if current operation is not properly tracked.
+
+    Use this in sensitive operations to alert about missing actor context.
+
+    Usage:
+        def force_open_circuit_breaker(service_name: str):
+            warn_if_untracked("force_open_circuit_breaker")
+            # ... do the operation
+    """
+    import warnings
+
+    if ActorContext.is_anonymous_or_system():
+        warnings.warn(
+            f"Sensitive operation '{operation}' performed without actor tracking. "
+            f"Current actor: {ActorContext.get_current().actor_id}. "
+            f"Consider using ActorContext.set_actor() for audit trail.",
+            ActorTrackingWarning,
+            stacklevel=2,
+        )
+        logger.warning(
+            f"[ActorContext] UNTRACKED_OPERATION operation={operation} "
+            f"actor={ActorContext.get_current().actor_id}"
+        )
+
+
+def require_actor_for_action(action_name: str) -> Actor:
+    """
+    Require an actor for a specific action, with detailed error message.
+
+    Use for operations that MUST be tracked (config changes, manual overrides, etc.)
+
+    Usage:
+        def change_critical_config(key, value):
+            actor = require_actor_for_action("change_critical_config")
+            # actor is guaranteed to be a real user, not system/anonymous
+    """
+    actor = ActorContext.get_current()
+
+    if actor.actor_type in ("system", "anonymous"):
+        raise RuntimeError(
+            f"Action '{action_name}' requires a tracked actor. "
+            f"Current actor '{actor.actor_id}' ({actor.actor_type}) is not sufficient. "
+            f"This action must be performed by a logged-in user. "
+            f"If this is a background job, use ActorContext.set_actor() to specify who initiated it."
+        )
+
+    return actor
+
 
 def get_audit_actor_info() -> dict[str, Any]:
     """
@@ -244,3 +318,105 @@ def get_audit_actor_info() -> dict[str, Any]:
         "actor_id": actor.actor_id,
         "actor_type": actor.actor_type,
     }
+
+
+# =============================================================================
+# Celery Task 지원
+# =============================================================================
+
+def get_actor_for_celery() -> dict[str, Any]:
+    """
+    Get current actor info for passing to Celery task.
+
+    Usage (in view/api):
+        from selfhealing.context import get_actor_for_celery
+
+        # Pass actor info to Celery task
+        my_task.delay(
+            order_id=123,
+            actor_info=get_actor_for_celery(),
+        )
+
+    Usage (in task):
+        @app.task
+        def my_task(order_id: int, actor_info: dict):
+            with restore_actor_from_celery(actor_info):
+                do_work()  # ActorContext is now set
+    """
+    actor = ActorContext.get_current()
+    return {
+        "actor_id": actor.actor_id,
+        "actor_type": actor.actor_type,
+        "source": f"celery_from_{actor.source}",
+        "ip_address": actor.ip_address,
+        "session_id": actor.session_id,
+        "original_set_at": actor.set_at.isoformat(),
+    }
+
+
+@contextmanager
+def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, None, None]:
+    """
+    Restore actor context in Celery task from passed info.
+
+    Usage:
+        @app.task
+        def my_task(order_id: int, actor_info: dict):
+            with restore_actor_from_celery(actor_info):
+                # ActorContext is now set with original user info
+                entry = AuditEntry(action=AuditAction.DLQ_REPLAY_START)
+                # entry.actor_id will be the original user, not "system"
+    """
+    if not actor_info:
+        # No actor info passed, log warning
+        logger.warning(
+            "[ActorContext] Celery task started without actor_info. "
+            "Operations will be attributed to 'system'."
+        )
+        yield SYSTEM_ACTOR
+        return
+
+    with ActorContext.set_actor(
+        actor_id=actor_info.get("actor_id", "unknown"),
+        actor_type=actor_info.get("actor_type", "celery"),
+        source=actor_info.get("source", "celery"),
+        ip_address=actor_info.get("ip_address"),
+        session_id=actor_info.get("session_id"),
+        original_request_time=actor_info.get("original_set_at"),
+    ) as actor:
+        yield actor
+
+
+# =============================================================================
+# Management Command 지원
+# =============================================================================
+
+@contextmanager
+def set_management_command_actor(
+    command_name: str,
+    run_by: Optional[str] = None,
+) -> Generator[Actor, None, None]:
+    """
+    Set actor context for Django management command.
+
+    Usage:
+        class Command(BaseCommand):
+            def handle(self, *args, **options):
+                with set_management_command_actor("cleanup_dlq", run_by="cron"):
+                    do_cleanup()
+    """
+    import getpass
+    import socket
+
+    actor_id = run_by or f"{getpass.getuser()}@{socket.gethostname()}"
+
+    with ActorContext.set_actor(
+        actor_id=actor_id,
+        actor_type="management_command",
+        source=f"manage.py:{command_name}",
+    ) as actor:
+        logger.info(
+            f"[ActorContext] Management command '{command_name}' started by {actor_id}"
+        )
+        yield actor
+
