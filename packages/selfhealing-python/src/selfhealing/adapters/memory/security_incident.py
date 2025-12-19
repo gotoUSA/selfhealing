@@ -38,11 +38,20 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         source_ip: Optional[str] = None,
         user_agent: str = "",
         user_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, int]] = None,
+        raw_payload: Optional[dict[str, Any]] = None,
+        # Legacy compatibility - will be converted to entity_refs
         order_id: Optional[int] = None,
         payment_id: Optional[int] = None,
-        raw_payload: Optional[dict[str, Any]] = None,
     ) -> SecurityIncidentData:
         """Create a new security incident."""
+        # Build entity_refs from legacy fields if not provided
+        refs = entity_refs or {}
+        if order_id is not None:
+            refs["order_id"] = order_id
+        if payment_id is not None:
+            refs["payment_id"] = payment_id
+
         with self._lock:
             incident = SecurityIncidentData(
                 id=self._next_id,
@@ -53,8 +62,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
                 source_ip=source_ip,
                 user_agent=user_agent,
                 user_id=user_id,
-                order_id=order_id,
-                payment_id=payment_id,
+                entity_refs=refs,
                 raw_payload=raw_payload or {},
                 created_at=_now(),
                 updated_at=_now(),
@@ -90,8 +98,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
                 source_ip=entry.source_ip,
                 user_agent=entry.user_agent,
                 user_id=entry.user_id,
-                order_id=entry.order_id,
-                payment_id=entry.payment_id,
+                entity_refs=entry.entity_refs,
                 raw_payload=entry.raw_payload,
                 assigned_to_id=assigned_to_id or entry.assigned_to_id,
                 investigation_notes=investigation_notes or entry.investigation_notes,

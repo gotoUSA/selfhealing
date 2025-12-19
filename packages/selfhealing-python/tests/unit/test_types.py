@@ -12,10 +12,11 @@ class TestFailureType:
     def test_failure_types_exist(self):
         from selfhealing.core.types import FailureType
 
+        # Domain-neutral failure types (no PAYMENT - that's application-specific)
         assert FailureType.NETWORK == "network"
         assert FailureType.DATABASE == "database"
         assert FailureType.TIMEOUT == "timeout"
-        assert FailureType.PAYMENT == "payment"
+        assert FailureType.EXTERNAL_SERVICE == "external_service"
 
     def test_failure_type_is_string(self):
         from selfhealing.core.types import FailureType

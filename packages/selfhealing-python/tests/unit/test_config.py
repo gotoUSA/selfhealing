@@ -230,15 +230,17 @@ class TestSLAConfig:
 
         config = SLAConfig()
 
-        assert config.payment_hours == 1
-        assert config.point_hours == 4
-        assert config.inventory_hours == 2
+        # Domain-neutral: uses thresholds_by_domain dict, not payment_hours etc.
         assert config.default_hours == 24
+        assert config.thresholds_by_domain == {}
 
     def test_get_threshold(self):
         from selfhealing.core.config import SLAConfig
 
-        config = SLAConfig()
+        config = SLAConfig(
+            default_hours=24,
+            thresholds_by_domain={"payment": 1, "order": 2}
+        )
 
         payment_threshold = config.get_threshold("payment")
         assert payment_threshold == timedelta(hours=1)
@@ -293,7 +295,9 @@ class TestConvenienceGetters:
         set_config(None)  # Reset
 
         sla = get_sla_thresholds()
-        assert sla.payment_hours == 1
+        # Domain-neutral: default config has empty thresholds_by_domain
+        assert sla.default_hours == 24
+        assert isinstance(sla.thresholds_by_domain, dict)
 
     def test_get_forensic_settings(self):
         from selfhealing.core.config import (

@@ -48,22 +48,21 @@ class TestStateSnapshot:
     def test_create_snapshot(self):
         from selfhealing.core.forensic import StateSnapshot
 
-        snapshot = StateSnapshot(
-            order_status="pending",
-            payment_status="completed",
-            user_points=1000,
-        )
+        # Domain-neutral: use states dict and get_state() method
+        snapshot = StateSnapshot()
+        snapshot.set_state("order_status", "pending")
+        snapshot.set_state("payment_status", "completed")
+        snapshot.set_state("user_points", 1000)
 
-        assert snapshot.order_status == "pending"
-        assert snapshot.user_points == 1000
+        assert snapshot.get_state("order_status") == "pending"
+        assert snapshot.get_state("user_points") == 1000
 
     def test_to_dict(self):
         from selfhealing.core.forensic import StateSnapshot
 
-        snapshot = StateSnapshot(
-            order_status="shipped",
-            payment_status="refunded",
-        )
+        snapshot = StateSnapshot()
+        snapshot.set_state("order_status", "shipped")
+        snapshot.set_state("payment_status", "refunded")
 
         d = snapshot.to_dict()
 
@@ -74,7 +73,7 @@ class TestStateSnapshot:
         from selfhealing.core.forensic import StateSnapshot
 
         snapshot = StateSnapshot(
-            order_status="pending",
+            states={"order_status": "pending"},
             extra={"custom_field": "value"},
         )
 
@@ -93,8 +92,8 @@ class TestStateSnapshot:
 
         snapshot = StateSnapshot.from_dict(data)
 
-        assert snapshot.order_status == "completed"
-        assert snapshot.extra["custom"] == "extra_value"
+        assert snapshot.get_state("order_status") == "completed"
+        assert snapshot.get_state("custom") == "extra_value"
 
 
 class TestForensicContext:
@@ -134,7 +133,7 @@ class TestForensicContext:
         )
 
         assert ctx.state_before is not None
-        assert ctx.state_before.order_status == "pending"
+        assert ctx.state_before.get_state("order_status") == "pending"
 
     def test_to_metadata(self):
         from selfhealing.core.forensic import ForensicContext
@@ -181,7 +180,7 @@ class TestForensicContext:
         assert ctx.latency_ms == 1000
         assert ctx.client_ip == "10.0.0.1"
         assert len(ctx.retry_history) == 1
-        assert ctx.state_before.order_status == "pending"
+        assert ctx.state_before.get_state("order_status") == "pending"
 
 
 class TestForensicContextBuilder:
@@ -213,8 +212,8 @@ class TestForensicContextBuilder:
             .build()
         )
 
-        assert ctx.state_before.order_status == "pending"
-        assert ctx.state_after.order_status == "completed"
+        assert ctx.state_before.get_state("order_status") == "pending"
+        assert ctx.state_after.get_state("order_status") == "completed"
 
     def test_builder_with_external_response(self):
         from selfhealing.core.forensic import ForensicContextBuilder
@@ -269,7 +268,7 @@ class TestConvenienceFunctions:
 
         assert ctx.client_ip == "192.168.1.1"
         assert ctx.task_id == "task-abc"
-        assert ctx.state_before.order_status == "pending"
+        assert ctx.state_before.get_state("order_status") == "pending"
 
     def test_create_snapshot_data(self):
         from selfhealing.core.forensic import create_snapshot_data
