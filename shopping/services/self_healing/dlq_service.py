@@ -195,6 +195,12 @@ class DLQService:
             logger.debug("[DLQService] DLQ is disabled, skipping storage")
             return DLQEntryResult.failed("DLQ is disabled")
 
+        # 행동 직전 로깅 - DLQ 저장 전에 기록
+        logger.info(
+            f"[DLQService] STORING domain={domain}, failure_type={failure_type}, "
+            f"entity_type={entity_type}, entity_id={entity_id}"
+        )
+
         try:
             from shopping.models.failed_operation import FailedOperation
 

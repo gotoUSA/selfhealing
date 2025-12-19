@@ -149,6 +149,31 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageUnavailableError,
 )
 
+# =============================================================================
+# Audit Log Adapter Interface (Non-invasive audit logging)
+# =============================================================================
+from selfhealing.interfaces.audit_adapter import (
+    # Enums
+    AuditAction,
+    # Data Classes
+    AuditEntry,
+    # Interface
+    AuditLogAdapter,
+)
+
+# =============================================================================
+# Alert Adapter Interface (Non-invasive alerting)
+# =============================================================================
+from selfhealing.interfaces.alert_adapter import (
+    # Enums
+    AlertSeverity,
+    AlertCategory,
+    # Data Classes
+    Alert,
+    # Interface
+    AlertAdapter,
+)
+
 
 __all__ = [
     # =========================================================================
@@ -244,4 +269,23 @@ __all__ = [
     # Exceptions
     "RateLimitStorageError",
     "RateLimitStorageUnavailableError",
+    # =========================================================================
+    # Audit Log Adapter Interface (Non-invasive audit logging)
+    # =========================================================================
+    # Enums
+    "AuditAction",
+    # Data Classes
+    "AuditEntry",
+    # Interface
+    "AuditLogAdapter",
+    # =========================================================================
+    # Alert Adapter Interface (Non-invasive alerting)
+    # =========================================================================
+    # Enums
+    "AlertSeverity",
+    "AlertCategory",
+    # Data Classes
+    "Alert",
+    # Interface
+    "AlertAdapter",
 ]

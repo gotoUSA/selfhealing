@@ -13,13 +13,180 @@
 | Circuit Breaker | ✅ 구현됨 | 🟢 높음 |
 | Dead Letter Queue | ✅ 구현됨 | 🟢 높음 |
 | 부하 테스트 | ✅ 구현됨 | 🟢 높음 |
-| SLI/SLO 정의 | ⚠️ 부분적 | 🟡 중간 |
+| SLI/SLO 정의 | ✅ **구현됨** | 🟢 높음 |
+| Audit Logging Adapter | ✅ **구현됨** | 🟢 높음 |
+| Alert Adapter | ✅ **구현됨** | 🟢 높음 |
 | 모니터링/Alerting | ⚠️ 부분적 | 🟡 중간 |
-| 분산 추적 | ❌ 미구현 | 🔴 낮음 |
-| Error Budget | ❌ 미구현 | 🔴 낮음 |
+| 분산 추적 | ⏭️ **불필요** | ➖ N/A |
+| Error Budget | ⚠️ 부분적 | 🟡 중간 |
 | Runbook 자동화 | ❌ 미구현 | 🔴 낮음 |
 | Incident Management | ❌ 미구현 | 🔴 낮음 |
 | Chaos Engineering (프로덕션) | ❌ 미구현 | 🔴 낮음 |
+
+> **업데이트 (2025-01)**: SLI/SLO, AuditLogAdapter, AlertAdapter 구현 완료. 분산 추적은 모놀리식 아키텍처에서 불필요로 판단.
+
+---
+
+## ✅ 새로 구현된 기능 (2025-01)
+
+### 1. SLI/SLO 정의 (`selfhealing.slo`)
+
+**구현 위치**: `packages/selfhealing-python/src/selfhealing/slo.py`
+
+**구현 내용**:
+- ✅ SLI 열거형 (Availability, Latency P50/P90/P99, Error Rate, Throughput)
+- ✅ SLO 데이터 클래스 (목표, 윈도우, 경고/위험 임계값)
+- ✅ SLOStatus (현재 상태, 에러 버짓 소진율, Burn Rate)
+- ✅ SLOConfig (여러 SLO 관리, 기본 설정 제공)
+- ✅ 도메인별 기본 SLO 템플릿 (Payment, Order, API)
+
+**사용 예시**:
+```python
+from selfhealing.slo import SLOConfig, SLO, SLI
+
+# 기본 SLO 설정 사용
+config = SLOConfig.default_config(service_name="payment-api")
+
+# 또는 커스텀 SLO 정의
+custom_slo = SLO(
+    name="payment_availability",
+    description="결제 API 가용성",
+    sli=SLI.AVAILABILITY,
+    target=0.9999,  # 99.99%
+    window_days=30,
+)
+
+# 에러 버짓 확인
+print(f"Error budget: {custom_slo.error_budget_minutes_per_day:.1f} min/day")
+# Output: Error budget: 0.1 min/day (99.99% = 4.3분/월)
+```
+
+---
+
+### 2. Audit Log Adapter (`selfhealing.interfaces.audit_adapter`)
+
+**설계 철학**: 
+- 사용자 시스템에 침범 없음 (DB 테이블 강제 X)
+- 기본은 파일/stdout, 사용자가 원하면 DB/Grafana 연결
+
+**구현 위치**: 
+- Interface: `packages/selfhealing-python/src/selfhealing/interfaces/audit_adapter.py`
+- Implementations: `packages/selfhealing-python/src/selfhealing/adapters/audit/`
+
+**구현 내용**:
+- ✅ `AuditAction` 열거형 (CB, DLQ, Retry, Security 액션)
+- ✅ `AuditEntry` 데이터 클래스 (누가, 무엇을, 언제, 왜)
+- ✅ `AuditLogAdapter` 추상 인터페이스
+- ✅ `FileAuditLogAdapter` - JSON Lines 파일 기반 (기본)
+- ✅ `StdoutAuditLogAdapter` - 컨테이너 환경용
+- ✅ `NullAuditLogAdapter` - 테스트/비활성화용
+
+**사용 예시**:
+```python
+from selfhealing.adapters.audit import FileAuditLogAdapter
+from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry
+
+# 파일 기반 어댑터 사용 (기본)
+adapter = FileAuditLogAdapter("logs/audit.log", rotate_daily=True)
+
+# 감사 로그 기록
+adapter.log_cb_open(
+    service_name="toss-payment",
+    reason="고장률 50% 초과",
+    actor_id="admin@example.com",
+    is_manual=True,
+)
+
+# 또는 직접 Entry 생성
+adapter.log(AuditEntry(
+    action=AuditAction.DLQ_REPLAY_START,
+    target_type="dlq_entry",
+    target_id="123",
+    actor_id="operator@example.com",
+    reason="수동 재처리 요청",
+))
+
+# 사용자가 자체 Grafana/Loki 연동 원할 경우:
+class MyGrafanaAdapter(AuditLogAdapter):
+    def log(self, entry: AuditEntry) -> None:
+        loki_client.push(entry.to_dict())
+```
+
+---
+
+### 3. Alert Adapter (`selfhealing.interfaces.alert_adapter`)
+
+**설계 철학**: 
+- 외부 서비스 의존 없음 (Slack/PagerDuty 강제 X)
+- 기본은 stdout/파일, 사용자가 원하면 연동
+
+**구현 위치**: 
+- Interface: `packages/selfhealing-python/src/selfhealing/interfaces/alert_adapter.py`
+- Implementations: `packages/selfhealing-python/src/selfhealing/adapters/alert/`
+
+**구현 내용**:
+- ✅ `AlertSeverity` 열거형 (Critical, Warning, Info)
+- ✅ `AlertCategory` 열거형 (Availability, Latency, ErrorRate, CB, DLQ, SLO)
+- ✅ `Alert` 데이터 클래스 (제목, 설명, 심각도, SLO 컨텍스트)
+- ✅ `AlertAdapter` 추상 인터페이스
+- ✅ `StdoutAlertAdapter` - 컨테이너 환경용 (컬러 지원)
+- ✅ `FileAlertAdapter` - 활성 알림 추적 + 히스토리
+- ✅ `NullAlertAdapter` - 테스트/비활성화용
+
+**사용 예시**:
+```python
+from selfhealing.adapters.alert import StdoutAlertAdapter
+
+adapter = StdoutAlertAdapter(use_color=True)
+
+# Circuit Breaker 열림 알림
+adapter.alert_cb_opened(
+    service_name="toss-payment",
+    failure_count=50,
+    threshold=10,
+)
+
+# SLO 위반 알림
+adapter.alert_slo_violation(
+    slo_name="payment_availability",
+    target=0.999,
+    current=0.985,
+    service_name="payment-api",
+)
+
+# 알림 해제
+adapter.alert_cb_closed(service_name="toss-payment")
+
+# 사용자가 Slack 연동 원할 경우:
+class MySlackAdapter(AlertAdapter):
+    def send(self, alert: Alert) -> None:
+        slack_webhook.post(alert.to_dict())
+    def resolve(self, alert_key: str) -> None:
+        slack_webhook.post({"text": f"Resolved: {alert_key}"})
+```
+
+---
+
+## ⏭️ 분산 추적 - 불필요 판단
+
+**현재 아키텍처**: 모놀리식 Django 애플리케이션
+
+**판단 근거**:
+- 모든 요청이 단일 프로세스 내에서 처리됨
+- Django의 기본 로깅 + ForensicContext로 충분한 추적 가능
+- 마이크로서비스로 전환 시 OpenTelemetry 도입 권장
+
+**현재 추적 메커니즘**:
+```python
+# ForensicContext가 이미 완전한 컨텍스트 제공
+forensic_context = ForensicContext(
+    user_id="user123",
+    order_id="order456",
+    payment_key="pay789",
+    action="payment_confirm",
+    ...
+)
+```
 
 ---
 
@@ -490,7 +657,24 @@ services:
 
 ---
 
-## 📚 참고 자료
+## � 구현 진행 현황 (Implementation Status)
+
+| 기능 | 상태 | 구현 위치 | 날짜 |
+|-----|------|----------|------|
+| SLI/SLO 정의 | ✅ 완료 | `selfhealing/slo.py` | 2025-01 |
+| AuditLogAdapter | ✅ 완료 | `selfhealing/interfaces/audit_adapter.py` | 2025-01 |
+| FileAuditLogAdapter | ✅ 완료 | `selfhealing/adapters/audit/file_adapter.py` | 2025-01 |
+| StdoutAuditLogAdapter | ✅ 완료 | `selfhealing/adapters/audit/stdout_adapter.py` | 2025-01 |
+| NullAuditLogAdapter | ✅ 완료 | `selfhealing/adapters/audit/null_adapter.py` | 2025-01 |
+| AlertAdapter | ✅ 완료 | `selfhealing/interfaces/alert_adapter.py` | 2025-01 |
+| StdoutAlertAdapter | ✅ 완료 | `selfhealing/adapters/alert/stdout_adapter.py` | 2025-01 |
+| FileAlertAdapter | ✅ 완료 | `selfhealing/adapters/alert/file_adapter.py` | 2025-01 |
+| NullAlertAdapter | ✅ 완료 | `selfhealing/adapters/alert/null_adapter.py` | 2025-01 |
+| 분산 추적 | ⏭️ 불필요 | N/A (모놀리식) | 2025-01 |
+
+---
+
+## �📚 참고 자료
 
 - [Google SRE Book](https://sre.google/sre-book/table-of-contents/)
 - [Google SRE Workbook](https://sre.google/workbook/table-of-contents/)

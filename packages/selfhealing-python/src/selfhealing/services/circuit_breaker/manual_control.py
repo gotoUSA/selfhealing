@@ -76,6 +76,12 @@ class ManualControlMixin:
             reason=ReasonCode.INTERVENTION_ALLOWED,
         )
 
+        # 행동 직전 로깅 - Circuit Breaker OPEN 전에 기록
+        logger.info(
+            f"[CircuitBreaker] FORCE_OPEN service={service_name}, "
+            f"reason={reason}, controlled_by_id={controlled_by_id}"
+        )
+
         try:
             # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_open(
@@ -152,6 +158,12 @@ class ManualControlMixin:
         decision_logger.intervention_evaluated(
             allowed=True,
             reason=ReasonCode.INTERVENTION_ALLOWED,
+        )
+
+        # 행동 직전 로깅 - Circuit Breaker CLOSE 전에 기록
+        logger.info(
+            f"[CircuitBreaker] FORCE_CLOSE service={service_name}, "
+            f"reason={reason}, controlled_by_id={controlled_by_id}, trigger_replay={trigger_replay}"
         )
 
         try:

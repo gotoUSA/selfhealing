@@ -220,13 +220,24 @@ class RetryHandler:
         attempt = 0
         last_error: Exception | None = None
         retry_history: list[dict[str, Any]] = []
+        func_name = getattr(func, "__name__", str(func))
 
         while attempt < self.config.max_attempts:
             attempt += 1
 
+            # 행동 직전 로깅 - 실제 실행 전에 기록
+            logger.info(
+                f"[RetryHandler] EXECUTING domain={self.config.domain}, "
+                f"func={func_name}, attempt={attempt}/{self.config.max_attempts}"
+            )
+
             try:
                 result = func(*args, **kwargs)
-                logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
+                # 성공 로깅
+                logger.info(
+                    f"[RetryHandler] SUCCESS domain={self.config.domain}, "
+                    f"func={func_name}, attempt={attempt}/{self.config.max_attempts}"
+                )
                 return RetryResult(
                     success=True,
                     action=RetryAction.SUCCESS,

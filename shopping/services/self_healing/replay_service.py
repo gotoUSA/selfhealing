@@ -407,6 +407,12 @@ class ReplayService:
         except FailedOperation.DoesNotExist:
             return ReplayResult.failed(dlq_id, "DLQ entry not found")
 
+        # 행동 직전 로깅 - Replay 실행 전에 기록
+        logger.info(
+            f"[ReplayService] REPLAYING dlq_id={dlq_id}, domain={failed_op.domain}, "
+            f"failure_type={failed_op.failure_type}, retry_count={failed_op.retry_count}"
+        )
+
         # Check replay eligibility - use the minimum of config and model's max_retries
         config_max = self.config["max_replay_attempts"]
         model_max = failed_op.max_retries
