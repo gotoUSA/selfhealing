@@ -23,17 +23,11 @@ from unittest.mock import patch, MagicMock
 import uuid
 
 import pytest
-from django.conf import settings
-from django.test import override_settings
-from django.utils import timezone
 
-from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
-from shopping.services.payment_recovery_service import CeleryPaymentRecovery
-from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
+from selfhealing.core import timezone
 
 
 @pytest.mark.tier2
-@pytest.mark.django_db(transaction=True)
 class TestObservabilityMetrics:
     """
     Observability and metrics emission tests.
@@ -118,7 +112,6 @@ class TestObservabilityMetrics:
         # Act: Open circuit breaker
         circuit_breaker_service.force_open(
             service_name=service_name,
-            tenant_id=tenant_a.id,
             reason="Test",
             controlled_by=tenant_a.admin_user,
         )
@@ -152,7 +145,7 @@ class TestObservabilityMetrics:
         assert events[0]["labels"]["from_state"] == "closed"
         assert events[0]["labels"]["to_state"] == "open"
 
-    def test_dlq_entry_creation_metric(self, mock_metrics, db):
+    def test_dlq_entry_creation_metric(self, mock_metrics):
         """
         Purpose:
             Verify DLQ entry creation emits labeled metric.
@@ -171,11 +164,6 @@ class TestObservabilityMetrics:
         Compliance:
             NIST AU-3 (Audit Content)
         """
-        # Create DLQ entry
-        user = UserFactory()
-        order = OrderFactory(user=user)
-        payment = PaymentFactory(order=order)
-
         failure_types = [
             "max_retries_exceeded",
             "non_retryable_error",
@@ -422,7 +410,6 @@ class TestObservabilityMetrics:
 
 
 @pytest.mark.tier2
-@pytest.mark.django_db(transaction=True)
 class TestMetricsAggregation:
     """
     Tests for metrics aggregation and querying.
@@ -553,7 +540,6 @@ class TestMetricsAggregation:
 
 
 @pytest.mark.tier2
-@pytest.mark.django_db(transaction=True)
 class TestMetricsEventOrdering:
     """
     Tests for metrics event ordering and timing.
@@ -602,9 +588,9 @@ class TestMetricsEventOrdering:
 
         all_events = mock_metrics.get_events()
 
-        # Find each type
-        counter_events = [e for e in all_events if e["type"] == "counter"]
-        histogram_events = [e for e in all_events if e["type"] == "histogram"]
+        # Find each type (MockMetrics uses "increment", "observe", "gauge" as type names)
+        counter_events = [e for e in all_events if e["type"] == "increment"]
+        histogram_events = [e for e in all_events if e["type"] == "observe"]
         gauge_events = [e for e in all_events if e["type"] == "gauge"]
 
         assert len(counter_events) == 1

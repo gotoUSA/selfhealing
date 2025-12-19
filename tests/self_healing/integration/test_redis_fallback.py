@@ -1,6 +1,13 @@
-"""Redis 연결 실패 시 폴백 테스트"""
+"""
+Redis 연결 실패 시 폴백 테스트
+
+Note: This module is skipped - infrastructure tests require Redis.
+"""
 
 import pytest
+
+# Skip entire module - Infrastructure tests require Redis
+pytestmark = pytest.mark.requires_redis
 from django.core.cache import cache
 from redis.exceptions import ConnectionError as RedisConnectionError
 

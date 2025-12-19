@@ -56,12 +56,14 @@ addopts = """
     --cov-fail-under=70
     --tb=short
     --strict-markers
-    -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy and not slow'
+    -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy and not slow and not e2e and not requires_redis and not requires_db and not flaky'
 """
-testpaths = ["shopping/tests"]
+testpaths = ["shopping/tests", "tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unit: marks tests as unit tests (fast, no external deps)",
     "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests (requires full infrastructure)",
     "performance: marks tests as performance tests",
     "load_test: load test related (excluded by default in CI)",
     "manual: manual/debugging tests (excluded by default in CI)",

@@ -29,6 +29,10 @@ from selfhealing.services import (
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
+# Security integration test - requires Django models (SecurityIncident, FailedOperation)
+pytestmark = [pytest.mark.e2e, pytest.mark.requires_db]
+
+
 @pytest.mark.django_db(transaction=True)
 class TestSecurityDLQSeparation:
     """

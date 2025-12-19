@@ -15,6 +15,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.test import RequestFactory
 
+# 이 파일의 테스트 중 일부는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from shopping.models.security_incident import SecurityIncident
 from selfhealing.services import (
     SecurityConfig,

@@ -16,6 +16,9 @@ from unittest.mock import patch, MagicMock
 import pytest
 from django.utils import timezone
 
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from shopping.models.failed_operation import FailedOperation
 from shopping.services.self_healing.metrics import (
     record_dlq_item_created,

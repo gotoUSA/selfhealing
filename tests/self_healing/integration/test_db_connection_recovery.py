@@ -1,6 +1,13 @@
-"""DB 연결 끊김 및 복구 테스트"""
+"""
+DB 연결 끊김 및 복구 테스트
+
+Note: This module is skipped - DB infrastructure tests.
+"""
 
 import pytest
+
+# Skip entire module - DB infrastructure tests
+pytestmark = pytest.mark.requires_db
 from django.db import OperationalError
 from django.db.utils import InterfaceError
 

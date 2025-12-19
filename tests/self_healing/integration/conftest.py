@@ -834,6 +834,7 @@ class MockMetrics:
             self._events[name] = []
         
         event["timestamp"] = time.time()
+        event["name"] = name  # Include metric name in event
         self._events[name].append(event)
 
     def get_events(self, name: str = None) -> list[dict]:

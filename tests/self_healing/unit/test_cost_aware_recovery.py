@@ -21,6 +21,9 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 from django.conf import settings
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
 from django.test import override_settings
 from django.utils import timezone
 

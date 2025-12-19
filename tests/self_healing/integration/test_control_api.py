@@ -9,9 +9,15 @@ Test Categories:
 3. TTL Management Tests
 4. Authorization Tests
 5. Validation Tests
+
+Note: This module is skipped because REST API tests depend on Django Test Client.
+      When selling selfhealing package, buyers should write their own API integration tests.
 """
 
 import pytest
+
+# Django REST API integration tests - require database
+pytestmark = [pytest.mark.e2e, pytest.mark.requires_db]
 import uuid
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, override_settings

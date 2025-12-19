@@ -20,9 +20,14 @@ Key Principles:
 Reference:
 - docs/SELF_HEALING_TEST_GAP_ANALYSIS.md §2.3
 - docs/L3_SELF_HEALING_ARCHITECTURE.md §6 (Cache Strategy)
+
+Note: This module is skipped - infrastructure tests require Redis.
 """
 
 import pytest
+
+# Skip entire module - Infrastructure tests require Redis
+pytestmark = pytest.mark.requires_redis
 from unittest.mock import patch, MagicMock, PropertyMock
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError

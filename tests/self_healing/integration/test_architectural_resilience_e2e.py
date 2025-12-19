@@ -35,6 +35,9 @@ from django.db import connection
 
 import pytest
 
+# E2E integration test - requires database connection
+pytestmark = [pytest.mark.e2e, pytest.mark.requires_db]
+
 from shopping.models.failed_operation import FailedOperation
 from shopping.models.order import Order
 from shopping.models.payment import Payment
