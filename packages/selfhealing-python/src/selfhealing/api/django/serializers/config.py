@@ -1,0 +1,202 @@
+"""
+Runtime Configuration API Serializers.
+
+Serializers for validating and serializing runtime configuration updates.
+Includes apply strategy support (immediate, delayed, graceful).
+"""
+
+from rest_framework import serializers
+
+
+# =============================================================================
+# Apply Strategy Mixin
+# =============================================================================
+
+
+class ApplyStrategyMixin(serializers.Serializer):
+    """Mixin that adds apply strategy fields to config serializers."""
+
+    apply_strategy = serializers.ChoiceField(
+        required=False,
+        choices=["immediate", "delayed", "graceful"],
+        help_text="How to apply the changes: immediate (now), delayed (after N seconds), graceful (wait for in-progress ops)",
+    )
+    delay_seconds = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=3600,
+        help_text="Seconds to wait before applying (only for 'delayed' strategy)",
+    )
+    grace_timeout_seconds = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=300,
+        help_text="Max seconds to wait for in-progress operations (only for 'graceful' strategy)",
+    )
+
+    def get_apply_options(self) -> dict:
+        """Extract apply strategy options from validated data."""
+        return {
+            "strategy": self.validated_data.get("apply_strategy"),
+            "delay_seconds": self.validated_data.get("delay_seconds"),
+            "grace_timeout_seconds": self.validated_data.get("grace_timeout_seconds"),
+        }
+
+    def get_config_changes(self) -> dict:
+        """Extract config changes (excluding apply strategy fields)."""
+        exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds"}
+        return {
+            k: v for k, v in self.validated_data.items()
+            if k not in exclude_fields and v is not None
+        }
+
+
+# =============================================================================
+# Config Serializers with Apply Strategy Support
+# =============================================================================
+
+
+class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Circuit Breaker configuration."""
+
+    enabled = serializers.BooleanField(required=False, default=True)
+    failure_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    recovery_timeout = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    success_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    half_open_max_calls = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    half_open_request_limit = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    rate_limit_cascade_threshold = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    rate_limit_cascade_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    self_ddos_protection_enabled = serializers.BooleanField(required=False)
+    self_ddos_request_threshold = serializers.IntegerField(required=False, min_value=1, max_value=10000)
+    self_ddos_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=300)
+    self_ddos_backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
+
+
+class DLQConfigSerializer(ApplyStrategyMixin):
+    """Serializer for DLQ configuration."""
+
+    enabled = serializers.BooleanField(required=False, default=True)
+    max_retries = serializers.IntegerField(required=False, min_value=1, max_value=20)
+    retry_delay = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    expiry_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
+    retention_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
+    batch_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    max_replay_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10)
+
+
+class RetryConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Retry configuration."""
+
+    max_attempts = serializers.IntegerField(required=False, min_value=1, max_value=20)
+    backoff_strategy = serializers.ChoiceField(
+        required=False,
+        choices=["exponential", "linear", "constant", "decorrelated_jitter"],
+    )
+    backoff_base = serializers.IntegerField(required=False, min_value=1, max_value=10)
+    base_delay = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
+    max_delay = serializers.FloatField(required=False, min_value=1.0, max_value=3600.0)
+    min_delay = serializers.IntegerField(required=False, min_value=1, max_value=60)
+    jitter = serializers.BooleanField(required=False)
+    jitter_percent = serializers.IntegerField(required=False, min_value=0, max_value=100)
+
+
+class SLAConfigSerializer(ApplyStrategyMixin):
+    """Serializer for SLA configuration."""
+
+    default_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
+    thresholds_by_domain = serializers.DictField(
+        required=False,
+        child=serializers.IntegerField(min_value=1, max_value=720),
+    )
+
+
+class RateLimitConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Rate Limit configuration."""
+
+    base_delay = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
+    max_delay = serializers.FloatField(required=False, min_value=1.0, max_value=300.0)
+    jitter_percent = serializers.FloatField(required=False, min_value=0.0, max_value=100.0)
+    default_retry_after = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
+    backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
+
+
+class SecurityConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Security configuration."""
+
+    rate_limit_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    rate_limit_max_requests = serializers.IntegerField(required=False, min_value=1, max_value=10000)
+    temporary_ban_hours = serializers.IntegerField(required=False, min_value=1, max_value=168)
+    permanent_ban_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    suspicious_ip_cache_timeout = serializers.IntegerField(required=False, min_value=60, max_value=604800)
+    injection_ban_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
+    failed_login_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+
+
+class IdempotencyConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Idempotency configuration."""
+
+    default_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    extended_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=86400)
+    short_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=300)
+    clock_skew_tolerance_seconds = serializers.FloatField(required=False, min_value=0.0, max_value=60.0)
+
+
+class NotificationConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Notification configuration."""
+
+    enabled = serializers.BooleanField(required=False)
+    channels = serializers.ListField(
+        required=False,
+        child=serializers.ChoiceField(choices=["email", "slack", "webhook"]),
+    )
+    critical_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    warning_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
+    slack_block_text_limit = serializers.IntegerField(required=False, min_value=100, max_value=10000)
+    description_max_length = serializers.IntegerField(required=False, min_value=50, max_value=5000)
+    action_taken_max_length = serializers.IntegerField(required=False, min_value=50, max_value=1000)
+    title_max_length = serializers.IntegerField(required=False, min_value=20, max_value=500)
+    notification_timeout_seconds = serializers.IntegerField(required=False, min_value=1, max_value=60)
+
+
+class ForensicConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Forensic configuration."""
+
+    error_message_max_length = serializers.IntegerField(required=False, min_value=50, max_value=5000)
+    response_body_max_length = serializers.IntegerField(required=False, min_value=100, max_value=100000)
+    user_agent_max_length = serializers.IntegerField(required=False, min_value=50, max_value=2000)
+
+
+class MetricsConfigSerializer(ApplyStrategyMixin):
+    """Serializer for Metrics configuration."""
+
+    enabled = serializers.BooleanField(required=False)
+    prefix = serializers.CharField(required=False, max_length=50)
+    collection_interval = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    export_prometheus = serializers.BooleanField(required=False)
+
+
+# =============================================================================
+# Pending Change Serializers
+# =============================================================================
+
+
+class PendingConfigChangeSerializer(serializers.Serializer):
+    """Serializer for pending configuration change."""
+
+    id = serializers.CharField(read_only=True)
+    config_type = serializers.CharField(read_only=True)
+    changes = serializers.DictField(read_only=True)
+    strategy = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    created_at = serializers.CharField(read_only=True)
+    scheduled_at = serializers.CharField(read_only=True)
+    applied_at = serializers.CharField(read_only=True, allow_null=True)
+    cancelled_at = serializers.CharField(read_only=True, allow_null=True)
+    previous_values = serializers.DictField(read_only=True)
+
+
+class CancelPendingChangeSerializer(serializers.Serializer):
+    """Serializer for cancelling a pending change."""
+
+    reason = serializers.CharField(required=False, max_length=500)

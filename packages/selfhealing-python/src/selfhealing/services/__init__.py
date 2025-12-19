@@ -189,6 +189,10 @@ from .security_notification_service import (
     notify_security_incident_by_id,
     notify_security_incident,  # Legacy API for incident objects
 )
+from .runtime_config import (
+    RuntimeConfigManager,
+    get_runtime_config_manager,
+)
 from .factory import (
     # Repository factory functions
     create_failed_operation_repository,
@@ -325,6 +329,9 @@ __all__ = [
     "NotificationChannel",
     "get_security_notification_service",
     "notify_security_incident",
+    # Runtime Config (Runtime Configuration API)
+    "RuntimeConfigManager",
+    "get_runtime_config_manager",
     # Factory (for DI and testing)
     "create_failed_operation_repository",
     "create_circuit_breaker_repository",

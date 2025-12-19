@@ -67,6 +67,24 @@ from selfhealing.api.django.views.system_control import (
     DryRunDisableView,
 )
 
+# Runtime Config Views
+from selfhealing.api.django.views.config import (
+    AllConfigView,
+    ResetConfigView,
+    PendingChangesView,
+    CancelPendingChangeView,
+    CircuitBreakerConfigView,
+    DLQConfigView,
+    RetryConfigView,
+    SLAConfigView,
+    RateLimitConfigView,
+    SecurityConfigView,
+    IdempotencyConfigView,
+    NotificationConfigView,
+    ForensicConfigView,
+    MetricsConfigView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -110,6 +128,21 @@ urlpatterns = [
     # Dry Run Mode
     path("system/dry-run/enable/", DryRunEnableView.as_view(), name="dry-run-enable"),
     path("system/dry-run/disable/", DryRunDisableView.as_view(), name="dry-run-disable"),
+    # Runtime Configuration API
+    path("config/", AllConfigView.as_view(), name="config-all"),
+    path("config/reset/", ResetConfigView.as_view(), name="config-reset"),
+    path("config/pending/", PendingChangesView.as_view(), name="config-pending"),
+    path("config/pending/<str:pending_id>/cancel/", CancelPendingChangeView.as_view(), name="config-pending-cancel"),
+    path("config/circuit-breaker/", CircuitBreakerConfigView.as_view(), name="config-circuit-breaker"),
+    path("config/dlq/", DLQConfigView.as_view(), name="config-dlq"),
+    path("config/retry/", RetryConfigView.as_view(), name="config-retry"),
+    path("config/sla/", SLAConfigView.as_view(), name="config-sla"),
+    path("config/rate-limit/", RateLimitConfigView.as_view(), name="config-rate-limit"),
+    path("config/security/", SecurityConfigView.as_view(), name="config-security"),
+    path("config/idempotency/", IdempotencyConfigView.as_view(), name="config-idempotency"),
+    path("config/notification/", NotificationConfigView.as_view(), name="config-notification"),
+    path("config/forensic/", ForensicConfigView.as_view(), name="config-forensic"),
+    path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

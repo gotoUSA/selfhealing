@@ -1,0 +1,11 @@
+{
+  "rate_limit_window_seconds": 120,
+  "rate_limit_max_requests": 100,
+  "temporary_ban_hours": 1,
+  "permanent_ban_threshold": 5,
+  "suspicious_ip_cache_timeout": 86400,
+  "injection_ban_hours": 24,
+  "failed_login_threshold": 5,
+  "suspicious_ip_cache_prefix": "security:suspicious_ip:",
+  "banned_ip_cache_prefix": "security:banned_ip:"
+}
