@@ -9,6 +9,10 @@ Celery 재시도 설정 테스트
 """
 
 import pytest
+
+# 이 파일의 테스트 중 일부는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from celery.exceptions import Retry, SoftTimeLimitExceeded
 from unittest.mock import MagicMock, patch
 

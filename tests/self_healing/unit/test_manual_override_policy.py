@@ -15,6 +15,11 @@ Test Cases:
 - OVER-006: Policy version mismatch fallback
 """
 
+import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from datetime import timedelta
 from decimal import Decimal
 from dataclasses import dataclass, field

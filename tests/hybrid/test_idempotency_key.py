@@ -26,6 +26,11 @@ Concurrency Control:
     - 캐시 기반 멱등성 (프로덕션: Redis)
 """
 
+import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 import threading
 import uuid
 from decimal import Decimal

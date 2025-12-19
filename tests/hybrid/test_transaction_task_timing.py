@@ -19,6 +19,10 @@ Reference:
 """
 
 import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from django.db import transaction
 from unittest.mock import patch, MagicMock, call
 from decimal import Decimal

@@ -5,6 +5,11 @@ Toss 실시간 결제 환경에 최적화된 TTL 설정:
 - Webhook Event: 60초
 """
 
+import pytest
+
+# 이 파일의 모든 테스트는 DB 및 Redis 필요
+pytestmark = [pytest.mark.requires_db, pytest.mark.requires_redis]
+
 from decimal import Decimal
 from unittest.mock import patch
 

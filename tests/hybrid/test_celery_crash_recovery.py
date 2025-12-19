@@ -1,6 +1,10 @@
 """Celery Worker 크래시 복구 테스트"""
 
 import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from celery.exceptions import Retry
 
 from shopping.models.payment import Payment

@@ -15,6 +15,11 @@ Test Cases:
 Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md §10
 """
 
+import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 import random
 import time
 import threading

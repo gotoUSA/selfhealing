@@ -8,6 +8,11 @@ Reference: docs/l3_auto_self_healing/testing/L3_TEST_GAP_REPORT.md
 Risk Covered: R-016 (Double processing on retry without idempotency)
 """
 
+import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 

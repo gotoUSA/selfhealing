@@ -1042,13 +1042,26 @@ def category():
 
 
 # ========================================
-# Admin User Fixture
+# Admin User Fixture (Mock)
 # ========================================
 
+@dataclass
+class MockAdminUser:
+    """Mock admin user for integration tests (no DB required)."""
+    id: int = 1
+    username: str = "test_admin"
+    email: str = "admin@test.com"
+    is_staff: bool = True
+    is_superuser: bool = True
+
+    def __str__(self):
+        return self.username
+
+
 @pytest.fixture
-def admin_user(db):
-    """Create an admin user for audit tests."""
-    return UserFactory(is_staff=True, is_superuser=True)
+def admin_user():
+    """Create a mock admin user for audit tests (no DB dependency)."""
+    return MockAdminUser()
 
 
 # ========================================

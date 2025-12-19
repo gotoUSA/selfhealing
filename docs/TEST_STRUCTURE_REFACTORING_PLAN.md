@@ -1,24 +1,24 @@
 # 테스트 구조 리팩토링 계획
 
 > 작성일: 2025-12-19  
-> 상태: 계획 수립 완료, 1단계 적용 완료
+> 상태: ✅ 전체 완료 (2025-12-19)
 
 ---
 
 ## 📊 현재 상태 분석
 
-### 문제점
+### 문제점 (모두 해결됨 ✅)
 
-1. **테스트 분류 혼란**
-   - `tests/self_healing/unit/` 내 테스트들이 실제로는 DB 필요 (integration 수준)
-   - `load_tests/scenarios/`에 Load + Chaos + Integration 테스트 혼재 (70개+)
-   - `tests/hybrid/` 폴더 목적 불명확
+1. **테스트 분류 혼란** → ✅ 해결
+   - `tests/self_healing/unit/` 내 테스트들이 실제로는 DB 필요 → `requires_db` 마커 추가 완료
+   - `load_tests/scenarios/`에 Load + Chaos + Integration 테스트 혼재 → 4개 하위 폴더로 분류 완료
+   - `tests/hybrid/` 폴더 목적 불명확 → `requires_db` 마커 추가 완료
 
-2. **인프라 의존성 불명확**
-   - 어떤 테스트가 DB/Redis 필요한지 파일 열어봐야 알 수 있음
-   - CI에서 DB 없이 실행하면 129개 에러 발생
+2. **인프라 의존성 불명확** → ✅ 해결
+   - 어떤 테스트가 DB/Redis 필요한지 파일 열어봐야 알 수 있음 → `pytestmark` 추가로 명확화
+   - CI에서 DB 없이 실행하면 129개 에러 발생 → 자동 skip 로직 적용
 
-3. **빈 폴더 및 중복**
+3. **빈 폴더 및 중복** → ✅ 해결
    - `tests/e2e/` 빈 폴더 (삭제 완료 ✅)
    - `tests/_out_of_scope/` 불필요 (삭제 완료 ✅)
    - `tests/self_healing/load/` 빈 폴더 (삭제 완료 ✅)
@@ -71,7 +71,7 @@ myproject/
 - [x] testpaths에 `tests` 추가
 - [x] addopts에 `not e2e and not requires_redis and not requires_db and not flaky` 추가
 
-### 2단계: 자동 Skip 로직 (즉시 적용 가능) 🔄
+### 2단계: 자동 Skip 로직 ✅ 완료
 
 **파일**: `tests/conftest.py`
 
@@ -88,7 +88,7 @@ def check_db_connection():
         pytest.skip("Database not available", allow_module_level=True)
 ```
 
-### 3단계: Unit 테스트 분류 (중간 우선순위)
+### 3단계: Unit 테스트 분류 ✅ 완료
 
 **작업 내용**: `tests/self_healing/unit/` 내 `@pytest.mark.django_db` 사용 파일에 `@pytest.mark.requires_db` 추가
 
@@ -110,7 +110,7 @@ def check_db_connection():
 grep -r "@pytest.mark.django_db" tests/self_healing/unit/ --include="*.py" -l
 ```
 
-### 4단계: Load Test 구조 정리 (낮은 우선순위)
+### 4단계: Load Test 구조 정리 ✅ 완료
 
 **현재**: `load_tests/scenarios/` 74개 파일 혼재
 
@@ -220,7 +220,7 @@ grep -r "@pytest.mark.django_db" tests/self_healing/unit/ --include="*.py" -l
 | 제외 | 1개 |
 | **총계** | **74개** |
 
-### 5단계: Hybrid 폴더 정리 (낮은 우선순위)
+### 5단계: Hybrid 폴더 정리 ✅ 완료
 
 **현재 `tests/hybrid/`** (14개 파일):
 - Celery 관련: `test_celery_*.py` (4개)
@@ -335,6 +335,8 @@ CHAOS_ENABLED=true locust -f load_tests/scenarios/stage6_chaos_random.py \
 - [x] testpaths 업데이트
 - [x] 자동 skip 로직 추가 (conftest.py)
 - [x] unit 테스트 requires_db 마커 추가
+- [x] load_tests/scenarios/ 폴더 구조 정리 (74개 파일 분류 완료)
+- [x] tests/hybrid/ 폴더 requires_db 마커 추가 (14개 파일)
 
 ---
 
@@ -345,8 +347,8 @@ CHAOS_ENABLED=true locust -f load_tests/scenarios/stage6_chaos_random.py \
 | 1단계 | 마커 시스템 | ✅ 완료 | - |
 | 2단계 | 자동 skip | ✅ 완료 | - |
 | 3단계 | Unit 분류 | ✅ 완료 | - |
-| 4단계 | Load Test 정리 (74개 분류 완료) | 낮음 | 1-2시간 (폴더 이동만) |
-| 5단계 | Hybrid 정리 | 낮음 | 1시간 |
+| 4단계 | Load Test 정리 | ✅ 완료 | - |
+| 5단계 | Hybrid 정리 | ✅ 완료 | - |
 
 ---
 

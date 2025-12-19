@@ -10,6 +10,10 @@ Celery Worker Crash 상황에서의 데이터 무결성 및 복구 테스트입�
 """
 
 import pytest
+
+# 이 파일의 모든 테스트는 DB 필요
+pytestmark = pytest.mark.requires_db
+
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from django.db import transaction
