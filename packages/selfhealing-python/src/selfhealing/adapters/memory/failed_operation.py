@@ -37,8 +37,9 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         failure_type: str,
         error_message: str = "",
         error_code: str = "",
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        entity_refs: Optional[dict[str, Any]] = None,
         user_id: Optional[int] = None,
         snapshot_data: Optional[dict[str, Any]] = None,
         request_data: Optional[dict[str, Any]] = None,
@@ -48,16 +49,27 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         max_retries: int = 2,
         next_action_hint: str = "",
         recommended_action: str = "",
+        # Legacy compatibility - will be converted to entity_refs
+        order_id: Optional[int] = None,
+        payment_id: Optional[int] = None,
     ) -> FailedOperationData:
         """Create a new failed operation record."""
+        # Build entity_refs from legacy fields if not provided
+        refs = entity_refs or {}
+        if order_id is not None:
+            refs["order_id"] = order_id
+        if payment_id is not None:
+            refs["payment_id"] = payment_id
+
         with self._lock:
             entry = FailedOperationData(
                 id=self._next_id,
                 domain=domain,
                 failure_type=failure_type,
                 status=FailedOperationStatus.PENDING.value,
-                order_id=order_id,
-                payment_id=payment_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                entity_refs=refs,
                 user_id=user_id,
                 snapshot_data=snapshot_data or {},
                 error_code=error_code,
@@ -75,6 +87,37 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             self._storage[self._next_id] = entry
             self._next_id += 1
             return entry
+
+    def _copy_with_updates(self, entry: FailedOperationData, **updates) -> FailedOperationData:
+        """Create a copy of entry with specified field updates."""
+        return FailedOperationData(
+            id=updates.get("id", entry.id),
+            domain=updates.get("domain", entry.domain),
+            failure_type=updates.get("failure_type", entry.failure_type),
+            status=updates.get("status", entry.status),
+            entity_type=updates.get("entity_type", entry.entity_type),
+            entity_id=updates.get("entity_id", entry.entity_id),
+            entity_refs=updates.get("entity_refs", entry.entity_refs),
+            user_id=updates.get("user_id", entry.user_id),
+            snapshot_data=updates.get("snapshot_data", entry.snapshot_data),
+            error_code=updates.get("error_code", entry.error_code),
+            error_message=updates.get("error_message", entry.error_message),
+            retry_count=updates.get("retry_count", entry.retry_count),
+            max_retries=updates.get("max_retries", entry.max_retries),
+            last_retry_at=updates.get("last_retry_at", entry.last_retry_at),
+            request_data=updates.get("request_data", entry.request_data),
+            response_data=updates.get("response_data", entry.response_data),
+            metadata=updates.get("metadata", entry.metadata),
+            resolved_at=updates.get("resolved_at", entry.resolved_at),
+            resolved_by_id=updates.get("resolved_by_id", entry.resolved_by_id),
+            resolution_type=updates.get("resolution_type", entry.resolution_type),
+            resolution_note=updates.get("resolution_note", entry.resolution_note),
+            next_action_hint=updates.get("next_action_hint", entry.next_action_hint),
+            recommended_action=updates.get("recommended_action", entry.recommended_action),
+            created_at=updates.get("created_at", entry.created_at),
+            updated_at=updates.get("updated_at", _now()),
+            expires_at=updates.get("expires_at", entry.expires_at),
+        )
 
     def get_by_id(self, id: int) -> Optional[FailedOperationData]:
         """Get a failed operation by ID."""
@@ -120,33 +163,13 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             if entry is None:
                 return False
 
-            # Create a new entry with updated fields
-            updated = FailedOperationData(
-                id=entry.id,
-                domain=entry.domain,
-                failure_type=entry.failure_type,
+            updated = self._copy_with_updates(
+                entry,
                 status=status,
-                order_id=entry.order_id,
-                payment_id=entry.payment_id,
-                user_id=entry.user_id,
-                snapshot_data=entry.snapshot_data,
-                error_code=entry.error_code,
-                error_message=entry.error_message,
-                retry_count=entry.retry_count,
-                max_retries=entry.max_retries,
-                last_retry_at=entry.last_retry_at,
-                request_data=entry.request_data,
-                response_data=entry.response_data,
-                metadata=entry.metadata,
                 resolved_at=_now() if status == FailedOperationStatus.RESOLVED.value else entry.resolved_at,
                 resolved_by_id=resolved_by_id or entry.resolved_by_id,
                 resolution_type=resolution_type or entry.resolution_type,
                 resolution_note=resolution_note or entry.resolution_note,
-                next_action_hint=entry.next_action_hint,
-                recommended_action=entry.recommended_action,
-                created_at=entry.created_at,
-                updated_at=_now(),
-                expires_at=entry.expires_at,
             )
             self._storage[id] = updated
             return True
@@ -158,32 +181,10 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             if entry is None:
                 return False
 
-            updated = FailedOperationData(
-                id=entry.id,
-                domain=entry.domain,
-                failure_type=entry.failure_type,
-                status=entry.status,
-                order_id=entry.order_id,
-                payment_id=entry.payment_id,
-                user_id=entry.user_id,
-                snapshot_data=entry.snapshot_data,
-                error_code=entry.error_code,
-                error_message=entry.error_message,
+            updated = self._copy_with_updates(
+                entry,
                 retry_count=entry.retry_count + 1,
-                max_retries=entry.max_retries,
                 last_retry_at=_now(),
-                request_data=entry.request_data,
-                response_data=entry.response_data,
-                metadata=entry.metadata,
-                resolved_at=entry.resolved_at,
-                resolved_by_id=entry.resolved_by_id,
-                resolution_type=entry.resolution_type,
-                resolution_note=entry.resolution_note,
-                next_action_hint=entry.next_action_hint,
-                recommended_action=entry.recommended_action,
-                created_at=entry.created_at,
-                updated_at=_now(),
-                expires_at=entry.expires_at,
             )
             self._storage[id] = updated
             return True
@@ -325,32 +326,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                 return None
 
             # Atomically update
-            updated = FailedOperationData(
-                id=entry.id,
-                domain=entry.domain,
-                failure_type=entry.failure_type,
+            updated = self._copy_with_updates(
+                entry,
                 status="replaying",
-                order_id=entry.order_id,
-                payment_id=entry.payment_id,
-                user_id=entry.user_id,
-                snapshot_data=entry.snapshot_data,
-                error_code=entry.error_code,
-                error_message=entry.error_message,
                 retry_count=entry.retry_count + 1,
-                max_retries=entry.max_retries,
                 last_retry_at=_now(),
-                request_data=entry.request_data,
-                response_data=entry.response_data,
-                metadata=entry.metadata,
-                resolved_at=entry.resolved_at,
-                resolved_by_id=entry.resolved_by_id,
-                resolution_type=entry.resolution_type,
-                resolution_note=entry.resolution_note,
-                next_action_hint=entry.next_action_hint,
-                recommended_action=entry.recommended_action,
-                created_at=entry.created_at,
-                updated_at=_now(),
-                expires_at=entry.expires_at,
             )
             self._storage[id] = updated
             return updated
@@ -378,32 +358,15 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                 new_status = FailedOperationStatus.PENDING.value
                 resolved_at = entry.resolved_at
 
-            updated = FailedOperationData(
-                id=entry.id,
-                domain=entry.domain,
-                failure_type=entry.failure_type,
+            updated = self._copy_with_updates(
+                entry,
                 status=new_status,
-                order_id=entry.order_id,
-                payment_id=entry.payment_id,
-                user_id=entry.user_id,
-                snapshot_data=entry.snapshot_data,
-                error_code=entry.error_code,
                 error_message=note or entry.error_message,
-                retry_count=entry.retry_count,
-                max_retries=entry.max_retries,
-                last_retry_at=entry.last_retry_at,
-                request_data=entry.request_data,
-                response_data=entry.response_data,
                 metadata={**(entry.metadata or {}), **(error_details or {})},
                 resolved_at=resolved_at,
                 resolved_by_id=resolved_by_id or entry.resolved_by_id,
                 resolution_type=resolution_type or entry.resolution_type,
                 resolution_note=note or entry.resolution_note,
-                next_action_hint=entry.next_action_hint,
-                recommended_action=entry.recommended_action,
-                created_at=entry.created_at,
-                updated_at=_now(),
-                expires_at=entry.expires_at,
             )
             self._storage[id] = updated
             return True
@@ -419,32 +382,9 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         with self._lock:
             for id, entry in list(self._storage.items()):
                 if entry.status == "replaying" and entry.last_retry_at and entry.last_retry_at < cutoff:
-                    updated = FailedOperationData(
-                        id=entry.id,
-                        domain=entry.domain,
-                        failure_type=entry.failure_type,
+                    updated = self._copy_with_updates(
+                        entry,
                         status=FailedOperationStatus.PENDING.value,
-                        order_id=entry.order_id,
-                        payment_id=entry.payment_id,
-                        user_id=entry.user_id,
-                        snapshot_data=entry.snapshot_data,
-                        error_code=entry.error_code,
-                        error_message=entry.error_message,
-                        retry_count=entry.retry_count,
-                        max_retries=entry.max_retries,
-                        last_retry_at=entry.last_retry_at,
-                        request_data=entry.request_data,
-                        response_data=entry.response_data,
-                        metadata=entry.metadata,
-                        resolved_at=entry.resolved_at,
-                        resolved_by_id=entry.resolved_by_id,
-                        resolution_type=entry.resolution_type,
-                        resolution_note=entry.resolution_note,
-                        next_action_hint=entry.next_action_hint,
-                        recommended_action=entry.recommended_action,
-                        created_at=entry.created_at,
-                        updated_at=_now(),
-                        expires_at=entry.expires_at,
                     )
                     self._storage[id] = updated
                     released += 1
@@ -472,37 +412,52 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         with self._lock:
             for id, entry in list(self._storage.items()):
                 if entry.status == FailedOperationStatus.RESOLVED.value and entry.resolved_at and entry.resolved_at < cutoff:
-                    updated = FailedOperationData(
-                        id=entry.id,
-                        domain=entry.domain,
-                        failure_type=entry.failure_type,
+                    updated = self._copy_with_updates(
+                        entry,
                         status=FailedOperationStatus.ARCHIVED.value,
-                        order_id=entry.order_id,
-                        payment_id=entry.payment_id,
-                        user_id=entry.user_id,
-                        snapshot_data=entry.snapshot_data,
-                        error_code=entry.error_code,
-                        error_message=entry.error_message,
-                        retry_count=entry.retry_count,
-                        max_retries=entry.max_retries,
-                        last_retry_at=entry.last_retry_at,
-                        request_data=entry.request_data,
-                        response_data=entry.response_data,
-                        metadata=entry.metadata,
-                        resolved_at=entry.resolved_at,
-                        resolved_by_id=entry.resolved_by_id,
-                        resolution_type=entry.resolution_type,
-                        resolution_note=entry.resolution_note,
-                        next_action_hint=entry.next_action_hint,
-                        recommended_action=entry.recommended_action,
-                        created_at=entry.created_at,
-                        updated_at=_now(),
-                        expires_at=entry.expires_at,
                     )
                     self._storage[id] = updated
                     archived_count += 1
 
         return archived_count
+
+    def _purge_by_ids(self, ids: list[int]) -> int:
+        """Purge specific archived entries by ID. Must be called with lock held."""
+        purged_count = 0
+        for id in ids:
+            entry = self._storage.get(id)
+            if entry and entry.status == FailedOperationStatus.ARCHIVED.value:
+                del self._storage[id]
+                purged_count += 1
+            elif entry:
+                raise ValueError(
+                    f"Entry {id} is not archived (status: {entry.status}). "
+                    "Only archived entries can be purged."
+                )
+        return purged_count
+
+    def _purge_older_than(self, older_than_days: int) -> int:
+        """Purge archived entries older than N days. Must be called with lock held."""
+        cutoff = _now() - timedelta(days=older_than_days)
+        to_delete = [
+            id for id, entry in self._storage.items()
+            if entry.status == FailedOperationStatus.ARCHIVED.value
+            and entry.updated_at
+            and entry.updated_at < cutoff
+        ]
+        for id in to_delete:
+            del self._storage[id]
+        return len(to_delete)
+
+    def _purge_all_archived(self) -> int:
+        """Purge all archived entries. Must be called with lock held."""
+        to_delete = [
+            id for id, entry in self._storage.items()
+            if entry.status == FailedOperationStatus.ARCHIVED.value
+        ]
+        for id in to_delete:
+            del self._storage[id]
+        return len(to_delete)
 
     def purge_archived(
         self,
@@ -513,38 +468,13 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         if ids is not None and older_than_days is not None:
             raise ValueError("Specify either ids or older_than_days, not both")
 
-        purged_count = 0
-
         with self._lock:
             if ids is not None:
-                # Purge specific IDs (must be ARCHIVED)
-                for id in ids:
-                    entry = self._storage.get(id)
-                    if entry and entry.status == FailedOperationStatus.ARCHIVED.value:
-                        del self._storage[id]
-                        purged_count += 1
-                    elif entry:
-                        raise ValueError(
-                            f"Entry {id} is not archived (status: {entry.status}). " "Only archived entries can be purged."
-                        )
+                return self._purge_by_ids(ids)
             elif older_than_days is not None:
-                # Purge archived entries older than N days
-                cutoff = _now() - timedelta(days=older_than_days)
-                to_delete = []
-                for id, entry in self._storage.items():
-                    if entry.status == FailedOperationStatus.ARCHIVED.value and entry.updated_at and entry.updated_at < cutoff:
-                        to_delete.append(id)
-                for id in to_delete:
-                    del self._storage[id]
-                    purged_count += 1
+                return self._purge_older_than(older_than_days)
             else:
-                # Purge all archived entries
-                to_delete = [id for id, entry in self._storage.items() if entry.status == FailedOperationStatus.ARCHIVED.value]
-                for id in to_delete:
-                    del self._storage[id]
-                    purged_count += 1
-
-        return purged_count
+                return self._purge_all_archived()
 
     def get_cleanup_stats(self) -> dict[str, Any]:
         """Get statistics for cleanup operations."""

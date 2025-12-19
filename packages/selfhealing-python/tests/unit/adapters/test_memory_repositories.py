@@ -47,8 +47,9 @@ class TestInMemoryFailedOperationRepository:
         assert entry.failure_type == "gateway_timeout"
         assert entry.error_message == "Connection timeout to payment gateway"
         assert entry.error_code == "TIMEOUT_001"
-        assert entry.order_id == 12345
-        assert entry.payment_id == 67890
+        # Legacy fields are now stored in entity_refs
+        assert entry.entity_refs.get("order_id") == 12345
+        assert entry.entity_refs.get("payment_id") == 67890
         assert entry.user_id == 100
         assert entry.status == FailedOperationStatus.PENDING.value
         assert entry.created_at is not None

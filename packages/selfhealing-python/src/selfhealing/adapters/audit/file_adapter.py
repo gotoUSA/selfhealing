@@ -73,6 +73,68 @@ class FileAuditLogAdapter(AuditLogAdapter):
         except Exception as e:
             logger.error(f"[FileAuditLogAdapter] Failed to write audit log: {e}")
 
+    def _get_log_files(self) -> list[Path]:
+        """Get list of log files sorted by modification time (newest first)."""
+        if self.rotate_daily:
+            pattern = f"{self.base_path.stem}_*{self.base_path.suffix}"
+            log_files = list(self.base_path.parent.glob(pattern))
+        else:
+            log_files = [self.base_path] if self.base_path.exists() else []
+
+        log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return log_files
+
+    def _entry_matches_filters(
+        self,
+        entry: AuditEntry,
+        action: Optional[AuditAction | str],
+        target_type: Optional[str],
+        target_id: Optional[str],
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+    ) -> bool:
+        """Check if entry matches all provided filters."""
+        if action and self._get_action_value(entry.action) != self._get_action_value(action):
+            return False
+        if target_type and entry.target_type != target_type:
+            return False
+        if target_id and entry.target_id != target_id:
+            return False
+        if start_time and entry.timestamp < start_time:
+            return False
+        if end_time and entry.timestamp > end_time:
+            return False
+        return True
+
+    def _parse_entries_from_file(
+        self,
+        log_file: Path,
+        action: Optional[AuditAction | str],
+        target_type: Optional[str],
+        target_id: Optional[str],
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+        limit: int,
+        current_count: int,
+    ) -> list[AuditEntry]:
+        """Parse and filter entries from a single log file."""
+        entries: list[AuditEntry] = []
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if current_count + len(entries) >= limit:
+                        break
+                    try:
+                        data = json.loads(line.strip())
+                        entry = self._dict_to_entry(data)
+                        if self._entry_matches_filters(entry, action, target_type, target_id, start_time, end_time):
+                            entries.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logger.warning(f"[FileAuditLogAdapter] Error reading {log_file}: {e}")
+        return entries
+
     def query(
         self,
         action: Optional[AuditAction | str] = None,
@@ -89,52 +151,17 @@ class FileAuditLogAdapter(AuditLogAdapter):
         For production use with large volumes, consider a database adapter.
         """
         entries: list[AuditEntry] = []
-
-        # Find all log files
-        if self.rotate_daily:
-            pattern = f"{self.base_path.stem}_*{self.base_path.suffix}"
-            log_files = list(self.base_path.parent.glob(pattern))
-        else:
-            log_files = [self.base_path] if self.base_path.exists() else []
-
-        # Sort by modification time (newest first)
-        log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        log_files = self._get_log_files()
 
         for log_file in log_files:
             if len(entries) >= limit:
                 break
+            file_entries = self._parse_entries_from_file(
+                log_file, action, target_type, target_id, start_time, end_time, limit, len(entries)
+            )
+            entries.extend(file_entries)
 
-            try:
-                with open(log_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        if len(entries) >= limit:
-                            break
-
-                        try:
-                            data = json.loads(line.strip())
-                            entry = self._dict_to_entry(data)
-
-                            # Apply filters
-                            if action and self._get_action_value(entry.action) != self._get_action_value(action):
-                                continue
-                            if target_type and entry.target_type != target_type:
-                                continue
-                            if target_id and entry.target_id != target_id:
-                                continue
-                            if start_time and entry.timestamp < start_time:
-                                continue
-                            if end_time and entry.timestamp > end_time:
-                                continue
-
-                            entries.append(entry)
-
-                        except json.JSONDecodeError:
-                            continue
-
-            except Exception as e:
-                logger.warning(f"[FileAuditLogAdapter] Error reading {log_file}: {e}")
-
-        return entries
+        return entries[:limit]
 
     def _get_action_value(self, action: AuditAction | str) -> str:
         """Get string value of action."""
