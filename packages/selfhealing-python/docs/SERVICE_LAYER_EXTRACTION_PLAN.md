@@ -10,8 +10,8 @@
 | 파일 | 현재 상태 | 우선순위 | 권장 서비스 |
 |------|-----------|----------|-------------|
 | `views/circuit_breaker.py` | ✅ 이미 분리됨 | 낮음 | 파일 분리만 필요 |
-| `views/dashboard.py` | ⚠️ **분리 필요** | 🔴 높음 | `DashboardService` |
-| `views/dlq.py` | ⚠️ **분리 필요** | 🔴 높음 | `DLQService` |
+| `views/dashboard.py` | ✅ **분리 완료** | ✅ 완료 | `DashboardService` |
+| `views/dlq.py` | ✅ **분리 완료** | ✅ 완료 | `DLQService` |
 | `views/health.py` | ⚠️ 부분 분리 필요 | 🟡 중간 | `HealthCheckService` |
 | `views/system_control.py` | ✅ 이미 분리됨 | 낮음 | 파일 분리만 필요 |
 | `views/config.py` | ✅ 이미 분리됨 | - | RuntimeConfigManager 사용 중 |
@@ -221,13 +221,15 @@ class DashboardService:
 ```
 services/
 ├── __init__.py
-├── circuit_breaker.py      # Phase 4 - CircuitBreakerManager 이동
-├── dashboard.py            # Phase 2 - NEW
-├── dlq.py                  # Phase 1 - NEW
-├── health_check.py         # Phase 3 - NEW
-├── pending_config.py       # 기존 (Config API)
-├── runtime_config.py       # 기존 (Config API)
-└── system_control.py       # Phase 4 - SystemControlService 이동
+├── circuit_breaker.py          # Phase 4 - CircuitBreakerManager 이동
+├── circuit_breaker_service.py  # 기존
+├── control_api_service.py      # 기존
+├── dashboard_service.py        # Phase 2 - ✅ 완료
+├── dlq_service.py              # Phase 1 - ✅ 완료 (기존 파일 확장)
+├── health_check.py             # Phase 3 - NEW
+├── pending_config.py           # 기존 (Config API)
+├── runtime_config.py           # 기존 (Config API)
+└── system_control.py           # Phase 4 - SystemControlService 이동
 ```
 
 ---
@@ -248,14 +250,26 @@ services/
   - `resolve_entry(pk, notes)` - 수동 해결 처리
   - `create_test_entry(**kwargs)` - 테스트용 항목 생성
 - [x] `views/dlq.py`에서 DLQService 사용하도록 리팩토링
-- [ ] 테스트 작성/수정
+- [x] 테스트 작성/수정 (24개 단위 테스트)
 
-### Phase 2: DashboardService
-- [ ] `services/dashboard.py` 파일 생성
-- [ ] DashboardSummary 데이터클래스 정의
-- [ ] DashboardService 클래스 구현
-- [ ] `views/dashboard.py`에서 DashboardService 사용하도록 리팩토링
-- [ ] 테스트 작성/수정
+### Phase 2: DashboardService ✅ 완료 (2025-12-19)
+- [x] `services/dashboard_service.py` 파일 생성
+- [x] 데이터클래스 정의:
+  - StatusCounts: 상태별 카운트
+  - RecentActivity: 최근 활동 통계
+  - Distribution: 도메인/실패유형별 분포
+  - AlertInfo: 알림 정보
+  - DashboardSummary: 전체 대시보드 요약
+- [x] DashboardService 클래스 구현:
+  - `get_summary()` - 대시보드 전체 요약
+  - `get_status_counts()` - 상태별 카운트
+  - `get_recent_activity(hours, days)` - 최근 활동 통계
+  - `get_distribution(limit)` - 도메인/실패유형별 분포
+  - `get_alerts(high_retry_threshold)` - 알림 정보
+  - `calculate_resolution_rate()` - 해결율 계산
+  - `determine_health_status(pending, failed)` - 헬스 상태 판단
+- [x] `views/dashboard.py`에서 DashboardService 사용하도록 리팩토링
+- [x] 테스트 작성/수정 (26개 단위 테스트)
 
 ### Phase 3: HealthCheckService
 - [ ] `services/health_check.py` 파일 생성
