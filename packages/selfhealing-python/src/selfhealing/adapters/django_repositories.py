@@ -12,25 +12,18 @@ Design:
 
 Reference: docs/SELF_HEALING_EXTRACTION_PLAN.md Phase 1.2
 
-NOTE: This file has been refactored. Implementations are now in:
-    - selfhealing.adapters.django_repos.failed_operation
-    - selfhealing.adapters.django_repos.circuit_breaker
-    - selfhealing.adapters.django_repos.security_incident
-    - selfhealing.adapters.django_repos.rate_limit
-
-This file re-exports all classes for backward compatibility.
+NOTE: This file re-exports classes from the django adapter module
+for backward compatibility.
 """
 
-from selfhealing.adapters.django_repos import (
+from selfhealing.adapters.django.repositories import (
     DjangoFailedOperationRepository,
     DjangoCircuitBreakerStateRepository,
     DjangoSecurityIncidentRepository,
-    DjangoRateLimitStateRepository,
 )
 
 __all__ = [
     "DjangoFailedOperationRepository",
     "DjangoCircuitBreakerStateRepository",
     "DjangoSecurityIncidentRepository",
-    "DjangoRateLimitStateRepository",
 ]

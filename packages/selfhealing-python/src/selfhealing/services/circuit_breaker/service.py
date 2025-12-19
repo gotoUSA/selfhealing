@@ -47,21 +47,21 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Force open (block requests)
         result = service.force_open(
-            service_name="toss_payment",
-            reason="PG maintenance window",
+            service_name="external_api",
+            reason="External service maintenance",
             controlled_by=admin_user
         )
 
         # Force close (allow requests)
         result = service.force_close(
-            service_name="toss_payment",
-            reason="PG recovered",
+            service_name="external_api",
+            reason="Service recovered",
             controlled_by=admin_user,
             trigger_replay=True
         )
 
         # Check if requests should be allowed
-        if service.should_allow("toss_payment"):
+        if service.should_allow("external_api"):
             # proceed with request
 
     For testing with mock repository:

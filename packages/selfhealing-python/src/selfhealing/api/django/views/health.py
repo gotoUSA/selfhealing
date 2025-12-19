@@ -25,13 +25,9 @@ logger = logging.getLogger(__name__)
 
 def _get_circuit_breaker_model():
     """Lazy import CircuitBreakerState model."""
-    try:
-        from shopping.models import CircuitBreakerState
-        return CircuitBreakerState
-    except ImportError:
-        # Fallback to selfhealing package model
-        from selfhealing.adapters.django.models import CircuitBreakerState
-        return CircuitBreakerState
+    from selfhealing.adapters.django.models import CircuitBreakerState
+
+    return CircuitBreakerState
 
 
 class SelfHealingHealthView(APIView):

@@ -181,7 +181,7 @@ def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffCa
 
 
 # =============================================================================
-# Legacy compatible classes (for migration from shopping project)
+# Legacy compatible classes (for migration from older projects)
 # =============================================================================
 
 
@@ -190,7 +190,7 @@ class BackoffConfig:
     """
     Configuration for exponential backoff calculation.
 
-    Compatible with shopping project's BackoffConfig for migration.
+    Compatible with older project BackoffConfig for migration.
     """
 
     base: int = 4  # Base for exponential (4^n seconds)
@@ -201,7 +201,7 @@ class BackoffConfig:
 
 class LegacyBackoffCalculator:
     """
-    Legacy backoff calculator compatible with shopping project.
+    Legacy backoff calculator for migration compatibility.
 
     Uses BackoffConfig for configuration.
     """

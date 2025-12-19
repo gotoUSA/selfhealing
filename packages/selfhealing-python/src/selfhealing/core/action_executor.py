@@ -12,8 +12,8 @@ Usage:
     result = executor.execute(
         Action(
             name="force_open_circuit",
-            target="toss_payment",
-            params={"reason": "PG maintenance"},
+            target="external_api",
+            params={"reason": "Service maintenance"},
             execute_fn=lambda: repository.atomic_force_open(...),
         )
     )

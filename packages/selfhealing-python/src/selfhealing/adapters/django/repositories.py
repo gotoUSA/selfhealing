@@ -40,22 +40,8 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         """
         Lazy import to avoid circular dependencies.
 
-        Model Resolution Strategy:
-        1. First tries shopping app model (for integrated deployments where
-           shopping app coexists with selfhealing package)
-        2. Falls back to selfhealing's own model (for standalone deployments)
-
-        This dual-resolution allows the same codebase to work in both scenarios
-        without requiring separate package versions or configurations.
+        Uses selfhealing's own Django model for standalone deployments.
         """
-        # Try shopping app model first (for Django projects using shopping app)
-        try:
-            from shopping.models.failed_operation import FailedOperation
-
-            return FailedOperation
-        except ImportError:
-            pass
-        # Fall back to selfhealing package model (standalone deployment)
         from selfhealing.adapters.django.models import FailedOperation
 
         return FailedOperation
@@ -354,14 +340,6 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
     def _get_model(self):
         """Lazy import to avoid circular dependencies."""
-        # Try shopping app model first (for Django projects using shopping app)
-        try:
-            from shopping.models.failed_payment import CircuitBreakerState
-
-            return CircuitBreakerState
-        except ImportError:
-            pass
-        # Fall back to selfhealing package model
         from selfhealing.adapters.django.models import CircuitBreakerState
 
         return CircuitBreakerState
@@ -729,14 +707,6 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
 
     def _get_model(self):
         """Lazy import to avoid circular dependencies."""
-        # Try shopping app model first (for Django projects using shopping app)
-        try:
-            from shopping.models.security_incident import SecurityIncident
-
-            return SecurityIncident
-        except ImportError:
-            pass
-        # Fall back to selfhealing package model
         from selfhealing.adapters.django.models import SecurityIncident
 
         return SecurityIncident

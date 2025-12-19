@@ -11,10 +11,6 @@ Available Adapters:
         - DjangoCircuitBreakerStateRepository
         - DjangoSecurityIncidentRepository
 
-    Payment Adapters:
-        - PaymentProviderAdapter (Base for payment integrations)
-        - MockPaymentAdapter (Testing)
-
     Cache Adapters:
         - RedisCacheAdapter (Redis)
         - InMemoryCacheAdapter (Testing)
@@ -29,9 +25,6 @@ Usage:
         DjangoFailedOperationRepository,
         DjangoCircuitBreakerStateRepository,
         DjangoSecurityIncidentRepository,
-        # Payments
-        TossPaymentAdapter,
-        MockPaymentAdapter,
         # Cache
         RedisCacheAdapter,
         InMemoryCacheAdapter,
@@ -50,14 +43,6 @@ from selfhealing.adapters.django_repositories import (
     DjangoFailedOperationRepository,
     DjangoCircuitBreakerStateRepository,
     DjangoSecurityIncidentRepository,
-)
-
-# =============================================================================
-# Payment Adapters (Phase 2)
-# =============================================================================
-from selfhealing.adapters.payments import (
-    TossPaymentAdapter,
-    MockPaymentAdapter,
 )
 
 # =============================================================================
@@ -109,11 +94,6 @@ __all__ = [
     "DjangoFailedOperationRepository",
     "DjangoCircuitBreakerStateRepository",
     "DjangoSecurityIncidentRepository",
-    # =========================================================================
-    # Payment Adapters
-    # =========================================================================
-    "TossPaymentAdapter",
-    "MockPaymentAdapter",
     # =========================================================================
     # Cache Adapters
     # =========================================================================

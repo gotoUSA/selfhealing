@@ -2,7 +2,6 @@
 Prometheus metrics for the self-healing system.
 
 This module provides Prometheus metric definitions and collection utilities.
-Mirrors the metric structure from the original shopping app metrics.py.
 """
 
 from typing import Optional, Dict, Any

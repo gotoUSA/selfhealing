@@ -95,7 +95,7 @@ _DEFAULT_DOMAINS: list[str] = [
 def register_domain(domain: str) -> None:
     """
     Register a domain for metrics collection.
-    
+
     Call this from adapters to register application-specific domains.
     Example: register_domain("payment"), register_domain("order")
     """
@@ -339,7 +339,7 @@ def record_circuit_breaker_state_change(
     Record a circuit breaker state transition.
 
     Args:
-        service: Service name (e.g., toss_payment)
+        service: Service name (e.g., external_gateway)
         from_state: Previous state
         to_state: New state
     """

@@ -147,14 +147,12 @@ class DefaultReplayHandler(ReplayHandler):
 # =============================================================================
 # Domain-Specific Handlers (MOVED TO ADAPTER LAYER)
 # =============================================================================
-# NOTE: Domain-specific handlers (PaymentReplayHandler, PointReplayHandler,
-# WebhookReplayHandler) have been moved to the adapter layer.
+# NOTE: Domain-specific handlers have been moved to the adapter layer.
 #
-# For shopping/Django projects, import from:
-#   from shopping.services.self_healing.replay_handlers import (
-#       PaymentReplayHandler,
-#       PointReplayHandler,
-#       WebhookReplayHandler,
+# For Django projects, create your own handlers:
+#   from myapp.services.self_healing.replay_handlers import (
+#       OrderReplayHandler,
+#       NotificationReplayHandler,
 #   )
 #
 # Or register your own handlers:
@@ -209,10 +207,10 @@ def get_replay_handler(domain: str) -> ReplayHandler:
 
 # NOTE: No default handlers registered in core package.
 # Domain-specific handlers should be registered by the adapter layer.
-# Example (in shopping adapter):
+# Example (in your adapter):
 #   from selfhealing.services.replay_service import register_replay_handler
-#   from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
-#   register_replay_handler(PaymentReplayHandler())
+#   from myapp.services.replay_handlers import OrderReplayHandler
+#   register_replay_handler(OrderReplayHandler())
 
 
 # =============================================================================

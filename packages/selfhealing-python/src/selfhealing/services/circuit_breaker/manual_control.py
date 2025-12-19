@@ -78,8 +78,7 @@ class ManualControlMixin:
 
         # 행동 직전 로깅 - Circuit Breaker OPEN 전에 기록
         logger.info(
-            f"[CircuitBreaker] FORCE_OPEN service={service_name}, "
-            f"reason={reason}, controlled_by_id={controlled_by_id}"
+            f"[CircuitBreaker] FORCE_OPEN service={service_name}, " f"reason={reason}, controlled_by_id={controlled_by_id}"
         )
 
         try:
@@ -305,16 +304,8 @@ class ManualControlMixin:
                         service_name=state.service_name,
                         state=CircuitState.HALF_OPEN,
                     )
-                    # Update control_reason separately since update_state doesn't support it
-                    # We use a direct model update for this
-                    try:
-                        from shopping.models.failed_payment import CircuitBreakerState
-
-                        CircuitBreakerState.objects.filter(service_name=state.service_name).update(
-                            control_reason=expired_reason
-                        )
-                    except ImportError:
-                        pass  # Running without Django models
+                    # Note: If you need to update control_reason,
+                    # implement it in your repository adapter
 
                     self.repository.clear_manual_control(state.service_name, preserve_reason=True)
 

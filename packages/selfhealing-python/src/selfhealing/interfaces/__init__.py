@@ -3,9 +3,8 @@ Self-Healing Interfaces Module
 
 Abstract interfaces for the pluggable self-healing architecture.
 These interfaces decouple the self-healing core logic from external
-dependencies (Django, Redis, Celery, payment providers), enabling:
+dependencies (Django, Redis, Celery, etc.), enabling:
 - Framework migration (Django -> FastAPI, Flask)
-- Payment provider switching (Toss -> Stripe, Iamport)
 - Cache backend switching (Redis -> Memcached, DynamoDB)
 - Task queue switching (Celery -> RQ, Dramatiq)
 
@@ -15,10 +14,6 @@ Usage:
         FailedOperationRepository,
         CircuitBreakerStateRepository,
         SecurityIncidentRepository,
-        # Payment provider interface
-        PaymentProviderInterface,
-        PaymentConfirmResult,
-        PaymentCancelResult,
         # Cache provider interface
         CacheProviderInterface,
         DistributedLock,
@@ -54,19 +49,6 @@ from selfhealing.interfaces.repositories import (
     FailedOperationRepository,
     CircuitBreakerStateRepository,
     SecurityIncidentRepository,
-)
-
-# =============================================================================
-# Payment Provider Interface (Phase 1)
-# =============================================================================
-from selfhealing.interfaces.payment_provider import (
-    # DTOs
-    PaymentConfirmResult,
-    PaymentCancelResult,
-    WebhookVerifyResult,
-    PaymentStatusResult,
-    # Interface
-    PaymentProviderInterface,
 )
 
 # =============================================================================
@@ -194,16 +176,6 @@ __all__ = [
     "FailedOperationRepository",
     "CircuitBreakerStateRepository",
     "SecurityIncidentRepository",
-    # =========================================================================
-    # Payment Provider Interface
-    # =========================================================================
-    # DTOs
-    "PaymentConfirmResult",
-    "PaymentCancelResult",
-    "WebhookVerifyResult",
-    "PaymentStatusResult",
-    # Interface
-    "PaymentProviderInterface",
     # =========================================================================
     # Cache Provider Interface
     # =========================================================================

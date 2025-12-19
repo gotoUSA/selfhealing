@@ -134,7 +134,7 @@ def _extract_domain_from_task_name(task_name: str) -> str:
 
     Priority:
     1. Explicit mapping in SELFHEALING_TASK_DOMAIN_MAPPING
-    2. Task name pattern matching (e.g., 'shopping.tasks.process_payment' -> 'payment')
+    2. Task name pattern matching (e.g., 'myapp.tasks.process_order' -> 'order')
     3. First segment of task name
     """
     # Check explicit mapping first
@@ -182,15 +182,15 @@ def _extract_service_name(task_name: str, exception: Optional[Exception] = None)
     if exception:
         # Check for common external service indicators in exception
         exc_str = str(exception).lower()
-        
+
         # Use configurable patterns or defaults
-        service_patterns = getattr(_config, 'service_name_patterns', None) or {
+        service_patterns = getattr(_config, "service_name_patterns", None) or {
             "redis": ["redis"],
             "external_timeout": ["timeout"],
             "external_connection": ["connection"],
             "payment_gateway": ["pg", "payment", "gateway"],
         }
-        
+
         for service_name, keywords in service_patterns.items():
             if any(keyword in exc_str for keyword in keywords):
                 return service_name
@@ -457,7 +457,7 @@ def _store_to_dlq(
         # Extract entity references generically
         entity_type = entity_refs.get("entity_type", "")
         entity_id = entity_refs.get("entity_id", "")
-        
+
         result = store_to_dlq(
             domain=domain,
             failure_type=failure_type,
@@ -501,10 +501,7 @@ def _classify_failure_type(exception: Exception) -> str:
     exc_str = str(exception).lower()
 
     # Network/Connection errors
-    if any(
-        keyword in exc_type.lower()
-        for keyword in ["connection", "timeout", "network", "socket"]
-    ):
+    if any(keyword in exc_type.lower() for keyword in ["connection", "timeout", "network", "socket"]):
         return "NETWORK_ERROR"
 
     if "timeout" in exc_str:
@@ -529,9 +526,9 @@ def _classify_failure_type(exception: Exception) -> str:
     if any(keyword in exc_str for keyword in ["502", "503", "504", "bad gateway"]):
         return "EXTERNAL_SERVICE_ERROR"
 
-    # Payment specific
-    if any(keyword in exc_str for keyword in ["payment", "pg", "toss"]):
-        return "PAYMENT_ERROR"
+    # Domain-specific errors (customize via configuration)
+    if any(keyword in exc_str for keyword in ["gateway", "provider", "external"]):
+        return "GATEWAY_ERROR"
 
     return "UNKNOWN_ERROR"
 
@@ -539,14 +536,14 @@ def _classify_failure_type(exception: Exception) -> str:
 def _extract_entity_refs(kwargs: Optional[dict]) -> Dict[str, str]:
     """
     Extract entity references from task kwargs.
-    
+
     Returns generic entity_type and entity_id for DLQ storage.
     """
     if not kwargs:
         return {}
 
     entity_refs = {}
-    
+
     # Check for explicit entity_type/entity_id first
     if "entity_type" in kwargs and "entity_id" in kwargs:
         entity_refs["entity_type"] = str(kwargs["entity_type"])
@@ -554,7 +551,7 @@ def _extract_entity_refs(kwargs: Optional[dict]) -> Dict[str, str]:
         if "user_id" in kwargs:
             entity_refs["user_id"] = kwargs["user_id"]
         return entity_refs
-    
+
     # Fallback: infer from common ID patterns
     id_priority = [
         ("order_id", "order"),
@@ -572,7 +569,7 @@ def _extract_entity_refs(kwargs: Optional[dict]) -> Dict[str, str]:
             entity_refs["entity_type"] = entity_type
             entity_refs["entity_id"] = str(kwargs[key])
             break
-    
+
     # Always include user_id if present
     if "user_id" in kwargs and kwargs["user_id"] is not None:
         entity_refs["user_id"] = kwargs["user_id"]
@@ -590,7 +587,7 @@ def _get_recommended_action(failure_type: str) -> str:
         "AUTH_ERROR": "Check credentials and permissions",
         "VALIDATION_ERROR": "Manual review required - data may be invalid",
         "EXTERNAL_SERVICE_ERROR": "Wait for external service recovery",
-        "PAYMENT_ERROR": "Check payment gateway status, manual review may be needed",
+        "GATEWAY_ERROR": "Check gateway status, manual review may be needed",
         "UNKNOWN_ERROR": "Manual review recommended",
     }
     return actions.get(failure_type, "Review and retry manually")
@@ -814,8 +811,8 @@ def selfhealing_task(
 
     Example:
         @app.task
-        @selfhealing_task(domain='payment', service_name='toss_payment')
-        def process_payment(order_id):
+        @selfhealing_task(domain='order', service_name='order_service')
+        def process_order(order_id):
             # Your task logic
             pass
     """

@@ -1,28 +1,25 @@
 """
 Provider Registry for Pluggable Architecture.
 
-Central registry for all pluggable components - payment providers,
-cache backends, and task queues.
+Central registry for all pluggable components - cache backends and task queues.
 
 Usage:
     >>> # Register adapters
-    >>> ProviderRegistry.register_payment("toss", TossPaymentAdapter)
     >>> ProviderRegistry.register_cache("redis", RedisCacheAdapter)
+    >>> ProviderRegistry.register_queue("celery", CeleryQueueAdapter)
     >>>
     >>> # Set defaults
-    >>> ProviderRegistry.set_defaults(payment="toss", cache="redis")
+    >>> ProviderRegistry.set_defaults(cache="redis", queue="celery")
     >>>
     >>> # Get instances
-    >>> payment = ProviderRegistry.get_payment()
     >>> cache = ProviderRegistry.get_cache()
+    >>> queue = ProviderRegistry.get_queue()
 
 Testing Example:
     >>> # Use mock adapters for testing
-    >>> ProviderRegistry.register_payment("mock", MockPaymentAdapter)
     >>> ProviderRegistry.register_cache("memory", InMemoryCacheAdapter)
     >>> ProviderRegistry.register_queue("sync", SyncTaskAdapter)
     >>> ProviderRegistry.set_defaults(
-    ...     payment="mock",
     ...     cache="memory",
     ...     queue="sync",
     ... )
@@ -34,7 +31,6 @@ import logging
 from typing import TYPE_CHECKING, Optional, Dict, Type, Any
 
 if TYPE_CHECKING:
-    from selfhealing.interfaces.payment_provider import PaymentProviderInterface
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.task_queue import TaskQueueInterface
 
@@ -46,73 +42,20 @@ class ProviderRegistry:
     Central registry for all pluggable components.
 
     Allows runtime registration and retrieval of adapter implementations.
-    Supports payment providers, cache backends, and task queues.
+    Supports cache backends and task queues.
     """
 
     # Provider registries
-    _payment_providers: Dict[str, Type] = {}
     _cache_providers: Dict[str, Type] = {}
     _task_queues: Dict[str, Type] = {}
 
     # Provider instances (singletons)
-    _payment_instances: Dict[str, Any] = {}
     _cache_instances: Dict[str, Any] = {}
     _queue_instances: Dict[str, Any] = {}
 
-    # Default provider names (None = no default, must be configured)
-    _default_payment: Optional[str] = None
+    # Default provider names
     _default_cache: str = "redis"
     _default_queue: str = "celery"
-
-    # =========================================================================
-    # Payment Provider Registry
-    # =========================================================================
-
-    @classmethod
-    def register_payment(cls, name: str, provider_class: Type) -> None:
-        """
-        Register a payment provider adapter.
-
-        Args:
-            name: Provider identifier (e.g., 'toss', 'stripe')
-            provider_class: Adapter class implementing PaymentProviderInterface
-        """
-        cls._payment_providers[name] = provider_class
-        logger.info(f"[ProviderRegistry] Registered payment provider: {name}")
-
-    @classmethod
-    def get_payment(
-        cls,
-        name: Optional[str] = None,
-        force_new: bool = False,
-        **kwargs,
-    ) -> "PaymentProviderInterface":
-        """
-        Get a payment provider instance.
-
-        Args:
-            name: Provider name (uses default if None)
-            force_new: Create new instance instead of using cached
-            **kwargs: Arguments passed to provider constructor
-
-        Returns:
-            PaymentProviderInterface implementation
-
-        Raises:
-            ValueError: If provider is not registered
-        """
-        name = name or cls._default_payment
-
-        if name not in cls._payment_providers:
-            # Auto-register known adapters
-            cls._auto_register_payment_adapters()
-            if name not in cls._payment_providers:
-                raise ValueError(f"Unknown payment provider: {name}")
-
-        if force_new or name not in cls._payment_instances:
-            cls._payment_instances[name] = cls._payment_providers[name](**kwargs)
-
-        return cls._payment_instances[name]
 
     # =========================================================================
     # Cache Provider Registry
@@ -219,7 +162,6 @@ class ProviderRegistry:
     @classmethod
     def set_defaults(
         cls,
-        payment: Optional[str] = None,
         cache: Optional[str] = None,
         queue: Optional[str] = None,
     ) -> None:
@@ -227,13 +169,9 @@ class ProviderRegistry:
         Set default providers.
 
         Args:
-            payment: Default payment provider name
             cache: Default cache provider name
             queue: Default task queue name
         """
-        if payment:
-            cls._default_payment = payment
-            logger.debug(f"[ProviderRegistry] Default payment: {payment}")
         if cache:
             cls._default_cache = cache
             logger.debug(f"[ProviderRegistry] Default cache: {cache}")
@@ -250,7 +188,6 @@ class ProviderRegistry:
             Dict with lists of registered provider names by type
         """
         return {
-            "payment": list(cls._payment_providers.keys()),
             "cache": list(cls._cache_providers.keys()),
             "queue": list(cls._task_queues.keys()),
         }
@@ -264,7 +201,6 @@ class ProviderRegistry:
             Dict with current default provider names
         """
         return {
-            "payment": cls._default_payment,
             "cache": cls._default_cache,
             "queue": cls._default_queue,
         }
@@ -283,16 +219,9 @@ class ProviderRegistry:
 
         Example:
             >>> results = ProviderRegistry.health_check_all()
-            >>> # {'payment': True, 'cache': True, 'queue': False}
+            >>> # {'cache': True, 'queue': False}
         """
         results = {}
-
-        try:
-            payment = cls.get_payment()
-            results["payment"] = payment.health_check()
-        except Exception as e:
-            logger.error(f"[ProviderRegistry] Payment health check failed: {e}")
-            results["payment"] = False
 
         try:
             cache = cls.get_cache()
@@ -340,35 +269,6 @@ class ProviderRegistry:
     # =========================================================================
     # Auto-Registration
     # =========================================================================
-
-    @classmethod
-    def _auto_register_payment_adapters(cls) -> None:
-        """Auto-register available payment adapters."""
-        # Try selfhealing package first
-        try:
-            from selfhealing.adapters.payments import MockPaymentAdapter
-
-            if "mock" not in cls._payment_providers:
-                cls.register_payment("mock", MockPaymentAdapter)
-        except ImportError:
-            pass
-
-        # Then try local adapters
-        try:
-            from .adapters.payments.toss_adapter import TossPaymentAdapter
-
-            if "toss" not in cls._payment_providers:
-                cls.register_payment("toss", TossPaymentAdapter)
-        except ImportError:
-            pass
-
-        try:
-            from .adapters.payments.mock_adapter import MockPaymentAdapter
-
-            if "mock" not in cls._payment_providers:
-                cls.register_payment("mock", MockPaymentAdapter)
-        except ImportError:
-            pass
 
     @classmethod
     def _auto_register_cache_adapters(cls) -> None:
@@ -443,13 +343,10 @@ class ProviderRegistry:
 
         Use in tests to ensure clean state.
         """
-        cls._payment_providers.clear()
         cls._cache_providers.clear()
         cls._task_queues.clear()
-        cls._payment_instances.clear()
         cls._cache_instances.clear()
         cls._queue_instances.clear()
-        cls._default_payment = "toss"
         cls._default_cache = "redis"
         cls._default_queue = "celery"
         logger.debug("[ProviderRegistry] Reset all registrations")
@@ -461,7 +358,6 @@ class ProviderRegistry:
 
         Useful for testing with fresh instances.
         """
-        cls._payment_instances.clear()
         cls._cache_instances.clear()
         cls._queue_instances.clear()
         logger.debug("[ProviderRegistry] Reset all instances")
@@ -472,16 +368,13 @@ class ProviderRegistry:
         Configure registry for testing with mock/sync adapters.
 
         Sets up:
-            - MockPaymentAdapter for payments
             - InMemoryCacheAdapter for cache
             - SyncTaskAdapter for tasks
         """
-        cls._auto_register_payment_adapters()
         cls._auto_register_cache_adapters()
         cls._auto_register_queue_adapters()
 
         cls.set_defaults(
-            payment="mock",
             cache="memory",
             queue="sync",
         )
@@ -494,16 +387,13 @@ class ProviderRegistry:
         Configure registry for production with real adapters.
 
         Sets up:
-            - TossPaymentAdapter for payments
             - RedisCacheAdapter for cache
             - CeleryTaskAdapter for tasks
         """
-        cls._auto_register_payment_adapters()
         cls._auto_register_cache_adapters()
         cls._auto_register_queue_adapters()
 
         cls.set_defaults(
-            payment="toss",
             cache="redis",
             queue="celery",
         )

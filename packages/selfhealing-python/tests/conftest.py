@@ -18,7 +18,7 @@ def sample_failed_operation_data():
 
     return FailedOperationData(
         id=1,
-        domain="payment",
+        domain="order",
         failure_type="network",
         status="pending",
         created_at=datetime.now(),
@@ -35,7 +35,7 @@ def sample_circuit_breaker_data():
     from selfhealing.core.types import CircuitBreakerStateData
 
     return CircuitBreakerStateData(
-        service_name="payment-gateway",
+        service_name="external-gateway",
         state="closed",
         failure_count=0,
         success_count=10,
@@ -97,16 +97,6 @@ def resource_simulator():
 
 
 @pytest.fixture
-def mock_payment_adapter():
-    """Provides a mock payment adapter for testing."""
-    from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
-
-    adapter = MockPaymentAdapter()
-    yield adapter
-    adapter.reset()
-
-
-@pytest.fixture
 def memory_cache_adapter():
     """Provides an in-memory cache adapter for testing."""
     from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
@@ -134,7 +124,6 @@ def test_provider_registry():
 
     # Set test defaults
     ProviderRegistry.set_defaults(
-        payment="mock",
         cache="memory",
         queue="sync",
     )

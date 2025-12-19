@@ -26,12 +26,9 @@ logger = logging.getLogger(__name__)
 
 def _get_failed_operation_model():
     """Lazy import FailedOperation model."""
-    try:
-        from shopping.models.failed_operation import FailedOperation
-        return FailedOperation
-    except ImportError:
-        from selfhealing.adapters.django.models import FailedOperation
-        return FailedOperation
+    from selfhealing.adapters.django.models import FailedOperation
+
+    return FailedOperation
 
 
 class DLQReplayView(APIView):

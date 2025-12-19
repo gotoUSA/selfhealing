@@ -40,32 +40,22 @@ def _get_circuit_breaker_model():
     """
     Lazy import CircuitBreakerState model.
 
-    Model Resolution: Tries shopping app model first for integrated deployments,
-    falls back to selfhealing's own model for standalone deployments.
-    This allows the same API views to work in both scenarios.
+    Uses selfhealing's own Django model for standalone deployments.
     """
-    try:
-        from shopping.models import CircuitBreakerState
-        return CircuitBreakerState
-    except ImportError:
-        from selfhealing.adapters.django.models import CircuitBreakerState
-        return CircuitBreakerState
+    from selfhealing.adapters.django.models import CircuitBreakerState
+
+    return CircuitBreakerState
 
 
 def _get_failed_operation_model():
     """
     Lazy import FailedOperation model.
 
-    Model Resolution: Tries shopping app model first for integrated deployments,
-    falls back to selfhealing's own model for standalone deployments.
-    This allows the same API views to work in both scenarios.
+    Uses selfhealing's own Django model for standalone deployments.
     """
-    try:
-        from shopping.models.failed_operation import FailedOperation
-        return FailedOperation
-    except ImportError:
-        from selfhealing.adapters.django.models import FailedOperation
-        return FailedOperation
+    from selfhealing.adapters.django.models import FailedOperation
+
+    return FailedOperation
 
 
 # =============================================================================

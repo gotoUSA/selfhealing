@@ -5,7 +5,7 @@ Provides configuration access for the selfhealing package.
 This module provides compatibility layer that re-exports from
 the appropriate configuration source.
 
-For Django applications, imports from shopping.services.self_healing.config.
+For Django applications, configuration is loaded from Django settings.
 For other frameworks, uses environment variables or defaults.
 """
 
@@ -81,17 +81,10 @@ class ForensicSettings:
 
 def _try_django_config():
     """Try to load config from Django settings."""
-    try:
-        from shopping.services.self_healing.config import (
-            get_notification_limits as django_get_notification_limits,
-        )
-        from shopping.services.self_healing.config import (
-            get_forensic_settings as django_get_forensic_settings,
-        )
-
-        return django_get_notification_limits, django_get_forensic_settings
-    except ImportError:
-        return None, None
+    # NOTE: For projects integrating with Django, configuration should be
+    # loaded from Django settings directly. The selfhealing package uses
+    # environment variables or defaults for standalone deployments.
+    return None, None
 
 
 @lru_cache(maxsize=1)

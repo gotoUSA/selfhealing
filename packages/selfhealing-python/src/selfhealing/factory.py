@@ -10,7 +10,6 @@ Usage:
     # Get default providers
     cache = ProviderRegistry.get_cache()
     queue = ProviderRegistry.get_queue()
-    payment = ProviderRegistry.get_payment()
 
     # Get specific providers
     cache = ProviderRegistry.get_cache("redis")
@@ -31,7 +30,6 @@ if TYPE_CHECKING:
         CircuitBreakerStateRepository,
         SecurityIncidentRepository,
     )
-    from selfhealing.interfaces.payment_provider import PaymentProviderInterface
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.task_queue import TaskQueueInterface
 
@@ -47,7 +45,6 @@ class ProviderRegistry:
     """
 
     # Provider registries
-    _payment_providers: dict[str, Type] = {}
     _cache_providers: dict[str, Type] = {}
     _task_queues: dict[str, Type] = {}
     _failed_op_repos: dict[str, Type] = {}
@@ -55,7 +52,6 @@ class ProviderRegistry:
     _security_repos: dict[str, Type] = {}
 
     # Default provider names
-    _default_payment: str = "mock"
     _default_cache: str = "memory"
     _default_queue: str = "sync"
     _default_repo: str = "django"
@@ -66,12 +62,6 @@ class ProviderRegistry:
     # =========================================================================
     # Registration Methods
     # =========================================================================
-
-    @classmethod
-    def register_payment(cls, name: str, provider_class: Type) -> None:
-        """Register a payment provider adapter."""
-        cls._payment_providers[name] = provider_class
-        logger.debug(f"[Registry] Registered payment provider: {name}")
 
     @classmethod
     def register_cache(cls, name: str, provider_class: Type) -> None:
@@ -106,39 +96,6 @@ class ProviderRegistry:
     # =========================================================================
     # Provider Getters
     # =========================================================================
-
-    @classmethod
-    def get_payment(
-        cls,
-        name: Optional[str] = None,
-        singleton: bool = True,
-    ) -> "PaymentProviderInterface":
-        """
-        Get payment provider instance.
-
-        Args:
-            name: Provider name (e.g., 'toss', 'stripe', 'mock')
-            singleton: If True, return cached instance
-
-        Returns:
-            PaymentProviderInterface instance
-        """
-        name = name or cls._default_payment
-
-        if singleton:
-            key = f"payment:{name}"
-            if key in cls._instances:
-                return cls._instances[key]
-
-        if name not in cls._payment_providers:
-            raise ValueError(f"Unknown payment provider: {name}. " f"Available: {list(cls._payment_providers.keys())}")
-
-        instance = cls._payment_providers[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
 
     @classmethod
     def get_cache(
@@ -285,7 +242,6 @@ class ProviderRegistry:
     @classmethod
     def set_defaults(
         cls,
-        payment: Optional[str] = None,
         cache: Optional[str] = None,
         queue: Optional[str] = None,
         repo: Optional[str] = None,
@@ -294,13 +250,10 @@ class ProviderRegistry:
         Set default providers.
 
         Args:
-            payment: Default payment provider name
             cache: Default cache provider name
             queue: Default task queue name
             repo: Default repository name
         """
-        if payment:
-            cls._default_payment = payment
         if cache:
             cls._default_cache = cache
         if queue:
@@ -310,7 +263,7 @@ class ProviderRegistry:
 
         logger.info(
             f"[Registry] Defaults updated: "
-            f"payment={cls._default_payment}, cache={cls._default_cache}, "
+            f"cache={cls._default_cache}, "
             f"queue={cls._default_queue}, repo={cls._default_repo}"
         )
 
@@ -318,7 +271,6 @@ class ProviderRegistry:
     def get_defaults(cls) -> dict[str, str]:
         """Get current default provider names."""
         return {
-            "payment": cls._default_payment,
             "cache": cls._default_cache,
             "queue": cls._default_queue,
             "repo": cls._default_repo,
@@ -328,7 +280,6 @@ class ProviderRegistry:
     def list_providers(cls) -> dict[str, list[str]]:
         """List all registered providers."""
         return {
-            "payment": list(cls._payment_providers.keys()),
             "cache": list(cls._cache_providers.keys()),
             "queue": list(cls._task_queues.keys()),
             "failed_operation_repo": list(cls._failed_op_repos.keys()),
@@ -346,13 +297,11 @@ class ProviderRegistry:
     def reset(cls) -> None:
         """Reset registry to initial state (useful for testing)."""
         cls._instances.clear()
-        cls._payment_providers.clear()
         cls._cache_providers.clear()
         cls._task_queues.clear()
         cls._failed_op_repos.clear()
         cls._circuit_breaker_repos.clear()
         cls._security_repos.clear()
-        cls._default_payment = "mock"
         cls._default_cache = "memory"
         cls._default_queue = "sync"
         cls._default_repo = "django"
@@ -371,13 +320,6 @@ class ProviderRegistry:
             Dict mapping provider type to health status
         """
         results = {}
-
-        try:
-            payment = cls.get_payment()
-            results["payment"] = payment.health_check()
-        except Exception as e:
-            logger.error(f"[Registry] Payment health check failed: {e}")
-            results["payment"] = False
 
         try:
             cache = cls.get_cache()
@@ -445,21 +387,6 @@ def _auto_register_adapters() -> None:
         from selfhealing.adapters.queues.rq_adapter import RQTaskAdapter
 
         ProviderRegistry.register_queue("rq", RQTaskAdapter)
-    except ImportError:
-        pass
-
-    # Payment providers
-    try:
-        from selfhealing.adapters.payments.mock_adapter import MockPaymentAdapter
-
-        ProviderRegistry.register_payment("mock", MockPaymentAdapter)
-    except ImportError:
-        pass
-
-    try:
-        from selfhealing.adapters.payments.stripe_adapter import StripePaymentAdapter
-
-        ProviderRegistry.register_payment("stripe", StripePaymentAdapter)
     except ImportError:
         pass
 

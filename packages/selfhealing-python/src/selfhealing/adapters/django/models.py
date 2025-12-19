@@ -469,11 +469,10 @@ class SecurityIncident(models.Model):
         SUSPICIOUS_ACTIVITY = "suspicious_activity", "Suspicious Activity"
         REPLAY_ATTACK = "replay_attack", "Replay Attack Detected"
         INJECTION_ATTEMPT = "injection_attempt", "Injection Attempt"
-        
-        # Legacy aliases (for backward compatibility in shopping domain adapter)
-        # Note: These will be deprecated in future versions
+
+        # Additional incident types (domain-agnostic)
         WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
-        PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
+        AMOUNT_TAMPERED = "amount_tampered", "Amount Tampered"
 
     class Severity(models.TextChoices):
         """Severity levels"""

@@ -20,18 +20,18 @@ Usage:
 
     # 설정 변경 추적
     with tracker.track_change(
-        config_key="circuit_breaker.toss_payment.threshold",
+        config_key="circuit_breaker.external_api.threshold",
         old_value=10,
         new_value=50,
         reason="트래픽 증가에 따른 임계값 조정",
     ):
         # 실제 설정 변경
-        update_config("circuit_breaker.toss_payment.threshold", 50)
+        update_config("circuit_breaker.external_api.threshold", 50)
 
     # 또는 데코레이터로
-    @tracker.track_config_change("payment.timeout")
-    def update_payment_timeout(new_value):
-        settings.PAYMENT_TIMEOUT = new_value
+    @tracker.track_config_change("service.timeout")
+    def update_service_timeout(new_value):
+        settings.SERVICE_TIMEOUT = new_value
 """
 
 from __future__ import annotations
@@ -218,8 +218,7 @@ class ConfigChangeTracker:
 
         self.audit_adapter.log(entry)
         logger.warning(
-            f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} "
-            f"value={new_value} reason={reason}"
+            f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} " f"value={new_value} reason={reason}"
         )
 
 

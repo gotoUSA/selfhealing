@@ -299,11 +299,10 @@ def heavy_concurrent_query(request):
     start = time.time()
     try:
         with connection.cursor() as cursor:
-            # ⚠️ STRESS TEST ONLY: This query uses shopping_product table as an example.
-            # For standalone deployments without shopping app, replace with any available
-            # table or configure via SELFHEALING_STRESS_TEST_TABLE setting.
+            # ⚠️ STRESS TEST ONLY: This query uses a configurable table for testing.
+            # Configure via SELFHEALING_STRESS_TEST_TABLE setting.
             # The actual table doesn't matter - this is purely for connection pool testing.
-            stress_table = getattr(settings, 'SELFHEALING_STRESS_TEST_TABLE', 'shopping_product')
+            stress_table = getattr(settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation")
             cursor.execute(
                 f"""
                 SELECT
