@@ -51,6 +51,19 @@ from selfhealing.api.django.views.health import (
     SelfHealingMetricsView,
 )
 
+# System Control Views (Kill Switch)
+from selfhealing.api.django.views.system_control import (
+    SystemStatusView,
+    SystemEnableView,
+    SystemDisableView,
+    DryRunEnableView,
+    DryRunDisableView,
+    is_selfhealing_enabled,
+    is_dry_run,
+    should_execute_action,
+    get_system_control,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -85,4 +98,14 @@ __all__ = [
     "ConnectionPoolHealthView",
     "simple_health_ping",
     "SelfHealingMetricsView",
+    # System Control (Kill Switch)
+    "SystemStatusView",
+    "SystemEnableView",
+    "SystemDisableView",
+    "DryRunEnableView",
+    "DryRunDisableView",
+    "is_selfhealing_enabled",
+    "is_dry_run",
+    "should_execute_action",
+    "get_system_control",
 ]

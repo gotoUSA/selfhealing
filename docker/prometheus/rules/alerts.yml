@@ -1,0 +1,261 @@
+# Self-Healing Prometheus Alert Rules
+# 
+# 이 파일은 Self-Healing 시스템의 핵심 알림 규칙을 정의합니다.
+# Prometheus에서 이 규칙들을 평가하여 문제 발생 시 알림을 발생시킵니다.
+
+groups:
+  # =========================================================================
+  # DLQ (Dead Letter Queue) 알림
+  # =========================================================================
+  - name: dlq_alerts
+    interval: 30s
+    rules:
+      # DLQ 대기 항목 증가 경고
+      - alert: DLQHighPendingCount
+        expr: sum(selfhealing_dlq_pending_count) > 50
+        for: 5m
+        labels:
+          severity: warning
+          category: dlq
+        annotations:
+          summary: "DLQ 대기 항목 증가"
+          description: "DLQ에 {{ $value }}개의 항목이 대기 중입니다. (임계값: 50)"
+          runbook_url: "https://docs.example.com/runbooks/dlq-high-pending"
+          dashboard_url: "/d/dlq-monitoring/dlq-monitoring"
+
+      # DLQ 대기 항목 위험 수준
+      - alert: DLQCriticalPendingCount
+        expr: sum(selfhealing_dlq_pending_count) > 100
+        for: 3m
+        labels:
+          severity: critical
+          category: dlq
+        annotations:
+          summary: "🚨 DLQ 대기 항목 위험 수준"
+          description: "DLQ에 {{ $value }}개의 항목이 대기 중입니다. 즉시 확인이 필요합니다."
+          runbook_url: "https://docs.example.com/runbooks/dlq-critical"
+          dashboard_url: "/d/dlq-monitoring/dlq-monitoring"
+
+      # DLQ 급증 감지 (5분간 2배 이상 증가)
+      - alert: DLQSpikeDetected
+        expr: |
+          (
+            sum(selfhealing_dlq_pending_count) 
+            / 
+            sum(selfhealing_dlq_pending_count offset 5m)
+          ) > 2
+        for: 2m
+        labels:
+          severity: warning
+          category: dlq
+        annotations:
+          summary: "DLQ 급증 감지"
+          description: "DLQ 대기 항목이 5분 전 대비 {{ $value | printf \"%.1f\" }}배 증가했습니다."
+
+  # =========================================================================
+  # Circuit Breaker 알림
+  # =========================================================================
+  - name: circuit_breaker_alerts
+    interval: 15s
+    rules:
+      # Circuit Breaker 열림 (OPEN 상태)
+      - alert: CircuitBreakerOpen
+        expr: selfhealing_circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+          category: circuit_breaker
+        annotations:
+          summary: "🔴 Circuit Breaker 열림"
+          description: "{{ $labels.service }} 서비스의 Circuit Breaker가 OPEN 상태입니다. 외부 서비스 장애 가능성이 있습니다."
+          runbook_url: "https://docs.example.com/runbooks/circuit-breaker-open"
+          dashboard_url: "/d/self-healing-overview/self-healing-overview"
+
+      # Circuit Breaker Half-Open (복구 시도 중)
+      - alert: CircuitBreakerHalfOpen
+        expr: selfhealing_circuit_breaker_state == 2
+        for: 5m
+        labels:
+          severity: warning
+          category: circuit_breaker
+        annotations:
+          summary: "🟡 Circuit Breaker 복구 시도 중"
+          description: "{{ $labels.service }} 서비스가 Half-Open 상태로 5분 이상 유지되고 있습니다."
+
+      # Circuit Breaker 실패율 높음
+      - alert: CircuitBreakerHighFailureRate
+        expr: |
+          (
+            sum(rate(selfhealing_circuit_breaker_failure_total[5m])) by (service)
+            /
+            (
+              sum(rate(selfhealing_circuit_breaker_success_total[5m])) by (service)
+              +
+              sum(rate(selfhealing_circuit_breaker_failure_total[5m])) by (service)
+            )
+          ) > 0.3
+        for: 3m
+        labels:
+          severity: warning
+          category: circuit_breaker
+        annotations:
+          summary: "Circuit Breaker 실패율 높음"
+          description: "{{ $labels.service }}의 실패율이 {{ $value | printf \"%.1f\" }}%입니다. (임계값: 30%)"
+
+  # =========================================================================
+  # 재시도 (Retry) 알림
+  # =========================================================================
+  - name: retry_alerts
+    interval: 30s
+    rules:
+      # 재시도 성공률 저하
+      - alert: RetrySuccessRateLow
+        expr: |
+          (
+            sum(rate(selfhealing_retry_success_total[5m])) by (domain)
+            /
+            sum(rate(selfhealing_retry_total[5m])) by (domain)
+          ) < 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: retry
+        annotations:
+          summary: "재시도 성공률 저하"
+          description: "{{ $labels.domain }} 도메인의 재시도 성공률이 {{ $value | printf \"%.1f\" }}%입니다. (임계값: 80%)"
+
+      # 재시도 급증
+      - alert: RetryRateHigh
+        expr: sum(rate(selfhealing_retry_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: retry
+        annotations:
+          summary: "재시도 발생률 높음"
+          description: "초당 {{ $value | printf \"%.2f\" }}건의 재시도가 발생하고 있습니다."
+
+  # =========================================================================
+  # SLO / Error Budget 알림
+  # =========================================================================
+  - name: slo_alerts
+    interval: 1m
+    rules:
+      # SLO 위반 (가용성)
+      - alert: SLOAvailabilityViolation
+        expr: |
+          (
+            1 - (
+              sum(rate(selfhealing_dlq_items_total[30d])) 
+              / 
+              sum(rate(selfhealing_requests_total[30d]))
+            )
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "🚨 SLO 위반: 가용성"
+          description: "30일 가용성이 {{ $value | printf \"%.4f\" }} ({{ $value | printf \"%.2f\" }}%)입니다. SLO 목표: 99.9%"
+          dashboard_url: "/d/error-budget/error-budget"
+
+      # Error Budget 위험 수준 (25% 미만)
+      - alert: ErrorBudgetCritical
+        expr: |
+          100 * (
+            1 - (
+              sum(increase(selfhealing_dlq_items_total[30d])) 
+              / 
+              (sum(increase(selfhealing_requests_total[30d])) * 0.001)
+            )
+          ) < 25
+        for: 10m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "🔴 Error Budget 위험"
+          description: "Error Budget 잔여량이 {{ $value | printf \"%.1f\" }}%입니다. 배포 동결 및 안정화 작업이 필요합니다."
+          dashboard_url: "/d/error-budget/error-budget"
+
+      # Error Budget 경고 수준 (50% 미만)
+      - alert: ErrorBudgetWarning
+        expr: |
+          100 * (
+            1 - (
+              sum(increase(selfhealing_dlq_items_total[30d])) 
+              / 
+              (sum(increase(selfhealing_requests_total[30d])) * 0.001)
+            )
+          ) < 50
+        for: 10m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "🟠 Error Budget 경고"
+          description: "Error Budget 잔여량이 {{ $value | printf \"%.1f\" }}%입니다. 신규 기능 배포를 자제해주세요."
+
+      # Fast Burn Rate (1시간 기준)
+      - alert: ErrorBudgetFastBurn
+        expr: |
+          (
+            (sum(rate(selfhealing_dlq_items_total[1h])) / sum(rate(selfhealing_requests_total[1h]))) 
+            / 0.001 * 720
+          ) > 14.4
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "🔥 Error Budget 급속 소진"
+          description: "1시간 Burn Rate가 {{ $value | printf \"%.1f\" }}입니다. 1시간에 에러 버짯 2% 이상 소진 중입니다."
+
+      # Slow Burn Rate (6시간 기준)
+      - alert: ErrorBudgetSlowBurn
+        expr: |
+          (
+            (sum(rate(selfhealing_dlq_items_total[6h])) / sum(rate(selfhealing_requests_total[6h]))) 
+            / 0.001 * 720
+          ) > 3
+        for: 30m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "🌡️ Error Budget 느린 소진"
+          description: "6시간 Burn Rate가 {{ $value | printf \"%.1f\" }}입니다. 지속적인 모니터링이 필요합니다."
+
+  # =========================================================================
+  # 시스템 상태 알림
+  # =========================================================================
+  - name: system_alerts
+    interval: 1m
+    rules:
+      # Self-Healing 메트릭 수집 실패
+      - alert: SelfHealingMetricsDown
+        expr: up{job="django"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "🚨 Self-Healing 메트릭 수집 실패"
+          description: "Django 애플리케이션에서 메트릭을 수집할 수 없습니다. 서비스 상태를 확인하세요."
+
+      # 요청 처리량 급감
+      - alert: RequestThroughputDrop
+        expr: |
+          (
+            sum(rate(selfhealing_requests_total[5m])) 
+            / 
+            sum(rate(selfhealing_requests_total[5m] offset 1h))
+          ) < 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "요청 처리량 급감"
+          description: "요청 처리량이 1시간 전 대비 {{ $value | printf \"%.1f\" }}배로 감소했습니다."

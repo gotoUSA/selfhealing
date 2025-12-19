@@ -16,14 +16,18 @@
 | SLI/SLO 정의 | ✅ **구현됨** | 🟢 높음 |
 | Audit Logging Adapter | ✅ **구현됨** | 🟢 높음 |
 | Alert Adapter | ✅ **구현됨** | 🟢 높음 |
-| 모니터링/Alerting | ⚠️ 부분적 | 🟡 중간 |
+| 모니터링/Alerting | ✅ **구현됨** | 🟢 높음 |
+| Grafana 대시보드 | ✅ **구현됨** | 🟢 높음 |
+| Prometheus Alert Rules | ✅ **구현됨** | 🟢 높음 |
 | 분산 추적 | ⏭️ **불필요** | ➖ N/A |
-| Error Budget | ⚠️ 부분적 | 🟡 중간 |
+| Error Budget | ✅ **구현됨** | 🟢 높음 |
 | Runbook 자동화 | ❌ 미구현 | 🔴 낮음 |
 | Incident Management | ❌ 미구현 | 🔴 낮음 |
 | Chaos Engineering (프로덕션) | ❌ 미구현 | 🔴 낮음 |
 
 > **업데이트 (2025-01)**: SLI/SLO, AuditLogAdapter, AlertAdapter 구현 완료. 분산 추적은 모놀리식 아키텍처에서 불필요로 판단.
+>
+> **업데이트 (2025-12)**: Phase 1, 2 완료. Grafana 대시보드 3개, Prometheus Alert Rules 15개 구현 완료.
 
 ---
 
@@ -635,15 +639,15 @@ services:
 
 ## 🎯 권장 구현 우선순위
 
-### Phase 1: 기반 (1-2주)
-1. **SLI/SLO 정의** - 핵심 지표 3개 정의
-2. **기본 메트릭 수집** - Prometheus 메트릭 추가
-3. **Grafana 대시보드** - Self-Healing 모니터링
+### Phase 1: 기반 (1-2주) ✅ 완료
+1. ✅ **SLI/SLO 정의** - 핵심 지표 3개 정의
+2. ✅ **기본 메트릭 수집** - Prometheus 메트릭 추가
+3. ✅ **Grafana 대시보드** - Self-Healing 모니터링
 
-### Phase 2: 가시성 (2-4주)
-4. **Alerting 규칙** - 핵심 알림 5개
-5. **분산 추적** - OpenTelemetry 통합
-6. **Error Budget** - 대시보드 추가
+### Phase 2: 가시성 (2-4주) ✅ 완료
+4. ✅ **Alerting 규칙** - 핵심 알림 15개 구현
+5. ⏭️ **분산 추적** - 불필요 (모놀리식)
+6. ✅ **Error Budget** - 대시보드 추가
 
 ### Phase 3: 자동화 (4-6주)
 7. **Runbook 자동화** - 상위 3개 시나리오
@@ -671,10 +675,16 @@ services:
 | FileAlertAdapter | ✅ 완료 | `selfhealing/adapters/alert/file_adapter.py` | 2025-01 |
 | NullAlertAdapter | ✅ 완료 | `selfhealing/adapters/alert/null_adapter.py` | 2025-01 |
 | 분산 추적 | ⏭️ 불필요 | N/A (모놀리식) | 2025-01 |
+| Grafana 프로비저닝 | ✅ 완료 | `docker/grafana/provisioning/` | 2025-12 |
+| Self-Healing 대시보드 | ✅ 완료 | `docker/grafana/provisioning/dashboards/self_healing_overview.json` | 2025-12 |
+| DLQ 모니터링 대시보드 | ✅ 완료 | `docker/grafana/provisioning/dashboards/dlq_monitoring.json` | 2025-12 |
+| Error Budget 대시보드 | ✅ 완료 | `docker/grafana/provisioning/dashboards/error_budget.json` | 2025-12 |
+| Prometheus Alert Rules | ✅ 완료 | `docker/prometheus/rules/alerts.yml` | 2025-12 |
+| Prometheus 설정 | ✅ 완료 | `docker/prometheus/prometheus.yml` | 2025-12 |
 
 ---
 
-## �📚 참고 자료
+## 📚 참고 자료
 
 - [Google SRE Book](https://sre.google/sre-book/table-of-contents/)
 - [Google SRE Workbook](https://sre.google/workbook/table-of-contents/)
@@ -684,4 +694,4 @@ services:
 
 ---
 
-*최종 업데이트: 2025-01*
+*최종 업데이트: 2025-12*

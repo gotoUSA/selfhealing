@@ -57,6 +57,15 @@ from selfhealing.api.django.views.dashboard import (
     DashboardSummaryView,
 )
 
+# System Control Views (Kill Switch)
+from selfhealing.api.django.views.system_control import (
+    SystemStatusView,
+    SystemEnableView,
+    SystemDisableView,
+    DryRunEnableView,
+    DryRunDisableView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -92,6 +101,13 @@ urlpatterns = [
     # Pool Circuit Breaker API
     path("circuit-breaker/pool/status/", circuit_breaker_status, name="pool-cb-status"),
     path("circuit-breaker/pool/reset/", circuit_breaker_reset, name="pool-cb-reset"),
+    # System Control (Global Kill Switch)
+    path("system/status/", SystemStatusView.as_view(), name="system-status"),
+    path("system/enable/", SystemEnableView.as_view(), name="system-enable"),
+    path("system/disable/", SystemDisableView.as_view(), name="system-disable"),
+    # Dry Run Mode
+    path("system/dry-run/enable/", DryRunEnableView.as_view(), name="dry-run-enable"),
+    path("system/dry-run/disable/", DryRunDisableView.as_view(), name="dry-run-disable"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)
