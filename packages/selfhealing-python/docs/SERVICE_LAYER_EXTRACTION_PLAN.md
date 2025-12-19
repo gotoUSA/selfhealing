@@ -9,11 +9,11 @@
 
 | 파일 | 현재 상태 | 우선순위 | 권장 서비스 |
 |------|-----------|----------|-------------|
-| `views/circuit_breaker.py` | ✅ 이미 분리됨 | 낮음 | 파일 분리만 필요 |
+| `views/circuit_breaker.py` | ✅ **분리 완료** | ✅ 완료 | `ControlAPIService` |
 | `views/dashboard.py` | ✅ **분리 완료** | ✅ 완료 | `DashboardService` |
 | `views/dlq.py` | ✅ **분리 완료** | ✅ 완료 | `DLQService` |
-| `views/health.py` | ⚠️ 부분 분리 필요 | 🟡 중간 | `HealthCheckService` |
-| `views/system_control.py` | ✅ 이미 분리됨 | 낮음 | 파일 분리만 필요 |
+| `views/health.py` | ✅ **분리 완료** | ✅ 완료 | `HealthCheckService` |
+| `views/system_control.py` | ✅ **분리 완료** | ✅ 완료 | `SystemControlManager` |
 | `views/config.py` | ✅ 이미 분리됨 | - | RuntimeConfigManager 사용 중 |
 
 ---
@@ -221,15 +221,15 @@ class DashboardService:
 ```
 services/
 ├── __init__.py
-├── circuit_breaker.py          # Phase 4 - CircuitBreakerManager 이동
-├── circuit_breaker_service.py  # 기존
-├── control_api_service.py      # 기존
+├── circuit_breaker/            # CircuitBreaker 관련 모듈
+├── circuit_breaker_service.py  # 기존 CircuitBreakerService
+├── control_api_service.py      # Phase 4 - ✅ 완료 (ControlAPIService)
 ├── dashboard_service.py        # Phase 2 - ✅ 완료
 ├── dlq_service.py              # Phase 1 - ✅ 완료 (기존 파일 확장)
-├── health_check.py             # Phase 3 - NEW
+├── health_check.py             # Phase 3 - ✅ 완료
 ├── pending_config.py           # 기존 (Config API)
 ├── runtime_config.py           # 기존 (Config API)
-└── system_control.py           # Phase 4 - SystemControlService 이동
+└── system_control.py           # Phase 4 - ✅ 완료 (SystemControlManager)
 ```
 
 ---
@@ -271,33 +271,79 @@ services/
 - [x] `views/dashboard.py`에서 DashboardService 사용하도록 리팩토링
 - [x] 테스트 작성/수정 (26개 단위 테스트)
 
-### Phase 3: HealthCheckService
-- [ ] `services/health_check.py` 파일 생성
-- [ ] HealthCheckService 클래스 구현
-- [ ] `views/health.py`에서 HealthCheckService 사용하도록 리팩토링
-- [ ] 테스트 작성/수정
+### Phase 3: HealthCheckService ✅ 완료 (2025-12-19)
+- [x] `services/health_check.py` 파일 생성
+- [x] 데이터클래스 정의:
+  - DatabaseCheck: 데이터베이스 연결 상태
+  - PoolInfo: 커넥션 풀 정보
+  - HealthStatus: 전체 헬스 상태
+  - ReadinessStatus: Kubernetes Readiness 상태
+  - PoolHealthStatus: 커넥션 풀 헬스 상태
+- [x] HealthCheckService 클래스 구현:
+  - `check_database(alias)` - 특정 DB 연결 확인
+  - `check_all_databases()` - 모든 DB 연결 확인
+  - `check_connection_pool(alias)` - 커넥션 풀 상태 조회
+  - `get_pool_health()` - 전체 커넥션 풀 헬스 상태
+  - `get_readiness()` - Kubernetes Readiness 상태 확인
+  - `get_overall_health()` - 전체 시스템 헬스 체크
+  - `is_alive()` / `is_ready()` - Liveness/Readiness 헬퍼
+- [x] `views/health.py`에서 HealthCheckService 사용하도록 리팩토링
+- [x] 테스트 작성/수정 (20개 단위 테스트)
 
-### Phase 4: 기존 서비스 파일 분리
-- [ ] CircuitBreakerManager를 `services/circuit_breaker.py`로 이동
-- [ ] SystemControlService를 `services/system_control.py`로 이동
-- [ ] View 파일들에서 import 경로 수정
-- [ ] 테스트 확인
+### Phase 4: 기존 서비스 파일 분리 ✅ 완료 (2025-12-19)
+- [x] `services/system_control.py` 생성 (SystemControlManager 이동)
+  - SystemState 데이터클래스
+  - SystemControlManager 싱글톤 클래스
+  - `get_system_control()` 팩토리 함수
+  - `is_selfhealing_enabled()`, `is_dry_run()`, `should_execute_action()` 헬퍼 함수
+- [x] `views/system_control.py`에서 services 모듈 import하도록 리팩토링
+- [x] `views/circuit_breaker.py`에서 `services/control_api_service.py` import하도록 리팩토링
+  - 중복된 ControlAPIService 클래스 제거
+  - View 코드만 유지 (Request/Response 처리)
+- [x] `services/__init__.py`에 새 모듈 export 추가:
+  - HealthCheckService 관련 클래스/함수
+  - SystemControlManager 관련 클래스/함수
+
+---
+
+## 🎉 완료 요약
+
+모든 Phase 완료! (2025-12-19)
+
+### 최종 결과
+
+| Phase | 서비스 | 상태 | 테스트 |
+|-------|--------|------|--------|
+| Phase 1 | DLQService | ✅ 완료 | 24개 |
+| Phase 2 | DashboardService | ✅ 완료 | 26개 |
+| Phase 3 | HealthCheckService | ✅ 완료 | 20개 |
+| Phase 4 | SystemControlManager, ControlAPIService 분리 | ✅ 완료 | 기존 테스트 유지 |
+
+### 아키텍처 개선 사항
+
+1. **View 레이어**: Request/Response 처리만 담당 (얇은 레이어)
+2. **Service 레이어**: 모든 비즈니스 로직 집중
+3. **테스트 용이성**: Service 단위 테스트 가능
+4. **재사용성**: 다른 View, Task, CLI에서 Service 재사용 가능
+5. **Backward Compatibility**: 기존 import 경로 유지 (re-export)
 
 ---
 
 ## 🔧 실행 명령
 
-다음 세션에서 아래 명령으로 시작:
+~~다음 세션에서 아래 명령으로 시작:~~
 
 ```
 Phase 1부터 진행해줘 - DLQService 생성
 ```
 
-또는 전체 진행:
+~~또는 전체 진행:~~
 
 ```
 SERVICE_LAYER_EXTRACTION_PLAN.md 문서 기반으로 서비스 레이어 분리 진행해줘
 ```
+
+**✅ 모든 작업 완료됨**
 
 ---
 

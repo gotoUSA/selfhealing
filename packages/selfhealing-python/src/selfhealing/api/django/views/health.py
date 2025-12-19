@@ -10,24 +10,22 @@ Endpoints:
 - GET  /api/self-healing/health/pool/ - Connection pool health
 - GET  /api/self-healing/health/ping/ - Simple ping
 - GET  /api/self-healing/metrics/ - Get metrics
+
+Note:
+- 비즈니스 로직은 HealthCheckService로 분리됨
+- View는 Request/Response 처리만 담당
 """
 
 import logging
 
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.services.health_check import get_health_check_service
+
 logger = logging.getLogger(__name__)
-
-
-def _get_circuit_breaker_model():
-    """Lazy import CircuitBreakerState model."""
-    from selfhealing.adapters.django.models import CircuitBreakerState
-
-    return CircuitBreakerState
 
 
 class SelfHealingHealthView(APIView):
@@ -41,35 +39,9 @@ class SelfHealingHealthView(APIView):
 
     def get(self, request):
         """Get self-healing system health."""
-        try:
-            from django.db import connection
-
-            # DB 연결 확인
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
-
-            CircuitBreakerState = _get_circuit_breaker_model()
-            services_count = CircuitBreakerState.objects.count()
-            health_status = "healthy"
-            db_status = "healthy"
-        except Exception as e:
-            logger.error(f"[SelfHealing] Health check failed: {e}")
-            services_count = 0
-            health_status = "degraded"
-            db_status = "unhealthy"
-
-        return Response(
-            {
-                "status": health_status,
-                "checks": {
-                    "database": db_status,
-                    "circuit_breaker": "enabled",
-                },
-                "services_count": services_count,
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
+        service = get_health_check_service()
+        health = service.get_overall_health()
+        return Response(health.to_dict())
 
 
 class LivenessView(APIView):
@@ -101,30 +73,13 @@ class ReadinessView(APIView):
 
     def get(self, request):
         """Check if application is ready to serve traffic."""
-        from django.db import connections
+        service = get_health_check_service()
+        readiness = service.get_readiness()
+        
+        response_data = readiness.to_dict()
+        del response_data["is_ready"]  # Remove internal field from response
 
-        ready = True
-        checks = {}
-
-        # Database readiness
-        for alias in connections:
-            try:
-                conn = connections[alias]
-                with conn.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-                    cursor.fetchone()
-                checks[f"database_{alias}"] = "ready"
-            except Exception as e:
-                logger.error(f"Database {alias} readiness check failed: {e}")
-                checks[f"database_{alias}"] = "not_ready"
-                ready = False
-
-        response_data = {
-            "status": "ready" if ready else "not_ready",
-            "checks": checks,
-        }
-
-        if not ready:
+        if not readiness.is_ready:
             return Response(response_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response(response_data)
@@ -143,30 +98,17 @@ class ConnectionPoolHealthView(APIView):
 
     def get(self, request):
         """Get connection pool health status."""
-        from django.db import connections
+        service = get_health_check_service()
+        pool_health = service.get_pool_health()
+        
+        response_data = pool_health.to_dict()
+        if response_data.get("error") is None:
+            del response_data["error"]  # Remove None error field
 
-        pool_data = {"status": "healthy", "pool_info": {}}
+        if pool_health.status in ("degraded", "error"):
+            return Response(response_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        try:
-            conn = connections["default"]
-
-            pool_data["pool_info"] = {
-                "alias": "default",
-                "vendor": conn.vendor,
-                "is_usable": conn.is_usable(),
-            }
-
-            if not conn.is_usable():
-                pool_data["status"] = "degraded"
-                return Response(pool_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        except Exception as e:
-            logger.error(f"Connection pool health check failed: {e}")
-            pool_data["status"] = "error"
-            pool_data["error"] = str(e)
-            return Response(pool_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        return Response(pool_data)
+        return Response(response_data)
 
 
 def simple_health_ping(request):

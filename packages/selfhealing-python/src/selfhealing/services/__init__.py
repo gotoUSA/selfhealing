@@ -193,6 +193,23 @@ from .runtime_config import (
     RuntimeConfigManager,
     get_runtime_config_manager,
 )
+from .health_check import (
+    HealthCheckService,
+    HealthStatus,
+    ReadinessStatus,
+    PoolHealthStatus,
+    DatabaseCheck,
+    PoolInfo,
+    get_health_check_service,
+)
+from .system_control import (
+    SystemControlManager,
+    SystemState,
+    get_system_control,
+    is_selfhealing_enabled,
+    is_dry_run,
+    should_execute_action,
+)
 from .factory import (
     # Repository factory functions
     create_failed_operation_repository,
@@ -332,6 +349,21 @@ __all__ = [
     # Runtime Config (Runtime Configuration API)
     "RuntimeConfigManager",
     "get_runtime_config_manager",
+    # Health Check Service (Phase 3)
+    "HealthCheckService",
+    "HealthStatus",
+    "ReadinessStatus",
+    "PoolHealthStatus",
+    "DatabaseCheck",
+    "PoolInfo",
+    "get_health_check_service",
+    # System Control Service (Phase 4)
+    "SystemControlManager",
+    "SystemState",
+    "get_system_control",
+    "is_selfhealing_enabled",
+    "is_dry_run",
+    "should_execute_action",
     # Factory (for DI and testing)
     "create_failed_operation_repository",
     "create_circuit_breaker_repository",
