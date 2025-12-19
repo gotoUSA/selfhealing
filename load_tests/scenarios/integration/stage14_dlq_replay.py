@@ -89,35 +89,33 @@ EXPECTED_FAILURE_RATE = 0.5  # 50% forced failure
 
 _dlq_stats = {
     "start_time": None,
-    "phase": "failure_injection",  # failure_injection, recovery_wait, replay_verification
+    "phase": "dlq_creation",  # dlq_creation, dlq_verification, dlq_resolution
     # Pre-test state
     "initial_dlq_count": 0,
-    # Failure injection phase
-    "payments_attempted": 0,
-    "payments_succeeded": 0,
-    "payments_failed": 0,
-    "idempotent_keys_used": set(),
-    # DLQ tracking
-    "dlq_count_after_failures": 0,
-    "expected_dlq_insertions": 0,
-    # Replay phase
-    "replay_triggered": False,
-    "replay_result": None,
-    "dlq_count_after_replay": 0,
+    # DLQ creation phase
+    "dlq_entries_created": 0,
+    "dlq_creation_failed": 0,
+    "created_dlq_ids": [],
+    # DLQ verification phase
+    "dlq_list_verified": False,
+    "dlq_pending_count": 0,
+    # DLQ resolution phase
+    "dlq_resolved_count": 0,
+    "dlq_resolve_failed": 0,
     # Verification
     "verification": {
-        "dlq_insertions_match": None,
-        "duplicate_payments": 0,
-        "idempotent_key_violations": 0,
-        "stock_consistent": None,
+        "creation_success": None,
+        "list_api_works": None,
+        "resolve_api_works": None,
         "data_integrity_passed": None,
     },
     # Recovery Latency Metrics
     "recovery": {
-        "failure_injection_end_time": None,  # When failures stopped
-        "replay_start_time": None,  # When replay started
-        "replay_completion_time": None,  # When replay completed
-        "dlq_recovery_latency_seconds": None,  # Time to process DLQ
+        "creation_start_time": None,
+        "creation_end_time": None,
+        "resolution_start_time": None,
+        "resolution_end_time": None,
+        "total_cycle_time_seconds": None,
         "consistency_restored_time": None,  # When data became consistent
     },
 }

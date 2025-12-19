@@ -50,6 +50,7 @@ from selfhealing.api.django.views.dlq import (
     DLQDetailView,
     DLQRetryView,
     DLQResolveView,
+    DLQTestCreateView,
 )
 
 # Dashboard Views
@@ -96,6 +97,7 @@ urlpatterns = [
     path("dlq/<int:pk>/", DLQDetailView.as_view(), name="dlq-detail"),
     path("dlq/<int:pk>/retry/", DLQRetryView.as_view(), name="dlq-retry"),
     path("dlq/<int:pk>/resolve/", DLQResolveView.as_view(), name="dlq-resolve"),
+    path("dlq/test/create/", DLQTestCreateView.as_view(), name="dlq-test-create"),
     # Dashboard
     path("dashboard/summary/", DashboardSummaryView.as_view(), name="dashboard-summary"),
     # Pool Circuit Breaker API

@@ -587,3 +587,92 @@ class DLQResolveView(APIView):
                 {"status": "error", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class DLQTestCreateView(APIView):
+    """
+    DLQ Test Entry Creation API.
+
+    Create test DLQ entries for load testing and verification.
+    Only available in non-production environments (DEBUG=True).
+
+    POST /api/self-healing/dlq/test/create/
+
+    Use Cases:
+    - Load test verification of DLQ functionality
+    - Integration testing of replay mechanism
+    - CI/CD pipeline testing
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        """Create a test DLQ entry."""
+        from django.conf import settings
+
+        # Only allow in non-production environments
+        if not getattr(settings, "DEBUG", False) and not getattr(settings, "TESTING", False):
+            return Response(
+                {"error": "DLQ test entries can only be created in DEBUG/TEST mode"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        domain = request.data.get("domain")
+        failure_type = request.data.get("failure_type")
+
+        if not domain or not failure_type:
+            return Response(
+                {"error": "domain and failure_type are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            FailedOperation = _get_failed_operation_model()
+
+            # Create test DLQ entry using correct field names
+            entry = FailedOperation.objects.create(
+                domain=domain,
+                failure_type=failure_type,
+                order_id=request.data.get("order_id"),
+                payment_id=request.data.get("payment_id"),
+                user_id=request.user.id if request.user else None,
+                error_code="TEST_ERROR",
+                error_message=request.data.get("error_message", "Test failure for load testing"),
+                snapshot_data=request.data.get("snapshot_data", {}),
+                request_data=request.data.get("request_data", {}),
+                response_data=request.data.get("response_data", {}),
+                metadata={
+                    "test": True,
+                    "created_by": str(request.user),
+                    "source": "DLQTestCreateView",
+                    "entity_type": request.data.get("entity_type", "test"),
+                    "entity_id": request.data.get("entity_id", ""),
+                    **(request.data.get("metadata", {})),
+                },
+                recommended_action=FailedOperation.RecommendedAction.REPLAY,
+                status=FailedOperation.Status.PENDING,
+            )
+
+            logger.info(
+                f"[DLQ] Test entry created: id={entry.id}, "
+                f"domain={domain}, failure_type={failure_type}, "
+                f"user={request.user}"
+            )
+
+            return Response(
+                {
+                    "status": "created",
+                    "dlq_id": entry.id,
+                    "domain": domain,
+                    "failure_type": failure_type,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            logger.error(f"[DLQ] Test entry creation failed: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
