@@ -14,19 +14,74 @@
 
 ---
 
+## ⚡ 5분 안에 시작하기 (Quick Start)
+
+**필수 요구사항**: Docker Desktop 설치 필요 ([다운로드](https://www.docker.com/products/docker-desktop/))
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/gotoUSA/django-shopping-mall.git
+cd django-shopping-mall
+
+# 2. 환경변수 파일 생성 (그대로 사용해도 테스트 환경에서는 동작)
+cp .env.example .env
+
+# 3. Docker Compose로 전체 서비스 시작 (첫 실행 시 이미지 빌드 약 2-3분 소요)
+docker-compose up -d
+
+# 4. 데이터베이스 초기화 (마이그레이션)
+docker-compose exec web python manage.py migrate
+
+# 5. 관리자 계정 생성
+docker-compose exec web python manage.py createsuperuser
+
+# 6. 테스트 데이터 생성 (상품, 카테고리 등)
+docker-compose exec web python manage.py create_test_data --preset basic
+
+# 🎉 완료! 아래 주소로 접속
+```
+
+### 접속 주소
+
+| 서비스 | URL | 설명 |
+|--------|-----|------|
+| **API 문서 (Swagger)** | http://localhost:8000/swagger/ | 전체 API 엔드포인트 테스트 |
+| **API 문서 (ReDoc)** | http://localhost:8000/redoc/ | 깔끔한 API 문서 뷰어 |
+| **관리자 페이지** | http://localhost:8000/admin/ | Django Admin |
+| **Celery 모니터링** | http://localhost:5555/ | 비동기 작업 상태 확인 |
+
+### 문제 해결
+
+```bash
+# Docker 컨테이너 상태 확인
+docker-compose ps
+
+# 로그 확인 (에러 발생 시)
+docker-compose logs web     # Django 앱 로그
+docker-compose logs db      # PostgreSQL 로그
+
+# 모든 서비스 재시작
+docker-compose down && docker-compose up -d
+
+# 완전 초기화 (데이터 포함 삭제)
+docker-compose down -v
+```
+
+---
+
 ## 🛠 기술 스택
 
 | 분류 | 기술 |
 |------|------|
 | **Backend** | Python 3.12, Django 5.2.4, DRF 3.16.0 |
-| **Database** | PostgreSQL 15, SQLite (개발) |
+| **Database** | PostgreSQL 15 |
 | **Authentication** | Simple JWT, django-allauth (소셜 로그인) |
 | **Payment** | Toss Payments API (카드/계좌/가상계좌) |
 | **Async** | Celery 5.5.3, Redis 7, Celery Beat, Flower |
-| **API Docs** | drf-yasg (Swagger/OpenAPI) |
-| **Deployment** | Docker, Docker Compose |
-| **Testing** | pytest, pytest-django, coverage |
-| **CI/CD** | GitHub Actions |
+| **API Docs** | drf-spectacular (OpenAPI 3.0) |
+| **Deployment** | Docker, Docker Compose, Nginx |
+| **Testing** | pytest, pytest-django, coverage (70%+) |
+| **Monitoring** | Prometheus, Grafana, Flower |
 
 ## ✨ 주요 기능
 
@@ -36,44 +91,55 @@
 - **🛒 장바구니 & 찜하기**: 실시간 재고 검증, Wishlist 기능
 - **💰 포인트**: 등급별 적립(1-5%), FIFO 만료 처리, 자동 알림
 - **⚡ 비동기**: Celery Beat 스케줄러, 이메일 발송, 포인트 만료 처리
+- **🔄 Self-Healing**: Circuit Breaker, Dead Letter Queue, 자동 복구
 
-## 🚀 빠른 시작
+## 🚀 상세 설치 가이드
 
-### Docker Compose 사용 (권장)
+### 방법 1: Docker Compose (권장)
+
+위의 "5분 안에 시작하기" 섹션 참조
+
+### 방법 2: 로컬 개발 환경 (Docker 없이)
+
+**필수 요구사항:**
+- Python 3.12+
+- PostgreSQL 15+
+- Redis 7+
 
 ```bash
 # 1. 저장소 클론
 git clone https://github.com/gotoUSA/django-shopping-mall.git
 cd django-shopping-mall
 
-# 2. 환경변수 설정
+# 2. 가상환경 생성 및 활성화
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 3. 의존성 설치
+pip install -r requirements.txt
+
+# 4. 환경변수 설정
 cp .env.example .env
-# .env 파일에서 SECRET_KEY, TOSS_CLIENT_KEY, TOSS_SECRET_KEY 설정
+# .env 파일 편집:
+# - DATABASE_HOST=localhost (PostgreSQL이 로컬에서 실행 중이라면)
+# - REDIS_URL=redis://localhost:6379/0
 
-# 3. Docker Compose로 전체 서비스 실행
-docker-compose up -d
-# 실행되는 서비스:
-# - web (Django API 서버) - 포트 8000
-# - db (PostgreSQL) - 포트 5432
-# - redis (Redis)
-# - celery_worker (비동기 작업 처리)
-# - celery_beat (스케줄 작업)
-# - flower (Celery 모니터링) - 포트 5555
+# 5. PostgreSQL 데이터베이스 생성 (psql에서)
+# CREATE DATABASE shopping_db;
+# CREATE USER shopping_user WITH PASSWORD 'shopping_pass';
+# GRANT ALL PRIVILEGES ON DATABASE shopping_db TO shopping_user;
 
-# 4. 마이그레이션 실행
-docker-compose exec web python manage.py migrate
+# 6. 마이그레이션
+python manage.py migrate
 
-# 5. 슈퍼유저 생성
-docker-compose exec web python manage.py createsuperuser
+# 7. 개발 서버 실행
+python manage.py runserver
 
-# 6. 테스트 데이터 생성 (선택)
-docker-compose exec web python manage.py create_test_data --preset basic
+# 8. (별도 터미널) Celery 워커 실행
+celery -A myproject worker -l info
 
-# 7. 접속 확인
-# API: http://localhost:8000/api/
-# Admin: http://localhost:8000/admin/
-# Swagger: http://localhost:8000/swagger/
-# Flower: http://localhost:5555/
+# 9. (별도 터미널) Celery Beat 실행
+celery -A myproject beat -l info
 ```
 
 ## 📚 문서
@@ -84,34 +150,84 @@ docker-compose exec web python manage.py create_test_data --preset basic
 - **[테스트](docs/TESTING.md)** - 테스트 작성 및 실행
 - **[기능](docs/FEATURES.md)** - 주요 기능
 
-**자동 생성 문서:**
-- Swagger UI: http://localhost:8000/swagger/
-- ReDoc: http://localhost:8000/redoc/
-- Flower (Celery 모니터링): http://localhost:5555/
-
 ## 🧪 테스트
 
 ```bash
-# Docker 환경에서 테스트
-docker-compose exec web pytest
+# Docker 환경에서 전체 테스트 실행
+docker-compose run --rm web python -m pytest shopping/tests/ -o "addopts="
 
-# 커버리지 포함
-docker-compose exec web pytest --cov=shopping --cov-report=html
+# 특정 테스트만 실행
+docker-compose run --rm web python -m pytest shopping/tests/api/ -o "addopts=" -v
+
+# 커버리지 리포트 생성
+docker-compose run --rm web python -m pytest shopping/tests/ -o "addopts=" --cov=shopping --cov-report=html
+
+# 로컬 환경에서 테스트 (가상환경 활성화 후)
+pytest shopping/tests/unit/ -v
+```
+
+### 테스트 구조
+
+```
+shopping/tests/
+├── admin/          # Django Admin 테스트
+├── api/            # API 엔드포인트 테스트
+│   ├── auth/       # 인증 관련 (로그인, 회원가입, 비밀번호)
+│   ├── cart/       # 장바구니
+│   ├── order/      # 주문
+│   ├── payment/    # 결제
+│   └── point/      # 포인트
+├── unit/           # 단위 테스트
+│   ├── models/     # 모델 테스트
+│   ├── serializers/# 시리얼라이저 테스트
+│   └── services/   # 서비스 로직 테스트
+├── integration/    # 통합 테스트
+├── schema/         # API 스키마/계약 테스트
+└── tasks/          # Celery 태스크 테스트
 ```
 
 ## 📁 프로젝트 구조
 
 ```
-django-shopping-mall/
-├── myproject/          # Django 프로젝트 설정
-├── shopping/           # 메인 앱
-│   ├── models/        # 데이터 모델
-│   ├── views/         # API 뷰
-│   ├── serializers/   # DRF 시리얼라이저
-│   ├── services/      # 비즈니스 로직
-│   └── tests/         # 테스트 코드
-├── docs/              # 상세 문서
-└── requirements.txt
+myproject/
+├── myproject/              # Django 프로젝트 설정
+│   ├── settings/           # 환경별 설정 (base, dev, test, prod)
+│   ├── urls.py
+│   └── celery.py           # Celery 설정
+├── shopping/               # 메인 앱
+│   ├── models/             # 데이터 모델 (User, Product, Order, Payment 등)
+│   ├── views/              # API 뷰 (ViewSet 기반)
+│   ├── serializers/        # DRF 시리얼라이저
+│   ├── services/           # 비즈니스 로직 레이어
+│   ├── admin/              # Django Admin 커스터마이징
+│   ├── tasks/              # Celery 비동기 작업
+│   └── tests/              # 테스트 코드
+├── docker/                 # Docker 관련 설정 (Grafana, Prometheus)
+├── docs/                   # 프로젝트 문서
+├── docker-compose.yml      # Docker Compose 설정
+├── Dockerfile
+├── requirements.txt        # Python 의존성
+└── Makefile                # 편의 명령어
+```
+
+## 🔧 환경변수 설정
+
+`.env.example` 파일을 `.env`로 복사하고 필요한 값을 설정합니다:
+
+```bash
+# 필수 설정 (테스트 환경에서는 기본값 사용 가능)
+DJANGO_SECRET_KEY=your-secret-key      # Django 시크릿 키
+DJANGO_DEBUG=True                       # 디버그 모드
+
+# 데이터베이스 (Docker 사용 시 기본값 그대로 사용)
+DATABASE_HOST=db                        # Docker: db, 로컬: localhost
+DATABASE_NAME=shopping_db
+DATABASE_USER=shopping_user
+DATABASE_PASSWORD=shopping_pass
+
+# 토스페이먼츠 (실제 결제 테스트 시 필요)
+TOSS_CLIENT_KEY=test_ck_xxx             # 테스트 클라이언트 키
+TOSS_SECRET_KEY=test_sk_xxx             # 테스트 시크릿 키
 ```
 
 ## 💡 개발 노트
