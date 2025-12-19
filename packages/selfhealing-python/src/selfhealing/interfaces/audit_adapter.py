@@ -67,6 +67,24 @@ class AuditAction(str, Enum):
     MANUAL_OVERRIDE = "manual_override"
 
 
+def _get_default_actor() -> tuple[Optional[str], str]:
+    """
+    Get default actor from ActorContext if available.
+
+    Returns (actor_id, actor_type) tuple.
+    Falls back to (None, "system") if ActorContext not available.
+    """
+    try:
+        from selfhealing.context.actor_context import ActorContext
+
+        if ActorContext.is_set():
+            actor = ActorContext.get_current()
+            return actor.actor_id, actor.actor_type
+    except ImportError:
+        pass
+    return None, "system"
+
+
 @dataclass
 class AuditEntry:
     """
@@ -74,18 +92,23 @@ class AuditEntry:
 
     Captures:
     - What happened (action)
-    - Who did it (actor_id, actor_type)
+    - Who did it (actor_id, actor_type) - 자동으로 ActorContext에서 가져옴
     - What was affected (target_type, target_id)
     - Why (reason)
     - Additional context (details)
+
+    Note:
+        actor_id와 actor_type은 명시적으로 설정하지 않으면
+        ActorContext에서 자동으로 가져옵니다.
+        이를 통해 "누가 언제 설정했는지" 자동 추적됩니다.
     """
 
     action: AuditAction | str
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
-    # Actor information
-    actor_id: Optional[str] = None
-    actor_type: str = "system"  # system, user, scheduler, etc.
+    # Actor information - 자동으로 ActorContext에서 가져옴
+    actor_id: Optional[str] = field(default=None)
+    actor_type: str = field(default="system")
 
     # Target information
     target_type: Optional[str] = None  # circuit_breaker, dlq_entry, etc.
@@ -100,6 +123,21 @@ class AuditEntry:
     # Result
     success: bool = True
     error_message: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """
+        Post-init: ActorContext에서 actor 정보 자동 채우기.
+
+        actor_id가 명시적으로 설정되지 않았으면 ActorContext에서 가져옵니다.
+        이를 통해 "누가 이 설정을 변경했는지" 자동 추적됩니다.
+        """
+        # actor_id가 None이고 actor_type이 기본값 "system"이면 자동 채우기
+        if self.actor_id is None and self.actor_type == "system":
+            auto_actor_id, auto_actor_type = _get_default_actor()
+            if auto_actor_id is not None:
+                # Use object.__setattr__ for frozen-like behavior compatibility
+                object.__setattr__(self, "actor_id", auto_actor_id)
+                object.__setattr__(self, "actor_type", auto_actor_type)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
