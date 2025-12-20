@@ -625,5 +625,5 @@ class PaymentReplayHandler(ReplayHandler):
 
 ## 버전 정보
 
-- **현재 버전**: 0.1.0
+- **현재 버전**: 1.0.0
 - **마지막 업데이트**: 2025-12-20

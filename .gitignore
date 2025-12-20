@@ -60,3 +60,6 @@ backup.json
 backup.json
 db.sqlite3.backup
 .hypothesis/
+
+# Runtime state files (auto-generated)
+logs/selfhealing_state/*.json

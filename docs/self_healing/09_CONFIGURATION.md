@@ -94,7 +94,7 @@ all_slas = sla.get_all_thresholds()  # dict of all domains
 ```python
 SELF_HEALING = {
     "RETRY": {
-        "MAX_ATTEMPTS": 3,      # 최대 재시도 횟수
+        "MAX_RETRIES": 3,       # 최대 재시도 횟수
         "BACKOFF_BASE": 4,      # 지수 백오프 베이스 (delay = base^attempt)
         "BACKOFF_MAX": 180,     # 최대 대기 시간 (초)
         "JITTER_PERCENT": 25,   # 지터 비율 (±25%)
@@ -107,7 +107,7 @@ SELF_HEALING = {
 
 | 필드 | 타입 | 기본값 | 설명 |
 |------|------|--------|------|
-| `max_attempts` | int | 3 | 최대 재시도 횟수 |
+| `max_retries` | int | 3 | 최대 재시도 횟수 |
 | `backoff_base` | int | 4 | 지수 백오프 베이스 |
 | `backoff_max` | int | 180 | 최대 대기 시간 (초) |
 | `jitter_percent` | int | 25 | 지터 비율 (%) |
@@ -670,3 +670,97 @@ def validate_config():
 - [03_CIRCUIT_BREAKER.md](03_CIRCUIT_BREAKER.md) - Circuit Breaker 상세
 - [05_RETRY_BACKOFF.md](05_RETRY_BACKOFF.md) - Retry 전략
 - [08_OBSERVABILITY.md](08_OBSERVABILITY.md) - 메트릭 및 모니터링
+- [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) - Chaos Engineering
+
+---
+
+## Chaos Engineering 설정
+
+> Chaos Engineering 시스템의 런타임 설정은 별도 모듈에서 관리됩니다.
+> 상세 내용은 [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) 7절을 참조하세요.
+
+### 설정 위치
+
+- 런타임 설정: `selfhealing.services.runtime_config`
+- Chaos 모듈: `selfhealing.services.chaos/`
+- 상태 파일: `logs/selfhealing_state/runtime_config_chaos.json`
+
+### 주요 설정 클래스
+
+| 클래스 | 설명 | 위치 |
+|--------|------|------|
+| `SchedulerConfig` | 스케줄러 설정 | `chaos/scheduler.py` |
+| `SafetyGuardConfig` | 안전장치 설정 | `chaos/safety_guard.py` |
+| `BlastRadiusPolicy` | 폭발반경 정책 | `chaos/blast_radius.py` |
+| `TTLConfig` | TTL 설정 | `chaos/stop_conditions.py` |
+| `StopConditionsConfig` | 중단 조건 설정 | `chaos/stop_conditions.py` |
+| `DryRunConfig` | Dry Run 설정 | `chaos/stop_conditions.py` |
+
+### SchedulerConfig (스케줄러 설정)
+
+```python
+@dataclass
+class SchedulerConfig:
+    enabled: bool = False                          # 스케줄러 활성화
+    dry_run_mode: bool = True                      # Dry Run 모드 (기본: True)
+    dry_run_reason: str = "Initial deployment"     # Dry Run 사유
+    default_schedule_hour_start: int = 2           # 실험 허용 시작 시간
+    default_schedule_hour_end: int = 6             # 실험 허용 종료 시간
+    auto_approve_instance_level: bool = True       # 인스턴스 레벨 자동 승인
+    auto_approve_service_level: bool = False       # 서비스 레벨 자동 승인
+    max_concurrent_experiments: int = 5            # 최대 동시 실험 수
+    max_experiments_per_day: int = 10              # 일일 최대 실험 수
+    min_interval_between_experiments_minutes: int = 30  # 최소 실험 간격
+```
+
+### StopConditionsConfig (자동 중단 조건)
+
+```python
+@dataclass
+class StopConditionsConfig:
+    max_error_rate_percent: float = 5.0            # 에러율 임계값 (%)
+    max_latency_p99_ms: int = 2000                 # P99 지연시간 임계값 (ms)
+    max_latency_p95_ms: int = 1000                 # P95 지연시간 임계값 (ms)
+    min_error_budget_percent: float = 10.0         # 에러 버짓 최소값 (%)
+    check_interval_seconds: int = 10               # 체크 주기 (초)
+    consecutive_breaches_required: int = 2         # 연속 위반 횟수
+    enabled: bool = True                           # 활성화 여부
+```
+
+### TTLConfig (자동 만료 설정)
+
+```python
+@dataclass
+class TTLConfig:
+    default_ttl_seconds: int = 600                 # 기본 TTL (10분)
+    min_ttl_seconds: int = 60                      # 최소 TTL (1분)
+    max_ttl_seconds: int = 3600                    # 최대 TTL (1시간)
+    auto_expiration_enabled: bool = True           # 자동 만료 활성화
+```
+
+### DryRunConfig (Dry Run 설정)
+
+```python
+@dataclass
+class DryRunConfig:
+    enabled: bool = True                           # Dry Run 모드 (기본: True - 안전)
+    reason: str = "Initial deployment"             # Dry Run 사유
+```
+
+### 런타임 설정 API
+
+```python
+from selfhealing.services.runtime_config import (
+    get_scheduler_config,
+    update_scheduler_config,
+    get_stop_conditions_config,
+    update_stop_conditions_config,
+)
+
+# 스케줄러 설정 조회
+config = get_scheduler_config()
+print(config.dry_run_mode)  # True
+
+# 설정 업데이트
+updated = update_scheduler_config(dry_run_mode=False)
+```

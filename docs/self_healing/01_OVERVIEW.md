@@ -218,6 +218,6 @@ packages/selfhealing-python/src/selfhealing/
 
 ## 버전 정보
 
-- **현재 버전**: 0.1.0
-- **마지막 업데이트**: 2025-12-20
+- **현재 버전**: 1.1.0
+- **마지막 업데이트**: 2025-12-21
 - **담당자**: SelfHealing Team

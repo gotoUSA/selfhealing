@@ -49,7 +49,31 @@ Self-Healing 시스템을 **통합 제어**하기 위한 REST API입니다.
 ├── allow/{service_name}/    # 서비스 허용
 ├── reset/{service_name}/    # 서비스 리셋
 ├── dlq/list/                # DLQ 목록
-└── dlq/replay/              # DLQ 재실행
+├── dlq/replay/              # DLQ 재실행
+│
+└── chaos/                   # Chaos Engineering API
+    ├── config/
+    │   ├── safety-guard/    # SafetyGuard 설정 (GET/PATCH)
+    │   ├── blast-radius/    # Blast Radius 정책 (GET/PATCH)
+    │   ├── scheduler/       # Scheduler 설정 (GET/PATCH)
+    │   └── reports/         # Report 설정 (GET/PATCH)
+    ├── schedules/           # 예약 실험 CRUD (GET/POST)
+    │   ├── {id}/            # 상세 조회/수정/삭제 (GET/PATCH/DELETE)
+    │   ├── {id}/approve/    # 승인/거부 (POST)
+    │   └── {id}/execute/    # 즉시 실행 (POST)
+    ├── kill-switch/         # Kill Switch 제어 (GET/POST)
+    ├── kill-all/            # 전체 실험 중단 (POST)
+    ├── safety-check/        # 안전 검사 실행 (GET)
+    ├── blast-radius/check/  # Blast Radius 검사 (POST)
+    ├── reports/             # 리포트 목록 (GET)
+    │   ├── generate/        # 리포트 생성 (POST)
+    │   └── {id}/            # 리포트 상세 (GET)
+    ├── grade-history/       # 등급 히스토리 (GET)
+    ├── pending-approvals/   # 승인 대기 목록 (GET)
+    └── safety/              # 안전장치 설정
+        ├── stop-conditions/ # Stop Conditions (GET/PATCH)
+        ├── ttl/             # TTL 설정 (GET/PATCH)
+        └── dry-run/         # Dry Run 설정 (GET/PATCH)
 ```
 
 ---
@@ -695,7 +719,80 @@ client.block_service("toss_payment", "점검", ttl_minutes=30)
 
 ---
 
+## 8. Chaos Engineering API
+
+> Chaos Engineering 전용 API는 별도 모듈로 분리되어 있습니다.
+> 상세 내용은 [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md)를 참조하세요.
+
+### 8.1 주요 엔드포인트 요약
+
+| 카테고리 | 엔드포인트 | 메서드 | 설명 |
+|----------|-----------|--------|------|
+| **설정** | `/chaos/config/safety-guard/` | GET, PATCH | SafetyGuard 설정 |
+| **설정** | `/chaos/config/blast-radius/` | GET, PATCH | Blast Radius 정책 |
+| **설정** | `/chaos/config/scheduler/` | GET, PATCH | Scheduler 설정 |
+| **스케줄** | `/chaos/schedules/` | GET, POST | 예약 실험 목록/생성 |
+| **스케줄** | `/chaos/schedules/{id}/approve/` | POST | 실험 승인/거부 |
+| **스케줄** | `/chaos/schedules/{id}/execute/` | POST | 즉시 실행 |
+| **Kill Switch** | `/chaos/kill-switch/` | GET, POST | Kill Switch 상태/제어 |
+| **Kill All** | `/chaos/kill-all/` | POST | 모든 실험 즉시 중단 |
+| **안전검사** | `/chaos/safety-check/` | GET | 안전 검사 실행 |
+| **리포트** | `/chaos/reports/generate/` | POST | 리포트 생성 |
+| **안전장치** | `/chaos/safety/stop-conditions/` | GET, PATCH | Stop Conditions 설정 |
+| **안전장치** | `/chaos/safety/ttl/` | GET, PATCH | TTL 설정 |
+| **안전장치** | `/chaos/safety/dry-run/` | GET, PATCH | Dry Run 설정 |
+
+### 8.2 안전장치 API 예시
+
+#### Stop Conditions 조회
+
+```bash
+curl -X GET /api/self-healing/chaos/safety/stop-conditions/ \
+  -H "Authorization: Token <token>"
+```
+
+```json
+{
+  "status": "success",
+  "data": {
+    "max_error_rate_percent": 5.0,
+    "max_latency_p99_ms": 2000,
+    "max_latency_p95_ms": 1000,
+    "min_error_budget_percent": 10.0,
+    "check_interval_seconds": 10,
+    "consecutive_breaches_required": 2,
+    "enabled": true
+  }
+}
+```
+
+#### Kill All - 전체 실험 중단
+
+```bash
+curl -X POST /api/self-healing/chaos/kill-all/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "긴급 장애 발생"}'
+```
+
+```json
+{
+  "status": "success",
+  "message": "All chaos experiments killed",
+  "killed_count": 3,
+  "affected_experiments": ["exp-001", "exp-002", "exp-003"],
+  "reason": "긴급 장애 발생",
+  "killed_by": "admin@example.com",
+  "killed_at": "2025-12-21T10:30:00Z"
+}
+```
+
+---
+
 ## 버전 정보
 
-- **현재 버전**: 0.1.0
-- **마지막 업데이트**: 2025-12-20
+- **현재 버전**: 1.1.0
+- **마지막 업데이트**: 2025-12-21
+- **변경 내역**:
+  - v1.1.0: Chaos Engineering API 섹션 추가
+  - v1.0.0: 초기 버전
