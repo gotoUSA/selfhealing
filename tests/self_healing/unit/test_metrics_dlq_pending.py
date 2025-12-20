@@ -20,7 +20,7 @@ from django.utils import timezone
 pytestmark = pytest.mark.requires_db
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.metrics import (
+from selfhealing.services.metrics import (
     record_dlq_item_created,
     update_dlq_pending_gauges,
     dlq_pending_gauge,

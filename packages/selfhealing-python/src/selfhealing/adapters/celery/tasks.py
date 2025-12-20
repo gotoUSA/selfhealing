@@ -785,34 +785,35 @@ def check_and_report_sla_breaches(self) -> dict:
 def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
     """
     Periodic heartbeat task for Dead Man's Snitch.
-    
+
     This task should be scheduled at a regular interval (default: 60 seconds).
     If the heartbeat metric stops being updated, Prometheus will fire an alert.
-    
+
     Add to CELERY_BEAT_SCHEDULE:
         'emit-selfhealing-heartbeat': {
             'task': 'selfhealing.adapters.celery.tasks.emit_selfhealing_heartbeat',
             'schedule': 60.0,  # Should match heartbeat_interval_seconds config
         },
-    
+
     Args:
         component: The component emitting the heartbeat (default: 'error_budget')
-    
+
     Returns:
         Dictionary with heartbeat status
-    
+
     Prometheus Alert Rules:
         - SelfHealingServiceDead: time() - selfhealing_heartbeat_timestamp_seconds > 120
         - SelfHealingHeartbeatMissing: absent(selfhealing_heartbeat_timestamp_seconds) == 1
     """
     import time
-    
+
     try:
         # Check if heartbeat is enabled
         from selfhealing.services.runtime_config import get_runtime_config_manager
+
         manager = get_runtime_config_manager()
         config = manager.get_error_budget_config()
-        
+
         if not config.get("heartbeat_enabled", True):
             logger.debug(f"[Heartbeat] Disabled for component={component}")
             return {
@@ -821,14 +822,15 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
                 "status": "disabled",
                 "timestamp": time.time(),
             }
-        
+
         # Emit heartbeat metric
         from selfhealing.services.metrics import emit_heartbeat
+
         emit_heartbeat(component=component)
-        
+
         current_time = time.time()
         logger.debug(f"[Heartbeat] Emitted for component={component} at {current_time}")
-        
+
         return {
             "success": True,
             "component": component,
@@ -837,16 +839,17 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
             "interval_seconds": config.get("heartbeat_interval_seconds", 60),
             "timeout_seconds": config.get("heartbeat_timeout_seconds", 120),
         }
-    
+
     except Exception as e:
         logger.error(f"[Heartbeat] Failed to emit heartbeat: {e}", exc_info=True)
         # Even on failure, we try to emit a heartbeat to indicate partial functionality
         try:
             from selfhealing.services.metrics import emit_heartbeat
+
             emit_heartbeat(component=f"{component}_degraded")
         except Exception:
             pass
-        
+
         return {
             "success": False,
             "component": component,
@@ -871,24 +874,25 @@ def notify_failsafe_recovery(
 ) -> dict:
     """
     Send recovery notification when fail-safe mode is deactivated.
-    
+
     This task should be called when the system transitions from fail-safe
     mode back to normal operation.
-    
+
     Args:
         component: The component that recovered
         downtime_seconds: How long the component was in fail-safe mode
         recovery_reason: Why the system recovered
-    
+
     Returns:
         Dictionary with notification status
     """
     try:
         # Check if recovery alerts are enabled
         from selfhealing.services.runtime_config import get_runtime_config_manager
+
         manager = get_runtime_config_manager()
         config = manager.get_error_budget_config()
-        
+
         if not config.get("recovery_alert_enabled", True):
             logger.info(f"[Recovery] Recovery alert disabled, skipping for {component}")
             return {
@@ -896,36 +900,31 @@ def notify_failsafe_recovery(
                 "component": component,
                 "status": "disabled",
             }
-        
+
         # Record metric
         from selfhealing.services.metrics import record_recovery_alert, record_failsafe_recovered
+
         record_recovery_alert(component=component)
         record_failsafe_recovered(component=component)
-        
+
         # If alert adapter is configured, send recovery notification
         try:
             from selfhealing.factory import ProviderRegistry
+
             alert_adapter = ProviderRegistry.get_alert_adapter()
-            
-            if hasattr(alert_adapter, 'alert_failsafe_recovered'):
+
+            if hasattr(alert_adapter, "alert_failsafe_recovered"):
                 alert_adapter.alert_failsafe_recovered(
                     component=component,
                     downtime_seconds=downtime_seconds,
                     recovery_reason=recovery_reason,
                 )
-                logger.info(
-                    f"[Recovery] Sent recovery alert for {component}, "
-                    f"downtime={downtime_seconds:.1f}s"
-                )
+                logger.info(f"[Recovery] Sent recovery alert for {component}, " f"downtime={downtime_seconds:.1f}s")
             else:
-                logger.warning(
-                    f"[Recovery] Alert adapter does not support recovery notifications"
-                )
+                logger.warning(f"[Recovery] Alert adapter does not support recovery notifications")
         except Exception as adapter_error:
-            logger.warning(
-                f"[Recovery] Could not send alert via adapter: {adapter_error}"
-            )
-        
+            logger.warning(f"[Recovery] Could not send alert via adapter: {adapter_error}")
+
         return {
             "success": True,
             "component": component,
@@ -933,7 +932,7 @@ def notify_failsafe_recovery(
             "recovery_reason": recovery_reason,
             "alert_sent": True,
         }
-    
+
     except Exception as e:
         logger.error(f"[Recovery] Failed to send recovery notification: {e}", exc_info=True)
         return {

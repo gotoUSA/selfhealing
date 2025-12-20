@@ -49,7 +49,7 @@ from selfhealing.core import (
 from selfhealing.services.backoff_calculator import get_calculator_for_domain
 from selfhealing.services import ForensicContext
 from selfhealing.core.forensic import create_snapshot_data
-from shopping.services.self_healing import (
+from selfhealing.services.forensic_context import (
     ForensicContextBuilder,
     capture_forensic_context,
 )
@@ -397,7 +397,9 @@ class TestWithRetryDecorator:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="IdempotencyService uses generic check_event API; Django-specific check_payment tests moved to Django adapter layer")
+@pytest.mark.skip(
+    reason="IdempotencyService uses generic check_event API; Django-specific check_payment tests moved to Django adapter layer"
+)
 @pytest.mark.django_db(transaction=True)
 class TestIdempotencyService:
     """

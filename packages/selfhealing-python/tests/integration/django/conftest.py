@@ -86,7 +86,7 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def reset_database(request):
     """Reset database between tests by using transactions.
-    
+
     Only runs for tests that use the database (have django_db marker).
     Serializer tests don't need this.
     """

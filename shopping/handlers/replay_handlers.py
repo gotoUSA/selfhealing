@@ -6,7 +6,7 @@ in the shopping domain. They are registered with the core selfhealing package
 at application startup.
 
 Usage:
-    from shopping.services.self_healing.replay_handlers import register_shopping_handlers
+    from shopping.handlers.replay_handlers import register_shopping_handlers
     register_shopping_handlers()  # Call during Django app ready()
 """
 
@@ -100,9 +100,7 @@ class PaymentReplayHandler(ReplayHandler):
                 from shopping.services.payment_recovery_service import get_payment_recovery_handler
 
                 recovery_handler = get_payment_recovery_handler()
-                callback = lambda pid, oid, att: recovery_handler.schedule_retry(
-                    payment_id=pid, order_id=oid, attempt=att
-                )
+                callback = lambda pid, oid, att: recovery_handler.schedule_retry(payment_id=pid, order_id=oid, attempt=att)
 
             snapshot = failed_op.snapshot_data or {}
             payment_id = getattr(failed_op, "payment_id", None) or snapshot.get("payment_id")
@@ -280,7 +278,7 @@ def register_shopping_handlers() -> None:
             name = "shopping"
 
             def ready(self):
-                from shopping.services.self_healing.replay_handlers import register_shopping_handlers
+                from shopping.handlers.replay_handlers import register_shopping_handlers
                 register_shopping_handlers()
     """
     register_replay_handler(PaymentReplayHandler())

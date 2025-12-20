@@ -539,14 +539,14 @@ Budget < 20% 감지
   run: |
     VERDICT=$(curl -s -H "Authorization: Bearer $TOKEN" \
       $API_URL/api/self-healing/deployment-policy/verdict/)
-    
+
     STATUS=$(echo $VERDICT | jq -r '.data.verdict.status')
     CAN_DEPLOY=$(echo $VERDICT | jq -r '.data.verdict.can_deploy')
-    
+
     if [ "$CAN_DEPLOY" = "false" ]; then
       echo "⚠️ Deployment not recommended: $STATUS"
       echo "Message: $(echo $VERDICT | jq -r '.data.message')"
-      
+
       # 권고일 뿐, 강제 차단하지 않음
       # exit 1  # 필요시 주석 해제
     fi
@@ -890,7 +890,7 @@ Heartbeat Task를 Celery Beat에 등록합니다:
 
 CELERY_BEAT_SCHEDULE = {
     # ... 기존 스케줄 ...
-    
+
     # Heartbeat (Dead Man's Snitch)
     'emit-selfhealing-heartbeat': {
         'task': 'selfhealing.adapters.celery.tasks.emit_selfhealing_heartbeat',

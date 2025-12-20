@@ -158,10 +158,7 @@ class RuntimeConfigManager:
     def get_all_config(self) -> Dict[str, Dict[str, Any]]:
         """Get all configuration."""
         with self._lock:
-            return {
-                config_type: self._get_config(config_type)
-                for config_type in self.STORAGE_KEYS.keys()
-            }
+            return {config_type: self._get_config(config_type) for config_type in self.STORAGE_KEYS.keys()}
 
     def get_default_strategy(self, config_type: str) -> Dict[str, Any]:
         """Get the default apply strategy for a config type."""
@@ -583,7 +580,7 @@ class RuntimeConfigManager:
     def get_error_budget_config(self) -> Dict[str, Any]:
         """
         Get Error Budget configuration.
-        
+
         Returns:
             dict: Error Budget 및 Burn Rate 임계값 설정
         """
@@ -615,7 +612,7 @@ class RuntimeConfigManager:
     ) -> Dict[str, Any]:
         """
         Update Error Budget configuration.
-        
+
         Args:
             threshold_healthy: 정상 상태 임계값 (%)
             threshold_caution: 주의 상태 임계값 (%)
@@ -635,7 +632,7 @@ class RuntimeConfigManager:
             escalation_enabled: Override 에스컬레이션 활성화 여부
             escalation_channel: 에스컬레이션 알림 채널 (예: #governance)
             escalation_mention: 에스컬레이션 멘션 대상 (예: @cto @security)
-            
+
         Returns:
             dict: 업데이트된 설정값
         """

@@ -24,7 +24,7 @@ from selfhealing.services import (
     ReplayService,
     get_replay_service,
 )
-from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
+from shopping.handlers.replay_handlers import PaymentReplayHandler
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 

@@ -29,7 +29,7 @@ logger = get_task_logger(__name__)
 
 def _get_sla_thresholds():
     """Get SLA thresholds from Django config."""
-    from shopping.services.self_healing.config import get_sla_thresholds
+    from selfhealing.services import get_sla_thresholds
 
     return get_sla_thresholds()
 
@@ -51,7 +51,7 @@ def _get_failed_operation_by_id(operation_id: int):
 def _record_sla_breach(domain: str):
     """Record SLA breach metric."""
     try:
-        from shopping.services.self_healing.metrics import record_sla_breach
+        from selfhealing.services.metrics import record_sla_breach
 
         record_sla_breach(domain)
     except Exception:

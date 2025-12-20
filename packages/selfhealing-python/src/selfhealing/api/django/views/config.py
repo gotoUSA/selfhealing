@@ -360,10 +360,10 @@ class MetricsConfigView(BaseConfigView):
 class ErrorBudgetConfigView(BaseConfigView):
     """
     Error Budget Configuration API.
-    
+
     GET  /api/self-healing/config/error-budget/ - Get Error Budget config
     PUT  /api/self-healing/config/error-budget/ - Update Error Budget config
-    
+
     Error Budget 및 Burn Rate 임계값을 동적으로 변경할 수 있습니다.
     변경 후 error_budget_service에서 자동으로 새 임계값을 사용합니다.
     """

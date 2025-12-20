@@ -148,11 +148,11 @@ SELF_HEALING = {
         "FAILURE_THRESHOLD": 5,                # 실패 임계값
         "RECOVERY_TIMEOUT": 60,                # 복구 타임아웃 (초)
         "SUCCESS_THRESHOLD": 2,                # Half-Open 성공 임계값
-        
+
         # Rate Limit Cascade 감지
         "RATE_LIMIT_CASCADE_THRESHOLD": 10,    # 429 응답 임계값
         "RATE_LIMIT_CASCADE_WINDOW_SECONDS": 60,  # 감지 윈도우
-        
+
         # Self-DDoS 보호
         "SELF_DDOS_PROTECTION_ENABLED": True,
         "SELF_DDOS_REQUEST_THRESHOLD": 100,
@@ -280,7 +280,7 @@ SELF_HEALING = {
         "CRITICAL_CHANNEL": "#critical-alerts",
         "HIGH_CHANNEL": "#ops-alerts",
         "MEDIUM_CHANNEL": "#dev-alerts",
-        
+
         # 메시지 제한
         "LIMITS": {
             "SLACK_BLOCK_TEXT_LIMIT": 3000,
@@ -366,26 +366,26 @@ SELF_HEALING = {
         "THRESHOLD_CAUTION": 50.0,      # 주의 상태 (50-75%)
         "THRESHOLD_WARNING": 20.0,      # 경고 상태 (20-50%)
         "THRESHOLD_CRITICAL": 0.0,      # 위험 상태 (20% 미만)
-        
+
         # Burn Rate 임계값 (Google SRE 권장)
         "BURN_RATE_FAST_CRITICAL": 14.4,  # 빠른 소진 위험 (2일 내 100% 소진)
         "BURN_RATE_FAST_WARNING": 6.0,    # 빠른 소진 경고 (5일 내 100% 소진)
         "BURN_RATE_SLOW_WARNING": 3.0,    # 느린 소진 경고 (10일 내 100% 소진)
         "BURN_RATE_SLOW_INFO": 1.0,       # 정상 소진율
-        
+
         # Fail-Safe 설정
         "FAILSAFE_ALERT_ENABLED": True,   # Fail-Safe 발동 시 알림 발송
         "FAILSAFE_COOLDOWN_SECONDS": 300, # 연속 알림 방지 (5분)
-        
+
         # Heartbeat (Dead Man's Snitch) 설정
         "HEARTBEAT_ENABLED": True,           # Heartbeat 활성화
         "HEARTBEAT_INTERVAL_SECONDS": 60,    # Heartbeat 발송 주기 (1분)
         "HEARTBEAT_TIMEOUT_SECONDS": 120,    # Heartbeat 타임아웃 (2분)
-        
+
         # 복구 알림 (Recovery Notification) 설정
         "RECOVERY_ALERT_ENABLED": True,           # 복구 알림 발송
         "RECOVERY_ALERT_INCLUDE_DOWNTIME": True,  # 장애 시간 포함
-        
+
         # Override 에스컬레이션 설정
         "ESCALATION_ENABLED": True,            # 에스컬레이션 활성화
         "ESCALATION_CHANNEL": "#governance",   # 에스컬레이션 채널
@@ -648,15 +648,15 @@ from shopping.services.self_healing.config import get_config
 
 def validate_config():
     config = get_config()
-    
+
     # CB 활성화 확인
     if not config.circuit_breaker.enabled:
         logger.warning("Circuit Breaker is DISABLED in production!")
-    
+
     # SLA 검증
     if config.sla.payment_hours > 2:
         logger.warning("Payment SLA is too lenient!")
-    
+
     # 재시도 설정 검증
     if config.retry.max_attempts < 2:
         logger.warning("Retry max attempts is very low!")

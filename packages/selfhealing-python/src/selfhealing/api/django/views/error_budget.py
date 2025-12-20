@@ -51,13 +51,13 @@ class ErrorBudgetStatusView(APIView):
     Error Budget 상태 조회 API.
 
     GET /api/self-healing/error-budget/status/
-    
+
     Returns current Error Budget status including:
     - Budget remaining (minutes, percentage)
     - Burn rate (1h, 6h)
     - SLO information
     - Health status
-    
+
     Query Parameters:
     - slo_name: SLO name to check (default: "availability")
     """
@@ -67,15 +67,17 @@ class ErrorBudgetStatusView(APIView):
     def get(self, request: Request) -> Response:
         try:
             slo_name = request.query_params.get("slo_name", "availability")
-            
+
             service = get_error_budget_service()
             budget_status = service.get_budget_status(slo_name)
 
-            return Response({
-                "status": "success",
-                "data": budget_status.to_dict(),
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "data": budget_status.to_dict(),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[ErrorBudgetAPI] Status failed: {e}", exc_info=True)
@@ -88,7 +90,7 @@ class ErrorBudgetHistoryView(APIView):
     Error Budget 결정 이력 조회 API.
 
     GET /api/self-healing/error-budget/history/
-    
+
     Query Parameters:
     - limit: Maximum records to return (default: 50)
     - decision_type: Filter by type (freeze_acknowledged, override_approved, freeze_lifted)
@@ -104,14 +106,16 @@ class ErrorBudgetHistoryView(APIView):
             service = get_error_budget_service()
             history = service.get_decision_history(limit=limit, decision_type=decision_type)
 
-            return Response({
-                "status": "success",
-                "data": {
-                    "records": [r.to_dict() for r in history],
-                    "count": len(history),
-                },
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "data": {
+                        "records": [r.to_dict() for r in history],
+                        "count": len(history),
+                    },
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[ErrorBudgetAPI] History failed: {e}", exc_info=True)
@@ -131,17 +135,17 @@ class DeploymentVerdictView(APIView):
     배포 가능 여부 판정 API.
 
     GET /api/self-healing/deployment-policy/verdict/
-    
+
     Returns deployment verdict including:
     - status: proceed, caution, warning, freeze_recommended
     - can_deploy: boolean
     - requires_override: boolean
     - message: Human-readable recommendation
     - allowed_deployment_types: List of allowed deployment types
-    
+
     Query Parameters:
     - slo_name: SLO name to evaluate (default: "availability")
-    
+
     Note: This is an ADVISORY endpoint. It does not block deployments.
     CI/CD tools can query this endpoint to display warnings to operators.
     """
@@ -154,23 +158,25 @@ class DeploymentVerdictView(APIView):
 
             service = get_error_budget_service()
             verdict = service.get_deployment_verdict(slo_name)
-            
+
             # 활성 Override 확인
             active_override = service.check_active_override()
 
             response_data = verdict.to_dict()
-            
+
             if active_override:
                 response_data["active_override"] = active_override.to_dict()
                 response_data["verdict"]["has_active_override"] = True
             else:
                 response_data["verdict"]["has_active_override"] = False
 
-            return Response({
-                "status": "success",
-                "data": response_data,
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "data": response_data,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[DeploymentPolicyAPI] Verdict failed: {e}", exc_info=True)
@@ -184,12 +190,12 @@ class DeploymentFreezeAcknowledgeView(APIView):
     배포 동결 확정 API.
 
     POST /api/self-healing/deployment-policy/acknowledge/
-    
+
     Request Body:
     {
         "justification": "Error budget critical, pausing all deployments"
     }
-    
+
     Records that the operator has acknowledged the freeze recommendation
     and confirms the deployment freeze.
     """
@@ -199,7 +205,7 @@ class DeploymentFreezeAcknowledgeView(APIView):
     def post(self, request: Request) -> Response:
         try:
             justification = request.data.get("justification", "")
-            
+
             if not justification:
                 return Response(
                     {
@@ -212,22 +218,22 @@ class DeploymentFreezeAcknowledgeView(APIView):
 
             service = get_error_budget_service()
             decided_by = getattr(request.user, "username", str(request.user))
-            
+
             record = service.acknowledge_freeze(
                 decided_by=decided_by,
                 justification=justification,
             )
 
-            logger.info(
-                f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}"
-            )
+            logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
 
-            return Response({
-                "status": "success",
-                "message": "배포 동결이 확정되었습니다.",
-                "data": record.to_dict(),
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "message": "배포 동결이 확정되었습니다.",
+                    "data": record.to_dict(),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[DeploymentPolicyAPI] Acknowledge failed: {e}", exc_info=True)
@@ -242,7 +248,7 @@ class DeploymentOverrideView(APIView):
     배포 동결 무시(Override) 승인 API.
 
     POST /api/self-healing/deployment-policy/override/
-    
+
     Request Body:
     {
         "justification": "Critical security patch for CVE-2024-XXXX",
@@ -251,10 +257,10 @@ class DeploymentOverrideView(APIView):
         "deployment_name": "payment-service v1.2.3",  // optional
         "expires_hours": 4  // optional, default 4
     }
-    
+
     Records that the operator has decided to override the freeze recommendation
     and proceed with deployment. This creates an audit trail.
-    
+
     IMPORTANT: This is a governance record. It does NOT automatically
     enable deployments. CI/CD systems should check for active overrides.
     """
@@ -320,13 +326,15 @@ class DeploymentOverrideView(APIView):
                 f"type={override_type.value}, deployment={deployment_name}"
             )
 
-            return Response({
-                "status": "success",
-                "message": "배포 동결 무시가 승인되었습니다. 이 결정은 감사 로그에 기록됩니다.",
-                "warning": "Error Budget이 낮은 상태에서의 배포는 추가 장애 위험이 있습니다.",
-                "data": record.to_dict(),
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "message": "배포 동결 무시가 승인되었습니다. 이 결정은 감사 로그에 기록됩니다.",
+                    "warning": "Error Budget이 낮은 상태에서의 배포는 추가 장애 위험이 있습니다.",
+                    "data": record.to_dict(),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[DeploymentPolicyAPI] Override failed: {e}", exc_info=True)
@@ -341,12 +349,12 @@ class DeploymentFreezeLiftView(APIView):
     배포 동결 해제 API.
 
     POST /api/self-healing/deployment-policy/lift/
-    
+
     Request Body:
     {
         "justification": "Error budget recovered to healthy level"
     }
-    
+
     Records that the deployment freeze has been lifted.
     This should be called when:
     - Error budget has recovered to healthy levels
@@ -359,7 +367,7 @@ class DeploymentFreezeLiftView(APIView):
     def post(self, request: Request) -> Response:
         try:
             justification = request.data.get("justification", "")
-            
+
             if not justification:
                 return Response(
                     {
@@ -378,16 +386,16 @@ class DeploymentFreezeLiftView(APIView):
                 justification=justification,
             )
 
-            logger.info(
-                f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}"
-            )
+            logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
 
-            return Response({
-                "status": "success",
-                "message": "배포 동결이 해제되었습니다. 일반 배포가 가능합니다.",
-                "data": record.to_dict(),
-                "timestamp": timezone.now().isoformat(),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "message": "배포 동결이 해제되었습니다. 일반 배포가 가능합니다.",
+                    "data": record.to_dict(),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[DeploymentPolicyAPI] Lift failed: {e}", exc_info=True)
@@ -402,7 +410,7 @@ class ActiveOverrideView(APIView):
     활성 Override 조회 API.
 
     GET /api/self-healing/deployment-policy/active-override/
-    
+
     Returns the currently active override, if any.
     CI/CD systems can use this to check if a deployment is allowed
     despite the freeze recommendation.
@@ -416,19 +424,23 @@ class ActiveOverrideView(APIView):
             active_override = service.check_active_override()
 
             if active_override:
-                return Response({
-                    "status": "success",
-                    "has_active_override": True,
-                    "data": active_override.to_dict(),
-                    "timestamp": timezone.now().isoformat(),
-                })
+                return Response(
+                    {
+                        "status": "success",
+                        "has_active_override": True,
+                        "data": active_override.to_dict(),
+                        "timestamp": timezone.now().isoformat(),
+                    }
+                )
             else:
-                return Response({
-                    "status": "success",
-                    "has_active_override": False,
-                    "data": None,
-                    "timestamp": timezone.now().isoformat(),
-                })
+                return Response(
+                    {
+                        "status": "success",
+                        "has_active_override": False,
+                        "data": None,
+                        "timestamp": timezone.now().isoformat(),
+                    }
+                )
 
         except Exception as e:
             logger.error(f"[DeploymentPolicyAPI] Active override check failed: {e}", exc_info=True)

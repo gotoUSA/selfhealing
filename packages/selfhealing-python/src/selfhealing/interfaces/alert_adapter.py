@@ -228,9 +228,7 @@ class AlertAdapter(ABC):
         self.send(
             Alert(
                 title=f"SLO Violation: {slo_name}",
-                description=(
-                    f"SLO '{slo_name}' is violated. Target: {target:.2%}, Current: {current:.2%}"
-                ),
+                description=(f"SLO '{slo_name}' is violated. Target: {target:.2%}, Current: {current:.2%}"),
                 severity=AlertSeverity.CRITICAL,
                 category=AlertCategory.SLO_VIOLATION,
                 service_name=service_name,
@@ -251,10 +249,7 @@ class AlertAdapter(ABC):
         self.send(
             Alert(
                 title=f"High Error Rate: {service_name}",
-                description=(
-                    f"Error rate for {service_name} is {error_rate:.1%}, "
-                    f"exceeding threshold of {threshold:.1%}"
-                ),
+                description=(f"Error rate for {service_name} is {error_rate:.1%}, " f"exceeding threshold of {threshold:.1%}"),
                 severity=AlertSeverity.WARNING,
                 category=AlertCategory.ERROR_RATE,
                 service_name=service_name,
@@ -274,15 +269,15 @@ class AlertAdapter(ABC):
     ) -> None:
         """
         CRITICAL: Fail-Safe 모드 발동 알림.
-        
+
         Self-Healing 시스템의 일부가 장애를 일으켜 Fail-Safe 모드로
         전환되었을 때 발송됩니다. 이 알림은 즉각적인 주의가 필요합니다.
-        
+
         Args:
             component: 장애가 발생한 컴포넌트 (예: "error_budget", "circuit_breaker")
             error_message: 장애 원인 메시지
             fallback_action: 취해진 fallback 동작 (예: "PROCEED", "ALLOW")
-        
+
         Note:
             이 알림은 "침묵하는 장애"를 방지하기 위해 설계되었습니다.
             Fail-Safe가 작동하면 시스템은 계속 동작하지만, 운영팀은
@@ -324,15 +319,15 @@ class AlertAdapter(ABC):
     ) -> None:
         """
         복구 완료 알림: Fail-Safe 모드에서 정상 복구 시 발송.
-        
+
         PagerDuty/OpsGenie의 "resolved" 이벤트와 유사하게,
         장애가 해소되었음을 적극적으로 알립니다.
-        
+
         Args:
             component: 복구된 컴포넌트 (예: "error_budget", "circuit_breaker")
             downtime_seconds: 장애 지속 시간 (초)
             recovery_reason: 복구 원인 설명
-        
+
         Note:
             이 알림은 "침묵하는 복구"를 방지합니다.
             장애가 해소되었을 때 명시적으로 알려, 운영팀이
@@ -381,10 +376,10 @@ class AlertAdapter(ABC):
     ) -> None:
         """
         Override 에스컬레이션 알림: Error Budget 부족 상태에서 배포 override 시 발송.
-        
+
         Netflix CAB(Change Advisory Board) 스타일로, Error Budget이 소진된 상태에서
         배포를 강행할 경우 상위 책임자/거버넌스 채널에 에스컬레이션합니다.
-        
+
         Args:
             override_type: Override 유형 (hotfix, security_patch, business_critical 등)
             requester: Override 요청자
@@ -392,7 +387,7 @@ class AlertAdapter(ABC):
             service_name: 대상 서비스 이름
             escalation_channel: 에스컬레이션 채널 (예: #governance)
             escalation_mention: 멘션할 담당자 (예: @cto @security)
-        
+
         Note:
             이 알림은 "위험한 행동"에 대한 가시성을 제공합니다.
             Error Budget 정책을 우회하는 모든 행위는 추적되어야 합니다.

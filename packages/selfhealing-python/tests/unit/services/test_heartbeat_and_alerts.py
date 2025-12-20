@@ -26,17 +26,15 @@ class TestHeartbeatMetrics:
             selfhealing_heartbeat_timestamp,
             selfhealing_heartbeat_count,
         )
-        
+
         before = time.time()
         emit_heartbeat(component="test_component")
         after = time.time()
-        
+
         # Verify timestamp is within reasonable bounds
         # The metric should have been set
-        metric_value = selfhealing_heartbeat_timestamp.labels(
-            component="test_component"
-        )._value.get()
-        
+        metric_value = selfhealing_heartbeat_timestamp.labels(component="test_component")._value.get()
+
         assert metric_value >= before
         assert metric_value <= after
 
@@ -46,19 +44,15 @@ class TestHeartbeatMetrics:
             emit_heartbeat,
             selfhealing_heartbeat_count,
         )
-        
+
         # Get current value (may be non-zero from other tests)
-        initial = selfhealing_heartbeat_count.labels(
-            component="test_counter"
-        )._value.get()
-        
+        initial = selfhealing_heartbeat_count.labels(component="test_counter")._value.get()
+
         emit_heartbeat(component="test_counter")
         emit_heartbeat(component="test_counter")
-        
-        final = selfhealing_heartbeat_count.labels(
-            component="test_counter"
-        )._value.get()
-        
+
+        final = selfhealing_heartbeat_count.labels(component="test_counter")._value.get()
+
         assert final == initial + 2
 
 
@@ -71,17 +65,13 @@ class TestRecoveryAlerts:
             record_recovery_alert,
             recovery_alert_total,
         )
-        
-        initial = recovery_alert_total.labels(
-            component="test_recovery"
-        )._value.get()
-        
+
+        initial = recovery_alert_total.labels(component="test_recovery")._value.get()
+
         record_recovery_alert(component="test_recovery")
-        
-        final = recovery_alert_total.labels(
-            component="test_recovery"
-        )._value.get()
-        
+
+        final = recovery_alert_total.labels(component="test_recovery")._value.get()
+
         assert final == initial + 1
 
     def test_alert_adapter_recovery_method(self):
@@ -91,63 +81,63 @@ class TestRecoveryAlerts:
             Alert,
             AlertSeverity,
         )
-        
+
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
                 self.alerts_sent = []
                 self.resolved_keys = []
-            
+
             def send(self, alert: Alert) -> None:
                 self.alerts_sent.append(alert)
-            
+
             def resolve(self, alert_key: str) -> None:
                 self.resolved_keys.append(alert_key)
-        
+
         adapter = MockAlertAdapter()
-        
+
         # Call recovery method
         adapter.alert_failsafe_recovered(
             component="error_budget",
             downtime_seconds=300.0,  # 5 minutes
             recovery_reason="Manual restart",
         )
-        
+
         # Verify alert was sent
         assert len(adapter.alerts_sent) == 1
         alert = adapter.alerts_sent[0]
-        
+
         assert "RECOVERED" in alert.title
         assert alert.severity == AlertSeverity.INFO
         assert alert.details["downtime_seconds"] == 300.0
         assert alert.details["recovered"] is True
-        
+
         # Should also resolve the previous failsafe alert
         assert "failsafe:error_budget" in adapter.resolved_keys
 
     def test_recovery_alert_formats_downtime_correctly(self):
         """Recovery alert should format downtime in readable format."""
         from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
-        
+
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
                 self.alerts_sent = []
-            
+
             def send(self, alert: Alert) -> None:
                 self.alerts_sent.append(alert)
-            
+
             def resolve(self, alert_key: str) -> None:
                 pass
-        
+
         adapter = MockAlertAdapter()
-        
+
         # Test seconds
         adapter.alert_failsafe_recovered("test", 30.0, "test")
         assert "30초" in adapter.alerts_sent[-1].description
-        
+
         # Test minutes
         adapter.alert_failsafe_recovered("test", 180.0, "test")
         assert "3.0분" in adapter.alerts_sent[-1].description
-        
+
         # Test hours
         adapter.alert_failsafe_recovered("test", 7200.0, "test")
         assert "2.0시간" in adapter.alerts_sent[-1].description
@@ -162,17 +152,13 @@ class TestOverrideEscalation:
             record_override_escalation,
             override_escalation_total,
         )
-        
-        initial = override_escalation_total.labels(
-            override_type="hotfix"
-        )._value.get()
-        
+
+        initial = override_escalation_total.labels(override_type="hotfix")._value.get()
+
         record_override_escalation(override_type="hotfix")
-        
-        final = override_escalation_total.labels(
-            override_type="hotfix"
-        )._value.get()
-        
+
+        final = override_escalation_total.labels(override_type="hotfix")._value.get()
+
         assert final == initial + 1
 
     def test_alert_adapter_escalation_method(self):
@@ -182,19 +168,19 @@ class TestOverrideEscalation:
             Alert,
             AlertSeverity,
         )
-        
+
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
                 self.alerts_sent = []
-            
+
             def send(self, alert: Alert) -> None:
                 self.alerts_sent.append(alert)
-            
+
             def resolve(self, alert_key: str) -> None:
                 pass
-        
+
         adapter = MockAlertAdapter()
-        
+
         adapter.alert_override_escalation(
             override_type="security_patch",
             requester="admin@example.com",
@@ -203,10 +189,10 @@ class TestOverrideEscalation:
             escalation_channel="#governance",
             escalation_mention="@cto @security",
         )
-        
+
         assert len(adapter.alerts_sent) == 1
         alert = adapter.alerts_sent[0]
-        
+
         assert "OVERRIDE ESCALATION" in alert.title
         assert alert.severity == AlertSeverity.WARNING
         assert alert.details["override_type"] == "security_patch"
@@ -221,36 +207,35 @@ class TestOverrideEscalation:
             "escalation_channel": "#test-channel",
             "escalation_mention": "@test-user",
         }
-        
+
         from selfhealing.interfaces.alert_adapter import AlertAdapter, Alert
-        
+
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
                 self.escalations = []
-            
+
             def send(self, alert: Alert) -> None:
                 if alert.details.get("is_escalation"):
                     self.escalations.append(alert)
-            
+
             def resolve(self, alert_key: str) -> None:
                 pass
-            
+
             def alert_override_escalation(self, **kwargs):
                 self.escalations.append(kwargs)
-        
+
         mock_adapter = MockAlertAdapter()
-        
+
         recorder = FreezeDecisionRecorder(
             advisor=mock.MagicMock(),
             alert_adapter=mock_adapter,
         )
-        
+
         # Mock the advisor
         recorder.advisor.get_deployment_verdict.return_value = mock.MagicMock(
-            budget_status=mock.MagicMock(budget_remaining_percent=10.0),
-            status="FREEZE_RECOMMENDED"
+            budget_status=mock.MagicMock(budget_remaining_percent=10.0), status="FREEZE_RECOMMENDED"
         )
-        
+
         # Approve override
         recorder.record_override_approved(
             decided_by="admin",
@@ -258,7 +243,7 @@ class TestOverrideEscalation:
             override_type=OverrideType.HOTFIX,
             deployment_name="critical-fix",
         )
-        
+
         # Should have sent escalation
         assert len(mock_adapter.escalations) == 1
         escalation = mock_adapter.escalations[0]
@@ -271,40 +256,39 @@ class TestOverrideEscalation:
         mock_config.return_value = {
             "escalation_enabled": False,
         }
-        
+
         from selfhealing.interfaces.alert_adapter import AlertAdapter, Alert
-        
+
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
                 self.escalations = []
-            
+
             def send(self, alert: Alert) -> None:
                 if alert.details.get("is_escalation"):
                     self.escalations.append(alert)
-            
+
             def resolve(self, alert_key: str) -> None:
                 pass
-            
+
             def alert_override_escalation(self, **kwargs):
                 self.escalations.append(kwargs)
-        
+
         mock_adapter = MockAlertAdapter()
-        
+
         recorder = FreezeDecisionRecorder(
             advisor=mock.MagicMock(),
             alert_adapter=mock_adapter,
         )
         recorder.advisor.get_deployment_verdict.return_value = mock.MagicMock(
-            budget_status=mock.MagicMock(budget_remaining_percent=10.0),
-            status="FREEZE_RECOMMENDED"
+            budget_status=mock.MagicMock(budget_remaining_percent=10.0), status="FREEZE_RECOMMENDED"
         )
-        
+
         recorder.record_override_approved(
             decided_by="admin",
             justification="Emergency fix",
             override_type=OverrideType.HOTFIX,
         )
-        
+
         # Should NOT have sent escalation
         assert len(mock_adapter.escalations) == 0
 
@@ -315,39 +299,39 @@ class TestAlertingRulesExtended:
     def test_dead_mans_snitch_rule_exists(self):
         """ALERTING_RULES should include Dead Man's Snitch rule."""
         from selfhealing.services.metrics import ALERTING_RULES
-        
+
         assert "SelfHealingServiceDead" in ALERTING_RULES
         rule = ALERTING_RULES["SelfHealingServiceDead"]
-        
+
         assert "selfhealing_heartbeat_timestamp" in rule["expr"]
         assert rule["severity"] == "critical"
 
     def test_heartbeat_missing_rule_exists(self):
         """ALERTING_RULES should include heartbeat missing rule."""
         from selfhealing.services.metrics import ALERTING_RULES
-        
+
         assert "SelfHealingHeartbeatMissing" in ALERTING_RULES
         rule = ALERTING_RULES["SelfHealingHeartbeatMissing"]
-        
+
         assert "absent" in rule["expr"]
         assert rule["severity"] == "critical"
 
     def test_override_escalation_rule_exists(self):
         """ALERTING_RULES should include override escalation rule."""
         from selfhealing.services.metrics import ALERTING_RULES
-        
+
         assert "OverrideEscalation" in ALERTING_RULES
         rule = ALERTING_RULES["OverrideEscalation"]
-        
+
         assert "override_escalation" in rule["expr"]
 
     def test_override_escalation_high_rule_exists(self):
         """ALERTING_RULES should include excessive override rule."""
         from selfhealing.services.metrics import ALERTING_RULES
-        
+
         assert "OverrideEscalationHigh" in ALERTING_RULES
         rule = ALERTING_RULES["OverrideEscalationHigh"]
-        
+
         assert rule["severity"] == "critical"
 
 
@@ -357,11 +341,11 @@ class TestErrorBudgetConfigNewFields:
     def test_config_has_heartbeat_fields(self):
         """ErrorBudgetConfig should have heartbeat fields."""
         config = ErrorBudgetConfig()
-        
+
         assert hasattr(config, "heartbeat_enabled")
         assert hasattr(config, "heartbeat_interval_seconds")
         assert hasattr(config, "heartbeat_timeout_seconds")
-        
+
         assert config.heartbeat_enabled is True
         assert config.heartbeat_interval_seconds == 60
         assert config.heartbeat_timeout_seconds == 120
@@ -369,21 +353,21 @@ class TestErrorBudgetConfigNewFields:
     def test_config_has_recovery_fields(self):
         """ErrorBudgetConfig should have recovery alert fields."""
         config = ErrorBudgetConfig()
-        
+
         assert hasattr(config, "recovery_alert_enabled")
         assert hasattr(config, "recovery_alert_include_downtime")
-        
+
         assert config.recovery_alert_enabled is True
         assert config.recovery_alert_include_downtime is True
 
     def test_config_has_escalation_fields(self):
         """ErrorBudgetConfig should have escalation fields."""
         config = ErrorBudgetConfig()
-        
+
         assert hasattr(config, "escalation_enabled")
         assert hasattr(config, "escalation_channel")
         assert hasattr(config, "escalation_mention")
-        
+
         assert config.escalation_enabled is True
         assert config.escalation_channel == "#governance"
         assert config.escalation_mention == "@cto @security"
@@ -398,16 +382,16 @@ class TestRuntimeConfigNewFields:
             RuntimeConfigManager,
             reset_runtime_config_manager,
         )
-        
+
         reset_runtime_config_manager()
         manager = RuntimeConfigManager()
-        
+
         result = manager.update_error_budget_config(
             heartbeat_enabled=True,
             heartbeat_interval_seconds=30,
             heartbeat_timeout_seconds=90,
         )
-        
+
         assert result["heartbeat_enabled"] is True
         assert result["heartbeat_interval_seconds"] == 30
         assert result["heartbeat_timeout_seconds"] == 90
@@ -418,15 +402,15 @@ class TestRuntimeConfigNewFields:
             RuntimeConfigManager,
             reset_runtime_config_manager,
         )
-        
+
         reset_runtime_config_manager()
         manager = RuntimeConfigManager()
-        
+
         result = manager.update_error_budget_config(
             recovery_alert_enabled=False,
             recovery_alert_include_downtime=True,
         )
-        
+
         assert result["recovery_alert_enabled"] is False
         assert result["recovery_alert_include_downtime"] is True
 
@@ -436,16 +420,16 @@ class TestRuntimeConfigNewFields:
             RuntimeConfigManager,
             reset_runtime_config_manager,
         )
-        
+
         reset_runtime_config_manager()
         manager = RuntimeConfigManager()
-        
+
         result = manager.update_error_budget_config(
             escalation_enabled=True,
             escalation_channel="#ops-escalation",
             escalation_mention="@oncall",
         )
-        
+
         assert result["escalation_enabled"] is True
         assert result["escalation_channel"] == "#ops-escalation"
         assert result["escalation_mention"] == "@oncall"
@@ -457,4 +441,3 @@ class TestRuntimeConfigNewFields:
 # Serializer tests require Django + REST Framework configured.
 # They are now in: tests/integration/django/test_serializers.py
 # =============================================================================
-

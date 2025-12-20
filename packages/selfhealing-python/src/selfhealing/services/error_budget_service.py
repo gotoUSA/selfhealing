@@ -13,7 +13,7 @@ Features:
 - 배포 동결 권고 (Freeze Advisor)
 - 결정 기록 (Audit Trail)
 
-Reference: 
+Reference:
 - docs/self_healing/08_OBSERVABILITY.md
 - Google SRE Workbook - Alerting on SLOs
 """
@@ -42,32 +42,32 @@ logger = logging.getLogger(__name__)
 
 class FreezeStatus(str, Enum):
     """배포 동결 상태."""
-    
+
     PROCEED = "proceed"
     """정상 - 배포 진행 가능."""
-    
+
     CAUTION = "caution"
     """주의 - 경고 표시 후 진행 가능 (수동 확인 권장)."""
-    
+
     WARNING = "warning"
     """경고 - 신규 기능 배포 자제, 안정화 우선."""
-    
+
     FREEZE_RECOMMENDED = "freeze_recommended"
     """동결 권고 - 긴급 패치 외 모든 신규 배포 중단 권고."""
 
 
 class OverrideType(str, Enum):
     """배포 동결 무시 유형."""
-    
+
     HOTFIX = "hotfix"
     """긴급 버그 수정."""
-    
+
     SECURITY_PATCH = "security_patch"
     """보안 패치."""
-    
+
     EXECUTIVE_APPROVAL = "executive_approval"
     """경영진 승인."""
-    
+
     ROLLBACK = "rollback"
     """롤백 배포."""
 
@@ -80,11 +80,12 @@ class OverrideType(str, Enum):
 def _get_error_budget_config() -> dict:
     """
     RuntimeConfigManager에서 Error Budget 설정을 가져옵니다.
-    
+
     API로 동적 변경된 설정이 반영됩니다.
     """
     try:
         from selfhealing.services.runtime_config import get_runtime_config_manager
+
         manager = get_runtime_config_manager()
         return manager.get_error_budget_config()
     except Exception:
@@ -95,7 +96,7 @@ def _get_error_budget_config() -> dict:
 def get_error_budget_thresholds() -> dict:
     """
     Error Budget 임계값을 가져옵니다 (동적 설정 지원).
-    
+
     Returns:
         dict: {healthy, caution, warning, critical} 임계값 (%)
     """
@@ -111,7 +112,7 @@ def get_error_budget_thresholds() -> dict:
 def get_burn_rate_thresholds() -> dict:
     """
     Burn Rate 임계값을 가져옵니다 (동적 설정 지원).
-    
+
     Returns:
         dict: {fast_critical, fast_warning, slow_warning, slow_info} 임계값
     """
@@ -159,23 +160,24 @@ _failsafe_counter = 0
 def _send_failsafe_alert(component: str, error_message: str, fallback_action: str) -> None:
     """
     Fail-Safe 발동 시 알림 발송.
-    
+
     "침묵하는 장애" 방지를 위해 Fail-Safe가 작동하면
     즉시 운영팀에 알림을 보냅니다.
     """
     global _failsafe_counter
     _failsafe_counter += 1
-    
+
     # 1. 로그 (항상 남김)
     logger.critical(
         f"[FAIL-SAFE] {component} 시스템 장애로 Fail-Safe 모드 전환. "
         f"Error: {error_message}, Fallback: {fallback_action}, "
         f"Count: {_failsafe_counter}"
     )
-    
+
     # 2. AlertAdapter를 통한 알림 (설정된 경우)
     try:
         from selfhealing.adapters.alert import get_alert_adapter
+
         adapter = get_alert_adapter()
         if adapter is not None:
             adapter.alert_failsafe_activated(
@@ -189,10 +191,11 @@ def _send_failsafe_alert(component: str, error_message: str, fallback_action: st
     except Exception as alert_error:
         # 알림 발송 실패해도 Fail-Safe 응답은 반환해야 함
         logger.error(f"[FAIL-SAFE] Failed to send alert: {alert_error}")
-    
+
     # 3. Prometheus 메트릭 증가 (가능한 경우)
     try:
         from selfhealing.services.metrics import record_failsafe_triggered
+
         record_failsafe_triggered(component=component)
     except ImportError:
         pass
@@ -203,10 +206,10 @@ def _send_failsafe_alert(component: str, error_message: str, fallback_action: st
 def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
     """
     Error Budget 시스템 장애 시 반환할 Fail-Safe 응답.
-    
+
     Returns a PROCEED verdict to ensure deployments are not blocked
     when the Error Budget system is unavailable.
-    
+
     🚨 IMPORTANT: 이 함수가 호출되면 자동으로 CRITICAL 알림이 발송됩니다.
     """
     # Fail-Safe 알림 발송 (침묵하는 장애 방지)
@@ -215,7 +218,7 @@ def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
         error_message=error_message,
         fallback_action="PROCEED (배포 허용)",
     )
-    
+
     return {
         "status": "degraded",  # 정상이 아님을 명시
         "data": {
@@ -228,10 +231,7 @@ def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
             "message": "⚠️ Error Budget 시스템 일시적 오류. 기본값 PROCEED 적용됨.",
             "recommendation": "Error Budget 시스템 상태를 확인하세요. 현재 배포는 허용됩니다.",
             "reasons": [],
-            "allowed_deployment_types": [
-                "feature", "enhancement", "refactor", 
-                "hotfix", "security_patch", "rollback"
-            ],
+            "allowed_deployment_types": ["feature", "enhancement", "refactor", "hotfix", "security_patch", "rollback"],
         },
         "degraded_mode": True,
         "error": error_message,
@@ -244,10 +244,10 @@ def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
 def get_failsafe_status_response(error_message: str) -> Dict[str, Any]:
     """
     Error Budget 상태 조회 실패 시 Fail-Safe 응답.
-    
+
     Returns a healthy status to ensure systems do not falsely alarm
     when the Error Budget system is unavailable.
-    
+
     🚨 IMPORTANT: 이 함수가 호출되면 자동으로 CRITICAL 알림이 발송됩니다.
     """
     # Fail-Safe 알림 발송 (침묵하는 장애 방지)
@@ -256,7 +256,7 @@ def get_failsafe_status_response(error_message: str) -> Dict[str, Any]:
         error_message=error_message,
         fallback_action="HEALTHY 상태 가정",
     )
-    
+
     return {
         "status": "degraded",
         "data": {
@@ -299,51 +299,51 @@ def get_failsafe_status_response(error_message: str) -> Dict[str, Any]:
 @dataclass
 class ErrorBudgetStatus:
     """Error Budget 현재 상태."""
-    
+
     # SLO 정보
     slo_name: str
     slo_target: float  # e.g., 0.999 (99.9%)
     window_days: int
-    
+
     # Budget 상태
     budget_total_minutes: float
     budget_consumed_minutes: float
     budget_remaining_minutes: float
     budget_remaining_percent: float
-    
+
     # Burn Rate
     burn_rate_1h: float = 0.0
     burn_rate_6h: float = 0.0
-    
+
     # 측정 정보
     measured_at: datetime = field(default_factory=now)
     error_count_window: int = 0
     total_requests_window: int = 0
-    
+
     @property
     def is_healthy(self) -> bool:
         """버짓이 건강한 상태인지."""
         thresholds = get_error_budget_thresholds()
         return self.budget_remaining_percent >= thresholds["healthy"]
-    
+
     @property
     def is_critical(self) -> bool:
         """버짓이 위험 상태인지."""
         thresholds = get_error_budget_thresholds()
         return self.budget_remaining_percent < thresholds["warning"]
-    
+
     @property
     def has_fast_burn(self) -> bool:
         """빠른 소진이 발생 중인지."""
         thresholds = get_burn_rate_thresholds()
         return self.burn_rate_1h >= thresholds["fast_warning"]
-    
+
     @property
     def has_slow_burn(self) -> bool:
         """느린 소진이 발생 중인지."""
         thresholds = get_burn_rate_thresholds()
         return self.burn_rate_6h >= thresholds["slow_warning"]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """API 응답용 딕셔너리 변환."""
         return {
@@ -380,31 +380,31 @@ class ErrorBudgetStatus:
 @dataclass
 class DeploymentVerdict:
     """배포 정책 판정 결과."""
-    
+
     status: FreezeStatus
     budget_status: ErrorBudgetStatus
-    
+
     # 권고 메시지
     message: str
     recommendation: str
-    
+
     # 상세 정보
     reasons: List[str] = field(default_factory=list)
     allowed_deployment_types: List[str] = field(default_factory=list)
-    
+
     # 타임스탬프
     evaluated_at: datetime = field(default_factory=now)
-    
+
     @property
     def can_deploy(self) -> bool:
         """배포 진행 가능 여부 (권고 기준)."""
         return self.status in (FreezeStatus.PROCEED, FreezeStatus.CAUTION)
-    
+
     @property
     def requires_override(self) -> bool:
         """Override가 필요한 상태인지."""
         return self.status == FreezeStatus.FREEZE_RECOMMENDED
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """API 응답용 딕셔너리 변환."""
         return {
@@ -425,27 +425,27 @@ class DeploymentVerdict:
 @dataclass
 class FreezeDecisionRecord:
     """배포 동결 결정 기록."""
-    
+
     decision_id: str
     decision_type: str  # "freeze_acknowledged", "override_approved", "freeze_lifted"
     decided_by: str
     decided_at: datetime
-    
+
     # 결정 당시 상태
     budget_remaining_percent: float
     freeze_status: FreezeStatus
-    
+
     # 사유
     justification: str
     override_type: Optional[OverrideType] = None
-    
+
     # 유효기간 (override의 경우)
     expires_at: Optional[datetime] = None
-    
+
     # 관련 배포 정보
     deployment_id: Optional[str] = None
     deployment_name: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환."""
         return {
@@ -471,11 +471,11 @@ class FreezeDecisionRecord:
 class ErrorBudgetCalculator:
     """
     Error Budget 계산기.
-    
+
     SLO 대비 현재 에러 버짓 소진량을 계산합니다.
     DLQ 유입량 및 장애 시간을 기반으로 계산합니다.
     """
-    
+
     def __init__(
         self,
         slo_config: Optional[SLOConfig] = None,
@@ -484,7 +484,7 @@ class ErrorBudgetCalculator:
     ):
         """
         초기화.
-        
+
         Args:
             slo_config: SLO 설정. None이면 기본값 사용.
             get_failed_operation_stats: DLQ 통계 조회 함수
@@ -493,7 +493,7 @@ class ErrorBudgetCalculator:
         self.slo_config = slo_config or SLOConfig.default_config()
         self._get_failed_operation_stats = get_failed_operation_stats
         self._get_request_stats = get_request_stats
-    
+
     def calculate_budget_status(
         self,
         slo_name: str = "availability",
@@ -502,12 +502,12 @@ class ErrorBudgetCalculator:
     ) -> ErrorBudgetStatus:
         """
         Error Budget 상태 계산.
-        
+
         Args:
             slo_name: SLO 이름
             window_start: 윈도우 시작 시간 (None이면 SLO window 사용)
             window_end: 윈도우 종료 시간 (None이면 현재)
-        
+
         Returns:
             ErrorBudgetStatus
         """
@@ -520,18 +520,18 @@ class ErrorBudgetCalculator:
                 target=0.999,
                 window_days=30,
             )
-        
+
         current_time = window_end or now()
         if window_start is None:
             window_start = current_time - timedelta(days=slo.window_days)
-        
+
         # Budget 총량 (분 단위)
         budget_total_minutes = slo.error_budget_minutes_per_window
-        
+
         # 에러/요청 통계 조회
         error_count = 0
         total_requests = 0
-        
+
         if self._get_failed_operation_stats:
             try:
                 stats = self._get_failed_operation_stats(
@@ -541,7 +541,7 @@ class ErrorBudgetCalculator:
                 error_count = stats.get("total_errors", 0)
             except Exception as e:
                 logger.warning(f"[ErrorBudget] Failed to get error stats: {e}")
-        
+
         if self._get_request_stats:
             try:
                 stats = self._get_request_stats(
@@ -551,7 +551,7 @@ class ErrorBudgetCalculator:
                 total_requests = stats.get("total_requests", 0)
             except Exception as e:
                 logger.warning(f"[ErrorBudget] Failed to get request stats: {e}")
-        
+
         # Budget 소진량 계산
         # 방법 1: DLQ 기반 (에러 건수 / 허용 에러)
         if total_requests > 0:
@@ -563,11 +563,13 @@ class ErrorBudgetCalculator:
             # 예: 1000건당 1건 에러 허용 시 (99.9% SLO)
             estimated_total = max(error_count * 1000, 100000)  # 최소 100k 가정
             consumed_ratio = min((error_count / estimated_total) / slo.error_budget, 1.0)
-        
+
         budget_consumed_minutes = budget_total_minutes * consumed_ratio
         budget_remaining_minutes = budget_total_minutes - budget_consumed_minutes
-        budget_remaining_percent = (budget_remaining_minutes / budget_total_minutes * 100) if budget_total_minutes > 0 else 100.0
-        
+        budget_remaining_percent = (
+            (budget_remaining_minutes / budget_total_minutes * 100) if budget_total_minutes > 0 else 100.0
+        )
+
         # Burn Rate 계산
         burn_rate_1h = self._calculate_burn_rate(
             slo=slo,
@@ -579,7 +581,7 @@ class ErrorBudgetCalculator:
             window_hours=6,
             current_time=current_time,
         )
-        
+
         return ErrorBudgetStatus(
             slo_name=slo.name,
             slo_target=slo.target,
@@ -594,7 +596,7 @@ class ErrorBudgetCalculator:
             error_count_window=error_count,
             total_requests_window=total_requests,
         )
-    
+
     def _calculate_burn_rate(
         self,
         slo: SLO,
@@ -603,16 +605,16 @@ class ErrorBudgetCalculator:
     ) -> float:
         """
         특정 시간 윈도우의 Burn Rate 계산.
-        
+
         Burn Rate = (실제 에러율 / 허용 에러율)
-        
+
         예: Burn Rate 14.4 = 1시간에 에러 버짯 2% 소진 속도
         """
         window_start = current_time - timedelta(hours=window_hours)
-        
+
         error_count = 0
         total_requests = 0
-        
+
         if self._get_failed_operation_stats:
             try:
                 stats = self._get_failed_operation_stats(
@@ -622,7 +624,7 @@ class ErrorBudgetCalculator:
                 error_count = stats.get("total_errors", 0)
             except Exception:
                 pass
-        
+
         if self._get_request_stats:
             try:
                 stats = self._get_request_stats(
@@ -632,13 +634,13 @@ class ErrorBudgetCalculator:
                 total_requests = stats.get("total_requests", 0)
             except Exception:
                 pass
-        
+
         if total_requests == 0 or slo.error_budget == 0:
             return 0.0
-        
+
         actual_error_rate = error_count / total_requests
         burn_rate = actual_error_rate / slo.error_budget
-        
+
         return burn_rate
 
 
@@ -650,50 +652,50 @@ class ErrorBudgetCalculator:
 class DeploymentPolicyAdvisor:
     """
     배포 정책 어드바이저.
-    
+
     Error Budget 상태를 기반으로 배포 가능 여부를 판정하고,
     권고 사항을 생성합니다.
-    
+
     Core Principle: "시스템은 조언하고, 결정은 사람이 한다."
     실제 배포 차단은 수행하지 않으며, 권고만 제공합니다.
     """
-    
+
     def __init__(
         self,
         calculator: Optional[ErrorBudgetCalculator] = None,
     ):
         """
         초기화.
-        
+
         Args:
             calculator: Error Budget 계산기
         """
         self.calculator = calculator or ErrorBudgetCalculator()
-        
+
         # 활성 Override 목록
         self._active_overrides: Dict[str, FreezeDecisionRecord] = {}
-    
+
     def get_deployment_verdict(
         self,
         slo_name: str = "availability",
     ) -> DeploymentVerdict:
         """
         배포 가능 여부 판정.
-        
+
         Args:
             slo_name: 평가할 SLO 이름
-        
+
         Returns:
             DeploymentVerdict
         """
         budget_status = self.calculator.calculate_budget_status(slo_name)
-        
+
         # 상태 결정
         status, message, recommendation, reasons = self._evaluate_status(budget_status)
-        
+
         # 허용되는 배포 유형 결정
         allowed_types = self._get_allowed_deployment_types(status)
-        
+
         return DeploymentVerdict(
             status=status,
             budget_status=budget_status,
@@ -702,7 +704,7 @@ class DeploymentPolicyAdvisor:
             reasons=reasons,
             allowed_deployment_types=allowed_types,
         )
-    
+
     def _evaluate_status(
         self,
         budget_status: ErrorBudgetStatus,
@@ -710,16 +712,15 @@ class DeploymentPolicyAdvisor:
         """상태 평가 및 메시지 생성."""
         reasons = []
         remaining = budget_status.budget_remaining_percent
-        
+
         # 동적 임계값 가져오기
         eb_thresholds = get_error_budget_thresholds()
         br_thresholds = get_burn_rate_thresholds()
-        
+
         # Fast Burn 체크 (최우선)
         if budget_status.burn_rate_1h >= br_thresholds["fast_critical"]:
             reasons.append(
-                f"Fast Burn Rate 위험: {budget_status.burn_rate_1h:.1f}x "
-                f"(임계값: {br_thresholds['fast_critical']}x)"
+                f"Fast Burn Rate 위험: {budget_status.burn_rate_1h:.1f}x " f"(임계값: {br_thresholds['fast_critical']}x)"
             )
             return (
                 FreezeStatus.FREEZE_RECOMMENDED,
@@ -727,58 +728,47 @@ class DeploymentPolicyAdvisor:
                 "즉시 원인 분석이 필요합니다. 모든 신규 배포를 중단하고 안정화에 집중하세요.",
                 reasons,
             )
-        
+
         # Budget 잔여량 기반 판정
         if remaining < eb_thresholds["warning"]:
-            reasons.append(
-                f"Error Budget 잔여량 위험: {remaining:.1f}% "
-                f"(임계값: {eb_thresholds['warning']}%)"
-            )
+            reasons.append(f"Error Budget 잔여량 위험: {remaining:.1f}% " f"(임계값: {eb_thresholds['warning']}%)")
             return (
                 FreezeStatus.FREEZE_RECOMMENDED,
                 "🔴 현재 에러 버짓이 소진되었습니다. 긴급 패치 외의 모든 신규 배포 중단을 권고합니다.",
                 "비상 대응 모드로 전환하세요. 모든 리소스를 안정화 작업에 투입하세요.",
                 reasons,
             )
-        
+
         if remaining < eb_thresholds["caution"]:
-            reasons.append(
-                f"Error Budget 잔여량 경고: {remaining:.1f}% "
-                f"(임계값: {eb_thresholds['caution']}%)"
-            )
-            
+            reasons.append(f"Error Budget 잔여량 경고: {remaining:.1f}% " f"(임계값: {eb_thresholds['caution']}%)")
+
             # Slow Burn 추가 체크
             if budget_status.has_slow_burn:
-                reasons.append(
-                    f"Slow Burn Rate 감지: {budget_status.burn_rate_6h:.1f}x"
-                )
-            
+                reasons.append(f"Slow Burn Rate 감지: {budget_status.burn_rate_6h:.1f}x")
+
             return (
                 FreezeStatus.WARNING,
                 "🟠 Error Budget 경고 수준입니다. 신규 기능 배포를 자제해주세요.",
                 "배포 동결을 고려하고, 기존 이슈 해결에 집중하세요.",
                 reasons,
             )
-        
+
         if remaining < eb_thresholds["healthy"]:
-            reasons.append(
-                f"Error Budget 주의: {remaining:.1f}% "
-                f"(권장: {eb_thresholds['healthy']}% 이상)"
-            )
+            reasons.append(f"Error Budget 주의: {remaining:.1f}% " f"(권장: {eb_thresholds['healthy']}% 이상)")
             return (
                 FreezeStatus.CAUTION,
                 "🟡 Error Budget 주의 수준입니다. 배포 시 주의가 필요합니다.",
                 "신규 배포 전 충분한 테스트와 점진적 롤아웃을 권장합니다.",
                 reasons,
             )
-        
+
         return (
             FreezeStatus.PROCEED,
             "🟢 Error Budget 정상 수준입니다. 일반 개발을 진행할 수 있습니다.",
             "정상적인 개발 및 배포를 진행하세요.",
             reasons,
         )
-    
+
     def _get_allowed_deployment_types(self, status: FreezeStatus) -> List[str]:
         """상태별 허용 배포 유형."""
         if status == FreezeStatus.PROCEED:
@@ -789,31 +779,31 @@ class DeploymentPolicyAdvisor:
             return ["hotfix", "security_patch", "rollback"]
         else:  # FREEZE_RECOMMENDED
             return ["security_patch", "rollback"]
-    
+
     def check_active_override(self, deployment_id: Optional[str] = None) -> Optional[FreezeDecisionRecord]:
         """
         활성 Override 확인.
-        
+
         Args:
             deployment_id: 특정 배포 ID (None이면 전체 체크)
-        
+
         Returns:
             활성 Override가 있으면 해당 레코드, 없으면 None
         """
         current_time = now()
-        
+
         for override_id, record in list(self._active_overrides.items()):
             # 만료 체크
             if record.expires_at and record.expires_at < current_time:
                 del self._active_overrides[override_id]
                 continue
-            
+
             # 특정 배포 ID 체크
             if deployment_id and record.deployment_id != deployment_id:
                 continue
-            
+
             return record
-        
+
         return None
 
 
@@ -825,10 +815,10 @@ class DeploymentPolicyAdvisor:
 class FreezeDecisionRecorder:
     """
     배포 동결 결정 기록기.
-    
+
     배포 동결 확정, Override 승인 등의 결정을 Audit Trail에 기록합니다.
     """
-    
+
     def __init__(
         self,
         advisor: Optional[DeploymentPolicyAdvisor] = None,
@@ -839,7 +829,7 @@ class FreezeDecisionRecorder:
     ):
         """
         초기화.
-        
+
         Args:
             advisor: 배포 정책 어드바이저
             persist_record: 기록 저장 함수
@@ -852,10 +842,10 @@ class FreezeDecisionRecorder:
         self._emit_metric = emit_metric
         self._emit_otel_event = emit_otel_event
         self._alert_adapter = alert_adapter
-        
+
         # In-memory 기록 (영속화 함수가 없는 경우)
         self._records: List[FreezeDecisionRecord] = []
-    
+
     def record_freeze_acknowledged(
         self,
         decided_by: str,
@@ -863,18 +853,18 @@ class FreezeDecisionRecorder:
     ) -> FreezeDecisionRecord:
         """
         배포 동결 확정 기록.
-        
+
         운영자가 동결 권고를 확인하고 동결을 확정할 때 호출.
-        
+
         Args:
             decided_by: 결정자 (사용자명 또는 ID)
             justification: 결정 사유
-        
+
         Returns:
             FreezeDecisionRecord
         """
         verdict = self.advisor.get_deployment_verdict()
-        
+
         record = FreezeDecisionRecord(
             decision_id=f"freeze_{now().strftime('%Y%m%d%H%M%S')}",
             decision_type="freeze_acknowledged",
@@ -884,16 +874,16 @@ class FreezeDecisionRecorder:
             freeze_status=verdict.status,
             justification=justification,
         )
-        
+
         self._save_and_emit(record)
-        
+
         logger.info(
             f"[FreezeDecision] Freeze acknowledged by {decided_by}: "
             f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
         )
-        
+
         return record
-    
+
     def record_override_approved(
         self,
         decided_by: str,
@@ -905,10 +895,10 @@ class FreezeDecisionRecorder:
     ) -> FreezeDecisionRecord:
         """
         배포 동결 무시(Override) 승인 기록.
-        
+
         운영자가 동결 권고를 무시하고 배포를 강행할 때 호출.
         에스컬레이션이 활성화된 경우, 상위 채널에 알림을 발송합니다.
-        
+
         Args:
             decided_by: 결정자
             justification: 결정 사유
@@ -916,12 +906,12 @@ class FreezeDecisionRecorder:
             deployment_id: 배포 ID
             deployment_name: 배포 이름
             expires_hours: Override 유효 시간
-        
+
         Returns:
             FreezeDecisionRecord
         """
         verdict = self.advisor.get_deployment_verdict()
-        
+
         record = FreezeDecisionRecord(
             decision_id=f"override_{now().strftime('%Y%m%d%H%M%S')}",
             decision_type="override_approved",
@@ -935,12 +925,12 @@ class FreezeDecisionRecorder:
             deployment_id=deployment_id,
             deployment_name=deployment_name,
         )
-        
+
         # Advisor에 활성 Override 등록
         self.advisor._active_overrides[record.decision_id] = record
-        
+
         self._save_and_emit(record)
-        
+
         # 에스컬레이션 알림 발송
         self._send_override_escalation(
             override_type=override_type,
@@ -948,15 +938,15 @@ class FreezeDecisionRecorder:
             reason=justification,
             service_name=deployment_name,
         )
-        
+
         logger.warning(
             f"[FreezeDecision] Override approved by {decided_by}: "
             f"type={override_type.value}, deployment={deployment_name}, "
             f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
         )
-        
+
         return record
-    
+
     def _send_override_escalation(
         self,
         override_type: OverrideType,
@@ -966,7 +956,7 @@ class FreezeDecisionRecorder:
     ) -> None:
         """
         Override 에스컬레이션 알림 발송.
-        
+
         RuntimeConfig의 escalation_enabled가 True일 때만 발송합니다.
         """
         try:
@@ -975,14 +965,15 @@ class FreezeDecisionRecorder:
             if not config.get("escalation_enabled", True):
                 logger.debug("[FreezeDecision] Escalation disabled, skipping")
                 return
-            
+
             escalation_channel = config.get("escalation_channel", "#governance")
             escalation_mention = config.get("escalation_mention", "@cto @security")
-            
+
             # 메트릭 기록
             from selfhealing.services.metrics import record_override_escalation
+
             record_override_escalation(override_type.value)
-            
+
             # AlertAdapter가 있으면 에스컬레이션 알림 발송
             if self._alert_adapter:
                 self._alert_adapter.alert_override_escalation(
@@ -994,8 +985,7 @@ class FreezeDecisionRecorder:
                     escalation_mention=escalation_mention,
                 )
                 logger.info(
-                    f"[FreezeDecision] Escalation alert sent: "
-                    f"type={override_type.value}, channel={escalation_channel}"
+                    f"[FreezeDecision] Escalation alert sent: " f"type={override_type.value}, channel={escalation_channel}"
                 )
             else:
                 logger.warning(
@@ -1006,7 +996,7 @@ class FreezeDecisionRecorder:
         except Exception as e:
             # 에스컬레이션 실패는 Override 자체를 막지 않음
             logger.error(f"[FreezeDecision] Failed to send escalation: {e}")
-    
+
     def record_freeze_lifted(
         self,
         decided_by: str,
@@ -1014,18 +1004,18 @@ class FreezeDecisionRecorder:
     ) -> FreezeDecisionRecord:
         """
         배포 동결 해제 기록.
-        
+
         Error Budget이 회복되거나 운영자가 동결을 해제할 때 호출.
-        
+
         Args:
             decided_by: 결정자
             justification: 해제 사유
-        
+
         Returns:
             FreezeDecisionRecord
         """
         verdict = self.advisor.get_deployment_verdict()
-        
+
         record = FreezeDecisionRecord(
             decision_id=f"lift_{now().strftime('%Y%m%d%H%M%S')}",
             decision_type="freeze_lifted",
@@ -1035,19 +1025,18 @@ class FreezeDecisionRecorder:
             freeze_status=verdict.status,
             justification=justification,
         )
-        
+
         # 활성 Override 모두 해제
         self.advisor._active_overrides.clear()
-        
+
         self._save_and_emit(record)
-        
+
         logger.info(
-            f"[FreezeDecision] Freeze lifted by {decided_by}: "
-            f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
+            f"[FreezeDecision] Freeze lifted by {decided_by}: " f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
         )
-        
+
         return record
-    
+
     def get_decision_history(
         self,
         limit: int = 50,
@@ -1055,33 +1044,33 @@ class FreezeDecisionRecorder:
     ) -> List[FreezeDecisionRecord]:
         """
         결정 이력 조회.
-        
+
         Args:
             limit: 최대 조회 건수
             decision_type: 결정 유형 필터
-        
+
         Returns:
             결정 기록 목록
         """
         records = self._records
-        
+
         if decision_type:
             records = [r for r in records if r.decision_type == decision_type]
-        
+
         return sorted(records, key=lambda r: r.decided_at, reverse=True)[:limit]
-    
+
     def _save_and_emit(self, record: FreezeDecisionRecord) -> None:
         """기록 저장 및 이벤트 발행."""
         # In-memory 저장
         self._records.append(record)
-        
+
         # 영속화
         if self._persist_record:
             try:
                 self._persist_record(record)
             except Exception as e:
                 logger.error(f"[FreezeDecision] Failed to persist record: {e}")
-        
+
         # 메트릭 발행
         if self._emit_metric:
             try:
@@ -1095,7 +1084,7 @@ class FreezeDecisionRecorder:
                 )
             except Exception as e:
                 logger.warning(f"[FreezeDecision] Failed to emit metric: {e}")
-        
+
         # OpenTelemetry 이벤트 발행
         if self._emit_otel_event:
             try:
@@ -1115,11 +1104,11 @@ class FreezeDecisionRecorder:
 class ErrorBudgetService:
     """
     통합 Error Budget 서비스.
-    
+
     Calculator, Advisor, Recorder를 통합하여
     Error Budget 관리를 위한 단일 진입점을 제공합니다.
     """
-    
+
     def __init__(
         self,
         slo_config: Optional[SLOConfig] = None,
@@ -1142,15 +1131,15 @@ class ErrorBudgetService:
             emit_metric=emit_metric,
             emit_otel_event=emit_otel_event,
         )
-    
+
     def get_budget_status(self, slo_name: str = "availability") -> ErrorBudgetStatus:
         """Error Budget 상태 조회."""
         return self.calculator.calculate_budget_status(slo_name)
-    
+
     def get_deployment_verdict(self, slo_name: str = "availability") -> DeploymentVerdict:
         """배포 가능 여부 판정."""
         return self.advisor.get_deployment_verdict(slo_name)
-    
+
     def acknowledge_freeze(
         self,
         decided_by: str,
@@ -1158,7 +1147,7 @@ class ErrorBudgetService:
     ) -> FreezeDecisionRecord:
         """배포 동결 확정."""
         return self.recorder.record_freeze_acknowledged(decided_by, justification)
-    
+
     def approve_override(
         self,
         decided_by: str,
@@ -1177,7 +1166,7 @@ class ErrorBudgetService:
             deployment_name=deployment_name,
             expires_hours=expires_hours,
         )
-    
+
     def lift_freeze(
         self,
         decided_by: str,
@@ -1185,7 +1174,7 @@ class ErrorBudgetService:
     ) -> FreezeDecisionRecord:
         """배포 동결 해제."""
         return self.recorder.record_freeze_lifted(decided_by, justification)
-    
+
     def get_decision_history(
         self,
         limit: int = 50,
@@ -1193,7 +1182,7 @@ class ErrorBudgetService:
     ) -> List[FreezeDecisionRecord]:
         """결정 이력 조회."""
         return self.recorder.get_decision_history(limit, decision_type)
-    
+
     def check_active_override(self) -> Optional[FreezeDecisionRecord]:
         """활성 Override 확인."""
         return self.advisor.check_active_override()
@@ -1210,17 +1199,17 @@ _service_instance: Optional[ErrorBudgetService] = None
 def get_error_budget_service() -> ErrorBudgetService:
     """
     ErrorBudgetService 싱글톤 인스턴스 반환.
-    
+
     Returns:
         ErrorBudgetService 인스턴스
     """
     global _service_instance
-    
+
     if _service_instance is None:
         # 기본 설정으로 생성
         # 실제 환경에서는 DI로 주입받거나 설정에서 로드
         _service_instance = ErrorBudgetService()
-    
+
     return _service_instance
 
 
@@ -1234,14 +1223,14 @@ def configure_error_budget_service(
 ) -> ErrorBudgetService:
     """
     ErrorBudgetService 설정 및 인스턴스 반환.
-    
+
     애플리케이션 시작 시 호출하여 서비스를 설정합니다.
-    
+
     Returns:
         설정된 ErrorBudgetService 인스턴스
     """
     global _service_instance
-    
+
     _service_instance = ErrorBudgetService(
         slo_config=slo_config,
         get_failed_operation_stats=get_failed_operation_stats,
@@ -1250,5 +1239,5 @@ def configure_error_budget_service(
         emit_metric=emit_metric,
         emit_otel_event=emit_otel_event,
     )
-    
+
     return _service_instance

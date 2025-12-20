@@ -17,7 +17,7 @@ class TestChaosExperimentContext:
 
     def test_create_context_with_defaults(self):
         """Test creating context with default values."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
             ChaosExperimentType,
             ChaosExperimentStatus,
@@ -33,7 +33,7 @@ class TestChaosExperimentContext:
 
     def test_create_context_with_custom_values(self):
         """Test creating context with custom values."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
             ChaosExperimentType,
         )
@@ -58,7 +58,7 @@ class TestChaosExperimentContext:
 
     def test_to_dict_serialization(self):
         """Test serialization to dictionary."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
         )
 
@@ -78,7 +78,7 @@ class TestChaosExperimentContext:
 
     def test_from_dict_deserialization(self):
         """Test deserialization from dictionary."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
         )
 
@@ -100,7 +100,7 @@ class TestChaosExperimentContext:
 
     def test_is_expired_not_expired(self):
         """Test is_expired returns False for active experiments."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
         )
 
@@ -112,7 +112,7 @@ class TestChaosExperimentContext:
 
     def test_is_expired_when_expired(self):
         """Test is_expired returns True for expired experiments."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
         )
 
@@ -127,7 +127,7 @@ class TestChaosExperimentContext:
 
     def test_mark_completed(self):
         """Test marking experiment as completed."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
             ChaosExperimentStatus,
         )
@@ -143,7 +143,7 @@ class TestChaosExperimentContext:
 
     def test_mark_aborted(self):
         """Test marking experiment as aborted."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             ChaosExperimentContext,
             ChaosExperimentStatus,
         )
@@ -173,7 +173,7 @@ class TestChaosContextHelpers:
 
     def test_is_chaos_experiment_false(self, mock_operation):
         """Test is_chaos_experiment returns False for regular operations."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             is_chaos_experiment,
         )
 
@@ -185,7 +185,7 @@ class TestChaosContextHelpers:
 
     def test_is_chaos_experiment_true(self, mock_operation):
         """Test is_chaos_experiment returns True for chaos operations."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             is_chaos_experiment,
         )
 
@@ -200,7 +200,7 @@ class TestChaosContextHelpers:
 
     def test_get_chaos_context_none(self, mock_operation):
         """Test get_chaos_context returns None for regular operations."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             get_chaos_context,
         )
 
@@ -209,7 +209,7 @@ class TestChaosContextHelpers:
 
     def test_get_chaos_context_success(self, mock_operation):
         """Test get_chaos_context returns context for chaos operations."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             get_chaos_context,
         )
 
@@ -229,7 +229,7 @@ class TestChaosContextHelpers:
 
     def test_attach_chaos_context(self, mock_operation):
         """Test attaching chaos context to operation."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             attach_chaos_context,
             ChaosExperimentContext,
         )
@@ -249,7 +249,7 @@ class TestChaosContextHelpers:
 
     def test_resolve_chaos_experiment(self, mock_operation):
         """Test resolving a chaos experiment."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             resolve_chaos_experiment,
         )
 
@@ -269,7 +269,7 @@ class TestChaosContextHelpers:
 
     def test_resolve_chaos_experiment_not_chaos(self, mock_operation):
         """Test resolve_chaos_experiment returns False for non-chaos ops."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             resolve_chaos_experiment,
         )
 
@@ -285,7 +285,7 @@ class TestCreateChaosContext:
 
     def test_create_chaos_context_basic(self):
         """Test basic chaos context creation."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             create_chaos_context,
             ChaosExperimentType,
         )
@@ -303,7 +303,7 @@ class TestCreateChaosContext:
 
     def test_create_chaos_context_with_all_params(self):
         """Test chaos context creation with all parameters."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             create_chaos_context,
             ChaosExperimentType,
         )
@@ -331,7 +331,7 @@ class TestCreateChaosContext:
 
     def test_create_chaos_context_string_type(self):
         """Test chaos context creation with string experiment type."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             create_chaos_context,
         )
 
@@ -367,7 +367,7 @@ class TestChaosContextIntegration:
     @pytest.mark.skip(reason="Integration test - run in Docker: docker-compose exec web pytest -k TestChaosContextIntegration")
     def test_attach_and_retrieve_chaos_context(self, failed_operation):
         """Test full attach and retrieve cycle."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             attach_chaos_context,
             get_chaos_context,
             is_chaos_experiment,
@@ -400,7 +400,7 @@ class TestChaosContextIntegration:
     @pytest.mark.skip(reason="Integration test - run in Docker: docker-compose exec web pytest -k TestChaosContextIntegration")
     def test_resolve_real_chaos_experiment(self, failed_operation):
         """Test resolving real chaos experiment."""
-        from shopping.services.self_healing.chaos_context import (
+        from selfhealing.services.chaos_context import (
             attach_chaos_context,
             resolve_chaos_experiment,
             create_chaos_context,

@@ -377,7 +377,7 @@ result = collect_all_metrics()
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-  
+
   external_labels:
     environment: 'production'
     service: 'self-healing'
@@ -566,9 +566,9 @@ def _get_or_create_gauge(name: str, description: str, labels: list[str]) -> Gaug
     # Similar implementation...
 
 def _get_or_create_histogram(
-    name: str, 
-    description: str, 
-    labels: list[str], 
+    name: str,
+    description: str,
+    labels: list[str],
     buckets: tuple = None
 ) -> Histogram:
     """Get existing histogram or create new one."""
@@ -611,7 +611,7 @@ histogram_quantile(0.95, rate(circuit_breaker_open_duration_seconds_bucket[1h]))
 
 ```promql
 # 도메인별 복구 시간 P95
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   sum(rate(recovery_time_seconds_bucket[1h])) by (le, domain)
 )
 
@@ -632,15 +632,15 @@ increase(sla_breach_total[1d])
 # Error Budget 잔여량 (%)
 100 * (
   1 - (
-    sum(increase(dlq_items_total[30d])) 
-    / 
+    sum(increase(dlq_items_total[30d]))
+    /
     (sum(increase(requests_total[30d])) * 0.001)
   )
 )
 
 # Burn Rate (1시간 기준)
 (
-  (sum(rate(dlq_items_total[1h])) / sum(rate(requests_total[1h]))) 
+  (sum(rate(dlq_items_total[1h])) / sum(rate(requests_total[1h])))
   / 0.001 * 720
 )
 ```

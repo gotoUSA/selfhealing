@@ -30,10 +30,7 @@ from selfhealing.services import (
     ControlRequest,
     ControlResponse,
 )
-from selfhealing.services.control_api_service import assess_risk_level
-from shopping.services.self_healing import (
-    classify_reason,
-)
+from selfhealing.services.control_api_service import assess_risk_level, classify_reason
 from shopping.serializers.self_healing_serializers import (
     ControlRequestSerializer,
     ControlAPIActions,

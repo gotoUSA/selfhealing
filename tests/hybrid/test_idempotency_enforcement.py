@@ -21,7 +21,7 @@ from django.core.cache import cache
 from django.test import RequestFactory
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.services.self_healing.idempotency_service import (
+from selfhealing.services.idempotency_service import (
     IdempotencyKey,
     IdempotencyResult,
     IdempotencyService,
@@ -30,7 +30,7 @@ from selfhealing.services import (
     ReplayResult,
     ReplayService,
 )
-from shopping.services.self_healing.replay_handlers import PaymentReplayHandler
+from shopping.handlers.replay_handlers import PaymentReplayHandler
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 

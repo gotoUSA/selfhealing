@@ -630,19 +630,19 @@ def record_failsafe_recovered(component: str) -> None:
 def emit_heartbeat(component: str = "error_budget") -> None:
     """
     Emit a heartbeat signal indicating the system is alive.
-    
+
     This should be called periodically (default: every 60 seconds).
     If this metric stops being updated, it indicates the service is dead.
-    
+
     Args:
         component: The component emitting the heartbeat
-    
+
     Usage:
         # In a Celery Beat task or background thread
         @app.task
         def heartbeat_task():
             emit_heartbeat("error_budget")
-    
+
     Prometheus Alert Rule:
         - alert: SelfHealingServiceDead
           expr: time() - selfhealing_heartbeat_timestamp_seconds > 120
@@ -651,6 +651,7 @@ def emit_heartbeat(component: str = "error_budget") -> None:
             severity: critical
     """
     import time
+
     try:
         current_time = time.time()
         selfhealing_heartbeat_timestamp.labels(component=component).set(current_time)
@@ -663,7 +664,7 @@ def emit_heartbeat(component: str = "error_budget") -> None:
 def record_override_escalation(override_type: str) -> None:
     """
     Record that an override escalation alert was sent.
-    
+
     Args:
         override_type: Type of override (hotfix, security_patch, etc.)
     """
@@ -677,7 +678,7 @@ def record_override_escalation(override_type: str) -> None:
 def record_recovery_alert(component: str) -> None:
     """
     Record that a recovery alert was sent.
-    
+
     Args:
         component: The component that recovered
     """

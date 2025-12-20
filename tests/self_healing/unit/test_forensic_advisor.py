@@ -32,7 +32,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_transient_network_pattern_detection(self, mock_failed_operation):
         """Test detection of transient network failure pattern."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
             RecommendedAction,
         )
@@ -53,7 +53,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_rate_limit_pattern_detection(self, mock_failed_operation):
         """Test detection of rate limit exceeded pattern."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
             RecommendedAction,
         )
@@ -72,7 +72,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_auth_failure_pattern_detection(self, mock_failed_operation):
         """Test detection of authentication/authorization failure."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
             RecommendedAction,
         )
@@ -91,7 +91,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_repeated_failure_escalation(self, mock_failed_operation):
         """Test escalation for repeated failures (retry_count >= 3)."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
             RecommendedAction,
             AdvisoryLevel,
@@ -113,7 +113,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_unknown_pattern_fallback(self, mock_failed_operation):
         """Test fallback for unknown patterns."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
             RecommendedAction,
         )
@@ -133,7 +133,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_analyze_and_update_stores_advisory(self, mock_failed_operation):
         """Test that analyze_and_update stores advisory in metadata."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
         )
 
@@ -153,7 +153,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_decision_factors_traceability(self, mock_failed_operation):
         """Test that decision factors are recorded for audit trail."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
         )
 
@@ -172,7 +172,7 @@ class TestForensicAdvisorPatternMatching:
 
     def test_hint_string_generation(self, mock_failed_operation):
         """Test generation of human-readable hint string."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
         )
 
@@ -210,7 +210,7 @@ class TestForensicAdvisorSingleton:
 
     def test_convenience_function_analyze(self):
         """Test analyze_failed_operation convenience function."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             analyze_failed_operation,
         )
 
@@ -231,7 +231,7 @@ class TestForensicAdvisorNonAutoExecution:
 
     def test_analyze_does_not_modify_status(self):
         """Verify analyze() does not change operation status."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
         )
 
@@ -253,7 +253,7 @@ class TestForensicAdvisorNonAutoExecution:
 
     def test_analyze_and_update_only_updates_advisory_fields(self):
         """Verify analyze_and_update only updates advisory-related fields."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             ForensicAdvisorService,
         )
 
@@ -322,7 +322,7 @@ class TestForensicAdvisorIntegration:
     )
     def test_real_operation_analysis(self, failed_operation):
         """Test analysis with real FailedOperation model."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             get_forensic_advisor,
         )
 
@@ -338,7 +338,7 @@ class TestForensicAdvisorIntegration:
     )
     def test_real_operation_update(self, failed_operation):
         """Test analyze_and_update with real FailedOperation model."""
-        from shopping.services.self_healing.forensic_advisor import (
+        from selfhealing.services.forensic_advisor import (
             get_forensic_advisor,
         )
 

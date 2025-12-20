@@ -22,41 +22,47 @@ from selfhealing.services import (
     record_sla_breach,
     track_recovery_time,
 )
-from shopping.services.self_healing import (
+from selfhealing.services.metrics import (
     ALERTING_RULES,
-    DOMAINS,
+    get_registered_domains,
+    register_domain,
 )
 
 
 # =============================================================================
-# DOMAINS Constant Tests
+# Domain Registration Tests
 # =============================================================================
 
 
 class TestDomainsConstant:
-    """Tests for DOMAINS constant."""
+    """Tests for domain registration functionality."""
 
-    def test_domains_contains_required_values(self):
+    def test_get_registered_domains_returns_list(self):
         """
         Purpose:
-            Verify DOMAINS contains all required domain values.
+            Verify get_registered_domains returns a list type.
         """
-        required_domains = {"payment", "point", "inventory", "webhook", "notification"}
-        assert set(DOMAINS) == required_domains
+        domains = get_registered_domains()
+        assert isinstance(domains, list)
 
-    def test_domains_is_list(self):
+    def test_get_registered_domains_contains_defaults(self):
         """
         Purpose:
-            Verify DOMAINS is a list type.
+            Verify get_registered_domains contains default domain values.
         """
-        assert isinstance(DOMAINS, list)
+        domains = get_registered_domains()
+        # Default domains from selfhealing package
+        default_domains = {"external_service", "internal_process", "async_task", "notification", "data_sync"}
+        assert default_domains.issubset(set(domains))
 
-    def test_domains_count(self):
+    def test_register_domain_adds_new_domain(self):
         """
         Purpose:
-            Verify DOMAINS has expected count.
+            Verify register_domain adds custom domains.
         """
-        assert len(DOMAINS) == 5
+        register_domain("test_domain_xyz")
+        domains = get_registered_domains()
+        assert "test_domain_xyz" in domains
 
 
 # =============================================================================
@@ -79,9 +85,9 @@ class TestRecordDLQItemCreated:
     def test_record_dlq_item_created_with_all_domains(self):
         """
         Purpose:
-            Verify all domain types from DOMAINS constant can be recorded.
+            Verify all domain types from registered domains can be recorded.
         """
-        for domain in DOMAINS:
+        for domain in get_registered_domains():
             record_dlq_item_created(domain=domain, failure_type="TEST_FAILURE")
 
 
@@ -157,9 +163,9 @@ class TestRecordSLABreach:
     def test_record_sla_breach_all_domains(self):
         """
         Purpose:
-            Verify SLA breach is recorded for each domain from DOMAINS constant.
+            Verify SLA breach is recorded for each registered domain.
         """
-        for domain in DOMAINS:
+        for domain in get_registered_domains():
             record_sla_breach(domain=domain)
 
 

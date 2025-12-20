@@ -19,16 +19,16 @@ class TestErrorBudgetConfigSerializerNewFields:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         data = {
             "heartbeat_enabled": True,
             "heartbeat_interval_seconds": 45,
             "heartbeat_timeout_seconds": 120,
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
-        
+
         validated = serializer.validated_data
         assert validated["heartbeat_enabled"] is True
         assert validated["heartbeat_interval_seconds"] == 45
@@ -38,12 +38,12 @@ class TestErrorBudgetConfigSerializerNewFields:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         data = {
             "heartbeat_interval_seconds": 60,
             "heartbeat_timeout_seconds": 30,  # Invalid: less than interval
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert not serializer.is_valid()
         assert "heartbeat_timeout_seconds" in str(serializer.errors)
@@ -53,12 +53,12 @@ class TestErrorBudgetConfigSerializerNewFields:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         data = {
             "recovery_alert_enabled": True,
             "recovery_alert_include_downtime": False,
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
 
@@ -67,13 +67,13 @@ class TestErrorBudgetConfigSerializerNewFields:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         data = {
             "escalation_enabled": True,
             "escalation_channel": "#security-alerts",
             "escalation_mention": "@security-team",
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
 
@@ -82,7 +82,7 @@ class TestErrorBudgetConfigSerializerNewFields:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         data = {
             # Error Budget thresholds
             "threshold_healthy": 75.0,
@@ -101,10 +101,10 @@ class TestErrorBudgetConfigSerializerNewFields:
             "escalation_channel": "#ops",
             "escalation_mention": "@oncall",
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
-        
+
         validated = serializer.validated_data
         assert validated["heartbeat_interval_seconds"] == 30
         assert validated["escalation_channel"] == "#ops"
@@ -118,13 +118,13 @@ class TestErrorBudgetConfigSerializerDefaults:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         # Empty data - should use defaults
         data = {}
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
-        
+
         validated = serializer.validated_data
         # Check defaults are applied
         assert "heartbeat_enabled" in validated or validated.get("heartbeat_enabled") is not None or True
@@ -135,14 +135,14 @@ class TestErrorBudgetConfigSerializerDefaults:
         from selfhealing.api.django.serializers.config import (
             ErrorBudgetConfigSerializer,
         )
-        
+
         # Partial update with valid heartbeat configuration
         # (both interval and timeout to pass validation)
         data = {
             "heartbeat_interval_seconds": 60,
             "heartbeat_timeout_seconds": 180,  # Valid: > interval
         }
-        
+
         serializer = ErrorBudgetConfigSerializer(data=data, partial=True)
         assert serializer.is_valid(), serializer.errors
         assert serializer.validated_data["heartbeat_interval_seconds"] == 60

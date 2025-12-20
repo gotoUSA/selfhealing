@@ -45,10 +45,7 @@ class ApplyStrategyMixin(serializers.Serializer):
     def get_config_changes(self) -> dict:
         """Extract config changes (excluding apply strategy fields)."""
         exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds"}
-        return {
-            k: v for k, v in self.validated_data.items()
-            if k not in exclude_fields and v is not None
-        }
+        return {k: v for k, v in self.validated_data.items() if k not in exclude_fields and v is not None}
 
 
 # =============================================================================
@@ -179,117 +176,89 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
 class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Error Budget configuration.
-    
+
     Error Budget 및 Burn Rate 임계값 설정.
     """
 
     # Error Budget 임계값 (%)
     threshold_healthy = serializers.FloatField(
-        required=False, min_value=50.0, max_value=100.0,
-        help_text="정상 상태 임계값 (기본: 75%)"
+        required=False, min_value=50.0, max_value=100.0, help_text="정상 상태 임계값 (기본: 75%)"
     )
     threshold_caution = serializers.FloatField(
-        required=False, min_value=20.0, max_value=80.0,
-        help_text="주의 상태 임계값 (기본: 50%)"
+        required=False, min_value=20.0, max_value=80.0, help_text="주의 상태 임계값 (기본: 50%)"
     )
     threshold_warning = serializers.FloatField(
-        required=False, min_value=5.0, max_value=50.0,
-        help_text="경고 상태 임계값 (기본: 20%)"
+        required=False, min_value=5.0, max_value=50.0, help_text="경고 상태 임계값 (기본: 20%)"
     )
     threshold_critical = serializers.FloatField(
-        required=False, min_value=0.0, max_value=20.0,
-        help_text="위험 상태 임계값 (기본: 0%)"
+        required=False, min_value=0.0, max_value=20.0, help_text="위험 상태 임계값 (기본: 0%)"
     )
 
     # Burn Rate 임계값
     burn_rate_fast_critical = serializers.FloatField(
-        required=False, min_value=10.0, max_value=50.0,
-        help_text="빠른 소진 위험 임계값 (기본: 14.4x)"
+        required=False, min_value=10.0, max_value=50.0, help_text="빠른 소진 위험 임계값 (기본: 14.4x)"
     )
     burn_rate_fast_warning = serializers.FloatField(
-        required=False, min_value=3.0, max_value=15.0,
-        help_text="빠른 소진 경고 임계값 (기본: 6.0x)"
+        required=False, min_value=3.0, max_value=15.0, help_text="빠른 소진 경고 임계값 (기본: 6.0x)"
     )
     burn_rate_slow_warning = serializers.FloatField(
-        required=False, min_value=1.0, max_value=10.0,
-        help_text="느린 소진 경고 임계값 (기본: 3.0x)"
+        required=False, min_value=1.0, max_value=10.0, help_text="느린 소진 경고 임계값 (기본: 3.0x)"
     )
     burn_rate_slow_info = serializers.FloatField(
-        required=False, min_value=0.5, max_value=3.0,
-        help_text="정상 소진율 임계값 (기본: 1.0x)"
+        required=False, min_value=0.5, max_value=3.0, help_text="정상 소진율 임계값 (기본: 1.0x)"
     )
 
     # Fail-Safe 설정
-    failsafe_alert_enabled = serializers.BooleanField(
-        required=False,
-        help_text="Fail-Safe 발동 시 알림 발송 여부"
-    )
+    failsafe_alert_enabled = serializers.BooleanField(required=False, help_text="Fail-Safe 발동 시 알림 발송 여부")
     failsafe_cooldown_seconds = serializers.IntegerField(
-        required=False, min_value=60, max_value=3600,
-        help_text="연속 알림 방지 쿨다운 (초)"
+        required=False, min_value=60, max_value=3600, help_text="연속 알림 방지 쿨다운 (초)"
     )
 
     # Heartbeat (Dead Man's Snitch) 설정
     heartbeat_enabled = serializers.BooleanField(
-        required=False,
-        help_text="Heartbeat (Dead Man's Snitch) 활성화 여부 (기본: True)"
+        required=False, help_text="Heartbeat (Dead Man's Snitch) 활성화 여부 (기본: True)"
     )
     heartbeat_interval_seconds = serializers.IntegerField(
-        required=False, min_value=10, max_value=300,
-        help_text="Heartbeat 발송 주기 (초, 기본: 60초)"
+        required=False, min_value=10, max_value=300, help_text="Heartbeat 발송 주기 (초, 기본: 60초)"
     )
     heartbeat_timeout_seconds = serializers.IntegerField(
-        required=False, min_value=30, max_value=600,
-        help_text="Heartbeat 타임아웃 (초, 기본: 120초, 이 시간 내 미응답시 Dead)"
+        required=False, min_value=30, max_value=600, help_text="Heartbeat 타임아웃 (초, 기본: 120초, 이 시간 내 미응답시 Dead)"
     )
 
     # 복구 알림 (Recovery Notification) 설정
-    recovery_alert_enabled = serializers.BooleanField(
-        required=False,
-        help_text="복구 완료 알림 발송 여부 (기본: True)"
-    )
+    recovery_alert_enabled = serializers.BooleanField(required=False, help_text="복구 완료 알림 발송 여부 (기본: True)")
     recovery_alert_include_downtime = serializers.BooleanField(
-        required=False,
-        help_text="복구 알림에 장애 시간 포함 여부 (기본: True)"
+        required=False, help_text="복구 알림에 장애 시간 포함 여부 (기본: True)"
     )
 
     # Override 에스컬레이션 설정
-    escalation_enabled = serializers.BooleanField(
-        required=False,
-        help_text="Override 에스컬레이션 활성화 여부 (기본: True)"
-    )
+    escalation_enabled = serializers.BooleanField(required=False, help_text="Override 에스컬레이션 활성화 여부 (기본: True)")
     escalation_channel = serializers.CharField(
-        required=False, max_length=100,
-        help_text="에스컬레이션 알림 채널 (기본: #governance)"
+        required=False, max_length=100, help_text="에스컬레이션 알림 채널 (기본: #governance)"
     )
     escalation_mention = serializers.CharField(
-        required=False, max_length=200,
-        help_text="에스컬레이션 멘션 대상 (기본: @cto @security)"
+        required=False, max_length=200, help_text="에스컬레이션 멘션 대상 (기본: @cto @security)"
     )
 
     def validate(self, data):
         """Validate threshold ordering and heartbeat settings."""
         # 임계값 순서 검증: healthy > caution > warning > critical
         thresholds = [
-            ('threshold_healthy', data.get('threshold_healthy', 75.0)),
-            ('threshold_caution', data.get('threshold_caution', 50.0)),
-            ('threshold_warning', data.get('threshold_warning', 20.0)),
-            ('threshold_critical', data.get('threshold_critical', 0.0)),
+            ("threshold_healthy", data.get("threshold_healthy", 75.0)),
+            ("threshold_caution", data.get("threshold_caution", 50.0)),
+            ("threshold_warning", data.get("threshold_warning", 20.0)),
+            ("threshold_critical", data.get("threshold_critical", 0.0)),
         ]
         for i in range(len(thresholds) - 1):
             if thresholds[i][1] <= thresholds[i + 1][1]:
-                raise serializers.ValidationError(
-                    f"{thresholds[i][0]}은 {thresholds[i + 1][0]}보다 커야 합니다."
-                )
-        
+                raise serializers.ValidationError(f"{thresholds[i][0]}은 {thresholds[i + 1][0]}보다 커야 합니다.")
+
         # Heartbeat 타임아웃은 interval보다 커야 함
-        interval = data.get('heartbeat_interval_seconds', 60)
-        timeout = data.get('heartbeat_timeout_seconds', 120)
+        interval = data.get("heartbeat_interval_seconds", 60)
+        timeout = data.get("heartbeat_timeout_seconds", 120)
         if timeout <= interval:
-            raise serializers.ValidationError(
-                "heartbeat_timeout_seconds는 heartbeat_interval_seconds보다 커야 합니다."
-            )
-        
+            raise serializers.ValidationError("heartbeat_timeout_seconds는 heartbeat_interval_seconds보다 커야 합니다.")
+
         return data
 
 

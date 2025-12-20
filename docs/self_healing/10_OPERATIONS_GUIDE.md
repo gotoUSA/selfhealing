@@ -154,11 +154,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
    2-a. 외부 서비스 장애
         └─ CB 열림 확인
         └─ 복구 대기
-   
+
    2-b. 코드 버그
         └─ 롤백 검토
         └─ Hotfix 배포
-   
+
    2-c. 데이터 문제
         └─ 문제 데이터 격리
         └─ 수동 수정 후 리플레이
