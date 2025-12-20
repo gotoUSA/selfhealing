@@ -40,6 +40,7 @@
 |------|------|------|
 | [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | Forensic Advisor, Chaos Context, SLA Drift Detection | 개발자, 운영자 |
 | [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 관리 및 배포 동결 권고 시스템 | 개발자, 운영자, SRE |
+| [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) | 자율 카오스 엔진 (Continuous Resilience Validation) | SRE, 개발자, 운영자 |
 
 ---
 
@@ -78,6 +79,10 @@
 | `packages/selfhealing-python/src/selfhealing/services/error_budget_service.py` | Error Budget 서비스 |
 | `packages/selfhealing-python/src/selfhealing/api/django/views/error_budget.py` | Error Budget API 뷰 |
 | `packages/selfhealing-python/src/selfhealing/services/metrics.py` | Error Budget 메트릭 |
+| **Chaos Engineering 관련** | |
+| `packages/selfhealing-python/src/selfhealing/services/chaos/` | 카오스 엔진 핵심 모듈 |
+| `packages/selfhealing-python/src/selfhealing/api/django/views/chaos.py` | Chaos API Views |
+| `packages/selfhealing-python/src/selfhealing/tasks/chaos_scheduler.py` | Chaos Celery Tasks |
 
 ---
 
@@ -85,6 +90,7 @@
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-12-20 | 1.3 | 자율 카오스 엔진 추가 (13_CHAOS_ENGINEERING.md) |
 | 2024-12-21 | 1.2 | Error Budget 관리 및 배포 동결 권고 시스템 추가 (12_ERROR_BUDGET.md) |
 | 2024-12-20 | 1.1 | Forensic Advisor, Chaos Context, SLA Drift Detection 추가 |
 | 2024-01-XX | 1.0 | 초기 문서 작성 |

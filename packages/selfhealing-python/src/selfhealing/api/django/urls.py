@@ -97,6 +97,26 @@ from selfhealing.api.django.views.error_budget import (
     ActiveOverrideView,
 )
 
+# Chaos Engineering API Views
+from selfhealing.api.django.views.chaos import (
+    SafetyGuardConfigView,
+    BlastRadiusPolicyView,
+    SchedulerConfigView,
+    ReportConfigView,
+    ScheduleListView,
+    ScheduleDetailView,
+    ScheduleApprovalView,
+    ScheduleExecuteView,
+    KillSwitchView,
+    SafetyCheckView,
+    BlastRadiusCheckView,
+    ReportListView,
+    ReportDetailView,
+    ReportGenerateView,
+    GradeHistoryView,
+    PendingApprovalsView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -165,6 +185,32 @@ urlpatterns = [
     path("deployment-policy/override/", DeploymentOverrideView.as_view(), name="deployment-override"),
     path("deployment-policy/lift/", DeploymentFreezeLiftView.as_view(), name="deployment-lift"),
     path("deployment-policy/active-override/", ActiveOverrideView.as_view(), name="deployment-active-override"),
+    
+    # =========================================================================
+    # Chaos Engineering API
+    # =========================================================================
+    # Configuration
+    path("chaos/config/safety-guard/", SafetyGuardConfigView.as_view(), name="chaos-config-safety-guard"),
+    path("chaos/config/blast-radius/", BlastRadiusPolicyView.as_view(), name="chaos-config-blast-radius"),
+    path("chaos/config/scheduler/", SchedulerConfigView.as_view(), name="chaos-config-scheduler"),
+    path("chaos/config/reports/", ReportConfigView.as_view(), name="chaos-config-reports"),
+    # Scheduled Experiments CRUD
+    path("chaos/schedules/", ScheduleListView.as_view(), name="chaos-schedules-list"),
+    path("chaos/schedules/<str:schedule_id>/", ScheduleDetailView.as_view(), name="chaos-schedule-detail"),
+    path("chaos/schedules/<str:schedule_id>/approve/", ScheduleApprovalView.as_view(), name="chaos-schedule-approve"),
+    path("chaos/schedules/<str:schedule_id>/execute/", ScheduleExecuteView.as_view(), name="chaos-schedule-execute"),
+    # Kill Switch
+    path("chaos/kill-switch/", KillSwitchView.as_view(), name="chaos-kill-switch"),
+    # Safety & Blast Radius Checks
+    path("chaos/safety-check/", SafetyCheckView.as_view(), name="chaos-safety-check"),
+    path("chaos/blast-radius/check/", BlastRadiusCheckView.as_view(), name="chaos-blast-radius-check"),
+    # Reports
+    path("chaos/reports/", ReportListView.as_view(), name="chaos-reports"),
+    path("chaos/reports/<str:report_id>/", ReportDetailView.as_view(), name="chaos-report-detail"),
+    path("chaos/reports/generate/", ReportGenerateView.as_view(), name="chaos-reports-generate"),
+    path("chaos/reports/grades/", GradeHistoryView.as_view(), name="chaos-grade-history"),
+    # Pending Approvals
+    path("chaos/pending-approvals/", PendingApprovalsView.as_view(), name="chaos-pending-approvals"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

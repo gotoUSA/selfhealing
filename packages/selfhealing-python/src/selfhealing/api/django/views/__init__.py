@@ -93,6 +93,26 @@ from selfhealing.api.django.views.error_budget import (
     ActiveOverrideView,
 )
 
+# Chaos Engineering Views
+from selfhealing.api.django.views.chaos import (
+    SafetyGuardConfigView,
+    BlastRadiusPolicyView,
+    SchedulerConfigView,
+    ReportConfigView,
+    ScheduleListView,
+    ScheduleDetailView,
+    ScheduleApprovalView,
+    ScheduleExecuteView,
+    KillSwitchView,
+    SafetyCheckView,
+    BlastRadiusCheckView,
+    ReportListView,
+    ReportDetailView,
+    ReportGenerateView,
+    GradeHistoryView,
+    PendingApprovalsView,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -160,4 +180,21 @@ __all__ = [
     "DeploymentOverrideView",
     "DeploymentFreezeLiftView",
     "ActiveOverrideView",
+    # Chaos Engineering Views
+    "SafetyGuardConfigView",
+    "BlastRadiusPolicyView",
+    "SchedulerConfigView",
+    "ReportConfigView",
+    "ScheduleListView",
+    "ScheduleDetailView",
+    "ScheduleApprovalView",
+    "ScheduleExecuteView",
+    "KillSwitchView",
+    "SafetyCheckView",
+    "BlastRadiusCheckView",
+    "ReportListView",
+    "ReportDetailView",
+    "ReportGenerateView",
+    "GradeHistoryView",
+    "PendingApprovalsView",
 ]

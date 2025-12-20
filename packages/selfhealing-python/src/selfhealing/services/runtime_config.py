@@ -639,6 +639,72 @@ class RuntimeConfigManager:
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("error_budget", **updates)
 
+    # =========================================================================
+    # Chaos Engineering Config
+    # =========================================================================
+
+    def get_chaos_config(self) -> Dict[str, Any]:
+        """
+        Get Chaos Engineering configuration.
+
+        Returns:
+            dict: Chaos scheduler, safety guard, and blast radius settings
+        """
+        storage_key = "runtime_config:chaos"
+        with self._lock:
+            stored = self._backend.get(storage_key)
+            if stored:
+                return stored
+            # Return empty config if not set
+            return {
+                "scheduler_config": {},
+                "safety_guard_config": {},
+                "blast_radius_policy": {},
+                "report_config": {},
+            }
+
+    def update_chaos_config(
+        self,
+        scheduler_config: Optional[Dict[str, Any]] = None,
+        safety_guard_config: Optional[Dict[str, Any]] = None,
+        blast_radius_policy: Optional[Dict[str, Any]] = None,
+        report_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update Chaos Engineering configuration.
+
+        Args:
+            scheduler_config: ChaosScheduler configuration
+            safety_guard_config: SafetyGuard configuration
+            blast_radius_policy: BlastRadius policy
+            report_config: Report generator configuration
+
+        Returns:
+            dict: Updated configuration
+        """
+        storage_key = "runtime_config:chaos"
+        with self._lock:
+            current = self.get_chaos_config()
+
+            if scheduler_config is not None:
+                current["scheduler_config"] = scheduler_config
+                logger.info("[RuntimeConfig] Updated chaos.scheduler_config")
+
+            if safety_guard_config is not None:
+                current["safety_guard_config"] = safety_guard_config
+                logger.info("[RuntimeConfig] Updated chaos.safety_guard_config")
+
+            if blast_radius_policy is not None:
+                current["blast_radius_policy"] = blast_radius_policy
+                logger.info("[RuntimeConfig] Updated chaos.blast_radius_policy")
+
+            if report_config is not None:
+                current["report_config"] = report_config
+                logger.info("[RuntimeConfig] Updated chaos.report_config")
+
+            self._backend.set(storage_key, current)
+            return current.copy()
+
 
 def get_runtime_config_manager() -> RuntimeConfigManager:
     """Get singleton RuntimeConfigManager instance."""
