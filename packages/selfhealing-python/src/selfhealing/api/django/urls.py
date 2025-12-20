@@ -115,6 +115,11 @@ from selfhealing.api.django.views.chaos import (
     ReportGenerateView,
     GradeHistoryView,
     PendingApprovalsView,
+    # Phase 2: Safety Mechanism Views
+    StopConditionsConfigView,
+    TTLConfigView,
+    DryRunConfigView,
+    KillAllView,
 )
 
 app_name = "selfhealing"
@@ -194,6 +199,10 @@ urlpatterns = [
     path("chaos/config/blast-radius/", BlastRadiusPolicyView.as_view(), name="chaos-config-blast-radius"),
     path("chaos/config/scheduler/", SchedulerConfigView.as_view(), name="chaos-config-scheduler"),
     path("chaos/config/reports/", ReportConfigView.as_view(), name="chaos-config-reports"),
+    # Phase 2: Safety Mechanism Configuration
+    path("chaos/config/stop-conditions/", StopConditionsConfigView.as_view(), name="chaos-config-stop-conditions"),
+    path("chaos/config/ttl/", TTLConfigView.as_view(), name="chaos-config-ttl"),
+    path("chaos/config/dry-run/", DryRunConfigView.as_view(), name="chaos-config-dry-run"),
     # Scheduled Experiments CRUD
     path("chaos/schedules/", ScheduleListView.as_view(), name="chaos-schedules-list"),
     path("chaos/schedules/<str:schedule_id>/", ScheduleDetailView.as_view(), name="chaos-schedule-detail"),
@@ -201,6 +210,8 @@ urlpatterns = [
     path("chaos/schedules/<str:schedule_id>/execute/", ScheduleExecuteView.as_view(), name="chaos-schedule-execute"),
     # Kill Switch
     path("chaos/kill-switch/", KillSwitchView.as_view(), name="chaos-kill-switch"),
+    # Phase 2: Kill All Control
+    path("chaos/control/kill-all/", KillAllView.as_view(), name="chaos-control-kill-all"),
     # Safety & Blast Radius Checks
     path("chaos/safety-check/", SafetyCheckView.as_view(), name="chaos-safety-check"),
     path("chaos/blast-radius/check/", BlastRadiusCheckView.as_view(), name="chaos-blast-radius-check"),

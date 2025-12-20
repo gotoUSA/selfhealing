@@ -2,6 +2,7 @@
 
 > 이 문서는 카오스 엔진의 안전장치(Safety Mechanisms)를 구현하기 위한 상세 계획입니다.
 > **Phase 1 구현 완료 (2025-12-20)**
+> **Phase 2 구현 완료 (2025-12-21)**
 
 ## 📋 목차
 
@@ -39,7 +40,7 @@
 | ~~**Self-Expiration (TTL)**~~ | ~~🔴 최고~~ | ✅ 완료 |
 | ~~**Dry Run 모드**~~ | ~~🟠 높음~~ | ✅ 완료 |
 | ~~**Idempotent Rollback**~~ | ~~🟠 높음~~ | ✅ 완료 |
-| Stop Conditions API | 🟡 중간 | Phase 2 예정 |
+| ~~Stop Conditions API~~ | ~~🟡 중간~~ | ✅ Phase 2 완료 |
 
 ---
 
@@ -61,10 +62,10 @@
 ### Phase 2: 강화 기능 (권장)
 
 ```
-4. Idempotent Rollback 강화
+4. Idempotent Rollback 강화 ✅ (Phase 1에서 완료)
    └─ 중복 롤백 명령에도 안전한 복구
 
-5. Governance API 완성
+5. Governance API 완성 ✅
    └─ 모든 설정을 API로 제어
 ```
 
@@ -638,14 +639,14 @@ POST /api/self-healing/chaos/control/kill-all/
   - [x] `experiments.py`: `_rollback_completed` 플래그로 멱등성 보장
   - [x] 모든 5종 실험 클래스에 적용
 
-### Phase 2: API 및 강화 기능
+### Phase 2: API 및 강화 기능 ✅ 완료
 
-- [ ] **Governance API**
-  - [ ] `views/chaos.py`: `StopConditionsConfigView` 추가
-  - [ ] `views/chaos.py`: `TTLConfigView` 추가
-  - [ ] `views/chaos.py`: `DryRunConfigView` 추가
-  - [ ] `views/chaos.py`: `KillAllView` 추가
-  - [ ] `urls.py`: 새 엔드포인트 등록
+- [x] **Governance API** ✅ 완료 (2025-12-21)
+  - [x] `views/chaos.py`: `StopConditionsConfigView` 추가
+  - [x] `views/chaos.py`: `TTLConfigView` 추가
+  - [x] `views/chaos.py`: `DryRunConfigView` 추가
+  - [x] `views/chaos.py`: `KillAllView` 추가
+  - [x] `urls.py`: 새 엔드포인트 등록
   - [x] `serializers/chaos.py`: 관련 Serializer 추가 ✅
 
 - [x] **Idempotent Rollback** ✅ Phase 1에서 완료
@@ -808,5 +809,6 @@ POST /api/self-healing/chaos/control/kill-all/
 ---
 
 **작성일**: 2025-12-20  
+**수정일**: 2025-12-21  
 **작성자**: GitHub Copilot  
-**상태**: ✅ Phase 1 완료
+**상태**: ✅ Phase 1 & Phase 2 완료
