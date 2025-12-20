@@ -31,7 +31,7 @@ from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
 
-from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
+from shopping.models.failed_external_request import CircuitBreakerState, FailedExternalRequest
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
@@ -230,10 +230,11 @@ class TestMultiTenancyDLQIsolation:
         payment_b = PaymentFactory(order=order_b, status="failed")
 
         # Create DLQ entries with tenant-specific metadata
-        dlq_a = FailedPayment.objects.create(
+        dlq_a = FailedExternalRequest.objects.create(
             payment=payment_a,
             order=order_a,
             user=user_a,
+            domain="payment",
             failure_type="max_retries_exceeded",
             error_code="PG_TIMEOUT",
             error_message="Timeout",
@@ -241,10 +242,11 @@ class TestMultiTenancyDLQIsolation:
             metadata={"tenant_id": tenant_a.id},
         )
 
-        dlq_b = FailedPayment.objects.create(
+        dlq_b = FailedExternalRequest.objects.create(
             payment=payment_b,
             order=order_b,
             user=user_b,
+            domain="payment",
             failure_type="max_retries_exceeded",
             error_code="PG_TIMEOUT",
             error_message="Timeout",
@@ -253,8 +255,8 @@ class TestMultiTenancyDLQIsolation:
         )
 
         # Query for Tenant A's DLQ entries
-        tenant_a_entries = FailedPayment.objects.filter(metadata__tenant_id=tenant_a.id)
-        tenant_b_entries = FailedPayment.objects.filter(metadata__tenant_id=tenant_b.id)
+        tenant_a_entries = FailedExternalRequest.objects.filter(metadata__tenant_id=tenant_a.id)
+        tenant_b_entries = FailedExternalRequest.objects.filter(metadata__tenant_id=tenant_b.id)
 
         assert tenant_a_entries.count() == 1, "Tenant A should have 1 DLQ entry"
         assert tenant_b_entries.count() == 1, "Tenant B should have 1 DLQ entry"
@@ -288,10 +290,11 @@ class TestMultiTenancyDLQIsolation:
         order_a = OrderFactory(user=user_a, status="confirmed")
         payment_a = PaymentFactory(order=order_a, status="failed")
 
-        dlq_a = FailedPayment.objects.create(
+        dlq_a = FailedExternalRequest.objects.create(
             payment=payment_a,
             order=order_a,
             user=user_a,
+            domain="payment",
             failure_type="max_retries_exceeded",
             error_code="PG_TIMEOUT",
             error_message="Timeout",

@@ -87,7 +87,7 @@ class TestRecoveryDuringChaos:
         Compliance:
             SOC 2 (Availability)
         """
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         # Arrange
         service_name = "test_payment_recovery"

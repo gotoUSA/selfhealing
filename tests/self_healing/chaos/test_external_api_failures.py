@@ -175,7 +175,7 @@ class TestConnectionFailureRecovery:
         from selfhealing.services import (
             CircuitBreakerService,
         )
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         # Clean up any existing state
         CircuitBreakerState.objects.filter(service_name="toss_payment").delete()
@@ -432,7 +432,7 @@ class TestCircuitBreakerExternalAPI:
             CircuitBreakerService,
             CircuitState,
         )
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         # Clean up any existing state
         CircuitBreakerState.objects.filter(service_name="api_failure_test").delete()
@@ -467,7 +467,7 @@ class TestCircuitBreakerExternalAPI:
             CircuitBreakerService,
             CircuitState,
         )
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         # Create OPEN state directly
         CircuitBreakerState.objects.update_or_create(

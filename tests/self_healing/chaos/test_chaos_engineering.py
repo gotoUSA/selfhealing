@@ -43,7 +43,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.models.failed_payment import CircuitBreakerState
+from shopping.models.failed_external_request import CircuitBreakerState
 from selfhealing.services import (
     CircuitBreakerConfig,
     CircuitBreakerService,

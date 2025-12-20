@@ -26,7 +26,7 @@ from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
 
-from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
+from shopping.models.failed_external_request import CircuitBreakerState, FailedExternalRequest
 from shopping.models.payment import Payment, PaymentLog
 from shopping.models.order import Order
 from shopping.models.user import User
@@ -189,11 +189,12 @@ class E2EPaymentFlowSimulator:
         payment: Payment,
         context: E2EFlowContext,
         error_code: str,
-    ) -> FailedPayment:
+    ) -> FailedExternalRequest:
         """Move payment to DLQ after max retries."""
-        dlq_entry = FailedPayment.objects.create(
+        dlq_entry = FailedExternalRequest.objects.create(
             payment=payment,
             order=payment.order,
+            domain="payment",
             amount=payment.amount,
             status="pending",
             failure_type=error_code,
@@ -218,7 +219,7 @@ class E2EPaymentFlowSimulator:
 
     def simulate_admin_replay(
         self,
-        dlq_entry: FailedPayment,
+        dlq_entry: FailedExternalRequest,
         context: E2EFlowContext,
         admin: User,
     ) -> dict:

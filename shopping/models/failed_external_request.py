@@ -1,7 +1,7 @@
 """
-Failed Payment 모델 (Dead Letter Queue)
+Failed External Request 모델 (Dead Letter Queue)
 
-결제 재시도 최대 횟수 초과 후 복구 불가능한 결제를 추적합니다.
+외부 API 호출 재시도 최대 횟수 초과 후 복구 불가능한 요청을 추적합니다.
 수동 복구 또는 배치 재처리를 위한 데이터를 저장합니다.
 """
 
@@ -14,11 +14,11 @@ from django.db import models
 from django.utils import timezone
 
 
-class FailedPayment(models.Model):
+class FailedExternalRequest(models.Model):
     """
-    Dead Letter Queue: 복구 불가능한 결제 추적
+    Dead Letter Queue: 복구 불가능한 외부 요청 추적
 
-    최대 재시도 횟수를 초과하거나 복구 불가능한 오류가 발생한 결제를
+    최대 재시도 횟수를 초과하거나 복구 불가능한 오류가 발생한 외부 API 요청을
     별도로 저장하여 수동 검토 및 복구를 지원합니다.
     """
 
@@ -41,13 +41,31 @@ class FailedPayment(models.Model):
         ("expired", "보관 기간 만료"),
     ]
 
-    # 원본 결제 참조 (nullable - 결제 생성 전 실패할 수도 있음)
+    # 도메인 타입 (어떤 외부 서비스인지)
+    DOMAIN_CHOICES = [
+        ("external_api", "외부 API"),
+        ("payment", "결제"),
+        ("point", "포인트"),
+        ("inventory", "재고"),
+        ("webhook", "웹훅"),
+        ("notification", "알림"),
+    ]
+
+    # 도메인 (어떤 종류의 외부 요청인지)
+    domain = models.CharField(
+        max_length=50,
+        choices=DOMAIN_CHOICES,
+        default="external_api",
+        verbose_name="도메인",
+    )
+
+    # 원본 결제 참조 (nullable - 결제 외 요청도 있을 수 있음)
     payment = models.ForeignKey(
         "Payment",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="failed_records",
+        related_name="failed_external_requests",
         verbose_name="원본 결제",
     )
 
@@ -57,7 +75,7 @@ class FailedPayment(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="failed_payment_records",
+        related_name="failed_external_requests",
         verbose_name="주문",
     )
 
@@ -67,28 +85,30 @@ class FailedPayment(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="failed_payments",
+        related_name="failed_external_requests",
         verbose_name="사용자",
     )
 
-    # 결제 정보 스냅샷 (원본 데이터가 삭제되더라도 추적 가능)
-    payment_key = models.CharField(
+    # 외부 요청 식별자 (결제키, 웹훅ID 등)
+    external_request_id = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name="토스 결제키",
+        verbose_name="외부 요청 ID",
     )
 
-    toss_order_id = models.CharField(
+    # 외부 주문/트랜잭션 ID
+    external_order_id = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name="토스 주문번호",
+        verbose_name="외부 주문번호",
     )
 
+    # 금액 (해당하는 경우)
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=0,
         default=Decimal("0"),
-        verbose_name="결제 금액",
+        verbose_name="금액",
     )
 
     # 실패 정보
@@ -142,7 +162,7 @@ class FailedPayment(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="resolved_failed_payments",
+        related_name="resolved_failed_external_requests",
         verbose_name="해결자",
     )
 
@@ -190,19 +210,20 @@ class FailedPayment(models.Model):
     )
 
     class Meta:
-        db_table = "shopping_failed_payment"
-        verbose_name = "실패 결제 (DLQ)"
-        verbose_name_plural = "실패 결제 목록 (DLQ)"
+        db_table = "shopping_failed_external_request"
+        verbose_name = "실패한 외부 요청 (DLQ)"
+        verbose_name_plural = "실패한 외부 요청 목록 (DLQ)"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["failure_type", "-created_at"]),
+            models.Index(fields=["domain", "-created_at"]),
             models.Index(fields=["expires_at"]),
             models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self) -> str:
-        return f"[{self.get_failure_type_display()}] {self.toss_order_id or 'N/A'} - {self.get_status_display()}"
+        return f"[{self.domain}] {self.get_failure_type_display()} {self.external_order_id or 'N/A'} - {self.get_status_display()}"
 
     def mark_as_resolved(self, resolved_by, note: str = "") -> None:
         """해결됨으로 표시"""
@@ -221,8 +242,9 @@ class FailedPayment(models.Model):
         self.save(update_fields=["status", "resolved_at", "resolved_by", "resolution_note", "updated_at"])
 
     @classmethod
-    def create_from_payment_failure(
+    def create_from_failure(
         cls,
+        domain: str = "external_api",
         payment=None,
         order=None,
         user=None,
@@ -230,24 +252,44 @@ class FailedPayment(models.Model):
         error_code: str = "",
         error_message: str = "",
         retry_count: int = 0,
+        external_request_id: str = "",
+        external_order_id: str = "",
+        amount: Decimal | None = None,
         request_data: dict[str, Any] | None = None,
         response_data: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> "FailedPayment":
-        """결제 실패로부터 Dead Letter 레코드 생성"""
-        from django.conf import settings
+    ) -> "FailedExternalRequest":
+        """외부 요청 실패로부터 Dead Letter 레코드 생성"""
         from datetime import timedelta
 
-        retention_days = settings.PAYMENT_RECOVERY.get("DLQ_RETENTION_DAYS", 30)
+        from django.conf import settings
+
+        retention_days = getattr(settings, "PAYMENT_RECOVERY", {}).get("DLQ_RETENTION_DAYS", 30)
         expires_at = timezone.now() + timedelta(days=retention_days)
 
+        # 결제에서 기본값 추출
+        if payment and not external_request_id:
+            external_request_id = getattr(payment, "payment_key", "") or ""
+        if payment and not external_order_id:
+            external_order_id = getattr(payment, "toss_order_id", "") or ""
+        if order and not external_order_id:
+            external_order_id = str(order.id)
+        if amount is None:
+            if payment:
+                amount = getattr(payment, "amount", Decimal("0"))
+            elif order:
+                amount = getattr(order, "final_amount", Decimal("0"))
+            else:
+                amount = Decimal("0")
+
         return cls.objects.create(
+            domain=domain,
             payment=payment,
             order=order,
             user=user,
-            payment_key=payment.payment_key if payment and payment.payment_key else "",
-            toss_order_id=payment.toss_order_id if payment else (str(order.id) if order else ""),
-            amount=payment.amount if payment else (order.final_amount if order else Decimal("0")),
+            external_request_id=external_request_id,
+            external_order_id=external_order_id,
+            amount=amount,
             failure_type=failure_type,
             error_code=error_code,
             error_message=error_message,
@@ -259,12 +301,12 @@ class FailedPayment(models.Model):
             expires_at=expires_at,
         )
 
-
+    # Backward compatibility alias
 class CircuitBreakerState(models.Model):
     """
     Circuit Breaker 상태 저장
 
-    외부 PG 장애 감지 시 운영자가 수동으로 활성화하거나,
+    외부 서비스 장애 감지 시 운영자가 수동으로 활성화하거나,
     자동으로 상태를 추적합니다.
     """
 
@@ -274,7 +316,7 @@ class CircuitBreakerState(models.Model):
         ("half_open", "테스트 중 (Half-Open)"),
     ]
 
-    # 서비스 식별자 (예: 'toss_payment', 'kakao_payment')
+    # 서비스 식별자 (예: 'external_api', 'payment_gateway')
     service_name = models.CharField(
         max_length=50,
         unique=True,
@@ -383,8 +425,9 @@ class CircuitBreakerState(models.Model):
         self.success_count = 0  # 성공 카운터 리셋
 
         # Circuit Breaker가 활성화되어 있고, 임계값 초과 시 Open
-        if settings.PAYMENT_RECOVERY.get("CIRCUIT_BREAKER_ENABLED", False):
-            threshold = settings.PAYMENT_RECOVERY.get("CIRCUIT_BREAKER_FAILURE_THRESHOLD", 5)
+        recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
+        if recovery_settings.get("CIRCUIT_BREAKER_ENABLED", False):
+            threshold = recovery_settings.get("CIRCUIT_BREAKER_FAILURE_THRESHOLD", 5)
             if self.failure_count >= threshold and self.state == "closed":
                 self.state = "open"
                 self.opened_at = timezone.now()
@@ -398,7 +441,8 @@ class CircuitBreakerState(models.Model):
         if self.state == "half_open":
             self.success_count += 1
 
-            success_threshold = settings.PAYMENT_RECOVERY.get("CIRCUIT_BREAKER_SUCCESS_THRESHOLD", 2)
+            recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
+            success_threshold = recovery_settings.get("CIRCUIT_BREAKER_SUCCESS_THRESHOLD", 2)
             if self.success_count >= success_threshold:
                 # Close로 전환
                 self.state = "closed"
@@ -417,7 +461,8 @@ class CircuitBreakerState(models.Model):
         from django.conf import settings
 
         # Circuit Breaker가 비활성화되어 있으면 항상 허용
-        if not settings.PAYMENT_RECOVERY.get("CIRCUIT_BREAKER_ENABLED", False):
+        recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
+        if not recovery_settings.get("CIRCUIT_BREAKER_ENABLED", False):
             return True
 
         if self.state == "closed":
@@ -425,7 +470,7 @@ class CircuitBreakerState(models.Model):
 
         if self.state == "open":
             # Recovery timeout 확인
-            recovery_timeout = settings.PAYMENT_RECOVERY.get("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", 60)
+            recovery_timeout = recovery_settings.get("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", 60)
             if self.opened_at:
                 elapsed = (timezone.now() - self.opened_at).total_seconds()
                 if elapsed >= recovery_timeout:

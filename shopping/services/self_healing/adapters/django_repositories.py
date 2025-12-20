@@ -443,7 +443,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
     def _get_model(self):
         """Lazy import to avoid circular dependencies"""
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         return CircuitBreakerState
 

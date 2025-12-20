@@ -735,7 +735,7 @@ class ControlAPIService:
         from django.db.models import Avg, Count, Q
         from django.utils import timezone
         from shopping.models.failed_operation import FailedOperation
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
         from shopping.services.self_healing.metrics import (
             DOMAINS,
             update_dlq_pending_gauges,

@@ -7,7 +7,7 @@ Models: CircuitBreakerState
 from django.contrib import admin
 from django.utils.html import format_html
 
-from shopping.models.failed_payment import CircuitBreakerState
+from shopping.models.failed_external_request import CircuitBreakerState
 
 
 # ============================================

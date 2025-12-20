@@ -83,7 +83,7 @@ class TestCircuitBreakerRedisFailure:
         - Service reads state from database
         - Correct state is returned based on DB record
         """
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
         from selfhealing.services import (
             CircuitBreakerService,
         )
@@ -118,7 +118,7 @@ class TestCircuitBreakerRedisFailure:
         - Database write succeeds
         - State change is durable
         """
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
         from selfhealing.services import (
             CircuitBreakerService,
         )

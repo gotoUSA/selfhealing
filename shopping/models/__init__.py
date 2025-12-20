@@ -1,7 +1,7 @@
 from .cart import Cart, CartItem
 from .email_verification import EmailLog, EmailVerificationToken
+from .failed_external_request import CircuitBreakerState, FailedExternalRequest
 from .failed_operation import FailedOperation
-from .failed_payment import CircuitBreakerState, FailedPayment
 from .notification import Notification
 from .order import Order, OrderItem
 from .password_reset import PasswordResetToken
@@ -30,7 +30,7 @@ __all__ = [
     "CartItem",
     "Payment",
     "PaymentLog",
-    "FailedPayment",
+    "FailedExternalRequest",
     "FailedOperation",
     "CircuitBreakerState",
     "SecurityIncident",

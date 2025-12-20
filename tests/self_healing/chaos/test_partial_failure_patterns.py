@@ -22,7 +22,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from django.utils import timezone
 
-from shopping.models.failed_payment import CircuitBreakerState, FailedPayment
+from shopping.models.failed_external_request import CircuitBreakerState, FailedExternalRequest
 from selfhealing.services import (
     CircuitBreakerConfig,
     CircuitBreakerService,

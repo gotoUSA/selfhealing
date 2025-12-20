@@ -280,7 +280,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         metadata: dict[str, Any] | None = None,
     ) -> int:
         """Dead Letter Queue에 실패 기록 저장"""
-        from ..models.failed_payment import FailedPayment
+        from ..models.failed_external_request import FailedExternalRequest
         from ..models.payment import Payment
         from ..models.order import Order
 
@@ -303,7 +303,8 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
             except Order.DoesNotExist:
                 pass
 
-        failed_payment = FailedPayment.create_from_payment_failure(
+        failed_request = FailedExternalRequest.create_from_failure(
+            domain="payment",
             payment=payment,
             order=order,
             user=user,
@@ -317,15 +318,15 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         )
 
         logger.warning(
-            f"결제 DLQ 이동: dlq_id={failed_payment.id}, payment_id={payment_id}, "
+            f"외부 요청 DLQ 이동: dlq_id={failed_request.id}, payment_id={payment_id}, "
             f"order_id={order_id}, failure_type={failure_type}, error_code={error_code}"
         )
 
         # 알림 전송 (설정된 경우)
         if self.config.get("NOTIFY_ON_DLQ", True):
-            self._notify_dlq_entry(failed_payment)
+            self._notify_dlq_entry(failed_request)
 
-        return failed_payment.id
+        return failed_request.id
 
     def check_circuit_breaker(self, service_name: str = "toss_payment") -> bool:
         """
@@ -339,7 +340,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return True
 
-        from ..models.failed_payment import CircuitBreakerState
+        from ..models.failed_external_request import CircuitBreakerState
 
         state, _ = CircuitBreakerState.objects.get_or_create(
             service_name=service_name,
@@ -357,7 +358,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return
 
-        from ..models.failed_payment import CircuitBreakerState
+        from ..models.failed_external_request import CircuitBreakerState
 
         state, _ = CircuitBreakerState.objects.get_or_create(
             service_name=service_name,

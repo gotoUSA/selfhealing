@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock
 # 이 파일의 테스트 중 일부는 DB 필요
 pytestmark = pytest.mark.requires_db
 
-from shopping.models.failed_payment import CircuitBreakerState
+from shopping.models.failed_external_request import CircuitBreakerState
 from selfhealing.services import (
     CircuitBreakerService,
     CircuitBreakerConfig,

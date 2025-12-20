@@ -97,7 +97,7 @@ def check_circuit_breaker_recovery(self) -> dict:
     from django.conf import settings
     from django.utils import timezone
 
-    from shopping.models.failed_payment import CircuitBreakerState
+    from shopping.models.failed_external_request import CircuitBreakerState
 
     # Check if circuit breaker is enabled
     self_healing = getattr(settings, "SELF_HEALING", {})

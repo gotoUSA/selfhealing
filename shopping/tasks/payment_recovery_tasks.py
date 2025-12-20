@@ -269,9 +269,9 @@ def cleanup_expired_dlq(self) -> dict:
     Returns:
         정리 결과
     """
-    from ..models.failed_payment import FailedPayment
+    from ..models.failed_external_request import FailedExternalRequest
 
-    expired_records = FailedPayment.objects.filter(
+    expired_records = FailedExternalRequest.objects.filter(
         expires_at__lt=timezone.now(),
         status__in=["resolved", "rejected", "expired"],
     )
@@ -312,7 +312,7 @@ def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = N
     Returns:
         처리 결과
     """
-    from ..models.failed_payment import FailedPayment
+    from ..models.failed_external_request import FailedExternalRequest
     from ..services.payment_recovery_service import get_payment_recovery_handler
 
     recovery = get_payment_recovery_handler()
@@ -325,7 +325,7 @@ def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = N
             "reason": "circuit_breaker_open",
         }
 
-    queryset = FailedPayment.objects.filter(status="pending")
+    queryset = FailedExternalRequest.objects.filter(status="pending")
 
     if failure_types:
         queryset = queryset.filter(failure_type__in=failure_types)
@@ -412,7 +412,7 @@ def reset_circuit_breaker(
     Returns:
         처리 결과
     """
-    from ..models.failed_payment import CircuitBreakerState
+    from ..models.failed_external_request import CircuitBreakerState
     from ..models.user import User
 
     state, created = CircuitBreakerState.objects.get_or_create(

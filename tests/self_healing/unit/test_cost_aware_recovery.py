@@ -27,7 +27,7 @@ pytestmark = pytest.mark.requires_db
 from django.test import override_settings
 from django.utils import timezone
 
-from shopping.models.failed_payment import FailedPayment
+from shopping.models.failed_external_request import FailedExternalRequest
 from shopping.services.payment_recovery_service import CeleryPaymentRecovery
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 

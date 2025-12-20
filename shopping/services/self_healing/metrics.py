@@ -431,7 +431,7 @@ def update_circuit_breaker_gauges() -> dict[str, str]:
         Dictionary of service -> state
     """
     try:
-        from shopping.models.failed_payment import CircuitBreakerState
+        from shopping.models.failed_external_request import CircuitBreakerState
 
         states = {}
         for cb in CircuitBreakerState.objects.all():
