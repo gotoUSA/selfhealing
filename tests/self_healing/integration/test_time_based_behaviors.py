@@ -54,9 +54,7 @@ class TestCircuitBreakerTimeBased:
     """
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_circuit_breaker_remains_open_before_timeout(
-        self, circuit_breaker_repository
-    ):
+    def test_circuit_breaker_remains_open_before_timeout(self, circuit_breaker_repository):
         """
         Verify Circuit Breaker stays OPEN before recovery_timeout expires.
 
@@ -97,9 +95,7 @@ class TestCircuitBreakerTimeBased:
             assert is_available is False
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_circuit_breaker_transitions_to_half_open_after_timeout(
-        self, circuit_breaker_repository
-    ):
+    def test_circuit_breaker_transitions_to_half_open_after_timeout(self, circuit_breaker_repository):
         """
         Verify Circuit Breaker transitions to HALF_OPEN after recovery_timeout.
 
@@ -144,9 +140,7 @@ class TestCircuitBreakerTimeBased:
             assert updated_state.state == CircuitState.HALF_OPEN
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_circuit_breaker_closes_after_success_in_half_open(
-        self, circuit_breaker_repository
-    ):
+    def test_circuit_breaker_closes_after_success_in_half_open(self, circuit_breaker_repository):
         """
         Verify Circuit Breaker closes after successful requests in HALF_OPEN.
 
@@ -211,9 +205,7 @@ class TestSLABreachDetectionTimeBased:
     """
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_payment_sla_breach_detected_after_one_hour(
-        self, failed_operation_repository
-    ):
+    def test_payment_sla_breach_detected_after_one_hour(self, failed_operation_repository):
         """
         Verify payment SLA breach is detected after 1 hour threshold.
 
@@ -253,9 +245,7 @@ class TestSLABreachDetectionTimeBased:
             assert time_pending > timedelta(hours=1)
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_payment_sla_not_breached_within_threshold(
-        self, failed_operation_repository
-    ):
+    def test_payment_sla_not_breached_within_threshold(self, failed_operation_repository):
         """
         Verify payment SLA is NOT breached within the 1 hour threshold.
 
@@ -294,9 +284,7 @@ class TestSLABreachDetectionTimeBased:
             assert time_pending == timedelta(minutes=30)
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_point_sla_breach_detected_after_four_hours(
-        self, failed_operation_repository
-    ):
+    def test_point_sla_breach_detected_after_four_hours(self, failed_operation_repository):
         """
         Verify point domain SLA breach is detected after 4 hour threshold.
 
@@ -330,9 +318,7 @@ class TestSLABreachDetectionTimeBased:
             assert time_pending > timedelta(hours=4)
 
     @freeze_time("2025-01-01 12:00:00")
-    def test_point_sla_not_breached_within_four_hours(
-        self, failed_operation_repository
-    ):
+    def test_point_sla_not_breached_within_four_hours(self, failed_operation_repository):
         """
         Verify point domain SLA is NOT breached within 4 hour threshold.
 

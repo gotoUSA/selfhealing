@@ -4,7 +4,7 @@
 
 ## 📋 개요
 
-`selfhealing` 패키지는 **프레임워크 독립적인** 자가 치유 시스템입니다. 
+`selfhealing` 패키지는 **프레임워크 독립적인** 자가 치유 시스템입니다.
 Django, FastAPI, Flask 등 어떤 프레임워크에서든 `pip install selfhealing` 한 번으로 바로 사용할 수 있습니다.
 
 ## 🔄 Import 변경 사항
@@ -99,7 +99,7 @@ class YourAppConfig(AppConfig):
 
     def ready(self):
         from selfhealing.factory import ProviderRegistry
-        
+
         # Django를 기본 어댑터로 설정
         ProviderRegistry._default_repo = "django"
 ```
@@ -122,7 +122,7 @@ app = FastAPI()
 
 # SQLAlchemy 어댑터 등록
 ProviderRegistry.register_failed_operation_repo(
-    "sqlalchemy", 
+    "sqlalchemy",
     SQLAlchemyFailedOperationRepository
 )
 ProviderRegistry._default_repo = "sqlalchemy"
@@ -136,7 +136,7 @@ dlq_service = create_dlq_service()
 마이그레이션 전환 기간 동안, 이전 경로로 import하면 `DeprecationWarning`이 발생합니다:
 
 ```
-DeprecationWarning: Importing from 'shopping.services.self_healing.adapters' 
+DeprecationWarning: Importing from 'shopping.services.self_healing.adapters'
 is deprecated. Please migrate to 'selfhealing.adapters.django'.
 ```
 

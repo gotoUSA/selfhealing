@@ -41,7 +41,7 @@ from selfhealing.core.timezone import now
 class InMemoryFailedOperationRepository(FailedOperationRepository):
     """
     In-memory implementation of FailedOperationRepository.
-    
+
     Enables fast, parallel testing without database dependencies.
     Thread-safe for concurrent test execution.
     """
@@ -111,10 +111,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Get pending operations for a specific domain."""
-        result = [
-            e for e in self._store.values()
-            if e.domain == domain and e.status == FailedOperationStatus.PENDING.value
-        ]
+        result = [e for e in self._store.values() if e.domain == domain and e.status == FailedOperationStatus.PENDING.value]
         return result[:limit]
 
     def get_pending_count_by_domain(self, domain: str) -> int:
@@ -184,10 +181,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Get operations that have expired."""
-        result = [
-            e for e in self._store.values()
-            if e.expires_at and e.expires_at < before_date
-        ]
+        result = [e for e in self._store.values() if e.expires_at and e.expires_at < before_date]
         return result[:limit]
 
     def bulk_update_status(
@@ -226,9 +220,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     ) -> list[FailedOperationData]:
         """Find operations that can be replayed."""
         result = [
-            e for e in self._store.values()
-            if e.status == FailedOperationStatus.PENDING.value
-            and e.retry_count < max_retries
+            e for e in self._store.values() if e.status == FailedOperationStatus.PENDING.value and e.retry_count < max_retries
         ]
         if domain:
             result = [e for e in result if e.domain == domain]
@@ -256,10 +248,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         current_time: datetime,
     ) -> list[FailedOperationData]:
         """Find operations past their retention period."""
-        return [
-            e for e in self._store.values()
-            if e.expires_at and e.expires_at < current_time
-        ]
+        return [e for e in self._store.values() if e.expires_at and e.expires_at < current_time]
 
     def get_statistics(self) -> dict[str, Any]:
         """Get statistics about failed operations."""
@@ -286,7 +275,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             return None
         if entry.retry_count >= max_retries:
             return None
-        
+
         # Atomically update
         self._store[id] = FailedOperationData(
             **{
@@ -312,7 +301,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         entry = self._store.get(id)
         if not entry:
             return False
-        
+
         if success:
             new_status = FailedOperationStatus.RESOLVED.value
         else:
@@ -321,7 +310,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                 new_status = FailedOperationStatus.REQUIRES_REVIEW.value
             else:
                 new_status = FailedOperationStatus.PENDING.value
-        
+
         self._store[id] = FailedOperationData(
             **{
                 **entry.__dict__,
@@ -345,9 +334,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         for id, entry in list(self._store.items()):
             if entry.status == "replaying":
                 if entry.last_retry_at and (current_time - entry.last_retry_at) > stale_threshold:
-                    self._store[id] = FailedOperationData(
-                        **{**entry.__dict__, "status": FailedOperationStatus.PENDING.value}
-                    )
+                    self._store[id] = FailedOperationData(**{**entry.__dict__, "status": FailedOperationStatus.PENDING.value})
                     count += 1
         return count
 
@@ -387,7 +374,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     ) -> list[FailedOperationData]:
         """Get pending entries matching specified failure types."""
         results = [
-            e for e in self._store.values()
+            e
+            for e in self._store.values()
             if e.status == FailedOperationStatus.PENDING.value
             and e.failure_type in failure_types
             and e.retry_count < max_retry_count
@@ -405,9 +393,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         for id, entry in list(self._store.items()):
             if entry.status == FailedOperationStatus.RESOLVED.value:
                 if entry.resolved_at and (current_time - entry.resolved_at) > older_than:
-                    self._store[id] = FailedOperationData(
-                        **{**entry.__dict__, "status": "archived", "updated_at": now()}
-                    )
+                    self._store[id] = FailedOperationData(**{**entry.__dict__, "status": "archived", "updated_at": now()})
                     archived_count += 1
                     if archived_count >= batch_size:
                         break
@@ -475,7 +461,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
 class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
     In-memory implementation of CircuitBreakerStateRepository.
-    
+
     Enables fast, parallel testing without database dependencies.
     """
 
@@ -496,7 +482,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Create a new circuit breaker state."""
         # Handle CircuitState enum
         state_value = state.value if hasattr(state, "value") else (state or CircuitBreakerStateEnum.CLOSED.value)
-        
+
         entry = CircuitBreakerStateData(
             service_name=service_name,
             state=state_value,
@@ -543,7 +529,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> bool:
         """Update circuit breaker state."""
         current = self.get_or_create(service_name)
-        
+
         # Determine opened_at value
         if opened_at is not None:
             new_opened_at = opened_at
@@ -551,7 +537,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             new_opened_at = now()
         else:
             new_opened_at = current.opened_at
-        
+
         self._store[service_name] = CircuitBreakerStateData(
             service_name=service_name,
             id=current.id,
@@ -742,10 +728,11 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 # Mock Metrics Fixture
 # ========================================
 
+
 class MockMetrics:
     """
     Mock metrics collector for testing observability.
-    
+
     Provides a simple in-memory implementation of
     counter, histogram, and gauge metrics.
     """
@@ -765,11 +752,11 @@ class MockMetrics:
         """Increment a counter metric."""
         if name not in self._counters:
             self._counters[name] = {}
-        
+
         label_key = tuple(sorted((labels or {}).items()))
         current = self._counters[name].get(label_key, 0)
         self._counters[name][label_key] = current + value
-        
+
         # Also record as event
         self._record_event(name, {"type": "increment", "value": value, "labels": labels})
 
@@ -781,7 +768,7 @@ class MockMetrics:
         """Get current counter value."""
         if name not in self._counters:
             return 0
-        
+
         label_key = tuple(sorted((labels or {}).items()))
         return self._counters[name].get(label_key, 0)
 
@@ -794,12 +781,14 @@ class MockMetrics:
         """Record a histogram observation."""
         if name not in self._histograms:
             self._histograms[name] = []
-        
-        self._histograms[name].append({
-            "value": value,
-            "labels": labels or {},
-        })
-        
+
+        self._histograms[name].append(
+            {
+                "value": value,
+                "labels": labels or {},
+            }
+        )
+
         self._record_event(name, {"type": "observe", "value": value, "labels": labels})
 
     def get_histogram(
@@ -810,9 +799,9 @@ class MockMetrics:
         """Get histogram observations."""
         if name not in self._histograms:
             return []
-        
+
         observations = self._histograms[name]
-        
+
         if labels:
             # Filter by labels
             filtered = []
@@ -820,7 +809,7 @@ class MockMetrics:
                 if all(obs["labels"].get(k) == v for k, v in labels.items()):
                     filtered.append(obs["value"])
             return filtered
-        
+
         return [obs["value"] for obs in observations]
 
     def set_gauge(
@@ -832,10 +821,10 @@ class MockMetrics:
         """Set a gauge value."""
         if name not in self._gauges:
             self._gauges[name] = {}
-        
+
         label_key = tuple(sorted((labels or {}).items()))
         self._gauges[name][label_key] = value
-        
+
         self._record_event(name, {"type": "gauge", "value": value, "labels": labels})
 
     def gauge(
@@ -855,16 +844,17 @@ class MockMetrics:
         """Get gauge value."""
         if name not in self._gauges:
             return None
-        
+
         label_key = tuple(sorted((labels or {}).items()))
         return self._gauges[name].get(label_key)
 
     def _record_event(self, name: str, event: dict) -> None:
         """Record a metric event for ordering tests."""
         import time
+
         if name not in self._events:
             self._events[name] = []
-        
+
         event["timestamp"] = time.time()
         event["name"] = name  # Include metric name in event
         self._events[name].append(event)
@@ -916,6 +906,7 @@ def mock_metrics():
 # In-Memory Repository Fixtures
 # ========================================
 
+
 @pytest.fixture
 def failed_operation_repository():
     """Provide an in-memory FailedOperation repository."""
@@ -932,9 +923,11 @@ def circuit_breaker_repository():
 # Sample Data Fixtures (Mock - No DB)
 # ========================================
 
+
 @dataclass
 class MockUser:
     """Mock user object for testing."""
+
     id: int = field(default_factory=lambda: int(time.time() * 1000) % 1000000)
     username: str = "testuser"
     email: str = "test@example.com"
@@ -946,6 +939,7 @@ class MockUser:
 @dataclass
 class MockOrder:
     """Mock order object for testing."""
+
     id: int = field(default_factory=lambda: int(time.time() * 1000) % 1000000)
     user: Any = None
     status: str = "confirmed"
@@ -955,6 +949,7 @@ class MockOrder:
 @dataclass
 class MockPayment:
     """Mock payment object for testing."""
+
     id: int = field(default_factory=lambda: int(time.time() * 1000) % 1000000)
     order: Any = None
     status: str = "in_progress"
@@ -985,10 +980,12 @@ def sample_payment(sample_order):
 # Service Fixtures with Injected Repositories
 # ========================================
 
+
 @pytest.fixture
 def circuit_breaker_service(circuit_breaker_repository):
     """Provide a circuit breaker service with mock repository."""
     from selfhealing.services import CircuitBreakerService
+
     return CircuitBreakerService(repository=circuit_breaker_repository)
 
 
@@ -996,6 +993,7 @@ def circuit_breaker_service(circuit_breaker_repository):
 def dlq_service(failed_operation_repository):
     """Provide a DLQ service with mock repository."""
     from selfhealing.services import DLQService, DLQConfig
+
     return DLQService(
         repository=failed_operation_repository,
         config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
@@ -1016,15 +1014,17 @@ def recovery_handler():
 # Multi-Tenant Fixtures
 # ========================================
 
+
 @dataclass
 class MockTenant:
     """Mock tenant for multi-tenancy tests."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "Test Tenant"
     settings: dict = field(default_factory=dict)
     admin_user: Any = None  # Will be populated if needed
     sla_timeout_seconds: int = 3600  # Default 1 hour
-    
+
     def __post_init__(self):
         # Create a mock admin user if not provided
         if self.admin_user is None:
@@ -1049,9 +1049,11 @@ def tenant_b():
 # Audit Entry Mock
 # ========================================
 
+
 @dataclass
 class AuditEntry:
     """Mock audit entry for accountability tests."""
+
     action_type: str
     dlq_id: int | None = None
     controlled_by: int | None = None
@@ -1067,6 +1069,7 @@ class AuditEntry:
 # Category Fixture for Parametrized Tests
 # ========================================
 
+
 @pytest.fixture
 def category():
     """Provide test category marker."""
@@ -1077,9 +1080,11 @@ def category():
 # Admin User Fixture (Mock)
 # ========================================
 
+
 @dataclass
 class MockAdminUser:
     """Mock admin user for integration tests (no DB required)."""
+
     id: int = 1
     username: str = "test_admin"
     email: str = "admin@test.com"
@@ -1100,6 +1105,7 @@ def admin_user():
 # Audit Log Repository Mock
 # ========================================
 
+
 class MockAuditLogRepository:
     """Mock audit log repository for accountability tests."""
 
@@ -1118,6 +1124,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log a circuit breaker action."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type="circuit_breaker_action",
             controlled_by=getattr(controlled_by, "id", controlled_by),
@@ -1151,6 +1158,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log a DLQ action."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type=f"dlq_{action}",
             dlq_id=dlq_id,
@@ -1173,6 +1181,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log an auto-retry decision."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type="auto_retry",
             dlq_id=dlq_id,
@@ -1196,6 +1205,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log a cost-based decision."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type="cost_decision",
             dlq_id=dlq_id,
@@ -1219,6 +1229,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log an SLA-based action."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type="sla_action",
             dlq_id=dlq_id,
@@ -1241,6 +1252,7 @@ class MockAuditLogRepository:
     ) -> AuditEntry:
         """Log an escalation."""
         from django.utils import timezone
+
         entry = AuditEntry(
             action_type="escalation",
             dlq_id=dlq_id,
@@ -1262,10 +1274,7 @@ class MockAuditLogRepository:
         """Find audit entries by action type."""
         result = [e for e in self._entries if e.action_type == action_type]
         if service_name:
-            result = [
-                e for e in result
-                if e.metadata.get("service_name") == service_name
-            ]
+            result = [e for e in result if e.metadata.get("service_name") == service_name]
         return result
 
     def find_by_dlq_id(self, dlq_id: int) -> list[AuditEntry]:
@@ -1290,6 +1299,7 @@ def audit_log_repository():
 # ========================================
 # Cost Tracker Fixtures
 # ========================================
+
 
 class MockCostTracker:
     """Mock cost tracker for cost-based decision tests."""
@@ -1327,16 +1337,17 @@ def high_cost_tracker():
 # Replay Service with Registered Handlers
 # ========================================
 
+
 @pytest.fixture
 def replay_service(failed_operation_repository):
     """
     Provide a replay service with mock repository.
-    
+
     Uses in-memory repository - no DB dependency.
     Handlers should be registered in tests as needed using mock handlers.
     """
     from selfhealing.services import ReplayService
-    
+
     # Create service with in-memory repository
     service = ReplayService(repository=failed_operation_repository)
     return service
