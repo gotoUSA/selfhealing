@@ -601,6 +601,17 @@ class RuntimeConfigManager:
         burn_rate_slow_info: Optional[float] = None,
         failsafe_alert_enabled: Optional[bool] = None,
         failsafe_cooldown_seconds: Optional[int] = None,
+        # Heartbeat (Dead Man's Snitch) 설정
+        heartbeat_enabled: Optional[bool] = None,
+        heartbeat_interval_seconds: Optional[int] = None,
+        heartbeat_timeout_seconds: Optional[int] = None,
+        # 복구 알림 (Recovery Notification) 설정
+        recovery_alert_enabled: Optional[bool] = None,
+        recovery_alert_include_downtime: Optional[bool] = None,
+        # Override 에스컬레이션 설정
+        escalation_enabled: Optional[bool] = None,
+        escalation_channel: Optional[str] = None,
+        escalation_mention: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Update Error Budget configuration.
@@ -616,6 +627,14 @@ class RuntimeConfigManager:
             burn_rate_slow_info: 정상 소진율 임계값 (x)
             failsafe_alert_enabled: Fail-Safe 발동 시 알림 발송 여부
             failsafe_cooldown_seconds: 연속 알림 방지 쿨다운 (초)
+            heartbeat_enabled: Heartbeat (Dead Man's Snitch) 활성화 여부
+            heartbeat_interval_seconds: Heartbeat 발송 주기 (초)
+            heartbeat_timeout_seconds: Heartbeat 타임아웃 (초, 이 시간 내 미응답시 Dead)
+            recovery_alert_enabled: 복구 완료 알림 발송 여부
+            recovery_alert_include_downtime: 복구 알림에 장애 시간 포함 여부
+            escalation_enabled: Override 에스컬레이션 활성화 여부
+            escalation_channel: 에스컬레이션 알림 채널 (예: #governance)
+            escalation_mention: 에스컬레이션 멘션 대상 (예: @cto @security)
             
         Returns:
             dict: 업데이트된 설정값

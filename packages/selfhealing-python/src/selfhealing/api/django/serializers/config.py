@@ -229,8 +229,46 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
         help_text="연속 알림 방지 쿨다운 (초)"
     )
 
+    # Heartbeat (Dead Man's Snitch) 설정
+    heartbeat_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Heartbeat (Dead Man's Snitch) 활성화 여부 (기본: True)"
+    )
+    heartbeat_interval_seconds = serializers.IntegerField(
+        required=False, min_value=10, max_value=300,
+        help_text="Heartbeat 발송 주기 (초, 기본: 60초)"
+    )
+    heartbeat_timeout_seconds = serializers.IntegerField(
+        required=False, min_value=30, max_value=600,
+        help_text="Heartbeat 타임아웃 (초, 기본: 120초, 이 시간 내 미응답시 Dead)"
+    )
+
+    # 복구 알림 (Recovery Notification) 설정
+    recovery_alert_enabled = serializers.BooleanField(
+        required=False,
+        help_text="복구 완료 알림 발송 여부 (기본: True)"
+    )
+    recovery_alert_include_downtime = serializers.BooleanField(
+        required=False,
+        help_text="복구 알림에 장애 시간 포함 여부 (기본: True)"
+    )
+
+    # Override 에스컬레이션 설정
+    escalation_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Override 에스컬레이션 활성화 여부 (기본: True)"
+    )
+    escalation_channel = serializers.CharField(
+        required=False, max_length=100,
+        help_text="에스컬레이션 알림 채널 (기본: #governance)"
+    )
+    escalation_mention = serializers.CharField(
+        required=False, max_length=200,
+        help_text="에스컬레이션 멘션 대상 (기본: @cto @security)"
+    )
+
     def validate(self, data):
-        """Validate threshold ordering."""
+        """Validate threshold ordering and heartbeat settings."""
         # 임계값 순서 검증: healthy > caution > warning > critical
         thresholds = [
             ('threshold_healthy', data.get('threshold_healthy', 75.0)),
@@ -243,6 +281,15 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
                 raise serializers.ValidationError(
                     f"{thresholds[i][0]}은 {thresholds[i + 1][0]}보다 커야 합니다."
                 )
+        
+        # Heartbeat 타임아웃은 interval보다 커야 함
+        interval = data.get('heartbeat_interval_seconds', 60)
+        timeout = data.get('heartbeat_timeout_seconds', 120)
+        if timeout <= interval:
+            raise serializers.ValidationError(
+                "heartbeat_timeout_seconds는 heartbeat_interval_seconds보다 커야 합니다."
+            )
+        
         return data
 
 

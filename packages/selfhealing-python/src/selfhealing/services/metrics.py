@@ -309,6 +309,46 @@ active_override_gauge = _get_or_create_gauge(
 
 
 # =============================================================================
+# Heartbeat Metrics (Dead Man's Snitch)
+# =============================================================================
+#
+# Heartbeat 메트릭은 시스템이 "살아있음"을 증명합니다.
+# 이 메트릭이 일정 시간 업데이트되지 않으면 시스템이 완전히 죽은 것입니다.
+#
+# Prometheus 알림 규칙 예시:
+#   expr: time() - selfhealing_heartbeat_timestamp_seconds > 120
+#   for: 0m
+#   severity: critical
+#
+
+selfhealing_heartbeat_timestamp = _get_or_create_gauge(
+    "selfhealing_heartbeat_timestamp_seconds",
+    "Last heartbeat timestamp in seconds since epoch",
+    ["component"],
+)
+
+selfhealing_heartbeat_count = _get_or_create_counter(
+    "selfhealing_heartbeat_total",
+    "Total heartbeat emissions",
+    ["component"],
+)
+
+# Override 에스컬레이션 카운터
+override_escalation_total = _get_or_create_counter(
+    "selfhealing_override_escalation_total",
+    "Total override escalation alerts sent",
+    ["override_type"],
+)
+
+# 복구 알림 카운터
+recovery_alert_total = _get_or_create_counter(
+    "selfhealing_recovery_alert_total",
+    "Total recovery alerts sent",
+    ["component"],
+)
+
+
+# =============================================================================
 # Helper Functions - Recording Metrics
 # =============================================================================
 
@@ -580,6 +620,72 @@ def record_failsafe_recovered(component: str) -> None:
         logger.info(f"[Metrics] Fail-safe recovered: component={component}")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record fail-safe recovery: {e}")
+
+
+# =============================================================================
+# Heartbeat Functions (Dead Man's Snitch)
+# =============================================================================
+
+
+def emit_heartbeat(component: str = "error_budget") -> None:
+    """
+    Emit a heartbeat signal indicating the system is alive.
+    
+    This should be called periodically (default: every 60 seconds).
+    If this metric stops being updated, it indicates the service is dead.
+    
+    Args:
+        component: The component emitting the heartbeat
+    
+    Usage:
+        # In a Celery Beat task or background thread
+        @app.task
+        def heartbeat_task():
+            emit_heartbeat("error_budget")
+    
+    Prometheus Alert Rule:
+        - alert: SelfHealingServiceDead
+          expr: time() - selfhealing_heartbeat_timestamp_seconds > 120
+          for: 0m
+          labels:
+            severity: critical
+    """
+    import time
+    try:
+        current_time = time.time()
+        selfhealing_heartbeat_timestamp.labels(component=component).set(current_time)
+        selfhealing_heartbeat_count.labels(component=component).inc()
+        logger.debug(f"[Metrics] Heartbeat emitted: component={component}, time={current_time}")
+    except Exception as e:
+        logger.error(f"[Metrics] Failed to emit heartbeat: {e}")
+
+
+def record_override_escalation(override_type: str) -> None:
+    """
+    Record that an override escalation alert was sent.
+    
+    Args:
+        override_type: Type of override (hotfix, security_patch, etc.)
+    """
+    try:
+        override_escalation_total.labels(override_type=override_type).inc()
+        logger.info(f"[Metrics] Override escalation recorded: type={override_type}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record override escalation: {e}")
+
+
+def record_recovery_alert(component: str) -> None:
+    """
+    Record that a recovery alert was sent.
+    
+    Args:
+        component: The component that recovered
+    """
+    try:
+        recovery_alert_total.labels(component=component).inc()
+        logger.info(f"[Metrics] Recovery alert recorded: component={component}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record recovery alert: {e}")
 
 
 # =============================================================================
@@ -990,5 +1096,60 @@ ALERTING_RULES: dict = {
             "Investigate and restore normal operation immediately."
         ),
         "runbook_url": "https://docs.internal/runbooks/selfhealing-failsafe",
+    },
+    # =========================================================================
+    # Dead Man's Snitch (Heartbeat Monitoring)
+    # =========================================================================
+    "SelfHealingServiceDead": {
+        "expr": "time() - selfhealing_heartbeat_timestamp_seconds > 120",
+        "for": "0m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "🔴 Self-Healing service is DEAD",
+        "description": (
+            "No heartbeat received from Self-Healing '{{ $labels.component }}' "
+            "for more than 2 minutes. The service may have crashed or is unresponsive. "
+            "This is a critical infrastructure failure."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/selfhealing-dead",
+    },
+    "SelfHealingHeartbeatMissing": {
+        "expr": "absent(selfhealing_heartbeat_timestamp_seconds) == 1",
+        "for": "5m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "🔴 Self-Healing heartbeat metric missing",
+        "description": (
+            "The Self-Healing heartbeat metric is completely absent. "
+            "The service may never have started or is not properly initialized."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/selfhealing-missing",
+    },
+    # =========================================================================
+    # Override Escalation Alerting Rules
+    # =========================================================================
+    "OverrideEscalation": {
+        "expr": "increase(selfhealing_override_escalation_total[1h]) > 0",
+        "for": "0m",
+        "severity": "warning",
+        "team": "ops",
+        "summary": "⚠️ Deployment override escalation",
+        "description": (
+            "A deployment override of type '{{ $labels.override_type }}' was approved "
+            "despite insufficient error budget. This action requires governance review."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/override-escalation",
+    },
+    "OverrideEscalationHigh": {
+        "expr": "increase(selfhealing_override_escalation_total[24h]) > 5",
+        "for": "0m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "🚨 Excessive deployment overrides",
+        "description": (
+            "More than 5 deployment overrides in the last 24 hours. "
+            "This may indicate process issues or sustained reliability problems."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/override-escalation-high",
     },
 }

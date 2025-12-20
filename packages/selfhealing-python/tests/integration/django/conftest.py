@@ -84,8 +84,19 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
-def reset_database():
-    """Reset database between tests by using transactions."""
+def reset_database(request):
+    """Reset database between tests by using transactions.
+    
+    Only runs for tests that use the database (have django_db marker).
+    Serializer tests don't need this.
+    """
+    # Check if this test needs database access
+    marker = request.node.get_closest_marker("django_db")
+    if marker is None:
+        # No django_db marker - skip database cleanup
+        yield
+        return
+
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 
@@ -93,12 +104,16 @@ def reset_database():
     yield
 
     # Rollback all changes - clear all data from tables
-    from selfhealing.adapters.django.models import (
-        FailedOperation,
-        CircuitBreakerState,
-        SecurityIncident,
-    )
+    try:
+        from selfhealing.adapters.django.models import (
+            FailedOperation,
+            CircuitBreakerState,
+            SecurityIncident,
+        )
 
-    FailedOperation.objects.all().delete()
-    CircuitBreakerState.objects.all().delete()
-    SecurityIncident.objects.all().delete()
+        FailedOperation.objects.all().delete()
+        CircuitBreakerState.objects.all().delete()
+        SecurityIncident.objects.all().delete()
+    except Exception:
+        # If database is not available, skip cleanup
+        pass

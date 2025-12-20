@@ -198,6 +198,26 @@ class ErrorBudgetConfig:
     failsafe_alert_enabled: bool = True    # Fail-Safe 발동 시 알림 발송
     failsafe_cooldown_seconds: int = 300   # 연속 알림 방지 (5분)
 
+    # =========================================================================
+    # Heartbeat (Dead Man's Snitch) 설정
+    # =========================================================================
+    heartbeat_enabled: bool = True              # Heartbeat 활성화
+    heartbeat_interval_seconds: int = 60        # Heartbeat 주기 (기본: 1분)
+    heartbeat_timeout_seconds: int = 120        # 이 시간 초과 시 Dead 판정 (기본: 2분)
+
+    # =========================================================================
+    # 복구 알림 (Recovery Notification) 설정
+    # =========================================================================
+    recovery_alert_enabled: bool = True         # 복구 시 알림 발송
+    recovery_alert_include_downtime: bool = True  # 다운타임 정보 포함
+
+    # =========================================================================
+    # Override 에스컬레이션 설정
+    # =========================================================================
+    escalation_enabled: bool = True             # Override 에스컬레이션 활성화
+    escalation_channel: str = "#governance"     # 에스컬레이션 채널
+    escalation_mention: str = "@cto @security"  # 멘션 대상
+
 
 @dataclass
 class SelfHealingConfig:

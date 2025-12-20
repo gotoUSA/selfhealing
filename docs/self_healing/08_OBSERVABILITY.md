@@ -263,6 +263,58 @@ record_active_override(is_active=True)
     return ReplayResult(success=True)
 ```
 
+### 7. Heartbeat & Fail-Safe 메트릭 (NEW)
+
+시스템 생존 확인 및 장애 모드 관측을 위한 메트릭입니다.
+
+| 메트릭 이름 | 타입 | 레이블 | 설명 |
+|-------------|------|--------|------|
+| `selfhealing_heartbeat_timestamp_seconds` | Gauge | `component` | 마지막 heartbeat 시각 |
+| `selfhealing_heartbeat_count` | Counter | `component` | Heartbeat 발송 횟수 |
+| `selfhealing_failsafe_triggered_total` | Counter | `component` | Fail-Safe 발동 횟수 |
+| `selfhealing_failsafe_mode_active` | Gauge | `component` | Fail-Safe 모드 활성 여부 (0/1) |
+| `selfhealing_override_escalation_total` | Counter | `override_type` | Override 에스컬레이션 횟수 |
+| `selfhealing_recovery_alert_total` | Counter | `component` | 복구 알림 발송 횟수 |
+
+**Dead Man's Snitch 패턴:**
+
+heartbeat 메트릭이 일정 시간(기본 120초) 이상 업데이트되지 않으면 서비스가 죽은 것으로 간주합니다.
+
+```promql
+# 서비스 사망 감지 (2분 이상 heartbeat 없음)
+time() - selfhealing_heartbeat_timestamp_seconds > 120
+
+# 메트릭 자체 부재 감지
+absent(selfhealing_heartbeat_timestamp_seconds) == 1
+```
+
+**사용 예시:**
+
+```python
+from selfhealing.services.metrics import (
+    emit_heartbeat,
+    record_failsafe_triggered,
+    record_failsafe_recovered,
+    record_override_escalation,
+    record_recovery_alert,
+)
+
+# Heartbeat 발송 (Celery Beat에서 주기적 호출)
+emit_heartbeat(component="error_budget")
+
+# Fail-Safe 발동 기록
+record_failsafe_triggered(component="error_budget")
+
+# Fail-Safe 복구 기록
+record_failsafe_recovered(component="error_budget")
+
+# Override 에스컬레이션 기록
+record_override_escalation(override_type="hotfix")
+
+# 복구 알림 기록
+record_recovery_alert(component="error_budget")
+```
+
 ---
 
 ## 도메인 정의

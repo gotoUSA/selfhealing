@@ -376,6 +376,20 @@ SELF_HEALING = {
         # Fail-Safe 설정
         "FAILSAFE_ALERT_ENABLED": True,   # Fail-Safe 발동 시 알림 발송
         "FAILSAFE_COOLDOWN_SECONDS": 300, # 연속 알림 방지 (5분)
+        
+        # Heartbeat (Dead Man's Snitch) 설정
+        "HEARTBEAT_ENABLED": True,           # Heartbeat 활성화
+        "HEARTBEAT_INTERVAL_SECONDS": 60,    # Heartbeat 발송 주기 (1분)
+        "HEARTBEAT_TIMEOUT_SECONDS": 120,    # Heartbeat 타임아웃 (2분)
+        
+        # 복구 알림 (Recovery Notification) 설정
+        "RECOVERY_ALERT_ENABLED": True,           # 복구 알림 발송
+        "RECOVERY_ALERT_INCLUDE_DOWNTIME": True,  # 장애 시간 포함
+        
+        # Override 에스컬레이션 설정
+        "ESCALATION_ENABLED": True,            # 에스컬레이션 활성화
+        "ESCALATION_CHANNEL": "#governance",   # 에스컬레이션 채널
+        "ESCALATION_MENTION": "@cto @security", # 멘션 대상
     },
 }
 ```
@@ -394,6 +408,14 @@ SELF_HEALING = {
 | `burn_rate_slow_info` | float | 1.0 | 0.5-3x | 정상 소진율 임계값 |
 | `failsafe_alert_enabled` | bool | True | - | Fail-Safe 발동 시 알림 발송 |
 | `failsafe_cooldown_seconds` | int | 300 | 60-3600 | 연속 알림 방지 쿨다운 (초) |
+| `heartbeat_enabled` | bool | True | - | Heartbeat 활성화 여부 |
+| `heartbeat_interval_seconds` | int | 60 | 10-300 | Heartbeat 발송 주기 (초) |
+| `heartbeat_timeout_seconds` | int | 120 | 30-600 | Heartbeat 타임아웃 (초) |
+| `recovery_alert_enabled` | bool | True | - | 복구 완료 알림 발송 여부 |
+| `recovery_alert_include_downtime` | bool | True | - | 알림에 장애 시간 포함 |
+| `escalation_enabled` | bool | True | - | Override 에스컬레이션 활성화 |
+| `escalation_channel` | str | "#governance" | - | 에스컬레이션 Slack 채널 |
+| `escalation_mention` | str | "@cto @security" | - | 에스컬레이션 멘션 대상 |
 
 **런타임 동적 변경 (API):**
 
@@ -409,9 +431,33 @@ curl -X PUT \
   -H "Content-Type: application/json" \
   -d '{"threshold_warning": 25.0, "burn_rate_fast_critical": 12.0}' \
   $API_URL/api/self-healing/config/error-budget/
+
+# Heartbeat 주기 변경
+curl -X PATCH \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "heartbeat_enabled": true,
+    "heartbeat_interval_seconds": 30,
+    "heartbeat_timeout_seconds": 90
+  }' \
+  $API_URL/api/self-healing/config/error-budget/
+
+# 에스컬레이션 설정 변경
+curl -X PATCH \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "escalation_enabled": true,
+    "escalation_channel": "#ops-critical",
+    "escalation_mention": "@oncall"
+  }' \
+  $API_URL/api/self-healing/config/error-budget/
 ```
 
 > 💡 **참고**: 임계값 변경은 즉시 적용됩니다. 변경 후 Error Budget 상태 판정에 새 임계값이 사용됩니다.
+
+> ⚠️ **주의**: `heartbeat_timeout_seconds`는 항상 `heartbeat_interval_seconds`보다 커야 합니다.
 
 ---
 

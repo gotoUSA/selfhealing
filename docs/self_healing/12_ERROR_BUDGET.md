@@ -702,3 +702,199 @@ Fail-Safe 발동 즉시 **3가지 채널로 알림**을 발송합니다:
 | **Google SRE** | "Silent failures are the worst failures" | 모든 Fallback에 메트릭 |
 | **Netflix** | Fallback activation = immediate alert | Circuit Breaker Fallback 시 알림 |
 | **Uber** | Self-healing with visibility | 자동 복구도 P2 인시던트 생성 |
+
+---
+
+## 11. 고급 관측성 기능
+
+### 11.1 Heartbeat (Dead Man's Snitch)
+
+Error Budget 시스템이 정상 동작 중인지 확인하기 위해 주기적인 heartbeat를 발송합니다.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                Dead Man's Snitch 패턴                    │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│   Error Budget 서비스                                    │
+│          │                                               │
+│          ▼  (매 60초)                                    │
+│   ┌─────────────────────────────────────────────────────┐│
+│   │         emit_heartbeat()                            ││
+│   │                                                      ││
+│   │  selfhealing_heartbeat_timestamp = time()           ││
+│   │  selfhealing_heartbeat_count++                      ││
+│   └─────────────────────────────────────────────────────┘│
+│          │                                               │
+│          ▼                                               │
+│   Prometheus 모니터링                                    │
+│          │                                               │
+│          ▼                                               │
+│   time() - heartbeat_timestamp > 120초?                 │
+│          │                                               │
+│    YES   ▼                                               │
+│   🚨 SelfHealingServiceDead 알림 발송                    │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Prometheus 알림 규칙:**
+
+```yaml
+# 서비스 사망 감지
+- alert: SelfHealingServiceDead
+  expr: time() - selfhealing_heartbeat_timestamp_seconds > 120
+  for: 0m
+  labels:
+    severity: critical
+  annotations:
+    summary: "🔴 Self-Healing service is DEAD"
+    description: "No heartbeat for 2+ minutes. Service may have crashed."
+
+# Heartbeat 메트릭 부재
+- alert: SelfHealingHeartbeatMissing
+  expr: absent(selfhealing_heartbeat_timestamp_seconds) == 1
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "🔴 Self-Healing heartbeat metric missing"
+```
+
+**API 설정:**
+
+```bash
+# Heartbeat 주기 변경 (30초)
+curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "heartbeat_enabled": true,
+    "heartbeat_interval_seconds": 30,
+    "heartbeat_timeout_seconds": 90
+  }'
+```
+
+### 11.2 복구 완료 알림 (Recovery Notification)
+
+Fail-Safe 모드에서 정상으로 복구되었을 때 적극적으로 알림을 발송합니다.
+
+```
+❌ 나쁜 예: 침묵하는 복구
+┌───────────────────────────────────────────────────────────┐
+│  Fail-Safe 모드 → 자동 복구 → (알림 없음)                 │
+│                                                           │
+│  운영자: "언제 복구됐지? 아직 장애 중인가?"              │
+└───────────────────────────────────────────────────────────┘
+
+✅ 좋은 예: Recovery Notification
+┌───────────────────────────────────────────────────────────┐
+│  Fail-Safe 모드 → 자동 복구                               │
+│              │                                            │
+│              ▼                                            │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │  alert_failsafe_recovered()                          │ │
+│  │                                                       │ │
+│  │  Title: ✅ RECOVERED: error_budget                   │ │
+│  │  Downtime: 5분 32초                                  │ │
+│  │  Severity: INFO                                       │ │
+│  └─────────────────────────────────────────────────────┘ │
+│              │                                            │
+│              ▼                                            │
+│  운영자: "5분만에 자동 복구됐구나, OK"                   │
+└───────────────────────────────────────────────────────────┘
+```
+
+**API 설정:**
+
+```bash
+curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
+  -d '{
+    "recovery_alert_enabled": true,
+    "recovery_alert_include_downtime": true
+  }'
+```
+
+### 11.3 Override 에스컬레이션
+
+Error Budget이 부족한 상태에서 배포 Override를 승인하면 상위 채널에 알림을 발송합니다.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Override 에스컬레이션 흐름                   │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│   Error Budget: 5% (위험)                                │
+│          │                                               │
+│          ▼                                               │
+│   개발자: "긴급 보안 패치 배포 필요"                     │
+│          │                                               │
+│          ▼                                               │
+│   record_override_approved(type=SECURITY_PATCH)          │
+│          │                                               │
+│          ▼                                               │
+│   ┌─────────────────────────────────────────────────────┐│
+│   │  에스컬레이션 알림 발송                              ││
+│   │                                                      ││
+│   │  채널: #governance                                   ││
+│   │  멘션: @cto @security                                ││
+│   │  내용: Override 승인 - 감사 로그 기록됨             ││
+│   └─────────────────────────────────────────────────────┘│
+│          │                                               │
+│          ▼                                               │
+│   배포 진행 + 거버넌스 추적                              │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**API 설정:**
+
+```bash
+curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
+  -d '{
+    "escalation_enabled": true,
+    "escalation_channel": "#governance",
+    "escalation_mention": "@cto @security"
+  }'
+```
+
+**Prometheus 알림 규칙:**
+
+```yaml
+# Override 발생 알림
+- alert: OverrideEscalation
+  expr: increase(selfhealing_override_escalation_total[1h]) > 0
+  for: 0m
+  labels:
+    severity: warning
+  annotations:
+    summary: "⚠️ Deployment override escalation"
+    description: "Override type '{{ $labels.override_type }}' approved despite low budget"
+
+# 과도한 Override 알림
+- alert: OverrideEscalationHigh
+  expr: increase(selfhealing_override_escalation_total[24h]) > 5
+  for: 0m
+  labels:
+    severity: critical
+  annotations:
+    summary: "🚨 Excessive deployment overrides"
+    description: "More than 5 overrides in 24h indicates process issues"
+```
+
+### 11.4 Celery Beat 스케줄 설정
+
+Heartbeat Task를 Celery Beat에 등록합니다:
+
+```python
+# myproject/celery.py 또는 settings.py
+
+CELERY_BEAT_SCHEDULE = {
+    # ... 기존 스케줄 ...
+    
+    # Heartbeat (Dead Man's Snitch)
+    'emit-selfhealing-heartbeat': {
+        'task': 'selfhealing.adapters.celery.tasks.emit_selfhealing_heartbeat',
+        'schedule': 60.0,  # heartbeat_interval_seconds와 동일하게
+    },
+}
+```

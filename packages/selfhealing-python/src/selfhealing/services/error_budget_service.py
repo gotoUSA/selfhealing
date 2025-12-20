@@ -835,6 +835,7 @@ class FreezeDecisionRecorder:
         persist_record: Optional[Callable[[FreezeDecisionRecord], None]] = None,
         emit_metric: Optional[Callable[[str, Dict], None]] = None,
         emit_otel_event: Optional[Callable[[str, Dict], None]] = None,
+        alert_adapter: Optional[Any] = None,  # AlertAdapter for escalations
     ):
         """
         초기화.
@@ -844,11 +845,13 @@ class FreezeDecisionRecorder:
             persist_record: 기록 저장 함수
             emit_metric: 메트릭 발행 함수
             emit_otel_event: OpenTelemetry 이벤트 발행 함수
+            alert_adapter: 알림 어댑터 (에스컬레이션용)
         """
         self.advisor = advisor or DeploymentPolicyAdvisor()
         self._persist_record = persist_record
         self._emit_metric = emit_metric
         self._emit_otel_event = emit_otel_event
+        self._alert_adapter = alert_adapter
         
         # In-memory 기록 (영속화 함수가 없는 경우)
         self._records: List[FreezeDecisionRecord] = []
@@ -904,6 +907,7 @@ class FreezeDecisionRecorder:
         배포 동결 무시(Override) 승인 기록.
         
         운영자가 동결 권고를 무시하고 배포를 강행할 때 호출.
+        에스컬레이션이 활성화된 경우, 상위 채널에 알림을 발송합니다.
         
         Args:
             decided_by: 결정자
@@ -937,6 +941,14 @@ class FreezeDecisionRecorder:
         
         self._save_and_emit(record)
         
+        # 에스컬레이션 알림 발송
+        self._send_override_escalation(
+            override_type=override_type,
+            requester=decided_by,
+            reason=justification,
+            service_name=deployment_name,
+        )
+        
         logger.warning(
             f"[FreezeDecision] Override approved by {decided_by}: "
             f"type={override_type.value}, deployment={deployment_name}, "
@@ -944,6 +956,56 @@ class FreezeDecisionRecorder:
         )
         
         return record
+    
+    def _send_override_escalation(
+        self,
+        override_type: OverrideType,
+        requester: str,
+        reason: str,
+        service_name: Optional[str] = None,
+    ) -> None:
+        """
+        Override 에스컬레이션 알림 발송.
+        
+        RuntimeConfig의 escalation_enabled가 True일 때만 발송합니다.
+        """
+        try:
+            # 설정 확인
+            config = _get_error_budget_config()
+            if not config.get("escalation_enabled", True):
+                logger.debug("[FreezeDecision] Escalation disabled, skipping")
+                return
+            
+            escalation_channel = config.get("escalation_channel", "#governance")
+            escalation_mention = config.get("escalation_mention", "@cto @security")
+            
+            # 메트릭 기록
+            from selfhealing.services.metrics import record_override_escalation
+            record_override_escalation(override_type.value)
+            
+            # AlertAdapter가 있으면 에스컬레이션 알림 발송
+            if self._alert_adapter:
+                self._alert_adapter.alert_override_escalation(
+                    override_type=override_type.value,
+                    requester=requester,
+                    reason=reason,
+                    service_name=service_name,
+                    escalation_channel=escalation_channel,
+                    escalation_mention=escalation_mention,
+                )
+                logger.info(
+                    f"[FreezeDecision] Escalation alert sent: "
+                    f"type={override_type.value}, channel={escalation_channel}"
+                )
+            else:
+                logger.warning(
+                    f"[FreezeDecision] No alert adapter configured, "
+                    f"escalation logged only: type={override_type.value}, "
+                    f"requester={requester}, reason={reason}"
+                )
+        except Exception as e:
+            # 에스컬레이션 실패는 Override 자체를 막지 않음
+            logger.error(f"[FreezeDecision] Failed to send escalation: {e}")
     
     def record_freeze_lifted(
         self,
