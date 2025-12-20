@@ -510,6 +510,164 @@ curl http://localhost:8000/api/self-healing/chaos/reports/grades/?days=30 \
 | `enabled` | bool | true | 스케줄러 활성화 |
 | `max_concurrent_experiments` | int | 3 | 최대 동시 실험 수 |
 | `approval_timeout_hours` | int | 24 | 승인 요청 만료 시간 |
+| `dry_run_mode` | bool | true | Dry Run 모드 (기본 True - 안전) |
+
+### 7.4 TTLConfig (Self-Expiration)
+
+| 필드 | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `default_ttl_seconds` | int | 600 | 기본 TTL (10분) |
+| `min_ttl_seconds` | int | 60 | 최소 TTL (1분) |
+| `max_ttl_seconds` | int | 3600 | 최대 TTL (1시간) |
+| `auto_expiration_enabled` | bool | true | 자동 만료 활성화 |
+
+### 7.5 StopConditionsConfig
+
+| 필드 | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `max_error_rate_percent` | float | 5.0 | 에러율 임계값 (%) |
+| `max_latency_p99_ms` | int | 2000 | P99 지연시간 임계값 (ms) |
+| `max_latency_p95_ms` | int | 1000 | P95 지연시간 임계값 (ms) |
+| `min_error_budget_percent` | float | 10.0 | 최소 에러 버짓 (%) |
+| `check_interval_seconds` | int | 10 | 메트릭 체크 주기 (초) |
+| `consecutive_breaches_required` | int | 2 | 연속 위반 횟수 |
+| `enabled` | bool | true | Stop Conditions 활성화 |
+
+### 7.6 DryRunConfig
+
+| 필드 | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `enabled` | bool | true | Dry Run 모드 활성화 (기본 True - 안전) |
+| `reason` | str | "Initial deployment" | Dry Run 활성화 이유 |
+
+---
+
+## 8. 안전장치 (Safety Mechanisms)
+
+> Phase 1 & Phase 2 구현 완료 (2025-12-21)
+
+### 8.1 구현된 안전장치 목록
+
+| 기능 | 상태 | 설명 |
+|------|------|------|
+| Pre-flight Safety Check | ✅ | 실험 전 안전 조건 검증 |
+| Error Budget 연동 (20% 차단) | ✅ | 에러 버짓 부족 시 실험 차단 |
+| Blast Radius Control | ✅ | INSTANCE → SERVICE → REGION 단계적 제어 |
+| REGION 승인 필수 | ✅ | 고위험 실험 수동 승인 |
+| Kill Switch | ✅ | 즉시 중단 기능 |
+| `fail_safe_on_error=True` | ✅ | 오류 시 안전하게 차단 |
+| **Self-Expiration (TTL)** | ✅ | 실험 자동 만료 (엔진 사망 시에도 복구) |
+| **Stop Conditions** | ✅ | SLA 위반 시 자동 중단 |
+| **Chaos Dry Run 모드** | ✅ | 실제 주입 없이 시뮬레이션 (기본 True) |
+| **Idempotent Rollback** | ✅ | 중복 롤백 방지 |
+
+### 8.2 Self-Expiration (TTL) 메커니즘
+
+카오스 엔진이 죽어도 타겟 시스템이 자동으로 복구됩니다.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Chaos Engine              Target System                      │
+│  ┌──────────────┐          ┌─────────────────────────────┐   │
+│  │ inject_chaos │─────────►│ chaos_config + expires_at   │   │
+│  │ (TTL=600s)   │          │ (현재시간 + 10분)            │   │
+│  └──────────────┘          └─────────────────────────────┘   │
+│        │                              │                       │
+│        X (엔진 죽음)                   ▼                       │
+│                           ┌─────────────────────────────┐    │
+│                           │ 매 요청 시:                  │    │
+│                           │ if now() > expires_at:       │    │
+│                           │   → 카오스 설정 무시         │    │
+│                           │   → 원래 동작 수행           │    │
+│                           └─────────────────────────────┘    │
+│                                                               │
+│  결과: 엔진이 죽어도 10분 후 자동 복구                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 Stop Conditions (자동 중단)
+
+실시간 메트릭을 모니터링하고 임계값 초과 시 즉시 중단합니다.
+
+```python
+from selfhealing.services.chaos.stop_conditions import (
+    StopConditionsConfig,
+    get_stop_conditions_checker,
+)
+
+# 설정 조회
+checker = get_stop_conditions_checker()
+print(checker.config.max_error_rate_percent)  # 5.0%
+
+# 설정 업데이트
+checker.update_config(
+    max_error_rate_percent=3.0,
+    consecutive_breaches_required=3,
+)
+```
+
+**자동 중단 조건:**
+- 에러율 > 5% (기본값)
+- P99 지연시간 > 2000ms
+- P95 지연시간 > 1000ms
+- 에러 버짓 < 10%
+
+### 8.4 Dry Run 모드
+
+실제 장애를 주입하지 않고 전체 워크플로우를 검증합니다.
+
+```python
+from selfhealing.services.chaos.experiments import (
+    ExperimentConfig,
+    LatencyInjectionExperiment,
+)
+
+# Dry Run 실험
+config = ExperimentConfig(
+    target_service="payment",
+    dry_run=True,  # 실제 주입 없음
+)
+experiment = LatencyInjectionExperiment(config=config)
+result = experiment.execute()
+
+print(result.dry_run)  # True
+print(result.status)   # "completed" (실제 주입 없이 완료)
+```
+
+**Dry Run에서 실행되는 것:**
+- ✅ Pre-flight Safety Check
+- ✅ Blast Radius Validation
+- ✅ Steady State 캡처
+- ✅ Audit Trail 기록
+- ❌ 실제 장애 주입
+
+### 8.5 Idempotent Rollback
+
+중복 롤백 요청에도 안전하게 동작합니다.
+
+```python
+experiment = LatencyInjectionExperiment(...)
+
+# 여러 번 롤백해도 안전
+experiment.rollback()  # 실행됨
+experiment.rollback()  # 무시됨 (이미 완료)
+experiment.rollback()  # 무시됨
+```
+
+**동시 롤백 방지:**
+- `threading.Lock` 사용
+- `_rollback_completed` 플래그로 상태 관리
+- 동시에 여러 인스턴스에서 롤백 시도해도 1번만 실행
+
+### 8.6 System Dry Run vs Chaos Dry Run
+
+| 구분 | System Dry Run | Chaos Dry Run |
+|------|----------------|---------------|
+| **위치** | `system_control.py` | `chaos/scheduler.py`, `experiments.py` |
+| **범위** | 전체 Self-Healing 시스템 | Chaos 실험 주입만 |
+| **용도** | 자동 복구 동작 관찰 | 카오스 주입 검증 |
+| **기본값** | `False` (활성) | `True` (안전 모드) |
+| **API** | `/api/self-healing/system/dry-run/` | 스케줄러 설정 |
 
 ---
 
@@ -541,6 +699,7 @@ curl http://localhost:8000/api/self-healing/chaos/reports/grades/?days=30 \
 
 ## 버전 정보
 
-- **현재 버전**: 1.0.0
-- **마지막 업데이트**: 2025-12-20
+- **현재 버전**: 1.1.0
+- **마지막 업데이트**: 2025-12-21
 - **담당자**: SelfHealing Team
+- **변경사항**: Phase 3 안전장치 섹션 추가 (TTL, Stop Conditions, Dry Run, Idempotent Rollback)
