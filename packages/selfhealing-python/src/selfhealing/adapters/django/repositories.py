@@ -330,6 +330,247 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             "archived_older_than_90_days": archived_older_than_90_days,
         }
 
+    # =========================================================================
+    # SLA & Replay Operations (migrated from shopping adapters)
+    # =========================================================================
+
+    def find_sla_breached(
+        self,
+        current_time: datetime,
+        sla_thresholds: Dict[str, timedelta],
+    ) -> List[FailedOperationData]:
+        """Find operations that have breached their SLA."""
+        FailedOperation = self._get_model()
+
+        results = []
+        for domain, threshold in sla_thresholds.items():
+            cutoff_time = current_time - threshold
+            queryset = FailedOperation.objects.filter(
+                domain=domain,
+                status=OperationStatus.PENDING.value,
+                created_at__lt=cutoff_time,
+            )
+            results.extend([self._to_data(obj) for obj in queryset])
+
+        return results
+
+    def find_replayable(
+        self,
+        max_retries: int,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[FailedOperationData]:
+        """Find operations that can be replayed (pending and retry_count < max_retries)."""
+        FailedOperation = self._get_model()
+
+        filters = {
+            "status": OperationStatus.PENDING.value,
+            "retry_count__lt": max_retries,
+        }
+        if domain:
+            filters["domain"] = domain
+        if failure_type:
+            filters["failure_type"] = failure_type
+
+        queryset = FailedOperation.objects.filter(**filters).order_by("created_at")[:limit]
+        return [self._to_data(obj) for obj in queryset]
+
+    def find_expired(
+        self,
+        current_time: datetime,
+    ) -> List[FailedOperationData]:
+        """Find operations past their retention period."""
+        FailedOperation = self._get_model()
+
+        queryset = FailedOperation.objects.filter(
+            expires_at__lt=current_time,
+        )
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get statistics about failed operations."""
+        FailedOperation = self._get_model()
+        from django.db.models import Count, Avg
+
+        total = FailedOperation.objects.count()
+        by_status = dict(
+            FailedOperation.objects.values("status")
+            .annotate(count=Count("id"))
+            .values_list("status", "count")
+        )
+        by_domain = dict(
+            FailedOperation.objects.values("domain")
+            .annotate(count=Count("id"))
+            .values_list("domain", "count")
+        )
+        avg_retries = FailedOperation.objects.aggregate(avg_retries=Avg("retry_count"))["avg_retries"] or 0
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "by_domain": by_domain,
+            "avg_retries": float(avg_retries),
+        }
+
+    def try_acquire_for_replay(
+        self,
+        operation_id: int,
+        max_retries: int,
+    ) -> Optional[FailedOperationData]:
+        """
+        Atomically acquire a DLQ entry for replay.
+
+        Uses row-level locking (SELECT FOR UPDATE) to prevent race conditions.
+        """
+        FailedOperation = self._get_model()
+
+        with transaction.atomic():
+            try:
+                obj = FailedOperation.objects.select_for_update(nowait=True).get(id=operation_id)
+
+                # Check if eligible for replay
+                if obj.status != OperationStatus.PENDING.value:
+                    return None
+                if obj.retry_count >= max_retries:
+                    # Max retries exceeded - mark as rejected
+                    obj.status = OperationStatus.REJECTED.value
+                    obj.resolution_note = f"Max retries ({max_retries}) exceeded"
+                    obj.save(update_fields=["status", "resolution_note", "updated_at"])
+                    return None
+
+                # Acquire the entry
+                obj.status = "replaying"
+                obj.retry_count += 1
+                obj.last_retry_at = timezone.now()
+                obj.save(update_fields=["status", "retry_count", "last_retry_at", "updated_at"])
+
+                return self._to_data(obj)
+            except FailedOperation.DoesNotExist:
+                return None
+            except Exception:
+                # Could be locked by another process
+                return None
+
+    def complete_replay(
+        self,
+        operation_id: int,
+        success: bool,
+        resolution_type: str = "",
+        note: str = "",
+        resolved_by_id: Optional[int] = None,
+        error_details: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Complete a replay operation by updating the final status."""
+        FailedOperation = self._get_model()
+
+        try:
+            obj = FailedOperation.objects.get(id=operation_id)
+
+            if success:
+                obj.status = OperationStatus.RESOLVED.value
+                obj.resolution_type = resolution_type or "auto_replay"
+                obj.resolution_note = note
+                obj.resolved_by_id = resolved_by_id
+                obj.resolved_at = timezone.now()
+            else:
+                # Revert to pending for retry or mark as requires_review
+                if obj.retry_count >= obj.max_retries:
+                    obj.status = OperationStatus.REQUIRES_REVIEW.value
+                else:
+                    obj.status = OperationStatus.PENDING.value
+
+                if error_details:
+                    obj.metadata = {**(obj.metadata or {}), "last_error": error_details}
+                if note:
+                    obj.resolution_note = note
+
+            obj.save()
+            return True
+        except FailedOperation.DoesNotExist:
+            return False
+
+    def release_stale_replaying(
+        self,
+        older_than_minutes: int = 30,
+    ) -> int:
+        """
+        Release DLQ entries stuck in REPLAYING state.
+
+        Entries can get stuck if the replay process crashes.
+        This reverts them to PENDING for retry.
+        """
+        FailedOperation = self._get_model()
+
+        cutoff_time = timezone.now() - timedelta(minutes=older_than_minutes)
+
+        # Find stale entries (status='replaying' and last_retry_at is old)
+        updated = FailedOperation.objects.filter(
+            status="replaying",
+            last_retry_at__lt=cutoff_time,
+        ).update(
+            status=OperationStatus.PENDING.value,
+            updated_at=timezone.now(),
+        )
+
+        return updated
+
+    def bulk_update_status(
+        self,
+        ids: List[int],
+        status: str,
+    ) -> int:
+        """Bulk update status for multiple operations."""
+        FailedOperation = self._get_model()
+
+        return FailedOperation.objects.filter(id__in=ids).update(
+            status=status,
+            updated_at=timezone.now(),
+        )
+
+    def find_by_status(
+        self,
+        status: str,
+        domain: Optional[str] = None,
+        failure_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[FailedOperationData]:
+        """Find operations by status with optional filters."""
+        FailedOperation = self._get_model()
+
+        filters = {"status": status}
+        if domain:
+            filters["domain"] = domain
+        if failure_type:
+            filters["failure_type"] = failure_type
+
+        queryset = FailedOperation.objects.filter(**filters).order_by("-created_at")[:limit]
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_pending_by_domain(
+        self,
+        domain: str,
+        limit: int = 100,
+    ) -> List[FailedOperationData]:
+        """Get pending operations for a specific domain."""
+        FailedOperation = self._get_model()
+
+        queryset = FailedOperation.objects.filter(
+            domain=domain,
+            status=OperationStatus.PENDING.value,
+        ).order_by("created_at")[:limit]
+
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_pending_count_by_domain(self, domain: str) -> int:
+        """Get count of pending operations for a domain."""
+        FailedOperation = self._get_model()
+
+        return FailedOperation.objects.filter(
+            domain=domain,
+            status=OperationStatus.PENDING.value,
+        ).count()
+
 
 class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
@@ -832,5 +1073,121 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
         since = timezone.now() - timedelta(hours=hours)
         return SecurityIncident.objects.filter(
             source_ip=source_ip,
+            created_at__gte=since,
+        ).count()
+
+    # =========================================================================
+    # Additional methods (migrated from shopping adapters)
+    # =========================================================================
+
+    def get_open_incidents(
+        self,
+        limit: int = 100,
+    ) -> List[SecurityIncidentData]:
+        """Get all open (unresolved) incidents."""
+        SecurityIncident = self._get_model()
+
+        queryset = SecurityIncident.objects.filter(
+            status__in=["open", "investigating"]
+        ).order_by("-created_at")[:limit]
+
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_by_type(
+        self,
+        incident_type: str,
+        limit: int = 100,
+    ) -> List[SecurityIncidentData]:
+        """Get incidents by type."""
+        SecurityIncident = self._get_model()
+
+        queryset = SecurityIncident.objects.filter(
+            incident_type=incident_type
+        ).order_by("-created_at")[:limit]
+
+        return [self._to_data(obj) for obj in queryset]
+
+    def get_by_severity(
+        self,
+        severity: str,
+        limit: int = 100,
+    ) -> List[SecurityIncidentData]:
+        """Get incidents by severity."""
+        SecurityIncident = self._get_model()
+
+        queryset = SecurityIncident.objects.filter(
+            severity=severity
+        ).order_by("-created_at")[:limit]
+
+        return [self._to_data(obj) for obj in queryset]
+
+    def update_status(
+        self,
+        incident_id: int,
+        status: str,
+        investigation_notes: str = "",
+        assigned_to_id: Optional[int] = None,
+    ) -> bool:
+        """Update incident status."""
+        SecurityIncident = self._get_model()
+
+        update_fields = {"status": status}
+        model_fields = [f.name for f in SecurityIncident._meta.get_fields()]
+
+        if "investigation_notes" in model_fields and investigation_notes:
+            update_fields["investigation_notes"] = investigation_notes
+        if "assigned_to_id" in model_fields and assigned_to_id:
+            update_fields["assigned_to_id"] = assigned_to_id
+
+        updated = SecurityIncident.objects.filter(id=incident_id).update(**update_fields)
+        return updated > 0
+
+    def mark_as_resolved(
+        self,
+        incident_id: int,
+        investigation_notes: str = "",
+    ) -> bool:
+        """Mark incident as resolved."""
+        SecurityIncident = self._get_model()
+
+        update_fields = {"status": "resolved"}
+        model_fields = [f.name for f in SecurityIncident._meta.get_fields()]
+
+        if "resolved_at" in model_fields:
+            update_fields["resolved_at"] = timezone.now()
+        if "investigation_notes" in model_fields and investigation_notes:
+            update_fields["investigation_notes"] = investigation_notes
+
+        updated = SecurityIncident.objects.filter(id=incident_id).update(**update_fields)
+        return updated > 0
+
+    def get_recent_by_ip(
+        self,
+        source_ip: str,
+        hours: int = 24,
+        limit: int = 100,
+    ) -> List[SecurityIncidentData]:
+        """Get recent incidents from a specific IP."""
+        SecurityIncident = self._get_model()
+
+        since = timezone.now() - timedelta(hours=hours)
+
+        queryset = SecurityIncident.objects.filter(
+            source_ip=source_ip,
+            created_at__gte=since,
+        ).order_by("-created_at")[:limit]
+
+        return [self._to_data(obj) for obj in queryset]
+
+    def count_by_type_since(
+        self,
+        incident_type: str,
+        since: datetime,
+    ) -> int:
+        """Count incidents of a type since a given time."""
+        SecurityIncident = self._get_model()
+
+        return SecurityIncident.objects.filter(
+            incident_type=incident_type,
             created_at__gte=since,
         ).count()

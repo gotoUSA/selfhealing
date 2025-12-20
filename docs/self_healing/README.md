@@ -34,6 +34,12 @@
 | [09_CONFIGURATION.md](09_CONFIGURATION.md) | 설정 레퍼런스 | 개발자, DevOps |
 | [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) | 운영 가이드 및 Runbook | 운영자 |
 
+### 고급 기능
+
+| 문서 | 설명 | 대상 |
+|------|------|------|
+| [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | Forensic Advisor, Chaos Context, SLA Drift Detection | 개발자, 운영자 |
+
 ---
 
 ## 🚀 빠른 시작
@@ -58,6 +64,9 @@
 | 경로 | 설명 |
 |------|------|
 | `shopping/services/self_healing/` | Self-Healing 서비스 구현 |
+| `shopping/services/self_healing/forensic_advisor.py` | Forensic Advisor (의사결정 지원) |
+| `shopping/services/self_healing/chaos_context.py` | Chaos Experiment Context |
+| `shopping/tasks/drift_detection_tasks.py` | SLA Drift Detection 태스크 |
 | `shopping/models/failed_operation.py` | DLQ 모델 |
 | `shopping/models/failed_external_request.py` | 외부 API DLQ 및 CB 상태 모델 |
 | `shopping/tasks/self_healing_tasks.py` | Celery 태스크 |
@@ -71,4 +80,5 @@
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2024-12-20 | 1.1 | Forensic Advisor, Chaos Context, SLA Drift Detection 추가 |
 | 2024-01-XX | 1.0 | 초기 문서 작성 |

@@ -156,6 +156,28 @@ from .security_notification_service import (
     get_security_notification_service,
     notify_security_incident,
 )
+from .forensic_advisor import (
+    ForensicAdvisorService,
+    ForensicAdvisory,
+    FailurePattern,
+    AdvisoryLevel,
+    RecommendedAction as AdvisoryRecommendedAction,
+    KNOWN_PATTERNS,
+    get_forensic_advisor,
+    analyze_failed_operation,
+    analyze_and_update_operation,
+)
+from .chaos_context import (
+    ChaosExperimentContext,
+    ChaosExperimentType,
+    ChaosExperimentStatus,
+    is_chaos_experiment,
+    get_chaos_context,
+    attach_chaos_context,
+    resolve_chaos_experiment,
+    resolve_expired_chaos_experiments,
+    create_chaos_context,
+)
 from .factory import (
     # Repository factory functions
     create_failed_operation_repository,
@@ -283,6 +305,26 @@ __all__ = [
     "NotificationChannel",
     "get_security_notification_service",
     "notify_security_incident",
+    # Forensic Advisor (Decision Support)
+    "ForensicAdvisorService",
+    "ForensicAdvisory",
+    "FailurePattern",
+    "AdvisoryLevel",
+    "AdvisoryRecommendedAction",
+    "KNOWN_PATTERNS",
+    "get_forensic_advisor",
+    "analyze_failed_operation",
+    "analyze_and_update_operation",
+    # Chaos Experiment Context
+    "ChaosExperimentContext",
+    "ChaosExperimentType",
+    "ChaosExperimentStatus",
+    "is_chaos_experiment",
+    "get_chaos_context",
+    "attach_chaos_context",
+    "resolve_chaos_experiment",
+    "resolve_expired_chaos_experiments",
+    "create_chaos_context",
     # Factory (for DI and testing)
     "create_failed_operation_repository",
     "create_circuit_breaker_repository",

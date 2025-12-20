@@ -1,59 +1,48 @@
 """
-Self-Healing Adapters Module
+Self-Healing Adapters Module - DEPRECATED
 
-Concrete implementations of pluggable interfaces.
-These adapters bridge the abstract interfaces with specific frameworks,
-services, and libraries.
+⚠️  DEPRECATION NOTICE:
+    This module is deprecated and will be removed in a future version.
+    Please migrate to the selfhealing package:
 
-Available Adapters:
-    Repository Adapters:
-        - DjangoFailedOperationRepository
-        - DjangoCircuitBreakerStateRepository
-        - DjangoSecurityIncidentRepository
+    Before (deprecated):
+        from shopping.services.self_healing.adapters import (
+            DjangoFailedOperationRepository,
+            DjangoCircuitBreakerStateRepository,
+        )
 
-    Payment Adapters:
-        - TossPaymentAdapter (Toss Payments - Korean PG)
-        - MockPaymentAdapter (Testing)
+    After (recommended):
+        from selfhealing.adapters.django import (
+            DjangoFailedOperationRepository,
+            DjangoCircuitBreakerStateRepository,
+        )
 
-    Cache Adapters:
-        - RedisCacheAdapter (Redis)
-        - InMemoryCacheAdapter (Testing)
-
-    Task Queue Adapters:
-        - CeleryTaskAdapter (Celery)
-        - SyncTaskAdapter (Testing - synchronous execution)
-
-Usage:
-    from shopping.services.self_healing.adapters import (
-        # Repositories
-        DjangoFailedOperationRepository,
-        DjangoCircuitBreakerStateRepository,
-        DjangoSecurityIncidentRepository,
-        # Payments
-        TossPaymentAdapter,
-        MockPaymentAdapter,
-        # Cache
-        RedisCacheAdapter,
-        InMemoryCacheAdapter,
-        # Task Queues
-        CeleryTaskAdapter,
-        SyncTaskAdapter,
-    )
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md
+Migration Guide: packages/selfhealing-python/docs/MIGRATION.md
 """
 
+import warnings
+
+# Show deprecation warning on module import
+warnings.warn(
+    "Importing from 'shopping.services.self_healing.adapters' is deprecated. "
+    "Please migrate to 'selfhealing.adapters.django' for repositories. "
+    "See packages/selfhealing-python/docs/MIGRATION.md for details.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 # =============================================================================
-# Repository Adapters (Phase 0)
+# Repository Adapters - Re-export from selfhealing package
 # =============================================================================
-from shopping.services.self_healing.adapters.django_repositories import (
+from selfhealing.adapters.django.repositories import (
     DjangoFailedOperationRepository,
     DjangoCircuitBreakerStateRepository,
     DjangoSecurityIncidentRepository,
 )
 
 # =============================================================================
-# Payment Adapters (Phase 2)
+# Payment Adapters (shopping-specific, not in selfhealing package)
+# These are shopping domain adapters, not general selfhealing infrastructure
 # =============================================================================
 from shopping.services.self_healing.adapters.payments import (
     TossPaymentAdapter,
@@ -61,42 +50,46 @@ from shopping.services.self_healing.adapters.payments import (
 )
 
 # =============================================================================
-# Cache Adapters (Phase 2)
+# Cache Adapters - Re-export from selfhealing package
 # =============================================================================
-from shopping.services.self_healing.adapters.cache import (
-    RedisCacheAdapter,
-    InMemoryCacheAdapter,
-)
+try:
+    from selfhealing.adapters.cache import (
+        RedisCacheAdapter,
+        InMemoryCacheAdapter,
+    )
+except ImportError:
+    # Fallback to local implementation if not available in selfhealing
+    from shopping.services.self_healing.adapters.cache import (
+        RedisCacheAdapter,
+        InMemoryCacheAdapter,
+    )
 
 # =============================================================================
-# Task Queue Adapters (Phase 2)
+# Task Queue Adapters - Re-export from selfhealing package
 # =============================================================================
-from shopping.services.self_healing.adapters.queues import (
-    CeleryTaskAdapter,
-    SyncTaskAdapter,
-)
+try:
+    from selfhealing.adapters.celery import CeleryTaskAdapter
+    from selfhealing.adapters.memory import SyncTaskAdapter
+except ImportError:
+    # Fallback to local implementation if not available in selfhealing
+    from shopping.services.self_healing.adapters.queues import (
+        CeleryTaskAdapter,
+        SyncTaskAdapter,
+    )
 
 
 __all__ = [
-    # =========================================================================
-    # Repository Adapters
-    # =========================================================================
+    # Repository Adapters (from selfhealing package)
     "DjangoFailedOperationRepository",
     "DjangoCircuitBreakerStateRepository",
     "DjangoSecurityIncidentRepository",
-    # =========================================================================
-    # Payment Adapters
-    # =========================================================================
+    # Payment Adapters (shopping-specific)
     "TossPaymentAdapter",
     "MockPaymentAdapter",
-    # =========================================================================
     # Cache Adapters
-    # =========================================================================
     "RedisCacheAdapter",
     "InMemoryCacheAdapter",
-    # =========================================================================
     # Task Queue Adapters
-    # =========================================================================
     "CeleryTaskAdapter",
     "SyncTaskAdapter",
 ]

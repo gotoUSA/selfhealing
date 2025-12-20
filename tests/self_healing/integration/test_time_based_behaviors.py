@@ -537,7 +537,7 @@ class TestManualOverrideTTLTimeBased:
             assert is_available is False
 
             # Verify override is still active
-            updated_state = circuit_breaker_repository.get("manual_override_test")
+            updated_state = circuit_breaker_repository.get_by_service_name("manual_override_test")
             assert updated_state.manually_controlled is True
 
     @freeze_time("2025-01-01 12:00:00")
@@ -576,7 +576,7 @@ class TestManualOverrideTTLTimeBased:
             # Override should have expired, returning to normal operation
             # If no recent failures, should be available
             # Note: Actual behavior depends on implementation
-            updated_state = circuit_breaker_repository.get("override_expiry_test")
+            updated_state = circuit_breaker_repository.get_by_service_name("override_expiry_test")
 
             # Verify override has expired
             assert updated_state.manual_override_expires_at < timezone.now()

@@ -102,12 +102,38 @@ selfhealing/
 │   ├── config.py   # 설정 관리
 │   └── backoff.py  # 백오프 계산 전략
 ├── interfaces/     # 추상 인터페이스 (Repository 패턴)
-├── adapters/       # 프레임워크별 어댑터
-│   ├── django/     # Django ORM 구현
-│   └── celery/     # Celery 태스크 구현
+├── services/       # 핵심 서비스 (DLQ, CircuitBreaker, Forensic 등)
+├── adapters/       # 프레임워크별 어댑터 (플러그인 방식)
+│   ├── django/     # Django ORM 구현 (models, repositories, admin)
+│   ├── celery/     # Celery 태스크 구현
+│   ├── fastapi/    # FastAPI 구현 (예정)
+│   └── sqlalchemy/ # SQLAlchemy 구현
 ├── api/            # REST API
 │   └── django/     # DRF 뷰/시리얼라이저
 └── metrics/        # Prometheus 메트릭
+```
+
+## 🔌 "딸깍 붙이기" 통합
+
+selfhealing 패키지는 **pip install 한 번**으로 어떤 프레임워크에든 통합할 수 있습니다.
+각 프레임워크용 어댑터가 패키지 내에 포함되어 있어, 별도 개발이 필요 없습니다.
+
+### Django 통합 예시
+
+```python
+# 1. 설치
+pip install selfhealing[django]
+
+# 2. settings.py에 추가
+INSTALLED_APPS = [
+    'selfhealing.adapters.django',
+]
+
+# 3. 바로 사용!
+from selfhealing.services.dlq_service import DLQService
+from selfhealing.adapters.django import DjangoFailedOperationRepository
+
+dlq = DLQService(repository=DjangoFailedOperationRepository())
 ```
 
 ## 🔧 Django 통합

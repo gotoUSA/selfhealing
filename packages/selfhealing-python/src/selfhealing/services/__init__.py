@@ -97,6 +97,27 @@ from .forensic_context import (
     ForensicContext,
     capture_forensic_context,
 )
+from .forensic_advisor import (
+    AdvisoryLevel,
+    RecommendedAction,
+    FailurePattern,
+    ForensicAdvisory,
+    ForensicAdvisorService,
+    KNOWN_PATTERNS,
+    get_forensic_advisor,
+    analyze_failed_operation,
+    analyze_and_update_operation,
+)
+from .chaos_context import (
+    ChaosExperimentType,
+    ChaosExperimentStatus,
+    ChaosExperimentContext,
+    is_chaos_experiment,
+    get_chaos_context,
+    attach_chaos_context,
+    resolve_chaos_experiment,
+    create_chaos_context,
+)
 from .control_api_service import (
     ControlAPIService,
     ControlRequest,
@@ -270,6 +291,25 @@ __all__ = [
     # Forensic
     "ForensicContext",
     "capture_forensic_context",
+    # Forensic Advisor (Human-in-the-loop decision support)
+    "AdvisoryLevel",
+    "RecommendedAction",
+    "FailurePattern",
+    "ForensicAdvisory",
+    "ForensicAdvisorService",
+    "KNOWN_PATTERNS",
+    "get_forensic_advisor",
+    "analyze_failed_operation",
+    "analyze_and_update_operation",
+    # Chaos Context (Chaos engineering experiment tracking)
+    "ChaosExperimentType",
+    "ChaosExperimentStatus",
+    "ChaosExperimentContext",
+    "is_chaos_experiment",
+    "get_chaos_context",
+    "attach_chaos_context",
+    "resolve_chaos_experiment",
+    "create_chaos_context",
     # Control API Service
     "ControlAPIService",
     "ControlRequest",

@@ -69,14 +69,16 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         next_action_hint: str = "",
         recommended_action: str = "",
         expires_at: Optional[datetime] = None,
+        status: Optional[str] = None,
+        created_at: Optional[datetime] = None,
     ) -> FailedOperationData:
         """Create a new failed operation record."""
-        current_time = now()
+        current_time = created_at or now()
         entry = FailedOperationData(
             id=self._next_id,
             domain=domain,
             failure_type=failure_type,
-            status=FailedOperationStatus.PENDING.value,
+            status=status or FailedOperationStatus.PENDING.value,
             entity_type=entity_type or "",
             entity_id=entity_id or "",
             entity_refs=entity_refs or {},
@@ -479,6 +481,36 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
     def __init__(self):
         self._store: dict[str, CircuitBreakerStateData] = {}
+
+    def create(
+        self,
+        service_name: str,
+        state: str = None,
+        failure_count: int = 0,
+        success_count: int = 0,
+        manually_controlled: bool = False,
+        manual_override_expires_at: Optional[datetime] = None,
+        control_reason: str = "",
+        opened_at: Optional[datetime] = None,
+    ) -> CircuitBreakerStateData:
+        """Create a new circuit breaker state."""
+        # Handle CircuitState enum
+        state_value = state.value if hasattr(state, "value") else (state or CircuitBreakerStateEnum.CLOSED.value)
+        
+        entry = CircuitBreakerStateData(
+            service_name=service_name,
+            state=state_value,
+            failure_count=failure_count,
+            success_count=success_count,
+            manually_controlled=manually_controlled,
+            manual_override_expires_at=manual_override_expires_at,
+            control_reason=control_reason,
+            opened_at=opened_at,
+            created_at=now(),
+            updated_at=now(),
+        )
+        self._store[service_name] = entry
+        return entry
 
     def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
         """Get or create circuit breaker state for a service."""

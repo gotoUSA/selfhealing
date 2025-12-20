@@ -170,7 +170,7 @@ class TestSecurityViolationServiceUnit:
         """
         Purpose:
             Verify client IP extraction from request_info dict.
-            
+
         Note:
             SecurityViolationService now receives request_info dict instead of
             Django request object for framework independence.
@@ -184,7 +184,7 @@ class TestSecurityViolationServiceUnit:
         """
         Purpose:
             Verify client IP in request_info (pre-extracted from X-Forwarded-For).
-            
+
         Note:
             IP extraction from X-Forwarded-For should be done at adapter layer
             before calling SecurityViolationService.
@@ -278,7 +278,7 @@ class TestSecurityViolationServiceIntegration:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.adapters.django_repositories import DjangoSecurityIncidentRepository
+        from selfhealing.adapters.django.repositories import DjangoSecurityIncidentRepository
 
         self.config = SecurityConfig()
         self.repository = DjangoSecurityIncidentRepository()
@@ -542,7 +542,7 @@ class TestTransactionRollback:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from shopping.services.self_healing.adapters.django_repositories import DjangoSecurityIncidentRepository
+        from selfhealing.adapters.django.repositories import DjangoSecurityIncidentRepository
 
         self.config = SecurityConfig()
         self.repository = DjangoSecurityIncidentRepository()
