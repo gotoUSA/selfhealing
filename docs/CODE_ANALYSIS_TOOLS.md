@@ -4,7 +4,44 @@
 
 ---
 
-## Formatting
+## Docker Compose 실행 (권장)
+
+```bash
+# 포맷팅
+docker-compose exec web black shopping/
+docker-compose exec web isort shopping/
+
+# 린팅
+docker-compose exec web ruff check shopping/
+docker-compose exec web ruff check --fix shopping/
+
+# 타입 체크
+docker-compose exec web mypy packages/selfhealing-python/src/selfhealing/
+
+# 보안 스캔
+docker-compose exec web bandit -r shopping/ -c pyproject.toml
+
+# 복잡도 분석
+docker-compose exec web radon cc shopping/ -a -s
+docker-compose exec web radon mi shopping/ -s
+
+# 사용되지 않는 코드 탐지
+docker-compose exec web vulture shopping/ --min-confidence 80
+
+# 테스트
+docker-compose exec web pytest
+docker-compose exec web pytest -m unit
+docker-compose exec web pytest --cov=shopping --cov-report=html
+
+# 전체 검사 (CI와 동일)
+docker-compose exec web sh -c "black --check shopping/ && isort --check-only shopping/ && ruff check shopping/ && pytest"
+```
+
+---
+
+## 로컬 실행
+
+### Formatting
 
 ### Black (Code Formatter)
 ```bash
