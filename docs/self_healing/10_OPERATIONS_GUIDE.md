@@ -401,6 +401,121 @@ python manage.py generate_self_healing_alerts
 
 ---
 
+## � Error Budget 동결 대응
+
+> 상세 문서: [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md)
+
+### Scenario 5: Error Budget 위험 (< 20%)
+
+**증상:**
+- Prometheus 알림: `ErrorBudgetCritical`
+- 배포 정책 API에서 `freeze_recommended` 상태
+
+**대응 절차:**
+
+```
+1. Error Budget 상태 확인
+   curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/self-healing/error-budget/status/
+
+2. 배포 동결 결정
+   ┌─────────────────────┐
+   │ 동결 권고 확인       │
+   └─────────┬───────────┘
+             │
+       ┌─────┴─────┐
+       ▼           ▼
+   ┌───────┐   ┌───────────┐
+   │ 확정  │   │ Override  │
+   │       │   │ (긴급시)  │
+   └───┬───┘   └─────┬─────┘
+       │             │
+       ▼             ▼
+   API 호출:     API 호출:
+   /acknowledge  /override
+
+3-a. 동결 확정 시
+     └─ 모든 신규 기능 배포 중지
+     └─ 기존 이슈 해결에 집중
+     └─ 안정화 작업 수행
+
+3-b. Override 승인 시 (긴급 배포 필요)
+     └─ 사유 명시 (HOTFIX/SECURITY_PATCH)
+     └─ 만료 시간 설정 (기본 4시간)
+     └─ 배포 완료 후 상황 모니터링
+
+4. 상황 해결 후
+   └─ Error Budget 회복 확인 (> 50%)
+   └─ 동결 해제 API 호출
+   └─ 포스트모템 수행
+```
+
+**동결 확정 (Acknowledge):**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"justification": "Error budget critical, pausing all deployments"}' \
+  http://localhost:8000/api/self-healing/deployment-policy/acknowledge/
+```
+
+**긴급 배포 Override:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "justification": "Critical security patch CVE-2024-XXXX",
+    "override_type": "security_patch",
+    "deployment_name": "auth-service v2.1.0",
+    "expires_hours": 2
+  }' \
+  http://localhost:8000/api/self-healing/deployment-policy/override/
+```
+
+**동결 해제:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"justification": "Situation resolved, budget recovered to 65%"}' \
+  http://localhost:8000/api/self-healing/deployment-policy/lift/
+```
+
+### Scenario 6: Fast Burn Rate 감지
+
+**증상:**
+- Prometheus 알림: `ErrorBudgetFastBurn`
+- 1시간 Burn Rate > 14.4x
+
+**의미:**
+- 현재 속도로 2일 내 Error Budget 완전 소진
+- 즉각적인 조치 필요
+
+**대응 절차:**
+
+```
+1. 원인 파악 (최우선)
+   └─ 최근 배포 확인
+   └─ 외부 서비스 상태 확인
+   └─ 에러 로그 분석
+
+2. 즉시 조치
+   └─ 원인 배포 롤백
+   └─ 외부 서비스 장애 시 CB 확인
+   └─ 트래픽 감소 조치 (필요시)
+
+3. 상태 모니터링
+   └─ Burn Rate 정상화 확인
+   └─ Budget 추가 소진 중단 확인
+
+4. 포스트모템
+   └─ 원인 분석
+   └─ 재발 방지책
+```
+
+---
+
 ## 🔐 권한 관리
 
 ### 필요 권한
@@ -411,14 +526,16 @@ python manage.py generate_self_healing_alerts
 | DLQ 리플레이 | `change_failedoperation` |
 | CB 상태 조회 | `view_circuitbreakerstate` |
 | CB 수동 제어 | `change_circuitbreakerstate` |
+| Error Budget 조회 | `view_errorbudget` |
+| 배포 동결 결정 | `manage_deployment_freeze` |
 
 ### 역할별 권한
 
 | 역할 | 권한 |
 |------|------|
-| Viewer | DLQ/CB 조회 |
-| Operator | DLQ 리플레이, CB 상태 조회 |
-| Admin | 모든 권한 (CB 수동 제어 포함) |
+| Viewer | DLQ/CB/Error Budget 조회 |
+| Operator | DLQ 리플레이, CB 상태 조회, 동결 확정/해제 |
+| Admin | 모든 권한 (CB 수동 제어, Override 승인 포함) |
 
 ---
 
@@ -426,10 +543,10 @@ python manage.py generate_self_healing_alerts
 
 | Severity | 조건 | 알림 채널 | 담당 |
 |----------|------|-----------|------|
-| Critical | CB OPEN > 5분, DLQ > 100 | #critical-alerts, PagerDuty | On-call |
-| High | DLQ 급증, SLA 위반 | #ops-alerts | Ops 팀 |
-| Medium | 재시도 성공률 저하 | #dev-alerts | Dev 팀 |
-| Low | Error Budget 50% 이하 | #dev-alerts | Dev 팀 |
+| Critical | CB OPEN > 5분, DLQ > 100, **Error Budget < 10%** | #critical-alerts, PagerDuty | On-call |
+| High | DLQ 급증, SLA 위반, **Fast Burn Rate** | #ops-alerts | Ops 팀 |
+| Medium | 재시도 성공률 저하, **Error Budget < 50%** | #dev-alerts | Dev 팀 |
+| Low | Error Budget 50-75% | #dev-alerts | Dev 팀 |
 
 ---
 
@@ -441,3 +558,4 @@ python manage.py generate_self_healing_alerts
 - [07_CONTROL_API.md](07_CONTROL_API.md) - Control API 레퍼런스
 - [08_OBSERVABILITY.md](08_OBSERVABILITY.md) - 메트릭 및 모니터링
 - [09_CONFIGURATION.md](09_CONFIGURATION.md) - 설정 레퍼런스
+- [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) - Error Budget 관리 및 배포 동결 권고

@@ -206,6 +206,60 @@ from shopping.services.self_healing.metrics import track_replay
 @track_replay("batch")
 def batch_replay(domain: str, items: list):
     # 리플레이 로직
+
+### 6. Error Budget 메트릭 (NEW)
+
+> 상세 문서: [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md)
+
+Error Budget 관리 및 배포 정책에 관련된 메트릭입니다.
+
+| 메트릭 이름 | 타입 | 레이블 | 설명 |
+|-------------|------|--------|------|
+| `error_budget_remaining_percent` | Gauge | `slo_name` | Error Budget 잔여량 (%) |
+| `error_budget_remaining_minutes` | Gauge | `slo_name` | Error Budget 잔여량 (분) |
+| `error_budget_burn_rate_1h` | Gauge | `slo_name` | 1시간 Burn Rate |
+| `error_budget_burn_rate_6h` | Gauge | `slo_name` | 6시간 Burn Rate |
+| `deployment_freeze_status` | Gauge | `slo_name` | 동결 상태 (0-3) |
+| `freeze_decision_total` | Counter | `decision_type` | 동결 결정 횟수 |
+| `deployment_active_override` | Gauge | - | 활성 Override 여부 |
+
+**동결 상태 값 매핑:**
+```python
+freeze_status_mapping = {
+    "proceed": 0,        # 정상 배포 가능
+    "caution": 1,        # 주의하여 배포
+    "warning": 2,        # 신규 기능 자제
+    "freeze_recommended": 3,  # 동결 권고
+}
+```
+
+**사용 예시:**
+
+```python
+from selfhealing.services.metrics import (
+    record_error_budget_status,
+    record_deployment_freeze_status,
+    record_freeze_decision,
+    record_active_override,
+)
+
+# Error Budget 상태 기록
+record_error_budget_status(
+    slo_name="availability",
+    remaining_percent=65.5,
+    remaining_minutes=28.3,
+    burn_rate_1h=2.1,
+    burn_rate_6h=1.8,
+)
+
+# 배포 동결 상태 기록
+record_deployment_freeze_status(slo_name="availability", status="warning")
+
+# 동결 결정 기록
+record_freeze_decision(decision_type="freeze_acknowledged")
+
+# 활성 Override 기록
+record_active_override(is_active=True)
     return ReplayResult(success=True)
 ```
 

@@ -82,6 +82,17 @@ from selfhealing.api.django.views.config import (
     MetricsConfigView,
 )
 
+# Error Budget & Deployment Policy Views
+from selfhealing.api.django.views.error_budget import (
+    ErrorBudgetStatusView,
+    ErrorBudgetHistoryView,
+    DeploymentVerdictView,
+    DeploymentFreezeAcknowledgeView,
+    DeploymentOverrideView,
+    DeploymentFreezeLiftView,
+    ActiveOverrideView,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -141,4 +152,12 @@ __all__ = [
     "NotificationConfigView",
     "ForensicConfigView",
     "MetricsConfigView",
+    # Error Budget & Deployment Policy Views
+    "ErrorBudgetStatusView",
+    "ErrorBudgetHistoryView",
+    "DeploymentVerdictView",
+    "DeploymentFreezeAcknowledgeView",
+    "DeploymentOverrideView",
+    "DeploymentFreezeLiftView",
+    "ActiveOverrideView",
 ]

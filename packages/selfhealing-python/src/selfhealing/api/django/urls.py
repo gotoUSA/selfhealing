@@ -83,6 +83,18 @@ from selfhealing.api.django.views.config import (
     NotificationConfigView,
     ForensicConfigView,
     MetricsConfigView,
+    ErrorBudgetConfigView,
+)
+
+# Error Budget & Deployment Policy Views
+from selfhealing.api.django.views.error_budget import (
+    ErrorBudgetStatusView,
+    ErrorBudgetHistoryView,
+    DeploymentVerdictView,
+    DeploymentFreezeAcknowledgeView,
+    DeploymentOverrideView,
+    DeploymentFreezeLiftView,
+    ActiveOverrideView,
 )
 
 app_name = "selfhealing"
@@ -143,6 +155,16 @@ urlpatterns = [
     path("config/notification/", NotificationConfigView.as_view(), name="config-notification"),
     path("config/forensic/", ForensicConfigView.as_view(), name="config-forensic"),
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
+    path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
+    # Error Budget API
+    path("error-budget/status/", ErrorBudgetStatusView.as_view(), name="error-budget-status"),
+    path("error-budget/history/", ErrorBudgetHistoryView.as_view(), name="error-budget-history"),
+    # Deployment Policy API
+    path("deployment-policy/verdict/", DeploymentVerdictView.as_view(), name="deployment-verdict"),
+    path("deployment-policy/acknowledge/", DeploymentFreezeAcknowledgeView.as_view(), name="deployment-acknowledge"),
+    path("deployment-policy/override/", DeploymentOverrideView.as_view(), name="deployment-override"),
+    path("deployment-policy/lift/", DeploymentFreezeLiftView.as_view(), name="deployment-lift"),
+    path("deployment-policy/active-override/", ActiveOverrideView.as_view(), name="deployment-active-override"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

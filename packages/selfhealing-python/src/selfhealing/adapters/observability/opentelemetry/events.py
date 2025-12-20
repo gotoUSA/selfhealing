@@ -107,6 +107,44 @@ class SelfHealingEventType(str, Enum):
     """SLO recovered to healthy state."""
 
     # =========================================================================
+    # Error Budget Events
+    # =========================================================================
+
+    ERROR_BUDGET_LOW = "selfhealing.error_budget.low"
+    """Error budget remaining is below warning threshold (< 50%)."""
+
+    ERROR_BUDGET_CRITICAL = "selfhealing.error_budget.critical"
+    """Error budget remaining is below critical threshold (< 20%)."""
+
+    ERROR_BUDGET_EXHAUSTED = "selfhealing.error_budget.exhausted"
+    """Error budget is exhausted (0% or negative)."""
+
+    ERROR_BUDGET_RECOVERED = "selfhealing.error_budget.recovered"
+    """Error budget has recovered to healthy levels."""
+
+    BURN_RATE_FAST = "selfhealing.error_budget.burn_rate_fast"
+    """Fast burn rate detected (1-hour window)."""
+
+    BURN_RATE_SLOW = "selfhealing.error_budget.burn_rate_slow"
+    """Slow burn rate detected (6-hour window)."""
+
+    # =========================================================================
+    # Deployment Freeze Events
+    # =========================================================================
+
+    DEPLOYMENT_FREEZE_RECOMMENDED = "selfhealing.deployment.freeze_recommended"
+    """Deployment freeze is recommended due to low error budget."""
+
+    DEPLOYMENT_FREEZE_ACKNOWLEDGED = "selfhealing.deployment.freeze_acknowledged"
+    """Operator has acknowledged and confirmed the deployment freeze."""
+
+    DEPLOYMENT_OVERRIDE_APPROVED = "selfhealing.deployment.override_approved"
+    """Operator has approved an override to bypass the freeze."""
+
+    DEPLOYMENT_FREEZE_LIFTED = "selfhealing.deployment.freeze_lifted"
+    """Deployment freeze has been lifted."""
+
+    # =========================================================================
     # Policy/Decision Events
     # =========================================================================
 
@@ -180,6 +218,22 @@ class EventAttribute:
     SLO_CURRENT_VALUE = "selfhealing.slo.current_value"
     SLO_THRESHOLD_VALUE = "selfhealing.slo.threshold_value"
     SLO_THRESHOLD_PERCENTAGE = "selfhealing.slo.threshold_percentage"
+
+    # Error Budget
+    ERROR_BUDGET_REMAINING_PERCENT = "selfhealing.error_budget.remaining_percent"
+    ERROR_BUDGET_REMAINING_MINUTES = "selfhealing.error_budget.remaining_minutes"
+    ERROR_BUDGET_CONSUMED_PERCENT = "selfhealing.error_budget.consumed_percent"
+    BURN_RATE_1H = "selfhealing.error_budget.burn_rate_1h"
+    BURN_RATE_6H = "selfhealing.error_budget.burn_rate_6h"
+
+    # Deployment Freeze
+    FREEZE_STATUS = "selfhealing.deployment.freeze_status"
+    FREEZE_DECISION_TYPE = "selfhealing.deployment.decision_type"
+    FREEZE_DECIDED_BY = "selfhealing.deployment.decided_by"
+    FREEZE_JUSTIFICATION = "selfhealing.deployment.justification"
+    FREEZE_OVERRIDE_TYPE = "selfhealing.deployment.override_type"
+    DEPLOYMENT_ID = "selfhealing.deployment.id"
+    DEPLOYMENT_NAME = "selfhealing.deployment.name"
 
     # Policy
     POLICY_NAME = "selfhealing.policy.name"

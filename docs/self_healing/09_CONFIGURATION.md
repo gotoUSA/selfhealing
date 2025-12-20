@@ -354,6 +354,67 @@ SELF_HEALING = {
 
 ---
 
+### 10. ERROR_BUDGET (에러 버짓)
+
+Error Budget 및 Burn Rate 임계값 설정입니다. **API를 통해 런타임에 동적 변경이 가능합니다.**
+
+```python
+SELF_HEALING = {
+    "ERROR_BUDGET": {
+        # Error Budget 임계값 (%)
+        "THRESHOLD_HEALTHY": 75.0,      # 정상 상태 (75% 이상)
+        "THRESHOLD_CAUTION": 50.0,      # 주의 상태 (50-75%)
+        "THRESHOLD_WARNING": 20.0,      # 경고 상태 (20-50%)
+        "THRESHOLD_CRITICAL": 0.0,      # 위험 상태 (20% 미만)
+        
+        # Burn Rate 임계값 (Google SRE 권장)
+        "BURN_RATE_FAST_CRITICAL": 14.4,  # 빠른 소진 위험 (2일 내 100% 소진)
+        "BURN_RATE_FAST_WARNING": 6.0,    # 빠른 소진 경고 (5일 내 100% 소진)
+        "BURN_RATE_SLOW_WARNING": 3.0,    # 느린 소진 경고 (10일 내 100% 소진)
+        "BURN_RATE_SLOW_INFO": 1.0,       # 정상 소진율
+        
+        # Fail-Safe 설정
+        "FAILSAFE_ALERT_ENABLED": True,   # Fail-Safe 발동 시 알림 발송
+        "FAILSAFE_COOLDOWN_SECONDS": 300, # 연속 알림 방지 (5분)
+    },
+}
+```
+
+**Dataclass: `ErrorBudgetConfig`**
+
+| 필드 | 타입 | 기본값 | 범위 | 설명 |
+|------|------|--------|------|------|
+| `threshold_healthy` | float | 75.0 | 50-100% | 정상 상태 임계값 |
+| `threshold_caution` | float | 50.0 | 20-80% | 주의 상태 임계값 |
+| `threshold_warning` | float | 20.0 | 5-50% | 경고 상태 임계값 |
+| `threshold_critical` | float | 0.0 | 0-20% | 위험 상태 임계값 |
+| `burn_rate_fast_critical` | float | 14.4 | 10-50x | 빠른 소진 위험 임계값 |
+| `burn_rate_fast_warning` | float | 6.0 | 3-15x | 빠른 소진 경고 임계값 |
+| `burn_rate_slow_warning` | float | 3.0 | 1-10x | 느린 소진 경고 임계값 |
+| `burn_rate_slow_info` | float | 1.0 | 0.5-3x | 정상 소진율 임계값 |
+| `failsafe_alert_enabled` | bool | True | - | Fail-Safe 발동 시 알림 발송 |
+| `failsafe_cooldown_seconds` | int | 300 | 60-3600 | 연속 알림 방지 쿨다운 (초) |
+
+**런타임 동적 변경 (API):**
+
+```bash
+# 현재 설정 조회
+curl -X GET \
+  -H "Authorization: Bearer $TOKEN" \
+  $API_URL/api/self-healing/config/error-budget/
+
+# 임계값 변경 (서버 재시작 불필요)
+curl -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"threshold_warning": 25.0, "burn_rate_fast_critical": 12.0}' \
+  $API_URL/api/self-healing/config/error-budget/
+```
+
+> 💡 **참고**: 임계값 변경은 즉시 적용됩니다. 변경 후 Error Budget 상태 판정에 새 임계값이 사용됩니다.
+
+---
+
 ## 설정 접근 API
 
 ### 전체 설정 로드

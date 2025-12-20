@@ -256,6 +256,59 @@ replay_outcomes_total = _get_or_create_counter(
 
 
 # =============================================================================
+# Error Budget Metrics
+# =============================================================================
+
+# Error budget remaining gauge (percentage)
+error_budget_remaining_percent = _get_or_create_gauge(
+    "error_budget_remaining_percent",
+    "Error budget remaining as percentage (0-100)",
+    ["slo_name"],
+)
+
+# Error budget remaining gauge (minutes)
+error_budget_remaining_minutes = _get_or_create_gauge(
+    "error_budget_remaining_minutes",
+    "Error budget remaining in minutes",
+    ["slo_name"],
+)
+
+# Burn rate gauges
+burn_rate_1h = _get_or_create_gauge(
+    "error_budget_burn_rate_1h",
+    "Error budget burn rate over 1 hour window",
+    ["slo_name"],
+)
+
+burn_rate_6h = _get_or_create_gauge(
+    "error_budget_burn_rate_6h",
+    "Error budget burn rate over 6 hour window",
+    ["slo_name"],
+)
+
+# Deployment freeze status gauge (0=proceed, 1=caution, 2=warning, 3=freeze_recommended)
+deployment_freeze_status = _get_or_create_gauge(
+    "deployment_freeze_status",
+    "Deployment freeze status (0=proceed, 1=caution, 2=warning, 3=freeze_recommended)",
+    [],  # Global status, no labels
+)
+
+# Freeze decision counter
+freeze_decision_total = _get_or_create_counter(
+    "freeze_decision_total",
+    "Total freeze-related decisions",
+    ["decision_type"],  # freeze_acknowledged, override_approved, freeze_lifted
+)
+
+# Active override gauge (0=no override, 1=has active override)
+active_override_gauge = _get_or_create_gauge(
+    "deployment_active_override",
+    "Whether there is an active deployment override (0=no, 1=yes)",
+    [],
+)
+
+
+# =============================================================================
 # Helper Functions - Recording Metrics
 # =============================================================================
 
@@ -391,6 +444,142 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
         logger.debug(f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, success={success}")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record replay metric: {e}")
+
+
+# =============================================================================
+# Error Budget Metrics Recording
+# =============================================================================
+
+
+def record_error_budget_status(
+    slo_name: str,
+    remaining_percent: float,
+    remaining_minutes: float,
+    burn_rate_1h_value: float,
+    burn_rate_6h_value: float,
+) -> None:
+    """
+    Record Error Budget status metrics.
+
+    Args:
+        slo_name: SLO name (e.g., "availability")
+        remaining_percent: Budget remaining percentage (0-100)
+        remaining_minutes: Budget remaining in minutes
+        burn_rate_1h_value: 1-hour burn rate
+        burn_rate_6h_value: 6-hour burn rate
+    """
+    try:
+        error_budget_remaining_percent.labels(slo_name=slo_name).set(remaining_percent)
+        error_budget_remaining_minutes.labels(slo_name=slo_name).set(remaining_minutes)
+        burn_rate_1h.labels(slo_name=slo_name).set(burn_rate_1h_value)
+        burn_rate_6h.labels(slo_name=slo_name).set(burn_rate_6h_value)
+        logger.debug(
+            f"[Metrics] Error budget recorded: slo={slo_name}, "
+            f"remaining={remaining_percent:.1f}%, burn_1h={burn_rate_1h_value:.2f}"
+        )
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record error budget metric: {e}")
+
+
+def record_deployment_freeze_status(status: str) -> None:
+    """
+    Record deployment freeze status.
+
+    Args:
+        status: Freeze status (proceed, caution, warning, freeze_recommended)
+    """
+    try:
+        status_mapping = {
+            "proceed": 0,
+            "caution": 1,
+            "warning": 2,
+            "freeze_recommended": 3,
+        }
+        status_value = status_mapping.get(status, 0)
+        deployment_freeze_status.set(status_value)
+        logger.debug(f"[Metrics] Deployment freeze status: {status} ({status_value})")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record freeze status metric: {e}")
+
+
+def record_freeze_decision(decision_type: str) -> None:
+    """
+    Record a freeze-related decision.
+
+    Args:
+        decision_type: Type of decision (freeze_acknowledged, override_approved, freeze_lifted)
+    """
+    try:
+        freeze_decision_total.labels(decision_type=decision_type).inc()
+        logger.info(f"[Metrics] Freeze decision recorded: {decision_type}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record freeze decision metric: {e}")
+
+
+def record_active_override(has_override: bool) -> None:
+    """
+    Record whether there is an active deployment override.
+
+    Args:
+        has_override: Whether an override is active
+    """
+    try:
+        active_override_gauge.set(1 if has_override else 0)
+        logger.debug(f"[Metrics] Active override: {has_override}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record active override metric: {e}")
+
+
+# =============================================================================
+# Fail-Safe Metrics
+# =============================================================================
+
+# Fail-Safe 발동 카운터 (침묵하는 장애 방지)
+failsafe_triggered_total = _get_or_create_counter(
+    "selfhealing_failsafe_triggered_total",
+    "Number of times fail-safe mode was activated",
+    ["component"],
+)
+
+# Fail-Safe 현재 상태 (1=degraded, 0=normal)
+failsafe_mode_active = _get_or_create_gauge(
+    "selfhealing_failsafe_mode_active",
+    "Whether fail-safe mode is currently active (1=yes, 0=no)",
+    ["component"],
+)
+
+
+def record_failsafe_triggered(component: str) -> None:
+    """
+    Record that fail-safe mode was triggered.
+
+    This metric is CRITICAL for detecting "silent failures".
+    It should trigger alerts in Prometheus/Grafana.
+
+    Args:
+        component: The component that triggered fail-safe (e.g., "error_budget")
+    """
+    try:
+        failsafe_triggered_total.labels(component=component).inc()
+        failsafe_mode_active.labels(component=component).set(1)
+        logger.critical(f"[Metrics] FAIL-SAFE TRIGGERED: component={component}. " "Alerting rules should fire.")
+    except Exception as e:
+        # 메트릭 기록 실패해도 시스템은 계속 동작
+        logger.error(f"[Metrics] Failed to record fail-safe metric: {e}")
+
+
+def record_failsafe_recovered(component: str) -> None:
+    """
+    Record that fail-safe mode has been recovered.
+
+    Args:
+        component: The component that recovered
+    """
+    try:
+        failsafe_mode_active.labels(component=component).set(0)
+        logger.info(f"[Metrics] Fail-safe recovered: component={component}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record fail-safe recovery: {e}")
 
 
 # =============================================================================
@@ -724,5 +913,82 @@ ALERTING_RULES: dict = {
         "summary": "Replay failure rate is high",
         "description": "More than 50% of replay attempts are failing",
         "runbook_url": "https://docs.internal/runbooks/replay-failure-high",
+    },
+    # =========================================================================
+    # Error Budget Alerting Rules
+    # =========================================================================
+    "ErrorBudgetCritical": {
+        "expr": "error_budget_remaining_percent < 20",
+        "for": "5m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "Error budget critical - deployment freeze recommended",
+        "description": "Error budget remaining is {{ $value }}%. Deployment freeze is recommended.",
+        "runbook_url": "https://docs.internal/runbooks/error-budget-critical",
+    },
+    "ErrorBudgetWarning": {
+        "expr": "error_budget_remaining_percent < 50",
+        "for": "10m",
+        "severity": "warning",
+        "team": "ops",
+        "summary": "Error budget warning",
+        "description": "Error budget remaining is {{ $value }}%. Consider reducing deployments.",
+        "runbook_url": "https://docs.internal/runbooks/error-budget-warning",
+    },
+    "ErrorBudgetFastBurn": {
+        "expr": "error_budget_burn_rate_1h > 14.4",
+        "for": "5m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "Fast error budget burn detected",
+        "description": "1-hour burn rate is {{ $value }}x. Consuming 2%+ budget per hour.",
+        "runbook_url": "https://docs.internal/runbooks/error-budget-fast-burn",
+    },
+    "ErrorBudgetSlowBurn": {
+        "expr": "error_budget_burn_rate_6h > 3",
+        "for": "30m",
+        "severity": "warning",
+        "team": "ops",
+        "summary": "Slow error budget burn detected",
+        "description": "6-hour burn rate is {{ $value }}x. Sustained elevated error rate.",
+        "runbook_url": "https://docs.internal/runbooks/error-budget-slow-burn",
+    },
+    "DeploymentFreezeActive": {
+        "expr": "deployment_freeze_status >= 3",
+        "for": "0m",
+        "severity": "info",
+        "team": "ops",
+        "summary": "Deployment freeze is active",
+        "description": "Deployment freeze is recommended or in effect.",
+        "runbook_url": "https://docs.internal/runbooks/deployment-freeze",
+    },
+    # =========================================================================
+    # Fail-Safe Alerting Rules (침묵하는 장애 방지)
+    # =========================================================================
+    "FailSafeTriggered": {
+        "expr": "increase(selfhealing_failsafe_triggered_total[5m]) > 0",
+        "for": "0m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "🚨 Self-Healing Fail-Safe mode activated",
+        "description": (
+            "Self-Healing system component '{{ $labels.component }}' has failed and "
+            "Fail-Safe mode is active. Deployments are proceeding but system needs "
+            "immediate attention."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/selfhealing-failsafe",
+    },
+    "FailSafeModeActive": {
+        "expr": "selfhealing_failsafe_mode_active == 1",
+        "for": "2m",
+        "severity": "critical",
+        "team": "ops",
+        "summary": "🚨 Self-Healing in degraded mode",
+        "description": (
+            "Self-Healing '{{ $labels.component }}' is operating in Fail-Safe mode. "
+            "Error Budget recommendations are not available. "
+            "Investigate and restore normal operation immediately."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/selfhealing-failsafe",
     },
 }

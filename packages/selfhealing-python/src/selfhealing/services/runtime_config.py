@@ -43,6 +43,7 @@ from selfhealing.core.config import (
     NotificationConfig,
     ForensicConfig,
     MetricsConfig,
+    ErrorBudgetConfig,
 )
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.core.apply_strategy import (
@@ -85,6 +86,7 @@ class RuntimeConfigManager:
         "notification": "runtime_config:notification",
         "forensic": "runtime_config:forensic",
         "metrics": "runtime_config:metrics",
+        "error_budget": "runtime_config:error_budget",
     }
 
     # Default config classes
@@ -99,6 +101,7 @@ class RuntimeConfigManager:
         "notification": NotificationConfig,
         "forensic": ForensicConfig,
         "metrics": MetricsConfig,
+        "error_budget": ErrorBudgetConfig,
     }
 
     def __init__(self):
@@ -572,6 +575,53 @@ class RuntimeConfigManager:
         """Update metrics configuration."""
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("metrics", **updates)
+
+    # =========================================================================
+    # Error Budget Config
+    # =========================================================================
+
+    def get_error_budget_config(self) -> Dict[str, Any]:
+        """
+        Get Error Budget configuration.
+        
+        Returns:
+            dict: Error Budget 및 Burn Rate 임계값 설정
+        """
+        return self._get_config("error_budget")
+
+    def update_error_budget_config(
+        self,
+        threshold_healthy: Optional[float] = None,
+        threshold_caution: Optional[float] = None,
+        threshold_warning: Optional[float] = None,
+        threshold_critical: Optional[float] = None,
+        burn_rate_fast_critical: Optional[float] = None,
+        burn_rate_fast_warning: Optional[float] = None,
+        burn_rate_slow_warning: Optional[float] = None,
+        burn_rate_slow_info: Optional[float] = None,
+        failsafe_alert_enabled: Optional[bool] = None,
+        failsafe_cooldown_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update Error Budget configuration.
+        
+        Args:
+            threshold_healthy: 정상 상태 임계값 (%)
+            threshold_caution: 주의 상태 임계값 (%)
+            threshold_warning: 경고 상태 임계값 (%)
+            threshold_critical: 위험 상태 임계값 (%)
+            burn_rate_fast_critical: 빠른 소진 위험 임계값 (x)
+            burn_rate_fast_warning: 빠른 소진 경고 임계값 (x)
+            burn_rate_slow_warning: 느린 소진 경고 임계값 (x)
+            burn_rate_slow_info: 정상 소진율 임계값 (x)
+            failsafe_alert_enabled: Fail-Safe 발동 시 알림 발송 여부
+            failsafe_cooldown_seconds: 연속 알림 방지 쿨다운 (초)
+            
+        Returns:
+            dict: 업데이트된 설정값
+        """
+        updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
+        return self._update_config("error_budget", **updates)
 
 
 def get_runtime_config_manager() -> RuntimeConfigManager:

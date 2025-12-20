@@ -176,6 +176,76 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
     export_prometheus = serializers.BooleanField(required=False)
 
 
+class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
+    """
+    Serializer for Error Budget configuration.
+    
+    Error Budget 및 Burn Rate 임계값 설정.
+    """
+
+    # Error Budget 임계값 (%)
+    threshold_healthy = serializers.FloatField(
+        required=False, min_value=50.0, max_value=100.0,
+        help_text="정상 상태 임계값 (기본: 75%)"
+    )
+    threshold_caution = serializers.FloatField(
+        required=False, min_value=20.0, max_value=80.0,
+        help_text="주의 상태 임계값 (기본: 50%)"
+    )
+    threshold_warning = serializers.FloatField(
+        required=False, min_value=5.0, max_value=50.0,
+        help_text="경고 상태 임계값 (기본: 20%)"
+    )
+    threshold_critical = serializers.FloatField(
+        required=False, min_value=0.0, max_value=20.0,
+        help_text="위험 상태 임계값 (기본: 0%)"
+    )
+
+    # Burn Rate 임계값
+    burn_rate_fast_critical = serializers.FloatField(
+        required=False, min_value=10.0, max_value=50.0,
+        help_text="빠른 소진 위험 임계값 (기본: 14.4x)"
+    )
+    burn_rate_fast_warning = serializers.FloatField(
+        required=False, min_value=3.0, max_value=15.0,
+        help_text="빠른 소진 경고 임계값 (기본: 6.0x)"
+    )
+    burn_rate_slow_warning = serializers.FloatField(
+        required=False, min_value=1.0, max_value=10.0,
+        help_text="느린 소진 경고 임계값 (기본: 3.0x)"
+    )
+    burn_rate_slow_info = serializers.FloatField(
+        required=False, min_value=0.5, max_value=3.0,
+        help_text="정상 소진율 임계값 (기본: 1.0x)"
+    )
+
+    # Fail-Safe 설정
+    failsafe_alert_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Fail-Safe 발동 시 알림 발송 여부"
+    )
+    failsafe_cooldown_seconds = serializers.IntegerField(
+        required=False, min_value=60, max_value=3600,
+        help_text="연속 알림 방지 쿨다운 (초)"
+    )
+
+    def validate(self, data):
+        """Validate threshold ordering."""
+        # 임계값 순서 검증: healthy > caution > warning > critical
+        thresholds = [
+            ('threshold_healthy', data.get('threshold_healthy', 75.0)),
+            ('threshold_caution', data.get('threshold_caution', 50.0)),
+            ('threshold_warning', data.get('threshold_warning', 20.0)),
+            ('threshold_critical', data.get('threshold_critical', 0.0)),
+        ]
+        for i in range(len(thresholds) - 1):
+            if thresholds[i][1] <= thresholds[i + 1][1]:
+                raise serializers.ValidationError(
+                    f"{thresholds[i][0]}은 {thresholds[i + 1][0]}보다 커야 합니다."
+                )
+        return data
+
+
 # =============================================================================
 # Pending Change Serializers
 # =============================================================================

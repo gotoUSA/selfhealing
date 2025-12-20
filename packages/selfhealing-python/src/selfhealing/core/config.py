@@ -174,6 +174,32 @@ class NotificationConfig:
 
 
 @dataclass
+class ErrorBudgetConfig:
+    """
+    Configuration for Error Budget thresholds.
+    
+    Error Budget 임계값 설정 (API로 동적 변경 가능).
+    Google SRE 권장 임계값을 기본값으로 사용합니다.
+    """
+
+    # Error Budget 임계값 (%)
+    threshold_healthy: float = 75.0       # 75% 이상: 정상
+    threshold_caution: float = 50.0       # 50-75%: 주의
+    threshold_warning: float = 20.0       # 20-50%: 경고
+    threshold_critical: float = 0.0       # 20% 미만: 동결 권고
+
+    # Burn Rate 임계값 (Google SRE 권장)
+    burn_rate_fast_critical: float = 14.4  # 1시간에 2% 소진 -> 즉시 대응
+    burn_rate_fast_warning: float = 6.0    # 1시간에 ~0.8% 소진
+    burn_rate_slow_warning: float = 3.0    # 6시간에 5% 소진
+    burn_rate_slow_info: float = 1.0       # 정상 소진율
+
+    # Fail-Safe 설정
+    failsafe_alert_enabled: bool = True    # Fail-Safe 발동 시 알림 발송
+    failsafe_cooldown_seconds: int = 300   # 연속 알림 방지 (5분)
+
+
+@dataclass
 class SelfHealingConfig:
     """
     Main configuration for the self-healing system.

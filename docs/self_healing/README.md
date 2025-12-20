@@ -39,6 +39,7 @@
 | 문서 | 설명 | 대상 |
 |------|------|------|
 | [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | Forensic Advisor, Chaos Context, SLA Drift Detection | 개발자, 운영자 |
+| [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 관리 및 배포 동결 권고 시스템 | 개발자, 운영자, SRE |
 
 ---
 
@@ -73,6 +74,10 @@
 | `shopping/views/self_healing/` | API 뷰 |
 | `docker/prometheus/` | Prometheus 설정 |
 | `docker/grafana/` | Grafana 대시보드 |
+| **Error Budget 관련** | |
+| `packages/selfhealing-python/src/selfhealing/services/error_budget_service.py` | Error Budget 서비스 |
+| `packages/selfhealing-python/src/selfhealing/api/django/views/error_budget.py` | Error Budget API 뷰 |
+| `packages/selfhealing-python/src/selfhealing/services/metrics.py` | Error Budget 메트릭 |
 
 ---
 
@@ -80,5 +85,6 @@
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2024-12-21 | 1.2 | Error Budget 관리 및 배포 동결 권고 시스템 추가 (12_ERROR_BUDGET.md) |
 | 2024-12-20 | 1.1 | Forensic Advisor, Chaos Context, SLA Drift Detection 추가 |
 | 2024-01-XX | 1.0 | 초기 문서 작성 |

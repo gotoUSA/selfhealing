@@ -39,6 +39,7 @@ from selfhealing.api.django.serializers.config import (
     NotificationConfigSerializer,
     ForensicConfigSerializer,
     MetricsConfigSerializer,
+    ErrorBudgetConfigSerializer,
     PendingConfigChangeSerializer,
 )
 from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -354,3 +355,18 @@ class MetricsConfigView(BaseConfigView):
 
     serializer_class = MetricsConfigSerializer
     config_name = "metrics"
+
+
+class ErrorBudgetConfigView(BaseConfigView):
+    """
+    Error Budget Configuration API.
+    
+    GET  /api/self-healing/config/error-budget/ - Get Error Budget config
+    PUT  /api/self-healing/config/error-budget/ - Update Error Budget config
+    
+    Error Budget 및 Burn Rate 임계값을 동적으로 변경할 수 있습니다.
+    변경 후 error_budget_service에서 자동으로 새 임계값을 사용합니다.
+    """
+
+    serializer_class = ErrorBudgetConfigSerializer
+    config_name = "error_budget"

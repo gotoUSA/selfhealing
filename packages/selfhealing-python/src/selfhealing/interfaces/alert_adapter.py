@@ -53,6 +53,7 @@ class AlertCategory(str, Enum):
     RESOURCE = "resource"  # CPU, Memory, Disk
     SECURITY = "security"  # Security incidents
     SLO_VIOLATION = "slo_violation"  # SLO breached
+    FAILSAFE = "failsafe"  # Fail-safe mode activated (self-healing degraded)
 
 
 @dataclass
@@ -264,3 +265,54 @@ class AlertAdapter(ABC):
                 alert_key=f"error_rate:{service_name}",
             )
         )
+
+    def alert_failsafe_activated(
+        self,
+        component: str,
+        error_message: str,
+        fallback_action: str = "PROCEED",
+    ) -> None:
+        """
+        CRITICAL: Fail-Safe 모드 발동 알림.
+        
+        Self-Healing 시스템의 일부가 장애를 일으켜 Fail-Safe 모드로
+        전환되었을 때 발송됩니다. 이 알림은 즉각적인 주의가 필요합니다.
+        
+        Args:
+            component: 장애가 발생한 컴포넌트 (예: "error_budget", "circuit_breaker")
+            error_message: 장애 원인 메시지
+            fallback_action: 취해진 fallback 동작 (예: "PROCEED", "ALLOW")
+        
+        Note:
+            이 알림은 "침묵하는 장애"를 방지하기 위해 설계되었습니다.
+            Fail-Safe가 작동하면 시스템은 계속 동작하지만, 운영팀은
+            즉시 알림을 받아 근본 원인을 해결해야 합니다.
+        """
+        self.send(
+            Alert(
+                title=f"🚨 FAIL-SAFE 발동: {component}",
+                description=(
+                    f"Self-Healing '{component}' 시스템이 장애로 인해 Fail-Safe 모드로 전환되었습니다.\n\n"
+                    f"오류: {error_message}\n"
+                    f"Fallback 동작: {fallback_action}\n\n"
+                    f"⚠️ 배포는 허용되었지만, 시스템 복구가 필요합니다."
+                ),
+                severity=AlertSeverity.CRITICAL,  # 항상 CRITICAL
+                category=AlertCategory.FAILSAFE,
+                source="selfhealing",
+                details={
+                    "component": component,
+                    "error_message": error_message,
+                    "fallback_action": fallback_action,
+                    "failsafe_applied": True,
+                    "requires_immediate_attention": True,
+                },
+                runbook_url="https://docs.internal/runbooks/selfhealing-failsafe",
+                alert_key=f"failsafe:{component}",
+            )
+        )
+
+    def resolve_failsafe(self, component: str) -> None:
+        """Fail-Safe 복구 시 알림 해제."""
+        self.resolve(f"failsafe:{component}")
+
