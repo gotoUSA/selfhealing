@@ -566,3 +566,194 @@ class BlastRadiusCheckResultSerializer(serializers.Serializer):
     max_concurrent = serializers.IntegerField()
     current_concurrent = serializers.IntegerField()
     within_allowed_window = serializers.BooleanField()
+
+
+# =============================================================================
+# Phase 1 Safety Mechanism Serializers (TTL, Stop Conditions, Dry Run)
+# =============================================================================
+
+
+class TTLConfigSerializer(serializers.Serializer):
+    """Serializer for TTL (Self-Expiration) configuration."""
+    
+    default_ttl_seconds = serializers.IntegerField(
+        required=False,
+        min_value=60,
+        max_value=3600,
+        default=600,
+        help_text="기본 TTL (초, 기본 600=10분). 실험이 자동으로 만료되는 시간."
+    )
+    min_ttl_seconds = serializers.IntegerField(
+        required=False,
+        min_value=30,
+        max_value=600,
+        default=60,
+        help_text="최소 TTL (초). 이 값보다 짧은 TTL은 허용되지 않음."
+    )
+    max_ttl_seconds = serializers.IntegerField(
+        required=False,
+        min_value=600,
+        max_value=7200,
+        default=3600,
+        help_text="최대 TTL (초, 기본 3600=1시간). 이 값보다 긴 TTL은 허용되지 않음."
+    )
+    auto_expiration_enabled = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="자동 만료 활성화 여부. True면 TTL 후 자동으로 카오스 설정이 제거됨."
+    )
+
+
+class StopConditionsConfigSerializer(serializers.Serializer):
+    """Serializer for Stop Conditions (자동 중단) configuration."""
+    
+    max_error_rate_percent = serializers.FloatField(
+        required=False,
+        min_value=0.1,
+        max_value=100,
+        default=5.0,
+        help_text="최대 허용 에러율 (%). 이 값 초과 시 실험 자동 중단."
+    )
+    max_latency_p99_ms = serializers.IntegerField(
+        required=False,
+        min_value=100,
+        max_value=30000,
+        default=2000,
+        help_text="최대 허용 P99 지연시간 (ms). 이 값 초과 시 실험 자동 중단."
+    )
+    max_latency_p95_ms = serializers.IntegerField(
+        required=False,
+        min_value=50,
+        max_value=20000,
+        default=1000,
+        help_text="최대 허용 P95 지연시간 (ms). 이 값 초과 시 실험 자동 중단."
+    )
+    min_error_budget_percent = serializers.FloatField(
+        required=False,
+        min_value=0,
+        max_value=100,
+        default=10.0,
+        help_text="최소 에러 버짓 (%). 이 값 미만이면 실험 자동 중단."
+    )
+    check_interval_seconds = serializers.IntegerField(
+        required=False,
+        min_value=5,
+        max_value=60,
+        default=10,
+        help_text="메트릭 체크 주기 (초)."
+    )
+    consecutive_breaches_required = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=10,
+        default=2,
+        help_text="연속 위반 횟수. 일시적 스파이크 무시를 위해 N회 연속 위반 시에만 중단."
+    )
+    enabled = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Stop Conditions 활성화 여부."
+    )
+
+
+class DryRunConfigSerializer(serializers.Serializer):
+    """Serializer for Dry Run configuration."""
+    
+    enabled = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Dry Run 모드 활성화. True면 실제 장애 주입 없이 시뮬레이션만 수행."
+    )
+    reason = serializers.CharField(
+        required=False,
+        max_length=500,
+        default="Initial deployment - simulation mode",
+        help_text="Dry Run 모드 활성화 이유."
+    )
+
+
+class KillAllRequestSerializer(serializers.Serializer):
+    """Request serializer for kill all operation."""
+    
+    reason = serializers.CharField(
+        required=True,
+        max_length=500,
+        help_text="모든 실험 중단 이유"
+    )
+    operator = serializers.CharField(
+        required=False,
+        max_length=100,
+        help_text="운영자 이메일 또는 ID"
+    )
+
+
+class KillAllResponseSerializer(serializers.Serializer):
+    """Response serializer for kill all operation."""
+    
+    status = serializers.CharField()
+    experiments_killed = serializers.IntegerField()
+    rollbacks_initiated = serializers.IntegerField()
+    ttl_configs_cleared = serializers.IntegerField()
+
+
+class ExperimentConfigWithTTLSerializer(serializers.Serializer):
+    """Serializer for experiment configuration with TTL support."""
+    
+    target_service = serializers.CharField(
+        required=True,
+        help_text="Target service name"
+    )
+    target_domain = serializers.CharField(
+        required=False,
+        default="",
+        help_text="Target domain"
+    )
+    target_instances = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+        help_text="Specific instances to target"
+    )
+    injection_rate = serializers.FloatField(
+        required=False,
+        min_value=0.0001,
+        max_value=1.0,
+        default=0.001,
+        help_text="Injection rate (0.001 = 0.1%)"
+    )
+    duration_seconds = serializers.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=3600,
+        default=300,
+        help_text="Experiment duration in seconds"
+    )
+    traffic_type = serializers.ChoiceField(
+        choices=["synthetic", "shadow", "canary", "production"],
+        required=False,
+        default="synthetic",
+        help_text="Type of traffic to target"
+    )
+    auto_rollback_on_sla_breach = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Auto-rollback on SLA breach"
+    )
+    parameters = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Experiment-specific parameters"
+    )
+    # TTL configuration
+    ttl_seconds = serializers.IntegerField(
+        required=False,
+        min_value=60,
+        max_value=3600,
+        help_text="실험 자동 만료 시간 (초). None이면 기본값 사용."
+    )
+    # Dry Run mode
+    dry_run = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="True이면 실제 장애 주입 없이 시뮬레이션만 수행."
+    )

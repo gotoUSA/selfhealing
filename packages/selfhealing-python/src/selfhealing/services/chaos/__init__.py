@@ -44,6 +44,18 @@ from .reports import (
     ResilienceReportGenerator,
     get_report_generator,
 )
+from .stop_conditions import (
+    StopConditionsConfig,
+    StopConditionsChecker,
+    StopConditionCheckResult,
+    StopConditionViolation,
+    TTLConfig,
+    DryRunConfig,
+    get_stop_conditions_checker,
+    get_ttl_config,
+    get_dry_run_config,
+    get_stop_conditions_config,
+)
 
 __all__ = [
     # Experiments
@@ -72,4 +84,15 @@ __all__ = [
     "DailyResilienceReport",
     "ResilienceReportGenerator",
     "get_report_generator",
+    # Stop Conditions & Safety Mechanisms (Phase 1)
+    "StopConditionsConfig",
+    "StopConditionsChecker",
+    "StopConditionCheckResult",
+    "StopConditionViolation",
+    "TTLConfig",
+    "DryRunConfig",
+    "get_stop_conditions_checker",
+    "get_ttl_config",
+    "get_dry_run_config",
+    "get_stop_conditions_config",
 ]

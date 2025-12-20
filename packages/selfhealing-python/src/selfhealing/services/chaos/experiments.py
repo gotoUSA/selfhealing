@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import abc
 import logging
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
 from selfhealing.core.timezone import now
 
@@ -137,6 +138,14 @@ class ExperimentConfig:
     
     # Additional parameters (experiment-specific)
     parameters: Dict[str, Any] = field(default_factory=dict)
+    
+    # TTL (Self-Expiration) configuration
+    ttl_seconds: Optional[int] = None
+    """실험 자동 만료 시간 (초). None이면 기본값 사용."""
+    
+    # Dry Run mode
+    dry_run: bool = False
+    """True이면 실제 장애 주입 없이 시뮬레이션만 수행."""
 
 
 @dataclass
@@ -176,6 +185,19 @@ class ExperimentResult:
     # Audit
     audit_record_ids: List[str] = field(default_factory=list)
     
+    # Dry Run / TTL info
+    dry_run: bool = False
+    """True이면 실제 장애 주입 없이 시뮬레이션만 수행됨."""
+    
+    ttl_seconds: int = 0
+    """사용된 TTL 값 (초)."""
+    
+    expires_at: str = ""
+    """카오스 설정 만료 시간 (ISO format)."""
+    
+    auto_expired: bool = False
+    """TTL에 의해 자동 만료되었는지 여부."""
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -197,6 +219,11 @@ class ExperimentResult:
             "forensic_advisory": self.forensic_advisory,
             "error_message": self.error_message,
             "audit_record_ids": self.audit_record_ids,
+            # Dry Run / TTL info
+            "dry_run": self.dry_run,
+            "ttl_seconds": self.ttl_seconds,
+            "expires_at": self.expires_at,
+            "auto_expired": self.auto_expired,
         }
 
 
@@ -273,12 +300,19 @@ class ChaosExperiment(abc.ABC):
     5. rollback() - Clean up / restore normal state
     6. validate_recovery() - Verify system recovered
     7. generate_report() - Create experiment report
+    
+    Safety features:
+    - TTL (Self-Expiration): 자동 만료로 엔진 사망 시에도 복구
+    - Stop Conditions: SLA 위반 시 자동 중단
+    - Dry Run: 실제 주입 없이 시뮬레이션
+    - Idempotent Rollback: 멱등성 있는 롤백
     """
     
     # Class-level configuration
     experiment_type: str = "base"
     requires_approval: bool = False
     default_duration_seconds: int = 300
+    default_ttl_seconds: int = 600  # 기본 10분 TTL
     
     def __init__(
         self,
@@ -300,6 +334,132 @@ class ChaosExperiment(abc.ABC):
         self.result: Optional[ExperimentResult] = None
         self._kill_requested = False
         self._audit_records: List[str] = []
+        
+        # TTL state
+        self._expires_at: Optional[datetime] = None
+        self._effective_ttl: int = 0
+        
+        # Rollback state (for idempotency)
+        self._rollback_completed = False
+        self._rollback_lock = threading.Lock()
+        
+        # Stop conditions monitoring
+        self._stop_condition_violation: Optional[str] = None
+    
+    # =========================================================================
+    # TTL (Self-Expiration) Methods
+    # =========================================================================
+    
+    def get_effective_ttl(self) -> int:
+        """
+        Get effective TTL for this experiment.
+        
+        Priority: config.ttl_seconds > default_ttl_seconds > global TTL config
+        """
+        if self.config.ttl_seconds is not None:
+            return self.config.ttl_seconds
+        
+        # Try to get from global config
+        try:
+            from .stop_conditions import get_ttl_config
+            ttl_config = get_ttl_config()
+            return ttl_config.validate_ttl(self.default_ttl_seconds)
+        except Exception:
+            return self.default_ttl_seconds
+    
+    def _calculate_expires_at(self) -> datetime:
+        """Calculate expiration time based on TTL."""
+        self._effective_ttl = self.get_effective_ttl()
+        self._expires_at = now() + timedelta(seconds=self._effective_ttl)
+        return self._expires_at
+    
+    def is_expired(self) -> bool:
+        """Check if experiment has expired based on TTL."""
+        if self._expires_at is None:
+            return False
+        return now() > self._expires_at
+    
+    # =========================================================================
+    # Dry Run Methods
+    # =========================================================================
+    
+    def _should_dry_run(self) -> bool:
+        """Check if this experiment should run in dry run mode."""
+        # Config-level override
+        if self.config.dry_run:
+            return True
+        
+        # Global dry run mode
+        try:
+            from .stop_conditions import get_dry_run_config
+            dry_run_config = get_dry_run_config()
+            return dry_run_config.enabled
+        except Exception:
+            return False
+    
+    def _run_dry(self) -> ExperimentResult:
+        """
+        Execute experiment in dry run mode.
+        
+        Performs all validations without actual chaos injection.
+        """
+        logger.info(f"[DryRun] Starting dry run for {self.experiment_id}")
+        
+        # Calculate TTL (for simulation)
+        self._calculate_expires_at()
+        
+        # Pre-flight check
+        if not self.pre_flight_check():
+            return self._create_skipped_result("Pre-flight check failed (dry run)")
+        
+        # Simulate steady state capture
+        steady_state_before = self.capture_steady_state()
+        self._audit("steady_state_captured", {"phase": "before", "metrics": steady_state_before, "dry_run": True})
+        
+        # Simulate injection (no actual injection)
+        self._audit("chaos_injection_simulated", {
+            "dry_run": True,
+            "would_inject": self._config_to_dict(),
+            "ttl_seconds": self._effective_ttl,
+            "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+        })
+        
+        logger.info(
+            f"[DryRun] Would inject chaos to {self.config.target_service} "
+            f"with TTL {self._effective_ttl}s (expires at {self._expires_at})"
+        )
+        
+        # Simulate duration wait (shortened for dry run)
+        duration = min(5, self.config.duration_seconds or self.default_duration_seconds)
+        import time
+        time.sleep(duration)
+        
+        # Simulate steady state after
+        steady_state_after = self.capture_steady_state()
+        
+        self.completed_at = now()
+        self.status = ExperimentStatus.COMPLETED
+        
+        self.result = ExperimentResult(
+            experiment_id=self.experiment_id,
+            experiment_type=self.experiment_type,
+            status=self.status.value,
+            started_at=self.started_at.isoformat() if self.started_at else "",
+            completed_at=self.completed_at.isoformat(),
+            duration_seconds=(self.completed_at - self.started_at).total_seconds() if self.started_at else 0,
+            steady_state_before=steady_state_before,
+            steady_state_after=steady_state_after,
+            steady_state_hypothesis_passed=True,
+            audit_record_ids=self._audit_records.copy(),
+            dry_run=True,
+            ttl_seconds=self._effective_ttl,
+            expires_at=self._expires_at.isoformat() if self._expires_at else "",
+        )
+        
+        self._audit("experiment_completed", {"result": self.result.to_dict(), "dry_run": True})
+        logger.info(f"[DryRun] Completed dry run for {self.experiment_id} - no actual chaos injected")
+        
+        return self.result
     
     # =========================================================================
     # Template Method - Main Execution Flow
@@ -310,13 +470,25 @@ class ChaosExperiment(abc.ABC):
         Execute the chaos experiment.
         
         This is the main entry point that orchestrates the experiment lifecycle.
+        Supports dry run mode and TTL-based auto-expiration.
         """
         self.started_at = now()
         self.status = ExperimentStatus.RUNNING
         
+        # Check if we should run in dry run mode
+        if self._should_dry_run():
+            return self._run_dry()
+        
         try:
+            # 0. Calculate TTL and expiration time
+            self._calculate_expires_at()
+            
             # 1. Pre-flight check
-            self._audit("experiment_started", {"config": self._config_to_dict()})
+            self._audit("experiment_started", {
+                "config": self._config_to_dict(),
+                "ttl_seconds": self._effective_ttl,
+                "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+            })
             
             if not self.pre_flight_check():
                 return self._create_skipped_result("Pre-flight check failed")
@@ -325,19 +497,25 @@ class ChaosExperiment(abc.ABC):
             steady_state_before = self.capture_steady_state()
             self._audit("steady_state_captured", {"phase": "before", "metrics": steady_state_before})
             
-            # 3. Inject chaos
-            self._audit("chaos_injection_started", {})
+            # 3. Inject chaos (with TTL)
+            self._audit("chaos_injection_started", {
+                "ttl_seconds": self._effective_ttl,
+                "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+            })
             injection_result = self.inject_chaos()
             
             if not injection_result:
                 return self._create_failed_result("Chaos injection failed")
             
-            # 4. Monitor impact (with kill switch check)
+            # 4. Monitor impact (with kill switch and stop conditions check)
             impact_metrics = self._monitor_with_kill_switch()
             
             if self._kill_requested:
                 self.rollback()
-                return self._create_aborted_result("Kill switch activated")
+                abort_reason = "Kill switch activated"
+                if self._stop_condition_violation:
+                    abort_reason = f"Stop condition violated: {self._stop_condition_violation}"
+                return self._create_aborted_result(abort_reason)
             
             # 5. Rollback / cleanup
             self._audit("rollback_started", {})
@@ -374,6 +552,9 @@ class ChaosExperiment(abc.ABC):
                 steady_state_after=steady_state_after,
                 steady_state_hypothesis_passed=hypothesis_passed,
                 audit_record_ids=self._audit_records.copy(),
+                dry_run=False,
+                ttl_seconds=self._effective_ttl,
+                expires_at=self._expires_at.isoformat() if self._expires_at else "",
             )
             
             self._audit("experiment_completed", {"result": self.result.to_dict()})
@@ -484,7 +665,13 @@ class ChaosExperiment(abc.ABC):
     # =========================================================================
     
     def _monitor_with_kill_switch(self) -> Dict[str, int]:
-        """Monitor experiment impact with periodic kill switch check."""
+        """
+        Monitor experiment impact with periodic kill switch check.
+        
+        Also checks:
+        - Stop Conditions (SLA breach)
+        - TTL expiration
+        """
         import time
         
         metrics = {
@@ -497,24 +684,67 @@ class ChaosExperiment(abc.ABC):
         poll_interval = min(5.0, duration / 10)  # Check at least 10 times
         elapsed = 0.0
         
+        # Get stop conditions checker
+        try:
+            from .stop_conditions import get_stop_conditions_checker
+            stop_checker = get_stop_conditions_checker()
+        except Exception:
+            stop_checker = None
+        
         while elapsed < duration:
+            # 1. Check kill switch
             if self._kill_requested:
                 break
             
-            # Update metrics (override _collect_impact_metrics for real implementation)
+            # 2. Check TTL expiration
+            if self.is_expired():
+                logger.warning(f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping")
+                self._kill_requested = True
+                self._stop_condition_violation = "TTL expired"
+                self._audit("auto_abort_ttl_expired", {
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                })
+                break
+            
+            # 3. Update metrics
             current_metrics = self._collect_impact_metrics()
             for key in metrics:
                 metrics[key] += current_metrics.get(key, 0)
             
-            # Check for SLA breach auto-rollback
-            if self.config.auto_rollback_on_sla_breach:
+            # 4. Check Stop Conditions (via Stop Conditions Checker)
+            if stop_checker:
+                stop_result = stop_checker.check(
+                    experiment_id=self.experiment_id,
+                    target_service=self.config.target_service,
+                )
+                if stop_result.should_stop:
+                    violation_messages = [v.message for v in stop_result.violations]
+                    logger.error(
+                        f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}"
+                    )
+                    self._kill_requested = True
+                    self._stop_condition_violation = "; ".join(violation_messages)
+                    self._audit("auto_abort_stop_condition", {
+                        "violations": [v.to_dict() for v in stop_result.violations],
+                        "consecutive_breaches": stop_result.consecutive_breach_count,
+                    })
+                    break
+            
+            # 5. Legacy SLA breach check (fallback)
+            elif self.config.auto_rollback_on_sla_breach:
                 if self._check_sla_breach():
                     self._kill_requested = True
+                    self._stop_condition_violation = "SLA breach threshold exceeded"
                     self._audit("auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"})
                     break
             
             time.sleep(poll_interval)
             elapsed += poll_interval
+        
+        # Cleanup stop conditions checker state
+        if stop_checker:
+            stop_checker.reset_breach_count(self.experiment_id)
         
         return metrics
     
@@ -522,10 +752,30 @@ class ChaosExperiment(abc.ABC):
         """Collect current impact metrics. Override for real implementation."""
         return {"total_requests": 10, "errors_injected": 1, "sla_breaches": 0}
     
-    def _check_sla_breach(self) -> bool:
-        """Check if SLA breach threshold exceeded."""
-        # Override for real implementation
-        return False
+    def _check_sla_breach(self) -> Optional[str]:
+        """
+        Check if SLA breach threshold exceeded.
+        
+        Returns:
+            Breach reason string if breached, None otherwise.
+        """
+        try:
+            from .stop_conditions import get_stop_conditions_checker
+            
+            checker = get_stop_conditions_checker()
+            result = checker.check(
+                experiment_id=self.experiment_id,
+                target_service=self.config.target_service,
+            )
+            
+            if result.should_stop:
+                return "; ".join([v.message for v in result.violations])
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"[ChaosExperiment] SLA check failed: {e}")
+            return None
     
     def _audit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Record audit event."""
@@ -624,17 +874,18 @@ class LatencyInjectionExperiment(ChaosExperiment):
         return self.config.parameters.get("latency_jitter_ms", 100)
     
     def inject_chaos(self) -> bool:
-        """Inject latency into target service."""
+        """Inject latency into target service with TTL."""
         logger.info(
             f"[LatencyInjection] Injecting {self.latency_ms}±{self.latency_jitter_ms}ms "
-            f"latency to {self.config.target_service} at {self.config.injection_rate*100}% rate"
+            f"latency to {self.config.target_service} at {self.config.injection_rate*100}% rate "
+            f"(TTL: {self._effective_ttl}s, expires: {self._expires_at})"
         )
         
         try:
             # Store original state for rollback
             self._original_state = self._get_current_chaos_config()
             
-            # Apply latency injection via chaos config
+            # Apply latency injection via chaos config with TTL
             self._apply_chaos_config({
                 "latency_injection": {
                     "enabled": True,
@@ -644,6 +895,9 @@ class LatencyInjectionExperiment(ChaosExperiment):
                     "rate": self.config.injection_rate,
                     "traffic_type": self.config.traffic_type,
                     "experiment_id": self.experiment_id,
+                    # TTL for self-expiration
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
                 }
             })
             
@@ -654,18 +908,29 @@ class LatencyInjectionExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
-        """Remove latency injection."""
-        logger.info(f"[LatencyInjection] Rolling back {self.experiment_id}")
+        """
+        Remove latency injection with idempotency.
         
-        try:
-            self._apply_chaos_config({
-                "latency_injection": {
-                    "enabled": False,
-                    "target_service": self.config.target_service,
-                }
-            })
-        except Exception as e:
-            logger.error(f"[LatencyInjection] Rollback failed: {e}")
+        Can be called multiple times safely - only executes once.
+        """
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[LatencyInjection] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[LatencyInjection] Rolling back {self.experiment_id}")
+            
+            try:
+                self._apply_chaos_config({
+                    "latency_injection": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[LatencyInjection] Rollback failed: {e}")
     
     def _get_current_chaos_config(self) -> Dict[str, Any]:
         """Get current chaos configuration."""
@@ -711,10 +976,11 @@ class Error5xxExperiment(ChaosExperiment):
         return self.config.parameters.get("error_message", "Service Unavailable (Chaos Experiment)")
     
     def inject_chaos(self) -> bool:
-        """Inject 5xx errors into target service."""
+        """Inject 5xx errors into target service with TTL."""
         logger.info(
             f"[Error5xxInjection] Injecting {self.error_code} errors "
-            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate"
+            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
+            f"(TTL: {self._effective_ttl}s)"
         )
         
         try:
@@ -727,6 +993,8 @@ class Error5xxExperiment(ChaosExperiment):
                     "rate": self.config.injection_rate,
                     "traffic_type": self.config.traffic_type,
                     "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
                 }
             })
             return True
@@ -735,18 +1003,25 @@ class Error5xxExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
-        """Remove error injection."""
-        logger.info(f"[Error5xxInjection] Rolling back {self.experiment_id}")
-        
-        try:
-            self._apply_chaos_config({
-                "error_injection": {
-                    "enabled": False,
-                    "target_service": self.config.target_service,
-                }
-            })
-        except Exception as e:
-            logger.error(f"[Error5xxInjection] Rollback failed: {e}")
+        """Remove error injection with idempotency."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[Error5xxInjection] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[Error5xxInjection] Rolling back {self.experiment_id}")
+            
+            try:
+                self._apply_chaos_config({
+                    "error_injection": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[Error5xxInjection] Rollback failed: {e}")
     
     def _apply_chaos_config(self, config: Dict[str, Any]) -> None:
         """Apply chaos configuration."""
@@ -776,10 +1051,10 @@ class PacketLossExperiment(ChaosExperiment):
         return self.config.parameters.get("loss_rate", 0.05)  # 5%
     
     def inject_chaos(self) -> bool:
-        """Inject packet loss."""
+        """Inject packet loss with TTL."""
         logger.info(
             f"[PacketLoss] Injecting {self.loss_rate*100}% packet loss "
-            f"to {self.config.target_service}"
+            f"to {self.config.target_service} (TTL: {self._effective_ttl}s)"
         )
         
         try:
@@ -790,6 +1065,8 @@ class PacketLossExperiment(ChaosExperiment):
                     "loss_rate": self.loss_rate,
                     "traffic_type": self.config.traffic_type,
                     "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
                 }
             })
             return True
@@ -798,18 +1075,25 @@ class PacketLossExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
-        """Remove packet loss injection."""
-        logger.info(f"[PacketLoss] Rolling back {self.experiment_id}")
-        
-        try:
-            self._apply_chaos_config({
-                "packet_loss": {
-                    "enabled": False,
-                    "target_service": self.config.target_service,
-                }
-            })
-        except Exception as e:
-            logger.error(f"[PacketLoss] Rollback failed: {e}")
+        """Remove packet loss injection with idempotency."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[PacketLoss] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[PacketLoss] Rolling back {self.experiment_id}")
+            
+            try:
+                self._apply_chaos_config({
+                    "packet_loss": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[PacketLoss] Rollback failed: {e}")
     
     def _apply_chaos_config(self, config: Dict[str, Any]) -> None:
         """Apply chaos configuration."""
@@ -839,10 +1123,11 @@ class TimeoutExperiment(ChaosExperiment):
         return self.config.parameters.get("timeout_delay_seconds", 30)
     
     def inject_chaos(self) -> bool:
-        """Inject timeout delays."""
+        """Inject timeout delays with TTL."""
         logger.info(
             f"[Timeout] Injecting {self.timeout_delay_seconds}s timeout delays "
-            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate"
+            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
+            f"(TTL: {self._effective_ttl}s)"
         )
         
         try:
@@ -854,6 +1139,8 @@ class TimeoutExperiment(ChaosExperiment):
                     "rate": self.config.injection_rate,
                     "traffic_type": self.config.traffic_type,
                     "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
                 }
             })
             return True
@@ -862,18 +1149,25 @@ class TimeoutExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
-        """Remove timeout injection."""
-        logger.info(f"[Timeout] Rolling back {self.experiment_id}")
-        
-        try:
-            self._apply_chaos_config({
-                "timeout_injection": {
-                    "enabled": False,
-                    "target_service": self.config.target_service,
-                }
-            })
-        except Exception as e:
-            logger.error(f"[Timeout] Rollback failed: {e}")
+        """Remove timeout injection with idempotency."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[Timeout] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[Timeout] Rolling back {self.experiment_id}")
+            
+            try:
+                self._apply_chaos_config({
+                    "timeout_injection": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[Timeout] Rollback failed: {e}")
     
     def _apply_chaos_config(self, config: Dict[str, Any]) -> None:
         """Apply chaos configuration."""
@@ -908,10 +1202,11 @@ class ResourceExhaustionExperiment(ChaosExperiment):
         return self.config.parameters.get("exhaustion_percent", 0.80)  # 80%
     
     def inject_chaos(self) -> bool:
-        """Inject resource exhaustion."""
+        """Inject resource exhaustion with TTL."""
         logger.info(
             f"[ResourceExhaustion] Exhausting {self.resource_type} to "
-            f"{self.exhaustion_percent*100}% on {self.config.target_service}"
+            f"{self.exhaustion_percent*100}% on {self.config.target_service} "
+            f"(TTL: {self._effective_ttl}s)"
         )
         
         try:
@@ -922,6 +1217,8 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                     "resource_type": self.resource_type,
                     "exhaustion_percent": self.exhaustion_percent,
                     "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
                 }
             })
             return True
@@ -930,18 +1227,25 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
-        """Release exhausted resources."""
-        logger.info(f"[ResourceExhaustion] Rolling back {self.experiment_id}")
-        
-        try:
-            self._apply_chaos_config({
-                "resource_exhaustion": {
-                    "enabled": False,
-                    "target_service": self.config.target_service,
-                }
-            })
-        except Exception as e:
-            logger.error(f"[ResourceExhaustion] Rollback failed: {e}")
+        """Release exhausted resources with idempotency."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[ResourceExhaustion] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[ResourceExhaustion] Rolling back {self.experiment_id}")
+            
+            try:
+                self._apply_chaos_config({
+                    "resource_exhaustion": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[ResourceExhaustion] Rollback failed: {e}")
     
     def _apply_chaos_config(self, config: Dict[str, Any]) -> None:
         """Apply chaos configuration."""

@@ -178,6 +178,17 @@ class SchedulerConfig:
     enabled: bool = True
     """Master switch for scheduler."""
     
+    # Dry Run mode (default True for safety)
+    dry_run_mode: bool = True
+    """
+    Dry Run 모드.
+    True: 실제 장애 주입 없이 전체 워크플로우만 검증 (기본값 - 안전)
+    False: 실제 장애 주입 (프로덕션 모드)
+    """
+    
+    dry_run_reason: str = "Initial deployment - simulation mode"
+    """Dry Run 모드 활성화 이유."""
+    
     # Default schedule window (UTC hours)
     default_schedule_hour_start: int = 2
     """Default start hour for scheduled experiments (2 AM UTC)."""
@@ -207,6 +218,8 @@ class SchedulerConfig:
         """Convert to dictionary."""
         return {
             "enabled": self.enabled,
+            "dry_run_mode": self.dry_run_mode,
+            "dry_run_reason": self.dry_run_reason,
             "default_schedule_hour_start": self.default_schedule_hour_start,
             "default_schedule_hour_end": self.default_schedule_hour_end,
             "auto_approve_instance_level": self.auto_approve_instance_level,
@@ -241,6 +254,10 @@ class ExecutionResult:
     # Errors
     error_message: str = ""
     
+    # Dry Run info
+    dry_run: bool = False
+    """True이면 실제 장애 주입 없이 시뮬레이션만 수행됨."""
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -255,6 +272,7 @@ class ExecutionResult:
             "skip_reason": self.skip_reason,
             "experiment_result": self.experiment_result,
             "error_message": self.error_message,
+            "dry_run": self.dry_run,
         }
 
 
@@ -749,13 +767,20 @@ class ChaosSchedulerService:
                     **schedule.experiment_config,
                 )
                 
+                # Apply dry_run mode from scheduler config
+                if self._config.dry_run_mode:
+                    config.dry_run = True
+                    logger.info(
+                        f"[ChaosScheduler] Running in DRY RUN mode: {self._config.dry_run_reason}"
+                    )
+                
                 experiment = create_experiment(
                     experiment_type=schedule.experiment_type,
                     config=config,
                 )
                 experiment.experiment_id = experiment_id
                 
-                # Execute
+                # Execute (will use dry run if config.dry_run is True)
                 result = experiment.execute()
                 
                 # Update schedule
@@ -779,6 +804,7 @@ class ChaosSchedulerService:
                     duration_seconds=(now() - started_at).total_seconds(),
                     success=result.status == "completed",
                     experiment_result=result.to_dict(),
+                    dry_run=result.dry_run,
                 )
                 
                 # Store in history

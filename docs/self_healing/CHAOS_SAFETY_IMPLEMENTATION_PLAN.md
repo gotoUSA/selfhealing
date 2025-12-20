@@ -1,7 +1,7 @@
 # Chaos Engine 안전장치 구현 계획
 
 > 이 문서는 카오스 엔진의 안전장치(Safety Mechanisms)를 구현하기 위한 상세 계획입니다.
-> **다음 세션에서 이 문서를 기반으로 구현을 진행합니다.**
+> **Phase 1 구현 완료 (2025-12-20)**
 
 ## 📋 목차
 
@@ -10,6 +10,7 @@
 3. [상세 구현 명세](#3-상세-구현-명세)
 4. [API 설계](#4-api-설계)
 5. [구현 체크리스트](#5-구현-체크리스트)
+6. [System Dry Run vs Chaos Dry Run](#6-system-dry-run-vs-chaos-dry-run)
 
 ---
 
@@ -25,28 +26,32 @@
 | REGION 승인 필수 | `blast_radius.py` | ✅ 완료 |
 | Kill Switch | `scheduler.py` | ✅ 완료 |
 | `fail_safe_on_error=True` | `safety_guard.py` | ✅ 완료 |
+| **Self-Expiration (TTL)** | `experiments.py`, `stop_conditions.py` | ✅ 완료 (Phase 1) |
+| **Stop Conditions (자동 중단)** | `stop_conditions.py`, `experiments.py` | ✅ 완료 (Phase 1) |
+| **Chaos Dry Run 모드** | `scheduler.py`, `experiments.py` | ✅ 완료 (Phase 1) |
+| **Idempotent Rollback** | `experiments.py` | ✅ 완료 (Phase 1) |
 
 ### 1.2 구현 필요한 안전장치 ⚠️
 
 | 기능 | 중요도 | 현황 |
 |------|--------|------|
-| **Stop Conditions (자동 중단)** | 🔴 최고 | 플레이스홀더만 존재 |
-| **Self-Expiration (TTL)** | 🔴 최고 | 미구현 |
-| **Dry Run 모드** | 🟠 높음 | 미구현 |
-| **Idempotent Rollback** | 🟠 높음 | 부분 구현 |
-| Stop Conditions API | 🟡 중간 | 미구현 |
+| ~~**Stop Conditions (자동 중단)**~~ | ~~🔴 최고~~ | ✅ 완료 |
+| ~~**Self-Expiration (TTL)**~~ | ~~🔴 최고~~ | ✅ 완료 |
+| ~~**Dry Run 모드**~~ | ~~🟠 높음~~ | ✅ 완료 |
+| ~~**Idempotent Rollback**~~ | ~~🟠 높음~~ | ✅ 완료 |
+| Stop Conditions API | 🟡 중간 | Phase 2 예정 |
 
 ---
 
 ## 2. 구현 우선순위
 
-### Phase 1: 핵심 안전장치 (필수)
+### Phase 1: 핵심 안전장치 (필수) ✅ 완료
 
 ```
-1. Self-Expiration (TTL) 메커니즘
+1. Self-Expiration (TTL) 메커니즘 ✅
    └─ 카오스 엔진이 죽어도 타겟 시스템이 자동 복구
 
-2. Stop Conditions (실시간 자동 중단)
+2. Stop Conditions (실시간 자동 중단) ✅
    └─ 에러율/지연시간 임계값 초과 시 즉시 중단
 
 3. Dry Run 모드
@@ -608,25 +613,30 @@ POST /api/self-healing/chaos/control/kill-all/
 
 ### Phase 1: 핵심 안전장치 (다음 세션)
 
-- [ ] **Self-Expiration (TTL)**
-  - [ ] `experiments.py`: `default_ttl_seconds`, `ttl_override` 필드 추가
-  - [ ] `experiments.py`: `inject_chaos()`에 `expires_at` 전달 로직
-  - [ ] `runtime_config.py`: `get_chaos_config()`에 자동 만료 로직
-  - [ ] `runtime_config.py`: `_record_auto_expiration()` Audit Trail
-  - [ ] `serializers/chaos.py`: TTL 관련 필드 추가
+- [x] **Self-Expiration (TTL)** ✅ 완료 (2025-12-20)
+  - [x] `experiments.py`: `default_ttl_seconds`, `ttl_override` 필드 추가
+  - [x] `experiments.py`: `inject_chaos()`에 `expires_at` 전달 로직
+  - [x] `runtime_config.py`: `update_chaos_ttl_config()` 메서드 추가
+  - [x] `stop_conditions.py`: `TTLConfig` 클래스 정의
+  - [x] `serializers/chaos.py`: TTL 관련 필드 추가
 
-- [ ] **Stop Conditions**
-  - [ ] `stop_conditions.py`: 새 파일 생성, `StopConditionsConfig` 정의
-  - [ ] `experiments.py`: `_check_sla_breach()` 실제 구현
-  - [ ] `experiments.py`: `_monitoring_loop()` 구현
-  - [ ] `experiments.py`: `_auto_abort()` 구현
-  - [ ] `metrics.py`: `get_current_error_rate()`, `get_latency_p99()` 추가
+- [x] **Stop Conditions** ✅ 완료 (2025-12-20)
+  - [x] `stop_conditions.py`: 새 파일 생성, `StopConditionsConfig` 정의
+  - [x] `experiments.py`: `_check_sla_breach()` 실제 구현
+  - [x] `experiments.py`: `_monitor_with_kill_switch()` 에 Stop Conditions 통합
+  - [x] `experiments.py`: 자동 중단 시 `_stop_condition_violation` 기록
+  - [x] `runtime_config.py`: `update_chaos_stop_conditions_config()` 추가
 
-- [ ] **Dry Run 모드**
-  - [ ] `scheduler.py`: `SchedulerConfig.dry_run_mode` 추가 (기본 True)
-  - [ ] `scheduler.py`: `_simulate_experiment()` 구현
-  - [ ] `experiments.py`: `_run_dry()` 구현
-  - [ ] 모든 Audit Trail에 `dry_run` 플래그 추가
+- [x] **Dry Run 모드** ✅ 완료 (2025-12-20)
+  - [x] `scheduler.py`: `SchedulerConfig.dry_run_mode` 추가 (기본 True)
+  - [x] `scheduler.py`: dry_run 플래그 전달 로직
+  - [x] `experiments.py`: `_run_dry()` 구현
+  - [x] 모든 Audit Trail에 `dry_run` 플래그 추가
+
+- [x] **Idempotent Rollback** ✅ 완료 (2025-12-20)
+  - [x] `experiments.py`: `_rollback_lock` 추가
+  - [x] `experiments.py`: `_rollback_completed` 플래그로 멱등성 보장
+  - [x] 모든 5종 실험 클래스에 적용
 
 ### Phase 2: API 및 강화 기능
 
@@ -636,12 +646,12 @@ POST /api/self-healing/chaos/control/kill-all/
   - [ ] `views/chaos.py`: `DryRunConfigView` 추가
   - [ ] `views/chaos.py`: `KillAllView` 추가
   - [ ] `urls.py`: 새 엔드포인트 등록
-  - [ ] `serializers/chaos.py`: 관련 Serializer 추가
+  - [x] `serializers/chaos.py`: 관련 Serializer 추가 ✅
 
-- [ ] **Idempotent Rollback**
-  - [ ] `experiments.py`: 멱등성 롤백 로직 구현
-  - [ ] 롤백 잠금 메커니즘 (Redis 또는 DB)
-  - [ ] 중복 롤백 감지 및 처리
+- [x] **Idempotent Rollback** ✅ Phase 1에서 완료
+  - [x] `experiments.py`: 멱등성 롤백 로직 구현
+  - [x] 롤백 잠금 메커니즘 (threading.Lock)
+  - [x] 중복 롤백 감지 및 처리
 
 ### Phase 3: 테스트 및 문서
 
@@ -684,15 +694,119 @@ POST /api/self-healing/chaos/control/kill-all/
 
 ---
 
-## 다음 세션 시작 시
+## 6. System Dry Run vs Chaos Dry Run
 
-1. 이 문서를 열고 Phase 1부터 순서대로 구현
-2. 각 항목 완료 시 체크리스트에 ✅ 표시
-3. 구현 완료 후 테스트 실행
-4. 문서 업데이트 및 커밋
+### 6.1 개요
+
+이 프로젝트에는 **두 가지 별도의 Dry Run 시스템**이 존재합니다:
+
+| 구분 | System Dry Run | Chaos Dry Run |
+|------|----------------|---------------|
+| **위치** | `system_control.py` | `chaos/scheduler.py`, `chaos/experiments.py` |
+| **범위** | 전체 Self-Healing 시스템 | Chaos 실험 주입만 |
+| **용도** | 자동 복구 동작 관찰 (실행 안 함) | 카오스 주입 검증 (주입 안 함) |
+| **기본값** | `False` (활성 상태) | `True` (안전 모드) |
+| **API** | `/api/self-healing/system/dry-run/enable/` | 스케줄러 설정 |
+
+### 6.2 System Dry Run (기존)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   System Dry Run (시스템 수준)                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  위치: selfhealing/services/system_control.py                   │
+│                                                                  │
+│  제어 대상:                                                      │
+│  ├─ Circuit Breaker 상태 변경                                   │
+│  ├─ Retry 정책 적용                                             │
+│  ├─ DLQ 메시지 처리                                             │
+│  ├─ Scale In/Out 명령                                           │
+│  └─ 모든 자동 복구 액션                                          │
+│                                                                  │
+│  dry_run=True 일 때:                                            │
+│  → 로그만 기록, 실제 시스템 변경 없음                            │
+│  → "what would happen" 모드                                      │
+│                                                                  │
+│  API:                                                            │
+│  POST /api/self-healing/system/dry-run/enable/                  │
+│  POST /api/self-healing/system/dry-run/disable/                 │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 6.3 Chaos Dry Run (Phase 1 신규)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Chaos Dry Run (실험 수준)                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  위치: selfhealing/services/chaos/scheduler.py                  │
+│        selfhealing/services/chaos/experiments.py                │
+│                                                                  │
+│  제어 대상:                                                      │
+│  ├─ Latency 주입                                                │
+│  ├─ Error 주입                                                  │
+│  ├─ Timeout 주입                                                │
+│  ├─ Resource 고갈                                               │
+│  └─ Partition 실험                                              │
+│                                                                  │
+│  dry_run=True 일 때:                                            │
+│  → Pre-flight 검증 ✅ 실행됨                                     │
+│  → Blast Radius 검증 ✅ 실행됨                                   │
+│  → 실제 장애 주입 ❌ 건너뜀                                      │
+│  → Audit Trail ✅ 기록됨 (dry_run 태그)                          │
+│                                                                  │
+│  설정:                                                           │
+│  SchedulerConfig(dry_run_mode=True)  # 기본값                   │
+│  ExperimentConfig(dry_run=True)      # 개별 실험                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 6.4 상호 작용
+
+```
+                    System Dry Run          Chaos Dry Run
+                    (system_control.py)     (chaos/*)
+                          │                      │
+                          ▼                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  Chaos 실험 발생                                                 │
+│       │                                                          │
+│       ▼                                                          │
+│  Chaos Dry Run 체크 ─── dry_run=True? ──→ 시뮬레이션만          │
+│       │                       │                                  │
+│       │ (dry_run=False)       │                                  │
+│       ▼                       │                                  │
+│  실제 장애 주입 (Latency, Error 등)                              │
+│       │                                                          │
+│       ▼                                                          │
+│  Self-Healing 시스템 반응                                        │
+│       │                                                          │
+│       ▼                                                          │
+│  System Dry Run 체크 ─── dry_run=True? ──→ 로그만 기록          │
+│       │                       │                                  │
+│       │ (dry_run=False)       │                                  │
+│       ▼                       ▼                                  │
+│  실제 복구 액션 실행     아무 것도 안 함                          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 6.5 사용 시나리오
+
+| 시나리오 | System Dry Run | Chaos Dry Run | 결과 |
+|----------|----------------|---------------|------|
+| 프로덕션 카오스 테스트 | `False` | `False` | 실제 장애 주입 + 실제 복구 |
+| 카오스 시나리오 검증 | `False` | `True` | 장애 주입 없음, 복구 대기 없음 |
+| 복구 로직 테스트 | `True` | `False` | 실제 장애 주입, 복구 로그만 |
+| 완전 관찰 모드 | `True` | `True` | 모든 것 시뮬레이션 |
 
 ---
 
 **작성일**: 2025-12-20  
 **작성자**: GitHub Copilot  
-**상태**: 구현 대기
+**상태**: ✅ Phase 1 완료
