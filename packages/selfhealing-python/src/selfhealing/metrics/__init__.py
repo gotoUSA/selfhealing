@@ -15,6 +15,11 @@ from selfhealing.metrics.event_handlers import (
     DLQMetricEventHandler,
     CircuitBreakerEventHandler,
     ReplayEventHandler,
+    reset_event_handler_cache,
+)
+from selfhealing.metrics.safe_gauge import (
+    SafeGauge,
+    SafeGaugeChild,
 )
 from selfhealing.metrics.decorators import (
     track_dlq_creation,
@@ -49,6 +54,10 @@ __all__ = [
     "DLQMetricEventHandler",
     "CircuitBreakerEventHandler",
     "ReplayEventHandler",
+    "reset_event_handler_cache",
+    # Safe Gauge
+    "SafeGauge",
+    "SafeGaugeChild",
     # Decorators
     "track_dlq_creation",
     "track_dlq_resolution",

@@ -165,6 +165,200 @@ def get_forensic_settings() -> ForensicSettings:
 
 
 # =============================================================================
+# Event Logging Settings (API-Level Configuration)
+# =============================================================================
+
+
+class EventLoggingConfig:
+    """
+    런타임에 변경 가능한 이벤트 로깅 설정.
+
+    API 레벨에서 로깅 레벨을 조절할 수 있어 서버 재시작 없이
+    운영자가 대시보드/API에서 즉시 변경 가능합니다.
+
+    Priority (highest to lowest):
+    1. API/Admin 설정 (런타임 변경)
+    2. 환경변수 (컨테이너 기본값)
+    3. 하드코딩 기본값
+
+    Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+
+    Example:
+        >>> config = get_event_logging_config()
+        >>> config.update(dlq_log_level="DEBUG")  # 런타임 변경
+        >>> config.get_dlq_log_level()  # "DEBUG"
+    """
+
+    # Valid log levels
+    VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+    # Singleton instance
+    _instance: "EventLoggingConfig | None" = None
+    _lock = None  # Will be initialized in __new__
+
+    def __new__(cls) -> "EventLoggingConfig":
+        """Singleton pattern for global configuration."""
+        if cls._instance is None:
+            import threading
+            cls._lock = threading.Lock()
+            with cls._lock:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._init_defaults()
+                    cls._instance = instance
+        return cls._instance
+
+    def _init_defaults(self) -> None:
+        """Initialize default values from environment or hardcoded defaults."""
+        import threading
+        self._runtime_lock = threading.Lock()
+
+        # Runtime-configurable values (API level)
+        self._runtime_config: dict = {}
+
+        # Environment-based defaults
+        self._env_defaults = {
+            "dlq_log_level": os.environ.get("SELFHEALING_DLQ_LOG_LEVEL", "INFO"),
+            "cb_log_level": os.environ.get("SELFHEALING_CB_LOG_LEVEL", "WARNING"),
+            "replay_log_level": os.environ.get("SELFHEALING_REPLAY_LOG_LEVEL", "INFO"),
+            "sla_log_level": os.environ.get("SELFHEALING_SLA_LOG_LEVEL", "WARNING"),
+        }
+
+        # Hardcoded defaults (fallback)
+        self._hardcoded_defaults = {
+            "dlq_log_level": "INFO",
+            "cb_log_level": "WARNING",
+            "replay_log_level": "INFO",
+            "sla_log_level": "WARNING",
+        }
+
+        # Last updated timestamp (for audit trail)
+        self._last_updated: dict = {}
+
+    def _validate_level(self, level: str) -> str:
+        """Validate and normalize log level."""
+        level = level.upper()
+        if level not in self.VALID_LEVELS:
+            raise ValueError(
+                f"Invalid log level: {level}. "
+                f"Valid levels: {self.VALID_LEVELS}"
+            )
+        return level
+
+    def _get_value(self, key: str) -> str:
+        """Get value with priority: runtime > env > hardcoded."""
+        with self._runtime_lock:
+            if key in self._runtime_config:
+                return self._runtime_config[key]
+        return self._env_defaults.get(
+            key, self._hardcoded_defaults.get(key, "INFO")
+        )
+
+    def update(
+        self,
+        dlq_log_level: str | None = None,
+        cb_log_level: str | None = None,
+        replay_log_level: str | None = None,
+        sla_log_level: str | None = None,
+        updated_by: str = "api",
+    ) -> dict:
+        """
+        Update logging configuration at runtime.
+
+        Args:
+            dlq_log_level: DLQ 이벤트 로그 레벨 (INFO 권장)
+            cb_log_level: Circuit Breaker 로그 레벨 (WARNING 권장)
+            replay_log_level: Replay 이벤트 로그 레벨 (INFO 권장)
+            sla_log_level: SLA 위반 로그 레벨 (WARNING 권장)
+            updated_by: 변경 주체 (감사 추적용)
+
+        Returns:
+            Updated configuration as dict
+        """
+        from datetime import datetime
+
+        updates = {}
+
+        with self._runtime_lock:
+            if dlq_log_level is not None:
+                level = self._validate_level(dlq_log_level)
+                self._runtime_config["dlq_log_level"] = level
+                updates["dlq_log_level"] = level
+
+            if cb_log_level is not None:
+                level = self._validate_level(cb_log_level)
+                self._runtime_config["cb_log_level"] = level
+                updates["cb_log_level"] = level
+
+            if replay_log_level is not None:
+                level = self._validate_level(replay_log_level)
+                self._runtime_config["replay_log_level"] = level
+                updates["replay_log_level"] = level
+
+            if sla_log_level is not None:
+                level = self._validate_level(sla_log_level)
+                self._runtime_config["sla_log_level"] = level
+                updates["sla_log_level"] = level
+
+            if updates:
+                self._last_updated = {
+                    "timestamp": datetime.now().isoformat(),
+                    "updated_by": updated_by,
+                    "changes": updates,
+                }
+
+        return self.to_dict()
+
+    def reset(self) -> None:
+        """Reset to environment/default values (clear runtime config)."""
+        with self._runtime_lock:
+            self._runtime_config.clear()
+            self._last_updated = {}
+
+    # Property-style getters for each log level
+    def get_dlq_log_level(self) -> str:
+        """Get DLQ event log level."""
+        return self._get_value("dlq_log_level")
+
+    def get_cb_log_level(self) -> str:
+        """Get Circuit Breaker log level."""
+        return self._get_value("cb_log_level")
+
+    def get_replay_log_level(self) -> str:
+        """Get Replay event log level."""
+        return self._get_value("replay_log_level")
+
+    def get_sla_log_level(self) -> str:
+        """Get SLA breach log level."""
+        return self._get_value("sla_log_level")
+
+    def get_log_level_int(self, level_name: str) -> int:
+        """Convert level name to logging module integer."""
+        import logging
+        return getattr(logging, level_name.upper(), logging.INFO)
+
+    def to_dict(self) -> dict:
+        """Export current configuration as dict."""
+        return {
+            "dlq_log_level": self.get_dlq_log_level(),
+            "cb_log_level": self.get_cb_log_level(),
+            "replay_log_level": self.get_replay_log_level(),
+            "sla_log_level": self.get_sla_log_level(),
+            "last_updated": self._last_updated,
+        }
+
+
+def get_event_logging_config() -> EventLoggingConfig:
+    """
+    Get the singleton EventLoggingConfig instance.
+
+    Returns:
+        EventLoggingConfig singleton
+    """
+    return EventLoggingConfig()
+
+
+# =============================================================================
 # Metric Collection Settings
 # =============================================================================
 
@@ -254,7 +448,9 @@ __all__ = [
     "NotificationLimits",
     "ForensicSettings",
     "MetricCollectionSettings",
+    "EventLoggingConfig",
     "get_notification_limits",
     "get_forensic_settings",
     "get_metric_collection_settings",
+    "get_event_logging_config",
 ]

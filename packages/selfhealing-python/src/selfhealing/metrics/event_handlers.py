@@ -3,18 +3,27 @@ DLQ Metric Event Handlers.
 
 Provides event-driven metric updates without DB queries.
 
+Key Features:
+- SafeGauge: 음수 방지 래퍼로 서버 재시작 후에도 Gauge가 -1이 되지 않음
+- Dynamic Logging: API 레벨에서 런타임 로깅 레벨 조절 가능
+
 Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from selfhealing.metrics.safe_gauge import SafeGauge
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular dependencies
+# Lazy imports to avoid circular dependencies
 _metrics_instance = None
+_safe_gauge_cache: Dict[str, "SafeGauge"] = {}
+_logging_config = None
 
 
 def _get_metrics():
@@ -30,6 +39,69 @@ def _get_metrics():
     return _metrics_instance
 
 
+def _get_logging_config():
+    """Get the logging config instance lazily."""
+    global _logging_config
+    if _logging_config is None:
+        try:
+            from selfhealing.config import get_event_logging_config
+            _logging_config = get_event_logging_config()
+        except ImportError:
+            return None
+    return _logging_config
+
+
+def _log_event(level_getter: str, message: str, **extra) -> None:
+    """
+    Log an event with dynamic log level from EventLoggingConfig.
+
+    Args:
+        level_getter: Method name on EventLoggingConfig (e.g., 'get_dlq_log_level')
+        message: Log message
+        **extra: Extra structured logging fields
+    """
+    config = _get_logging_config()
+    if config is None:
+        # Fallback to INFO if config not available
+        logger.info(message, extra=extra)
+        return
+
+    try:
+        level_name = getattr(config, level_getter)()
+        level = config.get_log_level_int(level_name)
+        logger.log(level, message, extra=extra)
+    except Exception:
+        logger.info(message, extra=extra)
+
+
+def _get_safe_pending_gauge() -> Optional["SafeGauge"]:
+    """
+    Get or create SafeGauge wrapper for dlq_pending_gauge.
+
+    Returns SafeGauge instance that prevents negative values.
+    """
+    global _safe_gauge_cache
+
+    if "dlq_pending" in _safe_gauge_cache:
+        return _safe_gauge_cache["dlq_pending"]
+
+    metrics = _get_metrics()
+    if metrics is None:
+        return None
+
+    try:
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        if hasattr(metrics, 'dlq_pending_gauge') and metrics.dlq_pending_gauge:
+            safe_gauge = SafeGauge(metrics.dlq_pending_gauge)
+            _safe_gauge_cache["dlq_pending"] = safe_gauge
+            return safe_gauge
+    except ImportError:
+        logger.warning("[EventHandler] SafeGauge not available, using raw gauge")
+
+    return None
+
+
 class DLQMetricEventHandler:
     """
     DLQ 이벤트 발생 시 메트릭을 업데이트하는 핸들러.
@@ -40,7 +112,12 @@ class DLQMetricEventHandler:
     Design:
     - Counter: 누적 카운트, Push Only (100% 정확)
     - Histogram: 관측 시점 기록, Push Only (100% 정확)
-    - Gauge: 현재 상태, Push + Lazy Sync (~99% 정확)
+    - Gauge: SafeGauge 래퍼 사용으로 음수 방지 (~99% 정확, 재시작 시 동기화)
+
+    SafeGauge Pattern:
+        서버 재시작 직후 Gauge가 0인 상태에서 '해결' 이벤트가 먼저 도착해도
+        대기 카운트가 -1이 되지 않습니다. 이는 Tech DD에서 '허술함' 노출을
+        방지하는 핵심 방어 로직입니다.
 
     Example:
         >>> handler = DLQMetricEventHandler()
@@ -67,12 +144,17 @@ class DLQMetricEventHandler:
             # Counter: 누적 카운트 증가 (100% 정확)
             metrics.record_dlq_item_created(domain, failure_type)
 
-            # Gauge: 현재 대기 수 증가 (~99% 정확, 재시작 시 동기화)
-            if hasattr(metrics, 'dlq_pending_gauge') and metrics.dlq_pending_gauge:
-                metrics.dlq_pending_gauge.labels(domain=domain).inc()
+            # Gauge: SafeGauge를 통한 안전한 증가
+            safe_gauge = _get_safe_pending_gauge()
+            if safe_gauge:
+                safe_gauge.labels(domain=domain).inc()
 
-            logger.debug(
-                f"[EventHandler] DLQ created: domain={domain}, type={failure_type}"
+            _log_event(
+                "get_dlq_log_level",
+                f"[EventHandler] DLQ created: domain={domain}, type={failure_type}",
+                event_type="dlq.created",
+                domain=domain,
+                failure_type=failure_type,
             )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record DLQ creation: {e}")
@@ -86,6 +168,11 @@ class DLQMetricEventHandler:
         """
         DLQ 항목 해결 시 호출.
 
+        SafeGauge를 사용하여 음수 방지:
+        - 서버 재시작 직후 '해결' 이벤트가 먼저 도착해도 -1이 되지 않음
+        - Shadow counter로 현재 값을 추적하고 0 미만 시 클램핑
+        - Lazy Sync(Reconciler)가 주기적으로 실제 DB 값과 동기화
+
         Args:
             domain: 도메인 이름
             resolution_type: 해결 유형 (auto_replay, manual, expired 등)
@@ -96,9 +183,10 @@ class DLQMetricEventHandler:
             return
 
         try:
-            # Gauge: 현재 대기 수 감소
-            if hasattr(metrics, 'dlq_pending_gauge') and metrics.dlq_pending_gauge:
-                metrics.dlq_pending_gauge.labels(domain=domain).dec()
+            # Gauge: SafeGauge를 통한 안전한 감소 (음수 방지!)
+            safe_gauge = _get_safe_pending_gauge()
+            if safe_gauge:
+                safe_gauge.labels(domain=domain).dec()
 
             # Histogram: 복구 시간 기록 (100% 정확)
             if duration_seconds is not None and hasattr(metrics, 'recovery_time_seconds'):
@@ -114,9 +202,14 @@ class DLQMetricEventHandler:
                     outcome="success",
                 ).inc()
 
-            logger.debug(
+            _log_event(
+                "get_dlq_log_level",
                 f"[EventHandler] DLQ resolved: domain={domain}, "
-                f"resolution={resolution_type}, duration={duration_seconds}s"
+                f"resolution={resolution_type}, duration={duration_seconds}s",
+                event_type="dlq.resolved",
+                domain=domain,
+                resolution_type=resolution_type,
+                duration_seconds=duration_seconds,
             )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record DLQ resolution: {e}")
@@ -153,9 +246,14 @@ class DLQMetricEventHandler:
                     domain=domain,
                 ).observe(attempt_count)
 
-            logger.debug(
+            _log_event(
+                "get_dlq_log_level",
                 f"[EventHandler] DLQ retry failed: domain={domain}, "
-                f"type={failure_type}, attempts={attempt_count}"
+                f"type={failure_type}, attempts={attempt_count}",
+                event_type="dlq.retry_failed",
+                domain=domain,
+                failure_type=failure_type,
+                attempt_count=attempt_count,
             )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record DLQ failure: {e}")
@@ -164,6 +262,9 @@ class DLQMetricEventHandler:
     def on_sla_breach(domain: str) -> None:
         """
         SLA 위반 발생 시 호출.
+
+        SLA 위반은 시스템 거버넌스에 중요한 이벤트이므로
+        기본적으로 WARNING 레벨로 로깅됩니다.
 
         Args:
             domain: 도메인 이름
@@ -176,7 +277,12 @@ class DLQMetricEventHandler:
             if hasattr(metrics, 'sla_breach_total'):
                 metrics.sla_breach_total.labels(domain=domain).inc()
 
-            logger.debug(f"[EventHandler] SLA breach: domain={domain}")
+            _log_event(
+                "get_sla_log_level",
+                f"[EventHandler] SLA breach: domain={domain}",
+                event_type="sla.breach",
+                domain=domain,
+            )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record SLA breach: {e}")
 
@@ -186,6 +292,8 @@ class CircuitBreakerEventHandler:
     Circuit Breaker 이벤트 핸들러.
 
     Circuit Breaker 상태 변경 시 메트릭을 업데이트합니다.
+    CB 상태 변경은 시스템의 거버넌스가 위협받는 신호이므로
+    기본적으로 WARNING 레벨로 로깅됩니다.
     """
 
     # 상태를 숫자로 매핑 (Prometheus Gauge용)
@@ -203,6 +311,8 @@ class CircuitBreakerEventHandler:
     ) -> None:
         """
         Circuit Breaker 상태 변경 시 호출.
+
+        CB 상태 변경은 시스템 불안정 신호이므로 WARNING 레벨로 로깅됩니다.
 
         Args:
             service: 서비스 이름
@@ -231,9 +341,14 @@ class CircuitBreakerEventHandler:
             if to_state == "open" and hasattr(metrics, 'circuit_breaker_trips'):
                 metrics.circuit_breaker_trips.labels(service_name=service).inc()
 
-            logger.debug(
+            _log_event(
+                "get_cb_log_level",
                 f"[EventHandler] CB state changed: service={service}, "
-                f"{from_state} -> {to_state}"
+                f"{from_state} -> {to_state}",
+                event_type="circuit_breaker.state_changed",
+                service=service,
+                from_state=from_state,
+                to_state=to_state,
             )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record CB state change: {e}")
@@ -253,6 +368,13 @@ class CircuitBreakerEventHandler:
         try:
             if hasattr(metrics, 'circuit_breaker_failures'):
                 metrics.circuit_breaker_failures.labels(service_name=service).inc()
+
+            _log_event(
+                "get_cb_log_level",
+                f"[EventHandler] CB failure recorded: service={service}",
+                event_type="circuit_breaker.failure",
+                service=service,
+            )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record CB failure: {e}")
 
@@ -283,6 +405,14 @@ class ReplayEventHandler:
                     domain=domain,
                     replay_type=replay_type,
                 ).inc()
+
+            _log_event(
+                "get_replay_log_level",
+                f"[EventHandler] Replay started: domain={domain}, type={replay_type}",
+                event_type="replay.started",
+                domain=domain,
+                replay_type=replay_type,
+            )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record replay start: {e}")
 
@@ -316,12 +446,35 @@ class ReplayEventHandler:
                 metrics.replay_duration_seconds.labels(
                     domain=domain,
                 ).observe(duration_seconds)
+
+            _log_event(
+                "get_replay_log_level",
+                f"[EventHandler] Replay completed: domain={domain}, "
+                f"success={success}, duration={duration_seconds}s",
+                event_type="replay.completed",
+                domain=domain,
+                success=success,
+                duration_seconds=duration_seconds,
+            )
         except Exception as e:
             logger.warning(f"[EventHandler] Failed to record replay completion: {e}")
+
+
+def reset_event_handler_cache() -> None:
+    """
+    Reset cached instances (for testing).
+
+    Clears the global caches for metrics, safe gauge, and logging config.
+    """
+    global _metrics_instance, _safe_gauge_cache, _logging_config
+    _metrics_instance = None
+    _safe_gauge_cache = {}
+    _logging_config = None
 
 
 __all__ = [
     "DLQMetricEventHandler",
     "CircuitBreakerEventHandler",
     "ReplayEventHandler",
+    "reset_event_handler_cache",
 ]
