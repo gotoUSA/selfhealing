@@ -170,7 +170,7 @@ class BatchReplayResult:
 ### 4.1 클래스 개요
 
 ```python
-from shopping.services.self_healing import get_replay_service
+from selfhealing.services import get_replay_service
 
 service = get_replay_service()
 ```
@@ -338,7 +338,8 @@ class PointReplayHandler(ReplayHandler):
             return ReplayResult.failed(failed_op.id, reason)
         
         try:
-            from shopping.services.point_service import add_point_by_user_id
+            # 도메인별 서비스 주입 (예시: 어댑터 패턴)
+            point_service = get_point_service()  # 의존성 주입
             
             # entity_refs와 스냅샷에서 포인트 정보 복구
             entity_refs = failed_op.entity_refs or {}
@@ -348,7 +349,7 @@ class PointReplayHandler(ReplayHandler):
             amount = snapshot.get("amount", 0)
             description = snapshot.get("description", "")
             
-            add_point_by_user_id(
+            point_service.add_point(
                 user_id=user_id,
                 amount=amount,
                 description=description,
@@ -366,7 +367,7 @@ class PointReplayHandler(ReplayHandler):
 ### 5.3 핸들러 등록
 
 ```python
-# shopping/services/self_healing/replay_service.py
+# selfhealing/services/replay_service.py
 
 # 도메인별 핸들러 레지스트리
 _replay_handlers: dict[str, ReplayHandler] = {}
@@ -410,7 +411,7 @@ def force_close(
     
     if trigger_replay:
         # Celery 태스크로 비동기 실행
-        from shopping.tasks import conditional_replay_on_circuit_close
+        from selfhealing.tasks.replay import conditional_replay_on_circuit_close
         conditional_replay_on_circuit_close.delay(
             service_name=service_name,
             max_items=50,
@@ -422,10 +423,10 @@ def force_close(
 ### 6.2 Celery 태스크
 
 ```python
-# shopping/tasks/self_healing_tasks.py
+# selfhealing/tasks/replay.py
 
 @shared_task(
-    name="shopping.tasks.conditional_replay_on_circuit_close",
+    name="selfhealing.tasks.conditional_replay_on_circuit_close",
     queue="dlq_processing",
     max_retries=0,
     time_limit=300,
@@ -577,7 +578,7 @@ class DLQReplayView(APIView):
 CELERY_BEAT_SCHEDULE = {
     # 매시간 payment 도메인 자동 재실행 시도
     "hourly-payment-replay": {
-        "task": "shopping.tasks.scheduled_batch_replay",
+        "task": "selfhealing.tasks.scheduled_batch_replay",
         "schedule": crontab(minute=0),
         "args": ("payment", 100),
     },

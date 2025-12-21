@@ -124,7 +124,8 @@ delay = min(base^attempt, max_delay) × (1 ± jitter_percent/100)
 ### 3.1 클래스 개요
 
 ```python
-from shopping.services.self_healing import RetryHandler, RetryConfig
+from selfhealing.services import RetryHandler
+from selfhealing.core.config import RetryConfig
 
 class RetryHandler:
     """
@@ -226,7 +227,7 @@ delay = handler.get_next_delay(attempt=2)
 ### 4.1 클래스 개요
 
 ```python
-from shopping.services.self_healing import BackoffCalculator, BackoffConfig
+from selfhealing.core.backoff import BackoffCalculator, BackoffConfig
 
 class BackoffCalculator:
     """
@@ -279,7 +280,7 @@ delays = calculator.get_delays_sequence(5, with_jitter=False)
 ### 4.4 편의 함수
 
 ```python
-from shopping.services.self_healing import calculate_backoff
+from selfhealing.core.backoff import calculate_backoff
 
 # 간단한 백오프 계산
 delay = calculate_backoff(
@@ -435,7 +436,7 @@ class RetryHandler:
 ### 7.1 기본 사용
 
 ```python
-from shopping.services.self_healing import RetryHandler
+from selfhealing.services import RetryHandler
 
 def call_external_api(order_id: int) -> dict:
     """외부 API 호출 (실패할 수 있음)"""
@@ -457,7 +458,7 @@ else:
 
 ```python
 from celery import shared_task
-from shopping.services.self_healing import RetryHandler
+from selfhealing.services import RetryHandler
 
 @shared_task(
     bind=True,
@@ -484,7 +485,7 @@ def process_payment_task(self, order_id: int, payment_data: dict):
 ### 7.3 컨텍스트 매니저 패턴
 
 ```python
-from shopping.services.self_healing import RetryHandler
+from selfhealing.services import RetryHandler
 
 handler = RetryHandler(domain="payment")
 
@@ -540,7 +541,7 @@ def async_api_call(self, url: str, data: dict):
 ### 7.5 커스텀 백오프 전략
 
 ```python
-from shopping.services.self_healing import BackoffCalculator, BackoffConfig
+from selfhealing.core.backoff import BackoffCalculator, BackoffConfig
 
 # 더 공격적인 백오프 (짧은 초기 간격)
 aggressive_config = BackoffConfig(

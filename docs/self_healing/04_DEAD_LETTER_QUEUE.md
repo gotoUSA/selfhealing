@@ -169,7 +169,7 @@ GENERIC_FAILURE_TYPES = [
 범용 DLQ 모델로, 모든 도메인의 실패를 저장합니다. **도메인 중립 설계**로 FK 대신 entity_type/entity_id를 사용합니다.
 
 ```python
-# shopping/models/failed_operation.py
+# {your_app}/models/failed_operation.py
 
 class FailedOperation(models.Model):
     """
@@ -317,7 +317,7 @@ class FailedOperation(models.Model):
 외부 API 요청 전용 DLQ로, **도메인 중립적 설계**를 따릅니다.
 
 ```python
-# shopping/models/failed_external_request.py
+# {your_app}/models/failed_external_request.py
 
 class FailedExternalRequest(models.Model):
     """
@@ -361,7 +361,7 @@ class FailedExternalRequest(models.Model):
 ### 5.1 DLQService
 
 ```python
-from shopping.services.self_healing import get_dlq_service
+from selfhealing.services import get_dlq_service
 
 service = get_dlq_service()
 ```
@@ -490,9 +490,9 @@ SELF_HEALING = {
 ### 6.2 SLA 체크 태스크
 
 ```python
-# shopping/tasks/self_healing_tasks.py
+# selfhealing/tasks/sla.py
 
-@shared_task(name="shopping.tasks.check_and_report_sla_breaches")
+@shared_task(name="selfhealing.tasks.check_and_report_sla_breaches")
 def check_and_report_sla_breaches() -> dict:
     """
     SLA 위반 항목 감지 및 알림.
@@ -517,7 +517,7 @@ def check_and_report_sla_breaches() -> dict:
 ```python
 # 도메인별 SLA 현황
 def get_sla_status_by_domain():
-    from shopping.models.failed_operation import FailedOperation
+    from {your_app}.models.failed_operation import FailedOperation
     from django.db.models import Count, Avg, F
     from django.db.models.functions import Now
     
@@ -731,11 +731,12 @@ class FailedOperationAdmin(admin.ModelAdmin):
 
 ```sql
 -- 도메인별 PENDING 항목 수
+-- 참고: 테이블명은 실제 앱 설정에 따라 {app_label}_failed_operation 형식
 SELECT 
     domain,
     COUNT(*) as pending_count,
     AVG(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600) as avg_wait_hours
-FROM shopping_failed_operation
+FROM failed_operation
 WHERE status = 'pending'
 GROUP BY domain;
 
@@ -743,7 +744,7 @@ GROUP BY domain;
 SELECT 
     id, domain, failure_type, created_at,
     EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600 as wait_hours
-FROM shopping_failed_operation
+FROM failed_operation
 WHERE status = 'pending'
   AND (
     (domain = 'payment' AND created_at < NOW() - INTERVAL '1 hour')

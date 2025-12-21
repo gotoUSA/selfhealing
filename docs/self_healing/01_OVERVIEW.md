@@ -119,58 +119,39 @@ GET  /api/self-healing/health/      # 헬스 체크
 
 | 서비스 | 위치 | 역할 |
 |--------|------|------|
-| `CircuitBreakerService` | `shopping/services/self_healing/circuit_breaker_service.py` | 서킷 브레이커 상태 관리 |
-| `DLQService` | `shopping/services/self_healing/dlq_service.py` | Dead Letter Queue 관리 |
-| `ReplayService` | `shopping/services/self_healing/replay_service.py` | DLQ 재실행 처리 |
-| `RetryHandler` | `shopping/services/self_healing/retry_handler.py` | 재시도 로직 |
-| `ControlAPIService` | `shopping/services/self_healing/control_api_service.py` | 제어 API 비즈니스 로직 |
-| `IdempotencyService` | `shopping/services/self_healing/idempotency_service.py` | 멱등성 보장 |
-| `BackoffCalculator` | `shopping/services/self_healing/backoff_calculator.py` | 백오프 계산 |
+| `CircuitBreakerService` | `selfhealing/services/circuit_breaker/` | 서킷 브레이커 상태 관리 |
+| `DLQService` | `selfhealing/services/dlq_service.py` | Dead Letter Queue 관리 |
+| `ReplayService` | `selfhealing/services/replay_service.py` | DLQ 재실행 처리 |
+| `RetryHandler` | `selfhealing/services/retry_handler.py` | 재시도 로직 |
+| `ControlAPIService` | `selfhealing/services/control_api_service.py` | 제어 API 비즈니스 로직 |
+| `IdempotencyService` | `selfhealing/services/idempotency_service.py` | 멱등성 보장 |
+| `BackoffCalculator` | `selfhealing/core/backoff.py` | 백오프 계산 |
 
 ### 3.2 모델 계층
 
 | 모델 | 위치 | 역할 |
 |------|------|------|
-| `FailedOperation` | `shopping/models/failed_operation.py` | DLQ 엔트리 (범용) |
-| `FailedExternalRequest` | `shopping/models/failed_external_request.py` | 외부 API 전용 DLQ |
-| `CircuitBreakerState` | `shopping/models/failed_external_request.py` | 서킷 브레이커 상태 |
-| `SecurityIncident` | `shopping/models/security_incident.py` | 보안 위반 기록 |
+| `FailedOperation` | `{app}/models/failed_operation.py` | DLQ 엔트리 (범용) |
+| `FailedExternalRequest` | `{app}/models/failed_external_request.py` | 외부 API 전용 DLQ |
+| `CircuitBreakerState` | `{app}/models/circuit_breaker_state.py` | 서킷 브레이커 상태 |
+| `SecurityIncident` | `{app}/models/security_incident.py` | 보안 위반 기록 |
+
+> **참고**: `{app}`은 Self-Healing을 통합하는 애플리케이션 모듈입니다 (예: `shopping`, `orders`, `payments` 등).
 
 ### 3.3 Celery 태스크
 
 | 태스크 | 위치 | 역할 |
 |--------|------|------|
-| `check_circuit_breaker_recovery` | `shopping/tasks/self_healing_tasks.py` | CB 상태 전환 체크 |
-| `conditional_replay_on_circuit_close` | `shopping/tasks/self_healing_tasks.py` | CB Close 시 자동 리플레이 |
-| `force_open_circuit_breaker` | `shopping/tasks/self_healing_tasks.py` | CB 강제 Open |
-| `force_close_circuit_breaker` | `shopping/tasks/self_healing_tasks.py` | CB 강제 Close |
+| `check_circuit_breaker_recovery` | `selfhealing/tasks/circuit_breaker.py` | CB 상태 전환 체크 |
+| `conditional_replay_on_circuit_close` | `selfhealing/tasks/replay.py` | CB Close 시 자동 리플레이 |
+| `force_open_circuit_breaker` | `selfhealing/tasks/circuit_breaker.py` | CB 강제 Open |
+| `force_close_circuit_breaker` | `selfhealing/tasks/circuit_breaker.py` | CB 강제 Close |
 
 ---
 
 ## 4. 패키지 구조
 
-### 4.1 레거시 패키지 (Django 통합)
-
-```
-shopping/services/self_healing/
-├── __init__.py              # 공개 API 익스포트
-├── config.py                # 설정값 정의
-├── circuit_breaker_service.py
-├── dlq_service.py
-├── replay_service.py
-├── retry_handler.py
-├── backoff_calculator.py
-├── control_api_service.py
-├── idempotency_service.py
-├── forensic_context.py
-├── metrics.py               # Prometheus 메트릭
-├── adapters/
-│   └── django_repositories.py  # Django ORM 어댑터
-└── interfaces/
-    └── repositories.py      # 추상 인터페이스
-```
-
-### 4.2 독립 패키지 (Framework-Agnostic)
+### 4.1 독립 패키지 (Framework-Agnostic) - 권장
 
 ```
 packages/selfhealing-python/src/selfhealing/
@@ -182,18 +163,40 @@ packages/selfhealing-python/src/selfhealing/
 ├── services/                # 비즈니스 로직
 │   ├── circuit_breaker/
 │   ├── dlq_service.py
-│   └── replay_service.py
+│   ├── replay_service.py
+│   ├── error_budget_service.py
+│   └── chaos/               # Chaos Engineering
 ├── adapters/                # 프레임워크별 어댑터
 │   ├── django/
 │   ├── celery/
 │   └── memory/
 ├── interfaces/              # 추상 인터페이스
 │   └── repositories.py
+├── api/                     # API Views
+│   └── django/
+│       └── views/
+├── tasks/                   # Celery 태스크
+│   ├── circuit_breaker.py
+│   ├── replay.py
+│   └── chaos_scheduler.py
 └── metrics/                 # 메트릭 수집
     └── prometheus.py
 ```
 
-> **참고**: 레거시 패키지는 deprecated 경고를 발생시키며, 새로운 `selfhealing` 패키지로의 마이그레이션이 권장됩니다.
+### 4.2 Django 통합 패키지 (예시)
+
+프레임워크 통합 시, 애플리케이션에 맞게 어댑터를 구현합니다:
+
+```
+{your_app}/services/self_healing/
+├── __init__.py              # selfhealing 패키지 re-export
+├── adapters/
+│   └── django_repositories.py  # Django ORM 어댑터
+└── models/                  # 앱 모델 (선택적)
+    └── failed_operation.py
+```
+
+> **참고**: `selfhealing` 패키지를 직접 사용하는 것을 권장합니다. 앱별 통합은 어댑터 구현만 필요합니다.
 
 ---
 

@@ -65,7 +65,7 @@ Forensic Advisor는 Self-Healing 시스템의 **의사결정 지원(Decision Sup
 #### Celery 태스크
 
 ```python
-from shopping.tasks.drift_detection_tasks import check_sla_drift
+from selfhealing.tasks.drift_detection import check_sla_drift
 
 # 주기적 실행 (celery beat 권장: 매 15분)
 result = check_sla_drift.delay()
@@ -118,7 +118,7 @@ result = check_sla_drift.delay()
 #### 사용법
 
 ```python
-from shopping.services.self_healing.chaos_context import (
+from selfhealing.services.chaos.context import (
     create_chaos_context,
     attach_chaos_context,
     is_chaos_experiment,
@@ -198,7 +198,7 @@ DLQ 항목을 분석하여 권장 조치를 제안합니다.
 #### 사용법
 
 ```python
-from shopping.services.self_healing.forensic_advisor import (
+from selfhealing.services.forensic_advisor import (
     get_forensic_advisor,
     analyze_and_update_operation,
 )
@@ -264,7 +264,7 @@ advisory = analyze_and_update_operation(failed_operation)
 #### 결정 기록
 
 ```python
-from shopping.tasks.drift_detection_tasks import record_advisory_decision
+from selfhealing.tasks.drift_detection import record_advisory_decision
 
 # 운영자가 결정 후 기록
 record_advisory_decision.delay(
@@ -303,19 +303,19 @@ record_advisory_decision.delay(
 CELERY_BEAT_SCHEDULE = {
     # SLA 드리프트 감지: 15분마다
     "check-sla-drift": {
-        "task": "shopping.tasks.drift_detection_tasks.check_sla_drift",
+        "task": "selfhealing.tasks.drift_detection.check_sla_drift",
         "schedule": timedelta(minutes=15),
         "options": {"queue": "maintenance"},
     },
     # 포렌식 분석: 10분마다
     "analyze-pending-operations": {
-        "task": "shopping.tasks.drift_detection_tasks.analyze_pending_operations",
+        "task": "selfhealing.tasks.drift_detection.analyze_pending_operations",
         "schedule": timedelta(minutes=10),
         "options": {"queue": "maintenance"},
     },
     # 카오스 실험 정리: 5분마다
     "cleanup-chaos-experiments": {
-        "task": "shopping.tasks.drift_detection_tasks.cleanup_expired_chaos_experiments",
+        "task": "selfhealing.tasks.chaos.cleanup_expired_chaos_experiments",
         "schedule": timedelta(minutes=5),
         "options": {"queue": "maintenance"},
     },

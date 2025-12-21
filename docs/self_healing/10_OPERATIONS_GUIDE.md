@@ -316,7 +316,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 2. 리플레이 핸들러 등록 확인
    ```python
-   from shopping.services.self_healing.replay_service import get_replay_registry
+   from selfhealing.services.replay_service import get_replay_registry
    registry = get_replay_registry()
    print(registry.get_handler("payment"))  # None이면 미등록
    ```
@@ -333,7 +333,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 1. CB 활성화 확인
    ```python
-   from shopping.services.self_healing.config import get_circuit_breaker_settings
+   from selfhealing.core.config import get_circuit_breaker_settings
    cb = get_circuit_breaker_settings()
    print(cb.enabled)  # False면 비활성화
    ```

@@ -313,7 +313,7 @@ Self-Healing 시스템은 3개의 주요 계층으로 구성됩니다:
 ### 4.2 Factory 패턴 사용
 
 ```python
-# shopping/services/self_healing/factory.py
+# selfhealing/factory.py
 
 def get_circuit_breaker_service() -> CircuitBreakerService:
     """싱글톤 패턴으로 CircuitBreakerService 인스턴스 반환"""
@@ -339,7 +339,7 @@ def get_control_api_service() -> ControlAPIService:
 ### 5.1 추상 인터페이스
 
 ```python
-# shopping/services/self_healing/interfaces/repositories.py
+# selfhealing/interfaces/repositories.py
 
 class CircuitBreakerStateRepository(ABC):
     """Circuit Breaker 상태 저장소 인터페이스"""
@@ -398,7 +398,7 @@ class FailedOperationRepository(ABC):
 ### 5.2 Django 어댑터 구현
 
 ```python
-# shopping/services/self_healing/adapters/django_repositories.py
+# selfhealing/adapters/django/repositories.py
 
 class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """Django ORM 기반 Circuit Breaker 저장소 구현"""
@@ -464,29 +464,24 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 │                                                                          │
 │   ┌─────────────────────────────────────────────────────────────────┐   │
 │   │                    Application Layer                             │   │
-│   │                 (shopping/views, tasks, etc.)                    │   │
+│   │              ({your_app}/views, tasks, admin, etc.)              │   │
 │   └─────────────────────────────┬───────────────────────────────────┘   │
 │                                 │                                        │
-│              ┌──────────────────┴──────────────────┐                    │
-│              │                                      │                    │
-│              ▼                                      ▼                    │
-│   ┌─────────────────────┐            ┌─────────────────────────┐        │
-│   │  Legacy Package     │            │  New Package            │        │
-│   │  (Django-coupled)   │  migrate   │  (Framework-agnostic)   │        │
-│   │  ─────────────────  │ ─────────► │  ───────────────────    │        │
-│   │  shopping/services/ │            │  packages/selfhealing-  │        │
-│   │  self_healing/      │            │  python/                │        │
-│   │                     │            │                         │        │
-│   │  ⚠️ DEPRECATED      │            │  ✅ RECOMMENDED         │        │
-│   └─────────────────────┘            └─────────────────────────┘        │
+│                                 ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                    selfhealing Package                           │   │
+│   │                 (Framework-agnostic)                             │   │
+│   │  ─────────────────────────────────────────────────────────────  │   │
+│   │  packages/selfhealing-python/src/selfhealing/                    │   │
+│   │                                                                  │   │
+│   │  ✅ RECOMMENDED - 모든 프레임워크에서 사용 가능                  │   │
+│   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
-│   Migration Path:                                                        │
-│   ──────────────                                                        │
-│   # Before (deprecated)                                                  │
-│   from shopping.services.self_healing import CircuitBreakerService      │
-│                                                                          │
-│   # After (recommended)                                                  │
-│   from selfhealing.services import CircuitBreakerService                │
+│   Usage:                                                                 │
+│   ──────                                                                │
+│   from selfhealing.services import get_circuit_breaker_service          │
+│   from selfhealing.services import get_dlq_service                      │
+│   from selfhealing.services import get_replay_service                   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

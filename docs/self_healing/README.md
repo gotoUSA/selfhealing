@@ -63,26 +63,45 @@
 
 ## 🔗 관련 코드
 
+### 독립 패키지 (권장)
+
 | 경로 | 설명 |
 |------|------|
-| `shopping/services/self_healing/` | Self-Healing 서비스 구현 |
-| `shopping/services/self_healing/forensic_advisor.py` | Forensic Advisor (의사결정 지원) |
-| `shopping/services/self_healing/chaos_context.py` | Chaos Experiment Context |
-| `shopping/tasks/drift_detection_tasks.py` | SLA Drift Detection 태스크 |
-| `shopping/models/failed_operation.py` | DLQ 모델 |
-| `shopping/models/failed_external_request.py` | 외부 API DLQ 및 CB 상태 모델 |
-| `shopping/tasks/self_healing_tasks.py` | Celery 태스크 |
-| `shopping/views/self_healing/` | API 뷰 |
+| `packages/selfhealing-python/src/selfhealing/` | 핵심 Self-Healing 패키지 |
+| `packages/selfhealing-python/src/selfhealing/core/` | 핵심 타입 및 설정 |
+| `packages/selfhealing-python/src/selfhealing/services/` | 비즈니스 로직 |
+| `packages/selfhealing-python/src/selfhealing/services/circuit_breaker/` | Circuit Breaker 서비스 |
+| `packages/selfhealing-python/src/selfhealing/services/chaos/` | 카오스 엔진 핵심 모듈 |
+| `packages/selfhealing-python/src/selfhealing/services/error_budget_service.py` | Error Budget 서비스 |
+| `packages/selfhealing-python/src/selfhealing/services/forensic_advisor.py` | Forensic Advisor |
+| `packages/selfhealing-python/src/selfhealing/adapters/` | 프레임워크별 어댑터 |
+| `packages/selfhealing-python/src/selfhealing/api/django/views/` | Django API Views |
+| `packages/selfhealing-python/src/selfhealing/tasks/` | Celery 태스크 |
+| `packages/selfhealing-python/src/selfhealing/metrics/` | Prometheus 메트릭 |
+
+### 인프라 설정
+
+| 경로 | 설명 |
+|------|------|
 | `docker/prometheus/` | Prometheus 설정 |
 | `docker/grafana/` | Grafana 대시보드 |
-| **Error Budget 관련** | |
-| `packages/selfhealing-python/src/selfhealing/services/error_budget_service.py` | Error Budget 서비스 |
-| `packages/selfhealing-python/src/selfhealing/api/django/views/error_budget.py` | Error Budget API 뷰 |
-| `packages/selfhealing-python/src/selfhealing/services/metrics.py` | Error Budget 메트릭 |
-| **Chaos Engineering 관련** | |
-| `packages/selfhealing-python/src/selfhealing/services/chaos/` | 카오스 엔진 핵심 모듈 |
-| `packages/selfhealing-python/src/selfhealing/api/django/views/chaos.py` | Chaos API Views |
-| `packages/selfhealing-python/src/selfhealing/tasks/chaos_scheduler.py` | Chaos Celery Tasks |
+
+### 앱 통합 예시 (Django)
+
+앱에서 selfhealing 패키지를 통합할 때의 구조 예시:
+
+```
+{your_app}/
+├── services/self_healing/
+│   ├── __init__.py         # selfhealing 패키지 re-export
+│   └── adapters/
+│       └── django_repositories.py  # Django ORM 어댑터
+├── models/
+│   ├── failed_operation.py         # DLQ 모델
+│   └── circuit_breaker_state.py    # CB 상태 모델
+├── views/self_healing/             # API 뷰 (선택적)
+└── tasks/                          # Celery 태스크 (선택적)
+```
 
 ---
 
@@ -90,6 +109,7 @@
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-12-21 | 1.4 | 도메인 중립적 문서 구조로 리팩토링 |
 | 2025-12-20 | 1.3 | 자율 카오스 엔진 추가 (13_CHAOS_ENGINEERING.md) |
 | 2024-12-21 | 1.2 | Error Budget 관리 및 배포 동결 권고 시스템 추가 (12_ERROR_BUDGET.md) |
 | 2024-12-20 | 1.1 | Forensic Advisor, Chaos Context, SLA Drift Detection 추가 |

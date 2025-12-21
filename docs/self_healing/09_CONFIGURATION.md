@@ -6,7 +6,7 @@ Self-Healing 시스템의 모든 설정은 Django settings의 `SELF_HEALING` 딕
 
 ### 설정 위치
 
-- 설정 정의: [shopping/services/self_healing/config.py](../../shopping/services/self_healing/config.py)
+- 설정 정의: `packages/selfhealing-python/src/selfhealing/core/config.py`
 - 개발 환경: [myproject/settings/local.py](../../myproject/settings/local.py)
 - 운영 환경: [myproject/settings/production.py](../../myproject/settings/production.py)
 - 테스트 환경: [myproject/settings/test.py](../../myproject/settings/test.py)
@@ -78,7 +78,7 @@ SELF_HEALING = {
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.config import get_sla_thresholds
+from selfhealing.core.config import get_sla_thresholds
 
 sla = get_sla_thresholds()
 payment_sla = sla.get_threshold("payment")  # timedelta(hours=1)
@@ -128,7 +128,7 @@ delay = min(base^attempt, max_delay) × (1 ± jitter)
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.config import get_retry_settings
+from selfhealing.core.config import get_retry_settings
 
 retry = get_retry_settings()
 print(f"Max attempts: {retry.max_attempts}")
@@ -466,7 +466,7 @@ curl -X PATCH \
 ### 전체 설정 로드
 
 ```python
-from shopping.services.self_healing.config import (
+from selfhealing.core.config import (
     get_config,
     reload_config,
     SelfHealingConfig,
@@ -486,7 +486,7 @@ print(config.circuit_breaker.enabled)
 ### 개별 설정 헬퍼 함수
 
 ```python
-from shopping.services.self_healing.config import (
+from selfhealing.core.config import (
     get_sla_thresholds,
     get_retry_settings,
     get_circuit_breaker_settings,
@@ -644,7 +644,7 @@ SELF_HEALING = {
 
 ```python
 # apps.py 또는 ready() 메서드에서
-from shopping.services.self_healing.config import get_config
+from selfhealing.core.config import get_config
 
 def validate_config():
     config = get_config()

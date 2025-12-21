@@ -360,7 +360,7 @@ SELF_HEALING = {
 ### 7.1 CircuitBreakerState 모델
 
 ```python
-# shopping/models/failed_external_request.py
+# {your_app}/models/circuit_breaker_state.py
 
 class CircuitBreakerState(models.Model):
     """Circuit Breaker 상태 저장"""
@@ -408,7 +408,7 @@ class CircuitBreakerState(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = "shopping_circuit_breaker_state"
+        db_table = "circuit_breaker_state"  # 앞에 {app_label}_ 접두사 추가 가능
 ```
 
 ### 7.2 DTO (Data Transfer Object)
@@ -529,10 +529,10 @@ def block_services(modeladmin, request, queryset):
 ### 9.1 주기적 상태 전환 체크
 
 ```python
-# shopping/tasks/self_healing_tasks.py
+# selfhealing/tasks/circuit_breaker.py
 
 @shared_task(
-    name="shopping.tasks.self_healing_tasks.check_circuit_breaker_recovery",
+    name="selfhealing.tasks.check_circuit_breaker_recovery",
     queue="maintenance",
 )
 def check_circuit_breaker_recovery() -> dict:
@@ -563,7 +563,7 @@ def check_circuit_breaker_recovery() -> dict:
 
 ```python
 @shared_task(
-    name="shopping.tasks.self_healing_tasks.force_open_circuit_breaker",
+    name="selfhealing.tasks.force_open_circuit_breaker",
     queue="critical",
 )
 def force_open_circuit_breaker(
@@ -582,7 +582,7 @@ def force_open_circuit_breaker(
 
 
 @shared_task(
-    name="shopping.tasks.self_healing_tasks.force_close_circuit_breaker",
+    name="selfhealing.tasks.force_close_circuit_breaker",
     queue="critical",
 )
 def force_close_circuit_breaker(
@@ -609,7 +609,7 @@ def force_close_circuit_breaker(
 
 CELERY_BEAT_SCHEDULE = {
     "check-circuit-breaker-recovery": {
-        "task": "shopping.tasks.self_healing_tasks.check_circuit_breaker_recovery",
+        "task": "selfhealing.tasks.check_circuit_breaker_recovery",
         "schedule": 60.0,  # 매 1분
     },
 }

@@ -375,7 +375,7 @@ Prometheus 메트릭을 조회합니다.
 ### 3.1 클래스 구조
 
 ```python
-from shopping.services.self_healing import get_control_api_service
+from selfhealing.services import get_control_api_service
 
 service = get_control_api_service()
 ```

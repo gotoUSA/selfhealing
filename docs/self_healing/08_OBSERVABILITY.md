@@ -17,9 +17,9 @@ Self-Healing 시스템의 관측성(Observability) 계층은 **Prometheus 메트
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Django Application                       │
+│                    Application Layer                        │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │         shopping/services/self_healing/metrics.py     │  │
+│  │              selfhealing/metrics/prometheus.py        │  │
 │  │                                                       │  │
 │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐ │  │
 │  │  │ Counter │  │  Gauge  │  │Histogram│  │ Summary │ │  │
@@ -63,7 +63,7 @@ Self-Healing 시스템의 관측성(Observability) 계층은 **Prometheus 메트
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.metrics import (
+from selfhealing.metrics import (
     record_dlq_item_created,
     update_dlq_pending_gauges,
 )
@@ -92,7 +92,7 @@ buckets=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.metrics import record_retry_attempt
+from selfhealing.metrics import record_retry_attempt
 
 # 재시도 결과 기록
 record_retry_attempt(
@@ -124,7 +124,7 @@ buckets=(300, 900, 1800, 3600, 7200, 14400, 28800)
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.metrics import (
+from selfhealing.metrics import (
     record_recovery_time,
     record_sla_breach,
     track_recovery_time,
@@ -167,7 +167,7 @@ state_mapping = {
 **사용 예시:**
 
 ```python
-from shopping.services.self_healing.metrics import (
+from selfhealing.metrics import (
     record_circuit_breaker_state_change,
     record_circuit_breaker_open_duration,
 )
@@ -201,7 +201,7 @@ record_circuit_breaker_open_duration(
 **데코레이터 사용:**
 
 ```python
-from shopping.services.self_healing.metrics import track_replay
+from selfhealing.metrics import track_replay
 
 @track_replay("batch")
 def batch_replay(domain: str, items: list):
@@ -320,7 +320,7 @@ record_recovery_alert(component="error_budget")
 ## 도메인 정의
 
 ```python
-# shopping/services/self_healing/metrics.py
+# selfhealing/core/domains.py
 
 DOMAINS: list[str] = [
     "payment",      # 결제 도메인
@@ -342,7 +342,7 @@ Gauge 타입 메트릭은 주기적으로 데이터베이스에서 값을 읽어
 ### collect_all_metrics()
 
 ```python
-from shopping.services.self_healing.metrics import collect_all_metrics
+from selfhealing.metrics import collect_all_metrics
 
 # Celery 태스크에서 호출
 result = collect_all_metrics()
@@ -454,7 +454,7 @@ scrape_configs:
 메트릭 모듈에는 Prometheus 알림 규칙의 코드 기반 정의가 포함되어 있습니다:
 
 ```python
-# shopping/services/self_healing/metrics.py
+# selfhealing/metrics/alerting_rules.py
 
 ALERTING_RULES = {
     "DLQPendingHigh": {
