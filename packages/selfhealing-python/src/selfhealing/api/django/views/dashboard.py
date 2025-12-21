@@ -13,7 +13,7 @@ See: services/dashboard_service.py
 import logging
 
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,9 +29,11 @@ class DashboardSummaryView(APIView):
     GET /api/self-healing/dashboard/summary/
 
     Returns a comprehensive summary of the self-healing system status.
+    
+    Note: Read-only endpoint - all authenticated users can view.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get dashboard summary statistics."""

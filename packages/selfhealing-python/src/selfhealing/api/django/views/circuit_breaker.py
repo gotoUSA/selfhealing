@@ -156,9 +156,12 @@ class ControlAuditView(APIView):
     Get Self-Healing Audit Logs.
 
     GET /api/self-healing/audit/
+    
+    Note: Read-only endpoint - all authenticated users can view.
+    Audit logs are immutable and cannot be modified via any API.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get audit logs."""

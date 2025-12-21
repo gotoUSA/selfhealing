@@ -789,10 +789,140 @@ curl -X POST /api/self-healing/chaos/kill-all/ \
 
 ---
 
+## 9. 보안 및 데이터 보호
+
+### 9.1 권한 설계
+
+Self-Healing API는 역할 기반 접근 제어(RBAC)를 적용합니다.
+
+| 구분 | 권한 설정 | 설명 |
+|------|----------|------|
+| **설정/제어 (POST/PUT)** | `IsAdminUser` | 사고 방지를 위한 엄격한 통제 |
+| **로그/통계 조회 (GET)** | `IsAuthenticated` | 운영의 투명성 확보 |
+| **데이터 수정** | API 없음 | 조작 불가능성(Immutability) 보장 |
+
+### 9.2 민감 정보 마스킹 (Log Masking)
+
+모든 로그와 API 응답에서 민감 정보가 자동으로 마스킹됩니다.
+
+**마스킹 대상:**
+
+```python
+# 필드 기반 마스킹
+sensitive_fields = [
+    "password", "secret", "token", "api_key",
+    "authorization", "credential", "private_key",
+    "card_number", "cvv", "connection_string",
+]
+
+# 패턴 기반 마스킹 (정규식)
+internal_ip_patterns = [
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",        # 10.0.0.0/8
+    r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}",  # 172.16.0.0/12
+    r"192\.168\.\d{1,3}\.\d{1,3}",           # 192.168.0.0/16
+]
+
+server_path_patterns = [
+    r"/home/[^/]+",                # Unix 홈 디렉토리
+    r"/var/[^/]+/[^/]+",          # Var 서브디렉토리
+    r"[A-Z]:\\Users\\[^\\]+",     # Windows 사용자 경로
+]
+```
+
+**마스킹 결과 예시:**
+
+```json
+// Before
+{"ip": "10.0.5.123", "path": "/home/deploy/app", "token": "secret123"}
+
+// After
+{"ip": "[INTERNAL_IP]", "path": "[SERVER_PATH]", "token": "[REDACTED]"}
+```
+
+### 9.3 액세스 로깅 (Access Logging)
+
+민감 엔드포인트에 대한 모든 접근이 기록됩니다.
+
+**로깅 대상 엔드포인트:**
+
+| 엔드포인트 | 민감도 | 이유 |
+|-----------|--------|------|
+| `/api/self-healing/audit/` | 🔴 높음 | 시스템 제어 기록 |
+| `/api/self-healing/config/*` | 🔴 높음 | 시스템 구성 정보 |
+| `/api/self-healing/chaos/schedules/*` | 🔴 높음 | 취약점 실험 정보 |
+| `/api/self-healing/chaos/config/*` | 🔴 높음 | 카오스 설정 정보 |
+
+**로그 형식:**
+
+```json
+{
+  "timestamp": "2025-12-21T10:30:00Z",
+  "user": "admin",
+  "method": "GET",
+  "path": "/api/self-healing/audit/",
+  "source_ip": "10.0.xxx.xxx",
+  "user_agent": "Mozilla/5.0...",
+  "status_code": 200,
+  "response_time_ms": 45.2
+}
+```
+
+**미들웨어 설정:**
+
+```python
+# settings.py
+MIDDLEWARE = [
+    ...
+    'selfhealing.api.django.middleware.SensitiveAccessLoggingMiddleware',
+    ...
+]
+```
+
+### 9.4 조회 성능 보호 (Read Cache)
+
+장애 상황 시 대량 조회로 인한 DB 부하를 방지하기 위해 Redis 캐싱을 사용합니다.
+
+**캐시 전략:**
+
+| 데이터 | TTL | 설명 |
+|--------|-----|------|
+| Dashboard Summary | 30초 | 전체 요약 데이터 |
+| Status Counts | 15초 | 상태별 카운트 |
+| Recent Activity | 60초 | 24h/7d 활동 통계 |
+
+**캐시 바이패스:**
+
+```python
+# 강제로 최신 데이터 조회
+service = get_dashboard_service()
+summary = service.get_summary(skip_cache=True)
+```
+
+**캐시 무효화:**
+
+```python
+from selfhealing.services.dashboard_service import invalidate_dashboard_cache
+
+# 중요 상태 변경 시 캐시 무효화
+invalidate_dashboard_cache()
+```
+
+### 9.5 데이터 불변성 (Immutability)
+
+감사 로그는 수정할 수 없습니다:
+
+- ✅ 로그 **조회** API만 존재 (GET)
+- ❌ 로그 **수정** API 없음 (POST/PUT/DELETE)
+- ✅ 모든 변경은 새 레코드로 추가
+- ✅ 삭제는 아카이브 처리만 가능
+
+---
+
 ## 버전 정보
 
-- **현재 버전**: 1.1.0
+- **현재 버전**: 1.2.0
 - **마지막 업데이트**: 2025-12-21
 - **변경 내역**:
+  - v1.2.0: 보안 및 데이터 보호 섹션 추가 (권한, 마스킹, 액세스 로깅, 캐싱)
   - v1.1.0: Chaos Engineering API 섹션 추가
   - v1.0.0: 초기 버전

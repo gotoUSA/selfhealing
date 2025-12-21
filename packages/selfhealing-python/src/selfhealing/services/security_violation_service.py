@@ -459,14 +459,21 @@ class SecurityViolationService:
 
     def _sanitize_request_data(self, raw_data: dict[str, Any] | None) -> dict[str, Any]:
         """
-        Sanitize request data by removing sensitive fields.
+        Sanitize request data by removing sensitive fields and masking IPs/paths.
+
+        Masks:
+        - Sensitive field values (passwords, tokens, keys)
+        - Internal IP addresses (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+        - Server paths (home directories, config paths)
 
         Args:
             raw_data: Raw request data
 
         Returns:
-            Sanitized data safe for storage
+            Sanitized data safe for storage and logging
         """
+        import re
+
         if not raw_data:
             return {}
 
@@ -483,13 +490,53 @@ class SecurityViolationService:
             "cvv",
             "cvc",
             "credit_card",
+            "private_key",
+            "secret_key",
+            "connection_string",
+            "db_password",
+            "redis_password",
         }
+
+        # Internal IP patterns to mask
+        internal_ip_patterns = [
+            re.compile(r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}"),           # 10.0.0.0/8
+            re.compile(r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"),  # 172.16.0.0/12
+            re.compile(r"192\.168\.\d{1,3}\.\d{1,3}"),              # 192.168.0.0/16
+        ]
+
+        # Server path patterns to mask
+        server_path_patterns = [
+            re.compile(r"/home/[^/\s]+"),                          # Unix home dirs
+            re.compile(r"/var/[^/\s]+/[^/\s]+"),                   # Var subdirs
+            re.compile(r"/etc/[^/\s]+"),                           # Config files
+            re.compile(r"[A-Z]:\\Users\\[^\\\s]+", re.IGNORECASE), # Windows paths
+            re.compile(r"/app/[^/\s]+/[^/\s]+"),                   # Container paths
+        ]
+
+        def mask_string(value: str) -> str:
+            """Mask sensitive patterns in a string value."""
+            result = value
+
+            # Mask internal IPs
+            for pattern in internal_ip_patterns:
+                result = pattern.sub("[INTERNAL_IP]", result)
+
+            # Mask server paths
+            for pattern in server_path_patterns:
+                result = pattern.sub("[SERVER_PATH]", result)
+
+            return result
 
         def sanitize(data: Any) -> Any:
             if isinstance(data, dict):
-                return {k: "[REDACTED]" if k.lower() in sensitive_fields else sanitize(v) for k, v in data.items()}
+                return {
+                    k: "[REDACTED]" if k.lower() in sensitive_fields else sanitize(v)
+                    for k, v in data.items()
+                }
             elif isinstance(data, list):
                 return [sanitize(item) for item in data]
+            elif isinstance(data, str):
+                return mask_string(data)
             return data
 
         return sanitize(raw_data)

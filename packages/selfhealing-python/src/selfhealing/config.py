@@ -63,6 +63,7 @@ class ForensicSettings:
     # Sensitive field masking
     mask_sensitive_fields: bool = True
     sensitive_field_patterns: tuple[str, ...] = (
+        # Authentication & Secrets
         "password",
         "secret",
         "token",
@@ -71,6 +72,39 @@ class ForensicSettings:
         "authorization",
         "auth",
         "credential",
+        "private_key",
+        "access_key",
+        "secret_key",
+        # Payment related
+        "card_number",
+        "cvv",
+        "cvc",
+        "credit_card",
+        # Internal infrastructure (should not be exposed in logs)
+        "internal_ip",
+        "server_path",
+        "db_password",
+        "redis_password",
+        "connection_string",
+    )
+
+    # IP address masking patterns (regex)
+    # Private IP ranges that should be masked in logs
+    mask_internal_ip: bool = True
+    internal_ip_patterns: tuple[str, ...] = (
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",       # 10.0.0.0/8
+        r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}",  # 172.16.0.0/12
+        r"192\.168\.\d{1,3}\.\d{1,3}",          # 192.168.0.0/16
+    )
+
+    # Server path patterns to mask
+    mask_server_paths: bool = True
+    server_path_patterns: tuple[str, ...] = (
+        r"/home/[^/]+",                         # Home directories
+        r"/var/[^/]+/[^/]+",                    # Var subdirectories
+        r"/etc/[^/]+",                          # Config files
+        r"[A-Z]:\\Users\\[^\\]+",               # Windows user paths
+        r"/app/[^/]+/[^/]+",                    # Container app paths
     )
 
 

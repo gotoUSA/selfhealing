@@ -10,12 +10,15 @@ Features:
 - Distribution analysis by domain and failure type
 - Health status determination
 - Resolution rate and retry count statistics
+- **Redis caching for high-traffic scenarios**
 
 Reference: docs/SERVICE_LAYER_EXTRACTION_PLAN.md Phase 2
+Reference: docs/self_healing/07_CONTROL_API.md (Performance section)
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -24,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from selfhealing.core.timezone import now
 
 if TYPE_CHECKING:
-    pass
+    from selfhealing.interfaces.cache_provider import CacheProviderInterface
 
 logger = logging.getLogger(__name__)
 
@@ -132,11 +135,31 @@ class DashboardService:
     Dashboard statistics service.
 
     Provides centralized access to system monitoring data and statistics.
+    Uses Redis caching to prevent database overload during high-traffic scenarios.
+
+    Cache Strategy:
+    - Summary data is cached for 30 seconds (configurable)
+    - Individual components (status, activity, distribution) use shorter TTL
+    - Cache is invalidated on significant state changes
+
+    Usage:
+        service = get_dashboard_service()
+        summary = service.get_summary()  # Returns cached if available
+
+        # Force fresh data (bypass cache)
+        summary = service.get_summary(skip_cache=True)
     """
 
-    def __init__(self):
-        """Initialize DashboardService."""
+    # Cache configuration
+    CACHE_PREFIX = "selfhealing:dashboard:"
+    CACHE_TTL_SECONDS = 30  # Default TTL for dashboard data
+    CACHE_TTL_STATUS = 15   # Shorter TTL for status counts
+    CACHE_TTL_ACTIVITY = 60 # Longer TTL for activity stats
+
+    def __init__(self, cache: "CacheProviderInterface | None" = None):
+        """Initialize DashboardService with optional cache provider."""
         self._model = None
+        self._cache = cache
 
     @property
     def model(self):
@@ -145,15 +168,63 @@ class DashboardService:
             self._model = _get_failed_operation_model()
         return self._model
 
-    def get_summary(self) -> DashboardSummary:
+    @property
+    def cache(self) -> "CacheProviderInterface | None":
+        """Get cache provider, creating default if needed."""
+        if self._cache is None:
+            try:
+                from selfhealing.factory import ProviderRegistry
+                self._cache = ProviderRegistry.get_cache()
+            except (ImportError, ValueError):
+                # Cache not available, will skip caching
+                pass
+        return self._cache
+
+    def _get_cached(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get cached value by key."""
+        if not self.cache:
+            return None
+        try:
+            full_key = f"{self.CACHE_PREFIX}{key}"
+            cached = self.cache.get(full_key)
+            if cached:
+                logger.debug(f"[Dashboard] Cache hit: {key}")
+                return cached
+        except Exception as e:
+            logger.warning(f"[Dashboard] Cache read error: {e}")
+        return None
+
+    def _set_cached(self, key: str, value: Dict[str, Any], ttl_seconds: int = None) -> None:
+        """Set cached value with TTL."""
+        if not self.cache:
+            return
+        try:
+            full_key = f"{self.CACHE_PREFIX}{key}"
+            ttl = ttl_seconds or self.CACHE_TTL_SECONDS
+            self.cache.set(full_key, value, ttl=timedelta(seconds=ttl))
+            logger.debug(f"[Dashboard] Cache set: {key}, ttl={ttl}s")
+        except Exception as e:
+            logger.warning(f"[Dashboard] Cache write error: {e}")
+
+    def get_summary(self, skip_cache: bool = False) -> DashboardSummary:
         """
         Get complete dashboard summary.
+
+        Args:
+            skip_cache: If True, bypass cache and fetch fresh data
 
         Returns:
             DashboardSummary: Complete dashboard data
         """
-        from django.db.models import Avg, Count
+        cache_key = "summary"
 
+        # Try cache first (unless skip_cache)
+        if not skip_cache:
+            cached = self._get_cached(cache_key)
+            if cached:
+                return self._dict_to_summary(cached)
+
+        # Fetch fresh data
         current_time = now()
 
         # Get all component data
@@ -175,7 +246,7 @@ class DashboardService:
             failed=status_counts.failed,
         )
 
-        return DashboardSummary(
+        summary = DashboardSummary(
             timestamp=current_time.isoformat(),
             health_status=health_status,
             status_counts=status_counts,
@@ -184,6 +255,46 @@ class DashboardService:
             alerts=alerts,
             resolution_rate_percent=resolution_rate,
             recommendations=[],  # Future: add AI recommendations
+        )
+
+        # Cache the result
+        self._set_cached(cache_key, summary.to_dict(), self.CACHE_TTL_SECONDS)
+
+        return summary
+
+    def _dict_to_summary(self, data: Dict[str, Any]) -> DashboardSummary:
+        """Convert cached dictionary back to DashboardSummary."""
+        overview = data.get("overview", {})
+        recent = data.get("recent_activity", {})
+        dist = data.get("distribution", {})
+        alerts_data = data.get("alerts", {})
+
+        return DashboardSummary(
+            timestamp=data.get("timestamp", ""),
+            health_status=data.get("health_status", "unknown"),
+            status_counts=StatusCounts(
+                total=overview.get("total", 0),
+                pending=overview.get("pending", 0),
+                resolved=overview.get("resolved", 0),
+                failed=overview.get("failed", 0),
+                archived=overview.get("archived", 0),
+            ),
+            recent_activity=RecentActivity(
+                new_failures_24h=recent.get("new_failures_24h", 0),
+                resolved_24h=recent.get("resolved_24h", 0),
+                new_failures_7d=recent.get("new_failures_7d", 0),
+                resolved_7d=recent.get("resolved_7d", 0),
+            ),
+            distribution=Distribution(
+                by_domain=dist.get("by_domain", []),
+                by_failure_type=dist.get("by_failure_type", []),
+            ),
+            alerts=AlertInfo(
+                high_retry_count=alerts_data.get("high_retry_count", 0),
+                avg_retry_count=alerts_data.get("avg_retry_count", 0.0),
+            ),
+            resolution_rate_percent=overview.get("resolution_rate_percent", 0.0),
+            recommendations=data.get("recommendations", []),
         )
 
     def get_status_counts(self) -> StatusCounts:
@@ -383,14 +494,37 @@ class DashboardService:
 _dashboard_service: Optional[DashboardService] = None
 
 
-def get_dashboard_service() -> DashboardService:
+def get_dashboard_service(cache: "CacheProviderInterface | None" = None) -> DashboardService:
     """
     Get the singleton DashboardService instance.
+
+    Args:
+        cache: Optional cache provider for Redis caching.
+               If not provided, will attempt to use ProviderRegistry.
 
     Returns:
         DashboardService: The singleton instance
     """
     global _dashboard_service
     if _dashboard_service is None:
-        _dashboard_service = DashboardService()
+        _dashboard_service = DashboardService(cache=cache)
     return _dashboard_service
+
+
+def invalidate_dashboard_cache() -> None:
+    """
+    Invalidate all dashboard cache entries.
+
+    Call this when significant state changes occur that should
+    be immediately reflected in the dashboard.
+    """
+    service = get_dashboard_service()
+    if service.cache:
+        try:
+            # Clear all dashboard cache keys
+            for key in ["summary", "status", "activity", "distribution", "alerts"]:
+                full_key = f"{DashboardService.CACHE_PREFIX}{key}"
+                service.cache.delete(full_key)
+            logger.info("[Dashboard] Cache invalidated")
+        except Exception as e:
+            logger.warning(f"[Dashboard] Cache invalidation error: {e}")

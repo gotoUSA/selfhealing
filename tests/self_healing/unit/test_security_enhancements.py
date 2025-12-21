@@ -1,0 +1,418 @@
+"""
+Tests for security enhancements:
+1. API permission relaxation (read-only endpoints accessible to all authenticated users)
+2. Log masking (sensitive fields, internal IPs, server paths)
+3. Sensitive endpoint access logging
+4. Dashboard Redis caching
+"""
+
+import re
+from datetime import datetime, timezone
+from unittest.mock import Mock, MagicMock, patch
+
+import pytest
+
+
+# =============================================================================
+# Test: Log Masking (_sanitize_request_data)
+# =============================================================================
+
+
+class TestLogMasking:
+    """Tests for the enhanced _sanitize_request_data function."""
+
+    def _get_service(self):
+        """Create SecurityViolationService with mocked dependencies."""
+        from selfhealing.services.security_violation_service import (
+            SecurityViolationService,
+            SecurityConfig,
+        )
+
+        mock_repo = Mock()
+        mock_cache = Mock()
+        mock_cache.get.return_value = None
+
+        return SecurityViolationService(
+            config=SecurityConfig(),
+            repository=mock_repo,
+            cache=mock_cache,
+        )
+
+    def test_mask_sensitive_fields(self):
+        """Test that sensitive fields are redacted."""
+        service = self._get_service()
+
+        raw_data = {
+            "username": "testuser",
+            "password": "secret123",
+            "token": "jwt_token_here",
+            "api_key": "key_12345",
+            "data": "normal data",
+        }
+
+        result = service._sanitize_request_data(raw_data)
+
+        assert result["username"] == "testuser"
+        assert result["password"] == "[REDACTED]"
+        assert result["token"] == "[REDACTED]"
+        assert result["api_key"] == "[REDACTED]"
+        assert result["data"] == "normal data"
+
+    def test_mask_internal_ips(self):
+        """Test that internal IP addresses are masked."""
+        service = self._get_service()
+
+        raw_data = {
+            "server": "Connected to 10.0.5.123 successfully",
+            "fallback": "Using 172.16.100.50 as backup",
+            "private": "Internal network 192.168.1.100",
+            "public": "External IP: 8.8.8.8",
+        }
+
+        result = service._sanitize_request_data(raw_data)
+
+        assert "[INTERNAL_IP]" in result["server"]
+        assert "10.0.5.123" not in result["server"]
+
+        assert "[INTERNAL_IP]" in result["fallback"]
+        assert "172.16.100.50" not in result["fallback"]
+
+        assert "[INTERNAL_IP]" in result["private"]
+        assert "192.168.1.100" not in result["private"]
+
+        # Public IP should NOT be masked
+        assert "8.8.8.8" in result["public"]
+
+    def test_mask_server_paths(self):
+        """Test that server paths are masked."""
+        service = self._get_service()
+
+        raw_data = {
+            "log_path": "Error in /home/deploy/app/main.py",
+            "config": "Reading from /etc/myapp",
+            "var": "Logs at /var/log/nginx",
+            "windows": r"Config at C:\Users\admin\settings",
+            "relative": "Using ./config/local.yaml",  # Should NOT be masked
+        }
+
+        result = service._sanitize_request_data(raw_data)
+
+        assert "[SERVER_PATH]" in result["log_path"]
+        assert "/home/deploy" not in result["log_path"]
+
+        assert "[SERVER_PATH]" in result["config"]
+        assert "/etc/myapp" not in result["config"]
+
+        assert "[SERVER_PATH]" in result["var"]
+        assert "/var/log" not in result["var"]
+
+        # Relative paths should NOT be masked
+        assert "./config/local.yaml" in result["relative"]
+
+    def test_mask_nested_data(self):
+        """Test masking in nested dictionaries and lists."""
+        service = self._get_service()
+
+        raw_data = {
+            "user": {
+                "name": "test",
+                "password": "secret",
+            },
+            "servers": [
+                {"ip": "10.0.0.1", "name": "server1"},
+                {"ip": "8.8.8.8", "name": "server2"},
+            ],
+        }
+
+        result = service._sanitize_request_data(raw_data)
+
+        assert result["user"]["password"] == "[REDACTED]"
+        assert "[INTERNAL_IP]" in result["servers"][0]["ip"]
+        assert "8.8.8.8" in result["servers"][1]["ip"]
+
+    def test_empty_data(self):
+        """Test handling of empty/None data."""
+        service = self._get_service()
+
+        assert service._sanitize_request_data(None) == {}
+        assert service._sanitize_request_data({}) == {}
+
+
+# =============================================================================
+# Test: Sensitive Endpoint Access Logging
+# =============================================================================
+
+
+class TestAccessLogging:
+    """Tests for SensitiveEndpointAccessLogger."""
+
+    def test_is_sensitive_endpoint(self):
+        """Test sensitive endpoint detection."""
+        from selfhealing.api.django.middleware import SensitiveEndpointAccessLogger
+
+        logger = SensitiveEndpointAccessLogger()
+
+        # Sensitive endpoints
+        assert logger.is_sensitive_endpoint("/api/self-healing/audit/")
+        assert logger.is_sensitive_endpoint("/api/self-healing/config/")
+        assert logger.is_sensitive_endpoint("/api/self-healing/config/circuit-breaker/")
+        assert logger.is_sensitive_endpoint("/api/self-healing/chaos/schedules/")
+        assert logger.is_sensitive_endpoint("/api/self-healing/chaos/schedules/123/")
+        assert logger.is_sensitive_endpoint("/api/self-healing/chaos/config/")
+
+        # Non-sensitive endpoints
+        assert not logger.is_sensitive_endpoint("/api/self-healing/status/")
+        assert not logger.is_sensitive_endpoint("/api/self-healing/health/")
+        assert not logger.is_sensitive_endpoint("/api/self-healing/dashboard/summary/")
+
+    def test_access_log_entry(self):
+        """Test AccessLogEntry creation and serialization."""
+        from selfhealing.api.django.middleware import AccessLogEntry
+
+        entry = AccessLogEntry(
+            timestamp=datetime(2025, 12, 21, 10, 30, 0, tzinfo=timezone.utc),
+            user="admin",
+            method="GET",
+            path="/api/self-healing/audit/",
+            query_params="page=1",
+            source_ip="10.0.5.123",
+            user_agent="Mozilla/5.0",
+            status_code=200,
+            response_time_ms=45.2,
+        )
+
+        data = entry.to_dict()
+
+        assert data["user"] == "admin"
+        assert data["method"] == "GET"
+        assert data["path"] == "/api/self-healing/audit/"
+        assert data["status_code"] == 200
+
+        # Internal IP should be partially masked
+        assert "xxx.xxx" in data["source_ip"]
+        assert "10.0.5.123" not in data["source_ip"]
+
+    def test_internal_ip_masking(self):
+        """Test internal IP masking in access log."""
+        from selfhealing.api.django.middleware import AccessLogEntry
+
+        # Test various internal IP ranges
+        test_cases = [
+            ("10.0.5.123", "10.0.xxx.xxx"),
+            ("172.16.100.50", "172.16.xxx.xxx"),
+            ("192.168.1.100", "192.168.xxx.xxx"),
+            ("8.8.8.8", "8.8.8.8"),  # Public IP - not masked
+        ]
+
+        for original, expected in test_cases:
+            entry = AccessLogEntry(
+                timestamp=datetime.now(timezone.utc),
+                user="test",
+                method="GET",
+                path="/test",
+                query_params="",
+                source_ip=original,
+                user_agent="",
+                status_code=200,
+            )
+            assert entry.to_dict()["source_ip"] == expected
+
+
+# =============================================================================
+# Test: Dashboard Caching
+# =============================================================================
+
+
+class TestDashboardCaching:
+    """Tests for Dashboard Redis caching."""
+
+    @patch("selfhealing.services.dashboard_service._get_failed_operation_model")
+    def test_cache_hit(self, mock_model):
+        """Test that cache is used when available."""
+        from selfhealing.services.dashboard_service import DashboardService
+
+        # Setup mock cache
+        mock_cache = Mock()
+        cached_data = {
+            "timestamp": "2025-12-21T10:00:00Z",
+            "health_status": "healthy",
+            "overview": {"total": 10, "pending": 0, "resolved": 5, "failed": 0, "archived": 5, "resolution_rate_percent": 50.0},
+            "recent_activity": {"new_failures_24h": 0, "resolved_24h": 2, "new_failures_7d": 5, "resolved_7d": 5},
+            "distribution": {"by_domain": [], "by_failure_type": []},
+            "alerts": {"high_retry_count": 0, "avg_retry_count": 0.0},
+            "recommendations": [],
+        }
+        mock_cache.get.return_value = cached_data
+
+        service = DashboardService(cache=mock_cache)
+        result = service.get_summary()
+
+        # Cache should be queried
+        assert mock_cache.get.called
+
+        # Model should NOT be accessed (cache hit)
+        assert not mock_model.called
+
+        # Result should match cached data
+        assert result.health_status == "healthy"
+        assert result.status_counts.total == 10
+
+    @patch("selfhealing.services.dashboard_service._get_failed_operation_model")
+    def test_cache_miss_and_set(self, mock_model):
+        """Test that cache is populated on cache miss."""
+        from selfhealing.services.dashboard_service import DashboardService
+
+        # Setup mock cache (returns None = cache miss)
+        mock_cache = Mock()
+        mock_cache.get.return_value = None
+
+        # Setup mock model
+        mock_qs = MagicMock()
+        mock_qs.values.return_value.annotate.return_value.values_list.return_value = []
+        mock_qs.filter.return_value.count.return_value = 0
+        mock_qs.filter.return_value.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = []
+        mock_qs.filter.return_value.aggregate.return_value = {"avg": 0}
+
+        mock_failed_op = Mock()
+        mock_failed_op.objects = mock_qs
+        mock_failed_op.Status.PENDING = "pending"
+        mock_failed_op.Status.RESOLVED = "resolved"
+        mock_failed_op.Status.FAILED = "failed"
+        mock_failed_op.Status.ARCHIVED = "archived"
+        mock_model.return_value = mock_failed_op
+
+        service = DashboardService(cache=mock_cache)
+        result = service.get_summary()
+
+        # Cache should be set after fetching fresh data
+        assert mock_cache.set.called
+
+    def test_skip_cache_flag(self):
+        """Test that skip_cache=True bypasses cache."""
+        from selfhealing.services.dashboard_service import DashboardService
+
+        mock_cache = Mock()
+        mock_cache.get.return_value = {"some": "cached_data"}
+
+        service = DashboardService(cache=mock_cache)
+
+        # This should fail because we're not mocking the model,
+        # but the point is that cache.get should NOT be called
+        with patch("selfhealing.services.dashboard_service._get_failed_operation_model") as mock_model:
+            mock_qs = MagicMock()
+            mock_qs.values.return_value.annotate.return_value.values_list.return_value = []
+            mock_qs.filter.return_value.count.return_value = 0
+            mock_qs.filter.return_value.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = []
+            mock_qs.filter.return_value.aggregate.return_value = {"avg": 0}
+
+            mock_failed_op = Mock()
+            mock_failed_op.objects = mock_qs
+            mock_failed_op.Status.PENDING = "pending"
+            mock_failed_op.Status.RESOLVED = "resolved"
+            mock_failed_op.Status.FAILED = "failed"
+            mock_failed_op.Status.ARCHIVED = "archived"
+            mock_model.return_value = mock_failed_op
+
+            result = service.get_summary(skip_cache=True)
+
+            # Model should be accessed (cache bypassed)
+            assert mock_model.called
+
+
+# =============================================================================
+# Test: API Permission Relaxation
+# =============================================================================
+
+
+class TestAPIPermissions:
+    """Tests for API permission configuration."""
+
+    def test_dashboard_view_permissions(self):
+        """Test DashboardSummaryView has correct permissions."""
+        from selfhealing.api.django.views.dashboard import DashboardSummaryView
+        from rest_framework.permissions import IsAuthenticated
+
+        view = DashboardSummaryView()
+
+        # Should only require IsAuthenticated (not IsAdminUser)
+        assert len(view.permission_classes) == 1
+        assert view.permission_classes[0] == IsAuthenticated
+
+    def test_audit_view_permissions(self):
+        """Test ControlAuditView has correct permissions."""
+        from selfhealing.api.django.views.circuit_breaker import ControlAuditView
+        from rest_framework.permissions import IsAuthenticated
+
+        view = ControlAuditView()
+
+        # Should only require IsAuthenticated (not IsAdminUser)
+        assert len(view.permission_classes) == 1
+        assert view.permission_classes[0] == IsAuthenticated
+
+    def test_dlq_stats_view_permissions(self):
+        """Test DLQCleanupStatsView has correct permissions."""
+        from selfhealing.api.django.views.dlq import DLQCleanupStatsView
+        from rest_framework.permissions import IsAuthenticated
+
+        view = DLQCleanupStatsView()
+
+        # Should only require IsAuthenticated (not IsAdminUser)
+        assert len(view.permission_classes) == 1
+        assert view.permission_classes[0] == IsAuthenticated
+
+    def test_control_action_still_requires_admin(self):
+        """Test that control actions still require admin."""
+        from selfhealing.api.django.views.circuit_breaker import ControlActionView
+        from rest_framework.permissions import IsAdminUser, IsAuthenticated
+
+        view = ControlActionView()
+
+        # Should require both IsAuthenticated AND IsAdminUser
+        assert IsAuthenticated in view.permission_classes
+        assert IsAdminUser in view.permission_classes
+
+
+# =============================================================================
+# Test: Config Masking Patterns
+# =============================================================================
+
+
+class TestConfigMaskingPatterns:
+    """Tests for ForensicSettings masking patterns."""
+
+    def test_sensitive_field_patterns(self):
+        """Test that all expected sensitive fields are configured."""
+        from selfhealing.config import ForensicSettings
+
+        settings = ForensicSettings()
+
+        expected_patterns = [
+            "password", "secret", "token", "api_key",
+            "authorization", "credential", "private_key",
+            "card_number", "cvv", "connection_string",
+        ]
+
+        for pattern in expected_patterns:
+            assert pattern in settings.sensitive_field_patterns, f"Missing: {pattern}"
+
+    def test_internal_ip_patterns(self):
+        """Test that internal IP patterns are configured."""
+        from selfhealing.config import ForensicSettings
+
+        settings = ForensicSettings()
+
+        assert settings.mask_internal_ip is True
+        assert len(settings.internal_ip_patterns) >= 3  # 10.x, 172.16.x, 192.168.x
+
+    def test_server_path_patterns(self):
+        """Test that server path patterns are configured."""
+        from selfhealing.config import ForensicSettings
+
+        settings = ForensicSettings()
+
+        assert settings.mask_server_paths is True
+        assert len(settings.server_path_patterns) >= 3
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

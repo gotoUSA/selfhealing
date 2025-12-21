@@ -78,9 +78,11 @@ class DLQCleanupStatsView(APIView):
     DLQ Cleanup Statistics API.
 
     GET /api/self-healing/dlq/cleanup/stats/
+    
+    Note: Read-only endpoint - all authenticated users can view statistics.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get cleanup statistics."""

@@ -681,9 +681,78 @@ dlq_items_total.labels(domain="payment", transaction_id=tx_id)  # ❌
 
 ---
 
+## 보안 및 데이터 보호
+
+### 1. 로그 데이터 마스킹
+
+모든 메트릭과 로그에서 민감 정보는 자동으로 마스킹됩니다.
+
+**마스킹 대상:**
+
+| 카테고리 | 대상 | 마스킹 결과 |
+|----------|------|-------------|
+| 인증 정보 | password, token, api_key | `[REDACTED]` |
+| 내부 IP | 10.x.x.x, 172.16-31.x.x, 192.168.x.x | `[INTERNAL_IP]` |
+| 서버 경로 | /home/user, /var/log, C:\Users | `[SERVER_PATH]` |
+
+**설정:**
+
+```python
+# selfhealing/config.py
+class ForensicSettings:
+    mask_sensitive_fields: bool = True
+    mask_internal_ip: bool = True
+    mask_server_paths: bool = True
+```
+
+### 2. 민감 엔드포인트 액세스 로깅
+
+아래 엔드포인트에 대한 모든 접근은 감사 로그로 기록됩니다:
+
+| 엔드포인트 | 민감도 | 로깅 |
+|-----------|--------|------|
+| `/api/self-healing/audit/` | 🔴 높음 | ✅ |
+| `/api/self-healing/config/*` | 🔴 높음 | ✅ |
+| `/api/self-healing/chaos/schedules/*` | 🔴 높음 | ✅ |
+| `/api/self-healing/chaos/config/*` | 🔴 높음 | ✅ |
+
+**미들웨어 활성화:**
+
+```python
+# settings.py
+MIDDLEWARE = [
+    ...
+    'selfhealing.api.django.middleware.SensitiveAccessLoggingMiddleware',
+]
+```
+
+### 3. 대시보드 성능 보호
+
+대량 조회 시 DB 부하를 방지하기 위해 Redis 캐싱을 적용합니다.
+
+```python
+# DashboardService 캐시 설정
+class DashboardService:
+    CACHE_TTL_SECONDS = 30   # 기본 TTL
+    CACHE_TTL_STATUS = 15    # 상태 카운트
+    CACHE_TTL_ACTIVITY = 60  # 활동 통계
+```
+
+**캐시 무효화:**
+
+```python
+from selfhealing.services.dashboard_service import invalidate_dashboard_cache
+
+# 중요 상태 변경 후 호출
+invalidate_dashboard_cache()
+```
+
+---
+
 ## 관련 문서
 
 - [01_OVERVIEW.md](01_OVERVIEW.md) - 시스템 개요
 - [03_CIRCUIT_BREAKER.md](03_CIRCUIT_BREAKER.md) - Circuit Breaker 상세
 - [04_DEAD_LETTER_QUEUE.md](04_DEAD_LETTER_QUEUE.md) - DLQ 시스템
+- [07_CONTROL_API.md](07_CONTROL_API.md) - Control API 보안 정책
 - [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) - 운영 가이드
