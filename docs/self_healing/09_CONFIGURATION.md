@@ -391,6 +391,30 @@ SELF_HEALING = {
         "ESCALATION_CHANNEL": "#governance",   # 에스컬레이션 채널
         "ESCALATION_MENTION": "@cto @security", # 멘션 대상
     },
+
+    # 메트릭 수집 설정 (NEW)
+    "METRIC_COLLECTION": {
+        # 동기화 설정
+        "SYNC_ON_STARTUP": True,              # 서버 시작 시 동기화
+        "SCHEDULED_SYNC_ENABLED": False,      # 주기적 동기화 (권장: 비활성화)
+        "SCHEDULED_SYNC_INTERVAL": 86400,     # 주기 (초), 기본 24시간
+
+        # Jitter 설정 (Thundering Herd 방지)
+        "JITTER_ENABLED": True,               # Jitter 활성화
+        "JITTER_MAX_DELAY_SECONDS": 60.0,     # 최대 지연 시간 (초)
+
+        # 어댑터 설정
+        "ADAPTER_TYPE": "django",             # django, redis, null
+        "REDIS_PREFIX": "sh:metrics:",        # Redis 어댑터용 키 프리픽스
+
+        # Drift 감지
+        "DRIFT_DETECTION_ENABLED": True,      # Drift 감지 활성화
+        "DRIFT_WARNING_THRESHOLD": 0.05,      # 5% - 경고
+        "DRIFT_CRITICAL_THRESHOLD": 0.20,     # 20% - 심각, 알림 발송
+        "DRIFT_INCIDENT_THRESHOLD": 0.50,     # 50% - 인시던트, 이벤트 유실
+        "DRIFT_INCIDENT_ENABLED": True,       # 인시던트 자동 생성
+        "DRIFT_ALERT_ENABLED": True,          # 알림 발송 활성화
+    },
 }
 ```
 
@@ -416,6 +440,72 @@ SELF_HEALING = {
 | `escalation_enabled` | bool | True | - | Override 에스컬레이션 활성화 |
 | `escalation_channel` | str | "#governance" | - | 에스컬레이션 Slack 채널 |
 | `escalation_mention` | str | "@cto @security" | - | 에스컬레이션 멘션 대상 |
+
+---
+
+### 11. METRIC_COLLECTION (메트릭 수집) - NEW
+
+> 상세 문서: [13_METRIC_COLLECTION_STRATEGY.md](13_METRIC_COLLECTION_STRATEGY.md)
+
+메트릭 수집 및 동기화 전략을 설정합니다.
+
+**Dataclass: `MetricCollectionSettings`**
+
+| 필드 | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `sync_on_startup` | bool | True | 서버 시작 시 Gauge 동기화 |
+| `scheduled_sync_enabled` | bool | False | 주기적 동기화 (권장: 비활성화) |
+| `scheduled_sync_interval` | int | 86400 | 동기화 주기 (초) |
+| `jitter_enabled` | bool | True | Jitter 활성화 (분산 환경) |
+| `jitter_max_delay_seconds` | float | 60.0 | 최대 Jitter 지연 시간 |
+| `adapter_type` | str | "null" | 어댑터 유형 (django/redis/null) |
+| `redis_prefix` | str | "sh:metrics:" | Redis 키 프리픽스 |
+| `drift_detection_enabled` | bool | True | Drift 감지 활성화 |
+| `drift_warning_threshold` | float | 0.05 | 경고 임계값 (5%) |
+| `drift_critical_threshold` | float | 0.20 | 심각 임계값 (20%) |
+| `drift_incident_threshold` | float | 0.50 | 인시던트 임계값 (50%) |
+| `drift_incident_enabled` | bool | True | 인시던트 자동 생성 |
+| `drift_alert_enabled` | bool | True | 알림 발송 활성화 |
+
+**환경 변수:**
+
+```bash
+# 메트릭 수집 기본 설정
+SELFHEALING_METRICS_SYNC_ON_STARTUP=true
+SELFHEALING_METRICS_ADAPTER_TYPE=django
+
+# Jitter 설정 (K8s 환경)
+SELFHEALING_METRICS_JITTER_ENABLED=true
+SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS=60.0
+
+# Drift 임계값 설정
+SELFHEALING_DRIFT_WARNING_THRESHOLD=0.05
+SELFHEALING_DRIFT_CRITICAL_THRESHOLD=0.20
+SELFHEALING_DRIFT_INCIDENT_THRESHOLD=0.50
+SELFHEALING_DRIFT_INCIDENT_ENABLED=true
+```
+
+**Drift 임계값 런타임 변경 (API):**
+
+```bash
+# 현재 설정 조회
+curl -X GET -H "Authorization: Bearer $TOKEN" \
+  $API_URL/api/self-healing/config/drift-thresholds/
+
+# 임계값 변경
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "warning_threshold": 0.10,
+    "critical_threshold": 0.30,
+    "incident_threshold": 0.60
+  }' \
+  $API_URL/api/self-healing/config/drift-thresholds/
+
+# 기본값으로 리셋
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  $API_URL/api/self-healing/config/drift-thresholds/reset/
+```
 
 **런타임 동적 변경 (API):**
 

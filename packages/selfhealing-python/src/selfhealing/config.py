@@ -165,6 +165,87 @@ def get_forensic_settings() -> ForensicSettings:
 
 
 # =============================================================================
+# Metric Collection Settings
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class MetricCollectionSettings:
+    """
+    메트릭 수집 설정.
+
+    Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+    """
+
+    # 동기화 설정
+    sync_on_startup: bool = True           # 서버 시작 시 동기화
+    scheduled_sync_enabled: bool = False   # 주기적 동기화 (권장: 비활성화)
+    scheduled_sync_interval: int = 86400   # 주기 (초), 기본 24시간
+
+    # Jitter 설정 (Thundering Herd 방지)
+    jitter_enabled: bool = True            # Jitter 활성화
+    jitter_max_delay_seconds: float = 60.0 # 최대 지연 시간 (초)
+
+    # 어댑터 설정
+    adapter_type: str = "null"             # django, redis, null
+    redis_prefix: str = "sh:metrics:"      # Redis 어댑터용 키 프리픽스
+
+    # Drift 감지 (거버넌스 레벨)
+    drift_detection_enabled: bool = True
+    drift_warning_threshold: float = 0.05    # 5% - 경고
+    drift_critical_threshold: float = 0.20   # 20% - 심각, 알림 발송
+    drift_incident_threshold: float = 0.50   # 50% - 인시던트, 이벤트 유실
+    drift_incident_enabled: bool = True      # 인시던트 자동 생성
+    drift_alert_enabled: bool = True         # 알림 발송 활성화
+
+
+@lru_cache(maxsize=1)
+def get_metric_collection_settings() -> MetricCollectionSettings:
+    """
+    Get metric collection settings.
+
+    Loads from environment variables with sensible defaults.
+    """
+    return MetricCollectionSettings(
+        sync_on_startup=os.environ.get(
+            "SELFHEALING_METRICS_SYNC_ON_STARTUP", "true"
+        ).lower() == "true",
+        scheduled_sync_enabled=os.environ.get(
+            "SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false"
+        ).lower() == "true",
+        scheduled_sync_interval=int(
+            os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")
+        ),
+        jitter_enabled=os.environ.get(
+            "SELFHEALING_METRICS_JITTER_ENABLED", "true"
+        ).lower() == "true",
+        jitter_max_delay_seconds=float(
+            os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")
+        ),
+        adapter_type=os.environ.get("SELFHEALING_METRICS_ADAPTER_TYPE", "null"),
+        redis_prefix=os.environ.get("SELFHEALING_METRICS_REDIS_PREFIX", "sh:metrics:"),
+        drift_detection_enabled=os.environ.get(
+            "SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true"
+        ).lower() == "true",
+        drift_warning_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")
+        ),
+        drift_critical_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")
+        ),
+        drift_incident_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")
+        ),
+        drift_incident_enabled=os.environ.get(
+            "SELFHEALING_DRIFT_INCIDENT_ENABLED", "true"
+        ).lower() == "true",
+        drift_alert_enabled=os.environ.get(
+            "SELFHEALING_DRIFT_ALERT_ENABLED", "true"
+        ).lower() == "true",
+    )
+
+
+# =============================================================================
 # Convenience exports
 # =============================================================================
 
@@ -172,6 +253,8 @@ def get_forensic_settings() -> ForensicSettings:
 __all__ = [
     "NotificationLimits",
     "ForensicSettings",
+    "MetricCollectionSettings",
     "get_notification_limits",
     "get_forensic_settings",
+    "get_metric_collection_settings",
 ]

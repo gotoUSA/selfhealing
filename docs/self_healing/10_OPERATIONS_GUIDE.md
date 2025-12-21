@@ -367,6 +367,135 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
    # collect_metrics 태스크가 스케줄되어 있는지 확인
    ```
 
+### 문제: Gauge 값이 실제와 다름 (Drift)
+
+**체크리스트:**
+
+1. 마지막 동기화 시간 확인
+   ```bash
+   curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/self-healing/metrics/status/
+   ```
+
+2. 수동 동기화 실행
+   ```bash
+   curl -X POST -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/self-healing/metrics/sync/
+   ```
+
+3. Drift 감지 포함 동기화
+   ```bash
+   curl -X POST -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"detect_drift": true}' \
+     http://localhost:8000/api/self-healing/metrics/sync/
+   ```
+
+4. 이벤트 핸들러 호출 여부 확인
+   - 비즈니스 로직에서 `DLQMetricEventHandler.on_item_created()` 호출 여부
+   - 로그에서 `[EventHandler]` 메시지 확인
+
+### 문제: 서버 시작 시 DB 부하 급증 (Thundering Herd)
+
+**체크리스트:**
+
+1. Jitter 활성화 확인
+   ```bash
+   # 환경 변수 확인
+   echo $SELFHEALING_METRICS_JITTER_ENABLED  # true여야 함
+   ```
+
+2. Jitter 값 조정 (K8s 환경)
+   ```bash
+   # Pod 수에 따라 조정
+   # 10 Pods: 30초, 100+ Pods: 60초
+   SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS=60.0
+   ```
+
+3. 로그에서 Jitter 적용 확인
+   ```
+   [Jitter] Sleeping for 45.23s before sync_all_gauges
+   ```
+
+---
+
+## 📊 메트릭 동기화 운영
+
+> 상세 문서: [13_METRIC_COLLECTION_STRATEGY.md](13_METRIC_COLLECTION_STRATEGY.md)
+
+### 메트릭 수집 전략 개요
+
+| 메트릭 타입 | 수집 방식 | 정확도 | DB 쿼리 |
+|------------|----------|--------|---------|
+| Counter | Push Only | 100% | 없음 |
+| Histogram | Push Only | 100% | 없음 |
+| Gauge | Hybrid | ~99% | 재시작 시만 |
+
+### 수동 동기화 실행
+
+```bash
+# 모든 Gauge 동기화
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/self-healing/metrics/sync/
+
+# 특정 도메인만 동기화
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "payment"}' \
+  http://localhost:8000/api/self-healing/metrics/sync/
+```
+
+### Drift 임계값 관리
+
+```bash
+# 현재 Drift 임계값 조회
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/self-healing/config/drift-thresholds/
+
+# 임계값 변경 (런타임)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "warning_threshold": 0.10,
+    "critical_threshold": 0.30
+  }' \
+  http://localhost:8000/api/self-healing/config/drift-thresholds/
+
+# 기본값으로 리셋
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/self-healing/config/drift-thresholds/reset/
+```
+
+### Drift 심각도별 대응
+
+| 심각도 | Drift 비율 | 알림 | 대응 |
+|--------|-----------|------|------|
+| normal | < 5% | 없음 | 정상 |
+| warning | 5~20% | 로그 | 모니터링 |
+| critical | 20~50% | Slack | 원인 분석 |
+| incident | > 50% | 인시던트 | 즉시 조치 |
+
+**50% 이상 Drift 발생 시:**
+
+```
+1. 인시던트 자동 생성됨
+2. 이벤트 핸들러 호출 여부 확인
+   └─ 비즈니스 로직에서 on_item_created() 호출?
+   └─ 최근 배포에서 핸들러 제거됨?
+3. 로그에서 누락된 이벤트 추적
+4. 수동 동기화로 값 복원
+```
+
+### 모니터링 체크리스트
+
+| 항목 | 확인 방법 | 기대값 |
+|------|----------|--------|
+| 메트릭 엔드포인트 | `curl /metrics` | 200 OK |
+| Gauge 동기화 상태 | 로그: "Metrics reconciled" | 서버 시작 시 1회 |
+| Jitter 적용 | 로그 시간 확인 | 인스턴스별 다른 시간 |
+| Drift 경고 | 로그: "Metric drift detected" | 없음 (정상) |
+| Drift 인시던트 | 로그: "METRIC INTEGRITY INCIDENT" | 없음 (정상) |
+
 ---
 
 ## 📋 관리 명령어
@@ -401,7 +530,7 @@ python manage.py generate_self_healing_alerts
 
 ---
 
-## � Error Budget 동결 대응
+## 🚨 Error Budget 동결 대응
 
 > 상세 문서: [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md)
 

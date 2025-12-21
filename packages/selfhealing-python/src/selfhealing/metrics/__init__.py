@@ -1,15 +1,72 @@
 """
 Metrics collection and export for the self-healing system.
 
-This module provides Prometheus metrics and other observability tools.
+This module provides Prometheus metrics, event handlers, and other
+observability tools.
+
+Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from selfhealing.metrics.prometheus import (
     SelfHealingMetrics,
     get_metrics,
 )
+from selfhealing.metrics.event_handlers import (
+    DLQMetricEventHandler,
+    CircuitBreakerEventHandler,
+    ReplayEventHandler,
+)
+from selfhealing.metrics.decorators import (
+    track_dlq_creation,
+    track_dlq_resolution,
+    track_replay,
+    track_execution_time,
+    track_counter,
+)
+from selfhealing.metrics.jitter import (
+    with_jitter,
+    calculate_jitter,
+    sleep_with_jitter,
+    JitterConfig,
+)
+from selfhealing.metrics.reconciler import (
+    MetricReconciler,
+    DriftSeverity,
+    DriftResult,
+    SyncResult,
+    get_reconciler,
+)
+from selfhealing.metrics.reliability import (
+    MetricReliability,
+    get_metric_reliability,
+)
 
 __all__ = [
+    # Prometheus metrics
     "SelfHealingMetrics",
     "get_metrics",
+    # Event handlers
+    "DLQMetricEventHandler",
+    "CircuitBreakerEventHandler",
+    "ReplayEventHandler",
+    # Decorators
+    "track_dlq_creation",
+    "track_dlq_resolution",
+    "track_replay",
+    "track_execution_time",
+    "track_counter",
+    # Jitter
+    "with_jitter",
+    "calculate_jitter",
+    "sleep_with_jitter",
+    "JitterConfig",
+    # Reconciler
+    "MetricReconciler",
+    "DriftSeverity",
+    "DriftResult",
+    "SyncResult",
+    "get_reconciler",
+    # Reliability
+    "MetricReliability",
+    "get_metric_reliability",
 ]

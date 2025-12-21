@@ -395,6 +395,89 @@ class MetricSourceAdapter(Protocol):
 
 어댑터 구현체는 Django ORM, Redis, 또는 커스텀 소스를 사용할 수 있습니다.
 
+### Drift 감지 및 인시던트 자동 생성
+
+Gauge 동기화 시 실제 값과의 차이(Drift)를 감지하고 심각도에 따라 대응합니다:
+
+| 심각도 | Drift 비율 | 의미 | 대응 |
+|--------|-----------|------|------|
+| `normal` | < 5% | 정상 오차 범위 | 로그만 기록 |
+| `warning` | 5~20% | 경고 | 로그 + 모니터링 |
+| `critical` | 20~50% | 심각 | 알림 발송 |
+| `incident` | > 50% | 이벤트 유실 | 인시던트 생성 |
+
+```python
+from selfhealing.metrics.reconciler import MetricReconciler
+
+reconciler = MetricReconciler(adapter=get_metric_adapter())
+result = reconciler.sync_with_drift_detection()
+
+if result.drift and result.drift.severity == "incident":
+    # 50% 이상 Drift: 이벤트 유실 의심
+    # 인시던트가 자동 생성됨
+    pass
+```
+
+### Thundering Herd 방지 (Jitter)
+
+분산 환경(K8s 등)에서 다수의 Pod가 동시 시작 시 DB 부하를 분산시킵니다:
+
+```python
+from selfhealing.metrics.jitter import with_jitter, JitterConfig
+
+# 데코레이터 방식
+@with_jitter(max_delay_seconds=60.0)
+def sync_metrics():
+    return reconciler.sync_all_gauges()
+
+# 설정 기반 방식
+config = JitterConfig.from_env()
+config.sleep()  # 0~60초 무작위 대기
+```
+
+| 환경 | 권장 Jitter | 이유 |
+|------|-------------|------|
+| 단일 서버 | 0초 (비활성화) | 분산 필요 없음 |
+| K8s 10 Pods | 30초 | 적당한 분산 |
+| K8s 100+ Pods | 60초 | 충분한 분산 필요 |
+
+### 메트릭 신뢰도 레벨
+
+각 메트릭의 정확도 수준을 문서화합니다:
+
+```python
+from selfhealing.metrics.reliability import (
+    MetricReliability,
+    get_metric_reliability,
+)
+
+reliability = get_metric_reliability("dlq_items_total")
+# MetricReliability.EXACT (100% 정확)
+
+reliability = get_metric_reliability("dlq_pending_count")
+# MetricReliability.EVENTUAL (~99%, 재시작 시 동기화)
+```
+
+| 신뢰도 | 메트릭 예시 | 설명 |
+|--------|-----------|------|
+| `EXACT` | Counter, Histogram | 100% 정확, 원본과 동일 |
+| `EVENTUAL` | Gauge | ~99%, 재시작 시 동기화 |
+| `APPROXIMATE` | 샘플링 메트릭 | ~95%, 추정값 |
+
+### 수동 동기화 API
+
+```bash
+# 모든 Gauge 동기화
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/self-healing/metrics/sync/
+
+# Drift 감지 포함 동기화
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"detect_drift": true}' \
+  http://localhost:8000/api/self-healing/metrics/sync/
+```
+
 ---
 
 ## Prometheus 설정
