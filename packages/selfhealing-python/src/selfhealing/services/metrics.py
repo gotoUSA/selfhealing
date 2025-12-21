@@ -757,7 +757,13 @@ def update_dlq_status_gauges(
         }
 
         for status, count in by_status.items():
-            dlq_by_status_gauge.labels(status=status).set(count)
+            # 음수 방어: 개수는 0 이상이어야 함
+            safe_count = max(0, count)
+            if safe_count != count:
+                logger.warning(
+                    f"[Metrics] Clamped negative DLQ status count: " f"status={status}, original={count}, clamped={safe_count}"
+                )
+            dlq_by_status_gauge.labels(status=status).set(safe_count)
 
         logger.debug(f"[Metrics] Updated DLQ status gauges: {by_status}")
         return by_status
@@ -831,8 +837,15 @@ def update_retry_success_rates(
                 # Default to 100% if no data
                 rate = 100.0
 
-            retry_success_rate.labels(domain=domain).set(rate)
-            rates[domain] = rate
+            # 0-100 범위 클램핑: 비율은 0-100 사이여야 함
+            safe_rate = max(0.0, min(100.0, rate))
+            if safe_rate != rate:
+                logger.warning(
+                    f"[Metrics] Clamped retry success rate out of range: "
+                    f"domain={domain}, original={rate}, clamped={safe_rate}"
+                )
+            retry_success_rate.labels(domain=domain).set(safe_rate)
+            rates[domain] = safe_rate
 
         logger.debug(f"[Metrics] Updated retry success rates: {rates}")
         return rates

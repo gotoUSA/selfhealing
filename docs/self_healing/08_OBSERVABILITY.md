@@ -894,6 +894,134 @@ invalidate_dashboard_cache()
 
 ---
 
+## SafeGauge: 음수 방지 래퍼
+
+### 문제 상황
+
+서버 재시작 직후 Gauge가 0인 상태에서 `dec()` 호출 시 **-1**이 되는 문제가 발생할 수 있습니다.
+이는 대시보드에 "대기 중인 항목: -1개"라고 표시되어 시스템의 신뢰도를 훼손합니다.
+
+### 해결책: SafeGauge 래퍼
+
+```python
+from selfhealing.metrics.safe_gauge import SafeGauge
+
+# 기존 Prometheus Gauge를 SafeGauge로 래핑
+safe_gauge = SafeGauge(dlq_pending_gauge)
+
+# 안전한 dec() 호출 - 음수로 내려가지 않음
+safe_gauge.labels(domain="payment").dec()
+```
+
+### SafeGauge 동작 방식
+
+| 상황 | 동작 | 결과 |
+|------|------|------|
+| 정상적인 inc/dec | 그대로 실행 | 값 증가/감소 |
+| dec() 시 값이 0 | 0으로 클램핑 | 음수 방지 |
+| 서버 재시작 직후 dec() 먼저 호출 | 무시 | 스테일 이벤트 처리 |
+| set()에 음수 전달 | 0으로 클램핑 | 음수 방지 |
+
+### 적용된 Gauge 목록
+
+| Gauge | SafeGauge 적용 | 추가 방어 |
+|-------|:--------------:|:---------:|
+| `dlq_pending_count` | ✅ | inc/dec 패턴 보호 |
+| `dlq_items_by_status` | - | set() 음수 클램핑 |
+| `retry_success_rate` | - | 0-100 범위 클램핑 |
+
+### 유틸리티 함수
+
+```python
+from selfhealing.metrics.safe_gauge import (
+    clamp_non_negative,   # 개수/수량용 (>= 0)
+    clamp_percentage,     # 비율용 (0-100)
+    safe_set_gauge,       # 래핑된 set() 호출
+)
+
+# 사용 예
+safe_set_gauge(
+    dlq_by_status_gauge,
+    count,
+    clamp_type="non_negative",
+    metric_name="dlq_by_status",
+    status="pending"
+)
+```
+
+---
+
+## EventLoggingConfig: API 레벨 로깅 설정
+
+### 동적 로깅 레벨 변경
+
+서버 재시작 없이 런타임에 로깅 레벨을 변경할 수 있습니다.
+
+```python
+from selfhealing.config import get_event_logging_config
+
+config = get_event_logging_config()
+
+# 런타임에 로깅 레벨 변경
+config.update(
+    dlq_log_level="DEBUG",
+    cb_log_level="WARNING",
+    updated_by="admin_user"
+)
+
+# 현재 설정 확인
+print(config.to_dict())
+```
+
+### 기본 로깅 레벨
+
+| 이벤트 유형 | 기본 레벨 | 설명 |
+|-------------|----------|------|
+| DLQ 생성/해결 | `INFO` | 비즈니스 이벤트 추적 |
+| Circuit Breaker 상태 변경 | `WARNING` | 시스템 거버넌스 신호 |
+| SLA 위반 | `WARNING` | 즉각적인 주의 필요 |
+| Replay 시작/완료 | `INFO` | 복구 작업 추적 |
+
+### 설정 우선순위
+
+```
+┌─────────────────────────────────────────────────────┐
+│              설정 우선순위 (높음 → 낮음)             │
+├─────────────────────────────────────────────────────┤
+│  1. API/Admin 설정 (최우선, 런타임 변경)            │
+│  2. 환경변수 (컨테이너 기본값)                      │
+│  3. 하드코딩 기본값 (폴백)                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### 환경변수 설정
+
+```bash
+# .env 또는 컨테이너 환경변수
+SELFHEALING_DLQ_LOG_LEVEL=INFO
+SELFHEALING_CB_LOG_LEVEL=WARNING
+SELFHEALING_REPLAY_LOG_LEVEL=INFO
+SELFHEALING_SLA_LOG_LEVEL=WARNING
+```
+
+### 감사 추적
+
+```python
+config = get_event_logging_config()
+config.update(dlq_log_level="DEBUG", updated_by="admin_user")
+
+# 변경 이력 확인
+result = config.to_dict()
+print(result["last_updated"])
+# {
+#     "timestamp": "2025-12-21T10:30:00",
+#     "updated_by": "admin_user",
+#     "changes": {"dlq_log_level": "DEBUG"}
+# }
+```
+
+---
+
 ## 관련 문서
 
 - [01_OVERVIEW.md](01_OVERVIEW.md) - 시스템 개요
@@ -901,3 +1029,4 @@ invalidate_dashboard_cache()
 - [04_DEAD_LETTER_QUEUE.md](04_DEAD_LETTER_QUEUE.md) - DLQ 시스템
 - [07_CONTROL_API.md](07_CONTROL_API.md) - Control API 보안 정책 및 재인증 훅
 - [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) - 운영 가이드
+- [13_METRIC_COLLECTION_STRATEGY.md](13_METRIC_COLLECTION_STRATEGY.md) - 메트릭 수집 전략

@@ -395,6 +395,73 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
    - 비즈니스 로직에서 `DLQMetricEventHandler.on_item_created()` 호출 여부
    - 로그에서 `[EventHandler]` 메시지 확인
 
+### 문제: Gauge 값이 음수로 표시됨
+
+**원인:** 서버 재시작 후 `dec()` 호출 시 발생 (Shadow counter 리셋)
+
+**해결책:**
+
+1. SafeGauge 사용 확인
+   ```python
+   from shopping.metrics.safe_gauge import SafeGauge
+   
+   # 올바른 사용
+   safe_gauge = SafeGauge(original_gauge, "gauge_name")
+   safe_gauge.labels(domain="payment").inc()
+   safe_gauge.labels(domain="payment").dec()  # 0 미만으로 떨어지지 않음
+   ```
+
+2. 동기화로 Shadow counter 복구
+   ```python
+   # 단일 레이블 동기화
+   safe_gauge.labels(domain="payment").sync_from_source(actual_db_count)
+   
+   # 또는 Reconciler 사용
+   from shopping.metrics.reconciler import MetricReconciler
+   reconciler = MetricReconciler()
+   reconciler.sync_all_gauges()
+   ```
+
+3. SafeGauge 보호 동작 확인
+   ```python
+   # 현재 shadow 값 확인
+   shadow = safe_gauge.labels(domain="payment").get_shadow_value()
+   print(f"Shadow value: {shadow}")
+   
+   # 음수 시도 시 경고 로그 확인
+   # [SafeGauge] gauge_name{domain=payment} dec blocked: shadow=0
+   ```
+
+### 문제: 로깅 레벨이 적절하지 않음
+
+**증상:** DLQ 이벤트가 INFO로 기록되어 너무 많거나, Circuit Breaker가 WARNING으로 놓쳐짐
+
+**해결책:**
+
+1. 런타임에서 로깅 레벨 변경
+   ```python
+   from shopping.config import EventLoggingConfig
+   
+   config = EventLoggingConfig.get_instance()
+   config.update(
+       dlq_log_level="WARNING",  # 로그 줄이기
+       circuit_breaker_log_level="INFO",  # 더 자세히
+       updated_by="ops-team"
+   )
+   ```
+
+2. 환경 변수로 기본값 설정
+   ```bash
+   export SH_EVENT_DLQ_LOG_LEVEL=WARNING
+   export SH_EVENT_CIRCUIT_BREAKER_LOG_LEVEL=INFO
+   export SH_EVENT_SLA_LOG_LEVEL=ERROR
+   ```
+
+3. 설정 초기화
+   ```python
+   config.reset()  # 환경 변수 기본값으로 복원
+   ```
+
 ### 문제: 서버 시작 시 DB 부하 급증 (Thundering Herd)
 
 **체크리스트:**

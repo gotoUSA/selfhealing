@@ -32,6 +32,7 @@ def _get_metrics():
     if _metrics_instance is None:
         try:
             from selfhealing.metrics.prometheus import get_metrics
+
             _metrics_instance = get_metrics()
         except ImportError:
             logger.warning("[EventHandler] Metrics not available")
@@ -45,6 +46,7 @@ def _get_logging_config():
     if _logging_config is None:
         try:
             from selfhealing.config import get_event_logging_config
+
             _logging_config = get_event_logging_config()
         except ImportError:
             return None
@@ -92,7 +94,7 @@ def _get_safe_pending_gauge() -> Optional["SafeGauge"]:
     try:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
-        if hasattr(metrics, 'dlq_pending_gauge') and metrics.dlq_pending_gauge:
+        if hasattr(metrics, "dlq_pending_gauge") and metrics.dlq_pending_gauge:
             safe_gauge = SafeGauge(metrics.dlq_pending_gauge)
             _safe_gauge_cache["dlq_pending"] = safe_gauge
             return safe_gauge
@@ -189,14 +191,14 @@ class DLQMetricEventHandler:
                 safe_gauge.labels(domain=domain).dec()
 
             # Histogram: 복구 시간 기록 (100% 정확)
-            if duration_seconds is not None and hasattr(metrics, 'recovery_time_seconds'):
+            if duration_seconds is not None and hasattr(metrics, "recovery_time_seconds"):
                 metrics.recovery_time_seconds.labels(
                     domain=domain,
                     resolution_type=resolution_type,
                 ).observe(duration_seconds)
 
             # Counter: 성공 카운트 증가
-            if hasattr(metrics, 'retry_outcomes_total'):
+            if hasattr(metrics, "retry_outcomes_total"):
                 metrics.retry_outcomes_total.labels(
                     domain=domain,
                     outcome="success",
@@ -234,22 +236,21 @@ class DLQMetricEventHandler:
 
         try:
             # Counter: 실패 카운트 증가
-            if hasattr(metrics, 'retry_outcomes_total'):
+            if hasattr(metrics, "retry_outcomes_total"):
                 metrics.retry_outcomes_total.labels(
                     domain=domain,
                     outcome="failure",
                 ).inc()
 
             # Histogram: 시도 횟수 기록
-            if hasattr(metrics, 'retry_attempts_histogram'):
+            if hasattr(metrics, "retry_attempts_histogram"):
                 metrics.retry_attempts_histogram.labels(
                     domain=domain,
                 ).observe(attempt_count)
 
             _log_event(
                 "get_dlq_log_level",
-                f"[EventHandler] DLQ retry failed: domain={domain}, "
-                f"type={failure_type}, attempts={attempt_count}",
+                f"[EventHandler] DLQ retry failed: domain={domain}, " f"type={failure_type}, attempts={attempt_count}",
                 event_type="dlq.retry_failed",
                 domain=domain,
                 failure_type=failure_type,
@@ -274,7 +275,7 @@ class DLQMetricEventHandler:
             return
 
         try:
-            if hasattr(metrics, 'sla_breach_total'):
+            if hasattr(metrics, "sla_breach_total"):
                 metrics.sla_breach_total.labels(domain=domain).inc()
 
             _log_event(
@@ -326,11 +327,11 @@ class CircuitBreakerEventHandler:
         try:
             # Gauge: 현재 상태 설정
             state_value = CircuitBreakerEventHandler.STATE_VALUES.get(to_state, 0)
-            if hasattr(metrics, 'circuit_breaker_state'):
+            if hasattr(metrics, "circuit_breaker_state"):
                 metrics.circuit_breaker_state.labels(service_name=service).set(state_value)
 
             # Counter: 상태 전환 카운트
-            if hasattr(metrics, 'circuit_breaker_transitions'):
+            if hasattr(metrics, "circuit_breaker_transitions"):
                 metrics.circuit_breaker_transitions.labels(
                     service_name=service,
                     from_state=from_state,
@@ -338,13 +339,12 @@ class CircuitBreakerEventHandler:
                 ).inc()
 
             # Counter: open 상태로 전환 시 trip 카운트
-            if to_state == "open" and hasattr(metrics, 'circuit_breaker_trips'):
+            if to_state == "open" and hasattr(metrics, "circuit_breaker_trips"):
                 metrics.circuit_breaker_trips.labels(service_name=service).inc()
 
             _log_event(
                 "get_cb_log_level",
-                f"[EventHandler] CB state changed: service={service}, "
-                f"{from_state} -> {to_state}",
+                f"[EventHandler] CB state changed: service={service}, " f"{from_state} -> {to_state}",
                 event_type="circuit_breaker.state_changed",
                 service=service,
                 from_state=from_state,
@@ -366,7 +366,7 @@ class CircuitBreakerEventHandler:
             return
 
         try:
-            if hasattr(metrics, 'circuit_breaker_failures'):
+            if hasattr(metrics, "circuit_breaker_failures"):
                 metrics.circuit_breaker_failures.labels(service_name=service).inc()
 
             _log_event(
@@ -400,7 +400,7 @@ class ReplayEventHandler:
             return
 
         try:
-            if hasattr(metrics, 'replay_attempts_total'):
+            if hasattr(metrics, "replay_attempts_total"):
                 metrics.replay_attempts_total.labels(
                     domain=domain,
                     replay_type=replay_type,
@@ -436,21 +436,20 @@ class ReplayEventHandler:
 
         try:
             outcome = "success" if success else "failure"
-            if hasattr(metrics, 'replay_outcomes_total'):
+            if hasattr(metrics, "replay_outcomes_total"):
                 metrics.replay_outcomes_total.labels(
                     domain=domain,
                     outcome=outcome,
                 ).inc()
 
-            if hasattr(metrics, 'replay_duration_seconds'):
+            if hasattr(metrics, "replay_duration_seconds"):
                 metrics.replay_duration_seconds.labels(
                     domain=domain,
                 ).observe(duration_seconds)
 
             _log_event(
                 "get_replay_log_level",
-                f"[EventHandler] Replay completed: domain={domain}, "
-                f"success={success}, duration={duration_seconds}s",
+                f"[EventHandler] Replay completed: domain={domain}, " f"success={success}, duration={duration_seconds}s",
                 event_type="replay.completed",
                 domain=domain,
                 success=success,

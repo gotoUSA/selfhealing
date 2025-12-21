@@ -728,6 +728,64 @@ SELF_HEALING = {
 
 ---
 
+## 이벤트 로깅 설정 (EventLoggingConfig)
+
+Self-Healing 이벤트 핸들러의 로깅 레벨은 런타임에 동적으로 변경 가능합니다.
+
+### 환경 변수
+
+| 환경 변수 | 기본값 | 설명 |
+|-----------|--------|------|
+| `SH_EVENT_DLQ_LOG_LEVEL` | INFO | DLQ 이벤트 로깅 레벨 |
+| `SH_EVENT_CIRCUIT_BREAKER_LOG_LEVEL` | WARNING | Circuit Breaker 이벤트 로깅 레벨 |
+| `SH_EVENT_SLA_LOG_LEVEL` | WARNING | SLA 위반 이벤트 로깅 레벨 |
+
+### 사용 예시
+
+```bash
+# 환경 변수로 기본값 설정
+export SH_EVENT_DLQ_LOG_LEVEL=DEBUG
+export SH_EVENT_CIRCUIT_BREAKER_LOG_LEVEL=INFO
+export SH_EVENT_SLA_LOG_LEVEL=INFO
+```
+
+### 런타임 API
+
+```python
+from shopping.config import EventLoggingConfig
+
+# 현재 설정 조회
+config = EventLoggingConfig.get_instance()
+print(config.to_dict())
+# {
+#     "dlq_log_level": "INFO",
+#     "circuit_breaker_log_level": "WARNING",
+#     "sla_log_level": "WARNING",
+#     "last_updated": "2025-01-10T12:00:00Z",
+#     "updated_by": None
+# }
+
+# 런타임 설정 변경 (API 레벨)
+config.update(
+    dlq_log_level="DEBUG",
+    circuit_breaker_log_level="INFO",
+    updated_by="admin-api"
+)
+
+# 설정 초기화 (환경 변수 기본값으로)
+config.reset()
+```
+
+### 설정 우선순위
+
+1. **API 런타임 설정** (최우선) - `EventLoggingConfig.update()`
+2. **환경 변수** - `SH_EVENT_*` 환경 변수
+3. **하드코딩 기본값** - INFO (DLQ), WARNING (CB, SLA)
+
+이 구조를 통해 운영자는 재배포 없이 로깅 레벨을 조정할 수 있습니다.
+
+---
+
 ## 설정 검증
 
 애플리케이션 시작 시 설정 검증을 권장합니다:

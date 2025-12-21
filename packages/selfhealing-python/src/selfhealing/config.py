@@ -92,19 +92,19 @@ class ForensicSettings:
     # Private IP ranges that should be masked in logs
     mask_internal_ip: bool = True
     internal_ip_patterns: tuple[str, ...] = (
-        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",       # 10.0.0.0/8
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # 10.0.0.0/8
         r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}",  # 172.16.0.0/12
-        r"192\.168\.\d{1,3}\.\d{1,3}",          # 192.168.0.0/16
+        r"192\.168\.\d{1,3}\.\d{1,3}",  # 192.168.0.0/16
     )
 
     # Server path patterns to mask
     mask_server_paths: bool = True
     server_path_patterns: tuple[str, ...] = (
-        r"/home/[^/]+",                         # Home directories
-        r"/var/[^/]+/[^/]+",                    # Var subdirectories
-        r"/etc/[^/]+",                          # Config files
-        r"[A-Z]:\\Users\\[^\\]+",               # Windows user paths
-        r"/app/[^/]+/[^/]+",                    # Container app paths
+        r"/home/[^/]+",  # Home directories
+        r"/var/[^/]+/[^/]+",  # Var subdirectories
+        r"/etc/[^/]+",  # Config files
+        r"[A-Z]:\\Users\\[^\\]+",  # Windows user paths
+        r"/app/[^/]+/[^/]+",  # Container app paths
     )
 
 
@@ -200,6 +200,7 @@ class EventLoggingConfig:
         """Singleton pattern for global configuration."""
         if cls._instance is None:
             import threading
+
             cls._lock = threading.Lock()
             with cls._lock:
                 if cls._instance is None:
@@ -211,6 +212,7 @@ class EventLoggingConfig:
     def _init_defaults(self) -> None:
         """Initialize default values from environment or hardcoded defaults."""
         import threading
+
         self._runtime_lock = threading.Lock()
 
         # Runtime-configurable values (API level)
@@ -239,10 +241,7 @@ class EventLoggingConfig:
         """Validate and normalize log level."""
         level = level.upper()
         if level not in self.VALID_LEVELS:
-            raise ValueError(
-                f"Invalid log level: {level}. "
-                f"Valid levels: {self.VALID_LEVELS}"
-            )
+            raise ValueError(f"Invalid log level: {level}. " f"Valid levels: {self.VALID_LEVELS}")
         return level
 
     def _get_value(self, key: str) -> str:
@@ -250,9 +249,7 @@ class EventLoggingConfig:
         with self._runtime_lock:
             if key in self._runtime_config:
                 return self._runtime_config[key]
-        return self._env_defaults.get(
-            key, self._hardcoded_defaults.get(key, "INFO")
-        )
+        return self._env_defaults.get(key, self._hardcoded_defaults.get(key, "INFO"))
 
     def update(
         self,
@@ -335,6 +332,7 @@ class EventLoggingConfig:
     def get_log_level_int(self, level_name: str) -> int:
         """Convert level name to logging module integer."""
         import logging
+
         return getattr(logging, level_name.upper(), logging.INFO)
 
     def to_dict(self) -> dict:
@@ -372,25 +370,25 @@ class MetricCollectionSettings:
     """
 
     # 동기화 설정
-    sync_on_startup: bool = True           # 서버 시작 시 동기화
-    scheduled_sync_enabled: bool = False   # 주기적 동기화 (권장: 비활성화)
-    scheduled_sync_interval: int = 86400   # 주기 (초), 기본 24시간
+    sync_on_startup: bool = True  # 서버 시작 시 동기화
+    scheduled_sync_enabled: bool = False  # 주기적 동기화 (권장: 비활성화)
+    scheduled_sync_interval: int = 86400  # 주기 (초), 기본 24시간
 
     # Jitter 설정 (Thundering Herd 방지)
-    jitter_enabled: bool = True            # Jitter 활성화
-    jitter_max_delay_seconds: float = 60.0 # 최대 지연 시간 (초)
+    jitter_enabled: bool = True  # Jitter 활성화
+    jitter_max_delay_seconds: float = 60.0  # 최대 지연 시간 (초)
 
     # 어댑터 설정
-    adapter_type: str = "null"             # django, redis, null
-    redis_prefix: str = "sh:metrics:"      # Redis 어댑터용 키 프리픽스
+    adapter_type: str = "null"  # django, redis, null
+    redis_prefix: str = "sh:metrics:"  # Redis 어댑터용 키 프리픽스
 
     # Drift 감지 (거버넌스 레벨)
     drift_detection_enabled: bool = True
-    drift_warning_threshold: float = 0.05    # 5% - 경고
-    drift_critical_threshold: float = 0.20   # 20% - 심각, 알림 발송
-    drift_incident_threshold: float = 0.50   # 50% - 인시던트, 이벤트 유실
-    drift_incident_enabled: bool = True      # 인시던트 자동 생성
-    drift_alert_enabled: bool = True         # 알림 발송 활성화
+    drift_warning_threshold: float = 0.05  # 5% - 경고
+    drift_critical_threshold: float = 0.20  # 20% - 심각, 알림 발송
+    drift_incident_threshold: float = 0.50  # 50% - 인시던트, 이벤트 유실
+    drift_incident_enabled: bool = True  # 인시던트 자동 생성
+    drift_alert_enabled: bool = True  # 알림 발송 활성화
 
 
 @lru_cache(maxsize=1)
@@ -401,41 +399,19 @@ def get_metric_collection_settings() -> MetricCollectionSettings:
     Loads from environment variables with sensible defaults.
     """
     return MetricCollectionSettings(
-        sync_on_startup=os.environ.get(
-            "SELFHEALING_METRICS_SYNC_ON_STARTUP", "true"
-        ).lower() == "true",
-        scheduled_sync_enabled=os.environ.get(
-            "SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false"
-        ).lower() == "true",
-        scheduled_sync_interval=int(
-            os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")
-        ),
-        jitter_enabled=os.environ.get(
-            "SELFHEALING_METRICS_JITTER_ENABLED", "true"
-        ).lower() == "true",
-        jitter_max_delay_seconds=float(
-            os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")
-        ),
+        sync_on_startup=os.environ.get("SELFHEALING_METRICS_SYNC_ON_STARTUP", "true").lower() == "true",
+        scheduled_sync_enabled=os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false").lower() == "true",
+        scheduled_sync_interval=int(os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")),
+        jitter_enabled=os.environ.get("SELFHEALING_METRICS_JITTER_ENABLED", "true").lower() == "true",
+        jitter_max_delay_seconds=float(os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")),
         adapter_type=os.environ.get("SELFHEALING_METRICS_ADAPTER_TYPE", "null"),
         redis_prefix=os.environ.get("SELFHEALING_METRICS_REDIS_PREFIX", "sh:metrics:"),
-        drift_detection_enabled=os.environ.get(
-            "SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true"
-        ).lower() == "true",
-        drift_warning_threshold=float(
-            os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")
-        ),
-        drift_critical_threshold=float(
-            os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")
-        ),
-        drift_incident_threshold=float(
-            os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")
-        ),
-        drift_incident_enabled=os.environ.get(
-            "SELFHEALING_DRIFT_INCIDENT_ENABLED", "true"
-        ).lower() == "true",
-        drift_alert_enabled=os.environ.get(
-            "SELFHEALING_DRIFT_ALERT_ENABLED", "true"
-        ).lower() == "true",
+        drift_detection_enabled=os.environ.get("SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true").lower() == "true",
+        drift_warning_threshold=float(os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")),
+        drift_critical_threshold=float(os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")),
+        drift_incident_threshold=float(os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")),
+        drift_incident_enabled=os.environ.get("SELFHEALING_DRIFT_INCIDENT_ENABLED", "true").lower() == "true",
+        drift_alert_enabled=os.environ.get("SELFHEALING_DRIFT_ALERT_ENABLED", "true").lower() == "true",
     )
 
 

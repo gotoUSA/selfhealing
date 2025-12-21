@@ -111,6 +111,32 @@ def sync_gauges():
         dlq_pending_count.labels(domain=domain).set(actual)
 ```
 
+### 음수 방지를 위한 SafeGauge 래퍼
+
+서버 재시작 후 `dec()` 호출 시 Gauge 값이 음수가 되는 문제를 방지하기 위해 **SafeGauge** 래퍼를 사용합니다.
+
+> 상세 문서: [08_OBSERVABILITY.md#safegauge-래퍼-패턴](08_OBSERVABILITY.md#safegauge-래퍼-패턴)
+
+```python
+from shopping.metrics.safe_gauge import SafeGauge
+
+# SafeGauge로 래핑
+safe_pending_gauge = SafeGauge(dlq_pending_gauge, "dlq_pending")
+
+# inc/dec 시 자동으로 0 미만 방지
+safe_pending_gauge.labels(domain="payment").inc()  # 1
+safe_pending_gauge.labels(domain="payment").dec()  # 0
+safe_pending_gauge.labels(domain="payment").dec()  # 0 유지 (음수 방지)
+
+# 재시작 후 동기화
+safe_pending_gauge.labels(domain="payment").sync_from_source(actual_db_count)
+```
+
+**동작 원리:**
+1. **Shadow Counter**: 각 레이블 조합별로 현재 값 추적
+2. **음수 차단**: `dec()` 호출 시 shadow 값이 0이면 실제 dec 호출 생략
+3. **동기화**: `sync_from_source(value)` 또는 Reconciler를 통해 DB와 동기화
+
 ---
 
 ## 메트릭 소스 어댑터

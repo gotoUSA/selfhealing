@@ -418,9 +418,7 @@ class TestEventHandlerWithSafeGauge:
         ):
             DLQMetricEventHandler.on_item_created("payment", "PG_TIMEOUT")
 
-        mock_metrics.record_dlq_item_created.assert_called_once_with(
-            "payment", "PG_TIMEOUT"
-        )
+        mock_metrics.record_dlq_item_created.assert_called_once_with("payment", "PG_TIMEOUT")
 
     def test_on_item_resolved_uses_safe_gauge(self):
         """on_item_resolved가 SafeGauge를 사용하는지 확인."""
@@ -444,9 +442,7 @@ class TestEventHandlerWithSafeGauge:
             "selfhealing.metrics.event_handlers._get_metrics",
             return_value=mock_metrics,
         ):
-            DLQMetricEventHandler.on_item_resolved(
-                "payment", "auto_replay", duration_seconds=30.0
-            )
+            DLQMetricEventHandler.on_item_resolved("payment", "auto_replay", duration_seconds=30.0)
 
         # Should have been called through SafeGauge
         mock_metrics.recovery_time_seconds.labels.assert_called()
@@ -478,9 +474,7 @@ class TestEventHandlerLogging:
             "selfhealing.metrics.event_handlers._get_metrics",
             return_value=mock_metrics,
         ):
-            with patch(
-                "selfhealing.metrics.event_handlers.logger"
-            ) as mock_logger:
+            with patch("selfhealing.metrics.event_handlers.logger") as mock_logger:
                 DLQMetricEventHandler.on_item_created("payment", "PG_TIMEOUT")
 
                 # Should log at WARNING level (30)
@@ -512,12 +506,8 @@ class TestEventHandlerLogging:
             "selfhealing.metrics.event_handlers._get_metrics",
             return_value=mock_metrics,
         ):
-            with patch(
-                "selfhealing.metrics.event_handlers.logger"
-            ) as mock_logger:
-                CircuitBreakerEventHandler.on_state_changed(
-                    "toss_payment", "closed", "open"
-                )
+            with patch("selfhealing.metrics.event_handlers.logger") as mock_logger:
+                CircuitBreakerEventHandler.on_state_changed("toss_payment", "closed", "open")
 
                 mock_logger.log.assert_called()
                 call_args = mock_logger.log.call_args

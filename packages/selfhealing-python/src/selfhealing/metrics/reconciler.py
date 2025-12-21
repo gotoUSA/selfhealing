@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 class DriftSeverity:
     """Drift 심각도 레벨."""
 
-    NORMAL = "normal"       # < 5%: 정상 범위
-    WARNING = "warning"     # 5~20%: 경고, 로그만 기록
-    CRITICAL = "critical"   # 20~50%: 심각, 알림 발송
-    INCIDENT = "incident"   # > 50%: 인시던트, 이벤트 유실 의심
+    NORMAL = "normal"  # < 5%: 정상 범위
+    WARNING = "warning"  # 5~20%: 경고, 로그만 기록
+    CRITICAL = "critical"  # 20~50%: 심각, 알림 발송
+    INCIDENT = "incident"  # > 50%: 인시던트, 이벤트 유실 의심
 
 
 @dataclass
@@ -105,6 +105,7 @@ class MetricReconciler:
             return self._domains
         try:
             from selfhealing.metrics.prometheus import get_domains
+
             return get_domains()
         except ImportError:
             return ["external_service", "internal_process", "async_task"]
@@ -113,6 +114,7 @@ class MetricReconciler:
         """메트릭 인스턴스 반환."""
         try:
             from selfhealing.metrics.prometheus import get_metrics
+
             return get_metrics()
         except ImportError:
             return None
@@ -131,10 +133,12 @@ class MetricReconciler:
         for domain in self._get_domains():
             try:
                 actual = self.adapter.get_dlq_pending_count(domain)
-                result.dlq_pending[domain] = actual
+                # 음수 방어: 개수는 0 이상이어야 함
+                safe_actual = max(0, actual)
+                result.dlq_pending[domain] = safe_actual
 
-                if metrics and hasattr(metrics, 'dlq_pending_gauge'):
-                    metrics.dlq_pending_gauge.labels(domain=domain).set(actual)
+                if metrics and hasattr(metrics, "dlq_pending_gauge"):
+                    metrics.dlq_pending_gauge.labels(domain=domain).set(safe_actual)
             except Exception as e:
                 logger.warning(f"[Reconciler] Failed to sync DLQ pending for {domain}: {e}")
 
@@ -145,7 +149,7 @@ class MetricReconciler:
                 state = self.adapter.get_circuit_breaker_state(service)
                 result.circuit_breaker_states[service] = state
 
-                if metrics and hasattr(metrics, 'circuit_breaker_state'):
+                if metrics and hasattr(metrics, "circuit_breaker_state"):
                     state_value = state_values.get(state, 0)
                     metrics.circuit_breaker_state.labels(service_name=service).set(state_value)
             except Exception as e:
@@ -155,10 +159,12 @@ class MetricReconciler:
         for domain in self._get_domains():
             try:
                 rate = self.adapter.get_retry_success_rate(domain)
-                result.retry_success_rates[domain] = rate
+                # 0-100 범위 클램핑
+                safe_rate = max(0.0, min(100.0, rate))
+                result.retry_success_rates[domain] = safe_rate
 
-                if metrics and hasattr(metrics, 'retry_success_rate'):
-                    metrics.retry_success_rate.labels(domain=domain).set(rate)
+                if metrics and hasattr(metrics, "retry_success_rate"):
+                    metrics.retry_success_rate.labels(domain=domain).set(safe_rate)
             except Exception as e:
                 logger.warning(f"[Reconciler] Failed to sync retry rate for {domain}: {e}")
 
@@ -194,14 +200,18 @@ class MetricReconciler:
         metrics = self._get_metrics()
 
         actual = self.adapter.get_dlq_pending_count(domain)
-        if metrics and hasattr(metrics, 'dlq_pending_gauge'):
-            metrics.dlq_pending_gauge.labels(domain=domain).set(actual)
+        # 음수 방어: 개수는 0 이상이어야 함
+        safe_actual = max(0, actual)
+        if metrics and hasattr(metrics, "dlq_pending_gauge"):
+            metrics.dlq_pending_gauge.labels(domain=domain).set(safe_actual)
 
         rate = self.adapter.get_retry_success_rate(domain)
-        if metrics and hasattr(metrics, 'retry_success_rate'):
-            metrics.retry_success_rate.labels(domain=domain).set(rate)
+        # 0-100 범위 클램핑
+        safe_rate = max(0.0, min(100.0, rate))
+        if metrics and hasattr(metrics, "retry_success_rate"):
+            metrics.retry_success_rate.labels(domain=domain).set(safe_rate)
 
-        return {"domain": domain, "dlq_pending": actual, "retry_rate": rate}
+        return {"domain": domain, "dlq_pending": safe_actual, "retry_rate": safe_rate}
 
     def sync_with_drift_detection(self) -> SyncResult:
         """
@@ -233,7 +243,7 @@ class MetricReconciler:
         result: Dict[str, Dict[str, Any]] = {"dlq_pending": {}}
         metrics = self._get_metrics()
 
-        if metrics and hasattr(metrics, 'dlq_pending_gauge'):
+        if metrics and hasattr(metrics, "dlq_pending_gauge"):
             for domain in self._get_domains():
                 try:
                     # Prometheus gauge에서 현재 값 읽기 시도
@@ -300,6 +310,7 @@ class MetricReconciler:
         except Exception:
             # 기본값 사용
             from selfhealing.models.drift_config import DriftThresholdConfig
+
             return DriftThresholdConfig()
 
     def _classify_drift_severity(self, drift: DriftResult) -> str:
