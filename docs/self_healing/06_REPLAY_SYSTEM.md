@@ -42,7 +42,7 @@ DLQ에 저장된 **실패한 작업을 다시 실행**하는 것입니다.
 
 ### 1.3 왜 Replay가 필요한가?
 
-1. **외부 서비스 복구 후**: PG 장애가 해결된 후 실패한 결제 재실행
+1. **외부 서비스 복구 후**: 외부 API 장애가 해결된 후 실패한 작업 재실행
 2. **버그 수정 후**: 코드 버그로 실패한 작업을 수정 후 재실행
 3. **수동 검토 후**: 운영자가 검토 후 안전하다고 판단한 항목 재실행
 4. **Circuit Breaker Close 시**: 서비스 복구 후 자동 재실행
@@ -249,26 +249,29 @@ for item in items:
 
 ```python
 class PaymentReplayHandler(ReplayHandler):
-    """결제 도메인 Replay 핸들러"""
+    """결제 도메인 Replay 핸들러 (도메인 중립 패턴 사용)"""
     
     @property
     def domain(self) -> str:
         return "payment"
     
     def can_replay(self, failed_op: FailedOperation) -> tuple[bool, str]:
-        # 이미 완료된 결제
-        if failed_op.payment and failed_op.payment.is_paid:
-            return False, "Payment is already completed"
+        # entity_refs에서 관련 ID 조회
+        entity_refs = failed_op.entity_refs or {}
         
-        # 취소된 주문
-        if failed_op.order and failed_op.order.status == "cancelled":
-            return False, "Order is cancelled"
+        # 이미 완료된 결제인지 확인 (외부 조회 필요시)
+        if self._is_already_completed(failed_op.entity_id, entity_refs):
+            return False, "Operation is already completed"
+        
+        # 취소된 관련 엔티티 확인
+        if self._is_related_entity_cancelled(entity_refs):
+            return False, "Related entity is cancelled"
         
         # 재실행 불가능한 실패 유형
         non_replayable = [
-            "AMOUNT_MISMATCH_PG_RESPONSE",
+            "AMOUNT_MISMATCH",
             "SECURITY_SIGNATURE_INVALID", 
-            "DUPLICATE_PAYMENT",
+            "DUPLICATE_OPERATION",
         ]
         if failed_op.failure_type in non_replayable:
             return False, f"Failure type {failed_op.failure_type} cannot be replayed"
@@ -281,21 +284,17 @@ class PaymentReplayHandler(ReplayHandler):
             return ReplayResult.failed(failed_op.id, reason)
         
         try:
-            # 스냅샷 데이터에서 복구
-            payment_id = (
-                failed_op.payment_id or 
-                failed_op.snapshot_data.get("payment_id")
-            )
-            order_id = (
-                failed_op.order_id or 
-                failed_op.snapshot_data.get("order_id")
-            )
+            # 스냅샷 데이터와 entity_refs에서 복구
+            entity_id = failed_op.entity_id
+            entity_refs = failed_op.entity_refs or {}
+            snapshot = failed_op.snapshot_data or {}
             
-            # PaymentRecoveryHandler를 통해 재시도 스케줄
-            recovery = get_payment_recovery_handler()
+            # 도메인별 RecoveryHandler를 통해 재시도 스케줄
+            recovery = get_recovery_handler(self.domain)
             task_id = recovery.schedule_retry(
-                payment_id=payment_id,
-                order_id=order_id,
+                entity_id=entity_id,
+                entity_refs=entity_refs,
+                snapshot_data=snapshot,
                 attempt=0,  # 새 시도
             )
             
@@ -313,15 +312,19 @@ class PaymentReplayHandler(ReplayHandler):
 
 ```python
 class PointReplayHandler(ReplayHandler):
-    """포인트 도메인 Replay 핸들러"""
+    """포인트 도메인 Replay 핸들러 (도메인 중립 패턴 사용)"""
     
     @property
     def domain(self) -> str:
         return "point"
     
     def can_replay(self, failed_op: FailedOperation) -> tuple[bool, str]:
-        if not failed_op.user:
-            return False, "User not found"
+        # entity_refs에서 user_id 조회
+        entity_refs = failed_op.entity_refs or {}
+        user_id = entity_refs.get("user_id") or failed_op.snapshot_data.get("user_id")
+        
+        if not user_id:
+            return False, "User ID not found in entity_refs or snapshot"
         
         # 이미 처리된 포인트 적립
         if self._is_point_already_applied(failed_op):
@@ -335,21 +338,25 @@ class PointReplayHandler(ReplayHandler):
             return ReplayResult.failed(failed_op.id, reason)
         
         try:
-            from shopping.services.point_service import add_point
+            from shopping.services.point_service import add_point_by_user_id
             
-            # 스냅샷에서 포인트 정보 복구
-            amount = failed_op.snapshot_data.get("amount", 0)
-            description = failed_op.snapshot_data.get("description", "")
+            # entity_refs와 스냅샷에서 포인트 정보 복구
+            entity_refs = failed_op.entity_refs or {}
+            snapshot = failed_op.snapshot_data or {}
             
-            add_point(
-                user=failed_op.user,
+            user_id = entity_refs.get("user_id") or snapshot.get("user_id")
+            amount = snapshot.get("amount", 0)
+            description = snapshot.get("description", "")
+            
+            add_point_by_user_id(
+                user_id=user_id,
                 amount=amount,
                 description=description,
             )
             
             return ReplayResult.succeeded(
                 failed_op.id,
-                f"Point {amount} added successfully"
+                f"Point {amount} added successfully for user {user_id}"
             )
             
         except Exception as e:
@@ -450,21 +457,31 @@ def conditional_replay_on_circuit_close(
 ### 6.3 서비스 이름과 DLQ 매칭
 
 ```python
-# 서비스 이름 → 도메인 + failure_type 매핑
+# 서비스 이름 → 도메인 + failure_type 매핑 (도메인 중립 설정)
 SERVICE_TO_DLQ_FILTER = {
-    "toss_payment": {
+    # 외부 결제 서비스 (PG사)
+    "external_payment_gateway": {
         "domain": "payment",
         "failure_types": [
-            "PG_TIMEOUT",
-            "PG_CONNECTION_ERROR",
+            "EXTERNAL_TIMEOUT",
+            "CONNECTION_ERROR",
             "CIRCUIT_BREAKER_OPEN",
         ],
     },
+    # 재고 관리 서비스
     "inventory_service": {
         "domain": "inventory",
         "failure_types": [
-            "STOCK_LOCK_TIMEOUT",
+            "RESOURCE_LOCK_TIMEOUT",
             "SERVICE_UNAVAILABLE",
+        ],
+    },
+    # 알림 서비스
+    "notification_service": {
+        "domain": "notification",
+        "failure_types": [
+            "DELIVERY_FAILED",
+            "RATE_LIMITED",
         ],
     },
 }
@@ -568,16 +585,18 @@ CELERY_BEAT_SCHEDULE = {
 
 @shared_task
 def scheduled_batch_replay(domain: str, max_items: int = 100):
-    """스케줄 기반 일괄 재실행"""
+    """스케줄 기반 일괄 재실행 (도메인 중립)"""
     
     service = get_replay_service()
     
     # Circuit Breaker가 열려있으면 스킵
     cb_service = get_circuit_breaker_service()
-    service_name = f"{domain}_service"
     
-    if not cb_service.should_allow(service_name):
-        return {"skipped": True, "reason": "Circuit breaker open"}
+    # 도메인에 연관된 서비스들의 Circuit Breaker 상태 확인
+    related_services = get_related_services_for_domain(domain)
+    for svc_name in related_services:
+        if not cb_service.should_allow(svc_name):
+            return {"skipped": True, "reason": f"Circuit breaker open for {svc_name}"}
     
     result = service.batch_replay(
         domain=domain,

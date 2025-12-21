@@ -3,6 +3,8 @@ Failed External Request 모델 (Dead Letter Queue)
 
 외부 API 호출 재시도 최대 횟수 초과 후 복구 불가능한 요청을 추적합니다.
 수동 복구 또는 배치 재처리를 위한 데이터를 저장합니다.
+
+NOTE: 도메인 중립적 설계 - 특정 비즈니스 도메인(결제, 주문 등)에 의존하지 않음
 """
 
 from __future__ import annotations
@@ -16,10 +18,14 @@ from django.utils import timezone
 
 class FailedExternalRequest(models.Model):
     """
-    Dead Letter Queue: 복구 불가능한 외부 요청 추적
+    Dead Letter Queue: 복구 불가능한 외부 요청 추적 (도메인 중립)
 
     최대 재시도 횟수를 초과하거나 복구 불가능한 오류가 발생한 외부 API 요청을
     별도로 저장하여 수동 검토 및 복구를 지원합니다.
+
+    설계 원칙:
+    - FK 대신 entity_type/entity_id로 느슨한 결합
+    - 어떤 비즈니스 도메인에서도 사용 가능
     """
 
     # 실패 유형
@@ -41,7 +47,7 @@ class FailedExternalRequest(models.Model):
         ("expired", "보관 기간 만료"),
     ]
 
-    # 도메인 타입 (어떤 외부 서비스인지)
+    # 도메인 타입 (어떤 외부 서비스인지) - 확장 가능한 설계
     DOMAIN_CHOICES = [
         ("external_api", "외부 API"),
         ("payment", "결제"),
@@ -59,48 +65,53 @@ class FailedExternalRequest(models.Model):
         verbose_name="도메인",
     )
 
-    # 원본 결제 참조 (nullable - 결제 외 요청도 있을 수 있음)
-    payment = models.ForeignKey(
-        "Payment",
-        on_delete=models.SET_NULL,
-        null=True,
+    # ========================================
+    # Generic Entity Reference (도메인 중립)
+    # ========================================
+    entity_type = models.CharField(
+        max_length=100,
         blank=True,
-        related_name="failed_external_requests",
-        verbose_name="원본 결제",
+        db_index=True,
+        verbose_name="엔티티 타입",
+        help_text="관련 엔티티 타입 (예: 'order', 'payment', 'subscription')",
     )
 
-    # 주문 참조
-    order = models.ForeignKey(
-        "Order",
-        on_delete=models.SET_NULL,
-        null=True,
+    entity_id = models.CharField(
+        max_length=100,
         blank=True,
-        related_name="failed_external_requests",
-        verbose_name="주문",
+        db_index=True,
+        verbose_name="엔티티 ID",
+        help_text="관련 엔티티의 ID",
     )
 
-    # 사용자 참조
-    user = models.ForeignKey(
-        "User",
-        on_delete=models.SET_NULL,
-        null=True,
+    # 추가 엔티티 참조를 위한 JSON 필드
+    entity_refs = models.JSONField(
+        default=dict,
         blank=True,
-        related_name="failed_external_requests",
-        verbose_name="사용자",
+        verbose_name="엔티티 참조",
+        help_text="추가 엔티티 참조 (예: {'user_id': 123, 'tenant_id': 'abc'})",
     )
 
-    # 외부 요청 식별자 (결제키, 웹훅ID 등)
+    # 사용자 ID (도메인 중립 - FK 대신 정수 ID 사용)
+    user_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="사용자 ID",
+    )
+
+    # 외부 요청 식별자 (API 키, 웹훅ID 등)
     external_request_id = models.CharField(
         max_length=200,
         blank=True,
         verbose_name="외부 요청 ID",
     )
 
-    # 외부 주문/트랜잭션 ID
-    external_order_id = models.CharField(
+    # 외부 트랜잭션 ID
+    external_transaction_id = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name="외부 주문번호",
+        verbose_name="외부 트랜잭션 ID",
     )
 
     # 금액 (해당하는 경우)
@@ -157,13 +168,11 @@ class FailedExternalRequest(models.Model):
         verbose_name="해결 시각",
     )
 
-    resolved_by = models.ForeignKey(
-        "User",
-        on_delete=models.SET_NULL,
+    # 해결자 ID (도메인 중립)
+    resolved_by_id = models.PositiveIntegerField(
         null=True,
         blank=True,
-        related_name="resolved_failed_external_requests",
-        verbose_name="해결자",
+        verbose_name="해결자 ID",
     )
 
     resolution_note = models.TextField(
@@ -218,78 +227,99 @@ class FailedExternalRequest(models.Model):
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["failure_type", "-created_at"]),
             models.Index(fields=["domain", "-created_at"]),
+            models.Index(fields=["entity_type", "entity_id"]),
             models.Index(fields=["expires_at"]),
             models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self) -> str:
-        return f"[{self.domain}] {self.get_failure_type_display()} {self.external_order_id or 'N/A'} - {self.get_status_display()}"
+        entity_info = f"{self.entity_type}:{self.entity_id}" if self.entity_type else "N/A"
+        return f"[{self.domain}] {self.get_failure_type_display()} {entity_info} - {self.get_status_display()}"
 
-    def mark_as_resolved(self, resolved_by, note: str = "") -> None:
+    def mark_as_resolved(self, resolved_by_id: int | None = None, note: str = "") -> None:
         """해결됨으로 표시"""
         self.status = "resolved"
         self.resolved_at = timezone.now()
-        self.resolved_by = resolved_by
+        self.resolved_by_id = resolved_by_id
         self.resolution_note = note
-        self.save(update_fields=["status", "resolved_at", "resolved_by", "resolution_note", "updated_at"])
+        self.save(update_fields=["status", "resolved_at", "resolved_by_id", "resolution_note", "updated_at"])
 
-    def mark_as_rejected(self, resolved_by, note: str = "") -> None:
+    def mark_as_rejected(self, resolved_by_id: int | None = None, note: str = "") -> None:
         """복구 불가로 표시"""
         self.status = "rejected"
         self.resolved_at = timezone.now()
-        self.resolved_by = resolved_by
+        self.resolved_by_id = resolved_by_id
         self.resolution_note = note
-        self.save(update_fields=["status", "resolved_at", "resolved_by", "resolution_note", "updated_at"])
+        self.save(update_fields=["status", "resolved_at", "resolved_by_id", "resolution_note", "updated_at"])
 
     @classmethod
     def create_from_failure(
         cls,
         domain: str = "external_api",
-        payment=None,
-        order=None,
-        user=None,
+        entity_type: str = "",
+        entity_id: str = "",
+        entity_refs: dict[str, Any] | None = None,
+        user_id: int | None = None,
         failure_type: str = "unknown",
         error_code: str = "",
         error_message: str = "",
         retry_count: int = 0,
         external_request_id: str = "",
-        external_order_id: str = "",
+        external_transaction_id: str = "",
         amount: Decimal | None = None,
         request_data: dict[str, Any] | None = None,
         response_data: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        snapshot_data: dict[str, Any] | None = None,
     ) -> "FailedExternalRequest":
-        """외부 요청 실패로부터 Dead Letter 레코드 생성"""
+        """
+        외부 요청 실패로부터 Dead Letter 레코드 생성 (도메인 중립)
+
+        Args:
+            domain: 비즈니스 도메인 (external_api, payment, point 등)
+            entity_type: 관련 엔티티 타입 (예: 'order', 'subscription')
+            entity_id: 관련 엔티티 ID
+            entity_refs: 추가 엔티티 참조 딕셔너리
+            user_id: 사용자 ID
+            failure_type: 실패 유형
+            error_code: 에러 코드
+            error_message: 에러 메시지
+            retry_count: 재시도 횟수
+            external_request_id: 외부 요청 ID
+            external_transaction_id: 외부 트랜잭션 ID
+            amount: 금액 (해당하는 경우)
+            request_data: 요청 데이터
+            response_data: 응답 데이터
+            metadata: 추가 메타데이터
+            snapshot_data: 복구용 스냅샷 (metadata에 병합)
+        """
         from datetime import timedelta
 
         from django.conf import settings
 
-        retention_days = getattr(settings, "PAYMENT_RECOVERY", {}).get("DLQ_RETENTION_DAYS", 30)
+        # SELF_HEALING 설정 우선, PAYMENT_RECOVERY는 하위 호환
+        self_healing_config = getattr(settings, "SELF_HEALING", {})
+        legacy_config = getattr(settings, "PAYMENT_RECOVERY", {})
+        retention_days = self_healing_config.get(
+            "DLQ_RETENTION_DAYS",
+            legacy_config.get("DLQ_RETENTION_DAYS", 30)
+        )
         expires_at = timezone.now() + timedelta(days=retention_days)
 
-        # 결제에서 기본값 추출
-        if payment and not external_request_id:
-            external_request_id = getattr(payment, "payment_key", "") or ""
-        if payment and not external_order_id:
-            external_order_id = getattr(payment, "toss_order_id", "") or ""
-        if order and not external_order_id:
-            external_order_id = str(order.id)
-        if amount is None:
-            if payment:
-                amount = getattr(payment, "amount", Decimal("0"))
-            elif order:
-                amount = getattr(order, "final_amount", Decimal("0"))
-            else:
-                amount = Decimal("0")
+        # 메타데이터에 스냅샷 병합
+        final_metadata = metadata or {}
+        if snapshot_data:
+            final_metadata["snapshot_data"] = snapshot_data
 
         return cls.objects.create(
             domain=domain,
-            payment=payment,
-            order=order,
-            user=user,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_refs=entity_refs or {},
+            user_id=user_id,
             external_request_id=external_request_id,
-            external_order_id=external_order_id,
-            amount=amount,
+            external_transaction_id=external_transaction_id,
+            amount=amount if amount is not None else Decimal("0"),
             failure_type=failure_type,
             error_code=error_code,
             error_message=error_message,
@@ -297,11 +327,11 @@ class FailedExternalRequest(models.Model):
             last_retry_at=timezone.now() if retry_count > 0 else None,
             request_data=request_data or {},
             response_data=response_data or {},
-            metadata=metadata or {},
+            metadata=final_metadata,
             expires_at=expires_at,
         )
 
-    # Backward compatibility alias
+    # Backward compatibility aliases removed - use entity_type/entity_id instead
 class CircuitBreakerState(models.Model):
     """
     Circuit Breaker 상태 저장
@@ -364,14 +394,11 @@ class CircuitBreakerState(models.Model):
         help_text="운영자가 수동으로 상태를 변경한 경우 True",
     )
 
-    # 수동 제어자
-    controlled_by = models.ForeignKey(
-        "User",
-        on_delete=models.SET_NULL,
+    # 수동 제어자 ID (도메인 중립)
+    controlled_by_id = models.PositiveIntegerField(
         null=True,
         blank=True,
-        related_name="circuit_breaker_controls",
-        verbose_name="제어자",
+        verbose_name="제어자 ID",
     )
 
     # 제어 사유
@@ -424,10 +451,13 @@ class CircuitBreakerState(models.Model):
         self.last_failure_at = timezone.now()
         self.success_count = 0  # 성공 카운터 리셋
 
-        # Circuit Breaker가 활성화되어 있고, 임계값 초과 시 Open
-        recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
-        if recovery_settings.get("CIRCUIT_BREAKER_ENABLED", False):
-            threshold = recovery_settings.get("CIRCUIT_BREAKER_FAILURE_THRESHOLD", 5)
+        # SELF_HEALING 설정 우선, PAYMENT_RECOVERY는 하위 호환
+        self_healing_config = getattr(settings, "SELF_HEALING", {})
+        legacy_config = getattr(settings, "PAYMENT_RECOVERY", {})
+        cb_config = self_healing_config.get("CIRCUIT_BREAKER", legacy_config)
+
+        if cb_config.get("CIRCUIT_BREAKER_ENABLED", cb_config.get("ENABLED", False)):
+            threshold = cb_config.get("CIRCUIT_BREAKER_FAILURE_THRESHOLD", cb_config.get("FAILURE_THRESHOLD", 5))
             if self.failure_count >= threshold and self.state == "closed":
                 self.state = "open"
                 self.opened_at = timezone.now()
@@ -441,8 +471,12 @@ class CircuitBreakerState(models.Model):
         if self.state == "half_open":
             self.success_count += 1
 
-            recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
-            success_threshold = recovery_settings.get("CIRCUIT_BREAKER_SUCCESS_THRESHOLD", 2)
+            # SELF_HEALING 설정 우선
+            self_healing_config = getattr(settings, "SELF_HEALING", {})
+            legacy_config = getattr(settings, "PAYMENT_RECOVERY", {})
+            cb_config = self_healing_config.get("CIRCUIT_BREAKER", legacy_config)
+            success_threshold = cb_config.get("CIRCUIT_BREAKER_SUCCESS_THRESHOLD", cb_config.get("SUCCESS_THRESHOLD", 2))
+
             if self.success_count >= success_threshold:
                 # Close로 전환
                 self.state = "closed"
@@ -460,9 +494,13 @@ class CircuitBreakerState(models.Model):
         """요청 허용 여부 확인"""
         from django.conf import settings
 
+        # SELF_HEALING 설정 우선
+        self_healing_config = getattr(settings, "SELF_HEALING", {})
+        legacy_config = getattr(settings, "PAYMENT_RECOVERY", {})
+        cb_config = self_healing_config.get("CIRCUIT_BREAKER", legacy_config)
+
         # Circuit Breaker가 비활성화되어 있으면 항상 허용
-        recovery_settings = getattr(settings, "PAYMENT_RECOVERY", {})
-        if not recovery_settings.get("CIRCUIT_BREAKER_ENABLED", False):
+        if not cb_config.get("CIRCUIT_BREAKER_ENABLED", cb_config.get("ENABLED", False)):
             return True
 
         if self.state == "closed":
@@ -470,7 +508,7 @@ class CircuitBreakerState(models.Model):
 
         if self.state == "open":
             # Recovery timeout 확인
-            recovery_timeout = recovery_settings.get("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", 60)
+            recovery_timeout = cb_config.get("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", cb_config.get("RECOVERY_TIMEOUT", 60))
             if self.opened_at:
                 elapsed = (timezone.now() - self.opened_at).total_seconds()
                 if elapsed >= recovery_timeout:
@@ -486,7 +524,7 @@ class CircuitBreakerState(models.Model):
 
     def force_open(
         self,
-        controlled_by=None,
+        controlled_by_id: int | None = None,
         reason: str = "",
         ttl_minutes: int = 90,
     ) -> None:
@@ -500,7 +538,7 @@ class CircuitBreakerState(models.Model):
         - Override expires automatically after TTL to prevent forgotten blocks
 
         Args:
-            controlled_by: User who initiated the override
+            controlled_by_id: User ID who initiated the override
             reason: Reason for the manual override
             ttl_minutes: Time-to-live in minutes (default 90, max recommended 180)
         """
@@ -509,18 +547,22 @@ class CircuitBreakerState(models.Model):
         self.state = "open"
         self.opened_at = timezone.now()
         self.manually_controlled = True
-        self.controlled_by = controlled_by
+        self.controlled_by_id = controlled_by_id
         self.control_reason = reason
         # Set TTL - manual overrides should never be indefinite
         self.manual_override_expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
         self.save()
 
-    def force_close(self, controlled_by=None, reason: str = "") -> None:
+    def force_close(self, controlled_by_id: int | None = None, reason: str = "") -> None:
         """
         Manually transition to CLOSED state (allow all requests).
 
         Clears manual override and resets all counters.
         If triggered with replay, failures are routed to REQUIRES_REVIEW.
+
+        Args:
+            controlled_by_id: User ID who initiated the override
+            reason: Reason for the manual override
         """
         self.state = "closed"
         self.failure_count = 0
@@ -528,7 +570,7 @@ class CircuitBreakerState(models.Model):
         self.half_open_request_count = 0
         self.opened_at = None
         self.manually_controlled = True
-        self.controlled_by = controlled_by
+        self.controlled_by_id = controlled_by_id
         self.control_reason = reason
         # Clear TTL on close
         self.manual_override_expires_at = None

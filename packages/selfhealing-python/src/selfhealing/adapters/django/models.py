@@ -94,19 +94,30 @@ class FailedOperation(models.Model):
         verbose_name="Status",
     )
 
-    # Original References (use integer IDs for flexibility)
-    order_id = models.PositiveIntegerField(
-        null=True,
+    # ========================================
+    # Generic Entity Reference (Domain Neutral)
+    # ========================================
+    entity_type = models.CharField(
+        max_length=100,
         blank=True,
         db_index=True,
-        verbose_name="Order ID",
+        verbose_name="Entity Type",
+        help_text="Type of related entity (e.g., 'order', 'subscription', 'user')",
     )
 
-    payment_id = models.PositiveIntegerField(
-        null=True,
+    entity_id = models.CharField(
+        max_length=100,
         blank=True,
         db_index=True,
-        verbose_name="Payment ID",
+        verbose_name="Entity ID",
+        help_text="ID of the related entity",
+    )
+
+    entity_refs = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Entity References",
+        help_text="Additional entity references (e.g., {'user_id': 123, 'tenant_id': 'abc'})",
     )
 
     user_id = models.PositiveIntegerField(
@@ -572,17 +583,27 @@ class SecurityIncident(models.Model):
         verbose_name="Resolved At",
     )
 
-    # Related References
-    order_id = models.PositiveIntegerField(
-        null=True,
+    # Generic Entity References (Domain Neutral)
+    entity_type = models.CharField(
+        max_length=100,
         blank=True,
-        verbose_name="Order ID",
+        db_index=True,
+        verbose_name="Entity Type",
+        help_text="Type of related entity (e.g., 'order', 'subscription')",
     )
 
-    payment_id = models.PositiveIntegerField(
-        null=True,
+    entity_id = models.CharField(
+        max_length=100,
         blank=True,
-        verbose_name="Payment ID",
+        db_index=True,
+        verbose_name="Entity ID",
+    )
+
+    entity_refs = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Entity References",
+        help_text="Additional entity references as key-value pairs",
     )
 
     # Timestamps

@@ -40,17 +40,9 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         user_id: Optional[int] = None,
         entity_refs: Optional[dict[str, int]] = None,
         raw_payload: Optional[dict[str, Any]] = None,
-        # Legacy compatibility - will be converted to entity_refs
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
     ) -> SecurityIncidentData:
-        """Create a new security incident."""
-        # Build entity_refs from legacy fields if not provided
+        """Create a new security incident (domain-neutral)."""
         refs = entity_refs or {}
-        if order_id is not None:
-            refs["order_id"] = order_id
-        if payment_id is not None:
-            refs["payment_id"] = payment_id
 
         with self._lock:
             incident = SecurityIncidentData(

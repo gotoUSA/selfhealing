@@ -37,8 +37,7 @@ class SQLAlchemySecurityIncidentRepository(BaseRepository, SecurityIncidentRepos
             source_ip=model.source_ip,
             user_agent=model.user_agent or "",
             user_id=model.user_id,
-            order_id=model.order_id,
-            payment_id=model.payment_id,
+            entity_refs=model.entity_refs or {},
             description=model.description or "",
             raw_payload=model.raw_payload or {},
             assigned_to_id=model.assigned_to_id,
@@ -56,11 +55,10 @@ class SQLAlchemySecurityIncidentRepository(BaseRepository, SecurityIncidentRepos
         source_ip: Optional[str] = None,
         user_agent: str = "",
         user_id: Optional[int] = None,
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
+        entity_refs: Optional[dict[str, Any]] = None,
         raw_payload: Optional[dict[str, Any]] = None,
     ) -> SecurityIncidentData:
-        """Create a new security incident."""
+        """Create a new security incident (domain-neutral)."""
         session = self._get_session()
         try:
             model = SecurityIncidentModel(
@@ -71,8 +69,7 @@ class SQLAlchemySecurityIncidentRepository(BaseRepository, SecurityIncidentRepos
                 source_ip=source_ip,
                 user_agent=user_agent,
                 user_id=user_id,
-                order_id=order_id,
-                payment_id=payment_id,
+                entity_refs=entity_refs or {},
                 raw_payload=raw_payload or {},
                 created_at=_now(),
                 updated_at=_now(),

@@ -37,8 +37,9 @@ class TestInMemoryFailedOperationRepository:
             failure_type="gateway_timeout",
             error_message="Connection timeout to payment gateway",
             error_code="TIMEOUT_001",
-            order_id=12345,
-            payment_id=67890,
+            entity_type="order",
+            entity_id="12345",
+            entity_refs={"order_id": 12345, "payment_id": 67890},
             user_id=100,
         )
 
@@ -47,7 +48,8 @@ class TestInMemoryFailedOperationRepository:
         assert entry.failure_type == "gateway_timeout"
         assert entry.error_message == "Connection timeout to payment gateway"
         assert entry.error_code == "TIMEOUT_001"
-        # Legacy fields are now stored in entity_refs
+        assert entry.entity_type == "order"
+        assert entry.entity_id == "12345"
         assert entry.entity_refs.get("order_id") == 12345
         assert entry.entity_refs.get("payment_id") == 67890
         assert entry.user_id == 100
@@ -568,12 +570,14 @@ class TestIntegrationScenarios:
         """Test complete DLQ workflow using in-memory repositories."""
         repo = InMemoryFailedOperationRepository()
 
-        # 1. Create failed operation
+        # 1. Create failed operation (domain-neutral)
         entry = repo.create(
             domain="payment",
             failure_type="gateway_timeout",
-            error_message="Toss payment gateway timeout",
-            order_id=12345,
+            error_message="External API gateway timeout",
+            entity_type="order",
+            entity_id="12345",
+            entity_refs={"order_id": 12345},
             max_retries=3,
         )
 

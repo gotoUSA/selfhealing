@@ -139,31 +139,25 @@ class Domain(models.TextChoices):
 | Webhook | 8시간 | 외부 알림 |
 | Notification | 24시간 | 이메일/SMS |
 
-### 3.3 도메인별 실패 유형
+### 3.3 실패 유형 예시 (도메인 중립)
 
 ```python
-# Payment 도메인
-PAYMENT_FAILURE_TYPES = [
-    "PG_TIMEOUT",              # PG 응답 시간 초과
-    "PG_CONNECTION_ERROR",     # PG 연결 실패
-    "AMOUNT_MISMATCH",         # 금액 불일치 (Non-retryable)
-    "DUPLICATE_PAYMENT",       # 중복 결제 (Non-retryable)
-    "SECURITY_SIGNATURE_INVALID", # 서명 위변조 (Non-retryable)
+# 일반적인 실패 유형 (모든 도메인에서 사용 가능)
+GENERIC_FAILURE_TYPES = [
+    "TIMEOUT",                 # 응답 시간 초과
+    "CONNECTION_ERROR",        # 연결 실패
     "MAX_RETRIES_EXCEEDED",    # 최대 재시도 초과
+    "VALIDATION_ERROR",        # 데이터 검증 실패 (Non-retryable)
+    "SECURITY_VIOLATION",      # 보안 위반 (Non-retryable)
+    "RATE_LIMITED",            # 요청 제한 초과
+    "EXTERNAL_SERVICE_ERROR",  # 외부 서비스 오류
 ]
 
-# Point 도메인
-POINT_FAILURE_TYPES = [
-    "INSUFFICIENT_POINTS",     # 포인트 부족
-    "POINT_CALCULATION_ERROR", # 계산 오류
-    "LOCK_ACQUISITION_FAILED", # 락 획득 실패
-]
-
-# Inventory 도메인
-INVENTORY_FAILURE_TYPES = [
-    "STOCK_INSUFFICIENT",      # 재고 부족
-    "STOCK_LOCK_TIMEOUT",      # 재고 락 타임아웃
-]
+# 예시: 실패 유형은 도메인별로 자유롭게 정의 가능
+# - 결제: PG_TIMEOUT, AMOUNT_MISMATCH, DUPLICATE_PAYMENT
+# - 재고: STOCK_INSUFFICIENT, LOCK_TIMEOUT
+# - 포인트: INSUFFICIENT_POINTS, CALCULATION_ERROR
+# - 웹훅: DELIVERY_FAILED, ENDPOINT_UNREACHABLE
 ```
 
 ---
@@ -172,13 +166,19 @@ INVENTORY_FAILURE_TYPES = [
 
 ### 4.1 FailedOperation 모델
 
-범용 DLQ 모델로, 모든 도메인의 실패를 저장합니다.
+범용 DLQ 모델로, 모든 도메인의 실패를 저장합니다. **도메인 중립 설계**로 FK 대신 entity_type/entity_id를 사용합니다.
 
 ```python
 # shopping/models/failed_operation.py
 
 class FailedOperation(models.Model):
-    """Dead Letter Queue for unrecoverable failures."""
+    """
+    Dead Letter Queue for unrecoverable failures.
+    
+    설계 원칙:
+    - FK 대신 entity_type/entity_id로 느슨한 결합
+    - 어떤 비즈니스 도메인에서도 사용 가능
+    """
     
     # ========================================
     # Domain & Classification
@@ -192,7 +192,7 @@ class FailedOperation(models.Model):
     failure_type = models.CharField(
         max_length=100,
         db_index=True,
-        help_text="예: PG_TIMEOUT, AMOUNT_MISMATCH",
+        help_text="예: TIMEOUT, VALIDATION_ERROR",
     )
     
     status = models.CharField(
@@ -203,25 +203,31 @@ class FailedOperation(models.Model):
     )
     
     # ========================================
-    # Entity Reference (Generic)
+    # Generic Entity Reference (도메인 중립)
     # ========================================
     entity_type = models.CharField(
         max_length=100,
         blank=True,
         db_index=True,
-        help_text="예: 'order', 'payment', 'subscription'",
+        help_text="엔티티 타입 (예: 'order', 'subscription', 'user')",
     )
     
     entity_id = models.CharField(
         max_length=100,
         blank=True,
         db_index=True,
+        help_text="엔티티 ID",
     )
     
-    user = models.ForeignKey(
-        "User",
-        on_delete=models.SET_NULL,
+    entity_refs = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="추가 엔티티 참조 (예: {'user_id': 123, 'tenant_id': 'abc'})",
+    )
+    
+    user_id = models.PositiveIntegerField(
         null=True, blank=True,
+        db_index=True,
     )
     
     # ========================================
@@ -308,25 +314,30 @@ class FailedOperation(models.Model):
 
 ### 4.2 FailedExternalRequest 모델
 
-외부 API 요청 전용 DLQ로, 도메인 필드가 추가됩니다.
+외부 API 요청 전용 DLQ로, **도메인 중립적 설계**를 따릅니다.
 
 ```python
 # shopping/models/failed_external_request.py
 
 class FailedExternalRequest(models.Model):
-    """외부 요청 전용 DLQ"""
+    """
+    외부 요청 전용 DLQ (도메인 중립)
+    
+    FK 대신 entity_type/entity_id를 사용하여 느슨한 결합 유지
+    """
     
     # 도메인 (어떤 종류의 요청인지)
     domain = models.CharField(choices=DOMAIN_CHOICES)
     
-    # FK 참조
-    payment = models.ForeignKey("Payment", ...)  # nullable
-    order = models.ForeignKey("Order", ...)      # nullable
-    user = models.ForeignKey("User", ...)        # nullable
+    # Generic Entity Reference (도메인 중립)
+    entity_type = models.CharField(max_length=100, blank=True)
+    entity_id = models.CharField(max_length=100, blank=True)
+    entity_refs = models.JSONField(default=dict)  # 추가 참조
+    user_id = models.PositiveIntegerField(null=True)
     
     # 외부 요청 식별자
     external_request_id = models.CharField(max_length=200)
-    external_order_id = models.CharField(max_length=100)
+    external_transaction_id = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=0)
     
     # 실패 정보
@@ -357,24 +368,26 @@ service = get_dlq_service()
 
 #### 핵심 메서드
 
-##### `store_failure()` - DLQ에 실패 저장
+##### `store_failure()` - DLQ에 실패 저장 (도메인 중립)
 
 ```python
 result = service.store_failure(
     domain="payment",
-    failure_type="PG_TIMEOUT",
+    failure_type="TIMEOUT",
     entity_type="order",
     entity_id="12345",
-    user=user,
+    user_id=user.id,  # FK 대신 ID 사용
+    entity_refs={"tenant_id": "acme"},  # 추가 참조
     error_code="TIMEOUT",
-    error_message="PG 응답 시간 초과",
+    error_message="외부 API 응답 시간 초과",
     snapshot_data={
-        "order_id": 12345,
+        "entity_type": "order",
+        "entity_id": 12345,
         "amount": 50000,
-        "payment_method": "card",
+        "status": "pending",
     },
     request_data={
-        "url": "https://api.tosspayments.com/...",
+        "url": "https://api.example.com/...",
         "method": "POST",
         "body": {...},
     },
@@ -387,7 +400,7 @@ result = service.store_failure(
         "retry_count": 3,
     },
     recommended_action="replay",
-    next_action_hint="PG 상태 확인 후 재실행 권장",
+    next_action_hint="외부 서비스 상태 확인 후 재실행 권장",
 )
 
 if result.success:
@@ -558,49 +571,58 @@ class ForensicContext:
     external_response_body: str = ""
 ```
 
-### 7.2 Forensic Context 사용
+### 7.2 Forensic Context 사용 (도메인 중립)
 
 ```python
-from shopping.services.self_healing import capture_forensic_context
+from selfhealing.services.forensic_context import (
+    ForensicContextBuilder,
+    capture_forensic_context,
+    create_snapshot_data,
+)
 
-# 결제 처리 중 컨텍스트 캡처
-with capture_forensic_context() as ctx:
-    ctx.set_request_info(
-        client_ip=request.META.get("REMOTE_ADDR"),
-        user_agent=request.META.get("HTTP_USER_AGENT"),
+# 작업 처리 중 컨텍스트 캡처 (도메인 중립)
+builder = ForensicContextBuilder()
+builder.start_timing()
+builder.with_request(request)
+
+# 작업 전 상태 (generic dict 사용)
+builder.with_state_before(
+    entity_status="pending",
+    user_id=user.id,
+    amount=50000,
+)
+
+try:
+    result = call_external_api(data)
+    builder.with_external_response(
+        request_id=result.request_id,
+        response_code=result.status_code,
+        response_body=result.body,
     )
-    
-    # 작업 전 상태
-    ctx.snapshot_before(
-        order_status=order.status,
-        payment_status=payment.status,
+except Exception as e:
+    ctx = builder.build()
+    ctx.add_retry_attempt(
+        attempt=1,
+        error_code=getattr(e, 'code', 'UNKNOWN'),
+        error_message=str(e),
     )
-    
-    try:
-        result = call_toss_api(payment_data)
-        ctx.set_external_response(result)
-    except Exception as e:
-        ctx.add_retry_attempt(
-            attempt=1,
-            error_code=e.code,
-            error_message=str(e),
-        )
-        raise
-    
-    # 작업 후 상태
-    ctx.snapshot_after(
-        order_status=order.status,
-        payment_status=payment.status,
-    )
+    raise
+
+# 작업 후 상태 (generic dict 사용)
+builder.with_state_after(
+    entity_status="completed",
+    result_code="SUCCESS",
+)
 
 # DLQ 저장 시 컨텍스트 포함
+ctx = builder.build()
 service.store_failure(
     ...
     metadata=ctx.to_metadata(),
 )
 ```
 
-### 7.3 저장되는 metadata 구조
+### 7.3 저장되는 metadata 구조 (도메인 중립)
 
 ```json
 {
@@ -624,56 +646,59 @@ service.store_failure(
         }
     ],
     "state_before": {
-        "order_status": "pending_payment",
-        "payment_status": "initiated"
+        "entity_status": "pending",
+        "amount": 50000
     },
     "state_after": {
-        "order_status": "pending_payment",
-        "payment_status": "failed"
+        "entity_status": "failed",
+        "error_code": "TIMEOUT"
     },
     "client_ip": "203.0.113.50",
     "task_id": "abc123-def456",
-    "external_request_id": "toss_req_xyz789"
+    "external_request_id": "ext_req_xyz789"
 }
 ```
 
 ---
 
-## 8. 사용 예시
+## 8. 사용 예시 (도메인 중립)
 
-### 8.1 결제 서비스에서 DLQ 저장
+### 8.1 외부 API 서비스에서 DLQ 저장
 
 ```python
-class PaymentRecoveryHandler:
-    def __init__(self):
-        self.dlq_service = get_dlq_service()
-        self.retry_handler = RetryHandler(domain="payment")
+class ExternalAPIRecoveryHandler:
+    """도메인 중립적인 외부 API 복구 핸들러"""
     
-    def process_payment(self, order: Order, payment_data: dict):
+    def __init__(self, domain: str = "external_api"):
+        self.domain = domain
+        self.dlq_service = get_dlq_service()
+        self.retry_handler = RetryHandler(domain=domain)
+    
+    def process_request(self, entity_type: str, entity_id: str, request_data: dict):
         try:
             result = self.retry_handler.execute(
-                self._call_toss_api,
-                payment_data,
+                self._call_external_api,
+                request_data,
             )
             return result
             
         except MaxRetriesExceededError as e:
-            # DLQ에 저장
+            # DLQ에 저장 (도메인 중립)
             self.dlq_service.store_failure(
-                domain="payment",
+                domain=self.domain,
                 failure_type="MAX_RETRIES_EXCEEDED",
-                entity_type="order",
-                entity_id=str(order.id),
-                user=order.user,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                user_id=request_data.get("user_id"),
                 error_code=e.last_error.code if e.last_error else "",
                 error_message=str(e),
                 snapshot_data={
-                    "order_id": order.id,
-                    "amount": int(order.total_amount),
-                    "payment_data": payment_data,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "request_data": request_data,
                 },
                 recommended_action="replay",
-                next_action_hint="PG 상태 확인 후 재실행 권장",
+                next_action_hint="외부 서비스 상태 확인 후 재실행 권장",
             )
             raise
 ```

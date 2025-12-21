@@ -73,7 +73,7 @@ class TestStateSnapshot:
         from selfhealing.core.forensic import StateSnapshot
 
         snapshot = StateSnapshot(
-            states={"order_status": "pending"},
+            state_data={"entity_status": "pending"},
             extra={"custom_field": "value"},
         )
 
@@ -263,43 +263,43 @@ class TestConvenienceFunctions:
         ctx = capture_forensic_context(
             client_ip="192.168.1.1",
             task_id="task-abc",
-            order_status="pending",
+            state_before={"entity_status": "pending"},
         )
 
         assert ctx.client_ip == "192.168.1.1"
         assert ctx.task_id == "task-abc"
-        assert ctx.state_before.get_state("order_status") == "pending"
+        assert ctx.state_before.state_data.get("entity_status") == "pending"
 
     def test_create_snapshot_data(self):
         from selfhealing.core.forensic import create_snapshot_data
 
+        # Domain-neutral snapshot creation
         snapshot = create_snapshot_data(
-            order_id=123,
-            order_number="ORD-001",
-            order_status="pending",
+            entity_type="order",
+            entity_id="123",
+            status="pending",
             total_amount="10000",
-            payment_id=456,
-            payment_key="pay_abc",
             user_id=789,
             user_email="test@example.com",
         )
 
-        assert snapshot["order_id"] == 123
-        assert snapshot["order_number"] == "ORD-001"
-        assert snapshot["payment_id"] == 456
+        assert snapshot["entity_type"] == "order"
+        assert snapshot["entity_id"] == "123"
+        assert snapshot["status"] == "pending"
         assert snapshot["user_id"] == 789
 
     def test_create_snapshot_data_partial(self):
         from selfhealing.core.forensic import create_snapshot_data
 
-        # Only order data
+        # Partial snapshot
         snapshot = create_snapshot_data(
-            order_id=100,
-            order_status="shipped",
+            entity_type="shipment",
+            entity_id="100",
+            status="shipped",
         )
 
-        assert snapshot["order_id"] == 100
-        assert "payment_id" not in snapshot
+        assert snapshot["entity_type"] == "shipment"
+        assert snapshot["entity_id"] == "100"
         assert "user_id" not in snapshot
 
     def test_set_time_provider(self):

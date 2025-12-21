@@ -103,13 +103,14 @@ class CircuitBreakerStateData:
 
 @dataclass
 class SecurityIncidentData:
-    """Data transfer object for security incidents."""
+    """Data transfer object for security incidents (domain-neutral)."""
 
     id: int
     incident_type: str
     severity: str
     source_ip: Optional[str] = None
     user_id: Optional[int] = None
+    entity_refs: Dict[str, Any] = field(default_factory=dict)
     description: str = ""
     context: Dict[str, Any] = field(default_factory=dict)
     created_at: Optional[datetime] = None

@@ -66,38 +66,46 @@ class RetryAttempt:
 
 @dataclass
 class StateSnapshot:
-    """Snapshot of entity states for forensic analysis (domain-neutral).
+    """
+    Snapshot of entity states for forensic analysis (domain-neutral).
     
-    All state data is stored in a generic `states` dictionary.
-    Use `set_state()` and `get_state()` methods for access.
+    All state data is stored in a generic `state_data` dictionary.
+    Use `set_state()` and `get_state()` methods for access, or
+    access `state_data` directly.
     
     Example:
         snapshot = StateSnapshot()
-        snapshot.set_state("order_status", "pending")
-        snapshot.set_state("payment_status", "completed")
+        snapshot.set_state("entity_status", "pending")
+        # or
+        snapshot = StateSnapshot(state_data={"entity_status": "pending"})
     """
 
-    states: Dict[str, Any] = field(default_factory=dict)
+    state_data: Dict[str, Any] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    # Alias for backwards compatibility
+    @property
+    def states(self) -> Dict[str, Any]:
+        return self.state_data
 
     def set_state(self, key: str, value: Any) -> None:
         """Set a state value."""
-        self.states[key] = value
+        self.state_data[key] = value
 
     def get_state(self, key: str, default: Any = None) -> Any:
         """Get a state value."""
-        return self.states.get(key, default)
+        return self.state_data.get(key, default)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage."""
-        result = dict(self.states)
+        result = dict(self.state_data)
         result.update(self.extra)
         return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StateSnapshot":
         """Create from dictionary."""
-        return cls(states=dict(data), extra={})
+        return cls(state_data=dict(data), extra={})
 
 
 @dataclass
@@ -215,7 +223,7 @@ class ForensicContext:
                 resource_count=100,
             )
         """
-        self.state_before = StateSnapshot(states=dict(states))
+        self.state_before = StateSnapshot(state_data=dict(states))
 
     def capture_state_after(
         self,
@@ -232,7 +240,7 @@ class ForensicContext:
                 resource_count=99,
             )
         """
-        self.state_after = StateSnapshot(states=dict(states))
+        self.state_after = StateSnapshot(state_data=dict(states))
 
     @classmethod
     def from_metadata(cls, metadata: Dict[str, Any]) -> "ForensicContext":
@@ -430,6 +438,8 @@ def capture_forensic_context(
     session_id: str = "",
     task_id: str = "",
     task_name: str = "",
+    state_before: Optional[Dict[str, Any]] = None,
+    state_after: Optional[Dict[str, Any]] = None,
     **extra: Any,
 ) -> ForensicContext:
     """
@@ -441,6 +451,8 @@ def capture_forensic_context(
         session_id: Session identifier
         task_id: Async task ID
         task_name: Async task name
+        state_before: State snapshot before operation (dict of key-value pairs)
+        state_after: State snapshot after operation (dict of key-value pairs)
         **extra: Additional state data (domain-neutral key-value pairs)
 
     Returns:
@@ -449,8 +461,8 @@ def capture_forensic_context(
     Example:
         context = capture_forensic_context(
             client_ip="192.168.1.1",
-            entity_status="pending",
-            resource_id=123,
+            state_before={"entity_status": "pending"},
+            state_after={"entity_status": "completed"},
         )
     """
     builder = ForensicContextBuilder()
@@ -466,8 +478,15 @@ def capture_forensic_context(
     if task_id or task_name:
         builder.with_task(task_id=task_id, task_name=task_name)
 
-    if extra:
+    # Handle state_before - either explicit dict or extra kwargs
+    if state_before:
+        builder.with_state_before(**state_before)
+    elif extra:
         builder.with_state_before(**extra)
+    
+    # Handle state_after if provided
+    if state_after:
+        builder.with_state_after(**state_after)
 
     return builder.build()
 

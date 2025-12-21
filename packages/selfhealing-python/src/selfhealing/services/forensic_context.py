@@ -44,21 +44,23 @@ class RetryAttempt:
 
 @dataclass
 class StateSnapshot:
-    """Snapshot of entity states for forensic analysis."""
+    """
+    Generic snapshot of entity states for forensic analysis.
 
-    order_status: str | None = None
-    payment_status: str | None = None
-    user_points: int | None = None
-    product_stock: dict[int, int] | None = None
+    Domain-neutral design: stores arbitrary key-value state data
+    instead of hardcoded order/payment/user fields.
+    """
+
+    state_data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON storage."""
-        return {
-            "order_status": self.order_status,
-            "payment_status": self.payment_status,
-            "user_points": self.user_points,
-            "product_stock": self.product_stock,
-        }
+        return self.state_data.copy()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StateSnapshot":
+        """Create StateSnapshot from dictionary."""
+        return cls(state_data=data)
 
 
 @dataclass
@@ -183,49 +185,48 @@ class ForensicContext:
 
     def capture_state_before(
         self,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
-        product_stocks: dict[int, int] | None = None,
+        state_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Capture state snapshot before operation.
 
         Args:
-            order: Order instance
-            payment: Payment instance
-            user: User instance
-            product_stocks: Dict of product_id -> stock quantity
+            state_data: Dictionary of state key-value pairs
+            **kwargs: Additional state fields as keyword arguments
+
+        Example:
+            ctx.capture_state_before(
+                entity_status="pending",
+                user_id=123,
+                amount=50000,
+            )
         """
-        self.state_before = StateSnapshot(
-            order_status=order.status if order else None,
-            payment_status=payment.status if payment else None,
-            user_points=user.points if user else None,
-            product_stock=product_stocks,
-        )
+        data = state_data.copy() if state_data else {}
+        data.update(kwargs)
+        self.state_before = StateSnapshot(state_data=data)
 
     def capture_state_after(
         self,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
-        product_stocks: dict[int, int] | None = None,
+        state_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Capture state snapshot after operation (or failure).
 
         Args:
-            order: Order instance
-            payment: Payment instance
-            user: User instance
-            product_stocks: Dict of product_id -> stock quantity
+            state_data: Dictionary of state key-value pairs
+            **kwargs: Additional state fields as keyword arguments
+
+        Example:
+            ctx.capture_state_after(
+                entity_status="failed",
+                error_code="TIMEOUT",
+            )
         """
-        self.state_after = StateSnapshot(
-            order_status=order.status if order else None,
-            payment_status=payment.status if payment else None,
-            user_points=user.points if user else None,
-            product_stock=product_stocks,
-        )
+        data = state_data.copy() if state_data else {}
+        data.update(kwargs)
+        self.state_after = StateSnapshot(state_data=data)
 
 
 class ForensicContextBuilder:
@@ -321,24 +322,32 @@ class ForensicContextBuilder:
 
     def with_state_before(
         self,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
-        product_stocks: dict[int, int] | None = None,
+        state_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> "ForensicContextBuilder":
-        """Capture state before operation."""
-        self._context.capture_state_before(order, payment, user, product_stocks)
+        """
+        Capture state before operation.
+
+        Args:
+            state_data: Dictionary of state key-value pairs
+            **kwargs: Additional state fields
+        """
+        self._context.capture_state_before(state_data, **kwargs)
         return self
 
     def with_state_after(
         self,
-        order: "Order | None" = None,
-        payment: "Payment | None" = None,
-        user: "User | None" = None,
-        product_stocks: dict[int, int] | None = None,
+        state_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> "ForensicContextBuilder":
-        """Capture state after operation."""
-        self._context.capture_state_after(order, payment, user, product_stocks)
+        """
+        Capture state after operation.
+
+        Args:
+            state_data: Dictionary of state key-value pairs
+            **kwargs: Additional state fields
+        """
+        self._context.capture_state_after(state_data, **kwargs)
         return self
 
     def with_extra(self, **kwargs: Any) -> "ForensicContextBuilder":
@@ -360,21 +369,17 @@ class ForensicContextBuilder:
 
 
 def capture_forensic_context(
-    order: "Order | None" = None,
-    payment: "Payment | None" = None,
-    user: "User | None" = None,
+    state_before: dict[str, Any] | None = None,
     request: Any = None,
     task_id: str = "",
     task_name: str = "",
 ) -> ForensicContext:
     """
-    Convenience function to capture forensic context.
+    Convenience function to capture forensic context (domain-neutral).
 
     Args:
-        order: Order instance
-        payment: Payment instance
-        user: User instance
-        request: Django request object
+        state_before: Initial state as dictionary
+        request: HTTP request object (Django, Flask, etc.)
         task_id: Celery task ID
         task_name: Celery task name
 
@@ -389,72 +394,87 @@ def capture_forensic_context(
     if task_id or task_name:
         builder.with_task(task_id=task_id, task_name=task_name)
 
-    if order or payment or user:
-        builder.with_state_before(order, payment, user)
+    if state_before:
+        builder.with_state_before(state_before)
 
     return builder.build()
 
 
 def create_snapshot_data(
-    order: "Order | None" = None,
-    payment: "Payment | None" = None,
-    user: "User | None" = None,
+    entity_data: dict[str, Any] | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """
-    Create snapshot data for DLQ storage.
+    Create snapshot data for DLQ storage (domain-neutral).
 
     This captures the essential data needed to recover the operation
     without accessing the original records.
 
     Args:
-        order: Order instance
-        payment: Payment instance
-        user: User instance
+        entity_data: Dictionary of entity data to include
+        **kwargs: Additional key-value pairs to include
 
     Returns:
         Dictionary with snapshot data
+
+    Example:
+        snapshot = create_snapshot_data(
+            entity_type="order",
+            entity_id="12345",
+            status="pending",
+            amount=50000,
+            user_id=123,
+        )
     """
     snapshot: dict[str, Any] = {}
 
-    if order:
-        snapshot.update(
-            {
-                "order_id": order.id,
-                "order_number": order.order_number,
-                "order_status": order.status,
-                "total_amount": str(order.total_amount),
-                "used_points": order.used_points,
-                "final_amount": str(order.final_amount),
-                "items": [
-                    {
-                        "product_id": item.product_id,
-                        "quantity": item.quantity,
-                        "price": str(item.price),
-                    }
-                    for item in order.order_items.all()
-                ],
-            }
-        )
+    if entity_data:
+        snapshot.update(entity_data)
 
-    if payment:
-        snapshot.update(
-            {
-                "payment_id": payment.id,
-                "payment_key": payment.payment_key or "",
-                "toss_order_id": payment.toss_order_id or "",
-                "amount": str(payment.amount),
-                "payment_status": payment.status,
-                "payment_method": payment.method,
-            }
-        )
+    snapshot.update(kwargs)
 
-    if user:
-        snapshot.update(
-            {
-                "user_id": user.id,
-                "user_email": user.email,
-                "user_points": user.points,
-            }
+    return snapshot
+
+
+def create_snapshot_from_entity(
+    entity: Any,
+    fields: list[str] | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Create snapshot data from any entity with specified fields.
+
+    Domain-neutral helper that extracts specified fields from an entity.
+
+    Args:
+        entity: Any object with attributes to snapshot
+        fields: List of field names to extract (defaults to ['id', 'status'])
+        extra_data: Additional data to include in snapshot
+
+    Returns:
+        Dictionary with snapshot data
+
+    Example:
+        snapshot = create_snapshot_from_entity(
+            order,
+            fields=['id', 'status', 'total_amount', 'user_id'],
+            extra_data={'context': 'payment_flow'}
         )
+    """
+    if fields is None:
+        fields = ['id', 'status']
+
+    snapshot: dict[str, Any] = {}
+
+    for field_name in fields:
+        if hasattr(entity, field_name):
+            value = getattr(entity, field_name)
+            # Convert Decimal to string for JSON serialization
+            if isinstance(value, Decimal):
+                value = str(value)
+            snapshot[field_name] = value
+
+    if extra_data:
+        snapshot.update(extra_data)
 
     return snapshot

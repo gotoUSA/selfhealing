@@ -49,17 +49,9 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         max_retries: int = 2,
         next_action_hint: str = "",
         recommended_action: str = "",
-        # Legacy compatibility - will be converted to entity_refs
-        order_id: Optional[int] = None,
-        payment_id: Optional[int] = None,
     ) -> FailedOperationData:
-        """Create a new failed operation record."""
-        # Build entity_refs from legacy fields if not provided
+        """Create a new failed operation record (domain-neutral)."""
         refs = entity_refs or {}
-        if order_id is not None:
-            refs["order_id"] = order_id
-        if payment_id is not None:
-            refs["payment_id"] = payment_id
 
         with self._lock:
             entry = FailedOperationData(

@@ -241,7 +241,7 @@ Self-Healing 시스템은 3개의 주요 계층으로 구성됩니다:
 │                    │         Failure recorded      │                    │
 │                    │         (failure_count++)     │                    │
 │                    │              │                 │                    │
-│             success_count        │                 │                    │
+│             success_count         │                 │                    │
 │           >= success_threshold    │                 │                    │
 │                    │              ▼                 │                    │
 │                    │    ┌──────────────────┐       │                    │
@@ -343,24 +343,24 @@ def get_control_api_service() -> ControlAPIService:
 
 class CircuitBreakerStateRepository(ABC):
     """Circuit Breaker 상태 저장소 인터페이스"""
-    
+
     @abstractmethod
     def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
         """서비스별 상태 조회 또는 생성"""
-        
+
     @abstractmethod
     def update_state(
-        self, 
-        service_name: str, 
+        self,
+        service_name: str,
         state: str,
         **kwargs
     ) -> CircuitBreakerStateData:
         """상태 업데이트"""
-        
+
     @abstractmethod
     def record_failure(self, service_name: str) -> CircuitBreakerStateData:
         """실패 기록"""
-        
+
     @abstractmethod
     def record_success(self, service_name: str) -> CircuitBreakerStateData:
         """성공 기록"""
@@ -368,28 +368,28 @@ class CircuitBreakerStateRepository(ABC):
 
 class FailedOperationRepository(ABC):
     """DLQ 저장소 인터페이스"""
-    
+
     @abstractmethod
     def create(self, **kwargs) -> FailedOperationData:
         """DLQ 엔트리 생성"""
-        
+
     @abstractmethod
     def get_by_id(self, dlq_id: int) -> Optional[FailedOperationData]:
         """ID로 조회"""
-        
+
     @abstractmethod
     def get_pending_by_domain(
-        self, 
-        domain: str, 
+        self,
+        domain: str,
         limit: int = 100
     ) -> List[FailedOperationData]:
         """도메인별 대기 중인 항목 조회"""
-        
+
     @abstractmethod
     def update_status(
-        self, 
-        dlq_id: int, 
-        status: str, 
+        self,
+        dlq_id: int,
+        status: str,
         **kwargs
     ) -> Optional[FailedOperationData]:
         """상태 업데이트"""
@@ -402,7 +402,7 @@ class FailedOperationRepository(ABC):
 
 class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """Django ORM 기반 Circuit Breaker 저장소 구현"""
-    
+
     def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
         obj, created = CircuitBreakerState.objects.get_or_create(
             service_name=service_name,
@@ -413,7 +413,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             }
         )
         return self._to_data(obj)
-    
+
     def _to_data(self, obj: CircuitBreakerState) -> CircuitBreakerStateData:
         """ORM 객체를 DTO로 변환"""
         return CircuitBreakerStateData(
@@ -426,7 +426,7 @@ class DjangoCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
 class DjangoFailedOperationRepository(FailedOperationRepository):
     """Django ORM 기반 DLQ 저장소 구현"""
-    
+
     def create(self, **kwargs) -> FailedOperationData:
         obj = FailedOperation.objects.create(**kwargs)
         return self._to_data(obj)
@@ -439,10 +439,10 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
 
 class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """테스트용 인메모리 저장소"""
-    
+
     def __init__(self):
         self._states: Dict[str, CircuitBreakerStateData] = {}
-    
+
     def get_or_create(self, service_name: str) -> CircuitBreakerStateData:
         if service_name not in self._states:
             self._states[service_name] = CircuitBreakerStateData(

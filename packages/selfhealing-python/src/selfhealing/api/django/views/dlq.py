@@ -423,9 +423,12 @@ class DLQTestCreateView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request):
-        """Create a test DLQ entry."""
+        """Create a test DLQ entry (domain-neutral)."""
         domain = request.data.get("domain")
         failure_type = request.data.get("failure_type")
+
+        # Build entity_refs from request data
+        entity_refs = request.data.get("entity_refs", {})
 
         try:
             service = get_dlq_service()
@@ -433,15 +436,14 @@ class DLQTestCreateView(APIView):
                 domain=domain,
                 failure_type=failure_type,
                 user_id=request.user.id if request.user else None,
-                order_id=request.data.get("order_id"),
-                payment_id=request.data.get("payment_id"),
+                entity_type=request.data.get("entity_type", "test"),
+                entity_id=request.data.get("entity_id", ""),
+                entity_refs=entity_refs,
                 error_message=request.data.get("error_message", "Test failure for load testing"),
                 snapshot_data=request.data.get("snapshot_data"),
                 request_data=request.data.get("request_data"),
                 response_data=request.data.get("response_data"),
                 metadata=request.data.get("metadata"),
-                entity_type=request.data.get("entity_type", "test"),
-                entity_id=request.data.get("entity_id", ""),
                 created_by=str(request.user),
             )
 
