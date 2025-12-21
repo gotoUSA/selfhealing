@@ -94,6 +94,55 @@ class SLAConfig:
 
 
 @dataclass
+class SLODefinition:
+    """
+    Single SLO definition for runtime configuration.
+
+    API를 통해 동적으로 생성/수정/삭제 가능한 SLO 정의.
+    """
+
+    name: str
+    sli_type: str = "availability"  # availability, latency_p99, latency_p95, latency_p50, error_rate, throughput
+    target: float = 0.999  # 목표값 (예: 0.999 = 99.9%)
+    window_days: int = 30  # 측정 윈도우 (일)
+    description: str = ""
+    service_name: str = ""
+    domain: str = ""
+
+    # 알림 임계값
+    warning_threshold: Optional[float] = None  # 경고 임계값
+    critical_threshold: Optional[float] = None  # 위험 임계값
+
+    # Burn rate 임계값 (SLO별 커스텀 가능)
+    fast_burn_rate: float = 14.4  # 1시간에 2% 소진 시 위험
+    slow_burn_rate: float = 3.0  # 6시간에 5% 소진 시 경고
+
+
+@dataclass
+class SLOConfigRuntime:
+    """
+    Runtime SLO configuration (API로 동적 변경 가능).
+
+    코드에서 정의한 SLOConfig(slo.py)와 별도로,
+    API를 통해 런타임에 SLO를 추가/수정/삭제할 수 있습니다.
+    """
+
+    # 기본 윈도우 (SLO 생성 시 기본값)
+    default_window_days: int = 30
+
+    # 기본 타겟 (SLO 생성 시 기본값)
+    default_target: float = 0.999
+
+    # 기본 burn rate 임계값
+    default_fast_burn_rate: float = 14.4
+    default_slow_burn_rate: float = 3.0
+
+    # SLO 정의 목록 (런타임에 동적으로 관리)
+    # 각 항목은 SLODefinition을 dict로 직렬화한 형태
+    slos: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class RateLimitConfig:
     """Configuration for rate limit coordination."""
 

@@ -33,6 +33,7 @@ from selfhealing.api.django.serializers.config import (
     DLQConfigSerializer,
     RetryConfigSerializer,
     SLAConfigSerializer,
+    SLOConfigSerializer,
     RateLimitConfigSerializer,
     SecurityConfigSerializer,
     IdempotencyConfigSerializer,
@@ -370,3 +371,96 @@ class ErrorBudgetConfigView(BaseConfigView):
 
     serializer_class = ErrorBudgetConfigSerializer
     config_name = "error_budget"
+
+
+class SLOConfigView(BaseConfigView):
+    """
+    SLO (Service Level Objectives) Configuration API.
+
+    GET    /api/self-healing/config/slo/ - Get all SLO configurations
+    PUT    /api/self-healing/config/slo/ - Add/Update SLO definitions
+    DELETE /api/self-healing/config/slo/<name>/ - Delete a specific SLO
+
+    SLO 정의를 동적으로 관리할 수 있습니다:
+    - target: SLO 목표값 (예: 0.999 = 99.9%)
+    - window_days: 측정 윈도우 (일)
+    - fast_burn_rate: 빠른 소진율 임계값
+    - slow_burn_rate: 느린 소진율 임계값
+    """
+
+    serializer_class = SLOConfigSerializer
+    config_name = "slo"
+
+    def put(self, request: Request) -> Response:
+        """Add or update SLO definitions."""
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"status": "error", "errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            manager = get_runtime_config_manager()
+            validated = serializer.validated_data
+
+            # Extract SLO-specific updates
+            result = manager.update_slo_config(
+                default_window_days=validated.get("default_window_days"),
+                default_target=validated.get("default_target"),
+                default_fast_burn_rate=validated.get("default_fast_burn_rate"),
+                default_slow_burn_rate=validated.get("default_slow_burn_rate"),
+                slo=validated.get("slo"),
+                slos=validated.get("slos"),
+            )
+
+            logger.info(f"[ConfigAPI] SLO config updated by {request.user}")
+
+            return Response(
+                {
+                    "status": "success",
+                    "config": result,
+                    "config_type": "slo",
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            logger.error(f"[ConfigAPI] Error updating SLO config: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def delete(self, request: Request) -> Response:
+        """Delete a specific SLO by name."""
+        try:
+            slo_name = request.query_params.get("name")
+            if not slo_name:
+                return Response(
+                    {"status": "error", "error": "Query parameter 'name' is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            manager = get_runtime_config_manager()
+            result = manager.delete_slo(slo_name)
+
+            if result.get("status") == "deleted":
+                logger.info(f"[ConfigAPI] SLO '{slo_name}' deleted by {request.user}")
+                return Response(
+                    {
+                        **result,
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response(result, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            logger.error(f"[ConfigAPI] Error deleting SLO: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

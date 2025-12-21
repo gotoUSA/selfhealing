@@ -87,6 +87,7 @@ class RuntimeConfigManager:
         "forensic": "runtime_config:forensic",
         "metrics": "runtime_config:metrics",
         "error_budget": "runtime_config:error_budget",
+        "slo": "runtime_config:slo",
     }
 
     # Default config classes
@@ -102,6 +103,7 @@ class RuntimeConfigManager:
         "forensic": ForensicConfig,
         "metrics": MetricsConfig,
         "error_budget": ErrorBudgetConfig,
+        "slo": None,  # SLO는 별도 처리 (SLOConfigRuntime)
     }
 
     def __init__(self):
@@ -121,7 +123,61 @@ class RuntimeConfigManager:
                 else:
                     # Use defaults
                     config_class = self.CONFIG_CLASSES[config_type]
-                    self._cache[config_type] = asdict(config_class())
+                    if config_class is not None:
+                        self._cache[config_type] = asdict(config_class())
+                    else:
+                        # SLO는 별도 기본값 사용
+                        self._cache[config_type] = self._get_slo_defaults()
+
+    def _get_slo_defaults(self) -> Dict[str, Any]:
+        """Get default SLO configuration."""
+        return {
+            "default_window_days": 30,
+            "default_target": 0.999,
+            "default_fast_burn_rate": 14.4,
+            "default_slow_burn_rate": 3.0,
+            "slos": [
+                {
+                    "name": "availability",
+                    "sli_type": "availability",
+                    "target": 0.999,
+                    "window_days": 30,
+                    "description": "API availability - proportion of successful requests",
+                    "service_name": "",
+                    "domain": "",
+                    "warning_threshold": None,
+                    "critical_threshold": None,
+                    "fast_burn_rate": 14.4,
+                    "slow_burn_rate": 3.0,
+                },
+                {
+                    "name": "latency_p99",
+                    "sli_type": "latency_p99",
+                    "target": 0.500,
+                    "window_days": 7,
+                    "description": "99th percentile response time should be under 500ms",
+                    "service_name": "",
+                    "domain": "",
+                    "warning_threshold": None,
+                    "critical_threshold": None,
+                    "fast_burn_rate": 14.4,
+                    "slow_burn_rate": 3.0,
+                },
+                {
+                    "name": "error_rate",
+                    "sli_type": "error_rate",
+                    "target": 0.999,
+                    "window_days": 30,
+                    "description": "Error rate should be under 0.1%",
+                    "service_name": "",
+                    "domain": "",
+                    "warning_threshold": None,
+                    "critical_threshold": None,
+                    "fast_burn_rate": 14.4,
+                    "slow_burn_rate": 3.0,
+                },
+            ],
+        }
 
     def _save_config(self, config_type: str, config_dict: Dict[str, Any]) -> None:
         """Save config to storage."""
@@ -133,8 +189,13 @@ class RuntimeConfigManager:
         """Get config by type."""
         with self._lock:
             if config_type not in self._cache:
-                config_class = self.CONFIG_CLASSES[config_type]
-                self._cache[config_type] = asdict(config_class())
+                config_class = self.CONFIG_CLASSES.get(config_type)
+                if config_class is not None:
+                    self._cache[config_type] = asdict(config_class())
+                elif config_type == "slo":
+                    self._cache[config_type] = self._get_slo_defaults()
+                else:
+                    self._cache[config_type] = {}
             return self._cache[config_type].copy()
 
     def _update_config(self, config_type: str, **kwargs) -> Dict[str, Any]:
@@ -638,6 +699,171 @@ class RuntimeConfigManager:
         """
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("error_budget", **updates)
+
+    # =========================================================================
+    # SLO Config (Service Level Objectives)
+    # =========================================================================
+
+    def get_slo_config(self) -> Dict[str, Any]:
+        """
+        Get SLO configuration.
+
+        Returns:
+            dict: SLO 기본값 및 SLO 정의 목록
+                - default_window_days: 새 SLO 생성 시 기본 윈도우
+                - default_target: 새 SLO 생성 시 기본 타겟
+                - default_fast_burn_rate: 새 SLO 생성 시 기본 빠른 소진율
+                - default_slow_burn_rate: 새 SLO 생성 시 기본 느린 소진율
+                - slos: SLO 정의 목록 (각각 name, target, window_days 등)
+        """
+        return self._get_config("slo")
+
+    def update_slo_config(
+        self,
+        default_window_days: Optional[int] = None,
+        default_target: Optional[float] = None,
+        default_fast_burn_rate: Optional[float] = None,
+        default_slow_burn_rate: Optional[float] = None,
+        slo: Optional[Dict[str, Any]] = None,
+        slos: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update SLO configuration.
+
+        Args:
+            default_window_days: 새 SLO 생성 시 기본 윈도우 (일)
+            default_target: 새 SLO 생성 시 기본 타겟 (0.0~1.0)
+            default_fast_burn_rate: 새 SLO 생성 시 기본 빠른 소진율
+            default_slow_burn_rate: 새 SLO 생성 시 기본 느린 소진율
+            slo: 추가/수정할 단일 SLO 정의
+            slos: 추가/수정할 SLO 정의 목록
+
+        Returns:
+            dict: 업데이트된 SLO 설정
+        """
+        with self._lock:
+            current = self._get_config("slo")
+
+            # Update defaults
+            if default_window_days is not None:
+                current["default_window_days"] = default_window_days
+                logger.info(f"[RuntimeConfig] Updated slo.default_window_days = {default_window_days}")
+            if default_target is not None:
+                current["default_target"] = default_target
+                logger.info(f"[RuntimeConfig] Updated slo.default_target = {default_target}")
+            if default_fast_burn_rate is not None:
+                current["default_fast_burn_rate"] = default_fast_burn_rate
+                logger.info(f"[RuntimeConfig] Updated slo.default_fast_burn_rate = {default_fast_burn_rate}")
+            if default_slow_burn_rate is not None:
+                current["default_slow_burn_rate"] = default_slow_burn_rate
+                logger.info(f"[RuntimeConfig] Updated slo.default_slow_burn_rate = {default_slow_burn_rate}")
+
+            # Add/update SLOs
+            slos_to_update = []
+            if slo is not None:
+                slos_to_update.append(slo)
+            if slos is not None:
+                slos_to_update.extend(slos)
+
+            for slo_def in slos_to_update:
+                self._upsert_slo(current, slo_def)
+
+            self._save_config("slo", current)
+            return current.copy()
+
+    def _upsert_slo(self, config: Dict[str, Any], slo_def: Dict[str, Any]) -> None:
+        """Insert or update an SLO definition."""
+        if "slos" not in config:
+            config["slos"] = []
+
+        slo_name = slo_def.get("name")
+        if not slo_name:
+            logger.warning("[RuntimeConfig] SLO definition missing 'name' field, skipping")
+            return
+
+        # Find existing SLO by name
+        existing_idx = None
+        for idx, existing in enumerate(config["slos"]):
+            if existing.get("name") == slo_name:
+                existing_idx = idx
+                break
+
+        # Apply defaults for new SLO
+        if existing_idx is None:
+            new_slo = {
+                "name": slo_name,
+                "sli_type": slo_def.get("sli_type", "availability"),
+                "target": slo_def.get("target", config.get("default_target", 0.999)),
+                "window_days": slo_def.get("window_days", config.get("default_window_days", 30)),
+                "description": slo_def.get("description", ""),
+                "service_name": slo_def.get("service_name", ""),
+                "domain": slo_def.get("domain", ""),
+                "warning_threshold": slo_def.get("warning_threshold"),
+                "critical_threshold": slo_def.get("critical_threshold"),
+                "fast_burn_rate": slo_def.get("fast_burn_rate", config.get("default_fast_burn_rate", 14.4)),
+                "slow_burn_rate": slo_def.get("slow_burn_rate", config.get("default_slow_burn_rate", 3.0)),
+            }
+            config["slos"].append(new_slo)
+            logger.info(f"[RuntimeConfig] Added SLO: {slo_name}")
+        else:
+            # Update existing SLO (only provided fields)
+            for key, value in slo_def.items():
+                if value is not None:
+                    config["slos"][existing_idx][key] = value
+            logger.info(f"[RuntimeConfig] Updated SLO: {slo_name}")
+
+    def delete_slo(self, slo_name: str) -> Dict[str, Any]:
+        """
+        Delete an SLO by name.
+
+        Args:
+            slo_name: 삭제할 SLO 이름
+
+        Returns:
+            dict: 결과 (status, deleted_slo, remaining_count)
+        """
+        with self._lock:
+            current = self._get_config("slo")
+
+            if "slos" not in current:
+                return {"status": "not_found", "error": f"SLO '{slo_name}' not found"}
+
+            original_count = len(current["slos"])
+            deleted_slo = None
+
+            for slo in current["slos"]:
+                if slo.get("name") == slo_name:
+                    deleted_slo = slo
+                    break
+
+            if deleted_slo is None:
+                return {"status": "not_found", "error": f"SLO '{slo_name}' not found"}
+
+            current["slos"] = [s for s in current["slos"] if s.get("name") != slo_name]
+            self._save_config("slo", current)
+
+            logger.info(f"[RuntimeConfig] Deleted SLO: {slo_name}")
+            return {
+                "status": "deleted",
+                "deleted_slo": deleted_slo,
+                "remaining_count": len(current["slos"]),
+            }
+
+    def get_slo_by_name(self, slo_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific SLO by name.
+
+        Args:
+            slo_name: SLO 이름
+
+        Returns:
+            dict or None: SLO 정의 또는 None
+        """
+        config = self._get_config("slo")
+        for slo in config.get("slos", []):
+            if slo.get("name") == slo_name:
+                return slo
+        return None
 
     # =========================================================================
     # Chaos Engineering Config
