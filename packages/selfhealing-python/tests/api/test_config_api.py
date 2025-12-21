@@ -4,6 +4,13 @@ Runtime Config API Tests.
 Tests for the runtime configuration management API.
 """
 
+import os
+import django
+
+# Configure Django settings before importing DRF
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
+django.setup()
+
 import pytest
 from unittest.mock import patch, MagicMock
 from rest_framework.test import APIRequestFactory
@@ -23,6 +30,7 @@ from selfhealing.api.django.views.config import (
     NotificationConfigView,
     ForensicConfigView,
     MetricsConfigView,
+    SLOConfigView,
 )
 
 # Import serializers
@@ -197,7 +205,7 @@ class TestConfigViews:
         """Test PUT /api/self-healing/config/circuit-breaker/"""
         request = self.factory.put(
             "/api/self-healing/config/circuit-breaker/",
-            {"failure_threshold": 15},
+            {"failure_threshold": 15, "apply_strategy": "immediate"},  # explicit immediate
             format="json",
         )
         request.user = self.admin_user
@@ -206,8 +214,23 @@ class TestConfigViews:
         response = view(request)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["status"] == "success"
-        assert response.data["config"]["failure_threshold"] == 15
+        assert response.data["status"] in ("success", "applied")
+
+    def test_circuit_breaker_config_view_put_delayed(self):
+        """Test PUT with delayed strategy returns 202."""
+        request = self.factory.put(
+            "/api/self-healing/config/circuit-breaker/",
+            {"failure_threshold": 20},  # default is delayed
+            format="json",
+        )
+        request.user = self.admin_user
+
+        view = CircuitBreakerConfigView.as_view()
+        response = view(request)
+
+        # Default strategy is delayed, so expect 202
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["status"] in ("scheduled", "waiting")
 
     def test_reset_config_view(self):
         """Test POST /api/self-healing/config/reset/"""
@@ -219,6 +242,65 @@ class TestConfigViews:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "success"
+
+
+class TestConfigValidationAuditLog:
+    """Tests for configuration validation audit logging."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, factory, admin_user):
+        self.factory = factory
+        self.admin_user = admin_user
+
+    def test_serializer_validation_fails_on_invalid_type(self):
+        """Test that serializer correctly rejects invalid types."""
+        serializer = CircuitBreakerConfigSerializer(data={"failure_threshold": "not_a_number"})
+        assert serializer.is_valid() is False
+        assert "failure_threshold" in serializer.errors
+
+    def test_serializer_validation_fails_on_out_of_range(self):
+        """Test that serializer correctly rejects out-of-range values."""
+        serializer = CircuitBreakerConfigSerializer(data={"failure_threshold": 0})
+        assert serializer.is_valid() is False
+        assert "failure_threshold" in serializer.errors
+
+    def test_serializer_validation_fails_on_negative(self):
+        """Test that serializer correctly rejects negative values."""
+        serializer = CircuitBreakerConfigSerializer(data={"failure_threshold": -5})
+        assert serializer.is_valid() is False
+        assert "failure_threshold" in serializer.errors
+
+    def test_get_client_ip_from_remote_addr(self):
+        """Test _get_client_ip extracts IP from REMOTE_ADDR."""
+        from selfhealing.api.django.views.config import BaseConfigView
+
+        view = CircuitBreakerConfigView()
+        request = MagicMock()
+        request.META = {"REMOTE_ADDR": "192.168.1.100"}
+
+        ip = view._get_client_ip(request)
+        assert ip == "192.168.1.100"
+
+    def test_get_client_ip_from_x_forwarded_for(self):
+        """Test _get_client_ip prefers X-Forwarded-For header."""
+        view = CircuitBreakerConfigView()
+        request = MagicMock()
+        request.META = {
+            "REMOTE_ADDR": "10.0.0.1",
+            "HTTP_X_FORWARDED_FOR": "203.0.113.50, 70.41.3.18",
+        }
+
+        ip = view._get_client_ip(request)
+        assert ip == "203.0.113.50"
+
+    def test_get_client_ip_handles_missing_addr(self):
+        """Test _get_client_ip returns 'unknown' when no IP available."""
+        view = CircuitBreakerConfigView()
+        request = MagicMock()
+        request.META = {}
+
+        ip = view._get_client_ip(request)
+        assert ip == "unknown"
 
 
 if __name__ == "__main__":

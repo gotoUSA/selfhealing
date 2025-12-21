@@ -207,6 +207,13 @@ class BaseConfigView(APIView):
     serializer_class = None
     config_name = ""
 
+    def _get_client_ip(self, request: Request) -> str:
+        """Extract client IP from request (handles proxies)."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "unknown")
+
     def get(self, request: Request) -> Response:
         """Get configuration with default strategy info."""
         try:
@@ -238,6 +245,12 @@ class BaseConfigView(APIView):
         try:
             serializer = self.serializer_class(data=request.data)
             if not serializer.is_valid():
+                # Audit log for validation failures (potential misuse detection)
+                client_ip = self._get_client_ip(request)
+                logger.warning(
+                    f"[ConfigAudit] Validation failed: config={self.config_name}, "
+                    f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
+                )
                 return Response(
                     {"status": "error", "errors": serializer.errors},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -396,6 +409,12 @@ class SLOConfigView(BaseConfigView):
         try:
             serializer = self.serializer_class(data=request.data)
             if not serializer.is_valid():
+                # Audit log for validation failures
+                client_ip = self._get_client_ip(request)
+                logger.warning(
+                    f"[ConfigAudit] Validation failed: config={self.config_name}, "
+                    f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
+                )
                 return Response(
                     {"status": "error", "errors": serializer.errors},
                     status=status.HTTP_400_BAD_REQUEST,

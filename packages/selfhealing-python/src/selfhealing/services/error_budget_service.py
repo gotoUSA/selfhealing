@@ -327,6 +327,11 @@ class ErrorBudgetStatus:
         return self.budget_remaining_percent >= thresholds["healthy"]
 
     @property
+    def is_over_budget(self) -> bool:
+        """SLO 위반 상태인지 (버짓 100% 초과 소진)."""
+        return self.budget_remaining_percent < 0
+
+    @property
     def is_critical(self) -> bool:
         """버짓이 위험 상태인지."""
         thresholds = get_error_budget_thresholds()
@@ -358,6 +363,7 @@ class ErrorBudgetStatus:
                 "consumed_minutes": round(self.budget_consumed_minutes, 2),
                 "remaining_minutes": round(self.budget_remaining_minutes, 2),
                 "remaining_percent": round(self.budget_remaining_percent, 2),
+                "is_over_budget": self.is_over_budget,
             },
             "burn_rate": {
                 "rate_1h": round(self.burn_rate_1h, 2),
@@ -368,6 +374,7 @@ class ErrorBudgetStatus:
             "health": {
                 "is_healthy": self.is_healthy,
                 "is_critical": self.is_critical,
+                "is_over_budget": self.is_over_budget,
             },
             "metrics": {
                 "error_count_window": self.error_count_window,
@@ -554,15 +561,16 @@ class ErrorBudgetCalculator:
 
         # Budget 소진량 계산
         # 방법 1: DLQ 기반 (에러 건수 / 허용 에러)
+        # Note: consumed_ratio는 1.0을 초과할 수 있음 (SLO 위반 시 음수 버짓)
         if total_requests > 0:
             error_rate = error_count / total_requests
             allowed_error_rate = slo.error_budget
-            consumed_ratio = min(error_rate / allowed_error_rate, 1.0) if allowed_error_rate > 0 else 0
+            consumed_ratio = (error_rate / allowed_error_rate) if allowed_error_rate > 0 else 0
         else:
             # 요청 통계가 없으면 DLQ 건수 기반 추정
             # 예: 1000건당 1건 에러 허용 시 (99.9% SLO)
             estimated_total = max(error_count * 1000, 100000)  # 최소 100k 가정
-            consumed_ratio = min((error_count / estimated_total) / slo.error_budget, 1.0)
+            consumed_ratio = (error_count / estimated_total) / slo.error_budget
 
         budget_consumed_minutes = budget_total_minutes * consumed_ratio
         budget_remaining_minutes = budget_total_minutes - budget_consumed_minutes

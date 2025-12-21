@@ -624,3 +624,104 @@ class TestFailSafeResponses:
                 # 항상 배포 가능
                 assert response["data"]["verdict"]["can_deploy"] is True
                 assert response["data"]["verdict"]["status"] == "proceed"
+
+
+class TestNegativeErrorBudget:
+    """Test negative Error Budget scenarios (SLO violation)."""
+
+    def test_error_budget_can_go_negative(self):
+        """Test that Error Budget can go negative when SLO is violated."""
+        # consumed_ratio > 1.0 → remaining_percent < 0
+        status = ErrorBudgetStatus(
+            slo_name="availability",
+            slo_target=0.999,
+            window_days=30,
+            budget_total_minutes=43.2,
+            budget_consumed_minutes=86.4,  # 200% consumed
+            budget_remaining_minutes=-43.2,  # negative
+            budget_remaining_percent=-100.0,  # negative
+        )
+
+        assert status.budget_remaining_percent < 0
+        assert status.budget_remaining_minutes < 0
+        assert status.is_over_budget is True
+        assert status.is_healthy is False
+        assert status.is_critical is True
+
+    def test_is_over_budget_property(self):
+        """Test is_over_budget property correctly identifies SLO violation."""
+        # Just barely over budget
+        slightly_over = ErrorBudgetStatus(
+            slo_name="test",
+            slo_target=0.999,
+            window_days=30,
+            budget_total_minutes=43.2,
+            budget_consumed_minutes=44.0,
+            budget_remaining_minutes=-0.8,
+            budget_remaining_percent=-1.85,
+        )
+        assert slightly_over.is_over_budget is True
+
+        # Exactly at 0%
+        at_zero = ErrorBudgetStatus(
+            slo_name="test",
+            slo_target=0.999,
+            window_days=30,
+            budget_total_minutes=43.2,
+            budget_consumed_minutes=43.2,
+            budget_remaining_minutes=0,
+            budget_remaining_percent=0,
+        )
+        assert at_zero.is_over_budget is False
+
+        # Healthy budget
+        healthy = ErrorBudgetStatus(
+            slo_name="test",
+            slo_target=0.999,
+            window_days=30,
+            budget_total_minutes=43.2,
+            budget_consumed_minutes=10.0,
+            budget_remaining_minutes=33.2,
+            budget_remaining_percent=76.9,
+        )
+        assert healthy.is_over_budget is False
+
+    def test_negative_budget_in_to_dict(self):
+        """Test that to_dict() correctly serializes negative budget values."""
+        status = ErrorBudgetStatus(
+            slo_name="availability",
+            slo_target=0.999,
+            window_days=30,
+            budget_total_minutes=43.2,
+            budget_consumed_minutes=64.8,
+            budget_remaining_minutes=-21.6,
+            budget_remaining_percent=-50.0,
+        )
+
+        result = status.to_dict()
+
+        assert result["budget"]["remaining_percent"] == -50.0
+        assert result["budget"]["remaining_minutes"] == -21.6
+        assert result["budget"]["is_over_budget"] is True
+        assert result["health"]["is_over_budget"] is True
+        assert result["health"]["is_critical"] is True
+
+    def test_calculator_allows_over_100_percent_consumption(self):
+        """Test calculator doesn't clamp consumed_ratio at 1.0."""
+        # Mock high error rate (5% when only 0.1% allowed)
+        mock_stats_fn = Mock(return_value={"total_errors": 5000})
+        mock_request_fn = Mock(return_value={"total_requests": 100000})  # 5% error rate
+
+        calculator = ErrorBudgetCalculator(
+            get_failed_operation_stats=mock_stats_fn,
+            get_request_stats=mock_request_fn,
+        )
+
+        status = calculator.calculate_budget_status()
+
+        # 5% error / 0.1% allowed = 50x over budget
+        # So consumed should be 5000% (50x)
+        assert status.budget_remaining_percent < 0, (
+            f"Expected negative remaining, got {status.budget_remaining_percent}"
+        )
+        assert status.is_over_budget is True, "Should be over budget with 5% error rate"

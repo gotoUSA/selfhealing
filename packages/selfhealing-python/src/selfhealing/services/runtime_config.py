@@ -409,7 +409,11 @@ class RuntimeConfigManager:
         """Reset all configuration to defaults."""
         with self._lock:
             for config_type, config_class in self.CONFIG_CLASSES.items():
-                default_config = asdict(config_class())
+                if config_class is not None:
+                    default_config = asdict(config_class())
+                else:
+                    # SLO는 별도 기본값 사용
+                    default_config = self._get_slo_defaults()
                 self._save_config(config_type, default_config)
                 logger.info(f"[RuntimeConfig] Reset {config_type} to defaults")
 
