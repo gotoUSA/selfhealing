@@ -916,13 +916,124 @@ invalidate_dashboard_cache()
 - ✅ 모든 변경은 새 레코드로 추가
 - ✅ 삭제는 아카이브 처리만 가능
 
+### 9.6 Fail-Safe vs Fail-Secure 정책
+
+보안 기능 실패 시 처리 방식입니다.
+
+| 실패 유형 | 적용 전략 | 기술적 구현 상세 | 비즈니스 가치 |
+|----------|----------|-----------------|--------------|
+| **마스킹 실패** | 🔒 Fail-Secure | 원본 차단 및 고정 텍스트 `[MASKING_ERROR: SENSITIVE_DATA_HIDDEN]` 반환 | 데이터 유출 사고 0% 보장 |
+| **권한 검증 실패** | 🔒 Fail-Secure | 즉시 403 Forbidden 반환 | 비인가 접근 원천 차단 |
+| **액세스 로깅 실패** | 🟢 Fail-Open + Fallback | 메인 로그 실패 시 stdout에 `[FALLBACK_AUDIT_LOG]` 기록 후 진행 | 운영 연속성 + 최소한의 추적성 유지 |
+| **캐시 실패** | 🟢 Fail-Open | DB 직접 조회로 전환 및 캐시 상태 경고 발생 | 성능 저하 시에도 서비스 가동 유지 |
+
+**Fail-Secure 권한 클래스 사용:**
+
+```python
+from selfhealing.api.django.middleware import (
+    FailSecureIsAuthenticated,
+    FailSecureIsAdminUser,
+)
+
+class MySensitiveView(APIView):
+    # 표준 DRF 대신 Fail-Secure 버전 사용
+    permission_classes = [FailSecureIsAuthenticated, FailSecureIsAdminUser]
+```
+
+**마스킹 실패 시 응답:**
+
+```python
+# 마스킹 오류 발생 시 원본 데이터 대신 고정 문자열 반환
+"[MASKING_ERROR: SENSITIVE_DATA_HIDDEN]"
+```
+
+**Fallback 로깅 출력 예시:**
+
+```bash
+# 메인 로깅 실패 시 stdout으로 기록
+[FALLBACK_AUDIT_LOG] {"_fallback": true, "_reason": "primary_logging_failed", "user": "admin", "path": "/api/self-healing/config/", ...}
+```
+
+### 9.7 재인증 요구사항 (Reauthentication)
+
+중요 설정 변경 시 추가 인증을 요구하는 훅 기반 시스템입니다.
+
+**설계 원칙:**
+- **벤더 중립**: 특정 인증 시스템(OAuth, SAML, JWT)에 종속되지 않음
+- **확장 가능**: `ReauthenticationProvider` 인터페이스 구현으로 커스텀 가능
+- **PCI-DSS 준수**: 유휴 시간 및 세션 제한 지원
+
+**데코레이터 사용:**
+
+```python
+from selfhealing.api.django.reauthentication import requires_reauthentication
+
+@requires_reauthentication(
+    max_idle_minutes=15,      # 15분 이상 유휴 시 재인증
+    max_session_minutes=60,   # 60분 이상 세션 시 재인증
+)
+def update_config(request, ...):
+    # 민감한 설정 변경 로직
+    ...
+```
+
+**DRF Permission 클래스 사용:**
+
+```python
+from selfhealing.api.django.reauthentication import RequiresReauthenticationPermission
+
+class ConfigUpdateView(APIView):
+    permission_classes = [IsAuthenticated, RequiresReauthenticationPermission]
+```
+
+**커스텀 Provider 구현:**
+
+```python
+from selfhealing.api.django.reauthentication import ReauthenticationProvider
+
+class MyOAuthReauthProvider(ReauthenticationProvider):
+    """기업별 OAuth 시스템 연동 예시"""
+    
+    def check_reauthentication_required(self, request, config):
+        # 기업의 OAuth 토큰 검증 로직
+        token = self._get_oauth_token(request)
+        issued_at = self._decode_token_time(token)
+        
+        # 세션 시간 확인
+        session_age = (datetime.now() - issued_at).total_seconds() / 60
+        if session_age > config.max_session_minutes:
+            return True
+        
+        return False
+    
+    def get_reauthentication_response(self, request, config):
+        return JsonResponse({
+            'error': 'reauthentication_required',
+            'oauth_url': '/oauth/reauthorize/',
+        }, status=403)
+```
+
+**설정 (settings.py):**
+
+```python
+# 커스텀 Provider 등록
+SELFHEALING_REAUTH_PROVIDER = 'myapp.auth.MyOAuthReauthProvider'
+
+# 또는 설정 기반 (RequiresReauthenticationPermission 사용 시)
+SELFHEALING_REAUTH_MAX_IDLE_MINUTES = 15
+SELFHEALING_REAUTH_MAX_SESSION_MINUTES = 60
+SELFHEALING_REAUTH_ENABLED = True
+```
+
 ---
 
 ## 버전 정보
 
-- **현재 버전**: 1.2.0
+- **현재 버전**: 1.4.0
 - **마지막 업데이트**: 2025-12-21
 - **변경 내역**:
+  - v1.4.0: 재인증 훅 시스템 추가, Fallback 로깅, 마스킹 에러 문자열 개선
+  - v1.3.0: Fail-Safe/Fail-Secure 정책 섹션 추가
   - v1.2.0: 보안 및 데이터 보호 섹션 추가 (권한, 마스킹, 액세스 로깅, 캐싱)
   - v1.1.0: Chaos Engineering API 섹션 추가
   - v1.0.0: 초기 버전

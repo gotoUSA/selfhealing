@@ -695,6 +695,15 @@ dlq_items_total.labels(domain="payment", transaction_id=tx_id)  # ❌
 | 내부 IP | 10.x.x.x, 172.16-31.x.x, 192.168.x.x | `[INTERNAL_IP]` |
 | 서버 경로 | /home/user, /var/log, C:\Users | `[SERVER_PATH]` |
 
+**Fail-Secure 마스킹:**
+
+마스킹 실패 시에도 원본 데이터는 절대 노출되지 않습니다:
+
+```python
+# 마스킹 오류 발생 시 반환되는 고정 문자열
+"[MASKING_ERROR: SENSITIVE_DATA_HIDDEN]"
+```
+
 **설정:**
 
 ```python
@@ -715,6 +724,20 @@ class ForensicSettings:
 | `/api/self-healing/config/*` | 🔴 높음 | ✅ |
 | `/api/self-healing/chaos/schedules/*` | 🔴 높음 | ✅ |
 | `/api/self-healing/chaos/config/*` | 🔴 높음 | ✅ |
+
+**Fallback 로깅:**
+
+메인 로깅 시스템 실패 시에도 최소한의 감사 추적을 보장합니다:
+
+```bash
+# Primary 로깅 실패 시 stdout으로 기록
+[FALLBACK_AUDIT_LOG] {"_fallback": true, "_reason": "primary_logging_failed", ...}
+```
+
+| 로깅 계층 | 대상 | 실패 시 동작 |
+|----------|------|-------------|
+| Primary | Python Logger + 전용 파일 | Fallback으로 전환 |
+| Fallback | stdout (컨테이너 로그) | 최소 정보만 출력 |
 
 **미들웨어 활성화:**
 
@@ -747,6 +770,15 @@ from selfhealing.services.dashboard_service import invalidate_dashboard_cache
 invalidate_dashboard_cache()
 ```
 
+### 4. Fail 전략 요약
+
+| 실패 유형 | 적용 전략 | 동작 | 비즈니스 가치 |
+|----------|----------|------|--------------|
+| **마스킹 실패** | 🔒 Fail-Secure | 고정 문자열 반환 | 데이터 유출 0% |
+| **권한 검증 실패** | 🔒 Fail-Secure | 403 Forbidden | 비인가 접근 차단 |
+| **액세스 로깅 실패** | 🟢 Fail-Open + Fallback | stdout 기록 후 진행 | 추적성 + 가용성 |
+| **캐시 실패** | 🟢 Fail-Open | DB 직접 조회 | 서비스 가동 유지 |
+
 ---
 
 ## 관련 문서
@@ -754,5 +786,5 @@ invalidate_dashboard_cache()
 - [01_OVERVIEW.md](01_OVERVIEW.md) - 시스템 개요
 - [03_CIRCUIT_BREAKER.md](03_CIRCUIT_BREAKER.md) - Circuit Breaker 상세
 - [04_DEAD_LETTER_QUEUE.md](04_DEAD_LETTER_QUEUE.md) - DLQ 시스템
-- [07_CONTROL_API.md](07_CONTROL_API.md) - Control API 보안 정책
+- [07_CONTROL_API.md](07_CONTROL_API.md) - Control API 보안 정책 및 재인증 훅
 - [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) - 운영 가이드

@@ -83,23 +83,32 @@ class AccessLogEntry:
         }
 
     def _mask_internal_ip(self, ip: str) -> str:
-        """Mask internal IP addresses for privacy."""
+        """
+        Mask internal IP addresses for privacy.
+
+        FAIL-SECURE: On any error, return "[MASKED]" instead of raw IP.
+        """
         if not ip:
+            return "[EMPTY]"
+
+        try:
+            internal_patterns = [
+                re.compile(r"^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$"),
+                re.compile(r"^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$"),
+                re.compile(r"^192\.168\.\d{1,3}\.\d{1,3}$"),
+            ]
+
+            for pattern in internal_patterns:
+                if pattern.match(ip):
+                    # Show only network portion for internal IPs
+                    parts = ip.split(".")
+                    return f"{parts[0]}.{parts[1]}.xxx.xxx"
+
             return ip
 
-        internal_patterns = [
-            re.compile(r"^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$"),
-            re.compile(r"^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$"),
-            re.compile(r"^192\.168\.\d{1,3}\.\d{1,3}$"),
-        ]
-
-        for pattern in internal_patterns:
-            if pattern.match(ip):
-                # Show only network portion for internal IPs
-                parts = ip.split(".")
-                return f"{parts[0]}.{parts[1]}.xxx.xxx"
-
-        return ip
+        except Exception:
+            # FAIL-SECURE: On any error, mask completely
+            return "[MASKED]"
 
     def __str__(self) -> str:
         """Format as log message."""
@@ -213,15 +222,62 @@ class SensitiveEndpointAccessLogger:
         return request.META.get("REMOTE_ADDR", "")
 
     def _write_log(self, entry: AccessLogEntry) -> None:
-        """Write the access log entry."""
-        # Log to Python logger (for aggregation)
-        logger.info(str(entry))
+        """
+        Write the access log entry with fallback mechanism.
+        
+        FAIL-OPEN with FALLBACK Design:
+        - Primary: Structured logger + dedicated access log file
+        - Fallback: Standard output (print) if primary fails
+        - This ensures we always have SOME record, even if degraded
+        """
+        primary_success = False
+        
+        # Primary: Log to Python logger (for aggregation)
+        try:
+            logger.info(str(entry))
+            primary_success = True
+        except Exception as e:
+            # Logger failed, will use fallback
+            pass
 
-        # Also write to dedicated access log file
+        # Primary: Also write to dedicated access log file
         try:
             self._append_to_file(entry)
+            primary_success = True
         except Exception as e:
             logger.warning(f"[AccessLog] Failed to write to file: {e}")
+        
+        # FALLBACK: If all primary logging failed, use stdout as last resort
+        if not primary_success:
+            self._fallback_log(entry)
+
+    def _fallback_log(self, entry: AccessLogEntry) -> None:
+        """
+        Fallback logging to stdout when primary logging fails.
+        
+        This ensures we have at least some audit trail even when:
+        - Main logger is misconfigured
+        - Log file is inaccessible
+        - Redis/DB logging is down
+        
+        stdout is captured by container orchestrators (Docker, K8s)
+        so it provides a secondary audit trail.
+        """
+        import sys
+        import json
+        
+        try:
+            fallback_record = {
+                "_fallback": True,
+                "_reason": "primary_logging_failed",
+                **entry.to_dict()
+            }
+            # Write directly to stdout, bypassing logging framework
+            print(f"[FALLBACK_AUDIT_LOG] {json.dumps(fallback_record)}", file=sys.stdout, flush=True)
+        except Exception:
+            # Last resort: minimal output
+            print(f"[FALLBACK_AUDIT_LOG] user={entry.user} path={entry.path} status={entry.status_code}", 
+                  file=sys.stdout, flush=True)
 
     def _append_to_file(self, entry: AccessLogEntry) -> None:
         """Append entry to the access log file."""
@@ -255,6 +311,10 @@ class SensitiveAccessLoggingMiddleware:
 
     This middleware logs all GET requests to sensitive endpoints
     (audit, config, chaos schedules) for compliance audit trails.
+
+    FAIL-OPEN Design: Logging failure does not block requests.
+    The primary function (serving the request) must not be affected by
+    secondary functions (logging).
     """
 
     def __init__(self, get_response: Callable):
@@ -271,10 +331,106 @@ class SensitiveAccessLoggingMiddleware:
         # Calculate response time
         response_time_ms = (time.time() - start_time) * 1000
 
-        # Log if sensitive endpoint
-        self.access_logger.log_if_sensitive(request, response, response_time_ms)
+        # FAIL-OPEN: Log if sensitive endpoint, but don't block on failure
+        try:
+            self.access_logger.log_if_sensitive(request, response, response_time_ms)
+        except Exception as e:
+            # Log error but don't affect response
+            logger.error(f"[AccessLog] Middleware error (fail-open): {e}")
 
         return response
+
+
+# =============================================================================
+# Fail-Secure Permission Classes
+# =============================================================================
+
+
+class FailSecureIsAuthenticated:
+    """
+    Fail-Secure version of IsAuthenticated.
+
+    FAIL-SECURE Design:
+    - If authentication check fails for ANY reason, deny access
+    - Default to denial on ambiguity
+    - Log all failures for security monitoring
+    """
+
+    def has_permission(self, request, view) -> bool:
+        """Check if user is authenticated with fail-secure logic."""
+        try:
+            # Standard authentication check
+            is_authenticated = bool(
+                request.user and
+                hasattr(request.user, 'is_authenticated') and
+                request.user.is_authenticated
+            )
+
+            if not is_authenticated:
+                logger.info(
+                    f"[Permission] Denied: user not authenticated, "
+                    f"path={request.path}, ip={request.META.get('REMOTE_ADDR')}"
+                )
+
+            return is_authenticated
+
+        except Exception as e:
+            # FAIL-SECURE: Any error = deny access
+            logger.warning(
+                f"[Permission] FAIL-SECURE denial due to error: {e}, "
+                f"path={request.path}"
+            )
+            return False
+
+
+class FailSecureIsAdminUser:
+    """
+    Fail-Secure version of IsAdminUser.
+
+    FAIL-SECURE Design:
+    - If admin check fails for ANY reason, deny access
+    - Both is_authenticated AND is_staff must be True
+    - Log all denials for security monitoring
+    """
+
+    def has_permission(self, request, view) -> bool:
+        """Check if user is admin with fail-secure logic."""
+        try:
+            # Must be authenticated first
+            is_authenticated = bool(
+                request.user and
+                hasattr(request.user, 'is_authenticated') and
+                request.user.is_authenticated
+            )
+
+            if not is_authenticated:
+                logger.info(
+                    f"[Permission] Admin check denied: not authenticated, "
+                    f"path={request.path}"
+                )
+                return False
+
+            # Must be staff
+            is_admin = bool(
+                hasattr(request.user, 'is_staff') and
+                request.user.is_staff
+            )
+
+            if not is_admin:
+                logger.info(
+                    f"[Permission] Admin check denied: user={request.user}, "
+                    f"path={request.path}"
+                )
+
+            return is_admin
+
+        except Exception as e:
+            # FAIL-SECURE: Any error = deny access
+            logger.warning(
+                f"[Permission] FAIL-SECURE admin denial due to error: {e}, "
+                f"path={request.path}"
+            )
+            return False
 
 
 # =============================================================================
@@ -282,8 +438,12 @@ class SensitiveAccessLoggingMiddleware:
 # =============================================================================
 
 __all__ = [
+    # Access Logging
     "SensitiveEndpointAccessLogger",
     "SensitiveAccessLoggingMiddleware",
     "AccessLogEntry",
     "SENSITIVE_ENDPOINT_PATTERNS",
+    # Fail-Secure Permissions
+    "FailSecureIsAuthenticated",
+    "FailSecureIsAdminUser",
 ]
