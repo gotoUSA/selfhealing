@@ -10,6 +10,8 @@ from contextlib import contextmanager
 from functools import wraps
 import logging
 
+from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
+
 logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client, but don't fail if not installed
@@ -254,13 +256,8 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            # 음수 방어: 개수는 0 이상이어야 함
-            safe_count = max(0, count)
-            if safe_count != count:
-                logger.warning(
-                    f"[Metrics] Clamped negative DLQ pending count: "
-                    f"domain={domain}, original={count}, clamped={safe_count}"
-                )
+            # 음수 방어: clamp_non_negative 유틸리티 사용
+            safe_count = clamp_non_negative(count, f"dlq_pending_count[{domain}]")
             self.dlq_pending_gauge.labels(domain=domain).set(safe_count)
         except Exception as e:
             logger.warning(f"[Metrics] Failed to set DLQ pending count: {e}")
@@ -270,12 +267,8 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            # 음수 방어: 개수는 0 이상이어야 함
-            safe_count = max(0, count)
-            if safe_count != count:
-                logger.warning(
-                    f"[Metrics] Clamped negative DLQ status count: " f"status={status}, original={count}, clamped={safe_count}"
-                )
+            # 음수 방어: clamp_non_negative 유틸리티 사용
+            safe_count = clamp_non_negative(count, f"dlq_status_count[{status}]")
             self.dlq_by_status_gauge.labels(status=status).set(safe_count)
         except Exception as e:
             logger.warning(f"[Metrics] Failed to set DLQ status count: {e}")
@@ -322,13 +315,8 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            # 0-100 범위 클램핑: 비율은 0-100 사이여야 함
-            safe_rate = max(0.0, min(100.0, rate))
-            if safe_rate != rate:
-                logger.warning(
-                    f"[Metrics] Clamped retry success rate out of range: "
-                    f"domain={domain}, original={rate}, clamped={safe_rate}"
-                )
+            # 0-100 범위 클램핑: clamp_percentage 유틸리티 사용
+            safe_rate = clamp_percentage(rate, f"retry_success_rate[{domain}]")
             self.retry_success_rate.labels(domain=domain).set(safe_rate)
         except Exception as e:
             logger.warning(f"[Metrics] Failed to set retry success rate: {e}")

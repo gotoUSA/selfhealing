@@ -17,6 +17,7 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from selfhealing.adapters.metrics.base import MetricSourceAdapter, NullMetricSourceAdapter
 from selfhealing.adapters.metrics.factory import get_metric_adapter
 from selfhealing.metrics.jitter import with_jitter, JitterConfig
+from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
 if TYPE_CHECKING:
     from selfhealing.services.security_violation_service import SecurityViolationService
@@ -133,8 +134,8 @@ class MetricReconciler:
         for domain in self._get_domains():
             try:
                 actual = self.adapter.get_dlq_pending_count(domain)
-                # 음수 방어: 개수는 0 이상이어야 함
-                safe_actual = max(0, actual)
+                # 음수 방어: clamp_non_negative 유틸리티 사용
+                safe_actual = clamp_non_negative(actual, f"dlq_pending[{domain}]")
                 result.dlq_pending[domain] = safe_actual
 
                 if metrics and hasattr(metrics, "dlq_pending_gauge"):
@@ -159,8 +160,8 @@ class MetricReconciler:
         for domain in self._get_domains():
             try:
                 rate = self.adapter.get_retry_success_rate(domain)
-                # 0-100 범위 클램핑
-                safe_rate = max(0.0, min(100.0, rate))
+                # 0-100 범위 클램핑: clamp_percentage 유틸리티 사용
+                safe_rate = clamp_percentage(rate, f"retry_success_rate[{domain}]")
                 result.retry_success_rates[domain] = safe_rate
 
                 if metrics and hasattr(metrics, "retry_success_rate"):
@@ -200,14 +201,14 @@ class MetricReconciler:
         metrics = self._get_metrics()
 
         actual = self.adapter.get_dlq_pending_count(domain)
-        # 음수 방어: 개수는 0 이상이어야 함
-        safe_actual = max(0, actual)
+        # 음수 방어: clamp_non_negative 유틸리티 사용
+        safe_actual = clamp_non_negative(actual, f"dlq_pending[{domain}]")
         if metrics and hasattr(metrics, "dlq_pending_gauge"):
             metrics.dlq_pending_gauge.labels(domain=domain).set(safe_actual)
 
         rate = self.adapter.get_retry_success_rate(domain)
-        # 0-100 범위 클램핑
-        safe_rate = max(0.0, min(100.0, rate))
+        # 0-100 범위 클램핑: clamp_percentage 유틸리티 사용
+        safe_rate = clamp_percentage(rate, f"retry_success_rate[{domain}]")
         if metrics and hasattr(metrics, "retry_success_rate"):
             metrics.retry_success_rate.labels(domain=domain).set(safe_rate)
 

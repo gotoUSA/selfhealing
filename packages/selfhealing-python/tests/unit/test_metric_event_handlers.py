@@ -35,14 +35,17 @@ class TestDLQMetricEventHandler:
         # Should not raise
         DLQMetricEventHandler.on_item_created("payment", "PG_TIMEOUT")
 
+    @patch("selfhealing.metrics.event_handlers._get_safe_pending_gauge")
     @patch("selfhealing.metrics.event_handlers._get_metrics")
-    def test_on_item_resolved_calls_metrics(self, mock_get_metrics):
-        """on_item_resolved should update metrics correctly."""
+    def test_on_item_resolved_calls_metrics(self, mock_get_metrics, mock_get_safe_gauge):
+        """on_item_resolved should update metrics correctly using SafeGauge."""
         mock_metrics = MagicMock()
-        mock_metrics.dlq_pending_gauge = MagicMock()
         mock_metrics.recovery_time_seconds = MagicMock()
         mock_metrics.retry_outcomes_total = MagicMock()
         mock_get_metrics.return_value = mock_metrics
+
+        mock_safe_gauge = MagicMock()
+        mock_get_safe_gauge.return_value = mock_safe_gauge
 
         DLQMetricEventHandler.on_item_resolved(
             domain="payment",
@@ -50,7 +53,9 @@ class TestDLQMetricEventHandler:
             duration_seconds=30.5,
         )
 
-        mock_metrics.dlq_pending_gauge.labels.assert_called()
+        # SafeGauge를 통해 dec() 호출됨
+        mock_safe_gauge.labels.assert_called_with(domain="payment")
+        mock_safe_gauge.labels.return_value.dec.assert_called_once()
         mock_metrics.recovery_time_seconds.labels.assert_called()
 
     @patch("selfhealing.metrics.event_handlers._get_metrics")
