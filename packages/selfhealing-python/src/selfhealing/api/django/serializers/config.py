@@ -343,6 +343,19 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
     collection_interval = serializers.IntegerField(required=False, min_value=1, max_value=3600)
     export_prometheus = serializers.BooleanField(required=False)
 
+    # Jitter settings (Thundering Herd prevention)
+    # Clamping: min=0.0 (음수 방지), max=300.0 (5분 상한)
+    jitter_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Jitter 활성화 여부 (기본: True). 분산 환경에서 Thundering Herd 방지",
+    )
+    jitter_max_delay_seconds = serializers.FloatField(
+        required=False,
+        min_value=0.0,  # 음수 방지 (Clamping)
+        max_value=300.0,  # 5분 상한
+        help_text="최대 Jitter 지연 시간 (초). 0-300 범위 (기본: 60.0)",
+    )
+
 
 class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     """

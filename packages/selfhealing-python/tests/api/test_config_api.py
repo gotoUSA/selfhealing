@@ -303,5 +303,111 @@ class TestConfigValidationAuditLog:
         assert ip == "unknown"
 
 
+class TestJitterConfigAPI:
+    """
+    Tests for Jitter Configuration API.
+
+    Validates the 'Triangle Defense System':
+    - SLA (Business Goals)
+    - Error Budget (Operational Budget)
+    - Jitter (Infrastructure Protection)
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup(self, factory, admin_user):
+        self.factory = factory
+        self.admin_user = admin_user
+
+    def test_jitter_serializer_valid_data(self):
+        """Test valid jitter configuration data."""
+        serializer = MetricsConfigSerializer(
+            data={
+                "jitter_enabled": True,
+                "jitter_max_delay_seconds": 30.0,
+            }
+        )
+        assert serializer.is_valid()
+        assert serializer.validated_data["jitter_enabled"] is True
+        assert serializer.validated_data["jitter_max_delay_seconds"] == 30.0
+
+    def test_jitter_serializer_rejects_negative_delay(self):
+        """Test that negative jitter delay is rejected (Clamping)."""
+        serializer = MetricsConfigSerializer(
+            data={"jitter_max_delay_seconds": -10.0}
+        )
+        assert serializer.is_valid() is False
+        assert "jitter_max_delay_seconds" in serializer.errors
+
+    def test_jitter_serializer_rejects_exceeding_max(self):
+        """Test that jitter delay exceeding 300 seconds is rejected."""
+        serializer = MetricsConfigSerializer(
+            data={"jitter_max_delay_seconds": 500.0}  # Exceeds max 300
+        )
+        assert serializer.is_valid() is False
+        assert "jitter_max_delay_seconds" in serializer.errors
+
+    def test_jitter_serializer_accepts_zero(self):
+        """Test that zero jitter delay is valid (disables jitter effectively)."""
+        serializer = MetricsConfigSerializer(
+            data={"jitter_max_delay_seconds": 0.0}
+        )
+        assert serializer.is_valid()
+        assert serializer.validated_data["jitter_max_delay_seconds"] == 0.0
+
+    def test_jitter_serializer_accepts_max_boundary(self):
+        """Test that exactly 300 seconds is valid."""
+        serializer = MetricsConfigSerializer(
+            data={"jitter_max_delay_seconds": 300.0}
+        )
+        assert serializer.is_valid()
+        assert serializer.validated_data["jitter_max_delay_seconds"] == 300.0
+
+    def test_metrics_config_view_get(self):
+        """Test GET /api/self-healing/config/metrics/"""
+        request = self.factory.get("/api/self-healing/config/metrics/")
+        request.user = self.admin_user
+
+        view = MetricsConfigView.as_view()
+        response = view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "success"
+        assert "config" in response.data
+
+    def test_metrics_config_view_put_jitter(self):
+        """Test PUT /api/self-healing/config/metrics/ with jitter settings."""
+        request = self.factory.put(
+            "/api/self-healing/config/metrics/",
+            {
+                "jitter_enabled": False,
+                "jitter_max_delay_seconds": 45.0,
+                "apply_strategy": "immediate",
+            },
+            format="json",
+        )
+        request.user = self.admin_user
+
+        view = MetricsConfigView.as_view()
+        response = view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] in ("success", "applied")
+
+    def test_metrics_config_view_put_invalid_jitter_rejected(self):
+        """Test PUT with invalid jitter values returns 400."""
+        request = self.factory.put(
+            "/api/self-healing/config/metrics/",
+            {"jitter_max_delay_seconds": -5.0},  # Invalid: negative
+            format="json",
+        )
+        request.user = self.admin_user
+
+        view = MetricsConfigView.as_view()
+        response = view(request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "errors" in response.data
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

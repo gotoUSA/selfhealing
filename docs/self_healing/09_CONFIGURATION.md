@@ -85,6 +85,43 @@ payment_sla = sla.get_threshold("payment")  # timedelta(hours=1)
 all_slas = sla.get_all_thresholds()  # dict of all domains
 ```
 
+**런타임 동적 변경 (API):**
+
+SLA 설정은 서버 재시작 없이 API를 통해 런타임에 변경할 수 있습니다.
+
+```bash
+# 현재 SLA 설정 조회
+curl -X GET -H "Authorization: Bearer $TOKEN" \
+  $API_URL/api/self-healing/config/sla/
+
+# SLA 시간 변경 (즉시 적용)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "default_hours": 24,
+    "thresholds_by_domain": {
+      "payment": 2,
+      "point": 8,
+      "inventory": 4,
+      "webhook": 12,
+      "notification": 48
+    }
+  }' \
+  $API_URL/api/self-healing/config/sla/
+
+# 지연 적용 (60초 후 적용, 취소 가능)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thresholds_by_domain": {"payment": 1},
+    "apply_strategy": "delayed",
+    "delay_seconds": 60
+  }' \
+  $API_URL/api/self-healing/config/sla/
+```
+
+> 💡 **도메인 중립적 설계**: `thresholds_by_domain`은 딕셔너리 형태로, 결제/포인트 외에도 어떤 도메인이든 자유롭게 추가/수정할 수 있습니다. 코드 변경 없이 새 도메인의 SLA를 정의할 수 있습니다.
+
 ---
 
 ### 2. RETRY (재시도 정책)
@@ -451,21 +488,32 @@ SELF_HEALING = {
 
 **Dataclass: `MetricCollectionSettings`**
 
-| 필드 | 타입 | 기본값 | 설명 |
-|------|------|--------|------|
-| `sync_on_startup` | bool | True | 서버 시작 시 Gauge 동기화 |
-| `scheduled_sync_enabled` | bool | False | 주기적 동기화 (권장: 비활성화) |
-| `scheduled_sync_interval` | int | 86400 | 동기화 주기 (초) |
-| `jitter_enabled` | bool | True | Jitter 활성화 (분산 환경) |
-| `jitter_max_delay_seconds` | float | 60.0 | 최대 Jitter 지연 시간 |
-| `adapter_type` | str | "null" | 어댑터 유형 (django/redis/null) |
-| `redis_prefix` | str | "sh:metrics:" | Redis 키 프리픽스 |
-| `drift_detection_enabled` | bool | True | Drift 감지 활성화 |
-| `drift_warning_threshold` | float | 0.05 | 경고 임계값 (5%) |
-| `drift_critical_threshold` | float | 0.20 | 심각 임계값 (20%) |
-| `drift_incident_threshold` | float | 0.50 | 인시던트 임계값 (50%) |
-| `drift_incident_enabled` | bool | True | 인시던트 자동 생성 |
-| `drift_alert_enabled` | bool | True | 알림 발송 활성화 |
+| 필드 | 타입 | 기본값 | 변경 방법 | 설명 |
+|------|------|--------|-----------|------|
+| `sync_on_startup` | bool | True | 환경변수 | 서버 시작 시 Gauge 동기화 |
+| `scheduled_sync_enabled` | bool | False | 환경변수 | 주기적 동기화 (권장: 비활성화) |
+| `scheduled_sync_interval` | int | 86400 | 환경변수 | 동기화 주기 (초) |
+| `jitter_enabled` | bool | True | API/환경변수 | Jitter 활성화 (분산 환경) |
+| `jitter_max_delay_seconds` | float | 60.0 | API/환경변수 | 최대 Jitter 지연 시간 (0-300) |
+| `adapter_type` | str | "null" | 환경변수 | 어댑터 유형 (django/redis/null) |
+| `redis_prefix` | str | "sh:metrics:" | 환경변수 | Redis 키 프리픽스 |
+| `drift_detection_enabled` | bool | True | API/환경변수 | Drift 감지 활성화 |
+| `drift_warning_threshold` | float | 0.05 | API/환경변수 | 경고 임계값 (5%) |
+| `drift_critical_threshold` | float | 0.20 | API/환경변수 | 심각 임계값 (20%) |
+| `drift_incident_threshold` | float | 0.50 | API/환경변수 | 인시던트 임계값 (50%) |
+| `drift_incident_enabled` | bool | True | API/환경변수 | 인시던트 자동 생성 |
+| `drift_alert_enabled` | bool | True | API/환경변수 | 알림 발송 활성화 |
+
+**설정 변경 방법:**
+
+| 설정 그룹 | 변경 방법 | 재시작 필요 |
+|-----------|-----------|-------------|
+| **Jitter 설정** | API + 환경 변수 | ❌ 불필요 (API) |
+| **Drift 임계값** | API + 환경 변수 | ❌ 불필요 (API) |
+| **동기화 설정** | 환경 변수 전용 | ✅ 필요 |
+| **어댑터 설정** | 환경 변수 전용 | ✅ 필요 |
+
+> 💡 **Jitter API 지원**: `jitter_enabled`, `jitter_max_delay_seconds`는 `/api/self-healing/config/metrics/` 엔드포인트를 통해 런타임에 변경할 수 있습니다. 음수 방지(Clamping)가 적용되어 0.0~300.0 범위만 허용됩니다.
 
 **환경 변수:**
 
@@ -474,11 +522,11 @@ SELF_HEALING = {
 SELFHEALING_METRICS_SYNC_ON_STARTUP=true
 SELFHEALING_METRICS_ADAPTER_TYPE=django
 
-# Jitter 설정 (K8s 환경)
+# Jitter 설정 (K8s 환경) - 환경 변수 또는 API로 변경 가능
 SELFHEALING_METRICS_JITTER_ENABLED=true
 SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS=60.0
 
-# Drift 임계값 설정
+# Drift 임계값 설정 (환경 변수 또는 API로 변경 가능)
 SELFHEALING_DRIFT_WARNING_THRESHOLD=0.05
 SELFHEALING_DRIFT_CRITICAL_THRESHOLD=0.20
 SELFHEALING_DRIFT_INCIDENT_THRESHOLD=0.50
@@ -506,6 +554,42 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   $API_URL/api/self-healing/config/drift-thresholds/reset/
 ```
+
+**Jitter 런타임 변경 (API):**
+
+```bash
+# 현재 Metrics (Jitter 포함) 설정 조회
+curl -X GET -H "Authorization: Bearer $TOKEN" \
+  $API_URL/api/self-healing/config/metrics/
+
+# Jitter 설정 변경 (서버 재시작 불필요)
+# ⚠️ Clamping 적용: jitter_max_delay_seconds는 0.0~300.0 범위만 허용
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jitter_enabled": true,
+    "jitter_max_delay_seconds": 30.0
+  }' \
+  $API_URL/api/self-healing/config/metrics/
+
+# Jitter 비활성화 (긴급 상황 시)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jitter_enabled": false}' \
+  $API_URL/api/self-healing/config/metrics/
+
+# Graceful 전략으로 변경 (진행 중인 요청 완료 후 적용)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jitter_max_delay_seconds": 120.0,
+    "apply_strategy": "graceful",
+    "grace_timeout_seconds": 30
+  }' \
+  $API_URL/api/self-healing/config/metrics/
+```
+
+> 🛡️ **삼각 방어 체계**: SLA(비즈니스 목표) + Error Budget(운영 예산) + Jitter(인프라 보호)가 모두 API로 런타임 변경 가능합니다.
 
 **런타임 동적 변경 (API):**
 

@@ -196,6 +196,10 @@ class MetricsConfig:
     collection_interval: int = 60  # seconds
     export_prometheus: bool = True
 
+    # Jitter settings (Thundering Herd prevention)
+    jitter_enabled: bool = True
+    jitter_max_delay_seconds: float = 60.0  # Clamped: min=0.0, max=300.0
+
 
 @dataclass
 class NotificationConfig:
