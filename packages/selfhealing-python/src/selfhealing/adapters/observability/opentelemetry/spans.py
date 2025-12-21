@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import uuid
 import logging
@@ -127,7 +127,7 @@ class DecisionSpanContext:
         """
         event_data = {
             "name": name,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "attributes": attributes or {},
         }
         self.events.append(event_data)
@@ -176,7 +176,7 @@ class DecisionSpanContext:
 
     def get_duration_ms(self) -> int:
         """Get duration of this span in milliseconds."""
-        elapsed = datetime.utcnow() - self.started_at
+        elapsed = datetime.now(timezone.utc) - self.started_at
         return int(elapsed.total_seconds() * 1000)
 
 

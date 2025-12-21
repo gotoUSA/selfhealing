@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -58,7 +58,7 @@ class FileAuditLogAdapter(AuditLogAdapter):
     def _get_current_file_path(self) -> Path:
         """Get current file path (with date if rotating)."""
         if self.rotate_daily:
-            date_str = datetime.utcnow().strftime("%Y-%m-%d")
+            date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             name = f"{self.base_path.stem}_{date_str}{self.base_path.suffix}"
             return self.base_path.parent / name
         return self.base_path
@@ -173,7 +173,7 @@ class FileAuditLogAdapter(AuditLogAdapter):
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         elif timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
 
         # Try to parse action as AuditAction enum
         action_str = data.get("action", "")

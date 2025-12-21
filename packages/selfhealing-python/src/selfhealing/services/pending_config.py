@@ -14,7 +14,7 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -53,7 +53,7 @@ class PendingConfigChange:
 
     def __post_init__(self):
         if not self.created_at:
-            self.created_at = datetime.utcnow().isoformat()
+            self.created_at = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -105,7 +105,7 @@ class PendingConfigService:
         """Save state to storage."""
         data = {
             "pending": [c.to_dict() for c in self._pending.values()],
-            "history": [c.to_dict() for c in self._history[-self.MAX_HISTORY:]],
+            "history": [c.to_dict() for c in self._history[-self.MAX_HISTORY :]],
         }
         self._backend.set(self.STORAGE_KEY, data)
 
@@ -116,7 +116,7 @@ class PendingConfigService:
         self._history.append(change)
         # Trim history
         if len(self._history) > self.MAX_HISTORY:
-            self._history = self._history[-self.MAX_HISTORY:]
+            self._history = self._history[-self.MAX_HISTORY :]
 
     # =========================================================================
     # Public API
@@ -146,9 +146,9 @@ class PendingConfigService:
 
             # Calculate scheduled time
             if apply_options.strategy == ApplyStrategy.DELAYED:
-                scheduled_time = datetime.utcnow() + timedelta(seconds=apply_options.delay_seconds)
+                scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=apply_options.delay_seconds)
             else:
-                scheduled_time = datetime.utcnow()
+                scheduled_time = datetime.now(timezone.utc)
 
             change = PendingConfigChange(
                 id=change_id,
@@ -163,8 +163,7 @@ class PendingConfigService:
             self._save_state()
 
             logger.info(
-                f"[PendingConfig] Created pending change {change_id} "
-                f"for {config_type}, scheduled at {scheduled_time}"
+                f"[PendingConfig] Created pending change {change_id} " f"for {config_type}, scheduled at {scheduled_time}"
             )
 
             return change
@@ -178,22 +177,18 @@ class PendingConfigService:
         """Get all pending changes for a config type."""
         with self._lock:
             return [
-                c for c in self._pending.values()
-                if c.config_type == config_type and c.status == PendingStatus.PENDING.value
+                c for c in self._pending.values() if c.config_type == config_type and c.status == PendingStatus.PENDING.value
             ]
 
     def get_all_pending_changes(self) -> List[PendingConfigChange]:
         """Get all pending changes."""
         with self._lock:
-            return [
-                c for c in self._pending.values()
-                if c.status == PendingStatus.PENDING.value
-            ]
+            return [c for c in self._pending.values() if c.status == PendingStatus.PENDING.value]
 
     def get_due_changes(self) -> List[PendingConfigChange]:
         """Get all changes that are due to be applied."""
         with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             due = []
             for change in self._pending.values():
                 if change.status != PendingStatus.PENDING.value:
@@ -228,7 +223,7 @@ class PendingConfigService:
                 return None
 
             change.status = PendingStatus.CANCELLED.value
-            change.cancelled_at = datetime.utcnow().isoformat()
+            change.cancelled_at = datetime.now(timezone.utc).isoformat()
             change.cancelled_by = cancelled_by
 
             self._move_to_history(change)
@@ -248,7 +243,7 @@ class PendingConfigService:
                 return None
 
             change.status = PendingStatus.APPLIED.value
-            change.applied_at = datetime.utcnow().isoformat()
+            change.applied_at = datetime.now(timezone.utc).isoformat()
 
             self._move_to_history(change)
             self._save_state()
@@ -296,7 +291,7 @@ class PendingConfigService:
             Number of expired changes cleaned up
         """
         with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             cutoff = now - timedelta(hours=max_age_hours)
             expired = []
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, Optional, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -281,7 +281,7 @@ def build_event_attributes(
     attributes = {
         EventAttribute.SERVICE_NAME: service_name,
         EventAttribute.ENVIRONMENT: environment,
-        EventAttribute.TIMESTAMP: datetime.utcnow().isoformat() + "Z",
+        EventAttribute.TIMESTAMP: datetime.now(timezone.utc).isoformat() + "Z",
     }
 
     if domain:

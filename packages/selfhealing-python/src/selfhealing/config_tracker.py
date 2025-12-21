@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Generator, Optional, TypeVar
 
 from selfhealing.context.actor_context import ActorContext
@@ -135,7 +135,7 @@ class ConfigChangeTracker:
             old_value=old_value,
             new_value=new_value,
             reason=reason,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=actor.actor_id,
         )
 

@@ -9,7 +9,7 @@ Tasks:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import shared_task
 
@@ -66,21 +66,25 @@ def apply_pending_config_changes(self):
                     failed_count += 1
                     logger.error(f"[ConfigTask] Failed to apply {change.id}: {result.get('error')}")
 
-                results.append({
-                    "id": change.id,
-                    "config_type": change.config_type,
-                    "status": result.get("status"),
-                })
+                results.append(
+                    {
+                        "id": change.id,
+                        "config_type": change.config_type,
+                        "status": result.get("status"),
+                    }
+                )
             except Exception as e:
                 failed_count += 1
                 pending_service.mark_failed(change.id, str(e))
                 logger.error(f"[ConfigTask] Exception applying {change.id}: {e}", exc_info=True)
-                results.append({
-                    "id": change.id,
-                    "config_type": change.config_type,
-                    "status": "error",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "id": change.id,
+                        "config_type": change.config_type,
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
 
         return {
             "status": "success",
@@ -128,14 +132,11 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
         # Check if we've exceeded max wait time
         created = datetime.fromisoformat(change.created_at)
-        elapsed = (datetime.utcnow() - created).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - created).total_seconds()
 
         if elapsed > max_wait_seconds:
             # Waited long enough, apply anyway
-            logger.warning(
-                f"[ConfigTask] Graceful wait exceeded {max_wait_seconds}s for {pending_id}, "
-                f"applying anyway"
-            )
+            logger.warning(f"[ConfigTask] Graceful wait exceeded {max_wait_seconds}s for {pending_id}, " f"applying anyway")
             result = config_manager.apply_pending_change(pending_id)
             return result
 
@@ -148,10 +149,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
         has_in_progress = _check_in_progress_operations(change.config_type)
 
         if has_in_progress:
-            logger.info(
-                f"[ConfigTask] Waiting for in-progress ops for {pending_id}, "
-                f"retry {self.request.retries + 1}"
-            )
+            logger.info(f"[ConfigTask] Waiting for in-progress ops for {pending_id}, " f"retry {self.request.retries + 1}")
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
 
         # No in-progress operations, apply the change
@@ -161,15 +159,15 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
     except Exception as e:
         if self.request.retries >= self.max_retries:
             # Max retries reached, apply anyway
-            logger.warning(
-                f"[ConfigTask] Max retries reached for {pending_id}, applying anyway"
-            )
+            logger.warning(f"[ConfigTask] Max retries reached for {pending_id}, applying anyway")
             try:
                 from selfhealing.services.runtime_config import get_runtime_config_manager
+
                 config_manager = get_runtime_config_manager()
                 return config_manager.apply_pending_change(pending_id)
             except Exception as apply_error:
                 from selfhealing.services.pending_config import get_pending_config_service
+
                 pending_service = get_pending_config_service()
                 pending_service.mark_failed(pending_id, str(apply_error))
                 raise

@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -154,7 +154,7 @@ class SLOStatus:
 
     slo: SLO
     current_value: float
-    measured_at: datetime = field(default_factory=datetime.utcnow)
+    measured_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Error budget status
     budget_remaining: Optional[float] = None  # Remaining as decimal (1.0 = 100%)

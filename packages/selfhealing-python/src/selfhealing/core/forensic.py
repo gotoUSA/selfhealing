@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, Dict, List, Callable
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def _get_current_time_iso() -> str:
     """Get current time in ISO format. Can be overridden by adapters."""
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 # Allow frameworks to override the time function
@@ -68,11 +68,11 @@ class RetryAttempt:
 class StateSnapshot:
     """
     Snapshot of entity states for forensic analysis (domain-neutral).
-    
+
     All state data is stored in a generic `state_data` dictionary.
     Use `set_state()` and `get_state()` methods for access, or
     access `state_data` directly.
-    
+
     Example:
         snapshot = StateSnapshot()
         snapshot.set_state("entity_status", "pending")
@@ -213,10 +213,10 @@ class ForensicContext:
         **states: Any,
     ) -> None:
         """Capture state snapshot before operation.
-        
+
         Args:
             **states: Key-value pairs of state data to capture
-            
+
         Example:
             context.capture_state_before(
                 entity_status="pending",
@@ -230,10 +230,10 @@ class ForensicContext:
         **states: Any,
     ) -> None:
         """Capture state snapshot after operation (or failure).
-        
+
         Args:
             **states: Key-value pairs of state data to capture
-            
+
         Example:
             context.capture_state_after(
                 entity_status="completed",
@@ -387,7 +387,7 @@ class ForensicContextBuilder:
         **states: Any,
     ) -> "ForensicContextBuilder":
         """Capture state before operation.
-        
+
         Args:
             **states: Key-value pairs of state data
         """
@@ -399,7 +399,7 @@ class ForensicContextBuilder:
         **states: Any,
     ) -> "ForensicContextBuilder":
         """Capture state after operation.
-        
+
         Args:
             **states: Key-value pairs of state data
         """
@@ -457,7 +457,7 @@ def capture_forensic_context(
 
     Returns:
         ForensicContext with captured data
-        
+
     Example:
         context = capture_forensic_context(
             client_ip="192.168.1.1",
@@ -483,7 +483,7 @@ def capture_forensic_context(
         builder.with_state_before(**state_before)
     elif extra:
         builder.with_state_before(**extra)
-    
+
     # Handle state_after if provided
     if state_after:
         builder.with_state_after(**state_after)
@@ -503,7 +503,7 @@ def create_snapshot_data(**data: Any) -> Dict[str, Any]:
 
     Returns:
         Dictionary with snapshot data (only non-None values included)
-        
+
     Example:
         snapshot = create_snapshot_data(
             entity_id=123,
@@ -513,6 +513,3 @@ def create_snapshot_data(**data: Any) -> Dict[str, Any]:
         )
     """
     return {k: v for k, v in data.items() if v is not None}
-
-
-

@@ -335,35 +335,65 @@ DOMAINS: list[str] = [
 
 ---
 
-## 주기적 메트릭 수집
+## 메트릭 수집 전략
 
-Gauge 타입 메트릭은 주기적으로 데이터베이스에서 값을 읽어 업데이트해야 합니다.
+> 상세 문서: [13_METRIC_COLLECTION_STRATEGY.md](13_METRIC_COLLECTION_STRATEGY.md)
 
-### collect_all_metrics()
+### 권장 방식: Pragmatic Hybrid
+
+Self-Healing 시스템은 **Push 기반 + Lazy Sync** 하이브리드 방식을 권장합니다.
+
+| 메트릭 타입 | 수집 방식 | 정확도 | 설명 |
+|------------|----------|--------|------|
+| **Counter** | Push Only | 100% | 이벤트 시점에 `.inc()` 호출 |
+| **Histogram** | Push Only | 100% | 관측 시점에 `.observe()` 호출 |
+| **Gauge** | Hybrid | ~99% | Push + 서버 재시작 시 동기화 |
+
+### 이벤트 기반 업데이트 (Push)
+
+DB 폴링 대신 **이벤트 발생 시점에 메트릭을 업데이트**합니다:
 
 ```python
-from selfhealing.metrics import collect_all_metrics
+from selfhealing.metrics.event_handlers import DLQMetricEventHandler
 
-# Celery 태스크에서 호출
-result = collect_all_metrics()
-# Returns:
-# {
-#     "dlq_pending_by_domain": {"payment": 5, "point": 2},
-#     "dlq_by_status": {"pending": 7, "resolved": 100},
-#     "circuit_breaker_states": {"toss_payment": "closed"},
-#     "retry_success_rates": {"payment": 95.5, "point": 88.2},
-#     "collected_at": "2024-01-15T10:30:00.123456",
-# }
+# DLQ 항목 생성 시 (DB 쿼리 없음)
+DLQMetricEventHandler.on_item_created(domain="payment", failure_type="PG_TIMEOUT")
+
+# DLQ 항목 해결 시 (DB 쿼리 없음)
+DLQMetricEventHandler.on_item_resolved(domain="payment", resolution_type="auto_replay")
 ```
 
-### 개별 게이지 업데이트 함수
+### Lazy Sync (Gauge 동기화)
 
-| 함수 | 설명 |
-|------|------|
-| `update_dlq_pending_gauges()` | 도메인별 대기 중인 DLQ 항목 수 업데이트 |
-| `update_dlq_status_gauges()` | 상태별 DLQ 항목 분포 업데이트 |
-| `update_circuit_breaker_gauges()` | Circuit Breaker 상태 업데이트 |
-| `update_retry_success_rates()` | 도메인별 재시도 성공률 업데이트 |
+Gauge 값은 다음 시점에 데이터 소스와 동기화합니다:
+
+| 시점 | 트리거 | 설명 |
+|------|--------|------|
+| **서버 시작** | 자동 | 인메모리 값 복원 |
+| **수동 트리거** | API 호출 | 운영자 요청 시 |
+| **일일 배치** | 선택적 | 권장: 비활성화 |
+
+```python
+from selfhealing.metrics.reconciler import MetricReconciler
+
+# 어댑터 패턴: DB 스키마에 직접 의존하지 않음
+reconciler = MetricReconciler(adapter=get_metric_adapter())
+result = reconciler.sync_all_gauges()
+```
+
+### 메트릭 소스 어댑터
+
+```python
+from typing import Protocol
+
+class MetricSourceAdapter(Protocol):
+    """사용자가 구현하는 메트릭 소스 인터페이스"""
+    def get_dlq_pending_count(self, domain: str) -> int: ...
+    def get_circuit_breaker_state(self, service: str) -> str: ...
+    def get_retry_success_rate(self, domain: str) -> float: ...
+```
+
+어댑터 구현체는 Django ORM, Redis, 또는 커스텀 소스를 사용할 수 있습니다.
 
 ---
 

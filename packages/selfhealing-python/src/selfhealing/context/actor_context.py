@@ -39,15 +39,13 @@ import contextvars
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
 # Context variable for thread-safe actor tracking
-_current_actor: contextvars.ContextVar[Optional["Actor"]] = contextvars.ContextVar(
-    "current_actor", default=None
-)
+_current_actor: contextvars.ContextVar[Optional["Actor"]] = contextvars.ContextVar("current_actor", default=None)
 
 
 @dataclass
@@ -70,7 +68,7 @@ class Actor:
     source: str = "unknown"
     ip_address: Optional[str] = None
     session_id: Optional[str] = None
-    set_at: datetime = field(default_factory=datetime.utcnow)
+    set_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -271,8 +269,7 @@ def warn_if_untracked(operation: str) -> None:
             stacklevel=2,
         )
         logger.warning(
-            f"[ActorContext] UNTRACKED_OPERATION operation={operation} "
-            f"actor={ActorContext.get_current().actor_id}"
+            f"[ActorContext] UNTRACKED_OPERATION operation={operation} " f"actor={ActorContext.get_current().actor_id}"
         )
 
 
@@ -324,6 +321,7 @@ def get_audit_actor_info() -> dict[str, Any]:
 # Celery Task 지원
 # =============================================================================
 
+
 def get_actor_for_celery() -> dict[str, Any]:
     """
     Get current actor info for passing to Celery task.
@@ -369,10 +367,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
     """
     if not actor_info:
         # No actor info passed, log warning
-        logger.warning(
-            "[ActorContext] Celery task started without actor_info. "
-            "Operations will be attributed to 'system'."
-        )
+        logger.warning("[ActorContext] Celery task started without actor_info. " "Operations will be attributed to 'system'.")
         yield SYSTEM_ACTOR
         return
 
@@ -390,6 +385,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
 # =============================================================================
 # Management Command 지원
 # =============================================================================
+
 
 @contextmanager
 def set_management_command_actor(
@@ -415,8 +411,5 @@ def set_management_command_actor(
         actor_type="management_command",
         source=f"manage.py:{command_name}",
     ) as actor:
-        logger.info(
-            f"[ActorContext] Management command '{command_name}' started by {actor_id}"
-        )
+        logger.info(f"[ActorContext] Management command '{command_name}' started by {actor_id}")
         yield actor
-

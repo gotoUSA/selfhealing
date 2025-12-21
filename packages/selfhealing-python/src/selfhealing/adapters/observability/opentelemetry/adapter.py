@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 from .config import OpenTelemetryConfig
@@ -239,7 +239,7 @@ class OpenTelemetryAdapter:
             event_attrs = {
                 EventAttribute.SERVICE_NAME: self.config.service_name,
                 EventAttribute.ENVIRONMENT: self.config.environment,
-                EventAttribute.TIMESTAMP: datetime.utcnow().isoformat() + "Z",
+                EventAttribute.TIMESTAMP: datetime.now(timezone.utc).isoformat() + "Z",
             }
 
             if domain:

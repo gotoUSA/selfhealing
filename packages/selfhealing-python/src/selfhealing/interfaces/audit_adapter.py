@@ -27,7 +27,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -104,7 +104,7 @@ class AuditEntry:
     """
 
     action: AuditAction | str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Actor information - 자동으로 ActorContext에서 가져옴
     actor_id: Optional[str] = field(default=None)

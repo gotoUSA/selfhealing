@@ -3,7 +3,7 @@ Unit tests for forensic context module.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class TestRetryAttempt:
@@ -317,4 +317,4 @@ class TestConvenienceFunctions:
         assert ctx.request_timestamp == "2024-01-01T00:00:00"
 
         # Reset to default
-        set_time_provider(lambda: datetime.utcnow().isoformat())
+        set_time_provider(lambda: datetime.now(timezone.utc).isoformat())

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -70,10 +70,14 @@ class FileAlertAdapter(AlertAdapter):
         """Save active alerts to file."""
         try:
             with open(self.active_alerts_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "keys": list(self._active_alerts.keys()),
-                    "updated_at": datetime.utcnow().isoformat(),
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "keys": list(self._active_alerts.keys()),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    f,
+                    indent=2,
+                )
         except Exception as e:
             logger.error(f"[FileAlertAdapter] Error saving active alerts: {e}")
 
@@ -88,7 +92,7 @@ class FileAlertAdapter(AlertAdapter):
             with open(self.history_path, "a", encoding="utf-8") as f:
                 entry = {
                     "event": "alert_sent",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "alert": alert.to_dict(),
                 }
                 f.write(json.dumps(entry, default=str) + "\n")
@@ -108,7 +112,7 @@ class FileAlertAdapter(AlertAdapter):
             with open(self.history_path, "a", encoding="utf-8") as f:
                 entry = {
                     "event": "alert_resolved",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "alert_key": alert_key,
                     "was_active": was_active,
                 }
@@ -153,9 +157,7 @@ class FileAlertAdapter(AlertAdapter):
 
                         # Filter by time if specified
                         if start_time or end_time:
-                            entry_time = datetime.fromisoformat(
-                                entry.get("timestamp", "").replace("Z", "+00:00")
-                            )
+                            entry_time = datetime.fromisoformat(entry.get("timestamp", "").replace("Z", "+00:00"))
                             if start_time and entry_time < start_time:
                                 continue
                             if end_time and entry_time > end_time:
