@@ -43,6 +43,7 @@ from selfhealing.api.django.serializers.config import (
     ErrorBudgetConfigSerializer,
     PendingConfigChangeSerializer,
 )
+from selfhealing.api.django.config_descriptions import format_changes_summary
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
 logger = logging.getLogger(__name__)
@@ -268,6 +269,9 @@ class BaseConfigView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            # Get previous config for change logging
+            previous_config = manager._get_config(self.config_name)
+
             # Update with strategy
             result = manager.update_with_strategy(
                 config_type=self.config_name,
@@ -275,10 +279,23 @@ class BaseConfigView(APIView):
                 **apply_options,
             )
 
-            logger.info(
-                f"[ConfigAPI] {self.config_name} config update requested by {request.user}: "
-                f"changes={config_changes}, strategy={result.get('applied_strategy')}"
-            )
+            # Format semantic change log (with fallback for robustness)
+            try:
+                change_summary = format_changes_summary(config_changes, previous_config)
+                logger.info(
+                    f"[ConfigAPI] {self.config_name.upper()} config updated by {request.user}:"
+                    f"{change_summary}\n  Applied: {result.get('applied_strategy', 'immediate')}"
+                )
+            except Exception as log_err:
+                # Fallback to basic logging - never let logging failure affect the API
+                logger.warning(
+                    f"[ConfigAPI] Semantic log formatting failed: {log_err}. "
+                    f"Falling back to basic log."
+                )
+                logger.info(
+                    f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
+                    f"changes={config_changes}, strategy={result.get('applied_strategy')}"
+                )
 
             # Determine response status based on result
             if result.get("status") == "applied":

@@ -870,6 +870,88 @@ config.reset()
 
 ---
 
+## Semantic Audit Logging (의미론적 감사 로그)
+
+Config API를 통한 설정 변경 시, 기술적 필드명 대신 **비즈니스 맥락이 담긴 명칭**으로 감사 로그가 기록됩니다.
+
+### 로그 출력 예시
+
+**Before (기존):**
+```
+[ConfigAPI] metrics config update requested by admin: 
+  changes={'jitter_enabled': False, 'jitter_max_delay_seconds': 5.0}, 
+  strategy=immediate
+```
+
+**After (Semantic):**
+```
+[ConfigAPI] METRICS config updated by admin:
+  • Infrastructure Protection (Jitter): enabled → disabled
+  • Jitter Delay Threshold: 60.0s → 5.0s
+  Applied: immediate
+```
+
+### 주요 필드 매핑
+
+| 기술적 필드명 | Semantic 명칭 | 단위 |
+|---------------|---------------|------|
+| `jitter_enabled` | Infrastructure Protection (Jitter) | bool |
+| `jitter_max_delay_seconds` | Jitter Delay Threshold | seconds |
+| `failure_threshold` | Circuit Breaker Failure Threshold | count |
+| `recovery_timeout` | Circuit Breaker Recovery Timeout | seconds |
+| `threshold_warning` | Error Budget Warning Level | percent |
+| `burn_rate_fast_critical` | Fast Burn Rate Critical Threshold | multiplier |
+| `default_hours` | Default SLA Resolution Time | hours |
+| `heartbeat_enabled` | Heartbeat (Dead Man's Snitch) Toggle | bool |
+
+> 📍 **전체 매핑 목록**: [config_descriptions.py](../../packages/selfhealing-python/src/selfhealing/api/django/config_descriptions.py)
+
+### 단위 포맷팅
+
+| 단위 | 포맷 예시 |
+|------|----------|
+| `bool` | `enabled` / `disabled` |
+| `seconds` | `60.0s` |
+| `hours` | `24h` |
+| `percent` | `75.0%` |
+| `multiplier` | `14.4x` |
+| `count` | `5` |
+
+### 사용 예시 (Python)
+
+```python
+from selfhealing.api.django.config_descriptions import (
+    get_field_description,
+    format_value_change,
+    format_changes_summary,
+)
+
+# 단일 필드 설명 조회
+label = get_field_description("jitter_enabled")
+# Returns: "Infrastructure Protection (Jitter)"
+
+# 변경 사항 포맷팅
+log_entry = format_value_change("jitter_max_delay_seconds", 60.0, 5.0)
+# Returns: "Jitter Delay Threshold: 60.0s → 5.0s"
+
+# 여러 변경 사항 요약
+changes = {"jitter_enabled": False, "jitter_max_delay_seconds": 5.0}
+previous = {"jitter_enabled": True, "jitter_max_delay_seconds": 60.0}
+summary = format_changes_summary(changes, previous)
+# Returns:
+#   • Infrastructure Protection (Jitter): enabled → disabled
+#   • Jitter Delay Threshold: 60.0s → 5.0s
+```
+
+### 거버넌스 이점
+
+1. **감사 추적성**: 실사단이 로그만 보고도 변경 의도 파악 가능
+2. **운영 이해도**: 기술적 용어 대신 비즈니스 맥락 제공
+3. **일관성**: 모든 Config 타입에 동일한 포맷 적용
+4. **확장성**: 새 필드 추가 시 `CONFIG_DESCRIPTIONS`에만 추가
+
+---
+
 ## 설정 검증
 
 애플리케이션 시작 시 설정 검증을 권장합니다:
