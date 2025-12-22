@@ -416,6 +416,323 @@ def get_metric_collection_settings() -> MetricCollectionSettings:
 
 
 # =============================================================================
+# L2 Storage Resilience Settings
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class L2StorageConfig:
+    """
+    L2 저장소 복원력 설정.
+
+    Layered Storage(L1 Memory + L2 Redis/DB)에서 L2 장애 시
+    타임아웃 및 복구 동작을 제어합니다.
+
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+
+    Priority (highest to lowest):
+    1. API/Runtime 설정 (런타임 변경)
+    2. 환경변수 (컨테이너 기본값)
+    3. 하드코딩 기본값 (업계 사례 기반)
+    """
+
+    # 어댑터별 타임아웃 (ms)
+    redis_timeout_ms: int = 50       # Redis: 빠름, 50ms면 충분
+    database_timeout_ms: int = 200   # DB: 부하 시 느려짐, 200ms 필요
+    fallback_timeout_ms: int = 100   # 알 수 없는 어댑터
+
+    # Shadow Logging 설정
+    shadow_log_enabled: bool = True  # Shadow Log 활성화
+    shadow_log_max_entries: int = 1000  # 최대 보관 항목 수
+
+    # Drift Reconciliation 설정 (Thundering Herd 방지)
+    reconciliation_jitter_min_seconds: float = 0.0   # 최소 지연
+    reconciliation_jitter_max_seconds: float = 5.0   # 최대 지연
+
+    # L2 헬스체크 설정
+    health_check_interval_seconds: float = 30.0  # 헬스체크 주기
+    health_check_timeout_ms: int = 100  # 헬스체크 타임아웃
+
+    def get_timeout_for_adapter(self, adapter_type: str) -> float:
+        """
+        어댑터 타입에 따른 타임아웃 반환 (초 단위).
+
+        Args:
+            adapter_type: 어댑터 타입 ("redis", "database", "django" 등)
+
+        Returns:
+            타임아웃 (초 단위)
+        """
+        timeouts = {
+            "redis": self.redis_timeout_ms,
+            "database": self.database_timeout_ms,
+            "django": self.database_timeout_ms,
+        }
+        return timeouts.get(adapter_type.lower(), self.fallback_timeout_ms) / 1000.0
+
+
+class L2StorageRuntimeConfig:
+    """
+    런타임에 변경 가능한 L2 저장소 설정.
+
+    API 레벨에서 설정을 조절할 수 있어 서버 재시작 없이
+    운영자가 대시보드/API에서 즉시 변경 가능합니다.
+
+    Singleton pattern으로 전역 설정 관리.
+    """
+
+    _instance: "L2StorageRuntimeConfig | None" = None
+    _lock = None
+
+    def __new__(cls) -> "L2StorageRuntimeConfig":
+        """Singleton pattern for global configuration."""
+        if cls._instance is None:
+            import threading
+
+            cls._lock = threading.Lock()
+            with cls._lock:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._init_defaults()
+                    cls._instance = instance
+        return cls._instance
+
+    def _init_defaults(self) -> None:
+        """Initialize default values from environment or hardcoded defaults."""
+        import threading
+
+        self._runtime_lock = threading.Lock()
+        self._runtime_config: dict = {}
+        self._last_updated: dict = {}
+
+        # 환경변수 기본값
+        self._env_defaults = {
+            "redis_timeout_ms": int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
+            "database_timeout_ms": int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
+            "fallback_timeout_ms": int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
+            "shadow_log_enabled": os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
+            "shadow_log_max_entries": int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
+            "reconciliation_jitter_min_seconds": float(
+                os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)
+            ),
+            "reconciliation_jitter_max_seconds": float(
+                os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MAX", 5.0)
+            ),
+            "health_check_interval_seconds": float(
+                os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)
+            ),
+            "health_check_timeout_ms": int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
+        }
+
+        # 하드코딩 기본값 (업계 사례 기반)
+        self._hardcoded_defaults = {
+            "redis_timeout_ms": 50,
+            "database_timeout_ms": 200,
+            "fallback_timeout_ms": 100,
+            "shadow_log_enabled": True,
+            "shadow_log_max_entries": 1000,
+            "reconciliation_jitter_min_seconds": 0.0,
+            "reconciliation_jitter_max_seconds": 5.0,
+            "health_check_interval_seconds": 30.0,
+            "health_check_timeout_ms": 100,
+        }
+
+    def _get_value(self, key: str) -> int | float | bool:
+        """Get value with priority: runtime > env > hardcoded."""
+        with self._runtime_lock:
+            if key in self._runtime_config:
+                return self._runtime_config[key]
+        return self._env_defaults.get(key, self._hardcoded_defaults.get(key))
+
+    def update(
+        self,
+        redis_timeout_ms: int | None = None,
+        database_timeout_ms: int | None = None,
+        fallback_timeout_ms: int | None = None,
+        shadow_log_enabled: bool | None = None,
+        shadow_log_max_entries: int | None = None,
+        reconciliation_jitter_min_seconds: float | None = None,
+        reconciliation_jitter_max_seconds: float | None = None,
+        health_check_interval_seconds: float | None = None,
+        health_check_timeout_ms: int | None = None,
+        updated_by: str = "api",
+    ) -> dict:
+        """
+        Update L2 storage configuration at runtime.
+
+        Args:
+            redis_timeout_ms: Redis 타임아웃 (ms), 10-1000 범위
+            database_timeout_ms: DB 타임아웃 (ms), 50-5000 범위
+            fallback_timeout_ms: 폴백 타임아웃 (ms), 10-1000 범위
+            shadow_log_enabled: Shadow Log 활성화 여부
+            shadow_log_max_entries: Shadow Log 최대 항목 수
+            reconciliation_jitter_min_seconds: Jitter 최소 시간 (초)
+            reconciliation_jitter_max_seconds: Jitter 최대 시간 (초)
+            health_check_interval_seconds: 헬스체크 주기 (초)
+            health_check_timeout_ms: 헬스체크 타임아웃 (ms)
+            updated_by: 변경 주체 (감사 추적용)
+
+        Returns:
+            Updated configuration as dict
+        """
+        from datetime import datetime
+
+        updates = {}
+
+        with self._runtime_lock:
+            if redis_timeout_ms is not None:
+                if not (10 <= redis_timeout_ms <= 1000):
+                    raise ValueError("redis_timeout_ms must be between 10 and 1000")
+                self._runtime_config["redis_timeout_ms"] = redis_timeout_ms
+                updates["redis_timeout_ms"] = redis_timeout_ms
+
+            if database_timeout_ms is not None:
+                if not (50 <= database_timeout_ms <= 5000):
+                    raise ValueError("database_timeout_ms must be between 50 and 5000")
+                self._runtime_config["database_timeout_ms"] = database_timeout_ms
+                updates["database_timeout_ms"] = database_timeout_ms
+
+            if fallback_timeout_ms is not None:
+                if not (10 <= fallback_timeout_ms <= 1000):
+                    raise ValueError("fallback_timeout_ms must be between 10 and 1000")
+                self._runtime_config["fallback_timeout_ms"] = fallback_timeout_ms
+                updates["fallback_timeout_ms"] = fallback_timeout_ms
+
+            if shadow_log_enabled is not None:
+                self._runtime_config["shadow_log_enabled"] = shadow_log_enabled
+                updates["shadow_log_enabled"] = shadow_log_enabled
+
+            if shadow_log_max_entries is not None:
+                if not (100 <= shadow_log_max_entries <= 10000):
+                    raise ValueError("shadow_log_max_entries must be between 100 and 10000")
+                self._runtime_config["shadow_log_max_entries"] = shadow_log_max_entries
+                updates["shadow_log_max_entries"] = shadow_log_max_entries
+
+            if reconciliation_jitter_min_seconds is not None:
+                if not (0.0 <= reconciliation_jitter_min_seconds <= 60.0):
+                    raise ValueError("reconciliation_jitter_min_seconds must be between 0 and 60")
+                self._runtime_config["reconciliation_jitter_min_seconds"] = reconciliation_jitter_min_seconds
+                updates["reconciliation_jitter_min_seconds"] = reconciliation_jitter_min_seconds
+
+            if reconciliation_jitter_max_seconds is not None:
+                if not (0.0 <= reconciliation_jitter_max_seconds <= 60.0):
+                    raise ValueError("reconciliation_jitter_max_seconds must be between 0 and 60")
+                self._runtime_config["reconciliation_jitter_max_seconds"] = reconciliation_jitter_max_seconds
+                updates["reconciliation_jitter_max_seconds"] = reconciliation_jitter_max_seconds
+
+            if health_check_interval_seconds is not None:
+                if not (5.0 <= health_check_interval_seconds <= 300.0):
+                    raise ValueError("health_check_interval_seconds must be between 5 and 300")
+                self._runtime_config["health_check_interval_seconds"] = health_check_interval_seconds
+                updates["health_check_interval_seconds"] = health_check_interval_seconds
+
+            if health_check_timeout_ms is not None:
+                if not (10 <= health_check_timeout_ms <= 1000):
+                    raise ValueError("health_check_timeout_ms must be between 10 and 1000")
+                self._runtime_config["health_check_timeout_ms"] = health_check_timeout_ms
+                updates["health_check_timeout_ms"] = health_check_timeout_ms
+
+            if updates:
+                self._last_updated = {
+                    "timestamp": datetime.now().isoformat(),
+                    "updated_by": updated_by,
+                    "changes": updates,
+                }
+
+        return self.to_dict()
+
+    def reset(self) -> None:
+        """Reset to environment/default values (clear runtime config)."""
+        with self._runtime_lock:
+            self._runtime_config.clear()
+            self._last_updated = {}
+
+    # Property-style getters
+    def get_redis_timeout_ms(self) -> int:
+        """Get Redis timeout in milliseconds."""
+        return self._get_value("redis_timeout_ms")
+
+    def get_database_timeout_ms(self) -> int:
+        """Get database timeout in milliseconds."""
+        return self._get_value("database_timeout_ms")
+
+    def get_fallback_timeout_ms(self) -> int:
+        """Get fallback timeout in milliseconds."""
+        return self._get_value("fallback_timeout_ms")
+
+    def get_shadow_log_enabled(self) -> bool:
+        """Get shadow log enabled status."""
+        return self._get_value("shadow_log_enabled")
+
+    def get_shadow_log_max_entries(self) -> int:
+        """Get shadow log max entries."""
+        return self._get_value("shadow_log_max_entries")
+
+    def get_timeout_for_adapter(self, adapter_type: str) -> float:
+        """Get timeout for adapter type in seconds."""
+        timeouts = {
+            "redis": self.get_redis_timeout_ms(),
+            "database": self.get_database_timeout_ms(),
+            "django": self.get_database_timeout_ms(),
+        }
+        return timeouts.get(adapter_type.lower(), self.get_fallback_timeout_ms()) / 1000.0
+
+    def to_dict(self) -> dict:
+        """Export current configuration as dict."""
+        return {
+            "redis_timeout_ms": self.get_redis_timeout_ms(),
+            "database_timeout_ms": self.get_database_timeout_ms(),
+            "fallback_timeout_ms": self.get_fallback_timeout_ms(),
+            "shadow_log_enabled": self.get_shadow_log_enabled(),
+            "shadow_log_max_entries": self.get_shadow_log_max_entries(),
+            "reconciliation_jitter_min_seconds": self._get_value("reconciliation_jitter_min_seconds"),
+            "reconciliation_jitter_max_seconds": self._get_value("reconciliation_jitter_max_seconds"),
+            "health_check_interval_seconds": self._get_value("health_check_interval_seconds"),
+            "health_check_timeout_ms": self._get_value("health_check_timeout_ms"),
+            "last_updated": self._last_updated,
+        }
+
+
+@lru_cache(maxsize=1)
+def get_l2_storage_config() -> L2StorageConfig:
+    """
+    Get L2 storage configuration (frozen dataclass).
+
+    Loads from environment variables with sensible defaults.
+    Use get_l2_storage_runtime_config() for runtime-changeable settings.
+    """
+    return L2StorageConfig(
+        redis_timeout_ms=int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
+        database_timeout_ms=int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
+        fallback_timeout_ms=int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
+        shadow_log_enabled=os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
+        shadow_log_max_entries=int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
+        reconciliation_jitter_min_seconds=float(
+            os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)
+        ),
+        reconciliation_jitter_max_seconds=float(
+            os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MAX", 5.0)
+        ),
+        health_check_interval_seconds=float(
+            os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)
+        ),
+        health_check_timeout_ms=int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
+    )
+
+
+def get_l2_storage_runtime_config() -> L2StorageRuntimeConfig:
+    """
+    Get the singleton L2StorageRuntimeConfig instance.
+
+    Use this for runtime-changeable settings via API.
+
+    Returns:
+        L2StorageRuntimeConfig singleton
+    """
+    return L2StorageRuntimeConfig()
+
+
+# =============================================================================
 # Convenience exports
 # =============================================================================
 
@@ -425,8 +742,12 @@ __all__ = [
     "ForensicSettings",
     "MetricCollectionSettings",
     "EventLoggingConfig",
+    "L2StorageConfig",
+    "L2StorageRuntimeConfig",
     "get_notification_limits",
     "get_forensic_settings",
     "get_metric_collection_settings",
     "get_event_logging_config",
+    "get_l2_storage_config",
+    "get_l2_storage_runtime_config",
 ]

@@ -130,6 +130,21 @@ from selfhealing.api.django.views.chaos import (
     KillAllView,
 )
 
+# L2 Storage Resilience API Views
+from selfhealing.api.django.views.l2_storage import (
+    L2StorageConfigView,
+    L2StorageConfigResetView,
+    L2StorageStatusView,
+    L2StorageHealthView,
+    L2StorageHealthResetView,
+    ShadowLogListView,
+    ShadowLogStatsView,
+    ShadowLogClearView,
+    L2StorageSyncFromL2View,
+    L2StorageSyncToL2View,
+    L2StorageMetricsView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -235,6 +250,27 @@ urlpatterns = [
     path("chaos/reports/grades/", GradeHistoryView.as_view(), name="chaos-grade-history"),
     # Pending Approvals
     path("chaos/pending-approvals/", PendingApprovalsView.as_view(), name="chaos-pending-approvals"),
+    
+    # =========================================================================
+    # L2 Storage Resilience API
+    # Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    # =========================================================================
+    # Configuration
+    path("l2-storage/config/", L2StorageConfigView.as_view(), name="l2-storage-config"),
+    path("l2-storage/config/reset/", L2StorageConfigResetView.as_view(), name="l2-storage-config-reset"),
+    # Status & Health
+    path("l2-storage/status/", L2StorageStatusView.as_view(), name="l2-storage-status"),
+    path("l2-storage/health/", L2StorageHealthView.as_view(), name="l2-storage-health"),
+    path("l2-storage/health/reset/", L2StorageHealthResetView.as_view(), name="l2-storage-health-reset"),
+    # Shadow Log
+    path("l2-storage/shadow-log/", ShadowLogListView.as_view(), name="l2-storage-shadow-log"),
+    path("l2-storage/shadow-log/stats/", ShadowLogStatsView.as_view(), name="l2-storage-shadow-log-stats"),
+    path("l2-storage/shadow-log/clear/", ShadowLogClearView.as_view(), name="l2-storage-shadow-log-clear"),
+    # Sync Operations
+    path("l2-storage/sync/from-l2/", L2StorageSyncFromL2View.as_view(), name="l2-storage-sync-from-l2"),
+    path("l2-storage/sync/to-l2/", L2StorageSyncToL2View.as_view(), name="l2-storage-sync-to-l2"),
+    # Metrics
+    path("l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

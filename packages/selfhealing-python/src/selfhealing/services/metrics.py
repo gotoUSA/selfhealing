@@ -239,6 +239,91 @@ circuit_breaker_open_duration = _get_or_create_histogram(
 
 
 # =============================================================================
+# L2 Storage Resilience Metrics
+# =============================================================================
+
+# L2 timeout counter
+l2_timeout_total = _get_or_create_counter(
+    "selfhealing_l2_timeout_total",
+    "Total L2 storage timeout occurrences",
+    ["adapter_type", "operation"],  # operation: sync, get, initial_load
+)
+
+# L2 sync failure counter
+l2_sync_failure_total = _get_or_create_counter(
+    "selfhealing_l2_sync_failure_total",
+    "Total L2 storage sync failures",
+    ["adapter_type", "operation"],
+)
+
+# L2 latency histogram
+l2_latency_seconds = _get_or_create_histogram(
+    "selfhealing_l2_latency_seconds",
+    "L2 storage operation latency in seconds",
+    ["adapter_type"],
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),  # 10ms to 1s
+)
+
+# L2 connection status gauge (1=healthy, 0=unhealthy)
+l2_connection_status = _get_or_create_gauge(
+    "selfhealing_l2_connection_status",
+    "L2 storage connection status (1=healthy, 0=unhealthy)",
+    ["adapter_type"],
+)
+
+# Shadow log unsynced count gauge
+shadow_log_unsynced_count = _get_or_create_gauge(
+    "selfhealing_shadow_log_unsynced_count",
+    "Number of unsynced shadow log entries",
+    [],
+)
+
+# Drift reconciliation counter
+drift_reconciliation_total = _get_or_create_counter(
+    "selfhealing_drift_reconciliation_total",
+    "Total drift reconciliation operations",
+    ["result"],  # result: success, conflict_resolved, failed
+)
+
+
+def record_l2_timeout(adapter_type: str, operation: str) -> None:
+    """Record L2 timeout occurrence."""
+    try:
+        l2_timeout_total.labels(adapter_type=adapter_type, operation=operation).inc()
+        l2_connection_status.labels(adapter_type=adapter_type).set(0)
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record L2 timeout: {e}")
+
+
+def record_l2_sync_failure(adapter_type: str, operation: str) -> None:
+    """Record L2 sync failure."""
+    try:
+        l2_sync_failure_total.labels(adapter_type=adapter_type, operation=operation).inc()
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record L2 sync failure: {e}")
+
+
+def record_l2_latency(adapter_type: str, latency_seconds: float) -> None:
+    """Record L2 operation latency."""
+    try:
+        l2_latency_seconds.labels(adapter_type=adapter_type).observe(latency_seconds)
+        l2_connection_status.labels(adapter_type=adapter_type).set(1)
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record L2 latency: {e}")
+
+
+def update_shadow_log_metrics() -> None:
+    """Update shadow log metrics from ShadowLogger."""
+    try:
+        from selfhealing.adapters.memory.circuit_breaker import get_shadow_logger
+        shadow_logger = get_shadow_logger()
+        stats = shadow_logger.get_stats()
+        shadow_log_unsynced_count.labels().set(stats.get("unsynced_count", 0))
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to update shadow log metrics: {e}")
+
+
+# =============================================================================
 # Replay Metrics
 # =============================================================================
 

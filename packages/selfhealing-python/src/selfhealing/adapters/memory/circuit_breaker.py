@@ -6,8 +6,12 @@ Thread-safe in-memory storage for circuit breaker states.
 
 from __future__ import annotations
 
+import logging
 import threading
-from datetime import datetime, timedelta
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from selfhealing.adapters.memory.base import _now
@@ -16,6 +20,9 @@ from selfhealing.interfaces.repositories import (
     CircuitBreakerStateData,
     CircuitBreakerStateEnum,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
@@ -396,6 +403,193 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._next_id = 1
 
 
+# =============================================================================
+# L2 Sync Failure Record & Shadow Logger
+# =============================================================================
+
+
+@dataclass
+class L2SyncFailureRecord:
+    """
+    L2 동기화 실패 기록.
+
+    L2 장애 동안 발생한 상태 변화를 기록하여
+    사후 분석(Forensic) 및 복구 후 재동기화에 활용합니다.
+
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
+    """
+
+    service_name: str
+    intended_state: str
+    failure_time: datetime
+    error_message: str
+    l1_state_at_failure: str
+    adapter_type: str = "unknown"
+    operation: str = "sync"  # sync, update, delete
+    synced_after_recovery: bool = False
+    recovery_time: Optional[datetime] = None
+
+
+class ShadowLogger:
+    """
+    L2 장애 동안의 상태 변화를 로컬에 기록.
+
+    Shadow Log는 L2가 장애 상태일 때 발생한 모든 상태 변경을
+    메모리에 기록하여, L2 복구 후 재동기화 및 Forensic 분석에 활용됩니다.
+
+    Thread-safe 구현으로 동시 접근에 안전합니다.
+
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
+    """
+
+    _instance: Optional["ShadowLogger"] = None
+    _lock_class = None
+
+    def __new__(cls) -> "ShadowLogger":
+        """Singleton pattern."""
+        if cls._instance is None:
+            cls._lock_class = threading.Lock()
+            with cls._lock_class:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._init()
+                    cls._instance = instance
+        return cls._instance
+
+    def _init(self) -> None:
+        """Initialize shadow logger."""
+        self._failure_log: List[L2SyncFailureRecord] = []
+        self._lock = threading.RLock()
+        self._max_entries = 1000  # 기본값, 런타임에 변경 가능
+
+    def set_max_entries(self, max_entries: int) -> None:
+        """Set maximum entries to keep."""
+        with self._lock:
+            self._max_entries = max_entries
+            # Trim if over limit
+            if len(self._failure_log) > max_entries:
+                self._failure_log = self._failure_log[-max_entries:]
+
+    def record_sync_failure(
+        self,
+        service_name: str,
+        intended_state: str,
+        error: Exception,
+        adapter_type: str = "unknown",
+        operation: str = "sync",
+    ) -> None:
+        """
+        L2 동기화 실패 기록.
+
+        Args:
+            service_name: 서비스 이름
+            intended_state: 동기화하려던 상태
+            error: 발생한 예외
+            adapter_type: L2 어댑터 타입 (redis, django 등)
+            operation: 작업 유형 (sync, update, delete)
+        """
+        with self._lock:
+            record = L2SyncFailureRecord(
+                service_name=service_name,
+                intended_state=intended_state,
+                failure_time=datetime.now(timezone.utc),
+                error_message=str(error),
+                l1_state_at_failure=intended_state,
+                adapter_type=adapter_type,
+                operation=operation,
+            )
+            self._failure_log.append(record)
+
+            # Trim old entries if over limit
+            if len(self._failure_log) > self._max_entries:
+                self._failure_log = self._failure_log[-self._max_entries:]
+
+            logger.warning(
+                f"[ShadowLog] L2 sync failed: service={service_name} "
+                f"state={intended_state} adapter={adapter_type} error={error}"
+            )
+
+    def get_unsynced_records(self) -> List[L2SyncFailureRecord]:
+        """아직 동기화되지 않은 기록 조회."""
+        with self._lock:
+            return [r for r in self._failure_log if not r.synced_after_recovery]
+
+    def get_all_records(self) -> List[L2SyncFailureRecord]:
+        """모든 기록 조회."""
+        with self._lock:
+            return list(self._failure_log)
+
+    def mark_as_synced(self, service_name: str) -> int:
+        """
+        복구 후 동기화 완료 마킹.
+
+        Args:
+            service_name: 서비스 이름
+
+        Returns:
+            마킹된 레코드 수
+        """
+        count = 0
+        with self._lock:
+            for record in self._failure_log:
+                if record.service_name == service_name and not record.synced_after_recovery:
+                    record.synced_after_recovery = True
+                    record.recovery_time = datetime.now(timezone.utc)
+                    count += 1
+        if count > 0:
+            logger.info(f"[ShadowLog] Marked {count} records as synced for {service_name}")
+        return count
+
+    def mark_all_as_synced(self) -> int:
+        """모든 미동기화 레코드를 동기화 완료로 마킹."""
+        count = 0
+        with self._lock:
+            now = datetime.now(timezone.utc)
+            for record in self._failure_log:
+                if not record.synced_after_recovery:
+                    record.synced_after_recovery = True
+                    record.recovery_time = now
+                    count += 1
+        if count > 0:
+            logger.info(f"[ShadowLog] Marked all {count} records as synced")
+        return count
+
+    def get_stats(self) -> Dict:
+        """Shadow Log 통계 조회."""
+        with self._lock:
+            unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
+            services = set(r.service_name for r in self._failure_log)
+            return {
+                "total_records": len(self._failure_log),
+                "unsynced_count": len(unsynced),
+                "affected_services": list(services),
+                "max_entries": self._max_entries,
+                "oldest_record": (
+                    self._failure_log[0].failure_time.isoformat()
+                    if self._failure_log else None
+                ),
+                "newest_record": (
+                    self._failure_log[-1].failure_time.isoformat()
+                    if self._failure_log else None
+                ),
+            }
+
+    def clear(self) -> None:
+        """Clear all records (for testing)."""
+        with self._lock:
+            self._failure_log.clear()
+
+
+def get_shadow_logger() -> ShadowLogger:
+    """Get the singleton ShadowLogger instance."""
+    return ShadowLogger()
+
+
+# =============================================================================
+# Layered Circuit Breaker State Repository
+# =============================================================================
+
+
 class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
     하이브리드 레이어드 저장소 (L1 Memory + L2 Shared Storage).
@@ -403,14 +597,19 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     설계 원칙:
     - L1 (Local Memory): 모든 판정은 1차적으로 메모리에서 즉시 수행 (0.01ms)
     - L2 (Shared Storage): Redis나 DB는 백그라운드에서 비동기적으로 동기화
+    - 타임아웃 적용: L2 응답이 늦으면 즉시 포기하고 L1만으로 동작 (Fail-Fast)
+    - Shadow Logging: L2 장애 시 발생한 변경사항을 로컬에 기록
     
     장점:
     - 외부 의존성(Redis/DB)이 잠시 죽어도 시스템은 L1만으로 계속 동작
     - 분산 환경에서도 최종적으로 일관성 유지 (Eventual Consistency)
     - 호스트 DB에 침투하지 않음 (L2는 opt-in)
     
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    
     Usage:
         # 메모리만 사용 (기본, 단일 서버)
+        repo = LayeredCircuitBreakerStateRepository()
         repo = LayeredCircuitBreakerStateRepository()
         
         # L2로 Redis 추가 (분산 환경)
@@ -421,35 +620,86 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         )
     """
     
+    # ThreadPoolExecutor for async L2 operations with timeout
+    _executor: Optional[ThreadPoolExecutor] = None
+    _executor_lock = threading.Lock()
+    
+    @classmethod
+    def _get_executor(cls) -> ThreadPoolExecutor:
+        """Get or create shared ThreadPoolExecutor."""
+        if cls._executor is None:
+            with cls._executor_lock:
+                if cls._executor is None:
+                    cls._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="l2_sync")
+        return cls._executor
+    
     def __init__(
         self,
         l2_repo: Optional[CircuitBreakerStateRepository] = None,
         sync_interval_seconds: float = 5.0,
+        adapter_type: str = "unknown",
     ):
         """
         Args:
             l2_repo: L2 저장소 (Redis, Django DB 등). None이면 L1만 사용.
             sync_interval_seconds: L2 동기화 주기 (초)
+            adapter_type: L2 어댑터 타입 (redis, django 등) - 타임아웃 결정에 사용
         """
         self._l1 = InMemoryCircuitBreakerStateRepository()
         self._l2 = l2_repo
         self._sync_interval = sync_interval_seconds
+        self._adapter_type = adapter_type
         self._last_sync_time: Optional[datetime] = None
         self._lock = threading.RLock()
+        self._shadow_logger = get_shadow_logger()
+        
+        # L2 연결 상태 추적
+        self._l2_healthy = True
+        self._l2_last_error_time: Optional[datetime] = None
+        self._l2_consecutive_failures = 0
+        
+        # 메트릭 카운터 (Prometheus 연동 전 로컬 추적용)
+        self._metrics = {
+            "l2_timeout_count": 0,
+            "l2_sync_failure_count": 0,
+            "l2_sync_success_count": 0,
+            "l2_latency_total_ms": 0.0,
+            "l2_latency_count": 0,
+        }
         
         # L2가 있으면 초기 로드
         if self._l2:
-            self._load_from_l2()
+            self._load_from_l2_with_timeout()
     
-    def _load_from_l2(self) -> None:
-        """L2에서 L1으로 초기 데이터 로드."""
+    def _get_timeout_seconds(self) -> float:
+        """어댑터 타입에 따른 타임아웃 반환 (초 단위)."""
+        try:
+            from selfhealing.config import get_l2_storage_runtime_config
+            config = get_l2_storage_runtime_config()
+            return config.get_timeout_for_adapter(self._adapter_type)
+        except ImportError:
+            # Config not available, use defaults
+            timeouts = {
+                "redis": 0.05,    # 50ms
+                "database": 0.2,  # 200ms
+                "django": 0.2,    # 200ms
+            }
+            return timeouts.get(self._adapter_type.lower(), 0.1)
+    
+    def _load_from_l2_with_timeout(self) -> None:
+        """L2에서 L1으로 초기 데이터 로드 (타임아웃 적용)."""
         if not self._l2:
             return
         
+        timeout = self._get_timeout_seconds() * 2  # 초기 로드는 2배 타임아웃
+        start_time = time.perf_counter()
+        
         try:
-            all_states = self._l2.get_all()
+            executor = self._get_executor()
+            future = executor.submit(self._l2.get_all)
+            all_states = future.result(timeout=timeout)
+            
             for state in all_states:
-                # L1에 복사
                 self._l1.get_or_create(state.service_name)
                 self._l1.update_state(
                     service_name=state.service_name,
@@ -458,34 +708,167 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                     success_count=state.success_count,
                     opened_at=state.opened_at,
                 )
+            
             self._last_sync_time = _now()
-        except Exception:
-            # L2 장애 시 무시 - L1만으로 동작
+            self._l2_healthy = True
+            self._l2_consecutive_failures = 0
+            
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            self._metrics["l2_latency_total_ms"] += elapsed_ms
+            self._metrics["l2_latency_count"] += 1
+            
+            logger.info(
+                f"[LayeredRepo] L2 initial load completed: "
+                f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms"
+            )
+            
+        except FuturesTimeoutError:
+            self._handle_l2_timeout("initial_load", None)
+            logger.warning(
+                f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). "
+                f"Starting with empty L1."
+            )
+        except Exception as e:
+            self._handle_l2_error("initial_load", None, e)
+            logger.warning(
+                f"[LayeredRepo] L2 initial load failed: {e}. "
+                f"Starting with empty L1."
+            )
+    
+    def _load_from_l2(self) -> None:
+        """L2에서 L1으로 초기 데이터 로드 (레거시, 타임아웃 없음)."""
+        # 레거시 호환성 유지, 새 메서드로 위임
+        self._load_from_l2_with_timeout()
+    
+    def _handle_l2_timeout(self, operation: str, service_name: Optional[str]) -> None:
+        """L2 타임아웃 처리."""
+        self._metrics["l2_timeout_count"] += 1
+        self._l2_consecutive_failures += 1
+        self._l2_last_error_time = datetime.now(timezone.utc)
+        
+        if self._l2_consecutive_failures >= 3:
+            self._l2_healthy = False
+        
+        # Prometheus 메트릭 업데이트 (가능한 경우)
+        try:
+            from selfhealing.services.metrics import record_l2_timeout
+            record_l2_timeout(self._adapter_type, operation)
+        except ImportError:
             pass
     
+    def _handle_l2_error(
+        self,
+        operation: str,
+        service_name: Optional[str],
+        error: Exception,
+        intended_state: str = "",
+    ) -> None:
+        """L2 오류 처리 및 Shadow Log 기록."""
+        self._metrics["l2_sync_failure_count"] += 1
+        self._l2_consecutive_failures += 1
+        self._l2_last_error_time = datetime.now(timezone.utc)
+        
+        if self._l2_consecutive_failures >= 3:
+            self._l2_healthy = False
+        
+        # Shadow Log에 기록
+        if service_name and intended_state:
+            self._shadow_logger.record_sync_failure(
+                service_name=service_name,
+                intended_state=intended_state,
+                error=error,
+                adapter_type=self._adapter_type,
+                operation=operation,
+            )
+        
+        # Prometheus 메트릭 업데이트 (가능한 경우)
+        try:
+            from selfhealing.services.metrics import record_l2_sync_failure
+            record_l2_sync_failure(self._adapter_type, operation)
+        except ImportError:
+            pass
+    
+    def _handle_l2_success(self, elapsed_ms: float) -> None:
+        """L2 성공 처리."""
+        self._metrics["l2_sync_success_count"] += 1
+        self._metrics["l2_latency_total_ms"] += elapsed_ms
+        self._metrics["l2_latency_count"] += 1
+        self._l2_consecutive_failures = 0
+        self._l2_healthy = True
+        
+        # Prometheus 메트릭 업데이트 (가능한 경우)
+        try:
+            from selfhealing.services.metrics import record_l2_latency
+            record_l2_latency(self._adapter_type, elapsed_ms / 1000.0)
+        except ImportError:
+            pass
+    
+    def _sync_to_l2_with_timeout(
+        self,
+        service_name: str,
+        state: CircuitBreakerStateData,
+    ) -> bool:
+        """
+        L2로 동기화 (타임아웃 적용).
+        
+        Args:
+            service_name: 서비스 이름
+            state: 동기화할 상태
+            
+        Returns:
+            성공 여부
+        """
+        if not self._l2:
+            return False
+        
+        timeout = self._get_timeout_seconds()
+        start_time = time.perf_counter()
+        
+        def _do_sync():
+            self._l2.get_or_create(service_name)
+            self._l2.update_state(
+                service_name=service_name,
+                state=state.state,
+                failure_count=state.failure_count,
+                success_count=state.success_count,
+                opened_at=state.opened_at,
+            )
+        
+        try:
+            executor = self._get_executor()
+            future = executor.submit(_do_sync)
+            future.result(timeout=timeout)
+            
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            self._handle_l2_success(elapsed_ms)
+            return True
+            
+        except FuturesTimeoutError:
+            self._handle_l2_timeout("sync", service_name)
+            logger.warning(
+                f"[LayeredRepo] L2 sync timeout for {service_name} "
+                f"({timeout*1000:.0f}ms). L1 isolated."
+            )
+            return False
+            
+        except Exception as e:
+            self._handle_l2_error("sync", service_name, e, state.state)
+            return False
+    
     def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
-        """L2로 비동기 동기화 (백그라운드)."""
+        """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return
         
-        # 간단한 비동기 처리 (실제 프로덕션에서는 ThreadPoolExecutor 사용 권장)
+        # ThreadPoolExecutor로 비동기 실행
         def _sync():
-            try:
-                self._l2.get_or_create(service_name)
-                self._l2.update_state(
-                    service_name=service_name,
-                    state=state.state,
-                    failure_count=state.failure_count,
-                    success_count=state.success_count,
-                    opened_at=state.opened_at,
-                )
-            except Exception:
-                # L2 장애 시 무시 - 다음 기회에 재시도
-                pass
+            self._sync_to_l2_with_timeout(service_name, state)
         
-        # 백그라운드 스레드로 실행
-        thread = threading.Thread(target=_sync, daemon=True)
-        thread.start()
+        try:
+            executor = self._get_executor()
+            executor.submit(_sync)
+        except Exception as e:
+            logger.warning(f"[LayeredRepo] Failed to submit L2 sync task: {e}")
     
     # =========================================================================
     # CircuitBreakerStateRepository 인터페이스 구현 (L1 우선)
@@ -495,9 +878,15 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """L1에서 조회. L1에 없으면 L2 확인 후 L1에 캐시."""
         result = self._l1.get_by_service_name(service_name)
         
-        if result is None and self._l2:
+        if result is None and self._l2 and self._l2_healthy:
+            timeout = self._get_timeout_seconds()
+            start_time = time.perf_counter()
+            
             try:
-                l2_result = self._l2.get_by_service_name(service_name)
+                executor = self._get_executor()
+                future = executor.submit(self._l2.get_by_service_name, service_name)
+                l2_result = future.result(timeout=timeout)
+                
                 if l2_result:
                     # L1에 캐시
                     self._l1.get_or_create(service_name)
@@ -508,9 +897,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                         success_count=l2_result.success_count,
                         opened_at=l2_result.opened_at,
                     )
+                    elapsed_ms = (time.perf_counter() - start_time) * 1000
+                    self._handle_l2_success(elapsed_ms)
                     return self._l1.get_by_service_name(service_name)
-            except Exception:
-                pass  # L2 장애 시 무시
+                    
+            except FuturesTimeoutError:
+                self._handle_l2_timeout("get", service_name)
+            except Exception as e:
+                self._handle_l2_error("get", service_name, e)
         
         return result
     
@@ -743,14 +1137,73 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     # =========================================================================
     
     def get_storage_info(self) -> Dict:
-        """저장소 정보 조회."""
+        """저장소 정보 조회 (L2 상태 및 메트릭 포함)."""
+        avg_latency_ms = 0.0
+        if self._metrics["l2_latency_count"] > 0:
+            avg_latency_ms = (
+                self._metrics["l2_latency_total_ms"] / 
+                self._metrics["l2_latency_count"]
+            )
+        
         return {
             "l1_type": "memory",
             "l1_count": len(self._l1.get_all()),
             "l2_enabled": self._l2 is not None,
             "l2_type": type(self._l2).__name__ if self._l2 else None,
+            "l2_adapter_type": self._adapter_type,
+            "l2_healthy": self._l2_healthy,
+            "l2_consecutive_failures": self._l2_consecutive_failures,
+            "l2_last_error_time": (
+                self._l2_last_error_time.isoformat() 
+                if self._l2_last_error_time else None
+            ),
             "sync_interval_seconds": self._sync_interval,
-            "last_sync_time": self._last_sync_time.isoformat() if self._last_sync_time else None,
+            "last_sync_time": (
+                self._last_sync_time.isoformat() 
+                if self._last_sync_time else None
+            ),
+            "timeout_ms": self._get_timeout_seconds() * 1000,
+            "metrics": {
+                "timeout_count": self._metrics["l2_timeout_count"],
+                "sync_failure_count": self._metrics["l2_sync_failure_count"],
+                "sync_success_count": self._metrics["l2_sync_success_count"],
+                "avg_latency_ms": round(avg_latency_ms, 2),
+            },
+            "shadow_log": self._shadow_logger.get_stats(),
+        }
+    
+    def get_l2_health(self) -> Dict:
+        """L2 헬스 상태 조회."""
+        return {
+            "healthy": self._l2_healthy,
+            "consecutive_failures": self._l2_consecutive_failures,
+            "last_error_time": (
+                self._l2_last_error_time.isoformat() 
+                if self._l2_last_error_time else None
+            ),
+            "adapter_type": self._adapter_type,
+            "timeout_ms": self._get_timeout_seconds() * 1000,
+        }
+    
+    def reset_l2_health(self) -> None:
+        """L2 헬스 상태 리셋 (수동 복구 시)."""
+        self._l2_healthy = True
+        self._l2_consecutive_failures = 0
+        self._l2_last_error_time = None
+        logger.info("[LayeredRepo] L2 health status reset manually")
+    
+    def get_metrics(self) -> Dict:
+        """내부 메트릭 조회."""
+        return dict(self._metrics)
+    
+    def reset_metrics(self) -> None:
+        """메트릭 리셋 (테스트용)."""
+        self._metrics = {
+            "l2_timeout_count": 0,
+            "l2_sync_failure_count": 0,
+            "l2_sync_success_count": 0,
+            "l2_latency_total_ms": 0.0,
+            "l2_latency_count": 0,
         }
     
     def force_sync_from_l2(self) -> bool:
@@ -759,7 +1212,34 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             return False
         
         try:
-            self._load_from_l2()
+            self._load_from_l2_with_timeout()
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"[LayeredRepo] Force sync from L2 failed: {e}")
             return False
+    
+    def force_sync_to_l2(self) -> Dict:
+        """L1의 모든 상태를 L2로 강제 동기화."""
+        if not self._l2:
+            return {"success": False, "reason": "L2 not configured"}
+        
+        all_states = self._l1.get_all()
+        success_count = 0
+        failure_count = 0
+        
+        for state in all_states:
+            if self._sync_to_l2_with_timeout(state.service_name, state):
+                success_count += 1
+            else:
+                failure_count += 1
+        
+        # Shadow Log 정리
+        if success_count > 0:
+            self._shadow_logger.mark_all_as_synced()
+        
+        return {
+            "success": failure_count == 0,
+            "total": len(all_states),
+            "synced": success_count,
+            "failed": failure_count,
+        }

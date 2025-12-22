@@ -470,3 +470,136 @@ class CancelPendingChangeSerializer(serializers.Serializer):
     """Serializer for cancelling a pending change."""
 
     reason = serializers.CharField(required=False, max_length=500)
+
+
+# =============================================================================
+# L2 Storage Resilience Serializers
+# =============================================================================
+
+
+class L2StorageConfigSerializer(ApplyStrategyMixin):
+    """
+    Serializer for L2 Storage resilience configuration.
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    """
+
+    # 타임아웃 설정 (ms)
+    redis_timeout_ms = serializers.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=1000,
+        help_text="Redis 어댑터 타임아웃 (ms). 기본: 50ms",
+    )
+    database_timeout_ms = serializers.IntegerField(
+        required=False,
+        min_value=50,
+        max_value=5000,
+        help_text="Database 어댑터 타임아웃 (ms). 기본: 200ms",
+    )
+    fallback_timeout_ms = serializers.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=1000,
+        help_text="알 수 없는 어댑터 폴백 타임아웃 (ms). 기본: 100ms",
+    )
+
+    # Shadow Logging 설정
+    shadow_log_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Shadow Log 활성화 여부. 기본: true",
+    )
+    shadow_log_max_entries = serializers.IntegerField(
+        required=False,
+        min_value=100,
+        max_value=10000,
+        help_text="Shadow Log 최대 보관 항목 수. 기본: 1000",
+    )
+
+    # Drift Reconciliation 설정
+    reconciliation_jitter_min_seconds = serializers.FloatField(
+        required=False,
+        min_value=0.0,
+        max_value=60.0,
+        help_text="Reconciliation Jitter 최소 시간 (초). 기본: 0.0",
+    )
+    reconciliation_jitter_max_seconds = serializers.FloatField(
+        required=False,
+        min_value=0.0,
+        max_value=60.0,
+        help_text="Reconciliation Jitter 최대 시간 (초). 기본: 5.0",
+    )
+
+    # 헬스체크 설정
+    health_check_interval_seconds = serializers.FloatField(
+        required=False,
+        min_value=5.0,
+        max_value=300.0,
+        help_text="L2 헬스체크 주기 (초). 기본: 30.0",
+    )
+    health_check_timeout_ms = serializers.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=1000,
+        help_text="L2 헬스체크 타임아웃 (ms). 기본: 100",
+    )
+
+    def validate(self, data):
+        """Cross-field validation."""
+        # Jitter min <= max 검증
+        jitter_min = data.get("reconciliation_jitter_min_seconds")
+        jitter_max = data.get("reconciliation_jitter_max_seconds")
+        
+        if jitter_min is not None and jitter_max is not None:
+            if jitter_min > jitter_max:
+                raise serializers.ValidationError(
+                    "reconciliation_jitter_min_seconds는 "
+                    "reconciliation_jitter_max_seconds보다 작거나 같아야 합니다."
+                )
+        
+        return data
+
+
+class L2StorageStatusSerializer(serializers.Serializer):
+    """Serializer for L2 Storage status response."""
+
+    l1_type = serializers.CharField(read_only=True)
+    l1_count = serializers.IntegerField(read_only=True)
+    l2_enabled = serializers.BooleanField(read_only=True)
+    l2_type = serializers.CharField(read_only=True, allow_null=True)
+    l2_adapter_type = serializers.CharField(read_only=True)
+    l2_healthy = serializers.BooleanField(read_only=True)
+    l2_consecutive_failures = serializers.IntegerField(read_only=True)
+    l2_last_error_time = serializers.CharField(read_only=True, allow_null=True)
+    sync_interval_seconds = serializers.FloatField(read_only=True)
+    last_sync_time = serializers.CharField(read_only=True, allow_null=True)
+    timeout_ms = serializers.FloatField(read_only=True)
+
+
+class ShadowLogEntrySerializer(serializers.Serializer):
+    """Serializer for Shadow Log entry."""
+
+    service_name = serializers.CharField(read_only=True)
+    intended_state = serializers.CharField(read_only=True)
+    failure_time = serializers.DateTimeField(read_only=True)
+    error_message = serializers.CharField(read_only=True)
+    l1_state_at_failure = serializers.CharField(read_only=True)
+    adapter_type = serializers.CharField(read_only=True)
+    operation = serializers.CharField(read_only=True)
+    synced_after_recovery = serializers.BooleanField(read_only=True)
+    recovery_time = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class ShadowLogStatsSerializer(serializers.Serializer):
+    """Serializer for Shadow Log statistics."""
+
+    total_records = serializers.IntegerField(read_only=True)
+    unsynced_count = serializers.IntegerField(read_only=True)
+    affected_services = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+    )
+    max_entries = serializers.IntegerField(read_only=True)
+    oldest_record = serializers.CharField(read_only=True, allow_null=True)
+    newest_record = serializers.CharField(read_only=True, allow_null=True)
+
