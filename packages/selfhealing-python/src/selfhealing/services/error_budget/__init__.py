@@ -1,18 +1,7 @@
 """
-Error Budget Service (Re-export Module)
+Error Budget Service Package
 
 SRE Error Budget 계산기 및 배포 정책 어드바이저.
-
-⚠️ BACKWARD COMPATIBILITY:
-이 파일은 기존 import 경로와의 호환성을 위해 유지됩니다.
-새로운 코드에서는 다음과 같이 import하세요:
-
-    from selfhealing.services.error_budget import (
-        ErrorBudgetService,
-        get_error_budget_service,
-        FreezeStatus,
-        OverrideType,
-    )
 
 Core Principle: "시스템은 조언하고, 결정은 사람이 한다."
 이 모듈은 오직 '상태 선언'과 '권고 데이터'만 제공하며,
@@ -24,36 +13,49 @@ Features:
 - 배포 동결 권고 (Freeze Advisor)
 - 결정 기록 (Audit Trail)
 
+Usage:
+    from selfhealing.services.error_budget import (
+        ErrorBudgetService,
+        get_error_budget_service,
+        configure_error_budget_service,
+    )
+
 Reference:
 - docs/self_healing/08_OBSERVABILITY.md
 - Google SRE Workbook - Alerting on SLOs
 """
 
-from __future__ import annotations
-
-# Re-export all from error_budget package for backward compatibility
-from selfhealing.services.error_budget import (
-    # Enums
+from selfhealing.services.error_budget.enums import (
     FreezeStatus,
     OverrideType,
-    # Thresholds
     ERROR_BUDGET_THRESHOLDS,
     BURN_RATE_THRESHOLDS,
     get_error_budget_thresholds,
     get_burn_rate_thresholds,
-    # Fail-safe
     get_failsafe_verdict_response,
     get_failsafe_status_response,
-    # Models
+)
+
+from selfhealing.services.error_budget.models import (
     ErrorBudgetStatus,
     DeploymentVerdict,
     FreezeDecisionRecord,
-    # Classes
+)
+
+from selfhealing.services.error_budget.calculator import (
     ErrorBudgetCalculator,
+)
+
+from selfhealing.services.error_budget.advisor import (
     DeploymentPolicyAdvisor,
+)
+
+from selfhealing.services.error_budget.recorder import (
     FreezeDecisionRecorder,
+)
+
+from selfhealing.services.error_budget.service import (
     ErrorBudgetService,
-    # Factory
     get_error_budget_service,
     configure_error_budget_service,
 )

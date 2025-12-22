@@ -1169,6 +1169,7 @@ class ErrorBudgetGate:
                 "fail_open_triggered": not gate_healthy,
             },
             "fault_detector": fault_detector_status,
+            "circuit_breaker": fault_detector_status,  # 하위 호환성 별칭
             "rate_limiter": rate_limiter_status,
             "alerts": alert_status,
             "config": {

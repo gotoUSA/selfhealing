@@ -1,0 +1,306 @@
+"""
+L2 Storage Status and Health API Views.
+
+Endpoints:
+- GET  /api/self-healing/l2-storage/status/      - Get L2 storage status
+- GET  /api/self-healing/l2-storage/health/      - Get L2 health status
+- POST /api/self-healing/l2-storage/health/reset - Reset L2 health status
+- POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2
+- POST /api/self-healing/l2-storage/sync/to-l2   - Force sync to L2
+- GET  /api/self-healing/l2-storage/metrics/     - Get L2 storage metrics
+"""
+
+import logging
+
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAdminUser
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
+
+logger = logging.getLogger(__name__)
+
+
+class L2StorageStatusView(APIView):
+    """
+    L2 Storage Status API.
+
+    GET /api/self-healing/l2-storage/status/ - Get storage status
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """Get L2 storage status including metrics."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Layered storage not configured",
+                        "storage_type": "memory_only",
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            
+            storage_info = repo.get_storage_info()
+            
+            return Response(
+                {
+                    "status": "success",
+                    "storage_info": storage_info,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error getting status: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageHealthView(APIView):
+    """
+    L2 Storage Health API.
+
+    GET /api/self-healing/l2-storage/health/ - Get health status
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """Get L2 health status."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "success",
+                        "health": {
+                            "healthy": True,
+                            "message": "Layered storage not configured (memory-only mode)",
+                        },
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            
+            health = repo.get_l2_health()
+            
+            return Response(
+                {
+                    "status": "success",
+                    "health": health,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error getting health: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageHealthResetView(APIView):
+    """
+    L2 Storage Health Reset API.
+
+    POST /api/self-healing/l2-storage/health/reset/ - Reset health status
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """Reset L2 health status (mark as healthy)."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": "Layered storage not configured",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            repo.reset_l2_health()
+            
+            logger.info(f"[L2StorageAPI] L2 health reset by {request.user}")
+            
+            return Response(
+                {
+                    "status": "success",
+                    "message": "L2 health status reset",
+                    "health": repo.get_l2_health(),
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error resetting health: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageSyncFromL2View(APIView):
+    """
+    L2 Storage Sync From L2 API.
+
+    POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """Force sync from L2 to L1."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": "Layered storage not configured",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            success = repo.force_sync_from_l2()
+            
+            if success:
+                logger.info(f"[L2StorageAPI] Force sync from L2 by {request.user}")
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Synced from L2 successfully",
+                        "storage_info": repo.get_storage_info(),
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": "Sync from L2 failed",
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error syncing from L2: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageSyncToL2View(APIView):
+    """
+    L2 Storage Sync To L2 API.
+
+    POST /api/self-healing/l2-storage/sync/to-l2 - Force sync to L2
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """Force sync from L1 to L2."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": "Layered storage not configured",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            result = repo.force_sync_to_l2()
+            
+            logger.info(
+                f"[L2StorageAPI] Force sync to L2 by {request.user}: {result}"
+            )
+            
+            return Response(
+                {
+                    "status": "success" if result["success"] else "partial",
+                    "message": "Sync to L2 completed",
+                    "result": result,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error syncing to L2: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageMetricsView(APIView):
+    """
+    L2 Storage Metrics API.
+
+    GET /api/self-healing/l2-storage/metrics/ - Get L2 storage metrics
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """Get L2 storage metrics."""
+        try:
+            repo = get_layered_repository()
+            
+            if repo is None:
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Layered storage not configured",
+                        "metrics": {},
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            
+            metrics = repo.get_metrics()
+            
+            # Calculate derived metrics
+            if metrics.get("l2_latency_count", 0) > 0:
+                metrics["avg_latency_ms"] = round(
+                    metrics["l2_latency_total_ms"] / metrics["l2_latency_count"],
+                    2,
+                )
+            else:
+                metrics["avg_latency_ms"] = 0.0
+            
+            return Response(
+                {
+                    "status": "success",
+                    "metrics": metrics,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error getting metrics: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

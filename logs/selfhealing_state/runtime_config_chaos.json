@@ -1,6 +1,8 @@
 {
   "scheduler_config": {
     "enabled": false,
+    "dry_run_mode": true,
+    "dry_run_reason": "Initial deployment - simulation mode",
     "default_schedule_hour_start": 2,
     "default_schedule_hour_end": 6,
     "auto_approve_instance_level": true,

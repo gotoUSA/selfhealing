@@ -1142,7 +1142,7 @@ class TestGateCircuitBreakerIntegration:
         
         assert cb_status["enabled"] is True
         assert cb_status["failure_threshold"] == 5
-        assert cb_status["state"] == "closed"
+        assert cb_status["state"] == "healthy"  # GateFaultState.HEALTHY
     
     def test_gate_reset_circuit_breaker(self):
         """Gate에서 Circuit Breaker 리셋."""
@@ -1158,16 +1158,16 @@ class TestGateCircuitBreakerIntegration:
         )
         gate = ErrorBudgetGate(config=config)
         
-        # Circuit Breaker 트리거 (강제 실패)
-        gate._circuit_breaker.record_failure()
-        gate._circuit_breaker.record_failure()
+        # Fault Detector 트리거 (강제 실패)
+        gate._fault_detector.record_failure()
+        gate._fault_detector.record_failure()
         
-        assert gate.get_circuit_breaker_status()["state"] == "open"
+        assert gate.get_circuit_breaker_status()["state"] == "degraded"  # GateFaultState.DEGRADED
         
         # 리셋
         gate.reset_circuit_breaker()
         
-        assert gate.get_circuit_breaker_status()["state"] == "closed"
+        assert gate.get_circuit_breaker_status()["state"] == "healthy"  # GateFaultState.HEALTHY
 
 
 # =============================================================================

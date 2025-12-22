@@ -40,8 +40,10 @@ def failing_l2_repo():
     """항상 실패하는 L2 레포지토리 mock."""
     mock_l2 = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
     mock_l2.get_all.return_value = []
-    mock_l2.set.side_effect = Exception("L2 connection failed")
+    mock_l2.update_state.side_effect = Exception("L2 connection failed")
     mock_l2.get_by_service_name.side_effect = Exception("L2 connection failed")
+    mock_l2.record_failure.side_effect = Exception("L2 connection failed")
+    mock_l2.record_success.side_effect = Exception("L2 connection failed")
     return mock_l2
 
 
@@ -171,7 +173,9 @@ class TestL2FailureScenarios:
         # Given: 실패하는 L2
         mock_l2 = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
         mock_l2.get_all.return_value = []
-        mock_l2.set.side_effect = Exception("L2 unavailable")
+        mock_l2.update_state.side_effect = Exception("L2 unavailable")
+        mock_l2.record_failure.side_effect = Exception("L2 unavailable")
+        mock_l2.record_success.side_effect = Exception("L2 unavailable")
         
         repo = LayeredCircuitBreakerStateRepository(
             l2_repo=mock_l2,
@@ -200,7 +204,9 @@ class TestL2FailureScenarios:
 
         mock_l2 = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
         mock_l2.get_all.return_value = []
-        mock_l2.set.side_effect = conditional_fail
+        mock_l2.update_state.side_effect = conditional_fail
+        mock_l2.record_failure.side_effect = conditional_fail
+        mock_l2.record_success.side_effect = conditional_fail
         mock_l2.get_by_service_name.return_value = None
 
         repo = LayeredCircuitBreakerStateRepository(

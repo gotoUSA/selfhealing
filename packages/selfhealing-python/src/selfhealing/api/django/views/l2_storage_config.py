@@ -1,0 +1,137 @@
+"""
+L2 Storage Configuration API Views.
+
+Endpoints:
+- GET  /api/self-healing/l2-storage/config/      - Get L2 storage config
+- PUT  /api/self-healing/l2-storage/config/      - Update L2 storage config
+- POST /api/self-healing/l2-storage/config/reset - Reset config to defaults
+"""
+
+import logging
+
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAdminUser
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from selfhealing.api.django.serializers.config import L2StorageConfigSerializer
+from selfhealing.config import get_l2_storage_runtime_config
+
+logger = logging.getLogger(__name__)
+
+
+class L2StorageConfigView(APIView):
+    """
+    L2 Storage Configuration API.
+
+    GET  /api/self-healing/l2-storage/config/ - Get current config
+    PUT  /api/self-healing/l2-storage/config/ - Update config
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """Get current L2 storage configuration."""
+        try:
+            config = get_l2_storage_runtime_config()
+            
+            return Response(
+                {
+                    "status": "success",
+                    "config": config.to_dict(),
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error getting config: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def put(self, request: Request) -> Response:
+        """Update L2 storage configuration."""
+        try:
+            serializer = L2StorageConfigSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"status": "error", "errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            config = get_l2_storage_runtime_config()
+            changes = serializer.get_config_changes()
+            
+            if not changes:
+                return Response(
+                    {"status": "error", "error": "No changes provided"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            updated_config = config.update(
+                **changes,
+                updated_by=str(request.user),
+            )
+            
+            logger.info(
+                f"[L2StorageAPI] Config updated by {request.user}: {changes}"
+            )
+            
+            return Response(
+                {
+                    "status": "success",
+                    "message": "L2 storage configuration updated",
+                    "config": updated_config,
+                    "changes": changes,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error updating config: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class L2StorageConfigResetView(APIView):
+    """
+    L2 Storage Configuration Reset API.
+
+    POST /api/self-healing/l2-storage/config/reset - Reset to defaults
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """Reset L2 storage configuration to defaults."""
+        try:
+            config = get_l2_storage_runtime_config()
+            config.reset()
+            
+            logger.info(f"[L2StorageAPI] Config reset to defaults by {request.user}")
+            
+            return Response(
+                {
+                    "status": "success",
+                    "message": "L2 storage configuration reset to defaults",
+                    "config": config.to_dict(),
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(f"[L2StorageAPI] Error resetting config: {e}", exc_info=True)
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
