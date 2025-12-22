@@ -146,6 +146,11 @@ from selfhealing.api.django.views.l2_storage import (
     ShadowLogAnalyzeView,
     ShadowLogReplayView,
     ShadowLogByServiceView,
+    # Drift Reconciliation Views (Phase 3)
+    DriftReconciliationStatsView,
+    DriftReconciliationHistoryView,
+    DriftReconciliationTriggerView,
+    DriftReconciliationServiceView,
 )
 
 app_name = "selfhealing"
@@ -275,6 +280,11 @@ urlpatterns = [
     # Sync Operations
     path("l2-storage/sync/from-l2/", L2StorageSyncFromL2View.as_view(), name="l2-storage-sync-from-l2"),
     path("l2-storage/sync/to-l2/", L2StorageSyncToL2View.as_view(), name="l2-storage-sync-to-l2"),
+    # Drift Reconciliation (Phase 3)
+    path("l2-storage/drift/stats/", DriftReconciliationStatsView.as_view(), name="l2-storage-drift-stats"),
+    path("l2-storage/drift/history/", DriftReconciliationHistoryView.as_view(), name="l2-storage-drift-history"),
+    path("l2-storage/drift/reconcile/", DriftReconciliationTriggerView.as_view(), name="l2-storage-drift-reconcile"),
+    path("l2-storage/drift/reconcile/<str:service_name>/", DriftReconciliationServiceView.as_view(), name="l2-storage-drift-reconcile-service"),
     # Metrics
     path("l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"),
 ]

@@ -2,17 +2,23 @@
 In-Memory Circuit Breaker State Repository Implementation.
 
 Thread-safe in-memory storage for circuit breaker states.
+Includes L1+L2 Layered Storage with Drift Reconciliation support.
+
+Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from selfhealing.adapters.memory.base import _now
 from selfhealing.interfaces.repositories import (
@@ -408,6 +414,294 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 # =============================================================================
 
 
+class DriftReconciliationResult(Enum):
+    """드리프트 복구 결과."""
+    L1_WINS = "l1_wins"       # L1 상태가 더 제한적 → L2에 전파
+    L2_WINS = "l2_wins"       # L2 상태가 더 제한적 → L1에 전파
+    TIMESTAMP_L1 = "timestamp_l1"  # 같은 상태, L1이 더 최신
+    TIMESTAMP_L2 = "timestamp_l2"  # 같은 상태, L2가 더 최신
+    NO_DRIFT = "no_drift"     # 드리프트 없음 (동일 상태)
+    SKIPPED = "skipped"       # 건너뜀 (데이터 없음 등)
+
+
+@dataclass
+class DriftReconciliationRecord:
+    """
+    드리프트 복구 기록.
+    
+    L2 복구 후 L1과 L2 간 상태 불일치 해결 기록.
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
+    """
+    service_name: str
+    l1_state: str
+    l2_state: str
+    l1_updated_at: Optional[datetime]
+    l2_updated_at: Optional[datetime]
+    winner: str  # "l1", "l2", "both" (동일)
+    result: DriftReconciliationResult
+    reconciled_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    jitter_seconds: float = 0.0
+
+
+class DriftReconciler:
+    """
+    L2 복구 시 상태 드리프트 해결.
+    
+    L2 장애 동안 L1만 업데이트되면, L2 복구 후 L1과 L2의 상태가 불일치합니다.
+    이 클래스는 "Most Restrictive Wins" 전략으로 드리프트를 해결합니다.
+    
+    우선순위: OPEN (3) > HALF_OPEN (2) > CLOSED (1)
+    - 더 제한적인 상태가 우선 (안전 우선)
+    - 같은 상태면 더 최신 타임스탬프가 우선
+    
+    Thundering Herd 방지:
+    - L2 복구 시 모든 Pod가 동시에 쓰기 요청을 보내면 L2 과부하 발생
+    - Jitter를 적용하여 순차적으로 동기화
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
+    """
+    
+    # 상태 우선순위: 높을수록 더 제한적
+    STATE_PRIORITY: Dict[str, int] = {
+        "open": 3,       # 가장 제한적 (우선)
+        "half_open": 2,
+        "closed": 1,     # 가장 허용적
+    }
+    
+    def __init__(
+        self,
+        min_jitter_seconds: float = 0.0,
+        max_jitter_seconds: float = 5.0,
+        on_reconciled: Optional[Callable[[DriftReconciliationRecord], None]] = None,
+    ):
+        """
+        Args:
+            min_jitter_seconds: 최소 Jitter (초)
+            max_jitter_seconds: 최대 Jitter (초)
+            on_reconciled: 복구 완료 시 콜백 (메트릭, 로깅 등)
+        """
+        self._min_jitter = min_jitter_seconds
+        self._max_jitter = max_jitter_seconds
+        self._on_reconciled = on_reconciled
+        self._reconciliation_history: List[DriftReconciliationRecord] = []
+        self._lock = threading.RLock()
+        self._max_history = 1000
+    
+    def get_jitter(self) -> float:
+        """Jitter 값 생성 (0~max 사이 무작위)."""
+        return random.uniform(self._min_jitter, self._max_jitter)
+    
+    def reconcile(
+        self,
+        service_name: str,
+        l1_state: str,
+        l2_state: str,
+        l1_updated_at: Optional[datetime] = None,
+        l2_updated_at: Optional[datetime] = None,
+    ) -> Tuple[str, DriftReconciliationResult]:
+        """
+        드리프트 해결 전략:
+        1. 더 제한적인 상태가 우선 (Most Restrictive Wins)
+        2. 같은 레벨이면 더 최신 타임스탬프가 우선
+        
+        Args:
+            service_name: 서비스 이름
+            l1_state: L1 상태 (closed, half_open, open)
+            l2_state: L2 상태
+            l1_updated_at: L1 마지막 업데이트 시간
+            l2_updated_at: L2 마지막 업데이트 시간
+            
+        Returns:
+            (승리 상태, 복구 결과)
+        """
+        l1_priority = self.STATE_PRIORITY.get(l1_state.lower(), 0)
+        l2_priority = self.STATE_PRIORITY.get(l2_state.lower(), 0)
+        
+        # 상태가 같으면 드리프트 없음
+        if l1_state.lower() == l2_state.lower():
+            winner_state = l1_state
+            result = DriftReconciliationResult.NO_DRIFT
+            winner = "both"
+        elif l1_priority > l2_priority:
+            # L1이 더 제한적 → L2에 전파
+            winner_state = l1_state
+            result = DriftReconciliationResult.L1_WINS
+            winner = "l1"
+            logger.info(
+                f"[DriftReconciler] Reconciled {service_name}: "
+                f"{l1_state.upper()} wins over {l2_state.upper()} (L1 more restrictive)"
+            )
+        elif l2_priority > l1_priority:
+            # L2가 더 제한적 → L1에 전파
+            winner_state = l2_state
+            result = DriftReconciliationResult.L2_WINS
+            winner = "l2"
+            logger.info(
+                f"[DriftReconciler] Reconciled {service_name}: "
+                f"{l2_state.upper()} wins over {l1_state.upper()} (L2 more restrictive)"
+            )
+        else:
+            # 같은 레벨: 타임스탬프 비교
+            if l1_updated_at and l2_updated_at:
+                if l1_updated_at > l2_updated_at:
+                    winner_state = l1_state
+                    result = DriftReconciliationResult.TIMESTAMP_L1
+                    winner = "l1"
+                else:
+                    winner_state = l2_state
+                    result = DriftReconciliationResult.TIMESTAMP_L2
+                    winner = "l2"
+            elif l1_updated_at:
+                winner_state = l1_state
+                result = DriftReconciliationResult.TIMESTAMP_L1
+                winner = "l1"
+            elif l2_updated_at:
+                winner_state = l2_state
+                result = DriftReconciliationResult.TIMESTAMP_L2
+                winner = "l2"
+            else:
+                # 타임스탬프 없으면 L1 우선 (로컬 데이터 신뢰)
+                winner_state = l1_state
+                result = DriftReconciliationResult.TIMESTAMP_L1
+                winner = "l1"
+        
+        # 기록 저장
+        record = DriftReconciliationRecord(
+            service_name=service_name,
+            l1_state=l1_state,
+            l2_state=l2_state,
+            l1_updated_at=l1_updated_at,
+            l2_updated_at=l2_updated_at,
+            winner=winner,
+            result=result,
+        )
+        
+        with self._lock:
+            self._reconciliation_history.append(record)
+            if len(self._reconciliation_history) > self._max_history:
+                self._reconciliation_history = self._reconciliation_history[-self._max_history:]
+        
+        # 콜백 실행
+        if self._on_reconciled:
+            try:
+                self._on_reconciled(record)
+            except Exception as e:
+                logger.warning(f"[DriftReconciler] Callback error: {e}")
+        
+        return winner_state, result
+    
+    def schedule_reconciliation_sync(
+        self,
+        service_name: str,
+        do_reconcile: Callable[[], None],
+    ) -> float:
+        """
+        Jitter를 적용하여 동기적으로 지연 후 동기화.
+        
+        Args:
+            service_name: 서비스 이름
+            do_reconcile: 실제 동기화 실행 함수
+            
+        Returns:
+            적용된 Jitter 시간 (초)
+        """
+        jitter = self.get_jitter()
+        
+        if jitter > 0:
+            logger.debug(
+                f"[DriftReconciler] Scheduling reconciliation for {service_name} "
+                f"in {jitter:.2f}s (jitter applied)"
+            )
+            time.sleep(jitter)
+        
+        do_reconcile()
+        return jitter
+    
+    async def schedule_reconciliation_async(
+        self,
+        service_name: str,
+        do_reconcile: Callable[[], None],
+    ) -> float:
+        """
+        Jitter를 적용하여 비동기적으로 지연 후 동기화.
+        
+        Args:
+            service_name: 서비스 이름
+            do_reconcile: 실제 동기화 실행 함수
+            
+        Returns:
+            적용된 Jitter 시간 (초)
+        """
+        jitter = self.get_jitter()
+        
+        if jitter > 0:
+            logger.info(
+                f"[DriftReconciler] Scheduling reconciliation for {service_name} "
+                f"in {jitter:.2f}s (jitter applied)"
+            )
+            await asyncio.sleep(jitter)
+        
+        do_reconcile()
+        return jitter
+    
+    def get_history(self) -> List[DriftReconciliationRecord]:
+        """복구 기록 조회."""
+        with self._lock:
+            return list(self._reconciliation_history)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """복구 통계 조회."""
+        with self._lock:
+            history = list(self._reconciliation_history)
+        
+        if not history:
+            return {
+                "total_reconciliations": 0,
+                "by_result": {},
+                "by_winner": {},
+                "affected_services": [],
+            }
+        
+        by_result: Dict[str, int] = {}
+        by_winner: Dict[str, int] = {}
+        services = set()
+        
+        for record in history:
+            result_name = record.result.value
+            by_result[result_name] = by_result.get(result_name, 0) + 1
+            by_winner[record.winner] = by_winner.get(record.winner, 0) + 1
+            services.add(record.service_name)
+        
+        return {
+            "total_reconciliations": len(history),
+            "by_result": by_result,
+            "by_winner": by_winner,
+            "affected_services": list(services),
+            "last_reconciliation": history[-1].reconciled_at.isoformat() if history else None,
+        }
+    
+    def clear_history(self) -> None:
+        """기록 초기화 (테스트용)."""
+        with self._lock:
+            self._reconciliation_history.clear()
+
+
+# 모듈 레벨 싱글톤 인스턴스
+_drift_reconciler: Optional[DriftReconciler] = None
+_drift_reconciler_lock = threading.Lock()
+
+
+def get_drift_reconciler() -> DriftReconciler:
+    """Get the singleton DriftReconciler instance."""
+    global _drift_reconciler
+    if _drift_reconciler is None:
+        with _drift_reconciler_lock:
+            if _drift_reconciler is None:
+                _drift_reconciler = DriftReconciler()
+    return _drift_reconciler
+
+
 @dataclass
 class L2SyncFailureRecord:
     """
@@ -787,12 +1081,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         l2_repo: Optional[CircuitBreakerStateRepository] = None,
         sync_interval_seconds: float = 5.0,
         adapter_type: str = "unknown",
+        drift_reconciler: Optional[DriftReconciler] = None,
     ):
         """
         Args:
             l2_repo: L2 저장소 (Redis, Django DB 등). None이면 L1만 사용.
             sync_interval_seconds: L2 동기화 주기 (초)
             adapter_type: L2 어댑터 타입 (redis, django 등) - 타임아웃 결정에 사용
+            drift_reconciler: 드리프트 복구 인스턴스. None이면 기본 인스턴스 사용.
         """
         self._l1 = InMemoryCircuitBreakerStateRepository()
         self._l2 = l2_repo
@@ -801,11 +1097,13 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self._last_sync_time: Optional[datetime] = None
         self._lock = threading.RLock()
         self._shadow_logger = get_shadow_logger()
+        self._drift_reconciler = drift_reconciler or get_drift_reconciler()
         
         # L2 연결 상태 추적
         self._l2_healthy = True
         self._l2_last_error_time: Optional[datetime] = None
         self._l2_consecutive_failures = 0
+        self._l2_was_unhealthy = False  # L2 복구 감지용
         
         # 메트릭 카운터 (Prometheus 연동 전 로컬 추적용)
         self._metrics = {
@@ -814,6 +1112,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "l2_sync_success_count": 0,
             "l2_latency_total_ms": 0.0,
             "l2_latency_count": 0,
+            "drift_reconciliation_count": 0,
         }
         
         # L2가 있으면 초기 로드
@@ -897,6 +1196,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
+            self._l2_was_unhealthy = True  # 복구 감지용 플래그 설정
         
         # Prometheus 메트릭 업데이트 (가능한 경우)
         try:
@@ -919,6 +1219,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
+            self._l2_was_unhealthy = True  # 복구 감지용 플래그 설정
         
         # Shadow Log에 기록
         if service_name and intended_state:
@@ -938,12 +1239,25 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             pass
     
     def _handle_l2_success(self, elapsed_ms: float) -> None:
-        """L2 성공 처리."""
+        """L2 성공 처리 및 복구 감지."""
+        was_unhealthy = not self._l2_healthy or self._l2_was_unhealthy
+        
         self._metrics["l2_sync_success_count"] += 1
         self._metrics["l2_latency_total_ms"] += elapsed_ms
         self._metrics["l2_latency_count"] += 1
         self._l2_consecutive_failures = 0
         self._l2_healthy = True
+        
+        # L2 복구 감지: unhealthy → healthy 전환 시
+        if was_unhealthy:
+            self._l2_was_unhealthy = False
+            logger.info(
+                f"[LayeredRepo] L2 recovery detected after "
+                f"{self._metrics.get('l2_sync_failure_count', 0)} failures. "
+                f"Initiating drift reconciliation."
+            )
+            # 백그라운드에서 드리프트 복구 실행
+            self._schedule_drift_reconciliation()
         
         # Prometheus 메트릭 업데이트 (가능한 경우)
         try:
@@ -951,6 +1265,135 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             record_l2_latency(self._adapter_type, elapsed_ms / 1000.0)
         except ImportError:
             pass
+    
+    def _schedule_drift_reconciliation(self) -> None:
+        """드리프트 복구를 백그라운드에서 스케줄."""
+        def _run_reconciliation():
+            try:
+                jitter = self._drift_reconciler.get_jitter()
+                if jitter > 0:
+                    logger.debug(
+                        f"[LayeredRepo] Drift reconciliation scheduled with "
+                        f"{jitter:.2f}s jitter (Thundering Herd prevention)"
+                    )
+                    time.sleep(jitter)
+                
+                self._reconcile_all_drift()
+            except Exception as e:
+                logger.error(f"[LayeredRepo] Drift reconciliation error: {e}")
+        
+        try:
+            executor = self._get_executor()
+            executor.submit(_run_reconciliation)
+        except Exception as e:
+            logger.warning(f"[LayeredRepo] Failed to schedule drift reconciliation: {e}")
+    
+    def _reconcile_all_drift(self) -> Dict[str, Any]:
+        """
+        모든 서비스의 L1/L2 드리프트 해결.
+        
+        Returns:
+            복구 결과 요약
+        """
+        if not self._l2:
+            return {"success": False, "reason": "L2 not configured"}
+        
+        reconciled_count = 0
+        l1_wins_count = 0
+        l2_wins_count = 0
+        errors = []
+        
+        # L1의 모든 상태 가져오기
+        l1_states = self._l1.get_all()
+        
+        for l1_state in l1_states:
+            try:
+                # L2에서 해당 서비스 상태 가져오기
+                timeout = self._get_timeout_seconds()
+                executor = self._get_executor()
+                future = executor.submit(
+                    self._l2.get_by_service_name, l1_state.service_name
+                )
+                
+                try:
+                    l2_state = future.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    logger.warning(
+                        f"[LayeredRepo] Drift reconciliation timeout for "
+                        f"{l1_state.service_name}, skipping"
+                    )
+                    continue
+                
+                if l2_state is None:
+                    # L2에 없으면 L1 상태를 L2로 동기화
+                    self._sync_to_l2_with_timeout(l1_state.service_name, l1_state)
+                    l1_wins_count += 1
+                    reconciled_count += 1
+                    continue
+                
+                # 드리프트 해결
+                winner_state, result = self._drift_reconciler.reconcile(
+                    service_name=l1_state.service_name,
+                    l1_state=l1_state.state,
+                    l2_state=l2_state.state,
+                    l1_updated_at=l1_state.updated_at,
+                    l2_updated_at=l2_state.updated_at,
+                )
+                
+                if result == DriftReconciliationResult.NO_DRIFT:
+                    continue
+                
+                reconciled_count += 1
+                
+                if result in (
+                    DriftReconciliationResult.L1_WINS,
+                    DriftReconciliationResult.TIMESTAMP_L1,
+                ):
+                    # L1 → L2 동기화
+                    self._sync_to_l2_with_timeout(l1_state.service_name, l1_state)
+                    l1_wins_count += 1
+                else:
+                    # L2 → L1 동기화
+                    self._l1.update_state(
+                        service_name=l2_state.service_name,
+                        state=l2_state.state,
+                        failure_count=l2_state.failure_count,
+                        success_count=l2_state.success_count,
+                        opened_at=l2_state.opened_at,
+                    )
+                    l2_wins_count += 1
+                
+            except Exception as e:
+                errors.append({
+                    "service": l1_state.service_name,
+                    "error": str(e),
+                })
+                logger.warning(
+                    f"[LayeredRepo] Drift reconciliation error for "
+                    f"{l1_state.service_name}: {e}"
+                )
+        
+        self._metrics["drift_reconciliation_count"] += reconciled_count
+        
+        # Shadow Log 정리
+        if reconciled_count > 0:
+            self._shadow_logger.mark_all_as_synced()
+        
+        result = {
+            "success": len(errors) == 0,
+            "total_checked": len(l1_states),
+            "reconciled": reconciled_count,
+            "l1_wins": l1_wins_count,
+            "l2_wins": l2_wins_count,
+            "errors": errors,
+        }
+        
+        logger.info(
+            f"[LayeredRepo] Drift reconciliation completed: "
+            f"{reconciled_count} reconciled, L1 wins={l1_wins_count}, L2 wins={l2_wins_count}"
+        )
+        
+        return result
     
     def _sync_to_l2_with_timeout(
         self,
@@ -1301,6 +1744,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "l2_type": type(self._l2).__name__ if self._l2 else None,
             "l2_adapter_type": self._adapter_type,
             "l2_healthy": self._l2_healthy,
+            "l2_was_unhealthy": self._l2_was_unhealthy,
             "l2_consecutive_failures": self._l2_consecutive_failures,
             "l2_last_error_time": (
                 self._l2_last_error_time.isoformat() 
@@ -1316,15 +1760,18 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 "timeout_count": self._metrics["l2_timeout_count"],
                 "sync_failure_count": self._metrics["l2_sync_failure_count"],
                 "sync_success_count": self._metrics["l2_sync_success_count"],
+                "drift_reconciliation_count": self._metrics["drift_reconciliation_count"],
                 "avg_latency_ms": round(avg_latency_ms, 2),
             },
             "shadow_log": self._shadow_logger.get_stats(),
+            "drift_reconciler": self._drift_reconciler.get_stats(),
         }
     
     def get_l2_health(self) -> Dict:
         """L2 헬스 상태 조회."""
         return {
             "healthy": self._l2_healthy,
+            "was_unhealthy": self._l2_was_unhealthy,
             "consecutive_failures": self._l2_consecutive_failures,
             "last_error_time": (
                 self._l2_last_error_time.isoformat() 
@@ -1337,6 +1784,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def reset_l2_health(self) -> None:
         """L2 헬스 상태 리셋 (수동 복구 시)."""
         self._l2_healthy = True
+        self._l2_was_unhealthy = False
         self._l2_consecutive_failures = 0
         self._l2_last_error_time = None
         logger.info("[LayeredRepo] L2 health status reset manually")
@@ -1353,6 +1801,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "l2_sync_success_count": 0,
             "l2_latency_total_ms": 0.0,
             "l2_latency_count": 0,
+            "drift_reconciliation_count": 0,
         }
     
     def force_sync_from_l2(self) -> bool:
@@ -1392,3 +1841,123 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "synced": success_count,
             "failed": failure_count,
         }
+    
+    def force_drift_reconciliation(self) -> Dict[str, Any]:
+        """
+        수동으로 드리프트 복구 트리거.
+        
+        L2 복구 후 자동 복구가 실행되지 않았거나,
+        관리자가 수동으로 드리프트를 해결하고자 할 때 사용.
+        
+        Returns:
+            복구 결과 요약 딕셔너리
+        """
+        if not self._l2:
+            return {"success": False, "reason": "L2 not configured"}
+        
+        logger.info("[LayeredRepo] Manual drift reconciliation triggered")
+        return self._reconcile_all_drift()
+    
+    def get_drift_reconciler_stats(self) -> Dict[str, Any]:
+        """드리프트 복구 통계 조회."""
+        return self._drift_reconciler.get_stats()
+    
+    def get_drift_reconciliation_history(self) -> List[Dict[str, Any]]:
+        """드리프트 복구 기록 조회."""
+        history = self._drift_reconciler.get_history()
+        return [
+            {
+                "service_name": r.service_name,
+                "l1_state": r.l1_state,
+                "l2_state": r.l2_state,
+                "l1_updated_at": r.l1_updated_at.isoformat() if r.l1_updated_at else None,
+                "l2_updated_at": r.l2_updated_at.isoformat() if r.l2_updated_at else None,
+                "winner": r.winner,
+                "result": r.result.value,
+                "reconciled_at": r.reconciled_at.isoformat(),
+                "jitter_seconds": r.jitter_seconds,
+            }
+            for r in history
+        ]
+    
+    def reconcile_single_service(self, service_name: str) -> Dict[str, Any]:
+        """
+        특정 서비스의 드리프트만 복구.
+        
+        Args:
+            service_name: 복구할 서비스 이름
+            
+        Returns:
+            복구 결과
+        """
+        if not self._l2:
+            return {"success": False, "reason": "L2 not configured"}
+        
+        l1_state = self._l1.get_by_service_name(service_name)
+        if l1_state is None:
+            return {"success": False, "reason": "Service not found in L1"}
+        
+        try:
+            timeout = self._get_timeout_seconds()
+            executor = self._get_executor()
+            future = executor.submit(self._l2.get_by_service_name, service_name)
+            l2_state = future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            return {"success": False, "reason": "L2 timeout"}
+        except Exception as e:
+            return {"success": False, "reason": str(e)}
+        
+        if l2_state is None:
+            # L2에 없으면 L1 상태를 L2로 동기화
+            self._sync_to_l2_with_timeout(service_name, l1_state)
+            return {
+                "success": True,
+                "action": "l1_to_l2",
+                "reason": "L2 had no state, synced from L1",
+            }
+        
+        # 드리프트 해결
+        winner_state, result = self._drift_reconciler.reconcile(
+            service_name=service_name,
+            l1_state=l1_state.state,
+            l2_state=l2_state.state,
+            l1_updated_at=l1_state.updated_at,
+            l2_updated_at=l2_state.updated_at,
+        )
+        
+        if result == DriftReconciliationResult.NO_DRIFT:
+            return {
+                "success": True,
+                "action": "none",
+                "reason": "No drift detected",
+            }
+        
+        self._metrics["drift_reconciliation_count"] += 1
+        
+        if result in (
+            DriftReconciliationResult.L1_WINS,
+            DriftReconciliationResult.TIMESTAMP_L1,
+        ):
+            self._sync_to_l2_with_timeout(service_name, l1_state)
+            return {
+                "success": True,
+                "action": "l1_to_l2",
+                "winner": "l1",
+                "result": result.value,
+                "winner_state": winner_state,
+            }
+        else:
+            self._l1.update_state(
+                service_name=l2_state.service_name,
+                state=l2_state.state,
+                failure_count=l2_state.failure_count,
+                success_count=l2_state.success_count,
+                opened_at=l2_state.opened_at,
+            )
+            return {
+                "success": True,
+                "action": "l2_to_l1",
+                "winner": "l2",
+                "result": result.value,
+                "winner_state": winner_state,
+            }

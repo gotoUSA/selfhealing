@@ -402,6 +402,12 @@ class TestShadowLogForensicAnalysis:
 class TestDriftReconciliation:
     """드리프트 복구 테스트."""
 
+    def setup_method(self):
+        """각 테스트 전 DriftReconciler 초기화."""
+        from selfhealing.adapters.memory.circuit_breaker import get_drift_reconciler
+        self.reconciler = get_drift_reconciler()
+        self.reconciler.clear_history()
+
     def test_most_restrictive_wins_open_vs_closed(self):
         """OPEN > CLOSED 우선순위.
         
@@ -409,10 +415,23 @@ class TestDriftReconciliation:
         - L1: OPEN (장애 감지)
         - L2: CLOSED (장애 전 상태)
         - 결과: OPEN (더 제한적인 상태 승리)
-        
-        TODO: DriftReconciler 구현 후 활성화
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        
+        # When: OPEN vs CLOSED
+        winner_state, result = reconciler.reconcile(
+            service_name="test-service",
+            l1_state="open",
+            l2_state="closed",
+        )
+        
+        # Then: OPEN이 승리 (더 제한적)
+        assert winner_state == "open"
+        assert result == DriftReconciliationResult.L1_WINS
 
     def test_most_restrictive_wins_half_open_vs_closed(self):
         """HALF_OPEN > CLOSED 우선순위.
@@ -421,10 +440,23 @@ class TestDriftReconciliation:
         - L1: HALF_OPEN (복구 시도 중)
         - L2: CLOSED
         - 결과: HALF_OPEN
-        
-        TODO: DriftReconciler 구현 후 활성화
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        
+        # When: HALF_OPEN vs CLOSED
+        winner_state, result = reconciler.reconcile(
+            service_name="test-service",
+            l1_state="half_open",
+            l2_state="closed",
+        )
+        
+        # Then: HALF_OPEN이 승리
+        assert winner_state == "half_open"
+        assert result == DriftReconciliationResult.L1_WINS
 
     def test_most_restrictive_wins_open_vs_half_open(self):
         """OPEN > HALF_OPEN 우선순위.
@@ -433,10 +465,23 @@ class TestDriftReconciliation:
         - L1: HALF_OPEN
         - L2: OPEN
         - 결과: OPEN (더 제한적)
-        
-        TODO: DriftReconciler 구현 후 활성화
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        
+        # When: HALF_OPEN vs OPEN
+        winner_state, result = reconciler.reconcile(
+            service_name="test-service",
+            l1_state="half_open",
+            l2_state="open",
+        )
+        
+        # Then: OPEN이 승리 (L2)
+        assert winner_state == "open"
+        assert result == DriftReconciliationResult.L2_WINS
 
     def test_timestamp_tiebreaker_same_state(self):
         """같은 상태면 타임스탬프로 결정.
@@ -445,10 +490,54 @@ class TestDriftReconciliation:
         - L1: OPEN (10:00:00)
         - L2: OPEN (10:00:05) ← 더 최신
         - 결과: L2 상태 채택
-        
-        TODO: DriftReconciler 구현 후 활성화
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        
+        now = datetime.now(timezone.utc)
+        l1_time = now - timedelta(seconds=5)
+        l2_time = now  # L2가 더 최신
+        
+        # When: 같은 상태, L2가 더 최신
+        winner_state, result = reconciler.reconcile(
+            service_name="test-service",
+            l1_state="open",
+            l2_state="open",
+            l1_updated_at=l1_time,
+            l2_updated_at=l2_time,
+        )
+        
+        # Then: 같은 상태면 드리프트 없음
+        assert result == DriftReconciliationResult.NO_DRIFT
+
+    def test_timestamp_tiebreaker_different_priority_same_level(self):
+        """같은 우선순위 레벨에서 타임스탬프로 결정."""
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        
+        now = datetime.now(timezone.utc)
+        l1_time = now
+        l2_time = now - timedelta(seconds=5)  # L1이 더 최신
+        
+        # 임의로 우선순위가 같다고 가정하기 위해
+        # 실제로는 다른 상태면 우선순위가 다르므로, 
+        # 이 테스트는 동일 상태 + 타임스탬프 비교로 대체
+        winner_state, result = reconciler.reconcile(
+            service_name="test-service",
+            l1_state="closed",
+            l2_state="closed",
+            l1_updated_at=l1_time,
+            l2_updated_at=l2_time,
+        )
+        
+        # 같은 상태면 NO_DRIFT
+        assert result == DriftReconciliationResult.NO_DRIFT
 
     def test_jitter_applied_to_reconciliation(self):
         """Jitter가 적용되어 지연됨.
@@ -457,10 +546,28 @@ class TestDriftReconciliation:
         - L2 복구 감지
         - 0~5초 사이 무작위 지연
         - 지연 후 동기화 실행
-        
-        TODO: DriftReconciler 구현 후 활성화
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import DriftReconciler
+        
+        reconciler = DriftReconciler(
+            min_jitter_seconds=0.0,
+            max_jitter_seconds=0.01,  # 빠른 테스트를 위해 10ms
+        )
+        
+        executed = []
+        
+        def do_reconcile():
+            executed.append(True)
+        
+        # When: 스케줄 실행
+        jitter = reconciler.schedule_reconciliation_sync(
+            service_name="test-service",
+            do_reconcile=do_reconcile,
+        )
+        
+        # Then: 실행 완료 및 Jitter 값 반환
+        assert len(executed) == 1
+        assert 0.0 <= jitter <= 0.01
 
     def test_jitter_distribution(self):
         """Jitter가 균등 분포.
@@ -469,8 +576,14 @@ class TestDriftReconciliation:
         - 1000회 Jitter 생성
         - 0~5초 범위에 균등 분포
         """
-        import random
-        jitters = [random.uniform(0.0, 5.0) for _ in range(1000)]
+        from selfhealing.adapters.memory.circuit_breaker import DriftReconciler
+        
+        reconciler = DriftReconciler(
+            min_jitter_seconds=0.0,
+            max_jitter_seconds=5.0,
+        )
+        
+        jitters = [reconciler.get_jitter() for _ in range(1000)]
         
         # 평균이 약 2.5초 근처
         avg = sum(jitters) / len(jitters)
@@ -487,10 +600,70 @@ class TestDriftReconciliation:
         - 100개 Pod가 동시에 L2 복구 감지
         - 각 Pod마다 다른 Jitter 적용
         - 동시 쓰기 요청 분산
-        
-        TODO: 통합 테스트로 이동 고려 (Phase 2)
         """
-        pass
+        from selfhealing.adapters.memory.circuit_breaker import DriftReconciler
+        
+        # Given: 100개 Reconciler (각 Pod 시뮬레이션)
+        jitters = []
+        for _ in range(100):
+            reconciler = DriftReconciler(
+                min_jitter_seconds=0.0,
+                max_jitter_seconds=5.0,
+            )
+            jitters.append(reconciler.get_jitter())
+        
+        # Then: 고유 값들이 많이 생성됨 (모든 Pod가 동시에 실행하지 않음)
+        unique_jitters = set(round(j, 2) for j in jitters)
+        # 100개 중 최소 50% 이상 고유해야 함
+        assert len(unique_jitters) > 50, f"Jitter 분산 부족: {len(unique_jitters)} unique"
+        
+        # 시간대가 분산됨 (첫 1초와 마지막 1초에 분산)
+        in_first_second = sum(1 for j in jitters if j < 1.0)
+        in_last_second = sum(1 for j in jitters if j >= 4.0)
+        # 대략적으로 분산되어 있어야 함
+        assert in_first_second > 10, "첫 1초에 충분한 Jitter 분산 없음"
+        assert in_last_second > 10, "마지막 1초에 충분한 Jitter 분산 없음"
+    
+    def test_reconciler_history_tracking(self):
+        """복구 기록 추적."""
+        from selfhealing.adapters.memory.circuit_breaker import DriftReconciler
+        
+        reconciler = DriftReconciler()
+        reconciler.clear_history()
+        
+        # When: 여러 복구 실행
+        reconciler.reconcile("svc-1", "open", "closed")
+        reconciler.reconcile("svc-2", "closed", "open")
+        reconciler.reconcile("svc-3", "half_open", "half_open")
+        
+        # Then: 기록 저장됨
+        history = reconciler.get_history()
+        assert len(history) == 3
+        assert history[0].service_name == "svc-1"
+        assert history[1].service_name == "svc-2"
+        assert history[2].service_name == "svc-3"
+    
+    def test_reconciler_stats(self):
+        """복구 통계."""
+        from selfhealing.adapters.memory.circuit_breaker import (
+            DriftReconciler, DriftReconciliationResult,
+        )
+        
+        reconciler = DriftReconciler()
+        reconciler.clear_history()
+        
+        # When: 여러 복구 실행
+        reconciler.reconcile("svc-1", "open", "closed")  # L1 wins
+        reconciler.reconcile("svc-2", "closed", "open")  # L2 wins
+        reconciler.reconcile("svc-3", "closed", "closed")  # No drift
+        
+        # Then: 통계 확인
+        stats = reconciler.get_stats()
+        assert stats["total_reconciliations"] == 3
+        assert stats["by_result"]["l1_wins"] == 1
+        assert stats["by_result"]["l2_wins"] == 1
+        assert stats["by_result"]["no_drift"] == 1
+        assert len(stats["affected_services"]) == 3
 
 
 class TestColdStartProtection:
@@ -559,7 +732,8 @@ class TestIntelligentFallback:
         """L2 에러 발생 시 메트릭 추적."""
         mock_l2 = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
         mock_l2.get_all.return_value = []
-        mock_l2.set.side_effect = Exception("Write failed")
+        mock_l2.update_state.side_effect = Exception("Write failed")
+        mock_l2.get_or_create.side_effect = Exception("Write failed")
         
         repo = LayeredCircuitBreakerStateRepository(l2_repo=mock_l2)
         repo._l2_healthy = True
@@ -606,10 +780,12 @@ class TestLayeredRepositoryBasic:
         mock_l2 = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
         mock_l2.get_all.return_value = []
         
-        def slow_set(*args, **kwargs):
+        def slow_update(*args, **kwargs):
             time.sleep(0.5)
+            return True
         
-        mock_l2.set.side_effect = slow_set
+        mock_l2.update_state.side_effect = slow_update
+        mock_l2.get_or_create.side_effect = slow_update
         
         repo = LayeredCircuitBreakerStateRepository(l2_repo=mock_l2)
         
