@@ -615,3 +615,212 @@ class L2StorageMetricsView(APIView):
                 {"status": "error", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class ShadowLogAnalyzeView(APIView):
+    """
+    Shadow Log Forensic Analysis API.
+
+    GET /api/self-healing/l2-storage/shadow-log/analyze/ - Analyze L2 failures
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        """
+        Analyze L2 failures for forensic investigation.
+
+        Returns a comprehensive analysis of L2 failures including:
+        - Timeline of failures
+        - Affected services
+        - Adapter-specific statistics
+        - Recommendations for recovery
+        """
+        try:
+            shadow_logger = _get_shadow_logger()
+
+            if shadow_logger is None:
+                return Response(
+                    {"status": "error", "error": "Shadow logger not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            analysis = shadow_logger.analyze_l2_failures()
+
+            return Response(
+                {
+                    "status": "success",
+                    "analysis": analysis,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(
+                f"[L2StorageAPI] Error analyzing shadow log: {e}", exc_info=True
+            )
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class ShadowLogReplayView(APIView):
+    """
+    Shadow Log Replay API.
+
+    POST /api/self-healing/l2-storage/shadow-log/replay/ - Replay unsynced records
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request) -> Response:
+        """
+        Replay unsynced shadow log records to L2.
+
+        This attempts to re-synchronize all failed L2 operations
+        that were recorded in the shadow log during L2 outages.
+
+        Request body (optional):
+            service_name: Replay only for specific service
+            mark_synced: Whether to mark records as synced after replay (default: true)
+
+        Returns:
+            Replay results with success/failure counts
+        """
+        try:
+            shadow_logger = _get_shadow_logger()
+            repo = _get_layered_repository()
+
+            if shadow_logger is None:
+                return Response(
+                    {"status": "error", "error": "Shadow logger not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            if repo is None:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": "Layered storage not configured",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Parse options
+            service_name = request.data.get("service_name")
+            mark_synced = request.data.get("mark_synced", True)
+
+            # Get records to replay
+            if service_name:
+                records = shadow_logger.get_records_by_service(service_name)
+                records = [r for r in records if not r.synced_after_recovery]
+            else:
+                records = shadow_logger.get_unsynced_records()
+
+            if not records:
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "No unsynced records to replay",
+                        "replayed": 0,
+                        "failed": 0,
+                        "timestamp": timezone.now(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Attempt replay via force sync to L2
+            result = repo.force_sync_to_l2()
+
+            # Mark records as synced if requested and sync was successful
+            marked_count = 0
+            if mark_synced and result.get("success", False):
+                if service_name:
+                    marked_count = shadow_logger.mark_as_synced(service_name)
+                else:
+                    marked_count = shadow_logger.mark_all_as_synced()
+
+            logger.info(
+                f"[L2StorageAPI] Shadow log replay by {request.user}: "
+                f"synced={result.get('synced', 0)}, failed={result.get('failed', 0)}, "
+                f"marked={marked_count}"
+            )
+
+            return Response(
+                {
+                    "status": "success" if result.get("success", False) else "partial",
+                    "message": "Shadow log replay completed",
+                    "records_found": len(records),
+                    "sync_result": result,
+                    "marked_as_synced": marked_count,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(
+                f"[L2StorageAPI] Error replaying shadow log: {e}", exc_info=True
+            )
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class ShadowLogByServiceView(APIView):
+    """
+    Shadow Log by Service API.
+
+    GET /api/self-healing/l2-storage/shadow-log/service/<service_name>/ - Get logs by service
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request, service_name: str) -> Response:
+        """Get shadow log entries for a specific service."""
+        try:
+            shadow_logger = _get_shadow_logger()
+
+            if shadow_logger is None:
+                return Response(
+                    {"status": "error", "error": "Shadow logger not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            records = shadow_logger.get_records_by_service(service_name)
+
+            entries = [
+                {
+                    "service_name": r.service_name,
+                    "intended_state": r.intended_state,
+                    "failure_time": r.failure_time.isoformat(),
+                    "error_message": r.error_message,
+                    "l1_state_at_failure": r.l1_state_at_failure,
+                    "adapter_type": r.adapter_type,
+                    "operation": r.operation,
+                    "synced_after_recovery": r.synced_after_recovery,
+                    "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
+                }
+                for r in records
+            ]
+
+            return Response(
+                {
+                    "status": "success",
+                    "service_name": service_name,
+                    "count": len(entries),
+                    "entries": entries,
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error(
+                f"[L2StorageAPI] Error getting shadow log for service: {e}",
+                exc_info=True,
+            )
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

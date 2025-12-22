@@ -12,7 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from selfhealing.adapters.memory.base import _now
 from selfhealing.interfaces.repositories import (
@@ -578,6 +578,155 @@ class ShadowLogger:
         """Clear all records (for testing)."""
         with self._lock:
             self._failure_log.clear()
+
+    def analyze_l2_failures(self) -> Dict[str, Any]:
+        """
+        L2 장애 기간 동안의 상태 변화 분석.
+
+        Forensic Advisor와 연동하여 L2 장애 시 발생한
+        상태 변화를 타임라인 형태로 분석합니다.
+
+        Returns:
+            분석 결과 딕셔너리:
+            - unsynced_count: 미동기화 레코드 수
+            - affected_services: 영향 받은 서비스 목록
+            - failure_timeline: 시간순 실패 이력
+            - by_adapter: 어댑터별 통계
+            - by_operation: 작업별 통계
+            - time_range: 장애 시간 범위
+            - recommendations: 권장 조치
+
+        Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7.3
+        """
+        with self._lock:
+            unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
+            all_records = list(self._failure_log)
+
+        if not all_records:
+            return {
+                "unsynced_count": 0,
+                "affected_services": [],
+                "failure_timeline": [],
+                "by_adapter": {},
+                "by_operation": {},
+                "time_range": None,
+                "recommendations": ["No L2 failures recorded."],
+            }
+
+        # 서비스별 집계
+        affected_services = list(set(r.service_name for r in unsynced))
+
+        # 타임라인 생성
+        sorted_records = sorted(all_records, key=lambda x: x.failure_time)
+        failure_timeline = [
+            {
+                "service": r.service_name,
+                "state": r.intended_state,
+                "time": r.failure_time.isoformat(),
+                "error": r.error_message,
+                "adapter": r.adapter_type,
+                "operation": r.operation,
+                "synced": r.synced_after_recovery,
+            }
+            for r in sorted_records
+        ]
+
+        # 어댑터별 통계
+        by_adapter: Dict[str, int] = {}
+        for r in all_records:
+            by_adapter[r.adapter_type] = by_adapter.get(r.adapter_type, 0) + 1
+
+        # 작업별 통계
+        by_operation: Dict[str, int] = {}
+        for r in all_records:
+            by_operation[r.operation] = by_operation.get(r.operation, 0) + 1
+
+        # 시간 범위
+        time_range = None
+        if sorted_records:
+            time_range = {
+                "start": sorted_records[0].failure_time.isoformat(),
+                "end": sorted_records[-1].failure_time.isoformat(),
+                "duration_seconds": (
+                    sorted_records[-1].failure_time - sorted_records[0].failure_time
+                ).total_seconds(),
+            }
+
+        # 권장 조치 생성
+        recommendations = self._generate_recommendations(
+            unsynced_count=len(unsynced),
+            affected_services=affected_services,
+            by_adapter=by_adapter,
+            total_records=len(all_records),
+        )
+
+        return {
+            "unsynced_count": len(unsynced),
+            "affected_services": affected_services,
+            "failure_timeline": failure_timeline,
+            "by_adapter": by_adapter,
+            "by_operation": by_operation,
+            "time_range": time_range,
+            "recommendations": recommendations,
+        }
+
+    def _generate_recommendations(
+        self,
+        unsynced_count: int,
+        affected_services: List[str],
+        by_adapter: Dict[str, int],
+        total_records: int,
+    ) -> List[str]:
+        """권장 조치 생성."""
+        recommendations = []
+
+        if unsynced_count > 0:
+            recommendations.append(
+                f"Sync {unsynced_count} unsynced records to L2 using "
+                f"POST /api/self-healing/l2-storage/sync/to-l2"
+            )
+
+        if len(affected_services) > 3:
+            recommendations.append(
+                f"Multiple services affected ({len(affected_services)}). "
+                f"Consider checking L2 infrastructure health."
+            )
+
+        if total_records > 100:
+            recommendations.append(
+                "High failure count detected. Consider increasing L2 timeout "
+                "or optimizing L2 storage performance."
+            )
+
+        # 어댑터별 권장사항
+        for adapter, count in by_adapter.items():
+            if count > 50:
+                recommendations.append(
+                    f"Adapter '{adapter}' has {count} failures. "
+                    f"Check {adapter} connectivity and performance."
+                )
+
+        if not recommendations:
+            recommendations.append("No critical issues detected.")
+
+        return recommendations
+
+    def get_records_by_service(self, service_name: str) -> List[L2SyncFailureRecord]:
+        """특정 서비스의 실패 기록 조회."""
+        with self._lock:
+            return [r for r in self._failure_log if r.service_name == service_name]
+
+    def get_records_by_time_range(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> List[L2SyncFailureRecord]:
+        """시간 범위 내 실패 기록 조회."""
+        with self._lock:
+            return [
+                r for r in self._failure_log
+                if start_time <= r.failure_time <= end_time
+            ]
 
 
 def get_shadow_logger() -> ShadowLogger:

@@ -143,6 +143,9 @@ from selfhealing.api.django.views.l2_storage import (
     L2StorageSyncFromL2View,
     L2StorageSyncToL2View,
     L2StorageMetricsView,
+    ShadowLogAnalyzeView,
+    ShadowLogReplayView,
+    ShadowLogByServiceView,
 )
 
 app_name = "selfhealing"
@@ -266,6 +269,9 @@ urlpatterns = [
     path("l2-storage/shadow-log/", ShadowLogListView.as_view(), name="l2-storage-shadow-log"),
     path("l2-storage/shadow-log/stats/", ShadowLogStatsView.as_view(), name="l2-storage-shadow-log-stats"),
     path("l2-storage/shadow-log/clear/", ShadowLogClearView.as_view(), name="l2-storage-shadow-log-clear"),
+    path("l2-storage/shadow-log/analyze/", ShadowLogAnalyzeView.as_view(), name="l2-storage-shadow-log-analyze"),
+    path("l2-storage/shadow-log/replay/", ShadowLogReplayView.as_view(), name="l2-storage-shadow-log-replay"),
+    path("l2-storage/shadow-log/service/<str:service_name>/", ShadowLogByServiceView.as_view(), name="l2-storage-shadow-log-by-service"),
     # Sync Operations
     path("l2-storage/sync/from-l2/", L2StorageSyncFromL2View.as_view(), name="l2-storage-sync-from-l2"),
     path("l2-storage/sync/to-l2/", L2StorageSyncToL2View.as_view(), name="l2-storage-sync-to-l2"),
