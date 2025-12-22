@@ -1,0 +1,136 @@
+"""
+Self-Healing Audit Logging Package.
+
+Provides comprehensive audit logging for configuration changes with:
+- Privacy-compliant IP masking (GDPR/CCPA)
+- Hash chain integrity for tamper detection
+- Trace ID correlation
+- Pluggable backends (local, cloud, WORM storage)
+
+Usage:
+    from selfhealing.audit import log_config_change, get_audit_logger
+
+    # Simple usage
+    log_config_change(
+        config_type="RETRY_CONFIG",
+        config_key="max_retries",
+        old_value=3,
+        new_value=5,
+        user="admin",
+        request=request,  # Django request object
+    )
+
+    # Advanced usage
+    logger = get_audit_logger()
+    logger.log_config_update(...)
+"""
+
+from selfhealing.audit.backends import (
+    AuditBackend,
+    AsyncAuditBackend,
+    BackendHealth,
+    BackendStatus,
+    BufferedBackend,
+    CloudWatchBackend,
+    CompositeBackend,
+    DatadogBackend,
+    LocalFileBackend,
+    RemoteAuditBackend,
+    S3WORMBackend,
+    create_composite_backend,
+    get_default_backend,
+)
+from selfhealing.audit.integrity import (
+    HashChainManager,
+    HashChainVerifier,
+    verify_audit_log_integrity,
+)
+from selfhealing.audit.logger import (
+    AuditAction,
+    AuditLogger,
+    ConfigChangeEvent,
+    get_audit_logger,
+    log_config_change,
+)
+from selfhealing.audit.masking import (
+    extract_ip_from_request,
+    hash_for_audit,
+    mask_email,
+    mask_ip,
+    mask_sensitive_fields,
+)
+from selfhealing.audit.trace import (
+    TraceContext,
+    generate_trace_id,
+    get_trace_id,
+    set_trace_id,
+    trace_id_middleware,
+)
+from selfhealing.audit.resilience import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerRegistry,
+    CircuitState,
+    AuditMetrics,
+    SyslogFallback,
+    DegradedModeManager,
+    get_circuit_breaker,
+    get_audit_metrics,
+    get_syslog_fallback,
+    get_degraded_mode_manager,
+    log_critical_to_syslog,
+)
+
+__all__ = [
+    # Main API
+    "AuditLogger",
+    "get_audit_logger",
+    "log_config_change",
+    "ConfigChangeEvent",
+    "AuditAction",
+    # Masking utilities
+    "mask_ip",
+    "mask_email",
+    "hash_for_audit",
+    "mask_sensitive_fields",
+    "extract_ip_from_request",
+    # Integrity
+    "HashChainManager",
+    "HashChainVerifier",
+    "verify_audit_log_integrity",
+    # Trace ID
+    "generate_trace_id",
+    "get_trace_id",
+    "set_trace_id",
+    "TraceContext",
+    "trace_id_middleware",
+    # Backend base classes
+    "AuditBackend",
+    "AsyncAuditBackend",
+    "BackendHealth",
+    "BackendStatus",
+    "BufferedBackend",
+    "CompositeBackend",
+    # Backend implementations
+    "LocalFileBackend",
+    "CloudWatchBackend",
+    "DatadogBackend",
+    "S3WORMBackend",
+    "RemoteAuditBackend",
+    # Factory functions
+    "get_default_backend",
+    "create_composite_backend",
+    # Resilience
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerRegistry",
+    "CircuitState",
+    "AuditMetrics",
+    "SyslogFallback",
+    "DegradedModeManager",
+    "get_circuit_breaker",
+    "get_audit_metrics",
+    "get_syslog_fallback",
+    "get_degraded_mode_manager",
+    "log_critical_to_syslog",
+]

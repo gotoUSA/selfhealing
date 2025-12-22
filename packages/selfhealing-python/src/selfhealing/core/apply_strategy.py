@@ -120,6 +120,12 @@ DEFAULT_APPLY_STRATEGIES: dict[str, DefaultApplyConfig] = {
         delay_seconds=60,
         warning_message="Security settings are highly sensitive. Ensure you have reviewed the changes.",
     ),
+    # Error Budget - delayed to prevent alert storm from threshold changes
+    "error_budget": DefaultApplyConfig(
+        strategy=ApplyStrategy.DELAYED,
+        delay_seconds=30,
+        warning_message="Error budget threshold changes can trigger immediate state transitions and alerts.",
+    ),
 }
 
 
