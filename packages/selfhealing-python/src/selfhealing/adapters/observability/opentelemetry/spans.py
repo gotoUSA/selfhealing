@@ -95,7 +95,7 @@ class DecisionSpanContext:
     decision_type: str = ""
     """Type of decision being evaluated."""
 
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """When the decision cycle started."""
 
     is_active: bool = True

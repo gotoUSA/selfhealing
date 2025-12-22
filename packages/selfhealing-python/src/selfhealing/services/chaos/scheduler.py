@@ -788,13 +788,30 @@ class ChaosSchedulerService:
             return next_run.replace(hour=hour, minute=minute, second=0, microsecond=0)
         
         elif schedule.schedule_type == ScheduleType.CRON.value:
-            # TODO: Implement cron parsing
-            # For now, default to daily
-            hour, minute = 2, 0
-            next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if next_run <= current:
-                next_run += timedelta(days=1)
-            return next_run
+            # Parse cron expression using croniter if available
+            try:
+                from croniter import croniter
+                cron_expr = schedule.cron_expression or "0 2 * * *"  # Default: daily at 2 AM
+                cron = croniter(cron_expr, current)
+                return cron.get_next(datetime)
+            except ImportError:
+                # croniter not installed - fallback to daily at 2 AM
+                logger.warning(
+                    "[ChaosScheduler] croniter not installed. "
+                    "Install with: pip install croniter. Using daily fallback."
+                )
+                hour, minute = 2, 0
+                next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if next_run <= current:
+                    next_run += timedelta(days=1)
+                return next_run
+            except Exception as e:
+                logger.warning(f"[ChaosScheduler] Invalid cron expression: {e}. Using daily fallback.")
+                hour, minute = 2, 0
+                next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if next_run <= current:
+                    next_run += timedelta(days=1)
+                return next_run
         
         # Default: tomorrow at 2 AM
         return (current + timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)

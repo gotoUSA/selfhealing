@@ -273,12 +273,26 @@ def check_and_alert_pending_approvals() -> Dict[str, Any]:
         total_pending = result["pending_schedules"] + result["pending_blast_radius"]
         
         if total_pending > 0:
-            # Send notification
+            # Send notification via configured channels
             logger.info(
                 f"[ChaosScheduler] {total_pending} experiments pending approval"
             )
-            # TODO: Integrate with notification service
-            result["alerts_sent"] = 1
+            
+            # Notification integration: Configure SELFHEALING_NOTIFICATION_WEBHOOK
+            # environment variable to enable Slack/Teams/PagerDuty notifications.
+            # See docs/self_healing/NOTIFICATION_SETUP.md for configuration.
+            try:
+                from selfhealing.services.notification import send_pending_approval_alert
+                send_pending_approval_alert(
+                    pending_count=total_pending,
+                    schedules=pending_schedules,
+                    blast_radius=pending_blast,
+                )
+                result["alerts_sent"] = 1
+            except ImportError:
+                # Notification service not configured - log only
+                result["alerts_sent"] = 0
+                result["notification_status"] = "not_configured"
         
     except Exception as e:
         logger.exception("[ChaosScheduler] Error checking pending approvals")

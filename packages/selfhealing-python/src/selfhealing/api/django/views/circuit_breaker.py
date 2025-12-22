@@ -164,16 +164,57 @@ class ControlAuditView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Get audit logs."""
-        # TODO: Implement actual audit log retrieval
-        return Response(
-            {
-                "logs": [],
-                "total_count": 0,
-                "page": int(request.query_params.get("page", 1)),
-                "page_size": int(request.query_params.get("page_size", 50)),
-            }
-        )
+        """Get audit logs from AuditLogger."""
+        from datetime import datetime, timedelta
+        from selfhealing.audit import get_audit_logger
+        
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 50))
+        config_type = request.query_params.get("config_type")
+        user = request.query_params.get("user")
+        days = int(request.query_params.get("days", 7))
+        
+        try:
+            audit_logger = get_audit_logger()
+            end_time = datetime.now()
+            start_time = end_time - timedelta(days=days)
+            
+            # Query logs with filters
+            all_logs = audit_logger.query(
+                start_time=start_time,
+                end_time=end_time,
+                config_type=config_type,
+                user=user,
+                limit=page * page_size + page_size,  # Fetch enough for pagination
+            )
+            
+            # Paginate results
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_logs = all_logs[start_idx:end_idx]
+            
+            return Response({
+                "logs": paginated_logs,
+                "total_count": len(all_logs),
+                "page": page,
+                "page_size": page_size,
+                "filters": {
+                    "config_type": config_type,
+                    "user": user,
+                    "days": days,
+                },
+            })
+        except Exception as e:
+            logger.warning(f"[AuditLogsView] Error retrieving audit logs: {e}")
+            return Response(
+                {
+                    "logs": [],
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "error": "Audit log retrieval temporarily unavailable",
+                }
+            )
 
 
 # =============================================================================

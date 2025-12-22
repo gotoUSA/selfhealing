@@ -753,9 +753,11 @@ class ControlAPIService:
             pass
 
         # Count auto-allowed/blocked in last 24h
-        # Note: SelfHealingLog model is not implemented yet.
-        # Audit logs are currently recorded via logger.info in _record_audit().
-        # TODO: Implement persistent SelfHealingLog model for audit trail querying.
+        # Audit logs are stored via AuditLogger with configurable backends:
+        # - LocalFileBackend (default): JSON files in logs/audit/
+        # - S3WORMBackend: Immutable S3 storage for compliance
+        # - CloudWatchBackend: AWS CloudWatch Logs
+        # Query via: get_audit_logger().query(start_time=..., end_time=...)
         auto_allowed = 0
         auto_blocked = 0
 

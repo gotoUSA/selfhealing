@@ -8,6 +8,7 @@ Verifies that:
 - No behavior is introduced
 """
 
+import logging
 import pytest
 
 from selfhealing.core.decision_logger import (
@@ -18,6 +19,16 @@ from selfhealing.core.decision_logger import (
     log_intervention_evaluated,
     log_exit_pre_decision_zone,
 )
+
+
+@pytest.fixture(autouse=True)
+def enable_log_propagation():
+    """Enable log propagation for caplog to work."""
+    decision_logger = logging.getLogger("selfhealing.decision_record")
+    original_propagate = decision_logger.propagate
+    decision_logger.propagate = True
+    yield
+    decision_logger.propagate = original_propagate
 
 
 class TestReasonCode:
@@ -137,12 +148,21 @@ class TestDecisionLogger:
 class TestLogOutput:
     """Verify logs are produced with correct structure."""
 
-    def test_logs_produced_with_correct_fields(self, caplog):
+    def test_logs_produced_with_correct_fields(self):
         """Verify logs are produced with required fields."""
         import json
-        import logging
-
-        with caplog.at_level(logging.INFO, logger="selfhealing.decision_record"):
+        import io
+        
+        # Create a string buffer handler to capture logs
+        log_buffer = io.StringIO()
+        handler = logging.StreamHandler(log_buffer)
+        handler.setLevel(logging.INFO)
+        
+        decision_logger = logging.getLogger("selfhealing.decision_record")
+        decision_logger.addHandler(handler)
+        decision_logger.setLevel(logging.INFO)
+        
+        try:
             log_enter_pre_decision_zone(service_name="test_service")
             log_intervention_evaluated(
                 service_name="test_service",
@@ -150,57 +170,83 @@ class TestLogOutput:
                 reason=ReasonCode.INTERVENTION_ALLOWED,
             )
             log_exit_pre_decision_zone(service_name="test_service")
+            
+            handler.flush()
+            log_content = log_buffer.getvalue()
+            log_lines = [line for line in log_content.strip().split('\n') if line]
+            
+            # Parse JSON records
+            json_records = []
+            for line in log_lines:
+                json_records.append(json.loads(line))
+            
+            assert len(json_records) == 3
 
-        # Verify log records exist
-        decision_records = [r for r in caplog.records if r.name == "selfhealing.decision_record"]
-        assert len(decision_records) == 3
+            # Verify ENTER event
+            enter_record = json_records[0]
+            assert enter_record["event"] == "ENTER_PRE_DECISION_ZONE"
+            assert enter_record["service_name"] == "test_service"
+            assert "timestamp" in enter_record
 
-        # Verify ENTER event
-        enter_record = json.loads(decision_records[0].message)
-        assert enter_record["event"] == "ENTER_PRE_DECISION_ZONE"
-        assert enter_record["service_name"] == "test_service"
-        assert "timestamp" in enter_record
+            # Verify INTERVENTION_EVALUATED event
+            eval_record = json_records[1]
+            assert eval_record["event"] == "INTERVENTION_EVALUATED"
+            assert eval_record["allowed"] is True
+            assert eval_record["reason"] == "INTERVENTION_ALLOWED"
+            assert eval_record["service_name"] == "test_service"
+            assert "timestamp" in eval_record
 
-        # Verify INTERVENTION_EVALUATED event
-        eval_record = json.loads(decision_records[1].message)
-        assert eval_record["event"] == "INTERVENTION_EVALUATED"
-        assert eval_record["allowed"] is True
-        assert eval_record["reason"] == "INTERVENTION_ALLOWED"
-        assert eval_record["service_name"] == "test_service"
-        assert "timestamp" in eval_record
+            # Verify EXIT event
+            exit_record = json_records[2]
+            assert exit_record["event"] == "EXIT_PRE_DECISION_ZONE"
+            assert exit_record["service_name"] == "test_service"
+            assert "timestamp" in exit_record
+        finally:
+            decision_logger.removeHandler(handler)
 
-        # Verify EXIT event
-        exit_record = json.loads(decision_records[2].message)
-        assert exit_record["event"] == "EXIT_PRE_DECISION_ZONE"
-        assert exit_record["service_name"] == "test_service"
-        assert "timestamp" in exit_record
-
-    def test_policy_version_included_when_provided(self, caplog):
+    def test_policy_version_included_when_provided(self):
         """Verify policy_version is included when provided."""
         import json
-        import logging
-
-        with caplog.at_level(logging.INFO, logger="selfhealing.decision_record"):
+        import io
+        
+        log_buffer = io.StringIO()
+        handler = logging.StreamHandler(log_buffer)
+        handler.setLevel(logging.INFO)
+        
+        decision_logger = logging.getLogger("selfhealing.decision_record")
+        decision_logger.addHandler(handler)
+        decision_logger.setLevel(logging.INFO)
+        
+        try:
             log_enter_pre_decision_zone(
                 service_name="test_service",
                 policy_version="v1.0.0",
             )
+            
+            handler.flush()
+            log_content = log_buffer.getvalue()
+            record = json.loads(log_content.strip())
+            assert record["policy_version"] == "v1.0.0"
+        finally:
+            decision_logger.removeHandler(handler)
 
-        decision_records = [r for r in caplog.records if r.name == "selfhealing.decision_record"]
-        assert len(decision_records) == 1
-
-        record = json.loads(decision_records[0].message)
-        assert record["policy_version"] == "v1.0.0"
-
-    def test_only_allowed_fields_present(self, caplog):
+    def test_only_allowed_fields_present(self):
         """Verify no extra fields beyond specification."""
         import json
-        import logging
+        import io
 
         allowed_fields_enter = {"event", "service_name", "policy_version", "timestamp"}
         allowed_fields_eval = {"event", "allowed", "reason", "service_name", "policy_version", "timestamp"}
 
-        with caplog.at_level(logging.INFO, logger="selfhealing.decision_record"):
+        log_buffer = io.StringIO()
+        handler = logging.StreamHandler(log_buffer)
+        handler.setLevel(logging.INFO)
+        
+        decision_logger = logging.getLogger("selfhealing.decision_record")
+        decision_logger.addHandler(handler)
+        decision_logger.setLevel(logging.INFO)
+        
+        try:
             log_enter_pre_decision_zone(service_name="test")
             log_intervention_evaluated(
                 service_name="test",
@@ -208,13 +254,19 @@ class TestLogOutput:
                 reason=ReasonCode.THRESHOLD_NOT_MET,
             )
 
-        decision_records = [r for r in caplog.records if r.name == "selfhealing.decision_record"]
+            handler.flush()
+            log_content = log_buffer.getvalue()
+            log_lines = [line for line in log_content.strip().split('\n') if line]
+            
+            json_records = [json.loads(line) for line in log_lines]
 
-        enter_record = json.loads(decision_records[0].message)
-        assert set(enter_record.keys()) == allowed_fields_enter
+            enter_record = json_records[0]
+            assert set(enter_record.keys()) == allowed_fields_enter
 
-        eval_record = json.loads(decision_records[1].message)
-        assert set(eval_record.keys()) == allowed_fields_eval
+            eval_record = json_records[1]
+            assert set(eval_record.keys()) == allowed_fields_eval
+        finally:
+            decision_logger.removeHandler(handler)
 
 
 class TestImportFromCore:

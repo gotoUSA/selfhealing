@@ -199,7 +199,7 @@ class TestOverrideEscalation:
         assert alert.details["requester"] == "admin@example.com"
         assert alert.details["is_escalation"] is True
 
-    @mock.patch("selfhealing.services.error_budget_service._get_error_budget_config")
+    @mock.patch("selfhealing.services.error_budget.recorder._get_error_budget_config")
     def test_recorder_sends_escalation_on_override(self, mock_config):
         """FreezeDecisionRecorder should send escalation on override."""
         mock_config.return_value = {
@@ -250,7 +250,7 @@ class TestOverrideEscalation:
         assert escalation["override_type"] == "hotfix"
         assert escalation["requester"] == "admin"
 
-    @mock.patch("selfhealing.services.error_budget_service._get_error_budget_config")
+    @mock.patch("selfhealing.services.error_budget.recorder._get_error_budget_config")
     def test_escalation_disabled_does_not_send(self, mock_config):
         """When escalation_enabled is False, no escalation should be sent."""
         mock_config.return_value = {

@@ -375,6 +375,286 @@
         "enabled": true,
         "failure_threshold": 15
       }
+    },
+    {
+      "id": "96cb16c3",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:03:49.532714+00:00",
+      "scheduled_at": "2025-12-22T14:04:19.532714+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "03005b4f",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:04:11.509841+00:00",
+      "scheduled_at": "2025-12-22T14:04:41.509841+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "e3d3e0a7",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:04:51.263908+00:00",
+      "scheduled_at": "2025-12-22T14:05:21.263908+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "bd98edbe",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:06:01.781680+00:00",
+      "scheduled_at": "2025-12-22T14:06:31.781680+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "1df97236",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:06:14.265590+00:00",
+      "scheduled_at": "2025-12-22T14:06:44.265590+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "ff224784",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:06:27.675735+00:00",
+      "scheduled_at": "2025-12-22T14:06:57.675735+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "ed804c74",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:14:46.891640+00:00",
+      "scheduled_at": "2025-12-22T14:15:16.891640+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "ba5d8208",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:17:47.146364+00:00",
+      "scheduled_at": "2025-12-22T14:18:17.146364+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "8e383aad",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:18:01.923839+00:00",
+      "scheduled_at": "2025-12-22T14:18:31.923839+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "a8f8846e",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:21:05.026073+00:00",
+      "scheduled_at": "2025-12-22T14:21:35.026073+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "63e84992",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:23:33.765292+00:00",
+      "scheduled_at": "2025-12-22T14:24:03.765292+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "f5abea00",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:26:15.870740+00:00",
+      "scheduled_at": "2025-12-22T14:26:45.870740+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "165b3e66",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:27:08.933688+00:00",
+      "scheduled_at": "2025-12-22T14:27:38.933688+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "945d12cc",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-22T14:28:29.971831+00:00",
+      "scheduled_at": "2025-12-22T14:28:59.971831+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
     }
   ],
   "history": [

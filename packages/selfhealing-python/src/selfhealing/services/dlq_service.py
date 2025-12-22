@@ -381,6 +381,32 @@ class DLQService:
     # API Business Logic - Replay Operations
     # =========================================================================
 
+    def _execute_replay(self, entry: "FailedOperationData") -> bool:
+        """
+        Execute replay for a single DLQ entry using registered handler.
+        
+        Args:
+            entry: The failed operation entry to replay
+            
+        Returns:
+            True if replay succeeded, False otherwise
+        """
+        from selfhealing.services.replay_service import get_replay_handler
+        
+        handler = get_replay_handler(entry.domain)
+        
+        # Check if replay is allowed
+        can_replay, reason = handler.can_replay(entry)
+        if not can_replay:
+            logger.warning(
+                f"[DLQService] Replay not allowed for entry {entry.id}: {reason}"
+            )
+            return False
+        
+        # Execute replay
+        result = handler.replay(entry)
+        return result.success
+
     def replay(
         self,
         domain: Optional[str] = None,
@@ -404,23 +430,25 @@ class DLQService:
 
             for entry in entries:
                 try:
-                    # TODO: Implement actual replay logic
-                    # For now, just log the replay attempt
-                    logger.info(
-                        f"[DLQService] Would replay entry {entry.id}: "
-                        f"{entry.domain}/{entry.failure_type}"
-                    )
-                    # In real implementation:
-                    # replay_result = self._execute_replay(entry)
-                    # if replay_result.success:
-                    #     self.resolve_entry(entry.id, "auto_replay")
-                    #     result.success += 1
-                    # else:
-                    #     result.failed += 1
-                    #     result.errors.append(f"Entry {entry.id}: {replay_result.error}")
+                    # Execute replay via registered handler
+                    replay_success = self._execute_replay(entry)
+                    
+                    if replay_success:
+                        self.resolve_entry(entry.id, "auto_replay")
+                        result.success += 1
+                        logger.info(
+                            f"[DLQService] Successfully replayed entry {entry.id}: "
+                            f"{entry.domain}/{entry.failure_type}"
+                        )
+                    else:
+                        result.failed += 1
+                        result.errors.append(f"Entry {entry.id}: Replay handler returned failure")
                 except Exception as e:
                     result.failed += 1
                     result.errors.append(f"Entry {entry.id}: {str(e)}")
+                    logger.warning(
+                        f"[DLQService] Replay failed for entry {entry.id}: {e}"
+                    )
 
             logger.info(
                 f"[DLQService] Replay completed: domain={domain}, "

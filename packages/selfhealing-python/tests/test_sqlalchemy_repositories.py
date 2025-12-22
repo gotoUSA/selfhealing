@@ -466,7 +466,7 @@ class TestSQLAlchemySecurityIncidentRepository:
         repo = SQLAlchemySecurityIncidentRepository(session_factory)
 
         incident = repo.create(
-            incident_type=SecurityIncidentType.WEBHOOK_SIGNATURE_INVALID.value,
+            incident_type=SecurityIncidentType.SIGNATURE_INVALID.value,
             severity=SecuritySeverity.HIGH.value,
             description="Invalid signature detected",
             source_ip="192.168.1.100",
@@ -474,7 +474,7 @@ class TestSQLAlchemySecurityIncidentRepository:
         )
 
         assert incident.id is not None
-        assert incident.incident_type == SecurityIncidentType.WEBHOOK_SIGNATURE_INVALID.value
+        assert incident.incident_type == SecurityIncidentType.SIGNATURE_INVALID.value
         assert incident.severity == SecuritySeverity.HIGH.value
         assert incident.status == SecurityIncidentStatus.OPEN.value
         assert incident.source_ip == "192.168.1.100"

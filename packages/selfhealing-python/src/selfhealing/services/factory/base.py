@@ -227,14 +227,54 @@ class ServiceFactory:
             return self._create_inmemory_repository(repo_type)
 
     def _create_fastapi_repository(self, repo_type: str) -> Any:
-        """Create SQLAlchemy based repository for FastAPI."""
-        # TODO: Implement in Stage 28-3
-        # For now, fall back to in-memory
-        logger.warning(
-            f"[ServiceFactory] FastAPI/SQLAlchemy repository not yet implemented. "
-            f"Falling back to in-memory for: {repo_type}"
-        )
-        return self._create_inmemory_repository(repo_type)
+        """
+        Create SQLAlchemy based repository for FastAPI.
+        
+        Requires SQLALCHEMY_DATABASE_URL environment variable.
+        If not set, falls back to in-memory storage.
+        
+        For production:
+        - Set SQLALCHEMY_DATABASE_URL to PostgreSQL/MySQL connection string
+        - Or use SELFHEALING_STORAGE=layered with Redis for distributed setup
+        """
+        import os
+        database_url = os.environ.get("SQLALCHEMY_DATABASE_URL")
+        
+        if not database_url:
+            logger.info(
+                "[ServiceFactory] SQLALCHEMY_DATABASE_URL not set, "
+                "falling back to in-memory storage."
+            )
+            return self._create_inmemory_repository(repo_type)
+        
+        try:
+            from sqlalchemy import create_engine
+            from selfhealing.adapters.sqlalchemy import (
+                SQLAlchemyFailedOperationRepository,
+                SQLAlchemyCircuitBreakerStateRepository,
+                SQLAlchemySecurityIncidentRepository,
+                create_session_factory,
+                Base,
+            )
+            
+            # Create engine and session factory (cached per database URL)
+            if not hasattr(self, "_sqlalchemy_session_factory"):
+                engine = create_engine(database_url)
+                Base.metadata.create_all(engine)
+                self._sqlalchemy_session_factory = create_session_factory(engine)
+            
+            mapping = {
+                "failed_operation": SQLAlchemyFailedOperationRepository,
+                "circuit_breaker": SQLAlchemyCircuitBreakerStateRepository,
+                "security_incident": SQLAlchemySecurityIncidentRepository,
+            }
+            return mapping[repo_type](self._sqlalchemy_session_factory)
+        except ImportError as e:
+            logger.warning(
+                f"[ServiceFactory] SQLAlchemy not available: {e}. "
+                "Install with: pip install sqlalchemy"
+            )
+            return self._create_inmemory_repository(repo_type)
 
     def _create_flask_repository(self, repo_type: str) -> Any:
         """Create Flask-SQLAlchemy based repository."""
