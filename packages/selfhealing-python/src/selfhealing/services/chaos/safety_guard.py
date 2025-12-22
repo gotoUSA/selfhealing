@@ -286,7 +286,190 @@ class SafetyGuard:
     # =========================================================================
     # Main Safety Check
     # =========================================================================
-    
+
+    def _check_global_block(self, result: SafetyCheckResult) -> bool:
+        """Check global block. Returns True if blocked."""
+        result.checks_performed.append("global_block")
+        if self._global_block:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.MANUAL_BLOCK.value
+            result.block_message = self._global_block_reason
+            result.checks_failed.append("global_block")
+            return True
+        result.checks_passed.append("global_block")
+        return False
+
+    def _check_kill_switch_status(self, result: SafetyCheckResult) -> bool:
+        """Check kill switch status. Returns True if blocked."""
+        result.checks_performed.append("kill_switch")
+        kill_switch_result = self._check_kill_switch()
+        if kill_switch_result:
+            result.kill_switch_active = True
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.KILL_SWITCH_ACTIVE.value
+            result.block_message = "Kill switch is active"
+            result.checks_failed.append("kill_switch")
+            return True
+        result.checks_passed.append("kill_switch")
+        return False
+
+    def _check_error_budget_status(self, result: SafetyCheckResult, experiment_id: str) -> bool:
+        """Check error budget. Returns True if blocked."""
+        result.checks_performed.append("error_budget")
+        budget_result = self._check_error_budget()
+        result.error_budget_remaining_percent = budget_result["remaining_percent"]
+        result.error_budget_threshold = self._config.error_budget_min_percent
+
+        if budget_result["remaining_percent"] < self._config.error_budget_min_percent:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.LOW_ERROR_BUDGET.value
+            result.block_message = (
+                f"Error budget at {budget_result['remaining_percent']:.1f}% "
+                f"(minimum: {self._config.error_budget_min_percent}%)"
+            )
+            result.checks_failed.append("error_budget")
+            self._notify_low_budget(experiment_id, budget_result)
+            return True
+
+        if budget_result["remaining_percent"] < self._config.error_budget_warning_percent:
+            result.warnings.append(
+                f"Error budget low: {budget_result['remaining_percent']:.1f}%"
+            )
+            result.status = SafetyStatus.WARNING.value
+
+        result.checks_passed.append("error_budget")
+        return False
+
+    def _check_system_health_status(self, result: SafetyCheckResult) -> bool:
+        """Check system health. Returns True if blocked."""
+        result.checks_performed.append("system_health")
+        health_result = self._check_system_health()
+        result.system_healthy = health_result["healthy"]
+
+        if not health_result["healthy"]:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.UNHEALTHY_SYSTEM.value
+            result.block_message = health_result.get("message", "System unhealthy")
+            result.checks_failed.append("system_health")
+            return True
+        result.checks_passed.append("system_health")
+        return False
+
+    def _check_active_incidents_status(self, result: SafetyCheckResult) -> bool:
+        """Check active incidents. Returns True if blocked."""
+        result.checks_performed.append("active_incidents")
+        incident_result = self._check_active_incidents()
+        result.active_incidents = incident_result["count"]
+
+        if incident_result["count"] > 0:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.ACTIVE_INCIDENT.value
+            result.block_message = f"{incident_result['count']} active incident(s)"
+            result.checks_failed.append("active_incidents")
+            return True
+        result.checks_passed.append("active_incidents")
+        return False
+
+    def _check_deployment_freeze_status(self, result: SafetyCheckResult) -> bool:
+        """Check deployment freeze. Returns True if blocked."""
+        result.checks_performed.append("deployment_freeze")
+        freeze_result = self._check_deployment_freeze()
+        result.deployment_freeze_active = freeze_result["active"]
+
+        if freeze_result["active"]:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.DEPLOYMENT_FREEZE.value
+            result.block_message = "Deployment freeze is active"
+            result.checks_failed.append("deployment_freeze")
+            return True
+        result.checks_passed.append("deployment_freeze")
+        return False
+
+    def _check_cooldown_status(self, result: SafetyCheckResult) -> None:
+        """Check cooldown status and add warnings if needed."""
+        result.checks_performed.append("cooldown")
+        cooldown_result = self._check_cooldown()
+        result.last_experiment_at = cooldown_result.get("last_experiment_at", "")
+        result.cooldown_remaining_minutes = cooldown_result.get("remaining_minutes", 0)
+
+        if cooldown_result.get("in_cooldown", False):
+            result.warnings.append(
+                f"Cooldown active: {cooldown_result['remaining_minutes']} minutes remaining"
+            )
+            if result.status == SafetyStatus.SAFE.value:
+                result.status = SafetyStatus.WARNING.value
+
+        result.checks_passed.append("cooldown")
+
+    def _run_core_checks(self, result: SafetyCheckResult, experiment_id: str) -> bool:
+        """Run core safety checks (always required). Returns True if blocked."""
+        # 1. Check global block
+        if self._check_global_block(result):
+            return True
+
+        # 2. Check kill switch
+        if self._check_kill_switch_status(result):
+            return True
+
+        # 3. Check error budget (CRITICAL)
+        if self._check_error_budget_status(result, experiment_id):
+            return True
+
+        return False
+
+    def _run_optional_checks(self, result: SafetyCheckResult) -> bool:
+        """Run optional checks (skippable with force). Returns True if blocked."""
+        # 4. Check system health
+        if self._config.require_healthy_system:
+            if self._check_system_health_status(result):
+                return True
+
+        # 5. Check active incidents
+        if self._config.require_no_active_incidents:
+            if self._check_active_incidents_status(result):
+                return True
+
+        # 6. Check deployment freeze
+        if self._config.require_no_deployment_freeze:
+            if self._check_deployment_freeze_status(result):
+                return True
+
+        return False
+
+    def _log_check_result(self, result: SafetyCheckResult, experiment_id: str) -> None:
+        """Log the result of safety checks."""
+        if result.status == SafetyStatus.SAFE.value:
+            logger.info(f"[SafetyGuard] All checks passed for {experiment_id}")
+        else:
+            logger.warning(
+                f"[SafetyGuard] Checks passed with warnings for {experiment_id}: "
+                f"{result.warnings}"
+            )
+
+    def _handle_check_error(self, e: Exception) -> SafetyCheckResult:
+        """Handle errors during safety check."""
+        logger.exception(f"[SafetyGuard] Error during safety check: {e}")
+
+        if self._config.fail_safe_on_error:
+            return SafetyCheckResult(
+                status=SafetyStatus.ERROR.value,
+                allowed=False,
+                block_reason="safety_check_error",
+                block_message=f"Safety check failed: {e}",
+            )
+        # Fail-open (not recommended for production)
+        return SafetyCheckResult(
+            status=SafetyStatus.WARNING.value,
+            allowed=True,
+            warnings=[f"Safety check error (fail-open): {e}"],
+        )
+
     def check(
         self,
         experiment_id: str = "",
@@ -311,146 +494,23 @@ class SafetyGuard:
         
         try:
             with self._lock:
-                # 1. Check global block
-                result.checks_performed.append("global_block")
-                if self._global_block:
-                    result.status = SafetyStatus.BLOCKED.value
-                    result.allowed = False
-                    result.block_reason = BlockReason.MANUAL_BLOCK.value
-                    result.block_message = self._global_block_reason
-                    result.checks_failed.append("global_block")
+                # Run core checks (always required)
+                if self._run_core_checks(result, experiment_id):
                     return result
-                result.checks_passed.append("global_block")
-                
-                # 2. Check kill switch
-                result.checks_performed.append("kill_switch")
-                kill_switch_result = self._check_kill_switch()
-                if kill_switch_result:
-                    result.kill_switch_active = True
-                    result.status = SafetyStatus.BLOCKED.value
-                    result.allowed = False
-                    result.block_reason = BlockReason.KILL_SWITCH_ACTIVE.value
-                    result.block_message = "Kill switch is active"
-                    result.checks_failed.append("kill_switch")
+
+                # Run optional checks (skippable with force)
+                if not force and self._run_optional_checks(result):
                     return result
-                result.checks_passed.append("kill_switch")
-                
-                # 3. Check error budget (CRITICAL)
-                result.checks_performed.append("error_budget")
-                budget_result = self._check_error_budget()
-                result.error_budget_remaining_percent = budget_result["remaining_percent"]
-                result.error_budget_threshold = self._config.error_budget_min_percent
-                
-                if budget_result["remaining_percent"] < self._config.error_budget_min_percent:
-                    result.status = SafetyStatus.BLOCKED.value
-                    result.allowed = False
-                    result.block_reason = BlockReason.LOW_ERROR_BUDGET.value
-                    result.block_message = (
-                        f"Error budget at {budget_result['remaining_percent']:.1f}% "
-                        f"(minimum: {self._config.error_budget_min_percent}%)"
-                    )
-                    result.checks_failed.append("error_budget")
-                    
-                    # Send notification
-                    self._notify_low_budget(experiment_id, budget_result)
-                    return result
-                
-                if budget_result["remaining_percent"] < self._config.error_budget_warning_percent:
-                    result.warnings.append(
-                        f"Error budget low: {budget_result['remaining_percent']:.1f}%"
-                    )
-                    result.status = SafetyStatus.WARNING.value
-                
-                result.checks_passed.append("error_budget")
-                
-                # 4. Check system health
-                if self._config.require_healthy_system and not force:
-                    result.checks_performed.append("system_health")
-                    health_result = self._check_system_health()
-                    result.system_healthy = health_result["healthy"]
-                    
-                    if not health_result["healthy"]:
-                        result.status = SafetyStatus.BLOCKED.value
-                        result.allowed = False
-                        result.block_reason = BlockReason.UNHEALTHY_SYSTEM.value
-                        result.block_message = health_result.get("message", "System unhealthy")
-                        result.checks_failed.append("system_health")
-                        return result
-                    result.checks_passed.append("system_health")
-                
-                # 5. Check active incidents
-                if self._config.require_no_active_incidents and not force:
-                    result.checks_performed.append("active_incidents")
-                    incident_result = self._check_active_incidents()
-                    result.active_incidents = incident_result["count"]
-                    
-                    if incident_result["count"] > 0:
-                        result.status = SafetyStatus.BLOCKED.value
-                        result.allowed = False
-                        result.block_reason = BlockReason.ACTIVE_INCIDENT.value
-                        result.block_message = f"{incident_result['count']} active incident(s)"
-                        result.checks_failed.append("active_incidents")
-                        return result
-                    result.checks_passed.append("active_incidents")
-                
-                # 6. Check deployment freeze
-                if self._config.require_no_deployment_freeze and not force:
-                    result.checks_performed.append("deployment_freeze")
-                    freeze_result = self._check_deployment_freeze()
-                    result.deployment_freeze_active = freeze_result["active"]
-                    
-                    if freeze_result["active"]:
-                        result.status = SafetyStatus.BLOCKED.value
-                        result.allowed = False
-                        result.block_reason = BlockReason.DEPLOYMENT_FREEZE.value
-                        result.block_message = "Deployment freeze is active"
-                        result.checks_failed.append("deployment_freeze")
-                        return result
-                    result.checks_passed.append("deployment_freeze")
-                
-                # 7. Check cooldown
-                result.checks_performed.append("cooldown")
-                cooldown_result = self._check_cooldown()
-                result.last_experiment_at = cooldown_result.get("last_experiment_at", "")
-                result.cooldown_remaining_minutes = cooldown_result.get("remaining_minutes", 0)
-                
-                if cooldown_result.get("in_cooldown", False):
-                    result.warnings.append(
-                        f"Cooldown active: {cooldown_result['remaining_minutes']} minutes remaining"
-                    )
-                    if result.status == SafetyStatus.SAFE.value:
-                        result.status = SafetyStatus.WARNING.value
-                
-                result.checks_passed.append("cooldown")
-                
-                # All checks passed
-                if result.status == SafetyStatus.SAFE.value:
-                    logger.info(f"[SafetyGuard] All checks passed for {experiment_id}")
-                else:
-                    logger.warning(
-                        f"[SafetyGuard] Checks passed with warnings for {experiment_id}: "
-                        f"{result.warnings}"
-                    )
-                
+
+                # Check cooldown (warning only)
+                self._check_cooldown_status(result)
+
+                # Log result
+                self._log_check_result(result, experiment_id)
                 return result
-                
+
         except Exception as e:
-            logger.exception(f"[SafetyGuard] Error during safety check: {e}")
-            
-            if self._config.fail_safe_on_error:
-                return SafetyCheckResult(
-                    status=SafetyStatus.ERROR.value,
-                    allowed=False,
-                    block_reason="safety_check_error",
-                    block_message=f"Safety check failed: {e}",
-                )
-            else:
-                # Fail-open (not recommended for production)
-                return SafetyCheckResult(
-                    status=SafetyStatus.WARNING.value,
-                    allowed=True,
-                    warnings=[f"Safety check error (fail-open): {e}"],
-                )
+            return self._handle_check_error(e)
     
     # =========================================================================
     # Individual Checks

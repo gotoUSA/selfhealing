@@ -270,101 +270,106 @@ class CompositeBackend(AuditBackend):
         names = [b.name for b in self._backends]
         return f"Composite({', '.join(names)})"
 
+    def _check_circuit_breaker(self, backend_name: str) -> tuple[bool, Any]:
+        """Check if circuit breaker allows execution. Returns (can_execute, circuit_breaker)."""
+        registry = self._get_circuit_registry()
+        if not registry:
+            return True, None
+        cb = registry.get_or_create(backend_name)
+        return cb.can_execute(), cb
+
+    def _record_metrics(self, backend_name: str, success: bool, duration_ms: float = 0, failure_type: str = None):
+        """Record metrics for a backend operation."""
+        if not self._enable_metrics:
+            return
+        metrics = self._get_metrics()
+        if not metrics:
+            return
+        metrics.record_write(backend_name, success=success, duration_ms=duration_ms)
+        if failure_type:
+            metrics.record_failure(backend_name, failure_type)
+
+    def _update_circuit_state(self, backend_name: str, success: bool, cb: Any) -> None:
+        """Update circuit breaker state and record metrics."""
+        if not cb:
+            return
+        if success:
+            cb.record_success()
+        else:
+            cb.record_failure()
+            # Check if circuit just opened
+            if cb.state.value == "open":
+                syslog = self._get_syslog()
+                if syslog:
+                    syslog.log_circuit_open(backend_name)
+        # Update circuit state metric
+        if self._enable_metrics:
+            metrics = self._get_metrics()
+            if metrics:
+                metrics.set_circuit_state(backend_name, cb.state.value)
+
+    def _write_single_backend(self, backend, entry: Dict[str, Any]) -> bool:
+        """Write to a single backend with circuit breaker and metrics."""
+        import time
+        backend_name = backend.name
+        start_time = time.time()
+
+        # Check circuit breaker
+        can_execute, cb = self._check_circuit_breaker(backend_name)
+        if not can_execute:
+            self._record_metrics(backend_name, success=False)
+            if cb:
+                metrics = self._get_metrics()
+                if metrics:
+                    metrics.set_circuit_state(backend_name, cb.state.value)
+            return False
+
+        try:
+            result = backend.write(entry)
+            duration_ms = (time.time() - start_time) * 1000
+            self._record_metrics(backend_name, success=result, duration_ms=duration_ms)
+            self._update_circuit_state(backend_name, result, cb)
+            if not result:
+                self._record_metrics(backend_name, success=False, failure_type="write_failed")
+            return result
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            self._record_metrics(backend_name, success=False, duration_ms=duration_ms, failure_type=type(e).__name__)
+            if self._enable_circuit_breaker:
+                registry = self._get_circuit_registry()
+                if registry:
+                    cb = registry.get_or_create(backend_name)
+                    self._update_circuit_state(backend_name, False, cb)
+            return False
+
+    def _handle_all_failed(self, entry: Dict[str, Any]) -> None:
+        """Handle the case when all backends fail."""
+        syslog = self._get_syslog()
+        if syslog:
+            syslog.log_backend_failure("ALL", "All backends failed to write")
+
+        # Write to stderr as last resort
+        import sys
+        import json
+        try:
+            print(f"AUDIT_FALLBACK: {json.dumps(entry, default=str)}", file=sys.stderr, flush=True)
+        except Exception:
+            pass
+
     def write(self, entry: Dict[str, Any]) -> bool:
         """Write to all backends with circuit breaker protection."""
-        import time
         results = []
         all_failed = True
 
         for backend in self._backends:
-            backend_name = backend.name
-            start_time = time.time()
-
-            try:
-                # Check circuit breaker
-                registry = self._get_circuit_registry()
-                if registry:
-                    cb = registry.get_or_create(backend_name)
-
-                    if not cb.can_execute():
-                        # Circuit is open, skip this backend
-                        if self._enable_metrics:
-                            metrics = self._get_metrics()
-                            if metrics:
-                                metrics.record_write(backend_name, success=False)
-                                metrics.set_circuit_state(backend_name, cb.state.value)
-                        results.append(False)
-                        continue
-
-                # Execute write
-                result = backend.write(entry)
-                duration_ms = (time.time() - start_time) * 1000
-
-                # Record metrics
-                if self._enable_metrics:
-                    metrics = self._get_metrics()
-                    if metrics:
-                        metrics.record_write(backend_name, success=result, duration_ms=duration_ms)
-
-                # Update circuit breaker
-                if registry:
-                    cb = registry.get_or_create(backend_name)
-                    if result:
-                        cb.record_success()
-                        all_failed = False
-                    else:
-                        cb.record_failure()
-                        if self._enable_metrics:
-                            metrics = self._get_metrics()
-                            if metrics:
-                                metrics.record_failure(backend_name, "write_failed")
-                    metrics = self._get_metrics()
-                    if metrics:
-                        metrics.set_circuit_state(backend_name, cb.state.value)
-                else:
-                    if result:
-                        all_failed = False
-
-                results.append(result)
-
-            except Exception as e:
-                duration_ms = (time.time() - start_time) * 1000
-
-                # Record failure
-                if self._enable_metrics:
-                    metrics = self._get_metrics()
-                    if metrics:
-                        metrics.record_write(backend_name, success=False, duration_ms=duration_ms)
-                        metrics.record_failure(backend_name, type(e).__name__)
-
-                # Update circuit breaker
-                if self._enable_circuit_breaker:
-                    registry = self._get_circuit_registry()
-                    if registry:
-                        cb = registry.get_or_create(backend_name)
-                        cb.record_failure()
-
-                        # Check if circuit just opened
-                        if cb.state.value == "open":
-                            syslog = self._get_syslog()
-                            if syslog:
-                                syslog.log_circuit_open(backend_name)
-
-                results.append(False)
+            result = self._write_single_backend(backend, entry)
+            results.append(result)
+            if result:
+                all_failed = False
 
         # Check if all backends failed
         if all_failed and results:
-            syslog = self._get_syslog()
-            if syslog:
-                syslog.log_backend_failure("ALL", "All backends failed to write")
-
-            # Write to stderr as last resort
-            import sys
-            import json
-            try:
-                print(f"AUDIT_FALLBACK: {json.dumps(entry, default=str)}", file=sys.stderr, flush=True)
-            except Exception:
-                pass
+            self._handle_all_failed(entry)
 
         # Update degraded mode status
         degraded_manager = self._get_degraded_manager()

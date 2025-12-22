@@ -185,6 +185,62 @@ class LocalFileBackend(AuditBackend):
             if self._hash_chain:
                 self._hash_chain._save_state()
 
+    def _parse_entry(self, line: str) -> Optional[Dict[str, Any]]:
+        """Parse a JSON line into an entry dict. Returns None if invalid."""
+        line = line.strip()
+        if not line:
+            return None
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            return None
+
+    def _entry_matches_config_type(self, entry: Dict[str, Any], config_type: str) -> bool:
+        """Check if entry matches config_type filter."""
+        return entry.get("change", {}).get("config_type") == config_type
+
+    def _entry_matches_user(self, entry: Dict[str, Any], user: str) -> bool:
+        """Check if entry matches user filter."""
+        return entry.get("actor", {}).get("user") == user
+
+    def _entry_matches_time_range(
+        self,
+        entry: Dict[str, Any],
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+    ) -> bool:
+        """Check if entry matches time range filter."""
+        entry_time_str = entry.get("timestamp")
+        if not entry_time_str:
+            return True  # No timestamp, include by default
+
+        try:
+            entry_time = datetime.fromisoformat(entry_time_str.replace("Z", "+00:00"))
+            if start_time and entry_time < start_time:
+                return False
+            if end_time and entry_time > end_time:
+                return False
+            return True
+        except ValueError:
+            return True  # Invalid timestamp, include by default
+
+    def _entry_matches_filters(
+        self,
+        entry: Dict[str, Any],
+        config_type: Optional[str],
+        user: Optional[str],
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+    ) -> bool:
+        """Check if entry matches all filters."""
+        if config_type and not self._entry_matches_config_type(entry, config_type):
+            return False
+        if user and not self._entry_matches_user(entry, user):
+            return False
+        if not self._entry_matches_time_range(entry, start_time, end_time):
+            return False
+        return True
+
     def query(
         self,
         start_time: Optional[datetime] = None,
@@ -197,7 +253,6 @@ class LocalFileBackend(AuditBackend):
         results = []
 
         try:
-            # Get all log files
             log_files = sorted(self._log_dir.glob("audit_*.jsonl"), reverse=True)
 
             for log_file in log_files:
@@ -209,37 +264,17 @@ class LocalFileBackend(AuditBackend):
                         if len(results) >= limit:
                             break
 
-                        line = line.strip()
-                        if not line:
+                        entry = self._parse_entry(line)
+                        if entry is None:
                             continue
 
-                        try:
-                            entry = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-
-                        # Apply filters
-                        if config_type and entry.get("change", {}).get("config_type") != config_type:
-                            continue
-                        if user and entry.get("actor", {}).get("user") != user:
-                            continue
-
-                        # Time filters
-                        entry_time_str = entry.get("timestamp")
-                        if entry_time_str:
-                            try:
-                                entry_time = datetime.fromisoformat(entry_time_str.replace("Z", "+00:00"))
-                                if start_time and entry_time < start_time:
-                                    continue
-                                if end_time and entry_time > end_time:
-                                    continue
-                            except ValueError:
-                                pass
-
-                        results.append(entry)
+                        if self._entry_matches_filters(entry, config_type, user, start_time, end_time):
+                            results.append(entry)
 
         except Exception as e:
             logger.error(f"[LocalFileBackend] Query failed: {e}")
+
+        return results
 
         return results
 

@@ -283,17 +283,28 @@ SELF_HEALING = {
 
 ### 5. IDEMPOTENCY (멱등성)
 
-캐시 기반 멱등성 설정입니다.
+캐시 기반 멱등성 설정입니다. 도메인 중립적으로 설계되어 어떤 도메인에서든 사용할 수 있습니다.
 
 ```python
 SELF_HEALING = {
     "IDEMPOTENCY": {
-        "DEFAULT_CACHE_TTL": 60,     # 기본 캐시 TTL (초)
-        "PAYMENT_CACHE_TTL": 300,    # 결제 캐시 TTL (초, 5분)
-        "WEBHOOK_CACHE_TTL": 60,     # 웹훅 캐시 TTL (초)
+        "DEFAULT_CACHE_TTL": 60,      # 기본 캐시 TTL (초)
+        "EXTENDED_CACHE_TTL": 300,    # 긴 TTL이 필요한 작업용 (초, 5분)
+        "SHORT_CACHE_TTL": 60,        # 짧은 TTL이 필요한 작업용 (초)
     },
 }
 ```
+
+**Dataclass: `IdempotencyConfig`**
+
+| 필드 | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `default_cache_ttl` | int | 60 | 기본 캐시 TTL (초) |
+| `extended_cache_ttl` | int | 300 | 긴 TTL이 필요한 작업용 (초) |
+| `short_cache_ttl` | int | 60 | 짧은 TTL이 필요한 작업용 (초) |
+| `clock_skew_tolerance_seconds` | float | 5.0 | 클럭 스큐 허용 오차 (초) |
+
+> 💡 **도메인 중립적 설계**: TTL은 작업 특성(중요도, 지속시간)에 따라 선택하며, 특정 도메인에 종속되지 않습니다.
 
 > ⚠️ **경고**: Idempotency는 중복 트랜잭션을 방지합니다. 변경 시 주의가 필요합니다.
 

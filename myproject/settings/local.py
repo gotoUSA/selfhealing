@@ -213,7 +213,7 @@ SELF_HEALING = {
     # Idempotency - Shorter TTLs for dev testing
     "IDEMPOTENCY": {
         "DEFAULT_CACHE_TTL": 60,
-        "PAYMENT_CACHE_TTL": 300,  # 5 minutes in dev
-        "WEBHOOK_CACHE_TTL": 120,
+        "EXTENDED_CACHE_TTL": 300,  # For operations requiring longer TTL
+        "SHORT_CACHE_TTL": 60,  # For short-lived operations
     },
 }

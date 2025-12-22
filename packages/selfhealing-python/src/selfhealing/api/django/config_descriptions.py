@@ -168,46 +168,57 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
 # Unit Formatters
 # =============================================================================
 
+# Simple suffix formatters: unit -> suffix
+_UNIT_SUFFIXES: dict[str, str] = {
+    "seconds": "s",
+    "hours": "h",
+    "days": "d",
+    "percent": "%",
+    "multiplier": "x",
+}
+
+
+def _format_collection(value: Any, empty_str: str, max_items: int = 3) -> str:
+    """Format a dict or list with item count for large collections."""
+    if not value:
+        return empty_str
+    if len(value) > max_items:
+        bracket = "{" if isinstance(value, dict) else "["
+        close = "}" if isinstance(value, dict) else "]"
+        return f"{bracket}...{len(value)} items{close}"
+    return str(value)
+
+
 def _format_value_with_unit(value: Any, unit: str) -> str:
     """Format a value with its unit suffix."""
     if value is None:
         return "None"
 
+    # Boolean formatting
     if unit == "bool":
         return "enabled" if value else "disabled"
-    elif unit == "seconds":
-        return f"{value}s"
-    elif unit == "hours":
-        return f"{value}h"
-    elif unit == "days":
-        return f"{value}d"
-    elif unit == "percent":
-        return f"{value}%"
-    elif unit == "count":
+
+    # Simple suffix formatting
+    if unit in _UNIT_SUFFIXES:
+        return f"{value}{_UNIT_SUFFIXES[unit]}"
+
+    # Count (no suffix)
+    if unit == "count":
         return str(value)
-    elif unit == "multiplier":
-        return f"{value}x"
-    elif unit == "dict":
-        if isinstance(value, dict):
-            if not value:
-                return "{}"
-            # Show key count for large dicts
-            if len(value) > 3:
-                return f"{{...{len(value)} items}}"
-            return str(value)
-        return str(value)
-    elif unit == "list":
-        if isinstance(value, list):
-            if not value:
-                return "[]"
-            if len(value) > 3:
-                return f"[...{len(value)} items]"
-            return str(value)
-        return str(value)
-    elif unit == "text":
+
+    # Collection formatting
+    if unit == "dict":
+        return _format_collection(value, "{}") if isinstance(value, dict) else str(value)
+
+    if unit == "list":
+        return _format_collection(value, "[]") if isinstance(value, list) else str(value)
+
+    # Text formatting
+    if unit == "text":
         return f'"{value}"' if value else '""'
-    else:
-        return str(value)
+
+    # Default
+    return str(value)
 
 
 # =============================================================================

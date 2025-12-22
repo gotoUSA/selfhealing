@@ -544,6 +544,32 @@ class L2StorageRuntimeConfig:
                 return self._runtime_config[key]
         return self._env_defaults.get(key, self._hardcoded_defaults.get(key))
 
+    # Field validation rules: (min, max, error_message)
+    _FIELD_VALIDATORS: dict = {
+        "redis_timeout_ms": (10, 1000, "redis_timeout_ms must be between 10 and 1000"),
+        "database_timeout_ms": (50, 5000, "database_timeout_ms must be between 50 and 5000"),
+        "fallback_timeout_ms": (10, 1000, "fallback_timeout_ms must be between 10 and 1000"),
+        "shadow_log_max_entries": (100, 10000, "shadow_log_max_entries must be between 100 and 10000"),
+        "reconciliation_jitter_min_seconds": (0.0, 60.0, "reconciliation_jitter_min_seconds must be between 0 and 60"),
+        "reconciliation_jitter_max_seconds": (0.0, 60.0, "reconciliation_jitter_max_seconds must be between 0 and 60"),
+        "health_check_interval_seconds": (5.0, 300.0, "health_check_interval_seconds must be between 5 and 300"),
+        "health_check_timeout_ms": (10, 1000, "health_check_timeout_ms must be between 10 and 1000"),
+    }
+
+    def _validate_and_update_field(self, key: str, value: int | float | bool | None) -> tuple[bool, int | float | bool | None]:
+        """Validate and update a single config field. Returns (updated, value)."""
+        if value is None:
+            return False, None
+
+        # Validate if validator exists
+        if key in self._FIELD_VALIDATORS:
+            min_val, max_val, error_msg = self._FIELD_VALIDATORS[key]
+            if not (min_val <= value <= max_val):
+                raise ValueError(error_msg)
+
+        self._runtime_config[key] = value
+        return True, value
+
     def update(
         self,
         redis_timeout_ms: int | None = None,
@@ -577,60 +603,26 @@ class L2StorageRuntimeConfig:
         """
         from datetime import datetime
 
+        # Build field update map
+        field_updates = {
+            "redis_timeout_ms": redis_timeout_ms,
+            "database_timeout_ms": database_timeout_ms,
+            "fallback_timeout_ms": fallback_timeout_ms,
+            "shadow_log_enabled": shadow_log_enabled,
+            "shadow_log_max_entries": shadow_log_max_entries,
+            "reconciliation_jitter_min_seconds": reconciliation_jitter_min_seconds,
+            "reconciliation_jitter_max_seconds": reconciliation_jitter_max_seconds,
+            "health_check_interval_seconds": health_check_interval_seconds,
+            "health_check_timeout_ms": health_check_timeout_ms,
+        }
+
         updates = {}
 
         with self._runtime_lock:
-            if redis_timeout_ms is not None:
-                if not (10 <= redis_timeout_ms <= 1000):
-                    raise ValueError("redis_timeout_ms must be between 10 and 1000")
-                self._runtime_config["redis_timeout_ms"] = redis_timeout_ms
-                updates["redis_timeout_ms"] = redis_timeout_ms
-
-            if database_timeout_ms is not None:
-                if not (50 <= database_timeout_ms <= 5000):
-                    raise ValueError("database_timeout_ms must be between 50 and 5000")
-                self._runtime_config["database_timeout_ms"] = database_timeout_ms
-                updates["database_timeout_ms"] = database_timeout_ms
-
-            if fallback_timeout_ms is not None:
-                if not (10 <= fallback_timeout_ms <= 1000):
-                    raise ValueError("fallback_timeout_ms must be between 10 and 1000")
-                self._runtime_config["fallback_timeout_ms"] = fallback_timeout_ms
-                updates["fallback_timeout_ms"] = fallback_timeout_ms
-
-            if shadow_log_enabled is not None:
-                self._runtime_config["shadow_log_enabled"] = shadow_log_enabled
-                updates["shadow_log_enabled"] = shadow_log_enabled
-
-            if shadow_log_max_entries is not None:
-                if not (100 <= shadow_log_max_entries <= 10000):
-                    raise ValueError("shadow_log_max_entries must be between 100 and 10000")
-                self._runtime_config["shadow_log_max_entries"] = shadow_log_max_entries
-                updates["shadow_log_max_entries"] = shadow_log_max_entries
-
-            if reconciliation_jitter_min_seconds is not None:
-                if not (0.0 <= reconciliation_jitter_min_seconds <= 60.0):
-                    raise ValueError("reconciliation_jitter_min_seconds must be between 0 and 60")
-                self._runtime_config["reconciliation_jitter_min_seconds"] = reconciliation_jitter_min_seconds
-                updates["reconciliation_jitter_min_seconds"] = reconciliation_jitter_min_seconds
-
-            if reconciliation_jitter_max_seconds is not None:
-                if not (0.0 <= reconciliation_jitter_max_seconds <= 60.0):
-                    raise ValueError("reconciliation_jitter_max_seconds must be between 0 and 60")
-                self._runtime_config["reconciliation_jitter_max_seconds"] = reconciliation_jitter_max_seconds
-                updates["reconciliation_jitter_max_seconds"] = reconciliation_jitter_max_seconds
-
-            if health_check_interval_seconds is not None:
-                if not (5.0 <= health_check_interval_seconds <= 300.0):
-                    raise ValueError("health_check_interval_seconds must be between 5 and 300")
-                self._runtime_config["health_check_interval_seconds"] = health_check_interval_seconds
-                updates["health_check_interval_seconds"] = health_check_interval_seconds
-
-            if health_check_timeout_ms is not None:
-                if not (10 <= health_check_timeout_ms <= 1000):
-                    raise ValueError("health_check_timeout_ms must be between 10 and 1000")
-                self._runtime_config["health_check_timeout_ms"] = health_check_timeout_ms
-                updates["health_check_timeout_ms"] = health_check_timeout_ms
+            for key, value in field_updates.items():
+                updated, validated_value = self._validate_and_update_field(key, value)
+                if updated:
+                    updates[key] = validated_value
 
             if updates:
                 self._last_updated = {

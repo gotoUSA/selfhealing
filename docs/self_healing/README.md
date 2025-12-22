@@ -51,6 +51,13 @@
 | [14_METRIC_COLLECTION_CORE.md](14_METRIC_COLLECTION_CORE.md) | 수집 전략, 어댑터, Lazy Sync | 개발자, DevOps |
 | [15_METRIC_COLLECTION_ADVANCED.md](15_METRIC_COLLECTION_ADVANCED.md) | Audit, Drift 감지, 신뢰도 레벨 | SRE, 운영자 |
 
+### 거버넌스 강화 (Big 4 실사 대응)
+
+| 문서 | 설명 | 대상 |
+|------|------|------|
+| [16_GOVERNANCE_IMPLEMENTATION_PART1.md](16_GOVERNANCE_IMPLEMENTATION_PART1.md) | RBAC, 환경변수 Audit, API Rate Limit | 개발자, 보안팀 |
+| [16_GOVERNANCE_IMPLEMENTATION_PART2.md](16_GOVERNANCE_IMPLEMENTATION_PART2.md) | Config Versioning, Fail-Safe Default | 개발자, SRE |
+
 ---
 
 ## 🚀 빠른 시작

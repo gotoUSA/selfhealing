@@ -173,7 +173,7 @@ SELF_HEALING = {
     # Longer TTLs in production to handle delayed retries
     "IDEMPOTENCY": {
         "DEFAULT_CACHE_TTL": 60,  # Default: 1 minute
-        "PAYMENT_CACHE_TTL": 600,  # Payment: 10 minutes (critical operations)
-        "WEBHOOK_CACHE_TTL": 120,  # Webhook: 2 minutes
+        "EXTENDED_CACHE_TTL": 600,  # For critical operations requiring longer TTL
+        "SHORT_CACHE_TTL": 120,  # For short-lived operations
     },
 }

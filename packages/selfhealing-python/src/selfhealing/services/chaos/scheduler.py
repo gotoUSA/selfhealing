@@ -410,7 +410,109 @@ class ChaosSchedulerService:
     # =========================================================================
     # Execution
     # =========================================================================
-    
+
+    def _make_skipped_result(
+        self, schedule_id: str, experiment_id: str, started_at, reason: str, status: str = "skipped"
+    ) -> "ExecutionResult":
+        """Create a skipped/blocked execution result."""
+        return ExecutionResult(
+            schedule_id=schedule_id,
+            experiment_id=experiment_id,
+            status=status,
+            skipped=True,
+            skip_reason=reason,
+            started_at=started_at.isoformat(),
+            completed_at=now().isoformat(),
+        )
+
+    def _check_error_budget_gate(self, schedule_id: str, experiment_id: str, started_at) -> ExecutionResult | None:
+        """Check error budget gate. Returns ExecutionResult if blocked, None otherwise."""
+        try:
+            from selfhealing.services.error_budget_gate import check_automation_allowed
+
+            gate_result = check_automation_allowed()
+            if not gate_result.allowed:
+                logger.warning(
+                    f"[ChaosScheduler] Experiment blocked by Error Budget Gate: "
+                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
+                )
+                return self._make_skipped_result(
+                    schedule_id, experiment_id, started_at,
+                    f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
+                    f"Manual mode enforced. {gate_result.recommendation}",
+                    status="blocked"
+                )
+        except ImportError:
+            pass  # Gate not available
+        return None
+
+    def _check_pre_execution_conditions(
+        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
+    ) -> ExecutionResult | None:
+        """Check scheduler/schedule/approval conditions. Returns ExecutionResult if blocked."""
+        if not self._config.enabled:
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, "Scheduler is disabled")
+
+        if not schedule.enabled:
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, "Schedule is disabled")
+
+        if schedule.approval_status not in (
+            ExperimentApprovalStatus.AUTO_APPROVED.value,
+            ExperimentApprovalStatus.APPROVED.value,
+        ):
+            return self._make_skipped_result(
+                schedule_id, experiment_id, started_at, f"Not approved: {schedule.approval_status}"
+            )
+        return None
+
+    def _check_safety_conditions(
+        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
+    ) -> ExecutionResult | None:
+        """Check safety guard conditions. Returns ExecutionResult if blocked."""
+        from .safety_guard import get_safety_guard
+
+        guard = get_safety_guard()
+        safety_result = guard.check(experiment_id=experiment_id, target_service=schedule.target_service)
+
+        if not safety_result.allowed:
+            self._record_audit("experiment_blocked_safety", {
+                "schedule_id": schedule_id,
+                "experiment_id": experiment_id,
+                "block_reason": safety_result.block_reason,
+                "block_message": safety_result.block_message,
+            })
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, safety_result.block_message)
+        return None
+
+    def _check_blast_radius_conditions(
+        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
+    ) -> ExecutionResult | None:
+        """Check blast radius conditions. Returns ExecutionResult if blocked."""
+        from .blast_radius import get_blast_radius_manager
+
+        br_manager = get_blast_radius_manager()
+        br_result = br_manager.check(
+            blast_radius=schedule.blast_radius,
+            target_service=schedule.target_service,
+            target_domain=schedule.target_domain,
+            experiment_id=experiment_id,
+        )
+
+        if not br_result.allowed:
+            return self._make_skipped_result(
+                schedule_id, experiment_id, started_at,
+                f"Blast radius check failed: {br_result.violations}"
+            )
+
+        # Register experiment
+        br_manager.register_experiment(
+            experiment_id=experiment_id,
+            blast_radius=schedule.blast_radius,
+            target_service=schedule.target_service,
+            target_domain=schedule.target_domain,
+        )
+        return None
+
     def execute_now(self, schedule_id: str, force: bool = False) -> ExecutionResult:
         """
         Execute a scheduled experiment immediately.
@@ -439,130 +541,28 @@ class ChaosSchedulerService:
         started_at = now()
         
         try:
-            # 0. Error Budget Gate Check (수동 모드 강제 전환)
+            # 0. Error Budget Gate Check
             if not force:
-                try:
-                    from selfhealing.services.error_budget_gate import (
-                        check_automation_allowed,
-                        AutomationBlockedError,
-                    )
-                    
-                    gate_result = check_automation_allowed()
-                    if not gate_result.allowed:
-                        logger.warning(
-                            f"[ChaosScheduler] Experiment blocked by Error Budget Gate: "
-                            f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
-                        )
-                        return ExecutionResult(
-                            schedule_id=schedule_id,
-                            experiment_id=experiment_id,
-                            status="blocked",
-                            skipped=True,
-                            skip_reason=(
-                                f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
-                                f"Manual mode enforced. {gate_result.recommendation}"
-                            ),
-                            started_at=started_at.isoformat(),
-                            completed_at=now().isoformat(),
-                        )
-                except ImportError:
-                    # Gate not available, continue
-                    pass
-            
-            # 1. Check if scheduler is enabled
-            if not self._config.enabled:
-                return ExecutionResult(
-                    schedule_id=schedule_id,
-                    experiment_id=experiment_id,
-                    status="skipped",
-                    skipped=True,
-                    skip_reason="Scheduler is disabled",
-                    started_at=started_at.isoformat(),
-                    completed_at=now().isoformat(),
-                )
-            
-            # 2. Check if schedule is enabled
-            if not schedule.enabled:
-                return ExecutionResult(
-                    schedule_id=schedule_id,
-                    experiment_id=experiment_id,
-                    status="skipped",
-                    skipped=True,
-                    skip_reason="Schedule is disabled",
-                    started_at=started_at.isoformat(),
-                    completed_at=now().isoformat(),
-                )
-            
-            # 3. Check approval status
-            if schedule.approval_status not in (
-                ExperimentApprovalStatus.AUTO_APPROVED.value,
-                ExperimentApprovalStatus.APPROVED.value,
-            ):
-                return ExecutionResult(
-                    schedule_id=schedule_id,
-                    experiment_id=experiment_id,
-                    status="skipped",
-                    skipped=True,
-                    skip_reason=f"Not approved: {schedule.approval_status}",
-                    started_at=started_at.isoformat(),
-                    completed_at=now().isoformat(),
-                )
-            
+                blocked = self._check_error_budget_gate(schedule_id, experiment_id, started_at)
+                if blocked:
+                    return blocked
+
+            # 1-3. Check pre-execution conditions (scheduler, schedule, approval)
+            blocked = self._check_pre_execution_conditions(schedule, schedule_id, experiment_id, started_at)
+            if blocked:
+                return blocked
+
             # 4. Safety checks (Pre-flight)
             if not force:
-                guard = get_safety_guard()
-                safety_result = guard.check(
-                    experiment_id=experiment_id,
-                    target_service=schedule.target_service,
-                )
-                
-                if not safety_result.allowed:
-                    # Record for audit
-                    self._record_audit("experiment_blocked_safety", {
-                        "schedule_id": schedule_id,
-                        "experiment_id": experiment_id,
-                        "block_reason": safety_result.block_reason,
-                        "block_message": safety_result.block_message,
-                    })
-                    
-                    return ExecutionResult(
-                        schedule_id=schedule_id,
-                        experiment_id=experiment_id,
-                        status="skipped",
-                        skipped=True,
-                        skip_reason=safety_result.block_message,
-                        started_at=started_at.isoformat(),
-                        completed_at=now().isoformat(),
-                    )
-            
+                blocked = self._check_safety_conditions(schedule, schedule_id, experiment_id, started_at)
+                if blocked:
+                    return blocked
+
             # 5. Blast radius check
             if not force:
-                br_manager = get_blast_radius_manager()
-                br_result = br_manager.check(
-                    blast_radius=schedule.blast_radius,
-                    target_service=schedule.target_service,
-                    target_domain=schedule.target_domain,
-                    experiment_id=experiment_id,
-                )
-                
-                if not br_result.allowed:
-                    return ExecutionResult(
-                        schedule_id=schedule_id,
-                        experiment_id=experiment_id,
-                        status="skipped",
-                        skipped=True,
-                        skip_reason=f"Blast radius check failed: {br_result.violations}",
-                        started_at=started_at.isoformat(),
-                        completed_at=now().isoformat(),
-                    )
-                
-                # Register experiment
-                br_manager.register_experiment(
-                    experiment_id=experiment_id,
-                    blast_radius=schedule.blast_radius,
-                    target_service=schedule.target_service,
-                    target_domain=schedule.target_domain,
-                )
+                blocked = self._check_blast_radius_conditions(schedule, schedule_id, experiment_id, started_at)
+                if blocked:
+                    return blocked
             
             # 6. Create and execute experiment
             with self._lock:
@@ -747,72 +747,67 @@ class ChaosSchedulerService:
     # =========================================================================
     # Internal Helpers
     # =========================================================================
-    
+
+    def _get_daily_next_run(self, current: datetime, hour: int, minute: int) -> datetime:
+        """Calculate next run for daily schedule."""
+        next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if next_run <= current:
+            next_run += timedelta(days=1)
+        return next_run
+
+    def _get_weekly_next_run(self, current: datetime, schedule: ScheduledExperiment) -> datetime:
+        """Calculate next run for weekly schedule."""
+        hour, minute = map(int, schedule.schedule_time.split(":"))
+
+        days_ahead = schedule.schedule_day - current.weekday()
+        if days_ahead < 0:
+            days_ahead += 7
+        elif days_ahead == 0:
+            target_time = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if current >= target_time:
+                days_ahead = 7
+
+        next_run = current + timedelta(days=days_ahead)
+        return next_run.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    def _get_cron_next_run(self, current: datetime, cron_expression: str) -> datetime:
+        """Calculate next run for cron schedule."""
+        try:
+            from croniter import croniter
+            cron_expr = cron_expression or "0 2 * * *"
+            cron = croniter(cron_expr, current)
+            return cron.get_next(datetime)
+        except ImportError:
+            logger.warning(
+                "[ChaosScheduler] croniter not installed. "
+                "Install with: pip install croniter. Using daily fallback."
+            )
+        except Exception as e:
+            logger.warning(f"[ChaosScheduler] Invalid cron expression: {e}. Using daily fallback.")
+
+        # Fallback to daily at 2 AM
+        return self._get_daily_next_run(current, 2, 0)
+
     def _calculate_next_run(self, schedule: ScheduledExperiment) -> datetime:
         """Calculate the next run time for a schedule."""
         current = now()
-        
+
         if schedule.schedule_type == ScheduleType.ONCE.value:
-            # Already ran? No next run
             if schedule.last_run_at:
                 return current + timedelta(days=36500)  # Far future
-            
-            # Parse time
             hour, minute = map(int, schedule.schedule_time.split(":"))
-            next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if next_run <= current:
-                next_run += timedelta(days=1)
-            return next_run
-        
-        elif schedule.schedule_type == ScheduleType.DAILY.value:
+            return self._get_daily_next_run(current, hour, minute)
+
+        if schedule.schedule_type == ScheduleType.DAILY.value:
             hour, minute = map(int, schedule.schedule_time.split(":"))
-            next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if next_run <= current:
-                next_run += timedelta(days=1)
-            return next_run
-        
-        elif schedule.schedule_type == ScheduleType.WEEKLY.value:
-            hour, minute = map(int, schedule.schedule_time.split(":"))
-            
-            # Find next occurrence of the target day
-            days_ahead = schedule.schedule_day - current.weekday()
-            if days_ahead < 0:
-                days_ahead += 7
-            elif days_ahead == 0:
-                # Same day - check if time passed
-                target_time = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                if current >= target_time:
-                    days_ahead = 7
-            
-            next_run = current + timedelta(days=days_ahead)
-            return next_run.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        
-        elif schedule.schedule_type == ScheduleType.CRON.value:
-            # Parse cron expression using croniter if available
-            try:
-                from croniter import croniter
-                cron_expr = schedule.cron_expression or "0 2 * * *"  # Default: daily at 2 AM
-                cron = croniter(cron_expr, current)
-                return cron.get_next(datetime)
-            except ImportError:
-                # croniter not installed - fallback to daily at 2 AM
-                logger.warning(
-                    "[ChaosScheduler] croniter not installed. "
-                    "Install with: pip install croniter. Using daily fallback."
-                )
-                hour, minute = 2, 0
-                next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                if next_run <= current:
-                    next_run += timedelta(days=1)
-                return next_run
-            except Exception as e:
-                logger.warning(f"[ChaosScheduler] Invalid cron expression: {e}. Using daily fallback.")
-                hour, minute = 2, 0
-                next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                if next_run <= current:
-                    next_run += timedelta(days=1)
-                return next_run
-        
+            return self._get_daily_next_run(current, hour, minute)
+
+        if schedule.schedule_type == ScheduleType.WEEKLY.value:
+            return self._get_weekly_next_run(current, schedule)
+
+        if schedule.schedule_type == ScheduleType.CRON.value:
+            return self._get_cron_next_run(current, schedule.cron_expression)
+
         # Default: tomorrow at 2 AM
         return (current + timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
     
