@@ -12,6 +12,10 @@
 6. [메트릭 및 모니터링](#6-메트릭-및-모니터링)
 7. [OpenTelemetry 연동](#7-opentelemetry-연동)
 8. [운영 가이드](#8-운영-가이드)
+9. [Error Budget Gate (자동화 제어)](#9-error-budget-gate-자동화-제어)
+10. [동적 설정 (Runtime Configuration)](#10-동적-설정-runtime-configuration)
+11. [Fail-Safe Self-Reporting](#11-fail-safe-self-reporting-침묵하는-장애-방지)
+12. [고급 관측성 기능](#12-고급-관측성-기능)
 
 ---
 
@@ -564,9 +568,196 @@ Budget < 20% 감지
 
 ---
 
-## 9. 동적 설정 (Runtime Configuration)
+## 9. Error Budget Gate (자동화 제어)
 
-### 9.1 API를 통한 임계값 변경
+> **핵심 원칙**: "시스템이 '대신 하는 것'이 아니라 '멈추는 것'" - Error Budget이 위험 수준일 때 자동화를 차단하고 수동 모드를 강제합니다.
+
+### 9.1 개요
+
+**Error Budget Gate**는 Error Budget 잔량에 따라 모든 자동화 기능을 중앙에서 제어하는 게이트입니다.
+
+Error Budget이 임계값(기본 10%) 미만으로 떨어지면:
+- ❌ Chaos Engineering 자동 실행 차단
+- ❌ DLQ Replay 자동 재시도 차단
+- ⚠️ 운영자에게 수동 확인 요청
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Error Budget Gate 개념도                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   Error Budget 상태          Gate 상태                       │
+│   ─────────────────          ─────────                       │
+│   ███████████ 75%     →     🟢 OPEN (자동화 허용)            │
+│   ██████░░░░░ 50%     →     🟢 OPEN (자동화 허용)            │
+│   ███░░░░░░░░ 20%     →     🟡 WARNING (경고, 허용)          │
+│   █░░░░░░░░░░ 10%     →     🔴 BLOCKED (자동화 차단!)        │
+│   ░░░░░░░░░░░  0%     →     🔴 BLOCKED (수동 모드 강제)      │
+│                                                              │
+│   ⚠️ Gate 오류 시     →     🟢 FAIL_OPEN (안전하게 허용)     │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 설정
+
+```python
+from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+
+# 기본 설정
+config = ErrorBudgetGateConfig(
+    enabled=True,                      # Gate 활성화
+    critical_threshold_percent=10.0,   # 차단 임계값 (10% 미만 시 차단)
+    warning_threshold_percent=20.0,    # 경고 임계값 (20% 미만 시 경고)
+    fail_open=True,                    # Gate 오류 시 허용 (기본: True)
+    cache_ttl_seconds=30,              # 캐시 TTL (API 호출 최소화)
+)
+```
+
+| 설정 | 기본값 | 설명 |
+|------|--------|------|
+| `enabled` | `True` | Gate 활성화 여부 |
+| `critical_threshold_percent` | `10.0` | 이 값 미만 시 자동화 차단 |
+| `warning_threshold_percent` | `20.0` | 이 값 미만 시 경고 발생 |
+| `fail_open` | `True` | Gate 오류 시 허용 (False면 차단) |
+| `cache_ttl_seconds` | `30` | Error Budget 캐시 시간 |
+
+### 9.3 사용법
+
+#### 간편 함수
+
+```python
+from selfhealing.services.error_budget_gate import (
+    is_automation_allowed,
+    check_automation_allowed,
+    require_automation_allowed,
+)
+
+# 1. 단순 확인 (bool 반환)
+if is_automation_allowed():
+    run_automation()
+else:
+    log.info("Manual mode enforced")
+
+# 2. 상세 결과 확인
+result = check_automation_allowed()
+if result.allowed:
+    run_automation()
+else:
+    log.warning(f"Blocked: {result.reason}")
+    log.info(f"Budget remaining: {result.budget_percent}%")
+
+# 3. 예외 발생 방식
+try:
+    require_automation_allowed(action="chaos_execution")
+    run_automation()
+except AutomationBlockedError as e:
+    log.warning(f"Automation blocked: {e.reason}")
+```
+
+#### 데코레이터
+
+```python
+from selfhealing.services.error_budget_gate import automation_gate
+
+@automation_gate(action="dlq_replay")  # 함수 시작 전 자동 체크
+def replay_dlq_entry(entry_id: str):
+    # Error Budget 부족 시 AutomationBlockedError 발생
+    ...
+```
+
+### 9.4 통합 포인트
+
+#### Chaos Scheduler
+
+```python
+# packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py
+
+class ChaosScheduler:
+    async def execute_now(self, rule_id: str, ...) -> ExecutionResult:
+        # Gate 체크 - 예산 부족 시 차단
+        gate_result = check_automation_allowed()
+        if not gate_result.allowed:
+            return ExecutionResult(
+                status="blocked",
+                message=f"Error Budget Gate: {gate_result.reason}"
+            )
+        
+        # 정상 실행
+        return await self._execute_injection(...)
+```
+
+#### DLQ Replay
+
+```python
+# packages/selfhealing-python/src/selfhealing/adapters/celery/tasks.py
+
+@app.task
+def replay_single_dlq_entry(entry_id: str, ...):
+    gate_result = check_automation_allowed()
+    if not gate_result.allowed:
+        return {
+            "status": "blocked",
+            "manual_mode_enforced": True,
+            "reason": gate_result.reason,
+        }
+    
+    # 정상 재시도 로직
+    ...
+```
+
+### 9.5 Gate 상태 종류
+
+| 상태 | 설명 | 자동화 |
+|------|------|--------|
+| `OPEN` | Error Budget 충분 | ✅ 허용 |
+| `WARNING` | 예산 경고 수준 (20% 미만) | ✅ 허용 (경고 로그) |
+| `BLOCKED` | 예산 위험 수준 (10% 미만) | ❌ 차단 |
+| `FAIL_OPEN` | Gate 오류 발생 | ✅ 허용 (안전 모드) |
+| `DISABLED` | Gate 비활성화 | ✅ 허용 |
+
+### 9.6 Fail-Open 설계
+
+**왜 Fail-Open인가?**
+
+Error Budget Gate 자체에 오류가 발생했을 때:
+- ❌ **Fail-Close**: 모든 자동화 차단 → 배포/운영 마비
+- ✅ **Fail-Open**: 자동화 허용 → 기존 동작 유지
+
+```python
+try:
+    budget = await self._fetch_error_budget()
+    return self._evaluate(budget)
+except Exception as e:
+    # Gate 오류 시 안전하게 허용
+    if self.config.fail_open:
+        return GateCheckResult(
+            allowed=True,
+            status=GateStatus.FAIL_OPEN,
+            reason=f"Gate error: {e}",
+        )
+    else:
+        return GateCheckResult(
+            allowed=False,
+            status=GateStatus.BLOCKED,
+            reason=f"Gate error (fail-close): {e}",
+        )
+```
+
+### 9.7 메트릭
+
+| 메트릭 | 타입 | 설명 |
+|--------|------|------|
+| `selfhealing_error_budget_gate_checks_total` | Counter | Gate 체크 횟수 |
+| `selfhealing_error_budget_gate_blocked_total` | Counter | 차단된 자동화 횟수 |
+| `selfhealing_error_budget_gate_status` | Gauge | 현재 Gate 상태 |
+| `selfhealing_error_budget_gate_latency_seconds` | Histogram | Gate 체크 지연 시간 |
+
+---
+
+## 10. 동적 설정 (Runtime Configuration)
+
+### 10.1 API를 통한 임계값 변경
 
 Error Budget 및 Burn Rate 임계값은 **서버 재시작 없이 API로 동적 변경**이 가능합니다.
 
@@ -607,7 +798,7 @@ curl -X PUT \
   $API_URL/api/self-healing/config/error-budget/
 ```
 
-### 9.2 설정 항목
+### 10.2 설정 항목
 
 | 설정 | 기본값 | 범위 | 설명 |
 |------|--------|------|------|
@@ -624,9 +815,9 @@ curl -X PUT \
 
 ---
 
-## 10. Fail-Safe Self-Reporting (침묵하는 장애 방지)
+## 11. Fail-Safe Self-Reporting (침묵하는 장애 방지)
 
-### 10.1 문제점
+### 11.1 문제점
 
 Fail-Safe가 발동되면 시스템은 안전하게 동작하지만, 운영팀이 이를 인지하지 못할 수 있습니다.
 
@@ -646,7 +837,7 @@ Fail-Safe가 발동되면 시스템은 안전하게 동작하지만, 운영팀�
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Self-Reporting 패턴
+### 11.2 Self-Reporting 패턴
 
 Fail-Safe 발동 즉시 **3가지 채널로 알림**을 발송합니다:
 
@@ -669,7 +860,7 @@ Fail-Safe 발동 즉시 **3가지 채널로 알림**을 발송합니다:
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 10.3 Prometheus 알림 규칙
+### 11.3 Prometheus 알림 규칙
 
 ```yaml
 # Fail-Safe 발동 알림 (즉시)
@@ -705,9 +896,9 @@ Fail-Safe 발동 즉시 **3가지 채널로 알림**을 발송합니다:
 
 ---
 
-## 11. 고급 관측성 기능
+## 12. 고급 관측성 기능
 
-### 11.1 Heartbeat (Dead Man's Snitch)
+### 12.1 Heartbeat (Dead Man's Snitch)
 
 Error Budget 시스템이 정상 동작 중인지 확인하기 위해 주기적인 heartbeat를 발송합니다.
 
@@ -774,7 +965,7 @@ curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
   }'
 ```
 
-### 11.2 복구 완료 알림 (Recovery Notification)
+### 12.2 복구 완료 알림 (Recovery Notification)
 
 Fail-Safe 모드에서 정상으로 복구되었을 때 적극적으로 알림을 발송합니다.
 
@@ -814,7 +1005,7 @@ curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
   }'
 ```
 
-### 11.3 Override 에스컬레이션
+### 12.3 Override 에스컬레이션
 
 Error Budget이 부족한 상태에서 배포 Override를 승인하면 상위 채널에 알림을 발송합니다.
 
@@ -881,7 +1072,7 @@ curl -X PATCH /api/v1/selfhealing/config/error-budget/ \
     description: "More than 5 overrides in 24h indicates process issues"
 ```
 
-### 11.4 Celery Beat 스케줄 설정
+### 12.4 Celery Beat 스케줄 설정
 
 Heartbeat Task를 Celery Beat에 등록합니다:
 

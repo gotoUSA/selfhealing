@@ -445,6 +445,33 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     logger.info(f"[DLQ Replay] Starting replay for DLQ entry: {dlq_id}")
 
     try:
+        # Error Budget Gate Check (수동 모드 강제 전환)
+        try:
+            from selfhealing.services.error_budget_gate import (
+                check_automation_allowed,
+            )
+            
+            gate_result = check_automation_allowed()
+            if not gate_result.allowed:
+                logger.warning(
+                    f"[DLQ Replay] Blocked by Error Budget Gate: "
+                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
+                )
+                return {
+                    "success": False,
+                    "dlq_id": dlq_id,
+                    "error": "automation_blocked",
+                    "message": (
+                        f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
+                        f"Manual mode enforced. Please process manually."
+                    ),
+                    "manual_mode_enforced": True,
+                    "error_budget_percent": gate_result.error_budget_percent,
+                }
+        except ImportError:
+            # Gate not available, continue
+            pass
+
         # Use ProviderRegistry to get repository
         from selfhealing.factory import ProviderRegistry
 
@@ -522,6 +549,36 @@ def replay_batch_by_domain(
     logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}")
 
     try:
+        # Error Budget Gate Check (수동 모드 강제 전환)
+        try:
+            from selfhealing.services.error_budget_gate import (
+                check_automation_allowed,
+            )
+            
+            gate_result = check_automation_allowed()
+            if not gate_result.allowed:
+                logger.warning(
+                    f"[DLQ Batch Replay] Blocked by Error Budget Gate: "
+                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
+                )
+                return {
+                    "success": False,
+                    "domain": domain,
+                    "error": "automation_blocked",
+                    "message": (
+                        f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
+                        f"Manual mode enforced. Please process manually."
+                    ),
+                    "manual_mode_enforced": True,
+                    "error_budget_percent": gate_result.error_budget_percent,
+                    "total": 0,
+                    "success_count": 0,
+                    "failed_count": 0,
+                }
+        except ImportError:
+            # Gate not available, continue
+            pass
+
         # Use ProviderRegistry to get repository
         from selfhealing.factory import ProviderRegistry
 

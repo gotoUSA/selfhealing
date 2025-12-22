@@ -31,7 +31,9 @@
 
 | 문서 | 설명 | 대상 |
 |------|------|------|
-| [09_CONFIGURATION.md](09_CONFIGURATION.md) | 설정 레퍼런스 | 개발자, DevOps |
+| [09a_CONFIGURATION_CORE.md](09a_CONFIGURATION_CORE.md) | 핵심 설정 (SLA, Retry, CB, DLQ 등) | 개발자, DevOps |
+| [09b_CONFIGURATION_ADVANCED.md](09b_CONFIGURATION_ADVANCED.md) | 고급 설정 (Apply Strategy, 환경별 설정) | 개발자, DevOps |
+| [09c_CONFIGURATION_CHAOS.md](09c_CONFIGURATION_CHAOS.md) | Chaos Engineering 및 Audit 설정 | SRE, DevOps |
 | [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) | 운영 가이드 및 Runbook | 운영자 |
 
 ### 고급 기능
@@ -42,6 +44,13 @@
 | [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 관리 및 배포 동결 권고 시스템 | 개발자, 운영자, SRE |
 | [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) | 자율 카오스 엔진 (Continuous Resilience Validation) | SRE, 개발자, 운영자 |
 
+### 메트릭 수집 전략
+
+| 문서 | 설명 | 대상 |
+|------|------|------|
+| [14_METRIC_COLLECTION_CORE.md](14_METRIC_COLLECTION_CORE.md) | 수집 전략, 어댑터, Lazy Sync | 개발자, DevOps |
+| [15_METRIC_COLLECTION_ADVANCED.md](15_METRIC_COLLECTION_ADVANCED.md) | Audit, Drift 감지, 신뢰도 레벨 | SRE, 운영자 |
+
 ---
 
 ## 🚀 빠른 시작
@@ -50,7 +59,7 @@
 
 1. [01_OVERVIEW.md](01_OVERVIEW.md) - 시스템 이해
 2. [02_ARCHITECTURE.md](02_ARCHITECTURE.md) - 아키텍처 파악
-3. [09_CONFIGURATION.md](09_CONFIGURATION.md) - 설정 방법
+3. [09a_CONFIGURATION_CORE.md](09a_CONFIGURATION_CORE.md) - 핵심 설정 방법
 
 ### 운영자용
 
@@ -109,6 +118,7 @@
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-12-22 | 1.5 | 대용량 문서 분할 (09_CONFIGURATION → 3개, 13_METRIC_COLLECTION_STRATEGY → 2개) |
 | 2025-12-21 | 1.4 | 도메인 중립적 문서 구조로 리팩토링 |
 | 2025-12-20 | 1.3 | 자율 카오스 엔진 추가 (13_CHAOS_ENGINEERING.md) |
 | 2024-12-21 | 1.2 | Error Budget 관리 및 배포 동결 권고 시스템 추가 (12_ERROR_BUDGET.md) |

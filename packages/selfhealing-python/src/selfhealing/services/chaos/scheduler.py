@@ -661,6 +661,36 @@ class ChaosSchedulerService:
         started_at = now()
         
         try:
+            # 0. Error Budget Gate Check (수동 모드 강제 전환)
+            if not force:
+                try:
+                    from selfhealing.services.error_budget_gate import (
+                        check_automation_allowed,
+                        AutomationBlockedError,
+                    )
+                    
+                    gate_result = check_automation_allowed()
+                    if not gate_result.allowed:
+                        logger.warning(
+                            f"[ChaosScheduler] Experiment blocked by Error Budget Gate: "
+                            f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
+                        )
+                        return ExecutionResult(
+                            schedule_id=schedule_id,
+                            experiment_id=experiment_id,
+                            status="blocked",
+                            skipped=True,
+                            skip_reason=(
+                                f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
+                                f"Manual mode enforced. {gate_result.recommendation}"
+                            ),
+                            started_at=started_at.isoformat(),
+                            completed_at=now().isoformat(),
+                        )
+                except ImportError:
+                    # Gate not available, continue
+                    pass
+            
             # 1. Check if scheduler is enabled
             if not self._config.enabled:
                 return ExecutionResult(
