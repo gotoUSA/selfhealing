@@ -148,3 +148,190 @@ class SelfHealingMetricsView(APIView):
                 {"error": "Failed to collect metrics", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class ErrorBudgetGateHealthView(APIView):
+    """
+    Error Budget Gate Health Check.
+
+    GET /api/self-healing/health/gate/
+
+    Returns comprehensive health status of the Error Budget Gate including:
+    - Gate status (open, blocked, fail_open, etc.)
+    - Circuit breaker state
+    - Rate limiter status
+    - Alert status
+    """
+
+    permission_classes = []  # Public endpoint for monitoring
+
+    def get(self, request):
+        """Get Error Budget Gate health status."""
+        try:
+            from selfhealing.services.error_budget_gate import get_error_budget_gate
+
+            gate = get_error_budget_gate()
+            health = gate.get_health_status()
+
+            # HTTP 상태 코드 결정
+            if health.get("healthy"):
+                return Response(health)
+            else:
+                return Response(health, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        except Exception as e:
+            logger.error(f"[ErrorBudgetGate] Health check failed: {e}")
+            return Response(
+                {
+                    "healthy": False,
+                    "status": "error",
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class ErrorBudgetGateConfigView(APIView):
+    """
+    Error Budget Gate Configuration Management.
+
+    GET /api/self-healing/config/gate/
+    PUT /api/self-healing/config/gate/
+
+    Allows runtime configuration of the Error Budget Gate.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get current gate configuration."""
+        try:
+            from selfhealing.services.error_budget_gate import get_error_budget_gate
+
+            gate = get_error_budget_gate()
+            config = gate.get_config()
+
+            return Response({
+                "status": "success",
+                "config": config.to_dict(),
+            })
+
+        except Exception as e:
+            logger.error(f"[ErrorBudgetGate] Config retrieval failed: {e}")
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def put(self, request):
+        """Update gate configuration."""
+        try:
+            from selfhealing.services.error_budget_gate import get_error_budget_gate
+
+            gate = get_error_budget_gate()
+            
+            # 허용된 설정 필드
+            allowed_fields = {
+                "enabled",
+                "critical_threshold_percent",
+                "warning_threshold_percent",
+                "fail_open",
+                "cache_ttl_seconds",
+                "fail_open_rate_limit_enabled",
+                "fail_open_rate_limit_per_minute",
+                "fail_open_rate_limit_window_seconds",
+                "circuit_breaker_enabled",
+                "circuit_breaker_failure_threshold",
+                "circuit_breaker_recovery_timeout",
+                "alert_on_fail_open",
+                "alert_cooldown_seconds",
+            }
+
+            # 유효한 필드만 추출
+            updates = {
+                k: v for k, v in request.data.items()
+                if k in allowed_fields
+            }
+
+            if not updates:
+                return Response(
+                    {"status": "error", "error": "No valid configuration fields provided"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            config = gate.update_config(**updates)
+
+            return Response({
+                "status": "success",
+                "message": f"Updated {len(updates)} configuration field(s)",
+                "updated_fields": list(updates.keys()),
+                "config": config.to_dict(),
+            })
+
+        except Exception as e:
+            logger.error(f"[ErrorBudgetGate] Config update failed: {e}")
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class ErrorBudgetGateResetView(APIView):
+    """
+    Error Budget Gate Component Reset.
+
+    POST /api/self-healing/gate/reset/
+
+    Reset specific components of the gate (for emergency recovery).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Reset gate components."""
+        try:
+            from selfhealing.services.error_budget_gate import get_error_budget_gate
+
+            gate = get_error_budget_gate()
+            
+            component = request.data.get("component", "all")
+            reset_actions = []
+
+            if component in ("all", "cache"):
+                gate.clear_cache()
+                reset_actions.append("cache")
+
+            if component in ("all", "rate_limiter"):
+                gate.reset_rate_limiter()
+                reset_actions.append("rate_limiter")
+
+            if component in ("all", "circuit_breaker"):
+                gate.reset_circuit_breaker()
+                reset_actions.append("circuit_breaker")
+
+            if component in ("all", "alerts"):
+                gate.reset_alert_cooldowns()
+                reset_actions.append("alerts")
+
+            if not reset_actions:
+                return Response(
+                    {
+                        "status": "error",
+                        "error": f"Unknown component: {component}",
+                        "valid_components": ["all", "cache", "rate_limiter", "circuit_breaker", "alerts"],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return Response({
+                "status": "success",
+                "message": f"Reset completed for: {', '.join(reset_actions)}",
+                "reset_components": reset_actions,
+            })
+
+        except Exception as e:
+            logger.error(f"[ErrorBudgetGate] Reset failed: {e}")
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

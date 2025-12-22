@@ -4,22 +4,30 @@ Base ServiceFactory for Self-Healing Components.
 Provides framework-specific service construction without Django fallbacks
 in the services layer.
 
+Storage Strategy (핵심 원칙: 호스트 DB에 침투하지 않음):
+- 기본값: Memory (설치 즉시 작동, 외부 의존성 없음)
+- opt-in: Redis, Django DB (호스트가 명시적으로 설정해야 함)
+
+저장소 모드:
+- Memory (Default): 테스트, 단일 서버, 최소 부하 → "Plug-and-Play"
+- Layered (L1+L2): Memory + Redis → 분산 환경 고성능, L1으로 장애 내성
+- Django DB (Opt-in): 영구 기록 필요 시 → 호스트가 마이그레이션 책임
+
 Usage:
-    # Django project
-    factory = ServiceFactory(framework=FrameworkType.DJANGO)
-    cb_service = factory.create_circuit_breaker_service()
-
-    # FastAPI project
-    factory = ServiceFactory(framework=FrameworkType.FASTAPI)
-    dlq_service = factory.create_dlq_service()
-
-    # Standalone (testing)
-    factory = ServiceFactory(framework=FrameworkType.STANDALONE)
+    # 기본 (Memory)
+    factory = ServiceFactory()
+    
+    # 분산 환경 (Layered: Memory + Redis)
+    factory = ServiceFactory(storage_mode="layered")
+    
+    # Django DB 사용 (opt-in, 명시적 설정 필요)
+    factory = ServiceFactory(storage_mode="django")
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Dict, Any
 
@@ -31,6 +39,20 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Storage Mode Enum
+# =============================================================================
+
+
+class StorageMode(str, Enum):
+    """저장소 모드."""
+    
+    MEMORY = "memory"      # 기본값: 메모리만 사용
+    LAYERED = "layered"    # L1(Memory) + L2(Redis)
+    DJANGO = "django"      # Django ORM (opt-in)
+    FASTAPI = "fastapi"    # SQLAlchemy (미구현)
 
 
 # =============================================================================
@@ -56,35 +78,48 @@ class ServiceFactory:
     """
     Factory for creating self-healing services with proper dependencies.
 
-    Provides framework-specific service construction without Django fallbacks
-    in the services layer.
+    핵심 원칙: 호스트 DB에 침투하지 않음
+    - 기본값은 항상 Memory (외부 의존성 없음)
+    - Django/Redis 사용은 호스트가 명시적으로 opt-in
 
     Usage:
-        # Django project
-        factory = ServiceFactory(framework=FrameworkType.DJANGO)
+        # 기본 (Memory, 설치 즉시 작동)
+        factory = ServiceFactory()
         cb_service = factory.create_circuit_breaker_service()
 
-        # FastAPI project
-        factory = ServiceFactory(framework=FrameworkType.FASTAPI)
-        dlq_service = factory.create_dlq_service()
-
-        # Standalone (testing)
-        factory = ServiceFactory(framework=FrameworkType.STANDALONE)
+        # 분산 환경 (L1 Memory + L2 Redis)
+        factory = ServiceFactory(storage_mode=StorageMode.LAYERED)
+        
+        # Django DB 사용 (opt-in, 마이그레이션 필요)
+        factory = ServiceFactory(storage_mode=StorageMode.DJANGO)
     """
 
     def __init__(
         self,
         framework: FrameworkType = FrameworkType.STANDALONE,
+        storage_mode: Optional[StorageMode] = None,
         custom_repositories: Optional[Dict[str, Any]] = None,
     ):
         self._framework = framework
         self._custom_repos = custom_repositories or {}
         self._repo_cache: Dict[str, Any] = {}
+        
+        # 저장소 모드 결정 (환경변수 또는 파라미터)
+        if storage_mode:
+            self._storage_mode = storage_mode
+        else:
+            env_mode = os.environ.get("SELFHEALING_STORAGE", "memory").lower()
+            self._storage_mode = StorageMode(env_mode) if env_mode in [m.value for m in StorageMode] else StorageMode.MEMORY
 
     @property
     def framework(self) -> FrameworkType:
         """Get the current framework type."""
         return self._framework
+    
+    @property
+    def storage_mode(self) -> StorageMode:
+        """Get the current storage mode."""
+        return self._storage_mode
 
     def get_failed_operation_repository(self) -> "FailedOperationRepository":
         """Get FailedOperation repository for current framework."""
@@ -123,30 +158,73 @@ class ServiceFactory:
         return repo
 
     def _create_repository(self, repo_type: str) -> Any:
-        """Create repository based on framework."""
-        if self._framework == FrameworkType.DJANGO:
+        """
+        Create repository based on storage_mode (not framework).
+        
+        핵심 원칙: 기본값은 항상 Memory
+        """
+        if self._storage_mode == StorageMode.DJANGO:
             return self._create_django_repository(repo_type)
-        elif self._framework == FrameworkType.FASTAPI:
+        elif self._storage_mode == StorageMode.LAYERED:
+            return self._create_layered_repository(repo_type)
+        elif self._storage_mode == StorageMode.FASTAPI:
             return self._create_fastapi_repository(repo_type)
-        elif self._framework == FrameworkType.FLASK:
-            return self._create_flask_repository(repo_type)
         else:
+            # 기본값: Memory (외부 의존성 없음)
             return self._create_inmemory_repository(repo_type)
 
     def _create_django_repository(self, repo_type: str) -> Any:
-        """Create Django ORM based repository."""
-        from selfhealing.adapters.django.repositories import (
-            DjangoFailedOperationRepository,
-            DjangoCircuitBreakerStateRepository,
-            DjangoSecurityIncidentRepository,
-        )
+        """
+        Create Django ORM based repository.
+        
+        ⚠️ opt-in: 호스트가 명시적으로 SELFHEALING_STORAGE=django 설정 필요
+        ⚠️ 마이그레이션: selfhealing.adapters.django를 INSTALLED_APPS에 추가 필요
+        """
+        try:
+            from selfhealing.adapters.django.repositories import (
+                DjangoFailedOperationRepository,
+                DjangoCircuitBreakerStateRepository,
+                DjangoSecurityIncidentRepository,
+            )
 
-        mapping = {
-            "failed_operation": DjangoFailedOperationRepository,
-            "circuit_breaker": DjangoCircuitBreakerStateRepository,
-            "security_incident": DjangoSecurityIncidentRepository,
-        }
-        return mapping[repo_type]()
+            mapping = {
+                "failed_operation": DjangoFailedOperationRepository,
+                "circuit_breaker": DjangoCircuitBreakerStateRepository,
+                "security_incident": DjangoSecurityIncidentRepository,
+            }
+            return mapping[repo_type]()
+        except Exception as e:
+            logger.warning(
+                f"[ServiceFactory] Django repository failed: {e}. "
+                f"Falling back to in-memory for: {repo_type}"
+            )
+            return self._create_inmemory_repository(repo_type)
+    
+    def _create_layered_repository(self, repo_type: str) -> Any:
+        """
+        Create Layered repository (L1 Memory + L2 Redis).
+        
+        분산 환경용: L1에서 즉시 판정, L2는 비동기 동기화
+        """
+        if repo_type == "circuit_breaker":
+            from selfhealing.adapters.memory import LayeredCircuitBreakerStateRepository
+            
+            # L2 Redis 연결 시도
+            l2_repo = None
+            try:
+                # Redis 저장소가 있으면 사용
+                from selfhealing.adapters.redis import RedisCircuitBreakerStateRepository
+                l2_repo = RedisCircuitBreakerStateRepository()
+                logger.info("[ServiceFactory] Using Layered storage: L1=Memory + L2=Redis")
+            except ImportError:
+                logger.info("[ServiceFactory] Redis adapter not available. Using L1=Memory only")
+            except Exception as e:
+                logger.warning(f"[ServiceFactory] Redis connection failed: {e}. Using L1=Memory only")
+            
+            return LayeredCircuitBreakerStateRepository(l2_repo=l2_repo)
+        else:
+            # 다른 타입은 일단 Memory
+            return self._create_inmemory_repository(repo_type)
 
     def _create_fastapi_repository(self, repo_type: str) -> Any:
         """Create SQLAlchemy based repository for FastAPI."""

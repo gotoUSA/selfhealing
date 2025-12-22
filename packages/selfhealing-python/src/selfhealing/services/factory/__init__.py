@@ -25,6 +25,7 @@ Reference:
 # Framework types and ServiceFactory
 from .base import (
     FrameworkType,
+    StorageMode,
     ServiceFactory,
     get_service_factory,
     configure_service_factory,
@@ -62,6 +63,7 @@ from .singleton import (
 __all__ = [
     # Framework types and ServiceFactory
     "FrameworkType",
+    "StorageMode",
     "ServiceFactory",
     "get_service_factory",
     "configure_service_factory",

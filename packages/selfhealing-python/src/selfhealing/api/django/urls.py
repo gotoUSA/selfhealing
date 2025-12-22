@@ -34,6 +34,13 @@ from selfhealing.api.django.views import (
     simple_health_ping,
 )
 
+# Error Budget Gate Health Views
+from selfhealing.api.django.views.health import (
+    ErrorBudgetGateHealthView,
+    ErrorBudgetGateConfigView,
+    ErrorBudgetGateResetView,
+)
+
 # Pool Circuit Breaker API
 from selfhealing.api.django.pool_circuit_breaker import (
     circuit_breaker_status,
@@ -143,6 +150,7 @@ urlpatterns = [
     path("health/ready/", ReadinessView.as_view(), name="health-readiness"),
     path("health/pool/", ConnectionPoolHealthView.as_view(), name="health-pool"),
     path("health/ping/", simple_health_ping, name="health-ping"),
+    path("health/gate/", ErrorBudgetGateHealthView.as_view(), name="health-gate"),
     path("metrics/", SelfHealingMetricsView.as_view(), name="metrics"),
     # DLQ
     path("dlq/replay/", DLQReplayView.as_view(), name="dlq-replay"),
@@ -183,6 +191,9 @@ urlpatterns = [
     path("config/forensic/", ForensicConfigView.as_view(), name="config-forensic"),
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
+    path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
+    # Error Budget Gate Reset
+    path("gate/reset/", ErrorBudgetGateResetView.as_view(), name="gate-reset"),
     # Error Budget API
     path("error-budget/status/", ErrorBudgetStatusView.as_view(), name="error-budget-status"),
     path("error-budget/history/", ErrorBudgetHistoryView.as_view(), name="error-budget-history"),

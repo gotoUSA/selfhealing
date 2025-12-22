@@ -669,3 +669,623 @@ class TestEdgeCases:
         
         assert result.allowed is True
         assert result.status == GateStatus.OPEN
+
+
+# =============================================================================
+# Test: In-Memory Rate Limiter
+# =============================================================================
+
+
+class TestInMemoryRateLimiter:
+    """InMemoryRateLimiter 테스트."""
+    
+    def test_rate_limiter_allows_within_limit(self):
+        """Rate limit 내 요청 허용."""
+        from selfhealing.services.error_budget_gate import InMemoryRateLimiter
+        
+        limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
+        
+        # 5회까지 허용
+        for i in range(5):
+            allowed, remaining, _ = limiter.try_acquire()
+            assert allowed is True
+            assert remaining == 5 - i - 1
+    
+    def test_rate_limiter_blocks_over_limit(self):
+        """Rate limit 초과 시 차단."""
+        from selfhealing.services.error_budget_gate import InMemoryRateLimiter
+        
+        limiter = InMemoryRateLimiter(max_requests=3, window_seconds=60)
+        
+        # 3회 소진
+        for _ in range(3):
+            allowed, _, _ = limiter.try_acquire()
+            assert allowed is True
+        
+        # 4번째 요청 차단
+        allowed, remaining, reset_at = limiter.try_acquire()
+        assert allowed is False
+        assert remaining == 0
+        assert reset_at is not None
+    
+    def test_rate_limiter_reset(self):
+        """Rate limiter 리셋."""
+        from selfhealing.services.error_budget_gate import InMemoryRateLimiter
+        
+        limiter = InMemoryRateLimiter(max_requests=2, window_seconds=60)
+        
+        # 소진
+        limiter.try_acquire()
+        limiter.try_acquire()
+        allowed, _, _ = limiter.try_acquire()
+        assert allowed is False
+        
+        # 리셋
+        limiter.reset()
+        
+        # 다시 허용
+        allowed, _, _ = limiter.try_acquire()
+        assert allowed is True
+    
+    def test_rate_limiter_update_limits(self):
+        """Rate limit 설정 동적 업데이트."""
+        from selfhealing.services.error_budget_gate import InMemoryRateLimiter
+        
+        limiter = InMemoryRateLimiter(max_requests=2, window_seconds=60)
+        
+        # 2회 소진
+        limiter.try_acquire()
+        limiter.try_acquire()
+        
+        # 차단 확인
+        allowed, _, _ = limiter.try_acquire()
+        assert allowed is False
+        
+        # limit 증가
+        limiter.update_limits(max_requests=5, window_seconds=60)
+        
+        # 다시 허용 (5 - 2 = 3회 남음)
+        allowed, remaining, _ = limiter.try_acquire()
+        assert allowed is True
+        assert remaining == 2  # 5 - 3 = 2
+    
+    def test_rate_limiter_get_status(self):
+        """Rate limiter 상태 조회."""
+        from selfhealing.services.error_budget_gate import InMemoryRateLimiter
+        
+        limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
+        
+        limiter.try_acquire()
+        limiter.try_acquire()
+        
+        status = limiter.get_status()
+        
+        assert status["current_count"] == 2
+        assert status["max_requests"] == 10
+        assert status["window_seconds"] == 60
+        assert status["remaining"] == 8
+
+
+# =============================================================================
+# Test: Fail-Open Rate Limiting
+# =============================================================================
+
+
+class TestFailOpenRateLimiting:
+    """Fail-Open Rate Limiting 테스트."""
+    
+    def test_fail_open_rate_limit_allows_within_limit(self):
+        """Rate limit 내 Fail-Open 허용."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+            GateStatus,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=5,
+            fail_open_rate_limit_window_seconds=60,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        # Mock error budget retrieval failure
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            # 첫 번째 요청 - 허용
+            result = gate.check(force_refresh=True)
+            
+            assert result.allowed is True
+            assert result.status == GateStatus.FAIL_OPEN
+            assert result.fail_open_triggered is True
+            assert result.rate_limit_remaining == 4
+    
+    def test_fail_open_rate_limit_blocks_over_limit(self):
+        """Rate limit 초과 시 Fail-Open에서도 차단."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+            GateStatus,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=3,
+            fail_open_rate_limit_window_seconds=60,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            # 3회 허용
+            for _ in range(3):
+                result = gate.check(force_refresh=True)
+                assert result.allowed is True
+            
+            # 4번째 요청 - Rate Limit 초과로 차단
+            result = gate.check(force_refresh=True)
+            
+            assert result.allowed is False
+            assert result.status == GateStatus.FAIL_OPEN_RATE_LIMITED
+            assert result.fail_open_triggered is True
+            assert result.rate_limit_remaining == 0
+            assert result.rate_limit_reset_at is not None
+    
+    def test_fail_open_rate_limit_disabled(self):
+        """Rate limit 비활성화 시 무제한 허용."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+            GateStatus,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=False,  # 비활성화
+            fail_open_rate_limit_per_minute=3,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            # 10회 모두 허용
+            for _ in range(10):
+                result = gate.check(force_refresh=True)
+                assert result.allowed is True
+                assert result.status == GateStatus.FAIL_OPEN
+    
+    def test_rate_limit_config_update_via_api(self):
+        """API를 통한 Rate Limit 설정 동적 변경."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+            GateStatus,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=2,
+            fail_open_rate_limit_window_seconds=60,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            # 2회 소진
+            gate.check(force_refresh=True)
+            gate.check(force_refresh=True)
+            
+            # 차단 확인
+            result = gate.check(force_refresh=True)
+            assert result.allowed is False
+            
+            # API로 limit 증가
+            gate.update_config(fail_open_rate_limit_per_minute=10)
+            
+            # 다시 허용
+            result = gate.check(force_refresh=True)
+            assert result.allowed is True
+    
+    def test_get_rate_limiter_status(self):
+        """Rate limiter 상태 조회."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=10,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        status = gate.get_rate_limiter_status()
+        
+        assert status["enabled"] is True
+        assert status["max_requests"] == 10
+        assert status["remaining"] == 10
+    
+    def test_reset_rate_limiter(self):
+        """Rate limiter 리셋."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+            GateStatus,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=2,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            # 소진
+            gate.check(force_refresh=True)
+            gate.check(force_refresh=True)
+            
+            # 차단 확인
+            result = gate.check(force_refresh=True)
+            assert result.allowed is False
+            
+            # 리셋
+            gate.reset_rate_limiter()
+            
+            # 다시 허용
+            result = gate.check(force_refresh=True)
+            assert result.allowed is True
+    
+    def test_config_to_dict_includes_rate_limit_fields(self):
+        """Config dict에 rate limit 필드 포함."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        config = ErrorBudgetGateConfig(
+            fail_open_rate_limit_enabled=True,
+            fail_open_rate_limit_per_minute=15,
+            fail_open_rate_limit_window_seconds=120,
+        )
+        
+        config_dict = config.to_dict()
+        
+        assert "fail_open_rate_limit_enabled" in config_dict
+        assert config_dict["fail_open_rate_limit_per_minute"] == 15
+        assert config_dict["fail_open_rate_limit_window_seconds"] == 120
+    
+    def test_config_from_dict_includes_rate_limit_fields(self):
+        """Config from_dict로 rate limit 필드 로드."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        data = {
+            "enabled": True,
+            "fail_open": True,
+            "fail_open_rate_limit_enabled": True,
+            "fail_open_rate_limit_per_minute": 20,
+            "fail_open_rate_limit_window_seconds": 30,
+        }
+        
+        config = ErrorBudgetGateConfig.from_dict(data)
+        
+        assert config.fail_open_rate_limit_enabled is True
+        assert config.fail_open_rate_limit_per_minute == 20
+        assert config.fail_open_rate_limit_window_seconds == 30
+
+
+# =============================================================================
+# Test: Gate Fault Detector (formerly Circuit Breaker)
+# =============================================================================
+
+
+class TestInMemoryCircuitBreaker:
+    """GateFaultDetector 테스트 (하위 호환성을 위해 클래스명 유지)."""
+    
+    def test_circuit_breaker_initial_state(self):
+        """초기 상태 HEALTHY."""
+        from selfhealing.services.error_budget_gate import GateFaultDetector, GateFaultState
+        
+        cb = GateFaultDetector(failure_threshold=3, recovery_timeout=30)
+        
+        status = cb.get_status()
+        assert status["state"] == GateFaultState.HEALTHY.value
+        assert status["failure_count"] == 0
+    
+    def test_circuit_breaker_opens_on_threshold(self):
+        """실패 임계값 초과 시 DEGRADED 상태 전환."""
+        from selfhealing.services.error_budget_gate import GateFaultDetector, GateFaultState
+        
+        cb = GateFaultDetector(failure_threshold=3, recovery_timeout=30)
+        
+        # 3회 실패
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.can_execute() is True  # 아직 CLOSED
+        
+        cb.record_failure()  # 3번째 실패
+        assert cb.can_execute() is False  # DEGRADED
+        
+        status = cb.get_status()
+        assert status["state"] == GateFaultState.DEGRADED.value
+    
+    def test_circuit_breaker_success_resets(self):
+        """성공 시 실패 카운트 리셋."""
+        from selfhealing.services.error_budget_gate import GateFaultDetector
+        
+        cb = GateFaultDetector(failure_threshold=3, recovery_timeout=30)
+        
+        cb.record_failure()
+        cb.record_failure()
+        
+        cb.record_success()  # 성공 시 리셋
+        
+        status = cb.get_status()
+        assert status["failure_count"] == 0
+    
+    def test_circuit_breaker_reset(self):
+        """Gate Fault Detector 리셋."""
+        from selfhealing.services.error_budget_gate import GateFaultDetector, GateFaultState
+        
+        cb = GateFaultDetector(failure_threshold=2, recovery_timeout=30)
+        
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.can_execute() is False
+        
+        cb.reset()
+        
+        assert cb.can_execute() is True
+        assert cb.get_status()["state"] == GateFaultState.HEALTHY.value
+    
+    def test_circuit_breaker_config_update(self):
+        """설정 동적 업데이트."""
+        from selfhealing.services.error_budget_gate import GateFaultDetector
+        
+        cb = GateFaultDetector(failure_threshold=3, recovery_timeout=30)
+        
+        cb.update_config(failure_threshold=5, recovery_timeout=60)
+        
+        status = cb.get_status()
+        assert status["failure_threshold"] == 5
+        assert status["recovery_timeout"] == 60
+
+
+# =============================================================================
+# Test: Alert Manager
+# =============================================================================
+
+
+class TestGateAlertManager:
+    """GateAlertManager 테스트."""
+    
+    def test_alert_manager_cooldown(self):
+        """알림 쿨다운 동작."""
+        from selfhealing.services.error_budget_gate import GateAlertManager
+        
+        manager = GateAlertManager(cooldown_seconds=300)
+        
+        # 첫 번째 알림 - 성공
+        result1 = manager._can_send_alert("test_alert")
+        assert result1 is True
+        
+        manager._record_alert_sent("test_alert")
+        
+        # 두 번째 알림 - 쿨다운 중
+        result2 = manager._can_send_alert("test_alert")
+        assert result2 is False
+    
+    def test_alert_manager_different_types(self):
+        """다른 알림 타입은 별도 쿨다운."""
+        from selfhealing.services.error_budget_gate import GateAlertManager
+        
+        manager = GateAlertManager(cooldown_seconds=300)
+        
+        manager._record_alert_sent("type_a")
+        
+        # type_b는 별도
+        result = manager._can_send_alert("type_b")
+        assert result is True
+    
+    def test_alert_manager_reset(self):
+        """알림 쿨다운 리셋."""
+        from selfhealing.services.error_budget_gate import GateAlertManager
+        
+        manager = GateAlertManager(cooldown_seconds=300)
+        
+        manager._record_alert_sent("test_alert")
+        assert manager._can_send_alert("test_alert") is False
+        
+        manager.reset()
+        
+        assert manager._can_send_alert("test_alert") is True
+    
+    def test_alert_manager_status(self):
+        """Alert Manager 상태 조회."""
+        from selfhealing.services.error_budget_gate import GateAlertManager
+        
+        manager = GateAlertManager(cooldown_seconds=600)
+        
+        status = manager.get_status()
+        
+        assert status["cooldown_seconds"] == 600
+        assert "last_alerts" in status
+
+
+# =============================================================================
+# Test: Gate with Circuit Breaker Integration
+# =============================================================================
+
+
+class TestGateCircuitBreakerIntegration:
+    """Gate와 Circuit Breaker 통합 테스트."""
+    
+    def test_gate_circuit_breaker_status(self):
+        """Gate에서 Circuit Breaker 상태 조회."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            circuit_breaker_enabled=True,
+            circuit_breaker_failure_threshold=5,
+            circuit_breaker_recovery_timeout=30,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        cb_status = gate.get_circuit_breaker_status()
+        
+        assert cb_status["enabled"] is True
+        assert cb_status["failure_threshold"] == 5
+        assert cb_status["state"] == "closed"
+    
+    def test_gate_reset_circuit_breaker(self):
+        """Gate에서 Circuit Breaker 리셋."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            circuit_breaker_enabled=True,
+            circuit_breaker_failure_threshold=2,
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        # Circuit Breaker 트리거 (강제 실패)
+        gate._circuit_breaker.record_failure()
+        gate._circuit_breaker.record_failure()
+        
+        assert gate.get_circuit_breaker_status()["state"] == "open"
+        
+        # 리셋
+        gate.reset_circuit_breaker()
+        
+        assert gate.get_circuit_breaker_status()["state"] == "closed"
+
+
+# =============================================================================
+# Test: Gate Health Status
+# =============================================================================
+
+
+class TestGateHealthStatus:
+    """Gate 헬스 상태 테스트."""
+    
+    def test_get_health_status_healthy(self):
+        """정상 상태 헬스 체크."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+        )
+        
+        config = ErrorBudgetGateConfig(enabled=True)
+        gate = ErrorBudgetGate(config=config)
+        
+        # Mock 정상 예산
+        with patch.object(gate, '_get_error_budget_percent', return_value=80.0):
+            health = gate.get_health_status()
+        
+        assert health["healthy"] is True
+        assert health["status"] == "healthy"
+        assert "gate" in health
+        assert "circuit_breaker" in health
+        assert "rate_limiter" in health
+        assert "alerts" in health
+    
+    def test_get_health_status_degraded(self):
+        """Fail-Open 상태에서 degraded 헬스."""
+        from selfhealing.services.error_budget_gate import (
+            ErrorBudgetGate,
+            ErrorBudgetGateConfig,
+        )
+        
+        config = ErrorBudgetGateConfig(
+            enabled=True,
+            fail_open=True,
+            alert_on_fail_open=False,  # 테스트에서 알림 비활성화
+        )
+        gate = ErrorBudgetGate(config=config)
+        
+        # Mock 예산 조회 실패
+        with patch.object(gate, '_get_error_budget_percent', return_value=None):
+            health = gate.get_health_status()
+        
+        assert health["healthy"] is False
+        assert health["status"] == "degraded"
+        assert health["gate"]["fail_open_triggered"] is True
+
+
+# =============================================================================
+# Test: Config with new fields
+# =============================================================================
+
+
+class TestConfigNewFields:
+    """새로 추가된 설정 필드 테스트."""
+    
+    def test_config_circuit_breaker_fields(self):
+        """Circuit Breaker 설정 필드."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        config = ErrorBudgetGateConfig(
+            circuit_breaker_enabled=True,
+            circuit_breaker_failure_threshold=10,
+            circuit_breaker_recovery_timeout=60,
+        )
+        
+        assert config.circuit_breaker_enabled is True
+        assert config.circuit_breaker_failure_threshold == 10
+        assert config.circuit_breaker_recovery_timeout == 60
+    
+    def test_config_alert_fields(self):
+        """알림 설정 필드."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        config = ErrorBudgetGateConfig(
+            alert_on_fail_open=True,
+            alert_cooldown_seconds=600,
+        )
+        
+        assert config.alert_on_fail_open is True
+        assert config.alert_cooldown_seconds == 600
+    
+    def test_config_to_dict_all_fields(self):
+        """to_dict에 모든 필드 포함."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        config = ErrorBudgetGateConfig()
+        config_dict = config.to_dict()
+        
+        assert "circuit_breaker_enabled" in config_dict
+        assert "circuit_breaker_failure_threshold" in config_dict
+        assert "circuit_breaker_recovery_timeout" in config_dict
+        assert "alert_on_fail_open" in config_dict
+        assert "alert_cooldown_seconds" in config_dict
+    
+    def test_config_from_dict_all_fields(self):
+        """from_dict에서 모든 필드 로드."""
+        from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
+        
+        data = {
+            "enabled": True,
+            "circuit_breaker_enabled": False,
+            "circuit_breaker_failure_threshold": 7,
+            "circuit_breaker_recovery_timeout": 45,
+            "alert_on_fail_open": False,
+            "alert_cooldown_seconds": 120,
+        }
+        
+        config = ErrorBudgetGateConfig.from_dict(data)
+        
+        assert config.circuit_breaker_enabled is False
+        assert config.circuit_breaker_failure_threshold == 7
+        assert config.circuit_breaker_recovery_timeout == 45
+        assert config.alert_on_fail_open is False
+        assert config.alert_cooldown_seconds == 120

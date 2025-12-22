@@ -13,6 +13,11 @@
 7. [OpenTelemetry 연동](#7-opentelemetry-연동)
 8. [운영 가이드](#8-운영-가이드)
 9. [Error Budget Gate (자동화 제어)](#9-error-budget-gate-자동화-제어)
+   - [9.7 Fail-Open Rate Limiting](#97-fail-open-rate-limiting-최소한의-제약이-있는-방임)
+   - [9.9 Circuit Breaker](#99-circuit-breaker-빠른-실패)
+   - [9.10 Alert Manager](#910-alert-manager-운영-알림)
+   - [9.11 Health Endpoint](#911-health-endpoint-상태-조회-api)
+   - [9.12 Grafana Dashboard](#912-grafana-dashboard)
 10. [동적 설정 (Runtime Configuration)](#10-동적-설정-runtime-configuration)
 11. [Fail-Safe Self-Reporting](#11-fail-safe-self-reporting-침묵하는-장애-방지)
 12. [고급 관측성 기능](#12-고급-관측성-기능)
@@ -724,27 +729,95 @@ Error Budget Gate 자체에 오류가 발생했을 때:
 - ❌ **Fail-Close**: 모든 자동화 차단 → 배포/운영 마비
 - ✅ **Fail-Open**: 자동화 허용 → 기존 동작 유지
 
-```python
-try:
-    budget = await self._fetch_error_budget()
-    return self._evaluate(budget)
-except Exception as e:
-    # Gate 오류 시 안전하게 허용
-    if self.config.fail_open:
-        return GateCheckResult(
-            allowed=True,
-            status=GateStatus.FAIL_OPEN,
-            reason=f"Gate error: {e}",
-        )
-    else:
-        return GateCheckResult(
-            allowed=False,
-            status=GateStatus.BLOCKED,
-            reason=f"Gate error (fail-close): {e}",
-        )
+### 9.7 Fail-Open Rate Limiting (최소한의 제약이 있는 방임)
+
+> **핵심 원칙**: "완전한 방임보다 '제한된 방임'이 폭주를 막는 최후의 보루"
+
+Redis/DB가 장애 상태일 때 무조건 `allowed=True`를 주는 것이 아니라,
+**메모리 기반 Rate Limit**을 적용하여 무한 루프나 폭주를 방지합니다.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│               Fail-Open Rate Limiting 개념도                  │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   Error Budget 조회 실패 (Redis/DB 장애)                      │
+│              │                                               │
+│              ▼                                               │
+│   ┌───────────────────────────────┐                          │
+│   │ Rate Limit 체크 (메모리 기반) │ ◀── 외부 의존성 없음      │
+│   │                               │                          │
+│   │ 분당 10회 이내?               │                          │
+│   └───────────────────────────────┘                          │
+│          │ Yes              │ No                             │
+│          ▼                  ▼                                │
+│   🟢 FAIL_OPEN         🔴 FAIL_OPEN_RATE_LIMITED             │
+│   (자동화 허용)        (자동화 차단)                          │
+│   remaining: 9          remaining: 0                          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 9.7 메트릭
+#### 설정
+
+```python
+config = ErrorBudgetGateConfig(
+    fail_open=True,
+    fail_open_rate_limit_enabled=True,        # Rate Limit 활성화 (기본: True)
+    fail_open_rate_limit_per_minute=10,       # 분당 최대 10회 (기본: 10)
+    fail_open_rate_limit_window_seconds=60,   # 슬라이딩 윈도우 60초 (기본: 60)
+)
+```
+
+| 설정 | 기본값 | 설명 |
+|------|--------|------|
+| `fail_open_rate_limit_enabled` | `True` | Rate Limit 적용 여부 |
+| `fail_open_rate_limit_per_minute` | `10` | 분당 최대 허용 횟수 |
+| `fail_open_rate_limit_window_seconds` | `60` | 슬라이딩 윈도우 크기 (초) |
+
+#### API로 동적 변경
+
+```bash
+# Rate Limit 설정 변경
+curl -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fail_open_rate_limit_per_minute": 5,
+    "fail_open_rate_limit_window_seconds": 30
+  }' \
+  $API_URL/api/self-healing/config/error-budget-gate/
+```
+
+#### Rate Limiter 상태 조회
+
+```python
+gate = get_error_budget_gate()
+status = gate.get_rate_limiter_status()
+# {
+#     "enabled": True,
+#     "current_count": 3,
+#     "max_requests": 10,
+#     "window_seconds": 60,
+#     "remaining": 7
+# }
+```
+
+#### 응답 예시 (Rate Limit 초과 시)
+
+```json
+{
+    "allowed": false,
+    "status": "fail_open_rate_limited",
+    "reason": "Error budget retrieval failed and rate limit exceeded (10/min)",
+    "recommendation": "에러 예산 조회 실패 상황에서 Rate Limit을 초과했습니다...",
+    "fail_open_triggered": true,
+    "rate_limit_remaining": 0,
+    "rate_limit_reset_at": "2024-01-15T10:30:00+00:00"
+}
+```
+
+### 9.8 메트릭
 
 | 메트릭 | 타입 | 설명 |
 |--------|------|------|
@@ -752,6 +825,311 @@ except Exception as e:
 | `selfhealing_error_budget_gate_blocked_total` | Counter | 차단된 자동화 횟수 |
 | `selfhealing_error_budget_gate_status` | Gauge | 현재 Gate 상태 |
 | `selfhealing_error_budget_gate_latency_seconds` | Histogram | Gate 체크 지연 시간 |
+| `selfhealing_error_budget_gate_rate_limited_total` | Counter | Rate Limit 초과 횟수 |
+| `selfhealing_error_budget_gate_circuit_breaker_state` | Gauge | Circuit Breaker 상태 (0=closed, 1=open, 2=half_open) |
+| `selfhealing_error_budget_gate_alerts_total` | Counter | 발송된 알림 횟수 |
+
+### 9.9 Circuit Breaker (빠른 실패)
+
+> **핵심 원칙**: "반복적인 실패에 대해 빠르게 실패하여 시스템 부하를 줄임"
+
+Error Budget Gate가 연속적으로 오류가 발생할 때, 매번 느린 타임아웃을 기다리는 대신 **즉시 Fail-Open**으로 응답합니다.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                 Circuit Breaker 상태 전이                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────────┐  failure >= 3   ┌─────────┐                    │
+│   │ CLOSED  │ ──────────────▶ │  OPEN   │                    │
+│   │ (정상)  │                 │ (차단)  │                    │
+│   └─────────┘                 └────┬────┘                    │
+│        ▲                           │                         │
+│        │ success                   │ recovery_timeout        │
+│        │                           ▼                         │
+│   ┌─────────┐                 ┌─────────┐                    │
+│   │         │ ◀────────────── │HALF_OPEN│                    │
+│   └─────────┘                 │ (시험)  │                    │
+│                               └─────────┘                    │
+│                                                              │
+│   CLOSED:    정상 동작, Error Budget 조회                    │
+│   OPEN:      즉시 Fail-Open 반환 (조회 안함)                 │
+│   HALF_OPEN: 1회 시험 조회, 성공 시 CLOSED                   │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 설정
+
+```python
+config = ErrorBudgetGateConfig(
+    circuit_breaker_enabled=True,           # Circuit Breaker 활성화
+    circuit_breaker_failure_threshold=3,    # 연속 실패 N회 시 Open
+    circuit_breaker_recovery_timeout=60,    # Open 상태 유지 시간 (초)
+)
+```
+
+| 설정 | 기본값 | 설명 |
+|------|--------|------|
+| `circuit_breaker_enabled` | `True` | Circuit Breaker 활성화 여부 |
+| `circuit_breaker_failure_threshold` | `3` | Open 전환을 위한 연속 실패 횟수 |
+| `circuit_breaker_recovery_timeout` | `60` | Open에서 Half-Open까지 대기 시간 (초) |
+
+#### 상태 조회
+
+```python
+gate = get_error_budget_gate()
+status = gate.get_circuit_breaker_status()
+# {
+#     "enabled": True,
+#     "state": "closed",  # "closed", "open", "half_open"
+#     "failure_count": 0,
+#     "failure_threshold": 3,
+#     "recovery_timeout_seconds": 60,
+#     "last_failure_at": None,
+#     "open_until": None
+# }
+```
+
+#### 동작 예시
+
+```
+Request 1: Error Budget 조회 성공 → CLOSED 유지
+Request 2: Error Budget 조회 실패 → failure_count=1, CLOSED
+Request 3: Error Budget 조회 실패 → failure_count=2, CLOSED  
+Request 4: Error Budget 조회 실패 → failure_count=3, CLOSED → OPEN 전환
+
+Request 5-100: 즉시 Fail-Open 반환 (조회 안함, 빠른 응답)
+
+60초 후...
+Request 101: HALF_OPEN, 1회 시험 조회
+  - 성공 → CLOSED, failure_count=0
+  - 실패 → OPEN 재진입, 60초 대기
+```
+
+### 9.10 Alert Manager (운영 알림)
+
+> **핵심 원칙**: "Fail-Safe가 발동하면 반드시 알림을 발송하여 '침묵하는 장애'를 방지"
+
+Fail-Open, Rate Limit, Circuit Breaker 상태 변화 시 자동으로 알림을 발송합니다.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   Alert Manager 알림 종류                     │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   🔶 fail_open                                               │
+│      "Error Budget 조회 실패, Fail-Open 모드 전환"           │
+│      심각도: warning                                         │
+│                                                              │
+│   🔴 rate_limited                                            │
+│      "Rate Limit 초과로 자동화 차단"                         │
+│      심각도: critical                                        │
+│                                                              │
+│   ⚡ circuit_open                                            │
+│      "연속 실패로 Circuit Breaker Open"                      │
+│      심각도: warning                                         │
+│                                                              │
+│   ✅ circuit_recovered                                       │
+│      "Circuit Breaker가 정상으로 복구됨"                     │
+│      심각도: info                                            │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 설정
+
+```python
+config = ErrorBudgetGateConfig(
+    alert_on_fail_open=True,          # Fail-Open 시 알림
+    alert_cooldown_seconds=300,       # 같은 타입 알림 재발송 대기 (5분)
+)
+```
+
+| 설정 | 기본값 | 설명 |
+|------|--------|------|
+| `alert_on_fail_open` | `True` | Fail-Open/Rate Limit/Circuit Open 시 알림 발송 |
+| `alert_cooldown_seconds` | `300` | 동일 타입 알림 재발송 쿨다운 (초) |
+
+#### 알림 상태 조회
+
+```python
+gate = get_error_budget_gate()
+status = gate.get_alert_manager_status()
+# {
+#     "enabled": True,
+#     "cooldown_seconds": 300,
+#     "alert_counts": {
+#         "fail_open": 2,
+#         "rate_limited": 0,
+#         "circuit_open": 1,
+#         "circuit_recovered": 1
+#     },
+#     "last_alerts": {
+#         "fail_open": "2024-01-15T10:30:00+00:00",
+#         "circuit_open": "2024-01-15T10:25:00+00:00"
+#     }
+# }
+```
+
+#### 알림 예시 (콘솔 로그)
+
+```
+[GateAlert] 🔶 Error Budget Gate: Fail-Open 발동: Error Budget 조회에 실패하여 Fail-Open 모드로 전환되었습니다.
+• 사유: Error budget service unavailable
+• Rate Limit 잔여: 9
+• 조치: Error Budget 서비스 상태를 확인하세요.
+```
+
+### 9.11 Health Endpoint (상태 조회 API)
+
+Gate의 전체 상태를 한 번에 조회할 수 있는 API를 제공합니다.
+
+#### GET /api/self-healing/health/gate/
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" $API_URL/api/self-healing/health/gate/
+```
+
+**응답 예시:**
+
+```json
+{
+    "status": "healthy",
+    "enabled": true,
+    "gate_status": "open",
+    "error_budget_percent": 75.0,
+    "thresholds": {
+        "critical_percent": 10.0,
+        "warning_percent": 20.0
+    },
+    "rate_limiter": {
+        "enabled": true,
+        "current_count": 0,
+        "max_requests": 10,
+        "remaining": 10
+    },
+    "circuit_breaker": {
+        "enabled": true,
+        "state": "closed",
+        "failure_count": 0,
+        "failure_threshold": 3
+    },
+    "alerts": {
+        "enabled": true,
+        "cooldown_seconds": 300,
+        "total_sent": 5
+    },
+    "checked_at": "2024-01-15T10:30:00+00:00"
+}
+```
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `status` | string | `healthy`, `degraded`, `unknown` |
+| `gate_status` | string | Gate 현재 상태 |
+| `error_budget_percent` | float | Error Budget 잔량 |
+| `rate_limiter` | object | Rate Limiter 상태 |
+| `circuit_breaker` | object | Circuit Breaker 상태 |
+| `alerts` | object | Alert Manager 상태 |
+
+#### GET /api/self-healing/config/gate/
+
+Gate 설정 조회:
+
+```json
+{
+    "enabled": true,
+    "critical_threshold_percent": 10.0,
+    "warning_threshold_percent": 20.0,
+    "fail_open": true,
+    "fail_open_rate_limit_enabled": true,
+    "fail_open_rate_limit_per_minute": 10,
+    "circuit_breaker_enabled": true,
+    "circuit_breaker_failure_threshold": 3,
+    "circuit_breaker_recovery_timeout": 60,
+    "alert_on_fail_open": true,
+    "alert_cooldown_seconds": 300
+}
+```
+
+#### PUT /api/self-healing/config/gate/
+
+Gate 설정 동적 변경:
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "circuit_breaker_failure_threshold": 5,
+    "alert_cooldown_seconds": 600
+  }' \
+  $API_URL/api/self-healing/config/gate/
+```
+
+#### POST /api/self-healing/gate/reset/
+
+긴급 상황에서 컴포넌트 리셋:
+
+```bash
+# 전체 리셋
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"components": ["all"]}' \
+  $API_URL/api/self-healing/gate/reset/
+
+# 특정 컴포넌트만 리셋
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"components": ["circuit_breaker", "rate_limiter"]}' \
+  $API_URL/api/self-healing/gate/reset/
+```
+
+### 9.12 Grafana Dashboard
+
+Error Budget Gate 전용 Grafana 대시보드를 제공합니다.
+
+**위치**: `docker/grafana/dashboards/error_budget_gate.json`
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              Error Budget Gate Dashboard                      │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│   │ Gate Status │ │ Budget %    │ │ Rate Limit  │            │
+│   │    OPEN     │ │    75%      │ │   8/10      │            │
+│   └─────────────┘ └─────────────┘ └─────────────┘            │
+│                                                              │
+│   ┌─────────────┐ ┌─────────────────────────────────────┐    │
+│   │ Circuit     │ │         Gate Activity               │    │
+│   │ Breaker     │ │   ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄       │    │
+│   │  CLOSED     │ │   ████████████████████████████       │    │
+│   └─────────────┘ └─────────────────────────────────────┘    │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**패널 구성:**
+
+| 패널 | 쿼리 | 설명 |
+|------|------|------|
+| Gate Status | `selfhealing_error_budget_gate_status` | 현재 Gate 상태 |
+| Error Budget | `selfhealing_error_budget_remaining_percent` | Budget 잔량 게이지 |
+| Rate Limit Remaining | `10 - rate(...)` | Rate Limit 잔여 횟수 |
+| Circuit Breaker State | `selfhealing_...circuit_breaker_state` | CB 상태 표시 |
+| Gate Checks | `rate(selfhealing_...checks_total[5m])` | 분당 체크 횟수 |
+| Gate Blocked | `rate(selfhealing_...blocked_total[5m])` | 분당 차단 횟수 |
+
+**대시보드 설정:**
+
+```bash
+# Grafana에 대시보드 임포트
+docker cp docker/grafana/dashboards/error_budget_gate.json grafana:/etc/grafana/provisioning/dashboards/
+```
 
 ---
 
