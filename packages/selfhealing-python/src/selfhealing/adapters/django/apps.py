@@ -39,7 +39,7 @@ def create_selfhealing_groups(sender, **kwargs):
     Called via post_migrate signal - runs only after migrations complete.
     Uses get_or_create for idempotency.
     
-    Environment snapshot is logged for audit trail.
+    Also logs environment variable snapshot for audit trail.
     """
     from django.contrib.auth.models import Group
     
@@ -62,6 +62,16 @@ def create_selfhealing_groups(sender, **kwargs):
         logger.debug(
             f"[SelfHealing] RBAC groups already existed: {existing_groups}"
         )
+    
+    # Log environment variable snapshot (Phase 2: 환경변수 Audit)
+    try:
+        from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
+        log_env_snapshot_to_audit()
+    except ImportError:
+        logger.debug("[SelfHealing] env_snapshot module not available")
+    except Exception as e:
+        # Best-effort: 실패해도 시스템은 시작
+        logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
 
 
 class SelfHealingConfig(AppConfig):

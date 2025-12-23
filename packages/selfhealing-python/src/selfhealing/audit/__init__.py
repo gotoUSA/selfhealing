@@ -80,6 +80,13 @@ from selfhealing.audit.resilience import (
     get_degraded_mode_manager,
     log_critical_to_syslog,
 )
+from selfhealing.audit.env_snapshot import (
+    collect_env_snapshot,
+    log_env_snapshot_to_audit,
+    get_env_snapshot_summary,
+    TRACKED_PREFIXES,
+    SENSITIVE_KEYWORDS,
+)
 
 __all__ = [
     # Main API
@@ -133,4 +140,10 @@ __all__ = [
     "get_syslog_fallback",
     "get_degraded_mode_manager",
     "log_critical_to_syslog",
+    # Environment Snapshot
+    "collect_env_snapshot",
+    "log_env_snapshot_to_audit",
+    "get_env_snapshot_summary",
+    "TRACKED_PREFIXES",
+    "SENSITIVE_KEYWORDS",
 ]

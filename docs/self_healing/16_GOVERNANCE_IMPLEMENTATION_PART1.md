@@ -35,7 +35,7 @@ permission_classes = [IsAuthenticated, IsAdminUser]
 
 ### 1.3 구현 계획
 
-#### Phase 1: 권한 클래스 생성
+#### Phase 1: 권한 클래스 생성 ✅
 
 **파일**: `packages/selfhealing-python/src/selfhealing/api/django/permissions.py`
 
@@ -43,10 +43,25 @@ permission_classes = [IsAuthenticated, IsAdminUser]
 """
 RBAC Permission Classes for Self-Healing Control API.
 
+Provides role-based access control for the Self-Healing system:
+- Viewer: Read-only access (dashboard, status, audit logs)
+- Operator: Operational tasks (DLQ replay, archive)
+- Admin: Full access (CB control, system enable/disable, config changes)
+
 Reference: docs/self_healing/10_OPERATIONS_GUIDE.md (권한 테이블)
+Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
-from rest_framework.permissions import BasePermission
+
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
+from rest_framework.permissions import BasePermission
+
+if TYPE_CHECKING:
+    from rest_framework.request import Request
+    from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
@@ -54,71 +69,112 @@ logger = logging.getLogger(__name__)
 class IsViewer(BasePermission):
     """
     읽기 전용 권한 (Viewer 역할).
-    
-    - 인증된 사용자 + 'selfhealing.view' 그룹 또는 staff
+
+    허용되는 작업:
+    - GET /status, GET /dashboard
+    - GET /audit (감사 로그 조회)
+    - GET /dlq/list, GET /dlq/<pk> (DLQ 조회)
+    - GET /system/status (시스템 상태 조회)
+
+    조건:
+    - 인증된 사용자
+    - staff 또는 'selfhealing_viewer' 그룹 멤버
     """
-    
-    def has_permission(self, request, view):
+
+    message = "Self-Healing 조회 권한이 필요합니다. selfhealing_viewer 그룹에 속해야 합니다."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
-        
+
         # Admin/Staff는 항상 허용
         if request.user.is_staff:
             return True
-        
-        # selfhealing_viewer 그룹 멤버십 확인
-        return request.user.groups.filter(name='selfhealing_viewer').exists()
+
+        # selfhealing_viewer, operator, admin 그룹 멤버십 확인
+        # (상위 권한은 하위 권한 포함)
+        return request.user.groups.filter(
+            name__in=["selfhealing_viewer", "selfhealing_operator", "selfhealing_admin"]
+        ).exists()
 
 
 class IsOperator(BasePermission):
     """
     운영자 권한 (Operator 역할).
-    
-    - DLQ 리플레이, CB 상태 조회, Audit 조회 가능
-    - CB 수동 제어, Override는 불가
+
+    허용되는 작업:
+    - 모든 Viewer 권한
+    - POST /dlq/replay (DLQ 리플레이)
+    - POST /dlq/cleanup/archive (DLQ 아카이브)
+    - POST /dlq/<pk>/retry (개별 항목 재시도)
+    - POST /dlq/<pk>/resolve (개별 항목 해결)
+
+    조건:
+    - 인증된 사용자
+    - superuser 또는 'selfhealing_operator' 또는 'selfhealing_admin' 그룹 멤버
     """
-    
-    def has_permission(self, request, view):
+
+    message = "Self-Healing 운영자 권한이 필요합니다. selfhealing_operator 그룹에 속해야 합니다."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
-        
+
         # Admin은 항상 허용
         if request.user.is_staff and request.user.is_superuser:
             return True
-        
-        # selfhealing_operator 그룹 멤버십 확인
+
+        # selfhealing_operator 또는 selfhealing_admin 그룹 멤버십 확인
         return request.user.groups.filter(
-            name__in=['selfhealing_operator', 'selfhealing_admin']
+            name__in=["selfhealing_operator", "selfhealing_admin"]
         ).exists()
 
 
 class IsSelfHealingAdmin(BasePermission):
     """
     관리자 권한 (Admin 역할).
-    
-    - 모든 권한 (CB 수동 제어, Override 승인 포함)
+
+    허용되는 작업:
+    - 모든 Operator 권한
+    - POST /control/ (CB 수동 제어: allow/block)
+    - POST /system/enable, /system/disable (킬 스위치)
+    - PUT /config/* (설정 변경)
+    - POST /dlq/cleanup/purge (DLQ 영구 삭제)
+
+    조건:
+    - Django superuser 또는 'selfhealing_admin' 그룹 멤버
+
+    보안:
     - Fail-Secure: 권한 확인 실패 시 거부
     """
-    
-    def has_permission(self, request, view):
+
+    message = "Self-Healing 관리자 권한이 필요합니다. selfhealing_admin 그룹에 속해야 합니다."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
         try:
             if not request.user or not request.user.is_authenticated:
                 return False
-            
+
             # Django superuser
             if request.user.is_superuser:
                 return True
-            
+
             # selfhealing_admin 그룹
-            return request.user.groups.filter(name='selfhealing_admin').exists()
-            
+            return request.user.groups.filter(name="selfhealing_admin").exists()
+
         except Exception as e:
             # Fail-Secure: 오류 시 거부
             logger.warning(f"[RBAC] Permission check failed (deny): {e}")
             return False
+
+
+# Backward compatibility aliases
+SelfHealingViewer = IsViewer
+SelfHealingOperator = IsOperator
+SelfHealingAdmin = IsSelfHealingAdmin
 ```
 
-#### Phase 2: View에 적용
+#### Phase 2: View에 적용 ✅
 
 ```python
 # 읽기 전용 엔드포인트
@@ -134,33 +190,112 @@ class CircuitBreakerControlView(APIView):
     permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 ```
 
-#### Phase 3: Django Group 생성 (Migration)
+#### Phase 3: Django Group 생성 (post_migrate Signal) ✅
 
-**파일**: `shopping/migrations/XXXX_create_selfhealing_groups.py`
+> **변경 사항**: Migration 방식에서 `post_migrate` 시그널 방식으로 변경
+> 
+> **이유**:
+> - 호스트 앱 오염 방지 (shopping 마이그레이션에 의존하지 않음)
+> - 이식성 확보 (다른 프로젝트로 패키지 재사용 가능)
+> - 업계 표준 방식 (django-allauth, django-guardian 방식)
+> 
+> **동작 방식**:
+> - `post_migrate` 시그널: 마이그레이션 완료 후 1회만 실행
+> - `get_or_create`로 멱등성 보장
+> - `dispatch_uid`로 중복 연결 방지
+
+**파일**: `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py`
 
 ```python
-from django.db import migrations
+"""
+Django App Configuration for Self-Healing.
 
-def create_groups(apps, schema_editor):
-    Group = apps.get_model('auth', 'Group')
+RBAC Groups:
+    The selfhealing package creates the following groups via post_migrate signal:
+    - selfhealing_viewer: Read-only access (dashboard, status, audit logs)
+    - selfhealing_operator: Operational tasks (DLQ replay, archive)
+    - selfhealing_admin: Full access (CB control, system enable/disable, config)
+
+    This approach:
+    - Does NOT pollute host app's migrations
+    - Runs only after migrations complete (DB ready guaranteed)
+    - Is idempotent (safe to run multiple times)
+    - Is the industry standard (used by django-allauth, django-guardian)
+"""
+
+import logging
+
+from django.apps import AppConfig
+from django.db.models.signals import post_migrate
+
+logger = logging.getLogger(__name__)
+
+# RBAC group definitions
+SELFHEALING_GROUPS = [
+    "selfhealing_viewer",
+    "selfhealing_operator", 
+    "selfhealing_admin",
+]
+
+
+def create_selfhealing_groups(sender, **kwargs):
+    """
+    Create RBAC groups for Self-Healing system.
     
-    Group.objects.get_or_create(name='selfhealing_viewer')
-    Group.objects.get_or_create(name='selfhealing_operator')
-    Group.objects.get_or_create(name='selfhealing_admin')
-
-def remove_groups(apps, schema_editor):
-    Group = apps.get_model('auth', 'Group')
-    Group.objects.filter(name__startswith='selfhealing_').delete()
-
-class Migration(migrations.Migration):
-    dependencies = [
-        ('shopping', 'XXXX_previous'),
-        ('auth', '__latest__'),
-    ]
+    Called via post_migrate signal - runs only after migrations complete.
+    Uses get_or_create for idempotency.
+    """
+    from django.contrib.auth.models import Group
     
-    operations = [
-        migrations.RunPython(create_groups, remove_groups),
-    ]
+    created_groups = []
+    existing_groups = []
+    
+    for group_name in SELFHEALING_GROUPS:
+        group, created = Group.objects.get_or_create(name=group_name)
+        if created:
+            created_groups.append(group_name)
+        else:
+            existing_groups.append(group_name)
+    
+    if created_groups:
+        logger.info(
+            f"[SelfHealing] RBAC groups created: {created_groups}"
+        )
+    
+    if existing_groups and created_groups:
+        logger.debug(
+            f"[SelfHealing] RBAC groups already existed: {existing_groups}"
+        )
+
+
+class SelfHealingConfig(AppConfig):
+    """Django app configuration for self-healing."""
+
+    name = "selfhealing.adapters.django"
+    label = "selfhealing"
+    verbose_name = "Self-Healing System"
+    default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self):
+        """
+        Called when the app is ready.
+        
+        Connects post_migrate signal for RBAC group creation.
+        This ensures groups are created after migrations complete,
+        not on every server start.
+        """
+        # Import admin to register admin classes
+        try:
+            from selfhealing.adapters.django import admin  # noqa: F401
+        except ImportError:
+            pass
+        
+        # Connect post_migrate signal for RBAC group creation
+        post_migrate.connect(
+            create_selfhealing_groups,
+            sender=self,
+            dispatch_uid="selfhealing_create_rbac_groups",
+        )
 ```
 
 ### 1.4 테스트 계획
@@ -296,7 +431,9 @@ def log_env_snapshot_to_audit():
 
 #### Phase 2: AppConfig에서 호출
 
-**파일**: `packages/selfhealing-python/src/selfhealing/apps.py` (수정)
+> **Note**: RBAC 그룹 생성과 함께 환경변수 스냅샷도 `post_migrate` 시그널에서 호출합니다.
+
+**파일**: `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py` (수정)
 
 ```python
 from django.apps import AppConfig
@@ -1601,16 +1738,16 @@ class TierDryRunAPI(APIView):
 
 ## 체크리스트
 
-### Phase 1: RBAC
-- [ ] `permissions.py` 생성 (IsViewer, IsOperator, IsSelfHealingAdmin)
-- [ ] Migration으로 Django Group 생성
-- [ ] View에 권한 클래스 적용
-- [ ] 테스트 작성
+### Phase 1: RBAC ✅
+- [x] `permissions.py` 생성 (IsViewer, IsOperator, IsSelfHealingAdmin)
+- [x] `post_migrate` 시그널로 Django Group 생성 (Migration 방식 → Signal 방식으로 변경)
+- [x] View에 권한 클래스 적용
+- [x] 테스트 작성 (`test_rbac_permissions.py`)
 
-### Phase 2: 환경변수 Audit
-- [ ] `env_snapshot.py` 생성
-- [ ] AppConfig.ready()에서 호출
-- [ ] 테스트 작성
+### Phase 2: 환경변수 Audit ✅
+- [x] `env_snapshot.py` 생성
+- [x] `post_migrate` 시그널에서 환경변수 스냅샷 로깅 호출
+- [x] 테스트 작성 (`test_env_snapshot.py`)
 
 ### Phase 3: API Rate Limit (Hybrid Throttling)
 - [ ] `LocalMemoryRateLimiter` 생성 (L1 비상 리미터)
