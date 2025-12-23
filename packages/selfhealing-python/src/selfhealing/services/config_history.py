@@ -95,6 +95,9 @@ class ConfigHistoryService:
         "metrics",
         "error_budget",
         "drift_threshold",  # Drift 임계값 설정
+        "emergency",        # Emergency Mode 설정
+        "logging",          # Logging 설정
+        "chaos",            # Chaos Engineering 설정
     ]
     
     def __init__(self):

@@ -581,13 +581,13 @@ manager._update_config(
 ## 체크리스트
 
 ### Phase 1: Core Integration
-- [ ] `RuntimeConfigManager._save_to_history()` 헬퍼 추가
-- [ ] `RuntimeConfigManager._update_config()` 시그니처 변경
-- [ ] **Diff-Aware Saving**: 실제 변경 시에만 버전 저장
-- [ ] **Safe Default 추적**: 적용 시 reason에 표식 추가
-- [ ] `RuntimeConfigManager.update_with_strategy()` 수정
-- [ ] `ConfigHistoryService.SUPPORTED_CONFIG_TYPES` 확장
-- [ ] 단위 테스트 추가
+- [x] `RuntimeConfigManager._save_to_history()` 헬퍼 추가
+- [x] `RuntimeConfigManager._update_config()` 시그니처 변경
+- [x] **Diff-Aware Saving**: 실제 변경 시에만 버전 저장
+- [x] **Safe Default 추적**: 적용 시 reason에 표식 추가
+- [x] `RuntimeConfigManager.update_with_strategy()` 수정
+- [x] `ConfigHistoryService.SUPPORTED_CONFIG_TYPES` 확장
+- [x] 단위 테스트 추가 (17개 테스트)
 
 ### Phase 2: Reconciliation Integration
 - [ ] `ReconciliationService._save_reconciliation_to_history()` 추가
