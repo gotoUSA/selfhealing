@@ -595,10 +595,11 @@ manager._update_config(
 - [x] 테스트 업데이트 (6개 테스트 추가)
 
 ### Phase 3: Emergency Mode Integration
-- [ ] `GracefulDegradationManager._save_state_to_config_history()` 추가
-- [ ] `activate_manual()` 수정
-- [ ] `deactivate()` 수정
-- [ ] 테스트 업데이트
+- [x] `GracefulDegradationManager._save_state_to_config_history()` 추가
+- [x] `activate_manual()` 수정
+- [x] `activate_auto()` 수정
+- [x] `_do_deactivate()` 수정
+- [x] 테스트 업데이트 (7개 테스트 추가, 총 42개 테스트)
 
 ### Phase 4: API Views Integration
 - [ ] `BaseConfigView.put()` 수정

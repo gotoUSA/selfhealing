@@ -463,6 +463,14 @@ class GracefulDegradationManager:
             self._log_history("ACTIVATED", old_state, self._state)
             self._log_audit("activate", activated_by, reason)
             
+            # ConfigHistory에 저장
+            self._save_state_to_config_history(
+                action="ACTIVATED",
+                state=self._state,
+                changed_by=activated_by,
+                reason=reason,
+            )
+            
             logger.warning(
                 f"[EmergencyMode] ACTIVATED by {activated_by}: "
                 f"level={level.name}, reason={reason}, "
@@ -512,6 +520,14 @@ class GracefulDegradationManager:
             self._save_state()
             self._log_history("AUTO_ACTIVATED", old_state, self._state)
             self._log_audit("auto_activate", "system", reason)
+            
+            # ConfigHistory에 저장
+            self._save_state_to_config_history(
+                action="AUTO_ACTIVATED",
+                state=self._state,
+                changed_by="system",
+                reason=reason,
+            )
             
             logger.warning(
                 f"[EmergencyMode] AUTO-ACTIVATED: level={level.name}, "
@@ -569,6 +585,14 @@ class GracefulDegradationManager:
         self._save_state()
         self._log_history("DEACTIVATED", old_state, self._state)
         self._log_audit("deactivate", deactivated_by, reason)
+        
+        # ConfigHistory에 저장
+        self._save_state_to_config_history(
+            action="DEACTIVATED",
+            state=self._state,
+            changed_by=deactivated_by,
+            reason=reason,
+        )
         
         logger.info(f"[EmergencyMode] DEACTIVATED by {deactivated_by}: {reason}")
         
@@ -784,6 +808,37 @@ class GracefulDegradationManager:
             )
         except Exception as e:
             logger.error(f"[EmergencyMode] Audit log failed: {e}")
+    
+    def _save_state_to_config_history(
+        self,
+        action: str,
+        state: EmergencyState,
+        changed_by: str,
+        reason: str,
+    ) -> None:
+        """
+        Emergency 상태를 ConfigHistory에 저장.
+        
+        Args:
+            action: 수행된 액션 (ACTIVATED, AUTO_ACTIVATED, DEACTIVATED)
+            state: 현재 상태
+            changed_by: 변경한 사용자
+            reason: 변경 사유
+        """
+        try:
+            from selfhealing.services.config_history import get_config_history_service
+            history_service = get_config_history_service()
+            
+            history_service.save_version(
+                config_type="emergency",
+                values=state.to_dict(),
+                changed_by=changed_by,
+                reason=f"Emergency {action}: {reason}",
+            )
+            logger.debug(f"[EmergencyMode] Saved to ConfigHistory: {action}")
+        except Exception as e:
+            # Graceful degradation - 히스토리 저장 실패해도 상태 변경은 성공
+            logger.warning(f"[EmergencyMode] Failed to save to ConfigHistory: {e}")
     
     # -------------------------------------------------------------------------
     # Configuration
