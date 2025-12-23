@@ -298,10 +298,15 @@ class BaseConfigView(APIView):
             # Get previous config for change logging
             previous_config = manager._get_config(self.config_name)
 
-            # Update with strategy
+            # Extract reason for history tracking
+            reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
+
+            # Update with strategy (includes ConfigHistory integration)
             result = manager.update_with_strategy(
                 config_type=self.config_name,
                 changes=config_changes,
+                changed_by=str(request.user),
+                reason=reason,
                 **apply_options,
             )
 

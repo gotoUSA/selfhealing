@@ -43,6 +43,12 @@ class ApplyStrategyMixin(serializers.Serializer):
         max_value=300,
         help_text="Max seconds to wait for in-progress operations (only for 'graceful' strategy)",
     )
+    reason = serializers.CharField(
+        required=False,
+        max_length=500,
+        allow_blank=True,
+        help_text="Reason for the configuration change (optional, for audit trail)",
+    )
 
     def get_apply_options(self) -> dict:
         """Extract apply strategy options from validated data."""
@@ -50,11 +56,12 @@ class ApplyStrategyMixin(serializers.Serializer):
             "strategy": self.validated_data.get("apply_strategy"),
             "delay_seconds": self.validated_data.get("delay_seconds"),
             "grace_timeout_seconds": self.validated_data.get("grace_timeout_seconds"),
+            "reason": self.validated_data.get("reason", ""),
         }
 
     def get_config_changes(self) -> dict:
         """Extract config changes (excluding apply strategy fields)."""
-        exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds"}
+        exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds", "reason"}
         return {k: v for k, v in self.validated_data.items() if k not in exclude_fields and v is not None}
 
     def validate_with_safe_fallback(self, data: dict) -> dict:

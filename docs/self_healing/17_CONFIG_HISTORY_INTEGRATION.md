@@ -266,7 +266,7 @@ SUPPORTED_CONFIG_TYPES = [
 
 ---
 
-### P4. Config API Views - High
+### P4. Config API Views - High ✅ (구현 완료)
 
 **현재 코드** (`views/config.py:261`):
 ```python
@@ -279,17 +279,52 @@ def put(self, request: Request) -> Response:
     )
 ```
 
-**변경 후**:
+**변경 후** (구현됨):
 ```python
 def put(self, request: Request) -> Response:
     # ...
+    # Extract apply options and config changes
+    apply_options = serializer.get_apply_options()
+    config_changes = serializer.get_config_changes()
+    
+    # Extract reason for history tracking
+    reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
+    
+    # Update with strategy (includes ConfigHistory integration)
     result = manager.update_with_strategy(
         config_type=self.config_name,
         changes=config_changes,
         changed_by=str(request.user),  # ✅ 사용자 정보 전달
-        reason=request.data.get("reason", "API update"),  # ✅ 변경 사유
+        reason=reason,                   # ✅ 변경 사유
         **apply_options,
     )
+```
+
+**Serializer 수정** (구현됨):
+```python
+class ApplyStrategyMixin(serializers.Serializer):
+    # ... 기존 필드들 ...
+    
+    reason = serializers.CharField(
+        required=False,
+        max_length=500,
+        allow_blank=True,
+        help_text="Reason for the configuration change (optional, for audit trail)",
+    )
+    
+    def get_apply_options(self) -> dict:
+        """Extract apply strategy options from validated data."""
+        return {
+            "strategy": self.validated_data.get("apply_strategy"),
+            "delay_seconds": self.validated_data.get("delay_seconds"),
+            "grace_timeout_seconds": self.validated_data.get("grace_timeout_seconds"),
+            "reason": self.validated_data.get("reason", ""),  # ✅ reason 포함
+        }
+
+    def get_config_changes(self) -> dict:
+        """Extract config changes (excluding apply strategy fields)."""
+        exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds", "reason"}  # ✅ reason 제외
+        return {k: v for k, v in self.validated_data.items() if k not in exclude_fields and v is not None}
 ```
 
 **RuntimeConfigManager.update_with_strategy() 수정**:
@@ -602,10 +637,17 @@ manager._update_config(
 - [x] 테스트 업데이트 (7개 테스트 추가, 총 42개 테스트)
 
 ### Phase 4: API Views Integration
-- [ ] `BaseConfigView.put()` 수정
-- [ ] Serializer reason 필드 추가 (optional)
-- [ ] 테스트 추가
+- [x] `BaseConfigView.put()` 수정
+  - `changed_by`: `str(request.user)` 전달
+  - `reason`: Serializer에서 추출 또는 기본값 생성
+- [x] Serializer reason 필드 추가 (optional, max 500자)
+- [x] `get_apply_options()`에 reason 포함
+- [x] `get_config_changes()`에서 reason 제외
+- [x] 테스트 추가 (15개 테스트)
+  - Serializer reason 필드 테스트 (7개)
+  - View Integration 테스트 (4개)
+  - RuntimeConfigManager Integration 테스트 (4개)
 
 ### 문서화
-- [ ] 변경된 API 시그니처 문서 업데이트
-- [ ] 사용 예시 추가
+- [x] 변경된 API 시그니처 문서 업데이트
+- [x] Phase 4 체크리스트 완료

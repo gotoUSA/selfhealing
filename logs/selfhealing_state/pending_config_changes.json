@@ -755,6 +755,102 @@
         "enabled": true,
         "failure_threshold": 15
       }
+    },
+    {
+      "id": "054e01b7",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-23T15:53:51.480774+00:00",
+      "scheduled_at": "2025-12-23T15:54:21.480774+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true
+      }
+    },
+    {
+      "id": "05a57b1c",
+      "config_type": "dlq",
+      "changes": {
+        "enabled": true
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-23T15:53:51.498847+00:00",
+      "scheduled_at": "2025-12-23T15:54:01.498847+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true
+      }
+    },
+    {
+      "id": "a6f4d04f",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-23T15:58:34.308317+00:00",
+      "scheduled_at": "2025-12-23T15:59:04.308317+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "63df67f4",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-23T15:59:09.783096+00:00",
+      "scheduled_at": "2025-12-23T15:59:39.783096+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
+    },
+    {
+      "id": "b9d096c8",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2025-12-23T16:00:18.912387+00:00",
+      "scheduled_at": "2025-12-23T16:00:48.912387+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 15
+      }
     }
   ],
   "history": [
