@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.models.drift_config import DriftThresholdConfig
 from selfhealing.core.state_backend import get_state_backend
+from selfhealing.services.config_history import get_config_history_service
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,19 @@ class DriftThresholdConfigView(APIView):
             backend = get_state_backend()
             backend.set(DRIFT_THRESHOLD_CONFIG_KEY, new_config.to_dict())
 
+            # ConfigHistory에 버전 저장 (감사 추적용)
+            try:
+                history_service = get_config_history_service()
+                history_service.save_version(
+                    config_type="drift_threshold",
+                    values=new_config.to_dict(),
+                    changed_by=actor_id,
+                    reason=f"Updated fields: {list(update_fields.keys())}",
+                )
+            except Exception as history_err:
+                # History 저장 실패해도 설정 변경은 성공으로 처리 (Graceful Degradation)
+                logger.warning(f"[DriftThresholdAPI] History save failed: {history_err}")
+
             # Audit 로깅
             logger.info(
                 f"[DriftThresholdAPI] Config updated by {actor_id}: "
@@ -197,6 +211,19 @@ class DriftThresholdResetView(APIView):
                 updated_by=actor_id,
             )
             backend.set(DRIFT_THRESHOLD_CONFIG_KEY, default.to_dict())
+
+            # ConfigHistory에 버전 저장 (감사 추적용)
+            try:
+                history_service = get_config_history_service()
+                history_service.save_version(
+                    config_type="drift_threshold",
+                    values=default.to_dict(),
+                    changed_by=actor_id,
+                    reason="Reset to default values",
+                )
+            except Exception as history_err:
+                # History 저장 실패해도 리셋은 성공으로 처리 (Graceful Degradation)
+                logger.warning(f"[DriftThresholdAPI] History save failed: {history_err}")
 
             # Audit 로깅
             logger.info(

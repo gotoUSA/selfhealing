@@ -364,3 +364,128 @@ class TestDriftThresholdIntegration:
         drift = DriftResult(max_drift_percent=3.0)
         severity = reconciler._classify_drift_severity(drift)
         assert severity == "normal"
+
+
+class TestDriftThresholdConfigHistory:
+    """Tests for ConfigHistory integration with drift threshold."""
+
+    @pytest.fixture
+    def factory(self):
+        return APIRequestFactory()
+
+    @pytest.fixture
+    def admin_user(self):
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_staff = True
+        user.__str__ = lambda self: "admin"
+        return user
+
+    @pytest.fixture
+    def mock_backend(self):
+        """Mock state backend."""
+        with patch("selfhealing.api.django.views.drift_threshold.get_state_backend") as mock:
+            backend = MagicMock()
+            mock.return_value = backend
+            yield backend
+
+    @pytest.fixture
+    def mock_history_service(self):
+        """Mock config history service."""
+        with patch("selfhealing.api.django.views.drift_threshold.get_config_history_service") as mock:
+            service = MagicMock()
+            mock.return_value = service
+            yield service
+
+    def test_put_saves_to_config_history(self, factory, admin_user, mock_backend, mock_history_service):
+        """PUT saves version to ConfigHistoryService."""
+        mock_backend.get.return_value = None
+
+        request = factory.put(
+            "/api/self-healing/config/drift-thresholds/",
+            data={"warning_threshold": 0.10},
+            content_type="application/json",
+        )
+        request.user = admin_user
+
+        view = DriftThresholdConfigView.as_view()
+        response = view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Verify ConfigHistory was called
+        mock_history_service.save_version.assert_called_once()
+        call_args = mock_history_service.save_version.call_args
+        assert call_args.kwargs["config_type"] == "drift_threshold"
+        assert call_args.kwargs["changed_by"] == "admin"
+        assert "warning_threshold" in call_args.kwargs["reason"]
+
+    def test_reset_saves_to_config_history(self, factory, admin_user, mock_backend, mock_history_service):
+        """POST /reset saves version to ConfigHistoryService."""
+        mock_backend.get.return_value = None
+
+        request = factory.post("/api/self-healing/config/drift-thresholds/reset/")
+        request.user = admin_user
+
+        view = DriftThresholdResetView.as_view()
+        response = view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Verify ConfigHistory was called
+        mock_history_service.save_version.assert_called_once()
+        call_args = mock_history_service.save_version.call_args
+        assert call_args.kwargs["config_type"] == "drift_threshold"
+        assert call_args.kwargs["changed_by"] == "admin"
+        assert "Reset to default" in call_args.kwargs["reason"]
+
+    def test_put_succeeds_when_history_fails(self, factory, admin_user, mock_backend, mock_history_service):
+        """PUT succeeds even if ConfigHistoryService fails (Graceful Degradation)."""
+        mock_backend.get.return_value = None
+        mock_history_service.save_version.side_effect = Exception("Redis unavailable")
+
+        request = factory.put(
+            "/api/self-healing/config/drift-thresholds/",
+            data={"warning_threshold": 0.10},
+            content_type="application/json",
+        )
+        request.user = admin_user
+
+        view = DriftThresholdConfigView.as_view()
+        response = view(request)
+
+        # Should still succeed
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["config"]["warning_threshold"] == 0.10
+
+    def test_reset_succeeds_when_history_fails(self, factory, admin_user, mock_backend, mock_history_service):
+        """POST /reset succeeds even if ConfigHistoryService fails (Graceful Degradation)."""
+        mock_backend.get.return_value = None
+        mock_history_service.save_version.side_effect = Exception("Redis unavailable")
+
+        request = factory.post("/api/self-healing/config/drift-thresholds/reset/")
+        request.user = admin_user
+
+        view = DriftThresholdResetView.as_view()
+        response = view(request)
+
+        # Should still succeed
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["config"]["warning_threshold"] == 0.05
+
+
+class TestConfigHistoryServiceDriftThreshold:
+    """Test that ConfigHistoryService supports drift_threshold config type."""
+
+    def test_drift_threshold_in_supported_types(self):
+        """drift_threshold is in SUPPORTED_CONFIG_TYPES."""
+        from selfhealing.services.config_history import ConfigHistoryService
+        
+        assert "drift_threshold" in ConfigHistoryService.SUPPORTED_CONFIG_TYPES
+
+    def test_is_valid_config_type_drift_threshold(self):
+        """ConfigHistoryService.is_valid_config_type returns True for drift_threshold."""
+        from selfhealing.services.config_history import ConfigHistoryService
+        
+        service = ConfigHistoryService()
+        assert service.is_valid_config_type("drift_threshold") is True

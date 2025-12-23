@@ -94,6 +94,7 @@ class ConfigHistoryService:
         "forensic",
         "metrics",
         "error_budget",
+        "drift_threshold",  # Drift 임계값 설정
     ]
     
     def __init__(self):
