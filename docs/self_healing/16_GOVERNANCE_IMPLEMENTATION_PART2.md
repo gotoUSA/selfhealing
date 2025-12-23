@@ -642,11 +642,24 @@ def validate_startup_config():
 - `packages/selfhealing-python/src/selfhealing/services/runtime_config.py` - logging 설정 지원
 - `tests/self_healing/unit/test_unexposed_config_api.py` - 29개 테스트
 
-### Phase 6: Fail-Safe Default
-- [ ] `safe_defaults.py` 생성
-- [ ] Serializer에 Safe Default 검증 추가
-- [ ] 시작 시 검증 로직 추가
-- [ ] 테스트 작성
+### Phase 6: Fail-Safe Default ✅ COMPLETED
+- [x] `safe_defaults.py` 생성
+- [x] Serializer에 Safe Default 검증 추가
+- [x] 시작 시 검증 로직 추가
+- [x] 테스트 작성 (55개 테스트)
+
+**구현된 파일:**
+- `packages/selfhealing-python/src/selfhealing/core/safe_defaults.py` - Safe Default 값 및 검증 로직
+- `packages/selfhealing-python/src/selfhealing/api/django/serializers/config.py` - Serializer에 Safe Default 폴백 추가
+- `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py` - 시작 시 검증 로직 추가
+- `tests/self_healing/unit/test_safe_defaults.py` - 55개 단위 테스트
+
+**Safe Default 주요 기능:**
+- 모든 설정 유형(circuit_breaker, dlq, retry, chaos 등)에 대한 안전한 기본값 정의
+- 설정값 유효성 검증 및 범위 체크
+- 무효한 값 자동 Safe Default 폴백
+- Chaos 설정 특별 안전 장치 (blast_radius 50% 제한, production dry_run 강제)
+- 서버 시작 시 자동 검증
 
 
 ---

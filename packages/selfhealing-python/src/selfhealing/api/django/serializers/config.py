@@ -3,6 +3,9 @@ Runtime Configuration API Serializers.
 
 Serializers for validating and serializing runtime configuration updates.
 Includes apply strategy support (immediate, delayed, graceful).
+
+Phase 6: Fail-Safe Default 강화 추가.
+Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
 """
 
 from rest_framework import serializers
@@ -14,7 +17,14 @@ from rest_framework import serializers
 
 
 class ApplyStrategyMixin(serializers.Serializer):
-    """Mixin that adds apply strategy fields to config serializers."""
+    """
+    Mixin that adds apply strategy fields to config serializers.
+    
+    Phase 6: Safe Default 검증 및 폴백 기능 추가.
+    """
+
+    # 서브클래스에서 오버라이드하여 config_type 지정
+    _config_type: str = ""
 
     apply_strategy = serializers.ChoiceField(
         required=False,
@@ -47,6 +57,28 @@ class ApplyStrategyMixin(serializers.Serializer):
         exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds"}
         return {k: v for k, v in self.validated_data.items() if k not in exclude_fields and v is not None}
 
+    def validate_with_safe_fallback(self, data: dict) -> dict:
+        """
+        Safe Default 검증 및 폴백 적용.
+        
+        잘못된 값은 Safe Default로 대체됩니다.
+        서브클래스에서 _config_type을 설정해야 합니다.
+        
+        Args:
+            data: 검증할 데이터
+            
+        Returns:
+            Safe Default가 적용된 데이터
+        """
+        if not self._config_type:
+            return data
+        
+        try:
+            from selfhealing.core.safe_defaults import validate_with_safe_fallback
+            return validate_with_safe_fallback(self._config_type, data)
+        except ImportError:
+            return data
+
 
 # =============================================================================
 # Config Serializers with Apply Strategy Support
@@ -54,7 +86,13 @@ class ApplyStrategyMixin(serializers.Serializer):
 
 
 class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Circuit Breaker configuration."""
+    """
+    Serializer for Circuit Breaker configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "circuit_breaker"
 
     enabled = serializers.BooleanField(required=False, default=True)
     failure_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
@@ -69,9 +107,20 @@ class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
     self_ddos_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=300)
     self_ddos_backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class DLQConfigSerializer(ApplyStrategyMixin):
-    """Serializer for DLQ configuration."""
+    """
+    Serializer for DLQ configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "dlq"
 
     enabled = serializers.BooleanField(required=False, default=True)
     max_retries = serializers.IntegerField(required=False, min_value=1, max_value=20)
@@ -81,9 +130,20 @@ class DLQConfigSerializer(ApplyStrategyMixin):
     batch_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
     max_replay_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class RetryConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Retry configuration."""
+    """
+    Serializer for Retry configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "retry"
 
     max_attempts = serializers.IntegerField(required=False, min_value=1, max_value=20)
     backoff_strategy = serializers.ChoiceField(
@@ -97,15 +157,31 @@ class RetryConfigSerializer(ApplyStrategyMixin):
     jitter = serializers.BooleanField(required=False)
     jitter_percent = serializers.IntegerField(required=False, min_value=0, max_value=100)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class SLAConfigSerializer(ApplyStrategyMixin):
-    """Serializer for SLA configuration."""
+    """
+    Serializer for SLA configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "sla"
 
     default_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
     thresholds_by_domain = serializers.DictField(
         required=False,
         child=serializers.IntegerField(min_value=1, max_value=720),
     )
+
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
 
 
 class SLODefinitionSerializer(serializers.Serializer):
@@ -232,7 +308,11 @@ class SLOConfigSerializer(ApplyStrategyMixin):
     - GET: 현재 등록된 모든 SLO 조회
     - PUT: SLO 기본값 업데이트 및 SLO 추가/수정
     - DELETE: 특정 SLO 삭제 (별도 엔드포인트)
+    
+    Phase 6: Safe Default 폴백 적용.
     """
+
+    _config_type = "slo"
 
     # 기본값 설정
     default_window_days = serializers.IntegerField(
@@ -269,18 +349,24 @@ class SLOConfigSerializer(ApplyStrategyMixin):
     )
 
     def validate(self, data):
-        """기본값 burn_rate 순서 검증."""
+        """기본값 burn_rate 순서 검증 + Safe Default 폴백."""
         fast = data.get("default_fast_burn_rate")
         slow = data.get("default_slow_burn_rate")
         if fast is not None and slow is not None and fast <= slow:
             raise serializers.ValidationError(
                 "default_fast_burn_rate는 default_slow_burn_rate보다 커야 합니다."
             )
-        return data
+        return self.validate_with_safe_fallback(data)
 
 
 class RateLimitConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Rate Limit configuration."""
+    """
+    Serializer for Rate Limit configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "rate_limit"
 
     base_delay = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
     max_delay = serializers.FloatField(required=False, min_value=1.0, max_value=300.0)
@@ -288,9 +374,20 @@ class RateLimitConfigSerializer(ApplyStrategyMixin):
     default_retry_after = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
     backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class SecurityConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Security configuration."""
+    """
+    Serializer for Security configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "security"
 
     rate_limit_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=3600)
     rate_limit_max_requests = serializers.IntegerField(required=False, min_value=1, max_value=10000)
@@ -300,18 +397,40 @@ class SecurityConfigSerializer(ApplyStrategyMixin):
     injection_ban_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
     failed_login_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class IdempotencyConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Idempotency configuration."""
+    """
+    Serializer for Idempotency configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "idempotency"
 
     default_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=3600)
     extended_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=86400)
     short_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=300)
     clock_skew_tolerance_seconds = serializers.FloatField(required=False, min_value=0.0, max_value=60.0)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class NotificationConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Notification configuration."""
+    """
+    Serializer for Notification configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "notification"
 
     enabled = serializers.BooleanField(required=False)
     channels = serializers.ListField(
@@ -326,14 +445,21 @@ class NotificationConfigSerializer(ApplyStrategyMixin):
     title_max_length = serializers.IntegerField(required=False, min_value=20, max_value=500)
     notification_timeout_seconds = serializers.IntegerField(required=False, min_value=1, max_value=60)
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class ForensicConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Forensic configuration.
     
     Forensic 분석 및 디버깅 관련 설정.
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5)
+    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
+
+    _config_type = "forensic"
 
     # 기존 필드
     error_message_max_length = serializers.IntegerField(required=False, min_value=50, max_value=5000)
@@ -367,9 +493,20 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
         help_text="마스킹할 키 패턴 목록. 기본: [password, secret, token, key, auth]",
     )
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class MetricsConfigSerializer(ApplyStrategyMixin):
-    """Serializer for Metrics configuration."""
+    """
+    Serializer for Metrics configuration.
+    
+    Phase 6: Safe Default 폴백 적용.
+    """
+
+    _config_type = "metrics"
 
     enabled = serializers.BooleanField(required=False)
     prefix = serializers.CharField(required=False, max_length=50)
@@ -389,13 +526,21 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
         help_text="최대 Jitter 지연 시간 (초). 0-300 범위 (기본: 60.0)",
     )
 
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
+
 
 class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Error Budget configuration.
 
     Error Budget 및 Burn Rate 임계값 설정.
+    Phase 6: Safe Default 폴백 적용.
     """
+
+    _config_type = "error_budget"
 
     # Error Budget 임계값 (%)
     threshold_healthy = serializers.FloatField(
@@ -458,7 +603,7 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     )
 
     def validate(self, data):
-        """Validate threshold ordering and heartbeat settings."""
+        """Validate threshold ordering and heartbeat settings + Safe Default 폴백."""
         # 임계값 순서 검증: healthy > caution > warning > critical
         thresholds = [
             ("threshold_healthy", data.get("threshold_healthy", 75.0)),
@@ -476,7 +621,7 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
         if timeout <= interval:
             raise serializers.ValidationError("heartbeat_timeout_seconds는 heartbeat_interval_seconds보다 커야 합니다.")
 
-        return data
+        return self.validate_with_safe_fallback(data)
 
 
 # =============================================================================
@@ -492,8 +637,10 @@ class LoggingConfigSerializer(ApplyStrategyMixin):
     각 Self-Healing 컴포넌트별 로깅 레벨 설정.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
     
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5)
+    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
+
+    _config_type = "logging"
 
     LEVEL_CHOICES = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
@@ -566,6 +713,11 @@ class LoggingConfigSerializer(ApplyStrategyMixin):
         required=False,
         help_text="JSON 구조화 로그 포맷 사용. 기본: True (운영환경)",
     )
+
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        return self.validate_with_safe_fallback(validated)
 
 
 # =============================================================================

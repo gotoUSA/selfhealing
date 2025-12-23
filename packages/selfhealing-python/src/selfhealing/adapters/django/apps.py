@@ -88,6 +88,7 @@ class SelfHealingConfig(AppConfig):
         1. Register admin classes
         2. Connect post_migrate signal for RBAC group creation
         3. Log environment variable snapshot for audit trail
+        4. Validate config with Safe Defaults (Phase 6)
         
         Note: Environment snapshot is logged here (not in post_migrate) because
         env vars can change on every restart, not just during migrations.
@@ -111,6 +112,10 @@ class SelfHealingConfig(AppConfig):
         # This runs on every server start because env vars can change
         # between restarts (e.g., Docker container restart with new env)
         self._log_env_snapshot()
+        
+        # Validate config with Safe Defaults (Phase 6: Fail-Safe Default 강화)
+        # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+        self._validate_startup_config()
     
     def _log_env_snapshot(self):
         """
@@ -127,3 +132,32 @@ class SelfHealingConfig(AppConfig):
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
             logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
+
+    def _validate_startup_config(self):
+        """
+        Validate config with Safe Defaults on startup.
+        
+        Best-effort: If validation fails, system continues with defaults.
+        Phase 6: Fail-Safe Default 강화
+        Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+        """
+        try:
+            from selfhealing.core.safe_defaults import validate_startup_config
+            from selfhealing.adapters.django.config_provider import get_config
+            
+            config = get_config()
+            changes = validate_startup_config(config, log_changes=True)
+            
+            if changes > 0:
+                logger.info(
+                    f"[SelfHealing] Startup config validation: "
+                    f"applied {changes} safe default(s)"
+                )
+            else:
+                logger.debug("[SelfHealing] Startup config validation: all settings valid")
+                
+        except ImportError:
+            logger.debug("[SelfHealing] safe_defaults module not available")
+        except Exception as e:
+            # Best-effort: 실패해도 시스템은 시작
+            logger.warning(f"[SelfHealing] Failed to validate startup config: {e}")
