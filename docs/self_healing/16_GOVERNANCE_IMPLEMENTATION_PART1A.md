@@ -1046,12 +1046,12 @@ class ManualEmergencyAPI(APIView):
 - [x] Prometheus 메트릭 추가
 - [x] 테스트 작성 (`test_tier_fallback.py`)
 
-### Phase 4: Emergency Mode 고급 기능
-- [ ] `EmergencyLevel` Enum 생성
-- [ ] `GracefulDegradationManager` 생성
-- [ ] `RecoveryGate` 생성
-- [ ] `ManualEmergencyAPI` 구현
-- [ ] Integration 테스트 작성
+### Phase 4: Emergency Mode 고급 기능 ✅
+- [x] `EmergencyLevel` Enum 생성
+- [x] `GracefulDegradationManager` 생성
+- [x] `RecoveryGate` 생성
+- [x] `ManualEmergencyAPI` 구현
+- [x] Integration 테스트 작성 (`test_emergency_mode.py`)
 
 ---
 

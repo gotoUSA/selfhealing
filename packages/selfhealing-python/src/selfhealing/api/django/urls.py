@@ -165,6 +165,18 @@ from selfhealing.api.django.views.tiering import (
     TierResolveLookupView,
 )
 
+# Emergency Mode Views (Phase 4 - Advanced)
+from selfhealing.api.django.views.emergency import (
+    EmergencyStatusView,
+    EmergencyTriggerView,
+    EmergencyReleaseView,
+    GradualRecoveryStartView,
+    GradualRecoveryStopView,
+    EmergencyHistoryView,
+    EmergencyConfigView,
+    EmergencyLevelsView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -239,6 +251,20 @@ urlpatterns = [
     path("config/tiers/resolve/", TierResolveLookupView.as_view(), name="config-tiers-resolve"),
     path("config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"),
     path("config/tier-overrides/", TierOverridesView.as_view(), name="config-tier-overrides"),
+    
+    # =========================================================================
+    # Emergency Mode API (Phase 4 - Advanced)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md
+    # =========================================================================
+    path("emergency/status/", EmergencyStatusView.as_view(), name="emergency-status"),
+    path("emergency/trigger/", EmergencyTriggerView.as_view(), name="emergency-trigger"),
+    path("emergency/release/", EmergencyReleaseView.as_view(), name="emergency-release"),
+    path("emergency/gradual-recovery/", GradualRecoveryStartView.as_view(), name="emergency-gradual-recovery"),
+    path("emergency/stop-recovery/", GradualRecoveryStopView.as_view(), name="emergency-stop-recovery"),
+    path("emergency/history/", EmergencyHistoryView.as_view(), name="emergency-history"),
+    path("emergency/config/", EmergencyConfigView.as_view(), name="emergency-config"),
+    path("emergency/levels/", EmergencyLevelsView.as_view(), name="emergency-levels"),
+    
     # Error Budget Gate Reset
     path("gate/reset/", ErrorBudgetGateResetView.as_view(), name="gate-reset"),
     # Error Budget API
