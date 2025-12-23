@@ -9,7 +9,7 @@ Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +305,70 @@ VALID_BACKOFF_STRATEGIES = {"exponential", "linear", "constant", "decorrelated_j
 
 
 # =============================================================================
+# Fatal Config Classification (is_fatal)
+# =============================================================================
+# 
+# Fatal configs: 위반 시 시스템 시작을 차단하는 Critical 설정
+# Non-fatal configs: 위반 시 Safe Default로 대체하고 경고만 출력
+#
+# 설계 원칙:
+# - Security, Chaos, Error Budget 관련 설정은 Fatal (시스템 안정성 직결)
+# - Circuit Breaker, DLQ 등 운영 설정은 Non-fatal (Safe Default 적용)
+# =============================================================================
+
+FATAL_CONFIGS: Dict[str, Set[str]] = {
+    # Security: 보안 관련 핵심 설정
+    "security": {
+        "rate_limit_max_requests",  # Rate limit이 너무 높으면 DDoS에 취약
+        "injection_ban_hours",       # SQL Injection 대응 필수
+        "failed_login_threshold",    # Brute force 방지 필수
+    },
+    # Chaos: 프로덕션에서 잘못된 설정은 치명적
+    "chaos": {
+        "max_blast_radius",   # 50% 초과 시 시스템 장애
+        "failure_rate",       # 50% 초과 시 서비스 불가
+    },
+    # Error Budget: 잘못된 임계값은 자동 복구 오작동 유발
+    "error_budget": {
+        "threshold_critical",       # 임계값 0 미만 불가
+        "burn_rate_fast_critical",  # Burn rate 범위 초과 위험
+    },
+}
+
+# Fatal 설정 위반 시 Quarantine Mode 활성화 여부 (True = LEVEL_3 격리)
+ENABLE_QUARANTINE_ON_FATAL = True
+
+
+def is_fatal_config(config_type: str, key: str) -> bool:
+    """
+    설정이 Fatal (필수) 설정인지 확인.
+    
+    Fatal 설정 위반은:
+    - CI/CD에서 Hard Block (비정상 종료)
+    - 런타임에서 Quarantine Mode (LEVEL_3) 활성화
+    
+    Args:
+        config_type: 설정 유형 (security, chaos 등)
+        key: 설정 키
+        
+    Returns:
+        True if fatal config, False otherwise
+    """
+    fatal_keys = FATAL_CONFIGS.get(config_type, set())
+    return key in fatal_keys
+
+
+def get_all_fatal_configs() -> Dict[str, Set[str]]:
+    """
+    모든 Fatal 설정 목록 반환.
+    
+    Returns:
+        {config_type: {key1, key2, ...}, ...} 형태
+    """
+    return {k: v.copy() for k, v in FATAL_CONFIGS.items()}
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -520,21 +584,69 @@ def get_validation_errors(
 # =============================================================================
 
 
-def validate_startup_config(config: Any, log_changes: bool = True) -> int:
+class FatalConfigError(Exception):
+    """
+    Fatal 설정 위반 예외.
+    
+    is_fatal=True인 설정이 유효하지 않을 때 발생.
+    CI/CD에서 Hard Block, 런타임에서 Quarantine Mode 활성화에 사용.
+    """
+    def __init__(self, violations: Dict[str, Dict[str, str]]):
+        self.violations = violations
+        violation_list = [
+            f"{config_type}.{key}: {msg}"
+            for config_type, keys in violations.items()
+            for key, msg in keys.items()
+        ]
+        super().__init__(
+            f"Fatal config violations detected:\n" + "\n".join(violation_list)
+        )
+
+
+class ConfigValidationResult:
+    """설정 검증 결과."""
+    
+    def __init__(self):
+        self.changes_count: int = 0
+        self.fatal_violations: Dict[str, Dict[str, str]] = {}
+        self.non_fatal_warnings: Dict[str, Dict[str, str]] = {}
+    
+    @property
+    def has_fatal_violations(self) -> bool:
+        return len(self.fatal_violations) > 0
+    
+    @property
+    def is_valid(self) -> bool:
+        return not self.has_fatal_violations
+
+
+def validate_startup_config(
+    config: Any, 
+    log_changes: bool = True,
+    raise_on_fatal: bool = False
+) -> int:
     """
     시작 시 설정 검증 + Safe Default 적용.
     
     SelfHealingConfig 인스턴스의 모든 설정을 검증하고
     잘못된 값은 Safe Default로 대체합니다.
     
+    Fatal 설정(is_fatal=True)이 유효하지 않으면:
+    - raise_on_fatal=True: FatalConfigError 발생 (CI/CD용)
+    - raise_on_fatal=False: 경고 로그만 출력 (런타임 Best-effort)
+    
     Args:
         config: SelfHealingConfig 인스턴스
         log_changes: 변경 사항 로깅 여부
+        raise_on_fatal: Fatal 설정 위반 시 예외 발생 여부
         
     Returns:
         수정된 설정 수
+        
+    Raises:
+        FatalConfigError: raise_on_fatal=True이고 Fatal 설정 위반 시
     """
-    changes_count = 0
+    result = ConfigValidationResult()
     
     # config_type -> config attribute 매핑
     config_mapping = {
@@ -548,6 +660,8 @@ def validate_startup_config(config: Any, log_changes: bool = True) -> int:
         "notification": "notification",
         "rate_limit": "rate_limit",
         "idempotency": "idempotency",
+        "chaos": "chaos",
+        "error_budget": "error_budget",
     }
     
     for config_type, attr_name in config_mapping.items():
@@ -561,25 +675,112 @@ def validate_startup_config(config: Any, log_changes: bool = True) -> int:
             current = getattr(sub_config, key, None)
             
             if not is_valid_value(config_type, key, current):
-                if log_changes:
-                    logger.warning(
-                        f"[Startup] Invalid {config_type}.{key}={current!r}, "
-                        f"applying safe default: {safe_value!r}"
-                    )
-                try:
-                    setattr(sub_config, key, safe_value)
-                    changes_count += 1
-                except AttributeError:
-                    # frozen dataclass의 경우
+                is_fatal = is_fatal_config(config_type, key)
+                error_msg = f"Invalid value {current!r}, expected safe default: {safe_value!r}"
+                
+                if is_fatal:
+                    # Fatal 설정 위반 기록
+                    if config_type not in result.fatal_violations:
+                        result.fatal_violations[config_type] = {}
+                    result.fatal_violations[config_type][key] = error_msg
+                    
+                    if log_changes:
+                        logger.error(
+                            f"[FATAL] Invalid {config_type}.{key}={current!r}, "
+                            f"this is a critical config violation!"
+                        )
+                else:
+                    # Non-fatal: Safe Default 적용
+                    if config_type not in result.non_fatal_warnings:
+                        result.non_fatal_warnings[config_type] = {}
+                    result.non_fatal_warnings[config_type][key] = error_msg
+                    
                     if log_changes:
                         logger.warning(
-                            f"[Startup] Cannot modify frozen {config_type}.{key}"
+                            f"[Startup] Invalid {config_type}.{key}={current!r}, "
+                            f"applying safe default: {safe_value!r}"
                         )
+                    try:
+                        setattr(sub_config, key, safe_value)
+                        result.changes_count += 1
+                    except AttributeError:
+                        # frozen dataclass의 경우
+                        if log_changes:
+                            logger.warning(
+                                f"[Startup] Cannot modify frozen {config_type}.{key}"
+                            )
     
-    if log_changes and changes_count > 0:
-        logger.info(f"[Startup] Applied {changes_count} safe default(s)")
+    if log_changes and result.changes_count > 0:
+        logger.info(f"[Startup] Applied {result.changes_count} safe default(s)")
     
-    return changes_count
+    # Fatal 위반 처리
+    if result.has_fatal_violations:
+        if log_changes:
+            logger.critical(
+                f"[FATAL] {len(result.fatal_violations)} fatal config violations detected! "
+                f"Types: {list(result.fatal_violations.keys())}"
+            )
+        
+        if raise_on_fatal:
+            raise FatalConfigError(result.fatal_violations)
+    
+    return result.changes_count
+
+
+def validate_config_preflight(config: Any) -> ConfigValidationResult:
+    """
+    Pre-flight 설정 검증 (CI/CD용).
+    
+    모든 설정을 검증하고 결과를 반환합니다.
+    실제 설정은 수정하지 않습니다.
+    
+    Args:
+        config: SelfHealingConfig 인스턴스
+        
+    Returns:
+        ConfigValidationResult 인스턴스
+    """
+    result = ConfigValidationResult()
+    
+    config_mapping = {
+        "circuit_breaker": "circuit_breaker",
+        "dlq": "dlq",
+        "retry": "retry",
+        "sla": "sla",
+        "security": "security",
+        "forensic": "forensic",
+        "metrics": "metrics",
+        "notification": "notification",
+        "rate_limit": "rate_limit",
+        "idempotency": "idempotency",
+        "chaos": "chaos",
+        "error_budget": "error_budget",
+    }
+    
+    for config_type, attr_name in config_mapping.items():
+        sub_config = getattr(config, attr_name, None)
+        if sub_config is None:
+            continue
+        
+        defaults = SAFE_DEFAULTS.get(config_type, {})
+        
+        for key, safe_value in defaults.items():
+            current = getattr(sub_config, key, None)
+            
+            if not is_valid_value(config_type, key, current):
+                is_fatal = is_fatal_config(config_type, key)
+                error_msg = f"Value {current!r} is invalid (safe default: {safe_value!r})"
+                
+                if is_fatal:
+                    if config_type not in result.fatal_violations:
+                        result.fatal_violations[config_type] = {}
+                    result.fatal_violations[config_type][key] = error_msg
+                else:
+                    if config_type not in result.non_fatal_warnings:
+                        result.non_fatal_warnings[config_type] = {}
+                    result.non_fatal_warnings[config_type][key] = error_msg
+    
+    return result
 
 
 # =============================================================================

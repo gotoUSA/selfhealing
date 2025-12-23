@@ -137,27 +137,82 @@ class SelfHealingConfig(AppConfig):
         """
         Validate config with Safe Defaults on startup.
         
-        Best-effort: If validation fails, system continues with defaults.
         Phase 6: Fail-Safe Default 강화
+        - Non-fatal 설정: Safe Default 적용 후 계속 운영
+        - Fatal 설정 위반: Quarantine Mode (LEVEL_3) 활성화
+        
         Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
         """
         try:
-            from selfhealing.core.safe_defaults import validate_startup_config
+            from selfhealing.core.safe_defaults import (
+                validate_startup_config,
+                FatalConfigError,
+                ENABLE_QUARANTINE_ON_FATAL,
+            )
             from selfhealing.adapters.django.config_provider import get_config
             
             config = get_config()
-            changes = validate_startup_config(config, log_changes=True)
             
-            if changes > 0:
-                logger.info(
-                    f"[SelfHealing] Startup config validation: "
-                    f"applied {changes} safe default(s)"
-                )
-            else:
-                logger.debug("[SelfHealing] Startup config validation: all settings valid")
+            try:
+                changes = validate_startup_config(config, log_changes=True, raise_on_fatal=False)
+                
+                if changes > 0:
+                    logger.info(
+                        f"[SelfHealing] Startup config validation: "
+                        f"applied {changes} safe default(s)"
+                    )
+                else:
+                    logger.debug("[SelfHealing] Startup config validation: all settings valid")
+                    
+            except FatalConfigError as e:
+                # Fatal 설정 위반 시 Quarantine Mode 활성화
+                if ENABLE_QUARANTINE_ON_FATAL:
+                    self._activate_quarantine_mode(e)
+                else:
+                    logger.critical(
+                        f"[SelfHealing] Fatal config error (Quarantine disabled): {e}"
+                    )
                 
         except ImportError:
             logger.debug("[SelfHealing] safe_defaults module not available")
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
             logger.warning(f"[SelfHealing] Failed to validate startup config: {e}")
+
+    def _activate_quarantine_mode(self, error: Exception):
+        """
+        Fatal 설정 위반 시 Quarantine Mode (LEVEL_3) 활성화.
+        
+        Quarantine Mode:
+        - EmergencyLevel.LEVEL_3 활성화 (Critical 트래픽만 50% 허용)
+        - 시스템은 시작하지만 격리된 상태로 운영
+        - 수동 개입 필요 (설정 수정 후 재시작)
+        
+        Args:
+            error: FatalConfigError 인스턴스
+        """
+        try:
+            from selfhealing.services.emergency_mode import (
+                GracefulDegradationManager,
+                EmergencyLevel,
+            )
+            
+            manager = GracefulDegradationManager()
+            
+            # Quarantine Mode (LEVEL_3) 활성화
+            manager.activate(
+                level=EmergencyLevel.LEVEL_3,
+                reason=f"Config Quarantine: {str(error)[:200]}",
+                activated_by="system:config_validation",
+                ttl_seconds=None,  # 무기한 (수동 해제 필요)
+            )
+            
+            logger.critical(
+                f"[QUARANTINE] System started in Quarantine Mode (LEVEL_3) "
+                f"due to fatal config violations. Manual intervention required."
+            )
+            
+        except ImportError:
+            logger.warning("[SelfHealing] emergency_mode module not available for Quarantine")
+        except Exception as e:
+            logger.error(f"[SelfHealing] Failed to activate Quarantine Mode: {e}")

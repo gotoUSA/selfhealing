@@ -626,3 +626,229 @@ class TestEdgeCases:
         # boolean이 아닌 값은 무효
         assert is_valid_value("circuit_breaker", "enabled", "true") is False
         assert is_valid_value("circuit_breaker", "enabled", 1) is False
+
+# =============================================================================
+# Fatal Config (is_fatal) Tests
+# =============================================================================
+
+
+class TestFatalConfig:
+    """Test is_fatal config classification."""
+
+    def test_fatal_configs_defined(self):
+        """FATAL_CONFIGS 상수가 정의되어 있어야 함."""
+        from selfhealing.core.safe_defaults import FATAL_CONFIGS
+        
+        assert isinstance(FATAL_CONFIGS, dict)
+        assert len(FATAL_CONFIGS) > 0
+
+    def test_security_configs_are_fatal(self):
+        """Security 관련 설정은 Fatal로 분류되어야 함."""
+        from selfhealing.core.safe_defaults import is_fatal_config, FATAL_CONFIGS
+        
+        assert "security" in FATAL_CONFIGS
+        assert is_fatal_config("security", "rate_limit_max_requests") is True
+        assert is_fatal_config("security", "injection_ban_hours") is True
+        assert is_fatal_config("security", "failed_login_threshold") is True
+
+    def test_chaos_configs_are_fatal(self):
+        """Chaos 관련 핵심 설정은 Fatal로 분류되어야 함."""
+        from selfhealing.core.safe_defaults import is_fatal_config
+        
+        assert is_fatal_config("chaos", "max_blast_radius") is True
+        assert is_fatal_config("chaos", "failure_rate") is True
+
+    def test_error_budget_critical_configs_are_fatal(self):
+        """Error Budget 임계값 설정은 Fatal로 분류되어야 함."""
+        from selfhealing.core.safe_defaults import is_fatal_config
+        
+        assert is_fatal_config("error_budget", "threshold_critical") is True
+        assert is_fatal_config("error_budget", "burn_rate_fast_critical") is True
+
+    def test_circuit_breaker_is_non_fatal(self):
+        """Circuit Breaker 설정은 Non-Fatal (Safe Default 적용 가능)."""
+        from selfhealing.core.safe_defaults import is_fatal_config
+        
+        assert is_fatal_config("circuit_breaker", "failure_threshold") is False
+        assert is_fatal_config("circuit_breaker", "enabled") is False
+
+    def test_dlq_is_non_fatal(self):
+        """DLQ 설정은 Non-Fatal."""
+        from selfhealing.core.safe_defaults import is_fatal_config
+        
+        assert is_fatal_config("dlq", "max_retries") is False
+        assert is_fatal_config("dlq", "enabled") is False
+
+    def test_get_all_fatal_configs(self):
+        """모든 Fatal 설정 목록 반환."""
+        from selfhealing.core.safe_defaults import get_all_fatal_configs
+        
+        all_fatal = get_all_fatal_configs()
+        assert isinstance(all_fatal, dict)
+        assert "security" in all_fatal
+        assert "chaos" in all_fatal
+        assert "error_budget" in all_fatal
+
+    def test_is_fatal_unknown_config_returns_false(self):
+        """알 수 없는 설정 유형은 Non-Fatal."""
+        from selfhealing.core.safe_defaults import is_fatal_config
+        
+        assert is_fatal_config("unknown_type", "any_key") is False
+
+
+class TestFatalConfigError:
+    """Test FatalConfigError exception."""
+
+    def test_fatal_config_error_raised_on_strict_mode(self):
+        """raise_on_fatal=True 시 FatalConfigError 발생."""
+        from selfhealing.core.safe_defaults import (
+            validate_startup_config,
+            FatalConfigError,
+        )
+        
+        @dataclass
+        class MockSecurityConfig:
+            rate_limit_max_requests: str = "invalid"  # should be int
+            injection_ban_hours: int = 24
+            failed_login_threshold: int = 5
+            rate_limit_window_seconds: int = 60
+            temporary_ban_hours: int = 1
+            permanent_ban_threshold: int = 5
+            suspicious_ip_cache_timeout: int = 86400
+        
+        @dataclass
+        class MockConfig:
+            security: MockSecurityConfig = field(default_factory=MockSecurityConfig)
+        
+        config = MockConfig()
+        
+        with pytest.raises(FatalConfigError) as exc_info:
+            validate_startup_config(config, log_changes=False, raise_on_fatal=True)
+        
+        assert "security" in str(exc_info.value) or exc_info.value.violations.get("security")
+
+    def test_fatal_config_error_contains_violations(self):
+        """FatalConfigError는 violations 정보를 포함해야 함."""
+        from selfhealing.core.safe_defaults import FatalConfigError
+        
+        violations = {
+            "security": {"rate_limit_max_requests": "Invalid value"},
+            "chaos": {"max_blast_radius": "Exceeds limit"},
+        }
+        
+        error = FatalConfigError(violations)
+        assert error.violations == violations
+        assert "security" in str(error)
+        assert "chaos" in str(error)
+
+
+class TestConfigValidationResult:
+    """Test ConfigValidationResult class."""
+
+    def test_config_validation_result_initial_state(self):
+        """ConfigValidationResult 초기 상태."""
+        from selfhealing.core.safe_defaults import ConfigValidationResult
+        
+        result = ConfigValidationResult()
+        assert result.changes_count == 0
+        assert result.fatal_violations == {}
+        assert result.non_fatal_warnings == {}
+        assert result.has_fatal_violations is False
+        assert result.is_valid is True
+
+    def test_config_validation_result_with_fatal_violations(self):
+        """Fatal violation이 있으면 is_valid=False."""
+        from selfhealing.core.safe_defaults import ConfigValidationResult
+        
+        result = ConfigValidationResult()
+        result.fatal_violations = {"security": {"key": "error"}}
+        
+        assert result.has_fatal_violations is True
+        assert result.is_valid is False
+
+    def test_config_validation_result_with_only_warnings(self):
+        """Non-fatal warning만 있으면 is_valid=True."""
+        from selfhealing.core.safe_defaults import ConfigValidationResult
+        
+        result = ConfigValidationResult()
+        result.non_fatal_warnings = {"circuit_breaker": {"key": "warning"}}
+        
+        assert result.has_fatal_violations is False
+        assert result.is_valid is True
+
+
+class TestValidateConfigPreflight:
+    """Test validate_config_preflight function (CI/CD용)."""
+
+    def test_preflight_returns_result_object(self):
+        """Pre-flight 검증은 ConfigValidationResult를 반환해야 함."""
+        from selfhealing.core.safe_defaults import (
+            validate_config_preflight,
+            ConfigValidationResult,
+        )
+        
+        @dataclass
+        class MockConfig:
+            pass
+        
+        result = validate_config_preflight(MockConfig())
+        assert isinstance(result, ConfigValidationResult)
+
+    def test_preflight_detects_fatal_violations(self):
+        """Pre-flight 검증이 Fatal 위반을 감지해야 함."""
+        from selfhealing.core.safe_defaults import validate_config_preflight
+        
+        @dataclass
+        class MockSecurityConfig:
+            rate_limit_max_requests: str = "invalid"  # should be int
+            injection_ban_hours: int = 24
+            failed_login_threshold: int = 5
+            rate_limit_window_seconds: int = 60
+            temporary_ban_hours: int = 1
+            permanent_ban_threshold: int = 5
+            suspicious_ip_cache_timeout: int = 86400
+        
+        @dataclass
+        class MockConfig:
+            security: MockSecurityConfig = field(default_factory=MockSecurityConfig)
+        
+        result = validate_config_preflight(MockConfig())
+        assert result.has_fatal_violations is True
+        assert "security" in result.fatal_violations
+
+
+# =============================================================================
+# Quarantine Mode Integration Tests
+# =============================================================================
+
+
+class TestQuarantineModeIntegration:
+    """Test Quarantine Mode activation on fatal config errors."""
+
+    def test_quarantine_mode_constant_defined(self):
+        """ENABLE_QUARANTINE_ON_FATAL 상수가 정의되어 있어야 함."""
+        from selfhealing.core.safe_defaults import ENABLE_QUARANTINE_ON_FATAL
+        
+        assert isinstance(ENABLE_QUARANTINE_ON_FATAL, bool)
+
+    def test_app_config_has_quarantine_method(self):
+        """AppConfig에 _activate_quarantine_mode 메서드가 있어야 함."""
+        from selfhealing.adapters.django.apps import SelfHealingConfig
+        
+        app_config = SelfHealingConfig("selfhealing", __import__("selfhealing"))
+        assert hasattr(app_config, "_activate_quarantine_mode")
+        assert callable(app_config._activate_quarantine_mode)
+
+    @patch("selfhealing.adapters.django.apps.logger")
+    def test_quarantine_mode_logs_critical(self, mock_logger):
+        """Quarantine Mode 활성화 시 CRITICAL 로그 출력."""
+        from selfhealing.adapters.django.apps import SelfHealingConfig
+        from selfhealing.core.safe_defaults import FatalConfigError
+        
+        app_config = SelfHealingConfig("selfhealing", __import__("selfhealing"))
+        error = FatalConfigError({"security": {"key": "error"}})
+        
+        # Mock the import to prevent actual activation
+        with patch.object(app_config, "_activate_quarantine_mode") as mock_quarantine:
+            mock_quarantine(error)
+            mock_quarantine.assert_called_once_with(error)

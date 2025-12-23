@@ -661,6 +661,133 @@ def validate_startup_config():
 - Chaos 설정 특별 안전 장치 (blast_radius 50% 제한, production dry_run 강제)
 - 서버 시작 시 자동 검증
 
+**Phase 6A: Governance 강화 (Fatal Config + Quarantine + Pre-flight)**
+- [x] `is_fatal` 플래그 - Critical vs Non-Critical 설정 분류
+- [x] Quarantine Mode 연동 - Fatal 위반 시 LEVEL_3 격리
+- [x] Pre-flight Check 명령어 - CI/CD 배포 전 검증
+
+**구현된 파일:**
+- `packages/selfhealing-python/src/selfhealing/core/safe_defaults.py` - FATAL_CONFIGS, is_fatal_config(), FatalConfigError
+- `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py` - Quarantine Mode 활성화 로직
+- `shopping/management/commands/check_selfhealing_config.py` - Pre-flight Check 명령어
+
+**Pre-flight Check 사용법:**
+```bash
+# 기본 검증 (경고 출력)
+python manage.py check_selfhealing_config
+
+# CI/CD Hard Block (Fatal 위반 시 exit 1)
+python manage.py check_selfhealing_config --strict
+
+# JSON 출력 (자동화 연동)
+python manage.py check_selfhealing_config --json
+
+# 상세 출력
+python manage.py check_selfhealing_config -v
+python manage.py check_selfhealing_config -vv
+```
+
+---
+
+## 7. Canary Config Rollout (향후 로드맵)
+
+### 7.1 개요
+
+> **Status: 📋 PLANNED (향후 구현 예정)**
+
+새로운 설정을 전체 서버에 즉시 적용하지 않고, 일부 서버/요청에만 적용하여
+부작용을 조기에 감지하는 기능입니다.
+
+### 7.2 왜 필요한가?
+
+- **점진적 배포**: 설정 변경의 영향을 제한된 범위에서 먼저 확인
+- **조기 감지**: 문제 발생 시 전체 시스템 영향 전에 발견
+- **자동 롤백**: 메트릭 이상 감지 시 자동으로 이전 설정 복원
+
+### 7.3 설계 개요
+
+```
+[Config API] → [CanaryManager]
+                    ↓
+    ┌───────────────┼───────────────┐
+    │               │               │
+  10% Canary     90% Stable    Rollback Ready
+    │               │               │
+    └───────────────┴───────────────┘
+                    ↓
+            [Metric Collector]
+                    ↓
+         Error Rate > 5%? → Auto Rollback
+```
+
+### 7.4 핵심 컴포넌트
+
+```python
+# 예상 구현 (향후)
+@dataclass
+class CanaryConfig:
+    """Canary 배포 설정."""
+    config_type: str
+    canary_values: Dict[str, Any]
+    stable_values: Dict[str, Any]
+    canary_percentage: float = 0.1  # 10%
+    rollback_error_threshold: float = 0.05  # 5%
+    monitoring_window_seconds: int = 300  # 5분
+
+
+class CanaryConfigManager:
+    """
+    Canary Config 배포 관리.
+    
+    Features:
+    - 퍼센트 기반 트래픽 분리
+    - 메트릭 기반 자동 롤백
+    - 점진적 프로모션 (10% → 25% → 50% → 100%)
+    """
+    
+    def start_canary(self, config: CanaryConfig) -> str:
+        """Canary 배포 시작."""
+        pass
+    
+    def promote(self, canary_id: str, new_percentage: float):
+        """Canary 비율 증가."""
+        pass
+    
+    def rollback(self, canary_id: str, reason: str):
+        """Canary 롤백."""
+        pass
+    
+    def complete(self, canary_id: str):
+        """Canary 완료 (100% 적용)."""
+        pass
+```
+
+### 7.5 구현 예상 시간
+
+| 항목 | 예상 시간 |
+|------|----------|
+| CanaryConfigManager 핵심 로직 | 2시간 |
+| Redis 상태 저장 | 1시간 |
+| 메트릭 연동 및 자동 롤백 | 1.5시간 |
+| API 엔드포인트 | 0.5시간 |
+| 테스트 | 1시간 |
+| **합계** | **6시간** |
+
+### 7.6 현재 대안
+
+Canary Config가 없어도 다음 기능으로 유사한 안전성 확보 가능:
+
+1. **ConfigHistoryService**: 설정 변경 이력 + 즉시 롤백
+2. **EmergencyLevel**: 문제 발생 시 LEVEL_3 격리
+3. **Pre-flight Check**: 배포 전 설정 검증
+
+### 7.7 구현 트리거 조건
+
+다음 조건 충족 시 구현 우선순위 상향:
+- 설정 변경으로 인한 인시던트 2회 이상 발생
+- 다중 리전/클러스터 배포 환경 도입
+- 설정 변경 빈도 주 10회 이상
+
 
 ---
 
