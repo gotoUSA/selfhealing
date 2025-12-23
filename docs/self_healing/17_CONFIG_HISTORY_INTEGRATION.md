@@ -70,16 +70,38 @@ def _update_config(
         current = self._get_config(config_type)
         previous = current.copy()  # 변경 전 스냅샷
         
-        # ... 필드 업데이트 ...
+        # Safe Default 적용 추적
+        applied_safe_defaults = []
+        
+        for key, value in kwargs.items():
+            if key in valid_fields:
+                # ✅ Safe Default 체크
+                if not is_valid_value(config_type, key, value):
+                    safe_value = SAFE_DEFAULTS.get(config_type, {}).get(key, value)
+                    current[key] = safe_value
+                    applied_safe_defaults.append(f"{key}: {value!r} → {safe_value!r}")
+                    logger.warning(f"[RuntimeConfig] Safe default applied: {config_type}.{key}")
+                else:
+                    current[key] = value
+        
+        # ✅ Diff-Aware: 실제 변경이 있을 때만 저장
+        if previous == current:
+            logger.debug(f"[RuntimeConfig] No changes detected for {config_type}")
+            return current.copy()
         
         self._save_config(config_type, current)
+        
+        # ✅ Safe Default 적용 시 reason에 표식 추가
+        final_reason = reason or f"Updated: {list(kwargs.keys())}"
+        if applied_safe_defaults:
+            final_reason = f"⚠️ Safe Default applied: {', '.join(applied_safe_defaults)} | {final_reason}"
         
         # ✅ ConfigHistory에 자동 저장
         self._save_to_history(
             config_type=config_type,
             values=current,
             changed_by=changed_by,
-            reason=reason or f"Updated: {list(kwargs.keys())}",
+            reason=final_reason,
         )
         
         return current.copy()
@@ -458,6 +480,58 @@ def _save_to_history(self, ...):
 
 ---
 
+## 최적화 전략
+
+### 1. Diff-Aware Saving (불필요한 버전 방지)
+
+동일한 값으로 반복 호출 시 버전이 쌓이지 않도록 최적화합니다.
+
+```python
+# 실제 변경이 있을 때만 저장
+if previous == current:
+    logger.debug(f"[RuntimeConfig] No changes detected for {config_type}")
+    return current.copy()  # History 저장 건너뜀
+```
+
+**효과:**
+- Redis 쓰기 I/O 절약
+- 이력 노이즈 감소 (진짜 변경만 기록)
+- 업계 표준: HashiCorp Vault, Kubernetes ConfigMap 동일 패턴
+
+### 2. Safe Default 적용 추적
+
+Phase 6에서 구현한 Safe Default가 작동할 때, 그 사실을 이력에 기록합니다.
+
+```python
+# Safe Default 적용 시 reason에 표식 추가
+if applied_safe_defaults:
+    final_reason = f"⚠️ Safe Default applied: {', '.join(applied_safe_defaults)} | {reason}"
+```
+
+**효과:**
+- 운영자 질문 "왜 내 설정이 무시됐지?" → 이력에서 즉시 확인 가능
+- Compliance 감사: "시스템이 위험한 값을 자동 차단" 증거
+- Root Cause Analysis에 필수
+
+### 3. Context Manager (향후 검토)
+
+> ⚠️ **현재는 명시적 전달 방식 유지 권장**
+
+`changed_by`, `reason`을 contextvars로 전역 선언하는 방식은 다음 Trade-off가 있습니다:
+
+| 장점 | 단점 |
+|------|------|
+| 코드 깔끔 (인자 전파 불필요) | Python "Explicit > Implicit" 철학 위반 |
+| Django request context처럼 자연스러움 | 디버깅 어려움 |
+| | 테스트 복잡성 증가 |
+| | Celery 태스크 컨텍스트 전파 문제 |
+
+**현재 권장**: 명시적 전달 유지  
+**재검토 조건**: 인자 전파가 5+ 레이어를 거치며 복잡해질 때
+```
+
+---
+
 ## 마이그레이션 고려사항
 
 ### 기존 데이터
@@ -509,6 +583,8 @@ manager._update_config(
 ### Phase 1: Core Integration
 - [ ] `RuntimeConfigManager._save_to_history()` 헬퍼 추가
 - [ ] `RuntimeConfigManager._update_config()` 시그니처 변경
+- [ ] **Diff-Aware Saving**: 실제 변경 시에만 버전 저장
+- [ ] **Safe Default 추적**: 적용 시 reason에 표식 추가
 - [ ] `RuntimeConfigManager.update_with_strategy()` 수정
 - [ ] `ConfigHistoryService.SUPPORTED_CONFIG_TYPES` 확장
 - [ ] 단위 테스트 추가
