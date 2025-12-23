@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer
 from selfhealing.services.dashboard_service import get_dashboard_service
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,10 @@ class DashboardSummaryView(APIView):
 
     Returns a comprehensive summary of the self-healing system status.
     
-    Note: Read-only endpoint - all authenticated users can view.
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request):
         """Get dashboard summary statistics."""

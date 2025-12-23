@@ -23,6 +23,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
 from selfhealing.services.dlq_service import get_dlq_service
 
@@ -34,9 +35,11 @@ class DLQReplayView(APIView):
     DLQ Replay API.
 
     POST /api/self-healing/dlq/replay/
+    
+    Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsOperator]
 
     def post(self, request):
         """Trigger DLQ replay."""
@@ -79,10 +82,10 @@ class DLQCleanupStatsView(APIView):
 
     GET /api/self-healing/dlq/cleanup/stats/
     
-    Note: Read-only endpoint - all authenticated users can view statistics.
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request):
         """Get cleanup statistics."""
@@ -119,9 +122,11 @@ class DLQArchiveView(APIView):
     {
         "older_than_days": 30  (optional, default 30)
     }
+    
+    Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsOperator]
 
     def post(self, request):
         """Archive old resolved entries."""
@@ -169,9 +174,11 @@ class DLQPurgeView(APIView):
     }
 
     If neither ids nor older_than_days specified, purges ALL archived.
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request):
         """Permanently delete archived entries."""
@@ -227,9 +234,11 @@ class DLQListView(APIView):
     - domain: Filter by domain
     - page: Page number (default 1)
     - page_size: Items per page (default 20, max 100)
+    
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request):
         """Get paginated list of DLQ entries."""
@@ -281,9 +290,11 @@ class DLQDetailView(APIView):
     DLQ Detail API.
 
     GET /api/self-healing/dlq/<pk>/
+    
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request, pk):
         """Get detailed info for a single DLQ entry."""
@@ -314,9 +325,11 @@ class DLQRetryView(APIView):
     POST /api/self-healing/dlq/<pk>/retry/
 
     Retries a single DLQ entry.
+    
+    Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsOperator]
 
     def post(self, request, pk):
         """Retry a single DLQ entry."""
@@ -365,9 +378,11 @@ class DLQResolveView(APIView):
     {
         "notes": "Reason for manual resolution"  (optional)
     }
+    
+    Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsOperator]
 
     def post(self, request, pk):
         """Manually resolve a DLQ entry."""
@@ -420,9 +435,11 @@ class DLQTestCreateView(APIView):
     - Load test verification of DLQ functionality
     - Integration testing of replay mechanism
     - CI/CD pipeline testing
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request):
         """Create a test DLQ entry (domain-neutral)."""

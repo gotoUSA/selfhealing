@@ -34,6 +34,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+
 # Import from services layer
 from selfhealing.services.system_control import (
     SystemControlManager,
@@ -80,7 +82,11 @@ class SystemStatusView(APIView):
     - disabled_at: When it was disabled (if applicable)
     - disabled_by: Who disabled it
     - disabled_reason: Why it was disabled
+    
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
+    
+    permission_classes = [IsViewer]
     
     def get(self, request: Request) -> Response:
         manager = get_system_control()
@@ -106,8 +112,10 @@ class SystemEnableView(APIView):
         {
             "reason": "Maintenance complete"
         }
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         reason = request.data.get("reason", "")
@@ -138,8 +146,10 @@ class SystemDisableView(APIView):
         {
             "reason": "Emergency maintenance"  // Required
         }
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         reason = request.data.get("reason", "")
@@ -184,8 +194,10 @@ class DryRunEnableView(APIView):
     - Test self-healing on production before going live
     - Validate thresholds and rules
     - Build confidence before full deployment
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         actor = getattr(request.user, "username", "api")
@@ -217,8 +229,10 @@ class DryRunDisableView(APIView):
         {
             "confirm": true  // Required confirmation
         }
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         confirm = request.data.get("confirm", False)

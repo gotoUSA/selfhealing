@@ -28,6 +28,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.api.django.serializers.config import (
     CircuitBreakerConfigSerializer,
     DLQConfigSerializer,
@@ -54,9 +55,11 @@ class AllConfigView(APIView):
     All Configuration API.
 
     GET  /api/self-healing/config/ - Get all configuration with default strategies
+    
+    Note: Read access for Viewer role, write requires Admin role.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get all configuration with default apply strategies."""
@@ -94,9 +97,11 @@ class ResetConfigView(APIView):
     Reset Configuration API.
 
     POST /api/self-healing/config/reset/ - Reset all to defaults
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Reset all configuration to defaults."""
@@ -128,9 +133,11 @@ class PendingChangesView(APIView):
     Pending Configuration Changes API.
 
     GET /api/self-healing/config/pending/ - Get all pending changes
+    
+    Note: Read access for Viewer role.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get all pending configuration changes."""
@@ -161,9 +168,11 @@ class CancelPendingChangeView(APIView):
     Cancel Pending Configuration Change API.
 
     POST /api/self-healing/config/pending/<id>/cancel/ - Cancel a pending change
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, pending_id: str) -> Response:
         """Cancel a pending configuration change."""
@@ -202,11 +211,27 @@ class BaseConfigView(APIView):
 
     Provides common GET/PUT handling with serializer validation.
     Supports immediate, delayed, and graceful apply strategies.
+    
+    Note: 
+    - GET: Viewer role can access (read-only)
+    - PUT: Admin role required (configuration changes)
     """
 
-    permission_classes = [IsAdminUser]
+    # Default to Admin for safety - subclasses can override for GET
+    permission_classes = [IsSelfHealingAdmin]
     serializer_class = None
     config_name = ""
+    
+    def get_permissions(self):
+        """
+        Return different permissions based on HTTP method.
+        
+        GET: IsViewer (read-only)
+        PUT: IsSelfHealingAdmin (configuration changes)
+        """
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request (handles proxies)."""

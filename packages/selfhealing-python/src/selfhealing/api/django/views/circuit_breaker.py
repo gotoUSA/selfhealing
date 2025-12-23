@@ -24,6 +24,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
 from selfhealing.api.django.serializers import (
     ControlRequestSerializer,
 )
@@ -69,9 +70,11 @@ class ControlActionView(APIView):
     Execute Self-Healing Control Actions.
 
     POST /api/self-healing/control/
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request):
         """Execute a control action."""
@@ -120,9 +123,11 @@ class ControlStatusView(APIView):
     Get Self-Healing Service Status.
 
     GET /api/self-healing/status/
+    
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request):
         """Get status of all services."""
@@ -139,9 +144,11 @@ class ServiceStatusView(APIView):
     Get Specific Service Status.
 
     GET /api/self-healing/status/{service_name}/
+    
+    Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request, service_name: str):
         """Get status of a specific service."""
@@ -157,11 +164,11 @@ class ControlAuditView(APIView):
 
     GET /api/self-healing/audit/
     
-    Note: Read-only endpoint - all authenticated users can view.
+    Note: Read-only endpoint - Viewer role or higher can access.
     Audit logs are immutable and cannot be modified via any API.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewer]
 
     def get(self, request):
         """Get audit logs from AuditLogger."""
@@ -227,9 +234,11 @@ class QuickAllowView(APIView):
     Quick Allow Action.
 
     POST /api/self-healing/allow/{service_name}/
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request, service_name: str):
         """Quick allow a service."""
@@ -252,9 +261,11 @@ class QuickBlockView(APIView):
     Quick Block Action.
 
     POST /api/self-healing/block/{service_name}/
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request, service_name: str):
         """Quick block a service."""
@@ -278,9 +289,11 @@ class QuickResetView(APIView):
     Quick Reset Action.
 
     POST /api/self-healing/reset/{service_name}/
+    
+    Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request, service_name: str):
         """Quick reset a service."""
