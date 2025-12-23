@@ -431,20 +431,38 @@ def log_env_snapshot_to_audit():
 
 #### Phase 2: AppConfig에서 호출
 
-> **Note**: RBAC 그룹 생성과 함께 환경변수 스냅샷도 `post_migrate` 시그널에서 호출합니다.
+> **중요**: 환경변수 스냅샷은 `ready()`에서, RBAC 그룹 생성은 `post_migrate`에서 호출합니다.
+> 
+> | 대상 작업 | 배치 위치 | 이유 | 비즈니스 가치 |
+> |----------|----------|------|-------------|
+> | 환경변수 스냅샷 | `ready()` | 프로세스 기동 시마다 변경 가능 | 감사 로그 100% 추적 |
+> | RBAC 그룹 생성 | `post_migrate` | DB 스키마 준비 후 1회 초기화 | DB 부하 최소화 |
+> 
+> **근거**:
+> - 12-Factor App: 환경변수는 "프로세스 상태"
+> - Spring Boot: `ApplicationReadyEvent`에서 설정 로깅
+> - Docker: 컨테이너 재시작 시 마이그레이션 없이 환경변수만 변경 가능
 
-**파일**: `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py` (수정)
+**파일**: `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py`
 
 ```python
-from django.apps import AppConfig
-
 class SelfHealingConfig(AppConfig):
     name = 'selfhealing'
     
     def ready(self):
-        # 환경변수 스냅샷 기록 (1회)
-        from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
-        log_env_snapshot_to_audit()
+        # 1. post_migrate 시그널 연결 (RBAC 그룹 - DB 작업)
+        post_migrate.connect(create_selfhealing_groups, ...)
+        
+        # 2. 환경변수 스냅샷 (프로세스 상태 - 매 기동 시)
+        self._log_env_snapshot()
+    
+    def _log_env_snapshot(self):
+        """Best-effort: 실패해도 시스템은 시작."""
+        try:
+            from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
+            log_env_snapshot_to_audit()
+        except Exception as e:
+            logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
 ```
 
 ### 2.4 감사 로그 예시

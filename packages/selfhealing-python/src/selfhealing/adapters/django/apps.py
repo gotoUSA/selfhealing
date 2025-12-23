@@ -4,17 +4,24 @@ Django App Configuration for Self-Healing.
 This allows the selfhealing.adapters.django module to be used
 as a Django app in INSTALLED_APPS.
 
+Lifecycle Hooks:
+    1. ready() - Called on every server start
+       - Environment variable snapshot logging (audit trail)
+       - Runs every time because env vars can change between restarts
+    
+    2. post_migrate signal - Called only after migrations
+       - RBAC group creation (DB schema initialization)
+       - Runs only when DB schema changes (efficient)
+
 RBAC Groups:
-    The selfhealing package creates the following groups via post_migrate signal:
     - selfhealing_viewer: Read-only access (dashboard, status, audit logs)
     - selfhealing_operator: Operational tasks (DLQ replay, archive)
     - selfhealing_admin: Full access (CB control, system enable/disable, config)
 
-    This approach:
-    - Does NOT pollute host app's migrations
-    - Runs only after migrations complete (DB ready guaranteed)
-    - Is idempotent (safe to run multiple times)
-    - Is the industry standard (used by django-allauth, django-guardian)
+Design Rationale:
+    - Environment variables = Process lifecycle (ready)
+    - Database schema = Data lifecycle (post_migrate)
+    - Industry standard: 12-Factor App, Spring Boot ApplicationReadyEvent
 """
 
 import logging
@@ -39,7 +46,8 @@ def create_selfhealing_groups(sender, **kwargs):
     Called via post_migrate signal - runs only after migrations complete.
     Uses get_or_create for idempotency.
     
-    Also logs environment variable snapshot for audit trail.
+    Note: Environment variable snapshot is logged in ready() instead,
+    because env vars can change on every restart (not just migrations).
     """
     from django.contrib.auth.models import Group
     
@@ -62,16 +70,6 @@ def create_selfhealing_groups(sender, **kwargs):
         logger.debug(
             f"[SelfHealing] RBAC groups already existed: {existing_groups}"
         )
-    
-    # Log environment variable snapshot (Phase 2: 환경변수 Audit)
-    try:
-        from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
-        log_env_snapshot_to_audit()
-    except ImportError:
-        logger.debug("[SelfHealing] env_snapshot module not available")
-    except Exception as e:
-        # Best-effort: 실패해도 시스템은 시작
-        logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
 
 
 class SelfHealingConfig(AppConfig):
@@ -84,11 +82,16 @@ class SelfHealingConfig(AppConfig):
 
     def ready(self):
         """
-        Called when the app is ready.
+        Called when the app is ready (every server start).
         
-        Connects post_migrate signal for RBAC group creation.
-        This ensures groups are created after migrations complete,
-        not on every server start.
+        Responsibilities:
+        1. Register admin classes
+        2. Connect post_migrate signal for RBAC group creation
+        3. Log environment variable snapshot for audit trail
+        
+        Note: Environment snapshot is logged here (not in post_migrate) because
+        env vars can change on every restart, not just during migrations.
+        This aligns with 12-Factor App principles and Spring Boot patterns.
         """
         # Import admin to register admin classes
         try:
@@ -103,3 +106,24 @@ class SelfHealingConfig(AppConfig):
             sender=self,
             dispatch_uid="selfhealing_create_rbac_groups",
         )
+        
+        # Log environment variable snapshot (Phase 2: 환경변수 Audit)
+        # This runs on every server start because env vars can change
+        # between restarts (e.g., Docker container restart with new env)
+        self._log_env_snapshot()
+    
+    def _log_env_snapshot(self):
+        """
+        Log environment variable snapshot for audit trail.
+        
+        Best-effort: If logging fails, system continues normally.
+        This is critical for compliance (Big 4 audit requirements).
+        """
+        try:
+            from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
+            log_env_snapshot_to_audit()
+        except ImportError:
+            logger.debug("[SelfHealing] env_snapshot module not available")
+        except Exception as e:
+            # Best-effort: 실패해도 시스템은 시작
+            logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
