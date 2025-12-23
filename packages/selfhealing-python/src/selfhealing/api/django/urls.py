@@ -94,6 +94,14 @@ from selfhealing.api.django.views.config import (
     ErrorBudgetConfigView,
 )
 
+# Config History & Rollback Views
+from selfhealing.api.django.views.config_history import (
+    ConfigHistoryView,
+    ConfigVersionDetailView,
+    ConfigRollbackView,
+    ConfigCompareView,
+)
+
 # Error Budget & Deployment Policy Views
 from selfhealing.api.django.views.error_budget import (
     ErrorBudgetStatusView,
@@ -239,6 +247,16 @@ urlpatterns = [
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
+    
+    # =========================================================================
+    # Config Versioning & Rollback (Phase 4 - Governance Part 2)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    # =========================================================================
+    path("config/<str:config_type>/history/", ConfigHistoryView.as_view(), name="config-history"),
+    path("config/<str:config_type>/history/<int:version>/", ConfigVersionDetailView.as_view(), name="config-version-detail"),
+    path("config/<str:config_type>/rollback/", ConfigRollbackView.as_view(), name="config-rollback"),
+    path("config/<str:config_type>/compare/", ConfigCompareView.as_view(), name="config-compare"),
+    
     # =========================================================================
     # API Tiering Configuration (Phase 4)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md

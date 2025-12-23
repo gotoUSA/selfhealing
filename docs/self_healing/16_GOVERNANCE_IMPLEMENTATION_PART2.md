@@ -602,11 +602,23 @@ def validate_startup_config():
 
 ## 전체 체크리스트
 
-### Phase 4: Config Versioning
-- [ ] `config_history.py` 서비스 생성
-- [ ] `ConfigHistoryView`, `ConfigRollbackView` 생성
-- [ ] URL 등록
-- [ ] 테스트 작성
+### Phase 4: Config Versioning ✅ COMPLETED
+- [x] `config_history.py` 서비스 생성
+- [x] `ConfigHistoryView`, `ConfigRollbackView` 생성
+- [x] `ConfigVersionDetailView`, `ConfigCompareView` 생성
+- [x] URL 등록
+- [x] 테스트 작성 (46개 테스트)
+
+**구현된 API:**
+- `GET  /api/self-healing/config/{config_type}/history/` - 설정 변경 이력 조회
+- `GET  /api/self-healing/config/{config_type}/history/{version}/` - 특정 버전 상세 조회
+- `POST /api/self-healing/config/{config_type}/rollback/` - 특정 버전으로 롤백
+- `GET  /api/self-healing/config/{config_type}/compare/` - 버전 비교
+
+**구현된 파일:**
+- `packages/selfhealing-python/src/selfhealing/services/config_history.py`
+- `packages/selfhealing-python/src/selfhealing/api/django/views/config_history.py`
+- `tests/self_healing/unit/test_config_history.py`
 
 ### Phase 5: API 미노출 설정
 - [ ] `ForensicConfigSerializer` 생성
@@ -619,6 +631,7 @@ def validate_startup_config():
 - [ ] Serializer에 Safe Default 검증 추가
 - [ ] 시작 시 검증 로직 추가
 - [ ] 테스트 작성
+
 
 ---
 

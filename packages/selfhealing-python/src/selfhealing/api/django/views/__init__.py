@@ -93,6 +93,14 @@ from selfhealing.api.django.views.error_budget import (
     ActiveOverrideView,
 )
 
+# Config History Views
+from selfhealing.api.django.views.config_history import (
+    ConfigHistoryView,
+    ConfigVersionDetailView,
+    ConfigRollbackView,
+    ConfigCompareView,
+)
+
 # Chaos Engineering Views
 from selfhealing.api.django.views.chaos import (
     SafetyGuardConfigView,
@@ -172,6 +180,11 @@ __all__ = [
     "NotificationConfigView",
     "ForensicConfigView",
     "MetricsConfigView",
+    # Config History Views
+    "ConfigHistoryView",
+    "ConfigVersionDetailView",
+    "ConfigRollbackView",
+    "ConfigCompareView",
     # Error Budget & Deployment Policy Views
     "ErrorBudgetStatusView",
     "ErrorBudgetHistoryView",
