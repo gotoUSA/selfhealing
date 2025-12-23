@@ -153,6 +153,18 @@ from selfhealing.api.django.views.l2_storage import (
     DriftReconciliationServiceView,
 )
 
+# API Tiering Views (Phase 4)
+from selfhealing.api.django.views.tiering import (
+    TierDefinitionsView,
+    TierMappingsView,
+    TierOverridesView,
+    TierDryRunView,
+    TierResetView,
+    TierExportView,
+    TierImportView,
+    TierResolveLookupView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -215,6 +227,18 @@ urlpatterns = [
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
+    # =========================================================================
+    # API Tiering Configuration (Phase 4)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
+    # =========================================================================
+    path("config/tiers/", TierDefinitionsView.as_view(), name="config-tiers"),
+    path("config/tiers/reset/", TierResetView.as_view(), name="config-tiers-reset"),
+    path("config/tiers/dry-run/", TierDryRunView.as_view(), name="config-tiers-dry-run"),
+    path("config/tiers/export/", TierExportView.as_view(), name="config-tiers-export"),
+    path("config/tiers/import/", TierImportView.as_view(), name="config-tiers-import"),
+    path("config/tiers/resolve/", TierResolveLookupView.as_view(), name="config-tiers-resolve"),
+    path("config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"),
+    path("config/tier-overrides/", TierOverridesView.as_view(), name="config-tier-overrides"),
     # Error Budget Gate Reset
     path("gate/reset/", ErrorBudgetGateResetView.as_view(), name="gate-reset"),
     # Error Budget API

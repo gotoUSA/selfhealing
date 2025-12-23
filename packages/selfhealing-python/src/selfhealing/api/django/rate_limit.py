@@ -2,14 +2,15 @@
 Hybrid Rate Limiting for Self-Healing Control API.
 
 Defense-in-Depth Strategy:
-- L2 (Primary): Redis-based sliding window rate limit (100 req/min)
-- L1 (Fallback): Local memory rate limit when Redis fails (10 req/min)
+- L2 (Primary): Redis-based sliding window rate limit (configurable, default 100 req/min)
+- L1 (Fallback): Local memory rate limit when Redis fails (configurable, default 10 req/min)
 
 Features:
 - Redis health checking with mini circuit breaker
 - Jitter-based gradual recovery to prevent thundering herd
 - Shadow audit logging for forensic analysis
 - Prometheus metrics for observability
+- Runtime-configurable via API (RateLimitConfig)
 
 Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 3)
 """
@@ -25,7 +26,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 from django.http import JsonResponse
 
@@ -36,10 +37,10 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Configuration Constants
+# Configuration Constants (Fallback Defaults)
 # =============================================================================
 
-# Normal mode settings (Redis available)
+# Normal mode settings (Redis available) - fallback if RuntimeConfig unavailable
 DEFAULT_RATE_LIMIT = 100  # requests per minute
 DEFAULT_WINDOW_SECONDS = 60
 
@@ -53,6 +54,45 @@ CONTROL_API_PATH_PREFIX = "/api/self-healing/"
 
 # Fallback log path
 FALLBACK_LOG_PATH = Path("logs/rate_limit_fallback.jsonl")
+
+
+# =============================================================================
+# Runtime Config Reader (Phase 3 API Control)
+# =============================================================================
+
+
+def get_rate_limit_config() -> dict:
+    """
+    Get rate limit configuration from RuntimeConfigManager.
+    
+    Returns:
+        dict with keys:
+        - control_api_rate_limit: int (requests/minute for normal mode)
+        - control_api_window_seconds: int
+        - emergency_rate_limit: int (requests/minute for emergency mode)
+        - emergency_window_seconds: int
+    """
+    try:
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        
+        manager = get_runtime_config_manager()
+        config = manager.get_rate_limit_config()
+        
+        return {
+            "control_api_rate_limit": config.get("control_api_rate_limit", DEFAULT_RATE_LIMIT),
+            "control_api_window_seconds": config.get("control_api_window_seconds", DEFAULT_WINDOW_SECONDS),
+            "emergency_rate_limit": config.get("emergency_rate_limit", EMERGENCY_RATE_LIMIT),
+            "emergency_window_seconds": config.get("emergency_window_seconds", EMERGENCY_WINDOW_SECONDS),
+        }
+    except Exception as e:
+        # Fallback to constants if RuntimeConfig fails
+        logger.warning(f"[RateLimit] Failed to get RuntimeConfig, using defaults: {e}")
+        return {
+            "control_api_rate_limit": DEFAULT_RATE_LIMIT,
+            "control_api_window_seconds": DEFAULT_WINDOW_SECONDS,
+            "emergency_rate_limit": EMERGENCY_RATE_LIMIT,
+            "emergency_window_seconds": EMERGENCY_WINDOW_SECONDS,
+        }
 
 
 # =============================================================================
@@ -435,21 +475,32 @@ class HybridRateLimitMiddleware:
         if not request.path.startswith(CONTROL_API_PATH_PREFIX):
             return self.get_response(request)
         
+        # Get runtime config (Phase 3 API Control)
+        config = get_rate_limit_config()
+        rate_limit = config["control_api_rate_limit"]
+        window_seconds = config["control_api_window_seconds"]
+        emergency_limit = config["emergency_rate_limit"]
+        emergency_window = config["emergency_window_seconds"]
+        
         # Health check
         redis_healthy = self.health_checker.check_health()
         
         if redis_healthy:
             # L2 (Redis) Rate Limit
-            is_allowed, remaining, reset_time = self._check_redis_limit(request)
+            is_allowed, remaining, reset_time = self._check_redis_limit(
+                request, rate_limit, window_seconds
+            )
             mode = "normal"
         else:
             # L1 (Local Memory) Emergency Rate Limit
-            is_allowed, remaining = self._check_local_limit(request)
-            reset_time = int(time.time()) + EMERGENCY_WINDOW_SECONDS
+            is_allowed, remaining = self._check_local_limit(
+                request, emergency_limit, emergency_window
+            )
+            reset_time = int(time.time()) + emergency_window
             mode = "emergency"
             
             # Shadow Audit for forensic analysis
-            self._log_emergency_bypass(request, is_allowed)
+            self._log_emergency_bypass(request, is_allowed, emergency_limit)
         
         if not is_allowed:
             # Record exceeded metric
@@ -462,6 +513,7 @@ class HybridRateLimitMiddleware:
         response["X-RateLimit-Remaining"] = str(remaining)
         response["X-RateLimit-Reset"] = str(reset_time)
         response["X-RateLimit-Mode"] = mode
+        response["X-RateLimit-Limit"] = str(rate_limit if mode == "normal" else emergency_limit)
         
         return response
     
@@ -478,9 +530,19 @@ class HybridRateLimitMiddleware:
             return x_forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR", "unknown")
     
-    def _check_redis_limit(self, request: HttpRequest) -> Tuple[bool, int, int]:
+    def _check_redis_limit(
+        self,
+        request: HttpRequest,
+        rate_limit: int,
+        window_seconds: int,
+    ) -> Tuple[bool, int, int]:
         """
         Check rate limit using Redis.
+        
+        Args:
+            request: HTTP request
+            rate_limit: Max requests per window
+            window_seconds: Window size in seconds
         
         Returns:
             Tuple of (is_allowed, remaining, reset_timestamp)
@@ -489,12 +551,12 @@ class HybridRateLimitMiddleware:
         # because we check health first
         if not self.redis_client:
             logger.warning("[RateLimit] Redis unavailable in check_redis_limit")
-            return (True, DEFAULT_RATE_LIMIT, 0)
+            return (True, rate_limit, 0)
         
         try:
             key = self._get_client_key(request)
             now = int(time.time())
-            window_start = now - DEFAULT_WINDOW_SECONDS
+            window_start = now - window_seconds
             
             pipe = self.redis_client.pipeline()
             
@@ -502,17 +564,17 @@ class HybridRateLimitMiddleware:
             pipe.zadd(key, {str(now): now})
             pipe.zremrangebyscore(key, 0, window_start)
             pipe.zcard(key)
-            pipe.expire(key, DEFAULT_WINDOW_SECONDS + 10)
+            pipe.expire(key, window_seconds + 10)
             
             results = pipe.execute()
             current_count = results[2]
             
-            remaining = max(0, DEFAULT_RATE_LIMIT - current_count)
-            reset_time = now + DEFAULT_WINDOW_SECONDS
+            remaining = max(0, rate_limit - current_count)
+            reset_time = now + window_seconds
             
-            if current_count > DEFAULT_RATE_LIMIT:
+            if current_count > rate_limit:
                 logger.warning(
-                    f"[RateLimit] Exceeded: key={key}, count={current_count}"
+                    f"[RateLimit] Exceeded: key={key}, count={current_count}, limit={rate_limit}"
                 )
                 return (False, 0, reset_time)
             
@@ -521,23 +583,43 @@ class HybridRateLimitMiddleware:
         except Exception as e:
             # On Redis error, fall back to local limiter
             logger.error(f"[RateLimit] Redis error - falling back to local: {e}")
-            is_allowed, remaining = self._check_local_limit(request)
-            reset_time = int(time.time()) + EMERGENCY_WINDOW_SECONDS
+            config = get_rate_limit_config()
+            is_allowed, remaining = self._check_local_limit(
+                request,
+                config["emergency_rate_limit"],
+                config["emergency_window_seconds"],
+            )
+            reset_time = int(time.time()) + config["emergency_window_seconds"]
             
             # Log the fallback
-            self._log_emergency_bypass(request, is_allowed, reason=str(e))
+            self._log_emergency_bypass(
+                request, is_allowed, config["emergency_rate_limit"], reason=str(e)
+            )
             
             return (is_allowed, remaining, reset_time)
     
-    def _check_local_limit(self, request: HttpRequest) -> Tuple[bool, int]:
+    def _check_local_limit(
+        self,
+        request: HttpRequest,
+        max_requests: Optional[int] = None,
+        window_seconds: Optional[int] = None,
+    ) -> Tuple[bool, int]:
         """Check rate limit using local memory."""
         key = self._get_client_key(request)
+        
+        # Update local limiter settings if different
+        if max_requests is not None:
+            self.local_limiter.max_requests = max_requests
+        if window_seconds is not None:
+            self.local_limiter.window_seconds = window_seconds
+        
         return self.local_limiter.is_allowed(key)
     
     def _log_emergency_bypass(
         self,
         request: HttpRequest,
         is_allowed: bool,
+        emergency_limit: int = EMERGENCY_RATE_LIMIT,
         reason: str = "Redis failure",
     ):
         """
@@ -559,7 +641,7 @@ class HybridRateLimitMiddleware:
                 "path": request.path,
                 "method": request.method,
                 "client_ip": self._get_client_ip(request),
-                "emergency_limit": EMERGENCY_RATE_LIMIT,
+                "emergency_limit": emergency_limit,
                 "reason": reason,
             }
             
@@ -580,7 +662,7 @@ class HybridRateLimitMiddleware:
                     "allowed": is_allowed,
                     "path": request.path,
                     "client_ip": self._get_client_ip(request),
-                    "emergency_limit": EMERGENCY_RATE_LIMIT,
+                    "emergency_limit": emergency_limit,
                 },
                 changed_by="system",
                 reason=f"Rate limit operating in emergency mode: {reason}",

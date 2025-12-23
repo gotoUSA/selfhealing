@@ -421,7 +421,7 @@ class TestShadowAudit:
             request.user.id = 1
             request.META = {"REMOTE_ADDR": "10.0.0.1"}
             
-            with patch('selfhealing.api.django.rate_limit.log_config_change'):
+            with patch('selfhealing.audit.log_config_change'):
                 middleware(request)
             
             # Check fallback file was written

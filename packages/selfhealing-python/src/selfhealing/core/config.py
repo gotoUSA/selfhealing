@@ -144,13 +144,23 @@ class SLOConfigRuntime:
 
 @dataclass
 class RateLimitConfig:
-    """Configuration for rate limit coordination."""
+    """Configuration for rate limit coordination.
+    
+    Includes both retry backoff settings and Control API rate limiting.
+    """
 
+    # Retry backoff settings (for 429 handling)
     base_delay: float = 1.0  # Base delay in seconds
     max_delay: float = 60.0  # Maximum delay cap
     jitter_percent: float = 30.0  # ±30% random jitter
     default_retry_after: float = 5.0  # Default if no Retry-After header
     backoff_multiplier: float = 2.0  # Cooldown multiplier for consecutive 429s
+    
+    # Control API Rate Limiting (Phase 3 - HybridRateLimitMiddleware)
+    control_api_rate_limit: int = 100  # requests/minute in normal mode (Redis)
+    control_api_window_seconds: int = 60  # window size
+    emergency_rate_limit: int = 10  # requests/minute when Redis fails
+    emergency_window_seconds: int = 60  # emergency window size
 
 
 @dataclass
