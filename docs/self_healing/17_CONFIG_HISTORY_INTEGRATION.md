@@ -590,9 +590,9 @@ manager._update_config(
 - [x] 단위 테스트 추가 (17개 테스트)
 
 ### Phase 2: Reconciliation Integration
-- [ ] `ReconciliationService._save_reconciliation_to_history()` 추가
-- [ ] `ReconciliationService._apply_to_primary()` 수정
-- [ ] 테스트 업데이트
+- [x] `ReconciliationService._save_reconciliation_to_history()` 추가
+- [x] `ReconciliationService._apply_to_primary()` 수정
+- [x] 테스트 업데이트 (6개 테스트 추가)
 
 ### Phase 3: Emergency Mode Integration
 - [ ] `GracefulDegradationManager._save_state_to_config_history()` 추가

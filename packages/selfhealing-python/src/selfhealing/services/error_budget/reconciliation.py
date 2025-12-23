@@ -778,7 +778,7 @@ class ErrorBudgetReconciliationService:
             return shadow
     
     def _apply_to_primary(self, shadow: ShadowBudget) -> None:
-        """Primary Budget에 조정 적용."""
+        """Primary Budget에 조정 적용 + 이력 저장."""
         adjustment = shadow.adjustment_percent
         
         # Capped 모드 적용
@@ -802,6 +802,45 @@ class ErrorBudgetReconciliationService:
         else:
             shadow.status = ReconciliationStatus.APPLIED
             logger.info(f"[Reconciliation] Adjustment recorded (no apply callback): {adjustment:.2f}%")
+        
+        # ConfigHistory에 기록
+        self._save_reconciliation_to_history(shadow, adjustment)
+
+    def _save_reconciliation_to_history(
+        self,
+        shadow: ShadowBudget,
+        adjustment: float,
+    ) -> None:
+        """
+        Reconciliation 결과를 ConfigHistory에 저장.
+        
+        Graceful Degradation: History 저장 실패해도 설정 변경은 성공.
+        """
+        try:
+            from selfhealing.services.config_history import get_config_history_service
+            history_service = get_config_history_service()
+            history_service.save_version(
+                config_type="error_budget",
+                values={
+                    "reconciliation_id": shadow.calculation_id,
+                    "failsafe_period_id": shadow.failsafe_period_id,
+                    "adjustment_percent": round(adjustment, 2),
+                    "primary_remaining_before": round(shadow.primary_remaining_percent, 2),
+                    "primary_remaining_after": round(shadow.primary_remaining_percent - adjustment, 2),
+                    "shadow_remaining_percent": round(shadow.shadow_remaining_percent, 2),
+                    "estimated_errors": shadow.estimated_errors,
+                    "log_source": shadow.log_source,
+                    "apply_mode": self._config.apply_mode.value,
+                },
+                changed_by=shadow.reviewed_by or "system",
+                reason=f"Shadow Budget Reconciliation: {shadow.review_justification or 'approved'}",
+            )
+            logger.debug(
+                f"[Reconciliation] Saved to history: calculation_id={shadow.calculation_id}"
+            )
+        except Exception as e:
+            # Graceful Degradation - 히스토리 저장 실패해도 설정 변경은 성공
+            logger.warning(f"[Reconciliation] Failed to save history: {e}")
     
     def reject_shadow_budget(
         self,
