@@ -859,12 +859,12 @@ class TestStaticCriticalPaths:
             STATIC_CRITICAL_PREFIXES,
         )
         
-        assert "/api/payment/" in STATIC_CRITICAL_PATHS
         assert "/api/self-healing/control/" in STATIC_CRITICAL_PATHS
         assert "/api/self-healing/emergency/" in STATIC_CRITICAL_PATHS
+        assert "/api/auth/token/" in STATIC_CRITICAL_PATHS
         
-        assert "/api/payment/" in STATIC_CRITICAL_PREFIXES
         assert "/api/self-healing/control/" in STATIC_CRITICAL_PREFIXES
+        assert "/api/self-healing/emergency/" in STATIC_CRITICAL_PREFIXES
 
     def test_static_critical_paths_immutable(self):
         """Static critical paths should be immutable (frozenset)."""
@@ -883,9 +883,9 @@ class TestStaticCriticalPaths:
         registry = TierRegistry.__new__(TierRegistry)
         registry._init()
         
-        assert registry._is_static_critical("/api/payment/") is True
         assert registry._is_static_critical("/api/self-healing/control/") is True
         assert registry._is_static_critical("/api/self-healing/emergency/") is True
+        assert registry._is_static_critical("/api/auth/token/") is True
 
     def test_is_static_critical_prefix_match(self):
         """Should identify paths starting with static critical prefixes."""
@@ -894,10 +894,9 @@ class TestStaticCriticalPaths:
         registry = TierRegistry.__new__(TierRegistry)
         registry._init()
         
-        assert registry._is_static_critical("/api/payment/toss/") is True
-        assert registry._is_static_critical("/api/payment/webhook/") is True
         assert registry._is_static_critical("/api/self-healing/control/allow/") is True
         assert registry._is_static_critical("/api/self-healing/emergency/trigger/") is True
+        assert registry._is_static_critical("/api/self-healing/control/block/") is True
 
     def test_is_static_critical_non_critical_paths(self):
         """Should not match non-critical paths."""
@@ -1121,8 +1120,8 @@ class TestResolveTierWithFallback:
         # Clear all dynamic mappings
         registry._mappings = []
         
-        # Payment path should still be critical (static)
-        result = registry.resolve_tier_with_fallback("/api/payment/toss/")
+        # Control path should still be critical (static)
+        result = registry.resolve_tier_with_fallback("/api/self-healing/control/allow/")
         
         assert result.tier_id == "critical"
         assert result.is_fallback is True
@@ -1233,8 +1232,8 @@ class TestResolveTierWithFallback:
         registry.resolve_tier = raise_error
         
         try:
-            # Payment path should still be critical
-            result = registry.resolve_tier_with_fallback("/api/payment/")
+            # Control path should still be critical
+            result = registry.resolve_tier_with_fallback("/api/self-healing/control/")
             
             assert result.tier_id == "critical"
             assert result.is_fallback is True

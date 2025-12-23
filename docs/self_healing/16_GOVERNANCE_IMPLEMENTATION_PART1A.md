@@ -370,13 +370,6 @@ DEFAULT_TIER_MAPPINGS = [
         description="자가치유 허용 액션"
     ),
     TierMapping(
-        pattern="/api/payment/*",
-        tier_id="critical",
-        pattern_type="wildcard",
-        priority=90,
-        description="결제 관련 API"
-    ),
-    TierMapping(
         pattern="/api/self-healing/config/*",
         tier_id="standard",
         pattern_type="wildcard",
@@ -464,7 +457,6 @@ AWS Lambda의 "Fallback of last resort" 패턴과 동일합니다.
 
 # 불변 집합 (frozenset으로 런타임 수정 방지)
 STATIC_CRITICAL_PATHS = frozenset([
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
     "/api/auth/token/",
@@ -472,7 +464,6 @@ STATIC_CRITICAL_PATHS = frozenset([
 
 # Prefix 매칭용 (tuple로 startswith 최적화)
 STATIC_CRITICAL_PREFIXES = (
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
 )
@@ -597,14 +588,12 @@ logger = logging.getLogger(__name__)
 # L1: 정적 Critical 경로 (절대 변경 불가 - 코드 배포 필요)
 # ============================================================
 STATIC_CRITICAL_PATHS = frozenset([
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
     "/api/auth/token/",
 ])
 
 STATIC_CRITICAL_PREFIXES = (
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
 )

@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 # Immutable set - requires code deployment to change
 STATIC_CRITICAL_PATHS = frozenset([
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
     "/api/auth/token/",
@@ -52,7 +51,6 @@ STATIC_CRITICAL_PATHS = frozenset([
 
 # Prefix matching optimization (tuple for startswith)
 STATIC_CRITICAL_PREFIXES = (
-    "/api/payment/",
     "/api/self-healing/control/",
     "/api/self-healing/emergency/",
 )
@@ -365,13 +363,6 @@ DEFAULT_TIER_MAPPINGS: List[TierMapping] = [
         pattern_type=PatternType.WILDCARD,
         priority=95,
         description="킬 스위치 등 시스템 제어",
-    ),
-    TierMapping(
-        pattern="/api/payment/*",
-        tier_id="critical",
-        pattern_type=PatternType.WILDCARD,
-        priority=90,
-        description="결제 관련 API",
     ),
     
     # Standard (Tier 2) - Operational tasks
@@ -1357,7 +1348,6 @@ class TierRegistry:
                 "/api/self-healing/dashboard/summary/",
                 "/api/self-healing/metrics/",
                 "/api/self-healing/audit/",
-                "/api/payment/toss/",
             ]
         
         # Simulate each path
