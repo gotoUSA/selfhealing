@@ -112,6 +112,16 @@ from selfhealing.api.django.views.error_budget import (
     DeploymentOverrideView,
     DeploymentFreezeLiftView,
     ActiveOverrideView,
+    # Reconciliation Views (Shadow Budget)
+    ReconciliationStatusView,
+    FailSafePeriodsView,
+    ShadowBudgetsView,
+    ShadowBudgetDetailView,
+    ShadowBudgetApproveView,
+    ShadowBudgetRejectView,
+    ExcludedPeriodsView,
+    ExcludedPeriodDetailView,
+    ReconciliationConfigView,
 )
 
 # Chaos Engineering API Views
@@ -296,6 +306,21 @@ urlpatterns = [
     path("deployment-policy/override/", DeploymentOverrideView.as_view(), name="deployment-override"),
     path("deployment-policy/lift/", DeploymentFreezeLiftView.as_view(), name="deployment-lift"),
     path("deployment-policy/active-override/", ActiveOverrideView.as_view(), name="deployment-active-override"),
+    
+    # =========================================================================
+    # Reconciliation API (Shadow Budget)
+    # Reference: docs/self_healing/12_ERROR_BUDGET.md (Section 13)
+    # "시스템은 계산하고, 반영은 사람이 결정한다."
+    # =========================================================================
+    path("reconciliation/status/", ReconciliationStatusView.as_view(), name="reconciliation-status"),
+    path("reconciliation/failsafe-periods/", FailSafePeriodsView.as_view(), name="reconciliation-failsafe-periods"),
+    path("reconciliation/shadow-budgets/", ShadowBudgetsView.as_view(), name="reconciliation-shadow-budgets"),
+    path("reconciliation/shadow-budgets/<str:calculation_id>/", ShadowBudgetDetailView.as_view(), name="reconciliation-shadow-budget-detail"),
+    path("reconciliation/shadow-budgets/<str:calculation_id>/approve/", ShadowBudgetApproveView.as_view(), name="reconciliation-shadow-budget-approve"),
+    path("reconciliation/shadow-budgets/<str:calculation_id>/reject/", ShadowBudgetRejectView.as_view(), name="reconciliation-shadow-budget-reject"),
+    path("reconciliation/excluded-periods/", ExcludedPeriodsView.as_view(), name="reconciliation-excluded-periods"),
+    path("reconciliation/excluded-periods/<str:exclusion_id>/", ExcludedPeriodDetailView.as_view(), name="reconciliation-excluded-period-detail"),
+    path("reconciliation/config/", ReconciliationConfigView.as_view(), name="reconciliation-config"),
     
     # =========================================================================
     # Chaos Engineering API

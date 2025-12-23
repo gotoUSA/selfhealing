@@ -21,6 +21,7 @@
 10. [동적 설정 (Runtime Configuration)](#10-동적-설정-runtime-configuration)
 11. [Fail-Safe Self-Reporting](#11-fail-safe-self-reporting-침묵하는-장애-방지)
 12. [고급 관측성 기능](#12-고급-관측성-기능)
+13. [Reconciliation (Shadow Budget)](#13-reconciliation-shadow-budget)
 
 ---
 
@@ -1467,3 +1468,400 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 ```
+
+---
+
+## 13. Reconciliation (Shadow Budget)
+
+### 13.1 개요
+
+Fail-Safe(Fail-Open) 설계로 인해 Error Budget Gate가 일시적으로 비활성화될 때, 그 기간 동안 발생한 에러가 Budget에 반영되지 않을 수 있습니다. **Reconciliation**은 이러한 "놓친 에러"를 추후에 조정할 수 있게 해주는 시스템입니다.
+
+> **핵심 원칙: "시스템은 계산하고, 반영은 사람이 결정한다."**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                   Shadow Budget Reconciliation 개념                    │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │  Fail-Safe 구간                                              │   │
+│   │  ════════════════════════                                    │   │
+│   │  시작: 10:00:00        종료: 10:15:00                        │   │
+│   │  지속시간: 15분                                              │   │
+│   │  원인: Redis connection timeout                              │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                            │                                         │
+│                            ▼                                         │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │  Shadow Budget 계산                                          │   │
+│   │  ────────────────────                                        │   │
+│   │  • Prometheus에서 해당 구간 에러 조회                        │   │
+│   │  • 추정 에러: 45건 (3.0 errors/min × 15min)                  │   │
+│   │  • 데이터 소스: prometheus                                   │   │
+│   │  • 신뢰도: 95%                                               │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                            │                                         │
+│                            ▼                                         │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │  운영자 검토 대기                                            │   │
+│   │  ────────────────────                                        │   │
+│   │  상태: PENDING_REVIEW                                        │   │
+│   │  옵션: [✓ Approve] [✗ Reject]                                │   │
+│   │                                                              │   │
+│   │  ⚠️ 자동 반영 없음 - 사람의 결정 필요                       │   │
+│   └─────────────────────────────────────────────────────────────┘   │
+│                            │                                         │
+│            ┌───────────────┴───────────────┐                        │
+│            ▼                               ▼                        │
+│   ┌─────────────────────┐       ┌─────────────────────┐             │
+│   │ Approve             │       │ Reject              │             │
+│   │ ─────────           │       │ ────────            │             │
+│   │ Budget 조정         │       │ Shadow 폐기         │             │
+│   │ (최대 10%/cycle)    │       │ 사유 기록           │             │
+│   │ Audit 기록          │       │ 분석에서 제외       │             │
+│   └─────────────────────┘       └─────────────────────┘             │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 13.2 왜 자동 반영하지 않는가?
+
+| 접근 방식 | 자동 Reconciliation | **Shadow Budget (권장)** |
+|-----------|---------------------|--------------------------|
+| 동작 | 시스템이 자동 조정 | 시스템이 계산, 사람이 결정 |
+| 위험 | Budget Shock, 급격한 감소 | 점진적 조정, 예측 가능 |
+| 투명성 | 블랙박스 | 완전한 감사 추적 |
+| 취소 | 어려움 | 승인 전 검토 가능 |
+| 적합성 | 단순 시스템 | 거버넌스 중요 환경 |
+
+**Budget Shock 방지:**
+- `ApplyMode.CAPPED`: 1회 조정 시 최대 10% 제한
+- 대규모 Shadow Budget은 여러 사이클에 걸쳐 분산 적용
+
+### 13.3 핵심 컴포넌트
+
+#### 13.3.1 FailSafePeriodTracker
+
+Fail-Safe 구간을 추적하고 기록합니다:
+
+```python
+from shopping.selfhealing.reconciliation import get_period_tracker
+
+tracker = get_period_tracker()
+
+# Fail-Safe 시작 기록
+tracker.start_failsafe(
+    reason="Redis connection timeout",
+    metadata={"component": "rate_limiter"}
+)
+
+# Fail-Safe 종료 기록
+tracker.end_failsafe()
+
+# 미계산 구간 조회
+unprocessed = tracker.get_unprocessed_periods()
+```
+
+#### 13.3.2 ShadowBudgetCalculator
+
+놓친 에러를 추정합니다:
+
+```python
+from shopping.selfhealing.reconciliation import ShadowBudgetCalculator
+
+calculator = ShadowBudgetCalculator(historical_error_rate=2.5)
+
+# Shadow Budget 계산
+shadow = calculator.calculate_shadow_budget(failsafe_period)
+print(f"추정 에러: {shadow.estimated_errors}")
+print(f"데이터 소스: {shadow.data_source}")
+print(f"신뢰도: {shadow.confidence_score}%")
+```
+
+#### 13.3.3 ReconciliationConfig
+
+조정 정책을 설정합니다:
+
+```python
+from shopping.selfhealing.reconciliation import ReconciliationConfig, ApplyMode
+
+config = ReconciliationConfig(
+    enabled=True,
+    apply_mode=ApplyMode.CAPPED,           # 최대 10% 제한
+    max_adjustment_percent=10.0,            # 1회 최대 조정률
+    require_approval=True,                  # 운영자 승인 필요
+    auto_exclude_short_periods=True,        # 60초 미만 자동 제외
+    min_period_seconds=60                   # 최소 추적 기간
+)
+```
+
+#### 13.3.4 ErrorBudgetReconciliationService
+
+전체 Reconciliation 워크플로우를 관리합니다:
+
+```python
+from shopping.selfhealing.reconciliation import get_reconciliation_service
+
+service = get_reconciliation_service()
+
+# Shadow Budget 계산 및 저장
+shadow = service.calculate_and_store_shadow_budget(period_id)
+
+# 운영자 승인
+service.approve_shadow_budget(
+    calculation_id=shadow.calculation_id,
+    approved_by="admin@example.com",
+    apply_percent=100.0  # 전체 반영
+)
+
+# 또는 거부
+service.reject_shadow_budget(
+    calculation_id=shadow.calculation_id,
+    rejected_by="admin@example.com",
+    reason="테스트 환경 에러, 제외 대상"
+)
+```
+
+### 13.4 API 레퍼런스
+
+#### 13.4.1 상태 조회
+
+```bash
+GET /api/self-healing/reconciliation/status/
+```
+
+**응답:**
+```json
+{
+    "enabled": true,
+    "pending_periods": 3,
+    "pending_shadow_budgets": 2,
+    "last_processed_at": "2025-01-15T10:30:00Z",
+    "config": {
+        "apply_mode": "CAPPED",
+        "max_adjustment_percent": 10.0,
+        "require_approval": true,
+        "auto_exclude_short_periods": true
+    }
+}
+```
+
+#### 13.4.2 Fail-Safe 구간 목록
+
+```bash
+GET /api/self-healing/reconciliation/failsafe-periods/
+```
+
+**응답:**
+```json
+{
+    "periods": [
+        {
+            "period_id": "period_abc123",
+            "start_time": "2025-01-15T10:00:00Z",
+            "end_time": "2025-01-15T10:15:00Z",
+            "duration_seconds": 900,
+            "reason": "Redis connection timeout",
+            "processed": false,
+            "excluded": false
+        }
+    ]
+}
+```
+
+#### 13.4.3 Shadow Budget 계산
+
+```bash
+POST /api/self-healing/reconciliation/shadow-budgets/
+Content-Type: application/json
+
+{
+    "period_id": "period_abc123"
+}
+```
+
+**응답:**
+```json
+{
+    "calculation_id": "shadow_xyz789",
+    "period_id": "period_abc123",
+    "estimated_errors": 45,
+    "data_source": "prometheus",
+    "confidence_score": 95,
+    "status": "PENDING_REVIEW",
+    "created_at": "2025-01-15T11:00:00Z"
+}
+```
+
+#### 13.4.4 Shadow Budget 승인
+
+```bash
+POST /api/self-healing/reconciliation/shadow-budgets/{calculation_id}/approve/
+Content-Type: application/json
+
+{
+    "approved_by": "admin@example.com",
+    "apply_percent": 100.0
+}
+```
+
+**응답:**
+```json
+{
+    "calculation_id": "shadow_xyz789",
+    "status": "APPROVED",
+    "applied_errors": 45,
+    "applied_at": "2025-01-15T11:05:00Z",
+    "approved_by": "admin@example.com"
+}
+```
+
+#### 13.4.5 Shadow Budget 거부
+
+```bash
+POST /api/self-healing/reconciliation/shadow-budgets/{calculation_id}/reject/
+Content-Type: application/json
+
+{
+    "rejected_by": "admin@example.com",
+    "reason": "테스트 환경 에러, 프로덕션 버짓에서 제외"
+}
+```
+
+#### 13.4.6 Excluded Period 관리
+
+**제외 추가:**
+```bash
+POST /api/self-healing/reconciliation/excluded-periods/
+Content-Type: application/json
+
+{
+    "period_id": "period_abc123",
+    "reason": "계획된 점검 시간",
+    "excluded_by": "admin@example.com"
+}
+```
+
+**제외 취소:**
+```bash
+DELETE /api/self-healing/reconciliation/excluded-periods/{exclusion_id}/
+```
+
+#### 13.4.7 설정 조회/변경
+
+```bash
+# 조회
+GET /api/self-healing/reconciliation/config/
+
+# 변경
+PUT /api/self-healing/reconciliation/config/
+Content-Type: application/json
+
+{
+    "enabled": true,
+    "apply_mode": "CAPPED",
+    "max_adjustment_percent": 15.0,
+    "require_approval": true,
+    "auto_exclude_short_periods": true,
+    "min_period_seconds": 60
+}
+```
+
+### 13.5 운영 워크플로우
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                    일일 Reconciliation 워크플로우                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  [1] 대시보드 확인 ───────────────────────────────────────────────── │
+│      │                                                               │
+│      ├─ Pending Periods: 3                                           │
+│      ├─ Pending Shadow Budgets: 2                                    │
+│      └─ Last Processed: 2시간 전                                     │
+│                                                                      │
+│  [2] Fail-Safe 구간 검토 ─────────────────────────────────────────── │
+│      │                                                               │
+│      ├─ 구간 1: Redis timeout (15분) → Shadow 계산 요청             │
+│      ├─ 구간 2: 점검 시간 (30분) → Exclude 처리                      │
+│      └─ 구간 3: 네트워크 장애 (5분) → 자동 제외됨 (<60초 아님)      │
+│                                                                      │
+│  [3] Shadow Budget 검토 ──────────────────────────────────────────── │
+│      │                                                               │
+│      ├─ Shadow 1: 45 errors, 95% 신뢰도 → Approve                   │
+│      └─ Shadow 2: 120 errors, 70% 신뢰도 → 추가 검토 필요           │
+│                                                                      │
+│  [4] 승인 결과 ───────────────────────────────────────────────────── │
+│      │                                                               │
+│      └─ Budget 조정: -4.5% (45 errors → 10% cap 적용)               │
+│         나머지: 다음 사이클에서 처리                                 │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 13.6 메트릭 및 알림
+
+**Prometheus 메트릭:**
+
+```python
+# 카운터
+selfhealing_reconciliation_periods_total       # 추적된 Fail-Safe 구간 수
+selfhealing_reconciliation_shadows_calculated  # 계산된 Shadow Budget 수
+selfhealing_reconciliation_approved_total      # 승인된 조정 수
+selfhealing_reconciliation_rejected_total      # 거부된 조정 수
+
+# 게이지
+selfhealing_reconciliation_pending_periods     # 대기 중인 구간 수
+selfhealing_reconciliation_pending_shadows     # 대기 중인 Shadow 수
+selfhealing_reconciliation_total_shadow_errors # 미반영 에러 총합
+```
+
+**알림 규칙:**
+
+```yaml
+# 미처리 구간 누적 알림
+- alert: ReconciliationBacklog
+  expr: selfhealing_reconciliation_pending_periods > 10
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: "Reconciliation 백로그 누적"
+    description: "{{ $value }}개의 Fail-Safe 구간이 미처리 상태입니다."
+
+# 대규모 Shadow Budget 알림
+- alert: LargeShadowBudget
+  expr: selfhealing_reconciliation_total_shadow_errors > 1000
+  for: 0m
+  labels:
+    severity: critical
+  annotations:
+    summary: "대규모 Shadow Budget 감지"
+    description: "{{ $value }}개의 미반영 에러가 대기 중입니다. 검토가 필요합니다."
+```
+
+### 13.7 설정 권장사항
+
+| 환경 | `apply_mode` | `max_adjustment_percent` | `require_approval` |
+|------|--------------|--------------------------|-------------------|
+| 개발 | `FULL` | 100% | `false` |
+| 스테이징 | `CAPPED` | 20% | `true` |
+| 프로덕션 | `CAPPED` | 10% | `true` |
+
+### 13.8 문제 해결
+
+**Q: Shadow Budget 계산 결과가 0인 경우?**
+- Prometheus에 해당 시간대 데이터가 없을 수 있음
+- `data_source`가 `fallback`인 경우 historical rate 확인
+- 해당 구간이 실제로 에러가 없었던 경우
+
+**Q: 너무 많은 Pending 구간이 쌓이는 경우?**
+- `auto_exclude_short_periods=True`로 짧은 구간 자동 제외
+- 정기 점검 시간은 미리 Exclude 등록
+- 자동화 스크립트로 주기적 처리
+
+**Q: CAPPED 모드에서 조정이 분산되는 이유?**
+- Budget Shock 방지를 위한 설계
+- 대규모 조정은 여러 사이클에 걸쳐 적용됨
+- 예: 50% 조정 필요 시 → 5회 × 10%로 분산

@@ -60,11 +60,32 @@ from selfhealing.services.error_budget.service import (
     configure_error_budget_service,
 )
 
+from selfhealing.services.error_budget.reconciliation import (
+    # Enums
+    ReconciliationStatus,
+    ApplyMode,
+    # Data Models
+    FailSafePeriod,
+    ShadowBudget,
+    ExcludedPeriod,
+    # Classes
+    FailSafePeriodTracker,
+    ShadowBudgetCalculator,
+    ReconciliationConfig,
+    ErrorBudgetReconciliationService,
+    # Factory
+    get_period_tracker,
+    get_reconciliation_service,
+    configure_reconciliation_service,
+)
+
 
 __all__ = [
     # Enums
     "FreezeStatus",
     "OverrideType",
+    "ReconciliationStatus",
+    "ApplyMode",
     # Thresholds
     "ERROR_BUDGET_THRESHOLDS",
     "BURN_RATE_THRESHOLDS",
@@ -77,12 +98,22 @@ __all__ = [
     "ErrorBudgetStatus",
     "DeploymentVerdict",
     "FreezeDecisionRecord",
+    "FailSafePeriod",
+    "ShadowBudget",
+    "ExcludedPeriod",
     # Classes
     "ErrorBudgetCalculator",
     "DeploymentPolicyAdvisor",
     "FreezeDecisionRecorder",
     "ErrorBudgetService",
+    "FailSafePeriodTracker",
+    "ShadowBudgetCalculator",
+    "ReconciliationConfig",
+    "ErrorBudgetReconciliationService",
     # Factory
     "get_error_budget_service",
     "configure_error_budget_service",
+    "get_period_tracker",
+    "get_reconciliation_service",
+    "configure_reconciliation_service",
 ]
