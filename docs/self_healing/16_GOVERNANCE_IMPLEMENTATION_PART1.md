@@ -485,6 +485,145 @@ class SelfHealingConfig(AppConfig):
 }
 ```
 
+### 2.5 Defense-in-Depth 전략 ✅
+
+> **"감시자를 감시하라"** - 단일 실패점 없는 Audit 시스템
+
+#### 문제점
+AuditService 자체가 장애 시 환경변수 변경 기록이 손실될 수 있음.
+
+#### 솔루션: 다층 방어
+
+| 계층 | 메커니즘 | 역할 | 구현 상태 |
+|------|----------|------|----------|
+| **Primary** | AuditService (DB) | 정상 경로 | ✅ |
+| **L1 Fallback** | Local JSON File | DB 장애 시 로컬 기록 | ✅ |
+| **L2 Critical Log** | `logger.critical()` | syslog/stdout 캡처 | ✅ |
+| **Prometheus** | Gauge 메트릭 | 관측 가능성 | ✅ |
+
+#### 구현 코드
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/env_snapshot.py`
+
+```python
+# 전역 상태
+FALLBACK_LOG_PATH = "logs/env_snapshot_fallback.jsonl"
+_snapshot_recorded: bool = False
+_last_snapshot_hash: Optional[str] = None
+
+
+def _get_metrics():
+    """Prometheus 메트릭 (lazy import)."""
+    try:
+        from prometheus_client import Gauge
+        env_recorded = Gauge(
+            "selfhealing_env_snapshot_recorded",
+            "Whether env snapshot was recorded at startup",
+        )
+        var_count = Gauge(
+            "selfhealing_env_variable_count",
+            "Number of tracked environment variables",
+        )
+        return env_recorded, var_count
+    except ImportError:
+        return None, None
+
+
+def log_env_snapshot_to_audit() -> bool:
+    """
+    Log environment variable snapshot with fallback.
+
+    Defense-in-Depth:
+    1. Try primary: AuditService (DB)
+    2. On failure: L1 fallback (local file + critical log)
+    3. Always: Update Prometheus metrics
+    """
+    global _snapshot_recorded, _last_snapshot_hash
+    
+    snapshot = collect_env_snapshot()
+    _last_snapshot_hash = snapshot["hash"]
+    
+    # Get Prometheus metrics
+    metric_recorded, metric_count = _get_metrics()
+    
+    # Try primary: AuditService
+    primary_success = _log_to_audit_service(snapshot)
+    
+    if primary_success:
+        _snapshot_recorded = True
+        if metric_recorded:
+            metric_recorded.set(1)
+            metric_count.set(snapshot["count"])
+        return True
+    
+    # Primary failed - activate L1 fallback
+    fallback_success = _log_to_fallback(snapshot)
+    
+    # Always emit critical log with hash (for syslog/stdout capture)
+    _emit_critical_log(snapshot, primary_success=False, fallback_success=fallback_success)
+    
+    return fallback_success
+
+
+def _log_to_fallback(snapshot: Dict[str, Any]) -> bool:
+    """
+    L1 Fallback: Log to local JSON file.
+    File format: JSON Lines (.jsonl) for easy parsing.
+    """
+    fallback_path = Path(FALLBACK_LOG_PATH)
+    fallback_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    fallback_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": "env_snapshot_fallback",
+        "hash": snapshot["hash"],
+        "variable_count": snapshot["count"],
+        "variables": snapshot["variables"],
+        "reason": "Primary AuditService unavailable",
+    }
+    
+    with open(fallback_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(fallback_entry, ensure_ascii=False) + "\n")
+    
+    return True
+
+
+def _emit_critical_log(snapshot, primary_success, fallback_success):
+    """
+    Emit critical log for syslog/stdout capture.
+    Last line of defense for forensic analysis.
+    """
+    status = "FALLBACK" if fallback_success else "FAILED"
+    logger.critical(
+        f"[EnvAudit] SNAPSHOT {status}: "
+        f"hash={snapshot['hash']} "
+        f"count={snapshot['count']} "
+        f"primary={primary_success} "
+        f"fallback={fallback_success}"
+    )
+```
+
+#### Prometheus 메트릭
+
+| 메트릭 | 타입 | 설명 |
+|--------|------|------|
+| `selfhealing_env_snapshot_recorded` | Gauge | 스냅샷 기록 성공 여부 (1/0) |
+| `selfhealing_env_variable_count` | Gauge | 추적 중인 환경변수 개수 |
+
+#### 알림 규칙 (예시)
+
+```yaml
+# Prometheus Alert Rule
+- alert: EnvSnapshotFailed
+  expr: selfhealing_env_snapshot_recorded == 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Environment snapshot recording failed"
+    description: "Check logs/env_snapshot_fallback.jsonl for fallback data"
+```
+
 ---
 
 ## 3. API Rate Limit

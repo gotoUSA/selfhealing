@@ -8,10 +8,18 @@ Features:
 - Automatic masking of sensitive values (SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL)
 - SHA256 hash for change detection
 - Integration with AuditLogger via log_config_change
+- L1 Local Fallback: Critical log + JSON file if DB fails
+- Prometheus metrics for observability
+
+Defense-in-Depth Strategy:
+1. Primary: Log to AuditService (DB)
+2. Fallback: Log to local file (logs/env_snapshot_fallback.jsonl)
+3. Always: logger.critical with hash for stdout/syslog
+4. Metrics: Prometheus gauge for monitoring
 
 Usage:
     This module is called automatically by SelfHealingConfig.ready()
-    via post_migrate signal.
+    on every server start.
 
 Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
@@ -19,9 +27,12 @@ Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +55,36 @@ SENSITIVE_KEYWORDS: List[str] = [
     "API_KEY",
     "PRIVATE",
 ]
+
+# Fallback 로그 파일 경로
+FALLBACK_LOG_PATH = "logs/env_snapshot_fallback.jsonl"
+
+# 전역 상태: 스냅샷 기록 성공 여부
+_snapshot_recorded: bool = False
+_last_snapshot_hash: Optional[str] = None
+
+
+def _get_metrics():
+    """Prometheus 메트릭 (lazy import to avoid circular deps)."""
+    try:
+        from prometheus_client import Gauge
+        
+        # 싱글톤 패턴으로 메트릭 생성
+        if not hasattr(_get_metrics, "_env_snapshot_recorded"):
+            _get_metrics._env_snapshot_recorded = Gauge(
+                "selfhealing_env_snapshot_recorded",
+                "Whether environment snapshot was successfully recorded (1=yes, 0=no)",
+            )
+            _get_metrics._env_snapshot_variable_count = Gauge(
+                "selfhealing_env_snapshot_variable_count",
+                "Number of tracked environment variables",
+            )
+        return (
+            _get_metrics._env_snapshot_recorded,
+            _get_metrics._env_snapshot_variable_count,
+        )
+    except ImportError:
+        return None, None
 
 
 def collect_env_snapshot() -> Dict[str, Any]:
@@ -91,27 +132,74 @@ def collect_env_snapshot() -> Dict[str, Any]:
 
 def log_env_snapshot_to_audit() -> bool:
     """
-    Log environment variable snapshot to AuditService.
+    Log environment variable snapshot to AuditService with fallback.
 
-    Called from SelfHealingConfig.ready() via post_migrate signal.
+    Called from SelfHealingConfig.ready() on every server start.
+
+    Defense-in-Depth:
+    1. Try primary: AuditService (DB)
+    2. On failure: L1 fallback (local file + critical log)
+    3. Always: Update Prometheus metrics
 
     Returns:
-        bool: True if successfully logged, False otherwise.
+        bool: True if successfully logged (primary or fallback), False otherwise.
+    """
+    global _snapshot_recorded, _last_snapshot_hash
+    
+    snapshot = collect_env_snapshot()
+    _last_snapshot_hash = snapshot["hash"]
+    
+    # Get Prometheus metrics
+    metric_recorded, metric_count = _get_metrics()
+    
+    if snapshot["count"] == 0:
+        logger.debug("[EnvAudit] No tracked environment variables found")
+        _snapshot_recorded = True
+        if metric_recorded:
+            metric_recorded.set(1)
+            metric_count.set(0)
+        return True
 
-    Note:
-        This is a best-effort operation. If logging fails,
-        the system continues to start normally.
+    # Try primary: AuditService
+    primary_success = _log_to_audit_service(snapshot)
+    
+    if primary_success:
+        _snapshot_recorded = True
+        if metric_recorded:
+            metric_recorded.set(1)
+            metric_count.set(snapshot["count"])
+        logger.info(
+            f"[EnvAudit] Snapshot recorded: "
+            f"count={snapshot['count']}, hash={snapshot['hash']}"
+        )
+        return True
+    
+    # Primary failed - activate L1 fallback
+    logger.warning("[EnvAudit] Primary logging failed, activating L1 fallback")
+    fallback_success = _log_to_fallback(snapshot)
+    
+    # Always emit critical log with hash (for syslog/stdout capture)
+    _emit_critical_log(snapshot, primary_success=False, fallback_success=fallback_success)
+    
+    # Update metrics
+    if metric_recorded:
+        metric_recorded.set(1 if fallback_success else 0)
+        metric_count.set(snapshot["count"])
+    
+    _snapshot_recorded = fallback_success
+    return fallback_success
+
+
+def _log_to_audit_service(snapshot: Dict[str, Any]) -> bool:
+    """
+    Try to log snapshot to primary AuditService.
+    
+    Returns:
+        bool: True if successful
     """
     try:
         from selfhealing.audit import log_config_change
 
-        snapshot = collect_env_snapshot()
-
-        if snapshot["count"] == 0:
-            logger.debug("[EnvAudit] No tracked environment variables found")
-            return True
-
-        # Log to audit system
         success = log_config_change(
             config_type="environment_variables",
             config_key="startup_snapshot",
@@ -122,26 +210,73 @@ def log_env_snapshot_to_audit() -> bool:
             metadata={
                 "hash": snapshot["hash"],
                 "variable_count": snapshot["count"],
-                "source": "post_migrate_signal",
+                "source": "ready",
             },
         )
-
-        logger.info(
-            f"[EnvAudit] Snapshot recorded: "
-            f"count={snapshot['count']}, hash={snapshot['hash']}"
-        )
-
-        return success
-
+        return bool(success)
     except ImportError as e:
-        # Audit module not available - skip gracefully
         logger.debug(f"[EnvAudit] Audit module not available: {e}")
         return False
-
     except Exception as e:
-        # Best-effort: 실패해도 시스템은 시작
-        logger.warning(f"[EnvAudit] Failed to record snapshot: {e}")
+        logger.warning(f"[EnvAudit] Primary audit failed: {e}")
         return False
+
+
+def _log_to_fallback(snapshot: Dict[str, Any]) -> bool:
+    """
+    L1 Fallback: Log to local JSON file.
+    
+    This ensures we have a record even if DB is down.
+    File format: JSON Lines (.jsonl) for easy parsing.
+    
+    Returns:
+        bool: True if successful
+    """
+    try:
+        fallback_path = Path(FALLBACK_LOG_PATH)
+        fallback_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        fallback_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": "env_snapshot_fallback",
+            "hash": snapshot["hash"],
+            "variable_count": snapshot["count"],
+            "variables": snapshot["variables"],
+            "reason": "Primary AuditService unavailable",
+        }
+        
+        with open(fallback_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(fallback_entry, ensure_ascii=False) + "\n")
+        
+        logger.warning(
+            f"[EnvAudit] Fallback recorded to {fallback_path}: "
+            f"hash={snapshot['hash']}"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"[EnvAudit] Fallback logging also failed: {e}")
+        return False
+
+
+def _emit_critical_log(
+    snapshot: Dict[str, Any],
+    primary_success: bool,
+    fallback_success: bool,
+) -> None:
+    """
+    Emit critical log for syslog/stdout capture.
+    
+    This is the last line of defense - even if everything else fails,
+    this should appear in container logs / syslog for forensic analysis.
+    """
+    status = "FALLBACK" if fallback_success else "FAILED"
+    logger.critical(
+        f"[EnvAudit] SNAPSHOT {status}: "
+        f"hash={snapshot['hash']} "
+        f"count={snapshot['count']} "
+        f"primary={primary_success} "
+        f"fallback={fallback_success}"
+    )
 
 
 def get_env_snapshot_summary() -> Dict[str, Any]:
