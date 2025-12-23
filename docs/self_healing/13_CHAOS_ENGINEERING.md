@@ -52,8 +52,8 @@
 │  │   Operator   │───►│  Control API │───►│  ChaosSchedulerService   │   │
 │  │   (Human)    │    │   (REST)     │    │  - Schedule CRUD         │   │
 │  └──────────────┘    └──────────────┘    │  - Kill Switch           │   │
-│                                           │  - Approval Workflow     │   │
-│                                           └──────────┬───────────────┘   │
+│                                          │  - Approval Workflow     │   │
+│                                          └──────────┬───────────────┘   │
 │                                                      │                   │
 │  ┌───────────────────────────────────────────────────┼───────────────┐   │
 │  │                     Pre-flight Checks             ▼               │   │

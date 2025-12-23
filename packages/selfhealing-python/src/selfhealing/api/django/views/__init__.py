@@ -82,6 +82,12 @@ from selfhealing.api.django.views.config import (
     MetricsConfigView,
 )
 
+# Drift Threshold Configuration Views
+from selfhealing.api.django.views.drift_threshold import (
+    DriftThresholdConfigView,
+    DriftThresholdResetView,
+)
+
 # Error Budget & Deployment Policy Views
 from selfhealing.api.django.views.error_budget import (
     ErrorBudgetStatusView,
@@ -180,6 +186,9 @@ __all__ = [
     "NotificationConfigView",
     "ForensicConfigView",
     "MetricsConfigView",
+    # Drift Threshold Config Views
+    "DriftThresholdConfigView",
+    "DriftThresholdResetView",
     # Config History Views
     "ConfigHistoryView",
     "ConfigVersionDetailView",

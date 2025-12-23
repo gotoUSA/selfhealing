@@ -1,5 +1,18 @@
 # Self-Healing 메트릭 수집 전략
 
+## 구현 상태
+
+| 기능 | 상태 | 위치 |
+|------|------|------|
+| DriftThresholdConfig 모델 | ✅ 구현됨 | `selfhealing/models/drift_config.py` |
+| MetricReconciler 동적 설정 로드 | ✅ 구현됨 | `selfhealing/metrics/reconciler.py` |
+| **Drift 임계값 설정 API** | ✅ 구현됨 | `selfhealing/api/django/views/drift_threshold.py` |
+| GET /config/drift-thresholds/ | ✅ 구현됨 | 현재 임계값 조회 |
+| PUT /config/drift-thresholds/ | ✅ 구현됨 | 임계값 수정 |
+| POST /config/drift-thresholds/reset/ | ✅ 구현됨 | 기본값으로 리셋 |
+
+---
+
 ## 개요
 
 Self-Healing 시스템의 메트릭 수집은 **도메인 중립성**과 **성능**을 모두 만족해야 합니다. 이 문서는 사용자 시스템의 DB에 직접 의존하지 않으면서도 정확한 메트릭을 수집하는 전략을 정의합니다.

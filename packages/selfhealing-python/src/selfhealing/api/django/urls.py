@@ -95,6 +95,12 @@ from selfhealing.api.django.views.config import (
     ErrorBudgetConfigView,
 )
 
+# Drift Threshold Configuration Views
+from selfhealing.api.django.views.drift_threshold import (
+    DriftThresholdConfigView,
+    DriftThresholdResetView,
+)
+
 # Config History & Rollback Views
 from selfhealing.api.django.views.config_history import (
     ConfigHistoryView,
@@ -259,6 +265,13 @@ urlpatterns = [
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
+    
+    # =========================================================================
+    # Drift Threshold Configuration (Metric Collection Strategy)
+    # Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+    # =========================================================================
+    path("config/drift-thresholds/", DriftThresholdConfigView.as_view(), name="config-drift-thresholds"),
+    path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
     
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)
