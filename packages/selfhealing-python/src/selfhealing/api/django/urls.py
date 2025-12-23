@@ -90,6 +90,7 @@ from selfhealing.api.django.views.config import (
     IdempotencyConfigView,
     NotificationConfigView,
     ForensicConfigView,
+    LoggingConfigView,
     MetricsConfigView,
     ErrorBudgetConfigView,
 )
@@ -244,6 +245,7 @@ urlpatterns = [
     path("config/idempotency/", IdempotencyConfigView.as_view(), name="config-idempotency"),
     path("config/notification/", NotificationConfigView.as_view(), name="config-notification"),
     path("config/forensic/", ForensicConfigView.as_view(), name="config-forensic"),
+    path("config/logging/", LoggingConfigView.as_view(), name="config-logging"),
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),

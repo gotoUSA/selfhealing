@@ -1,0 +1,1 @@
+[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active

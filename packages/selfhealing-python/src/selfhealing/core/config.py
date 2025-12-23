@@ -190,11 +190,56 @@ class SecurityConfig:
 
 @dataclass
 class ForensicConfig:
-    """Forensic context truncation limits."""
+    """
+    Forensic context truncation limits.
+    
+    Phase 5 확장: max_stack_frames, max_context_size_bytes 등 추가.
+    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    """
 
     error_message_max_length: int = 500
     response_body_max_length: int = 5000
     user_agent_max_length: int = 500
+    
+    # Phase 5: 추가 설정 (이전 env만 노출되었던 설정들)
+    max_stack_frames: int = 50
+    max_context_size_bytes: int = 65536  # 64KB
+    include_local_variables: bool = False  # 보안상 기본 비활성화
+    sanitize_sensitive_data: bool = True
+    sensitive_key_patterns: List[str] = field(
+        default_factory=lambda: ["password", "secret", "token", "key", "auth"]
+    )
+
+
+@dataclass
+class LoggingConfig:
+    """
+    Logging configuration for Self-Healing components.
+    
+    각 컴포넌트별 로그 레벨 설정.
+    Phase 5: 이전 환경변수로만 제어 가능했던 설정들을 API로 노출.
+    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    """
+
+    # 컴포넌트별 로그 레벨
+    dlq_log_level: str = "INFO"
+    circuit_breaker_log_level: str = "INFO"
+    replay_log_level: str = "INFO"
+    sla_log_level: str = "INFO"
+    forensic_log_level: str = "DEBUG"
+    emergency_log_level: str = "WARNING"
+    chaos_log_level: str = "INFO"
+    l2_storage_log_level: str = "INFO"
+
+    # 로그 포맷 설정
+    include_timestamps: bool = True
+    include_request_id: bool = True
+    include_user_info: bool = False  # 보안상 기본 비활성화
+
+    # 로그 출력 설정
+    console_output_enabled: bool = True
+    file_output_enabled: bool = False
+    structured_json: bool = True  # 운영환경 기본값
 
 
 @dataclass

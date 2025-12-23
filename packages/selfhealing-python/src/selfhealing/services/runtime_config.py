@@ -42,6 +42,7 @@ from selfhealing.core.config import (
     IdempotencyConfig,
     NotificationConfig,
     ForensicConfig,
+    LoggingConfig,
     MetricsConfig,
     ErrorBudgetConfig,
 )
@@ -85,6 +86,7 @@ class RuntimeConfigManager:
         "idempotency": "runtime_config:idempotency",
         "notification": "runtime_config:notification",
         "forensic": "runtime_config:forensic",
+        "logging": "runtime_config:logging",
         "metrics": "runtime_config:metrics",
         "error_budget": "runtime_config:error_budget",
         "slo": "runtime_config:slo",
@@ -101,6 +103,7 @@ class RuntimeConfigManager:
         "idempotency": IdempotencyConfig,
         "notification": NotificationConfig,
         "forensic": ForensicConfig,
+        "logging": LoggingConfig,
         "metrics": MetricsConfig,
         "error_budget": ErrorBudgetConfig,
         "slo": None,  # SLO는 별도 처리 (SLOConfigRuntime)
@@ -186,26 +189,48 @@ class RuntimeConfigManager:
         self._cache[config_type] = config_dict
 
     def _get_config(self, config_type: str) -> Dict[str, Any]:
-        """Get config by type."""
+        """
+        Get config by type.
+        
+        새 필드가 추가되었을 경우, 저장된 설정과 기본값을 병합하여 반환합니다.
+        """
         with self._lock:
+            config_class = self.CONFIG_CLASSES.get(config_type)
+            
+            # Get defaults
+            if config_class is not None:
+                defaults = asdict(config_class())
+            elif config_type == "slo":
+                defaults = self._get_slo_defaults()
+            else:
+                defaults = {}
+            
             if config_type not in self._cache:
-                config_class = self.CONFIG_CLASSES.get(config_type)
-                if config_class is not None:
-                    self._cache[config_type] = asdict(config_class())
-                elif config_type == "slo":
-                    self._cache[config_type] = self._get_slo_defaults()
-                else:
-                    self._cache[config_type] = {}
+                self._cache[config_type] = defaults.copy()
+            else:
+                # Merge defaults with cached values (cached values take precedence)
+                # This ensures new fields from defaults are included
+                merged = defaults.copy()
+                merged.update(self._cache[config_type])
+                self._cache[config_type] = merged
+            
             return self._cache[config_type].copy()
 
     def _update_config(self, config_type: str, **kwargs) -> Dict[str, Any]:
         """Update config fields."""
         with self._lock:
             current = self._get_config(config_type)
+            config_class = self.CONFIG_CLASSES.get(config_type)
+            
+            # Get valid field names from config class (if available)
+            if config_class is not None:
+                valid_fields = {f.name for f in fields(config_class)}
+            else:
+                valid_fields = set(current.keys())
 
-            # Update only provided fields
+            # Update only provided fields that are valid
             for key, value in kwargs.items():
-                if key in current:
+                if key in valid_fields:
                     current[key] = value
                     logger.info(f"[RuntimeConfig] Updated {config_type}.{key} = {value}")
 
@@ -611,10 +636,78 @@ class RuntimeConfigManager:
         max_body_size_bytes: Optional[int] = None,
         retention_days: Optional[int] = None,
         sampling_rate: Optional[float] = None,
+        # Phase 5: 추가 설정
+        max_stack_frames: Optional[int] = None,
+        max_context_size_bytes: Optional[int] = None,
+        include_local_variables: Optional[bool] = None,
+        sanitize_sensitive_data: Optional[bool] = None,
+        sensitive_key_patterns: Optional[list] = None,
+        error_message_max_length: Optional[int] = None,
+        response_body_max_length: Optional[int] = None,
+        user_agent_max_length: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Update forensic configuration."""
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("forensic", **updates)
+
+    # =========================================================================
+    # Logging Config (Phase 5)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    # =========================================================================
+
+    def get_logging_config(self) -> Dict[str, Any]:
+        """
+        Get logging configuration.
+        
+        Returns:
+            dict: 컴포넌트별 로그 레벨 및 포맷 설정
+        """
+        return self._get_config("logging")
+
+    def update_logging_config(
+        self,
+        # 컴포넌트별 로그 레벨
+        dlq_log_level: Optional[str] = None,
+        circuit_breaker_log_level: Optional[str] = None,
+        replay_log_level: Optional[str] = None,
+        sla_log_level: Optional[str] = None,
+        forensic_log_level: Optional[str] = None,
+        emergency_log_level: Optional[str] = None,
+        chaos_log_level: Optional[str] = None,
+        l2_storage_log_level: Optional[str] = None,
+        # 로그 포맷 설정
+        include_timestamps: Optional[bool] = None,
+        include_request_id: Optional[bool] = None,
+        include_user_info: Optional[bool] = None,
+        # 로그 출력 설정
+        console_output_enabled: Optional[bool] = None,
+        file_output_enabled: Optional[bool] = None,
+        structured_json: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update logging configuration.
+        
+        Args:
+            dlq_log_level: DLQ 관련 로그 레벨
+            circuit_breaker_log_level: Circuit Breaker 로그 레벨
+            replay_log_level: DLQ Replay 로그 레벨
+            sla_log_level: SLA/SLO 모니터링 로그 레벨
+            forensic_log_level: Forensic 분석 로그 레벨
+            emergency_log_level: Emergency Mode 로그 레벨
+            chaos_log_level: Chaos Engineering 로그 레벨
+            l2_storage_log_level: L2 Storage Resilience 로그 레벨
+            include_timestamps: 로그에 타임스탬프 포함 여부
+            include_request_id: 로그에 Request ID 포함 여부
+            include_user_info: 로그에 사용자 정보 포함 여부
+            console_output_enabled: 콘솔 로그 출력 활성화
+            file_output_enabled: 파일 로그 출력 활성화
+            structured_json: JSON 구조화 로그 포맷 사용
+            
+        Returns:
+            dict: 업데이트된 설정값
+        """
+        updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
+        return self._update_config("logging", **updates)
 
     # =========================================================================
     # Metrics Config

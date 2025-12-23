@@ -620,11 +620,27 @@ def validate_startup_config():
 - `packages/selfhealing-python/src/selfhealing/api/django/views/config_history.py`
 - `tests/self_healing/unit/test_config_history.py`
 
-### Phase 5: API 미노출 설정
-- [ ] `ForensicConfigSerializer` 생성
-- [ ] `LoggingConfigSerializer` 생성
-- [ ] View 및 URL 추가
-- [ ] 테스트 작성
+### Phase 5: API 미노출 설정 ✅ COMPLETED
+- [x] `ForensicConfigSerializer` 확장 (max_stack_frames, max_context_size_bytes 등)
+- [x] `LoggingConfigSerializer` 생성 (컴포넌트별 로그 레벨)
+- [x] `LoggingConfigView` 생성
+- [x] URL 등록 (`config/logging/`)
+- [x] 29개 단위 테스트 작성
+
+**구현된 API:**
+- `GET/PUT /api/self-healing/config/forensic/` - Forensic 설정 (확장 필드 추가)
+- `GET/PUT /api/self-healing/config/logging/` - 로깅 설정 (신규)
+
+**추가된 설정:**
+- **Forensic**: max_stack_frames, max_context_size_bytes, include_local_variables, sanitize_sensitive_data, sensitive_key_patterns
+- **Logging**: dlq_log_level, circuit_breaker_log_level, replay_log_level, sla_log_level, forensic_log_level, emergency_log_level, chaos_log_level, l2_storage_log_level
+
+**구현된 파일:**
+- `packages/selfhealing-python/src/selfhealing/core/config.py` - LoggingConfig 추가
+- `packages/selfhealing-python/src/selfhealing/api/django/serializers/config.py` - Serializers 확장
+- `packages/selfhealing-python/src/selfhealing/api/django/views/config.py` - LoggingConfigView 추가
+- `packages/selfhealing-python/src/selfhealing/services/runtime_config.py` - logging 설정 지원
+- `tests/self_healing/unit/test_unexposed_config_api.py` - 29개 테스트
 
 ### Phase 6: Fail-Safe Default
 - [ ] `safe_defaults.py` 생성

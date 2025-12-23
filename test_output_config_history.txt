@@ -1,0 +1,1497 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.6, pytest-9.0.1, pluggy-1.6.0 -- C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+django: version: 5.2.9, settings: myproject.settings.test (from ini)
+rootdir: C:\Users\admin\Desktop\python\CRUD\myproject
+configfile: pyproject.toml
+plugins: anyio-4.12.0, Faker-30.8.2, locust-2.42.5, asyncio-1.3.0, celery-1.2.1, cov-7.0.0, django-4.11.1, pytest_docker_tools-3.1.9, mock-3.15.1, xdist-3.8.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 6/6 workers
+6 workers [46 items]
+
+scheduling tests via LoadScopeScheduling
+
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_invalid_config_type 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_save_version_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_consistent 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_save_version_returns_none_when_redis_unavailable 
+tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_creation 
+tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_history_key_format 
+[gw2] [  2%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_consistent 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_different_values 
+[gw2] [  4%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_different_values 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_order_independent 
+[gw2] [  6%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_order_independent 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_length 
+[gw3] [  8%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_creation 
+tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_to_dict 
+[gw0] [ 10%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_save_version_success 
+[gw2] [ 13%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceHashComputation::test_compute_hash_length 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_save_version_invalid_config_type 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_is_valid_config_type_valid 
+[gw3] [ 15%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_to_dict 
+tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_from_dict 
+[gw0] [ 17%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_save_version_invalid_config_type 
+[gw3] [ 19%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_from_dict 
+[gw2] [ 21%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_is_valid_config_type_valid 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_history_success 
+tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_roundtrip 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_is_valid_config_type_invalid 
+[gw3] [ 23%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigVersion::test_config_version_roundtrip 
+[gw0] [ 26%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_history_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_redis_exception_on_save 
+[gw2] [ 28%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_is_valid_config_type_invalid 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_found 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_supported_config_types_list 
+[gw2] [ 30%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceValidation::test_supported_config_types_list 
+[gw0] [ 32%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_found 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRollback::test_rollback_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_not_found 
+[gw3] [ 34%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_redis_exception_on_save 
+[gw0] [ 36%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_not_found 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_compare_versions_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_redis_exception_on_get_history 
+[gw2] [ 39%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRollback::test_rollback_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRollback::test_rollback_version_not_found 
+[gw2] [ 41%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRollback::test_rollback_version_not_found 
+[gw0] [ 43%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_compare_versions_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceSingleton::test_get_config_history_service_returns_singleton 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_compare_versions_not_found 
+[gw3] [ 45%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_redis_exception_on_get_history 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_invalid_json_in_history 
+[gw2] [ 47%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceSingleton::test_get_config_history_service_returns_singleton 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceSingleton::test_reset_config_history_service 
+[gw5] [ 50%] PASSED tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_history_key_format 
+[gw0] [ 52%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_compare_versions_not_found 
+[gw2] [ 54%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceSingleton::test_reset_config_history_service 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_current_version_success 
+tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_version_counter_key_format 
+[gw4] [ 56%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_save_version_returns_none_when_redis_unavailable 
+[gw3] [ 58%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryErrorHandling::test_invalid_json_in_history 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_history_returns_empty_when_redis_unavailable 
+[gw5] [ 60%] PASSED tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_version_counter_key_format 
+[gw0] [ 63%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_current_version_success 
+tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_current_key_format 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_count 
+[gw4] [ 65%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_history_returns_empty_when_redis_unavailable 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_current_version_returns_none_when_redis_unavailable 
+[gw5] [ 67%] PASSED tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_current_key_format 
+[gw0] [ 69%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_get_version_count 
+[gw4] [ 71%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_current_version_returns_none_when_redis_unavailable 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_rollback_returns_none_when_redis_unavailable 
+tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_max_history_entries 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_clear_history C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+
+[gw5] [ 73%] PASSED tests/self_healing/unit/test_config_history.py::TestRedisKeyPatterns::test_max_history_entries 
+[gw4] [ 76%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_rollback_returns_none_when_redis_unavailable 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_version_count_returns_zero_when_redis_unavailable C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+
+[gw4] [ 78%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceRedisUnavailable::test_get_version_count_returns_zero_when_redis_unavailable 
+[gw0] [ 80%] PASSED tests/self_healing/unit/test_config_history.py::TestConfigHistoryServiceWithMockedRedis::test_clear_history C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+
+[gw1] [ 82%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_invalid_config_type 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_valid_config_type 
+[gw1] [ 84%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_valid_config_type 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_missing_version 
+[gw1] [ 86%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_missing_version 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_version_not_found 
+[gw1] [ 89%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_version_not_found 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_success 
+[gw1] [ 91%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_missing_params 
+[gw1] [ 93%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_missing_params 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_success 
+[gw1] [ 95%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_success 
+[gw1] [ 97%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_success 
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_not_found 
+[gw1] [100%] ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_not_found C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\coverage\control.py:957: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.0/messages.html#warning-no-data-collected
+  self._warn("No data was collected.", slug="no-data-collected")
+
+ERROR: Coverage failure: total of 15.94 is less than fail-under=70.00
+
+
+=================================== ERRORS ====================================
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_history_view_invalid_config_type _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:728: in pytest_fixture_setup
+    return (yield)
+            ^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+---------------------------- Captured stderr setup ----------------------------
+Creating test database for alias 'default'...
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_history_view_valid_config_type _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_rollback_view_missing_version _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_rollback_view_version_not_found _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_rollback_view_success _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_compare_view_missing_params _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_compare_view_success _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_version_detail_view_success _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+_ ERROR at setup of TestConfigHistoryAPIViews.test_config_version_detail_view_not_found _
+[gw1] win32 -- Python 3.12.6 C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:507: in _nodb_cursor
+    with super()._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:712: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+
+During handling of the above exception, another exception occurred:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known
+
+The above exception was the direct cause of the following exception:
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_django\fixtures.py:198: in django_db_setup
+    db_cfg = setup_databases(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\test\utils.py:204: in setup_databases
+    connection.creation.create_test_db(
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:62: in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\creation.py:202: in _create_test_db
+    with self._nodb_cursor() as cursor:
+         ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:533: in _nodb_cursor
+    with conn.cursor() as cursor:
+         ^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:320: in cursor
+    return self._cursor()
+           ^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:296: in _cursor
+    self.ensure_connection()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:278: in ensure_connection
+    with self.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\utils.py:91: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:279: in ensure_connection
+    self.connect()
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\base\base.py:256: in connect
+    self.connection = self.get_new_connection(conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\utils\asyncio.py:26: in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:332: in get_new_connection
+    connection = self.Database.connect(**conn_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py:135: in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   django.db.utils.OperationalError: could not translate host name "db" to address: Name or service not known
+============================== warnings summary ===============================
+tests\self_healing\unit\test_config_history.py:15
+tests\self_healing\unit\test_config_history.py:15
+tests\self_healing\unit\test_config_history.py:15
+tests\self_healing\unit\test_config_history.py:15
+tests\self_healing\unit\test_config_history.py:15
+tests\self_healing\unit\test_config_history.py:15
+  C:\Users\admin\Desktop\python\CRUD\myproject\tests\self_healing\unit\test_config_history.py:15: DeprecationWarning: Importing from old module paths is deprecated and will be removed in a future version. Please migrate to 'selfhealing' package. See packages/selfhealing-python/docs/MIGRATION.md for details.
+    from selfhealing.services.config_history import (
+
+tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_invalid_config_type
+  C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\django\db\backends\postgresql\base.py:512: RuntimeWarning: Normally Django will use a connection to the 'postgres' database to avoid running initialization queries against the production database when it's not needed (for example, when running tests). Django was unable to create a connection to the 'postgres' database and will use the first PostgreSQL database instead.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.12.6-final-0 _______________
+
+Name                                                           Stmts   Miss Branch BrPart   Cover   Missing
+-----------------------------------------------------------------------------------------------------------
+shopping\adapters.py                                              39     39     14      0   0.00%   14-150
+shopping\admin\base.py                                            76     76     16      0   0.00%   8-199
+shopping\admin\circuit_breaker_admin.py                           62     38     18      0  30.00%   96-102, 113-115, 122-136, 144-159, 167-182, 190-204
+shopping\admin\dlq_admin.py                                       65     38     16      0  33.33%   151-162, 173-179, 185-188, 195-212, 220-229, 234-242, 247-254
+shopping\admin\notification_admin.py                              81     30      6      0  58.62%   54, 61, 71-76, 82, 89, 133-151, 164, 169-170, 175-176, 180-198, 202-208, 259
+shopping\admin\order_admin.py                                     53      9      0      0  83.02%   36, 119, 127-128, 133-134, 139-140, 169
+shopping\admin\payment_admin.py                                   81     37     12      0  47.31%   120-123, 129-138, 148-149, 155-158, 164-166, 172-175, 181, 185, 233-234, 240-248, 258-260, 266-269, 275, 279, 283
+shopping\admin\point_admin.py                                     20      5      2      0  68.18%   69-72, 78, 82
+shopping\admin\product_admin.py                                   55      6      2      0  85.96%   76, 82, 130, 154-156
+shopping\admin\qa_admin.py                                        35      6      4      0  74.36%   85-87, 133-135
+shopping\admin\return_admin.py                                    91     42     10      0  48.51%   29-31, 170-175, 185-194, 205-206, 212, 218-220, 227-235, 240-248, 253-261, 306, 312, 318
+shopping\admin\user_admin.py                                      47     12      6      0  66.04%   29-31, 35-37, 153-156, 163, 215
+shopping\apps.py                                                  17      6      0      0  64.71%   36-43
+shopping\chaos\breakpoints.py                                     39      3      0      0  92.31%   266, 276, 289
+shopping\chaos\config.py                                          68     35     18      0  38.37%   103-138, 153-166, 178-182, 200-214, 218, 237-239
+shopping\chaos\decorators.py                                     172    135     78      0  14.80%   38-40, 75-136, 155-173, 193-200, 222-229, 242-248, 257-263, 272-276, 285-289, 298-304, 313-317, 355-375, 391-410, 423-444, 459-479, 491-515, 524-544
+shopping\dtos\__init__.py                                          2      2      0      0   0.00%   7-9
+shopping\dtos\product_filter.py                                   37     37      8      0   0.00%   5-90
+shopping\handlers\replay_handlers.py                             114    114     28      0   0.00%   13-303
+shopping\management\commands\cleanup_expired_tokens.py            43     43      4      0   0.00%   8-101
+shopping\management\commands\cleanup_old_carts.py                 43     43      2      0   0.00%   8-93
+shopping\management\commands\create_load_test_users.py            41     41     14      0   0.00%   10-97
+shopping\management\commands\create_test_data.py                 246    246     82      0   0.00%   3-650
+shopping\management\commands\delete_unverified_users.py           89     89     28      0   0.00%   1-172
+shopping\management\commands\generate_self_healing_alerts.py      74     74     30      0   0.00%   16-176
+shopping\management\commands\security_review.py                  198    198     24      0   0.00%   12-501
+shopping\models\cart.py                                          135     79     22      0  35.67%   87-96, 100-101, 105-114, 118-122, 126, 130-131, 141-174, 179-207, 256, 261-263, 268-270, 274-275, 279-284, 288-293, 297, 301-304, 309
+shopping\models\email_verification.py                            100     46     18      0  45.76%   83-85, 89-103, 110-112, 116-118, 122-124, 246-285, 289-291, 295-297, 301-303
+shopping\models\failed_external_request.py                       168    100     30      0  34.34%   241-245, 249-253, 296-314, 448-465, 469-491, 495-523, 545-554, 567-577, 586-590, 601-613
+shopping\models\failed_operation.py                              137     58     16      0  51.63%   293-300, 323-328, 346-352, 361-365, 380-388, 402-411, 423-428, 432-435, 443, 448, 458-462, 507-509
+shopping\models\notification.py                                   26      5      2      0  75.00%   84-89
+shopping\models\order.py                                          92     28     16      0  59.26%   224, 229, 234, 239, 243, 248, 252-275, 327, 331-343, 361
+shopping\models\password_reset.py                                 62     29      8      0  47.14%   83-91, 105-106, 127-138, 150, 175-189, 204-207, 217-219
+shopping\models\payment.py                                       107     49     20      0  45.67%   187-207, 212, 217, 224-242, 246-248, 255-264, 289-305, 322
+shopping\models\point.py                                          98     57     20      0  34.75%   31-32, 44-45, 58-71, 84-88, 95, 187-205, 217, 232-245, 275-291, 316-317, 335-359
+shopping\models\point_history.py                                   2      2      0      0   0.00%   8-10
+shopping\models\product.py                                       143     42     20      0  61.96%   63-65, 72-73, 79-80, 85, 90, 188-190, 195, 200-202, 207, 211, 216-220, 225, 229-231, 235, 242, 247-257, 297, 340, 361
+shopping\models\product_qa.py                                     55     24     20      0  41.33%   81-99, 150-172, 181
+shopping\models\rate_limit_state.py                               21      4      0      0  80.95%   66-68, 73-75
+shopping\models\return_request.py                                132     61     22      0  46.10%   248-258, 266-267, 275-276, 290-303, 314-323, 344-363, 374-375, 386-387, 397-398, 406-407, 415-419, 487-493, 497, 505-508
+shopping\models\security_incident.py                              83     24      2      0  69.41%   225-227, 243-247, 264-269, 277, 282, 320-335, 351-354, 372-375
+shopping\models\seller.py                                         23      3      2      0  80.00%   99-101
+shopping\models\user.py                                           68     27     10      0  52.56%   121-136, 143-145, 160-166, 171, 176-177, 181, 185, 189-190, 194-195
+shopping\permissions.py                                           37     37     10      0   0.00%   3-207
+shopping\serializers\__init__.py                                  13     13      0      0   0.00%   14-110
+shopping\serializers\cart_serializers.py                          93     93     12      0   0.00%   1-314
+shopping\serializers\category_serializers.py                      69     69     18      0   0.00%   1-222
+shopping\serializers\email_verification_serializers.py            77     77     12      0   0.00%   1-167
+shopping\serializers\notification_serializers.py                  78     78     24      0   0.00%   1-185
+shopping\serializers\order_serializers.py                         96     96     16      0   0.00%   1-296
+shopping\serializers\password_reset_serializers.py                70     70     12      0   0.00%   1-203
+shopping\serializers\payment_serializers.py                       96     96     24      0   0.00%   1-297
+shopping\serializers\point_serializers.py                        114    114     30      0   0.00%   1-282
+shopping\serializers\product_qa_serializers.py                   107    107     24      0   0.00%   1-229
+shopping\serializers\product_serializers.py                      162    162     50      0   0.00%   1-477
+shopping\serializers\return_serializers.py                       183    183     40      0   0.00%   1-458
+shopping\serializers\self_healing_serializers.py                 120    120      8      0   0.00%   8-317
+shopping\serializers\social_auth_serializers.py                   15     15      0      0   0.00%   1-35
+shopping\serializers\user_serializers.py                         114    114     32      0   0.00%   1-359
+shopping\serializers\wishlist_serializers.py                      56     56     10      0   0.00%   1-116
+shopping\services\base.py                                         36     23      4      0  32.50%   50-111, 135-138
+shopping\services\cart_service.py                                277    185     84      0  25.48%   48, 137-169, 198-239, 262-290, 309-322, 343-353, 377-432, 455-497, 502-507, 523-542, 558-569, 589-629, 652-710, 722-729, 737-747, 752-753, 771-799, 804-820
+shopping\services\email_verification_service.py                  124     70     32      0  34.62%   49, 114-155, 179-222, 241-290, 306-325, 342-354, 368, 375-379, 388-401
+shopping\services\notification_service.py                        104     44      6      0  54.55%   49, 111, 126-134, 152-155, 177-197, 211-222, 239-247, 266-276, 305-321, 344-363, 379
+shopping\services\order_service.py                               106     77     30      0  21.32%   44-64, 102-182, 219-276, 291-330, 346-370, 392-432
+shopping\services\password_reset_service.py                       56     56      2      0   0.00%   8-176
+shopping\services\payment_recovery_service.py                    128    128     30      0   0.00%   15-467
+shopping\services\payment_service.py                             267    267     68      0   0.00%   3-815
+shopping\services\point_query_service.py                         103     48     18      0  45.45%   55-61, 129-156, 178-187, 208-242, 260-274, 296, 313
+shopping\services\point_service.py                               197    162     62      0  13.51%   60-83, 109-139, 148-160, 172-186, 196-253, 265-272, 286-300, 312-324, 336-343, 361-376, 406-464, 482-517, 526-567, 580-604
+shopping\services\product_qa_service.py                           17      8      0      0  52.94%   45-78
+shopping\services\product_service.py                              16      7      2      0  50.00%   39-60
+shopping\services\return_service.py                              223    185     78      0  12.62%   50-67, 90-116, 132-152, 165-168, 198-279, 299-329, 348-373, 391-413, 437-599, 625-691
+shopping\services\shipping_service.py                             22      7      4      0  57.69%   36-47, 64-66
+shopping\services\social_auth_service.py                         124    124     20      0   0.00%   12-410
+shopping\services\token_service.py                                62     62     10      0   0.00%   8-134
+shopping\services\toss_webhook_service.py                        152    118     48      0  17.00%   45-70, 83, 97-98, 103-104, 109-118, 138-225, 240-311, 325-366
+shopping\services\user_service.py                                143    100     20      0  26.38%   32-34, 79-98, 111-114, 130-146, 174-206, 223-226, 243-273, 303-354, 377-391
+shopping\services\wishlist_service.py                            173     93     38      0  37.91%   49, 142-157, 184-192, 212-224, 245-272, 296-307, 327-329, 350-371, 392-437, 471-530, 537-540, 549-558
+shopping\signals.py                                               44     29     16      0  25.00%   37-53, 72-94, 114-123
+shopping\tasks\cleanup_tasks.py                                   87     70     14      0  16.83%   33-84, 107-147, 169-200, 218-249
+shopping\tasks\dlq_replay_tasks.py                                75     62      6      0  16.05%   37-63, 96-122, 154-180, 212-239, 272-321
+shopping\tasks\drift_detection_tasks.py                           66     66      6      0   0.00%   13-250
+shopping\tasks\email_tasks.py                                    103     82     22      0  16.80%   22-24, 29-32, 56-156, 170-221, 262-324
+shopping\tasks\order_tasks.py                                     47     40     12      0  11.86%   36-147
+shopping\tasks\payment_recovery_tasks.py                         156    139     32      0   9.04%   18, 45-170, 198-246, 272-287, 315-378, 415-444
+shopping\tasks\payment_tasks.py                                  214    189     46      0   9.62%   68-149, 181-305, 334-444, 470-512, 543-562
+shopping\tasks\point_tasks.py                                    120     96      8      0  18.75%   40-62, 82-102, 128-149, 174-283, 298-327, 342-360
+shopping\tasks\self_healing_tasks.py                             128    111     20      0  11.49%   40-70, 97-145, 178-216, 252-291, 323-342, 378-394, 422-452
+shopping\throttles.py                                             29     29      0      0   0.00%   15-216
+shopping\urls.py                                                  71     71      2      0   0.00%   1-428
+shopping\utils\encryption.py                                      60     49     20      0  13.75%   36-50, 70-79, 99-111, 134-164, 183-191
+shopping\utils\toss_payment.py                                    84     63     16      0  21.00%   27-36, 58-97, 125-159, 176-192, 212-221, 236-262, 275-278, 282, 315
+shopping\views\auth_views.py                                     141    141      8      0   0.00%   1-412
+shopping\views\cart_views.py                                     231    231     28      0   0.00%   12-717
+shopping\views\email_verification_views.py                       114    114     16      0   0.00%   7-365
+shopping\views\memory_test_views.py                              524    524    150      0   0.00%   42-1222
+shopping\views\mixins.py                                          10     10      2      0   0.00%   3-44
+shopping\views\notification_views.py                              65     65      4      0   0.00%   7-235
+shopping\views\order_views.py                                     72     72     14      0   0.00%   1-183
+shopping\views\password_reset_views.py                            47     47      6      0   0.00%   1-175
+shopping\views\payment_views.py                                  321    321     58      0   0.00%   1-974
+shopping\views\point_views.py                                    232    232     48      0   0.00%   1-590
+shopping\views\product_qa_views.py                               125    125     42      0   0.00%   1-372
+shopping\views\product_views.py                                  225    225     62      0   0.00%   1-698
+shopping\views\return_views.py                                   152    152     52      0   0.00%   1-490
+shopping\views\social_auth_views.py                               43     43      6      0   0.00%   11-113
+shopping\views\user_views.py                                      72     72      6      0   0.00%   1-209
+shopping\views\wishlist_views.py                                 185    185     18      0   0.00%   7-628
+-----------------------------------------------------------------------------------------------------------
+TOTAL                                                          11090   8961   2268      0  15.94%
+
+12 files skipped due to complete coverage.
+Coverage HTML written to dir htmlcov
+[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active
+FAIL Required test coverage of 70% not reached. Total coverage: 15.94%
+=========================== short test summary info ===========================
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_invalid_config_type
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_history_view_valid_config_type
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_missing_version
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_version_not_found
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_rollback_view_success
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_missing_params
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_compare_view_success
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_success
+ERROR tests/self_healing/unit/test_config_history.py::TestConfigHistoryAPIViews::test_config_version_detail_view_not_found
+================== 37 passed, 7 warnings, 9 errors in 19.23s ==================

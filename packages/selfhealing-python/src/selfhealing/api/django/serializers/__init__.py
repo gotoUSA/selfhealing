@@ -40,6 +40,7 @@ from selfhealing.api.django.serializers.config import (
     IdempotencyConfigSerializer,
     NotificationConfigSerializer,
     ForensicConfigSerializer,
+    LoggingConfigSerializer,
     MetricsConfigSerializer,
 )
 
@@ -75,5 +76,6 @@ __all__ = [
     "IdempotencyConfigSerializer",
     "NotificationConfigSerializer",
     "ForensicConfigSerializer",
+    "LoggingConfigSerializer",
     "MetricsConfigSerializer",
 ]

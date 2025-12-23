@@ -40,6 +40,7 @@ from selfhealing.api.django.serializers.config import (
     IdempotencyConfigSerializer,
     NotificationConfigSerializer,
     ForensicConfigSerializer,
+    LoggingConfigSerializer,
     MetricsConfigSerializer,
     ErrorBudgetConfigSerializer,
     PendingConfigChangeSerializer,
@@ -404,6 +405,23 @@ class ForensicConfigView(BaseConfigView):
 
     serializer_class = ForensicConfigSerializer
     config_name = "forensic"
+
+
+class LoggingConfigView(BaseConfigView):
+    """
+    Logging Configuration API.
+
+    GET  /api/self-healing/config/logging/ - Get logging config
+    PUT  /api/self-healing/config/logging/ - Update logging config
+
+    각 Self-Healing 컨포넌트별 로깅 레벨을 동적으로 변경할 수 있습니다.
+    이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
+    
+    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5)
+    """
+
+    serializer_class = LoggingConfigSerializer
+    config_name = "logging"
 
 
 class MetricsConfigView(BaseConfigView):
