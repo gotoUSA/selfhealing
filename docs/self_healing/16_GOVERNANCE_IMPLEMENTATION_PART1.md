@@ -1906,16 +1906,17 @@ class TierDryRunAPI(APIView):
 - [x] `post_migrate` 시그널에서 환경변수 스냅샷 로깅 호출
 - [x] 테스트 작성 (`test_env_snapshot.py`)
 
-### Phase 3: API Rate Limit (Hybrid Throttling)
-- [ ] `LocalMemoryRateLimiter` 생성 (L1 비상 리미터)
-- [ ] `RedisHealthChecker` 생성 (Mini Circuit Breaker)
-- [ ] `HybridRateLimitMiddleware` 생성 (통합 미들웨어)
-- [ ] settings.py에 미들웨어 추가
-- [ ] Prometheus 메트릭 추가 (`rate_limit_degraded_mode`, `rate_limit_failover_total`)
-- [ ] Grafana 알림 규칙 추가
-- [ ] L1 Fallback 동작 테스트
-- [ ] Shadow Audit 기록 테스트
-- [ ] Jitter 기반 복구 테스트
+### Phase 3: API Rate Limit (Hybrid Throttling) ✅
+- [x] `LocalMemoryRateLimiter` 생성 (L1 비상 리미터)
+- [x] `RedisHealthChecker` 생성 (Mini Circuit Breaker)
+- [x] `HybridRateLimitMiddleware` 생성 (통합 미들웨어)
+- [x] settings.py에 미들웨어 추가
+- [x] Prometheus 메트릭 추가 (`rate_limit_degraded_mode`, `rate_limit_failover_total`)
+- [x] Grafana 알림 규칙 추가 (문서에 예시 포함)
+- [x] L1 Fallback 동작 테스트
+- [x] Shadow Audit 기록 테스트
+- [x] Jitter 기반 복구 테스트
+- [x] 테스트 파일 작성 (`test_rate_limit.py`)
 
 ### Phase 4: API 티어링 시스템
 - [ ] `TierDefinition` 모델/데이터클래스 생성

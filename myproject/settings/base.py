@@ -83,6 +83,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
+    "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
 ]
 
 ROOT_URLCONF = "myproject.urls"
