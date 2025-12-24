@@ -232,6 +232,16 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             logger.warning(
                 f"[CircuitBreaker] Circuit auto-opened for '{service_name}' " f"(failures: {updated_state.failure_count})"
             )
+            # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+            try:
+                from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                CircuitBreakerEventHandler.on_state_changed(
+                    service=service_name,
+                    from_state="closed",
+                    to_state="open",
+                )
+            except ImportError:
+                pass  # Metrics not available
 
     def record_success(self, service_name: str) -> None:
         """
@@ -282,5 +292,15 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             logger.info(
                 f"[CircuitBreaker] Circuit auto-closed for '{service_name}' " f"(successes: {self.config.success_threshold})"
             )
+            # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+            try:
+                from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                CircuitBreakerEventHandler.on_state_changed(
+                    service=service_name,
+                    from_state="half_open",
+                    to_state="closed",
+                )
+            except ImportError:
+                pass  # Metrics not available
             # Trigger conditional replay on auto-close
             self._trigger_conditional_replay(service_name)

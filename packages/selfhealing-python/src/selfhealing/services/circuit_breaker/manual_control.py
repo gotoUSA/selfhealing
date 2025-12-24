@@ -104,6 +104,16 @@ class ManualControlMixin:
                         f"[CircuitBreaker] Force opened circuit for '{service_name}': "
                         f"{previous_state} -> {new_state} | Reason: {reason}"
                     )
+                    # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+                    try:
+                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                        CircuitBreakerEventHandler.on_state_changed(
+                            service=service_name,
+                            from_state=previous_state,
+                            to_state=new_state,
+                        )
+                    except ImportError:
+                        pass  # Metrics not available
                     return CircuitBreakerResult.succeeded(
                         service_name=service_name,
                         previous_state=previous_state,
@@ -188,6 +198,17 @@ class ManualControlMixin:
                         f"{previous_state} -> {new_state} | Reason: {reason}"
                     )
 
+                    # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+                    try:
+                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                        CircuitBreakerEventHandler.on_state_changed(
+                            service=service_name,
+                            from_state=previous_state,
+                            to_state=new_state,
+                        )
+                    except ImportError:
+                        pass  # Metrics not available
+
                     result = CircuitBreakerResult.succeeded(
                         service_name=service_name,
                         previous_state=previous_state,
@@ -249,6 +270,17 @@ class ManualControlMixin:
                     f"[CircuitBreaker] Reset circuit for '{service_name}': "
                     f"{previous_state} -> {new_state} | Reason: {reason}"
                 )
+                # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+                if previous_state != new_state:
+                    try:
+                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                        CircuitBreakerEventHandler.on_state_changed(
+                            service=service_name,
+                            from_state=previous_state,
+                            to_state=new_state,
+                        )
+                    except ImportError:
+                        pass  # Metrics not available
                 return CircuitBreakerResult.succeeded(
                     service_name=service_name,
                     previous_state=previous_state,

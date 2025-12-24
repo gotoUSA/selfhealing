@@ -405,13 +405,26 @@ class DLQService:
 
 ### 5.5 체크리스트
 
-- [ ] `SafeGauge` 클래스 구현
-- [ ] 기존 Gauge를 SafeGauge로 교체
-- [ ] DLQService에 Push 훅 추가 (enqueue/mark_processed)
-- [ ] CircuitBreaker에 Push 훅 추가 (trip/reset)
-- [ ] RetryHandler에 Push 훅 추가 (on_success/on_failure)
-- [ ] 단위 테스트 작성
-- [ ] 통합 테스트: 이벤트 발생 → Gauge 변경 확인
+- [x] `SafeGauge` 클래스 구현 (`selfhealing/metrics/safe_gauge.py`)
+- [x] 기존 Gauge를 SafeGauge로 교체 (event_handlers에서 사용)
+- [x] DLQService에 Push 훅 추가 (store_failure/resolve_entry)
+- [x] CircuitBreaker에 Push 훅 추가 (force_open/force_close/reset/record_failure/record_success)
+- [x] RetryHandler에 Push 훅 추가 (이미 event_handlers에 구현됨)
+- [x] 단위 테스트 작성 (`tests/self_healing/unit/test_push_event_integration.py`)
+- [x] 통합 테스트: 이벤트 발생 → Gauge 변경 확인
+
+### 5.6 구현 파일
+
+Phase 3 구현은 다음 파일들에서 확인할 수 있습니다:
+
+| 파일 | 설명 |
+|------|------|
+| `selfhealing/metrics/safe_gauge.py` | SafeGauge 클래스 (음수 방지 래퍼) |
+| `selfhealing/metrics/event_handlers.py` | DLQ/CB/Replay 이벤트 핸들러 |
+| `selfhealing/services/dlq_service.py` | DLQService Push 훅 통합 |
+| `selfhealing/services/circuit_breaker/manual_control.py` | CB 수동 제어 Push 훅 |
+| `selfhealing/services/circuit_breaker/service.py` | CB 자동 상태 변경 Push 훅 |
+| `tests/self_healing/unit/test_push_event_integration.py` | Push 이벤트 테스트 |
 
 ---
 

@@ -190,6 +190,13 @@ class DLQService:
 
             logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
 
+            # Phase 3: Push 이벤트 - Gauge 증가 (SafeGauge 사용)
+            try:
+                from selfhealing.metrics.event_handlers import DLQMetricEventHandler
+                DLQMetricEventHandler.on_item_created(domain, failure_type)
+            except ImportError:
+                pass  # Metrics not available
+
             return DLQEntryResult.created(failed_op.id)
 
         except Exception as e:
@@ -825,6 +832,21 @@ class DLQService:
             entry.save()
 
             logger.info(f"[DLQService] Entry {pk} manually resolved: {notes}")
+
+            # Phase 3: Push 이벤트 - Gauge 감소 (SafeGauge 사용)
+            try:
+                from selfhealing.metrics.event_handlers import DLQMetricEventHandler
+                # 해결 시간 계산 (생성 시점부터)
+                duration_seconds = None
+                if entry.created_at:
+                    duration_seconds = (entry.resolved_at - entry.created_at).total_seconds()
+                DLQMetricEventHandler.on_item_resolved(
+                    domain=entry.domain,
+                    resolution_type="manual",
+                    duration_seconds=duration_seconds,
+                )
+            except ImportError:
+                pass  # Metrics not available
 
             return ResolveResult(
                 success=True,
