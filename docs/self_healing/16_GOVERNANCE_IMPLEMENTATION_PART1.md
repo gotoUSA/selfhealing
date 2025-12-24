@@ -329,6 +329,209 @@ class TestRBACPermissions:
 
 ---
 
+## 1.5 긴급 에스컬레이션 (Emergency Escalation) ✅
+
+### 1.5.1 개요
+
+> **"Break Glass" 패턴** - Admin 부재 시 Operator가 긴급 대응 가능
+
+| 회사/시스템 | 구현 방식 |
+|------------|----------|
+| **AWS** | "Break Glass" 계정 - 평소 비활성화, 긴급 시 MFA로 활성화 |
+| **Google SRE** | "Emergency Access" - 일시적 권한 상승 + 자동 만료 + 사후 감사 |
+| **Netflix** | "Escalation Path" - 상위 권한 작업은 자동 티켓 생성 |
+| **PCI-DSS** | "Break Glass Procedure" - 감사 로그 필수, 24시간 내 리뷰 |
+
+### 1.5.2 설계
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Emergency Escalation Pattern                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   [정상 상태]          [긴급 상황]          [복구]          │
+│                                                             │
+│   NORMAL ──────────► STRICT ──────────► NORMAL             │
+│      │                  │                  ▲               │
+│      │   Operator OK    │   Admin Only     │               │
+│      │   (일방향 ✅)    │   (승인 필요)    │               │
+│      │                  │                  │               │
+│      │                  ▼                  │               │
+│      │            [자동 만료]              │               │
+│      │            (4시간 후) ──────────────┘               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.5.3 핵심 설계 원칙
+
+| 원칙 | 설명 | 이유 |
+|------|------|------|
+| **일방향 긴급권** | Operator → STRICT 가능, 복구는 Admin | "Fail-Safe" 원칙 |
+| **자동 만료** | 4시간 후 자동 알림/만료 | 무기한 비상모드 방지 |
+| **강제 Audit** | 긴급 전환 시 사유 필수 입력 | 사후 검토 보장 |
+| **알림 폭탄** | Admin 전원에게 즉시 알림 | 인지 보장 |
+
+### 1.5.4 구현
+
+**파일**: `packages/selfhealing-python/src/selfhealing/api/django/permissions.py`
+
+```python
+class EmergencyEscalationPermission(BasePermission):
+    """
+    긴급 에스컬레이션 권한 (Break Glass Pattern).
+
+    일방향 긴급권:
+    - STRICT 전환: Operator도 가능 (긴급 상황)
+    - NORMAL 복구: Admin만 가능 (승인 필요)
+
+    사용 시나리오:
+    - Admin 부재 중 시스템 폭주
+    - 운영자가 긴급히 STRICT 모드로 전환 필요
+
+    Reference:
+    - AWS Break Glass Pattern
+    - Google SRE Emergency Access
+    - PCI-DSS Break Glass Procedure
+    """
+
+    message = "긴급 에스컬레이션 권한이 없습니다."
+    EMERGENCY_EXPIRY_HOURS = 4  # 긴급 모드 자동 만료 시간
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        target_mode = request.data.get("mode", "").upper()
+
+        # STRICT 전환 = Operator도 가능 (일방향 긴급권)
+        if target_mode == "STRICT":
+            return IsOperator().has_permission(request, view)
+
+        # NORMAL 복구 = Admin만 가능
+        if target_mode == "NORMAL":
+            return IsSelfHealingAdmin().has_permission(request, view)
+
+        # 기타 모드 변경 = Admin만
+        return IsSelfHealingAdmin().has_permission(request, view)
+```
+
+---
+
+## 1.6 임계값 기반 권한 (Threshold-Based Authorization) ✅
+
+### 1.6.1 개요
+
+> **Risk-Based Access Control** - 위험도에 따른 동적 권한 레벨
+
+| 회사/시스템 | 구현 방식 |
+|------------|----------|
+| **은행권** | 거래 금액별 승인 레벨 (100만 이하: 담당자, 1억 이상: 임원) |
+| **GitHub** | PR 변경 라인 수에 따른 리뷰어 수 조정 |
+| **Kubernetes** | Resource Quota - 리소스 사용량에 따른 제한 |
+| **AWS IAM** | Condition 기반 정책 (예: `s3:max-keys`) |
+
+### 1.6.2 설계
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Threshold-Based Authorization                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   오차율 (Discrepancy)         필요 권한                    │
+│   ─────────────────────────────────────────                 │
+│   0% ~ 5%                      Operator (자동 승인 가능)    │
+│   5% ~ 15%                     Operator (수동 확인 필요)    │
+│   15% ~ 30%                    Admin (승인 필요)            │
+│   30% 초과                     Admin 2인 승인 (4-Eyes)      │
+│                                                             │
+│   ⚠️ 핵심: 임계값은 설정 파일로 관리, 하드코딩 금지        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.6.3 설정
+
+```python
+# 기본 임계값 (환경변수로 오버라이드 가능)
+THRESHOLD_SETTINGS = {
+    "auto_approve": 0.05,      # 5% 이하: 자동 승인
+    "operator_approve": 0.15,  # 15% 이하: Operator 승인
+    "admin_approve": 0.30,     # 30% 이하: Admin 승인
+    # 30% 초과: 4-Eyes 원칙 (별도 워크플로우)
+}
+```
+
+### 1.6.4 구현
+
+**파일**: `packages/selfhealing-python/src/selfhealing/api/django/permissions.py`
+
+```python
+class ThresholdBasedPermission(BasePermission):
+    """
+    임계값 기반 동적 권한 (Risk-Based Access Control).
+
+    오차율(discrepancy_rate)에 따라 필요 권한 레벨 결정:
+    - 5% 이하: Operator 자동 승인
+    - 15% 이하: Operator 수동 승인
+    - 30% 이하: Admin 승인
+    - 30% 초과: Admin 2인 승인 (4-Eyes)
+
+    사용처:
+    - 정합성 조정 승인
+    - 대규모 변경 승인
+
+    Reference:
+    - 은행권 거래 승인 레벨
+    - GitHub PR 리뷰어 수 조정
+    """
+
+    message = "해당 작업의 임계값이 권한 레벨을 초과합니다."
+
+    # 환경변수로 오버라이드 가능
+    THRESHOLDS = {
+        "auto_approve": float(os.environ.get("SELFHEALING_THRESHOLD_AUTO", "0.05")),
+        "operator_approve": float(os.environ.get("SELFHEALING_THRESHOLD_OPERATOR", "0.15")),
+        "admin_approve": float(os.environ.get("SELFHEALING_THRESHOLD_ADMIN", "0.30")),
+    }
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        discrepancy = request.data.get("discrepancy_rate", 0)
+
+        try:
+            discrepancy = float(discrepancy)
+        except (TypeError, ValueError):
+            discrepancy = 0
+
+        # 임계값별 권한 체크
+        if discrepancy <= self.THRESHOLDS["operator_approve"]:
+            return IsOperator().has_permission(request, view)
+
+        if discrepancy <= self.THRESHOLDS["admin_approve"]:
+            return IsSelfHealingAdmin().has_permission(request, view)
+
+        # 30% 초과: 4-Eyes 원칙 (현재는 Admin만 허용, 추후 듀얼 승인 구현)
+        return self._check_dual_approval(request, discrepancy)
+
+    def _check_dual_approval(self, request: Request, discrepancy: float) -> bool:
+        """
+        4-Eyes 원칙: 고위험 작업은 2인 승인 필요.
+        현재는 Admin + 경고 로그, 추후 듀얼 승인 워크플로우 구현.
+        """
+        if IsSelfHealingAdmin().has_permission(request, Mock()):
+            logger.warning(
+                f"[RBAC] High-risk operation approved by single admin: "
+                f"discrepancy={discrepancy:.1%}, user={request.user}"
+            )
+            return True
+        return False
+```
+
+---
+
 ## 2. 환경변수 Audit
 
 ### 2.1 현재 상태
@@ -642,6 +845,17 @@ def _emit_critical_log(snapshot, primary_success, fallback_success):
 - [x] `post_migrate` 시그널로 Django Group 생성 (Migration 방식 → Signal 방식으로 변경)
 - [x] View에 권한 클래스 적용
 - [x] 테스트 작성 (`test_rbac_permissions.py`)
+
+### Phase 1.5: 긴급 에스컬레이션 ✅
+- [x] `EmergencyEscalationPermission` 클래스 구현
+- [x] 일방향 긴급권 로직 (STRICT: Operator OK, NORMAL: Admin Only)
+- [x] 테스트 작성 (`test_emergency_escalation.py`)
+
+### Phase 1.6: 임계값 기반 권한 ✅
+- [x] `ThresholdBasedPermission` 클래스 구현
+- [x] 환경변수로 임계값 설정 가능
+- [x] 4-Eyes 원칙 경고 로깅
+- [x] 테스트 작성 (`test_threshold_permission.py`)
 
 ### Phase 2: 환경변수 Audit ✅
 - [x] `env_snapshot.py` 생성

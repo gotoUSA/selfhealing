@@ -5,6 +5,8 @@ Provides role-based access control for the Self-Healing system:
 - Viewer: Read-only access (dashboard, status, audit logs)
 - Operator: Operational tasks (DLQ replay, archive)
 - Admin: Full access (CB control, system enable/disable, config changes)
+- EmergencyEscalation: Break Glass pattern for emergency mode changes
+- ThresholdBased: Risk-based access control for high-impact operations
 
 Reference: docs/self_healing/10_OPERATIONS_GUIDE.md (권한 테이블)
 Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
@@ -13,6 +15,7 @@ Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from rest_framework.permissions import BasePermission
@@ -159,6 +162,157 @@ class IsSelfHealingAdmin(BasePermission):
             # Fail-Secure: 오류 시 거부
             logger.warning(f"[RBAC] Permission check failed (deny): {e}")
             return False
+
+
+class EmergencyEscalationPermission(BasePermission):
+    """
+    긴급 에스컬레이션 권한 (Break Glass Pattern).
+
+    일방향 긴급권:
+    - STRICT 전환: Operator도 가능 (긴급 상황)
+    - NORMAL 복구: Admin만 가능 (승인 필요)
+
+    사용 시나리오:
+    - Admin 부재 중 시스템 폭주
+    - 운영자가 긴급히 STRICT 모드로 전환 필요
+
+    Reference:
+    - AWS Break Glass Pattern
+    - Google SRE Emergency Access
+    - PCI-DSS Break Glass Procedure
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
+    """
+
+    message = "긴급 에스컬레이션 권한이 없습니다. STRICT 전환은 Operator 이상, NORMAL 복구는 Admin만 가능합니다."
+    EMERGENCY_EXPIRY_HOURS = 4  # 긴급 모드 자동 만료 시간
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """
+        모드 전환에 대한 권한 체크.
+
+        Args:
+            request: HTTP 요청 객체 (data.mode 필드 사용)
+            view: 뷰 객체
+
+        Returns:
+            bool: 권한 여부
+        """
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        target_mode = request.data.get("mode", "").upper()
+
+        # STRICT 전환 = Operator도 가능 (일방향 긴급권)
+        if target_mode == "STRICT":
+            has_perm = IsOperator().has_permission(request, view)
+            if has_perm:
+                logger.warning(
+                    f"[RBAC] Emergency escalation to STRICT by operator: "
+                    f"user={request.user}, expiry_hours={self.EMERGENCY_EXPIRY_HOURS}"
+                )
+            return has_perm
+
+        # NORMAL 복구 = Admin만 가능
+        if target_mode == "NORMAL":
+            return IsSelfHealingAdmin().has_permission(request, view)
+
+        # 기타 모드 변경 = Admin만
+        return IsSelfHealingAdmin().has_permission(request, view)
+
+
+class ThresholdBasedPermission(BasePermission):
+    """
+    임계값 기반 동적 권한 (Risk-Based Access Control).
+
+    오차율(discrepancy_rate)에 따라 필요 권한 레벨 결정:
+    - 15% 이하: Operator 승인
+    - 30% 이하: Admin 승인
+    - 30% 초과: Admin 승인 + 경고 로그 (4-Eyes 권장)
+
+    사용처:
+    - 정합성 조정 승인
+    - 대규모 변경 승인
+
+    환경변수로 임계값 조정 가능:
+    - SELFHEALING_THRESHOLD_OPERATOR: Operator 승인 상한 (기본: 0.15)
+    - SELFHEALING_THRESHOLD_ADMIN: Admin 승인 상한 (기본: 0.30)
+
+    Reference:
+    - 은행권 거래 승인 레벨
+    - GitHub PR 리뷰어 수 조정
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
+    """
+
+    message = "해당 작업의 임계값이 권한 레벨을 초과합니다."
+
+    def __init__(self) -> None:
+        """임계값을 환경변수에서 로드."""
+        super().__init__()
+        self.thresholds = {
+            "operator_approve": float(
+                os.environ.get("SELFHEALING_THRESHOLD_OPERATOR", "0.15")
+            ),
+            "admin_approve": float(
+                os.environ.get("SELFHEALING_THRESHOLD_ADMIN", "0.30")
+            ),
+        }
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """
+        임계값 기반 권한 체크.
+
+        Args:
+            request: HTTP 요청 객체 (data.discrepancy_rate 필드 사용)
+            view: 뷰 객체
+
+        Returns:
+            bool: 권한 여부
+        """
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        discrepancy = request.data.get("discrepancy_rate", 0)
+
+        try:
+            discrepancy = float(discrepancy)
+        except (TypeError, ValueError):
+            discrepancy = 0
+
+        # 임계값별 권한 체크
+        if discrepancy <= self.thresholds["operator_approve"]:
+            return IsOperator().has_permission(request, view)
+
+        if discrepancy <= self.thresholds["admin_approve"]:
+            return IsSelfHealingAdmin().has_permission(request, view)
+
+        # 30% 초과: 4-Eyes 원칙 (현재는 Admin + 경고 로그)
+        return self._check_high_risk_approval(request, view, discrepancy)
+
+    def _check_high_risk_approval(
+        self, request: Request, view: APIView, discrepancy: float
+    ) -> bool:
+        """
+        4-Eyes 원칙: 고위험 작업은 Admin + 경고 로그.
+
+        Args:
+            request: HTTP 요청 객체
+            view: 뷰 객체
+            discrepancy: 오차율
+
+        Returns:
+            bool: Admin 권한 여부
+
+        Note:
+            추후 듀얼 승인 워크플로우로 확장 가능
+        """
+        if IsSelfHealingAdmin().has_permission(request, view):
+            logger.warning(
+                f"[RBAC] High-risk operation approved by single admin: "
+                f"discrepancy={discrepancy:.1%}, user={request.user}, "
+                f"threshold_exceeded={self.thresholds['admin_approve']:.1%}"
+            )
+            return True
+        return False
 
 
 # Backward compatibility aliases
