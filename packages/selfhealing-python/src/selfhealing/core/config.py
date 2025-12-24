@@ -325,6 +325,55 @@ class ErrorBudgetConfig:
 
 
 @dataclass
+class GovernanceConfig:
+    """
+    거버넌스 관련 설정.
+
+    RBAC 임계값, 긴급 모드 자동 복귀, 알림 등의 설정을 관리합니다.
+    API를 통해 런타임에 동적으로 변경 가능합니다.
+
+    Reference:
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    - AWS Break Glass Pattern
+    - Google SRE Emergency Access
+    """
+
+    # =========================================================================
+    # 임계값 기반 권한 (Risk-Based Access Control)
+    # =========================================================================
+    threshold_operator: float = 0.15  # Operator 승인 상한 (15%)
+    threshold_admin: float = 0.30     # Admin 승인 상한 (30%)
+
+    # =========================================================================
+    # 긴급 에스컬레이션 (Break Glass)
+    # =========================================================================
+    emergency_expiry_hours: int = 8       # 자동 복귀까지 시간
+    emergency_warning_hours: int = 4      # 경고 시작 시간
+    emergency_final_warning_hours: int = 6  # 최종 경고 시간
+
+    # =========================================================================
+    # 운영 모드
+    # =========================================================================
+    default_mode: str = "NORMAL"  # NORMAL 또는 STRICT
+
+    # =========================================================================
+    # 알림 설정
+    # =========================================================================
+    notify_on_emergency: bool = True
+    notify_channels: List[str] = field(
+        default_factory=lambda: ["slack", "email"]
+    )
+    emergency_slack_channel: str = "#emergency-alerts"
+    emergency_email_recipients: List[str] = field(default_factory=list)
+
+    # =========================================================================
+    # 4-Eyes Principle (간소화 버전)
+    # =========================================================================
+    four_eyes_enabled: bool = False  # 듀얼 승인 워크플로우 활성화
+    four_eyes_expiry_hours: int = 24  # 승인 요청 만료 시간
+
+
+@dataclass
 class SelfHealingConfig:
     """
     Main configuration for the self-healing system.

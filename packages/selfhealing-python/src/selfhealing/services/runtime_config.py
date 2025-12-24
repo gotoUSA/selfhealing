@@ -45,6 +45,7 @@ from selfhealing.core.config import (
     LoggingConfig,
     MetricsConfig,
     ErrorBudgetConfig,
+    GovernanceConfig,
 )
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.core.apply_strategy import (
@@ -90,6 +91,7 @@ class RuntimeConfigManager:
         "metrics": "runtime_config:metrics",
         "error_budget": "runtime_config:error_budget",
         "slo": "runtime_config:slo",
+        "governance": "runtime_config:governance",
     }
 
     # Default config classes
@@ -107,6 +109,7 @@ class RuntimeConfigManager:
         "metrics": MetricsConfig,
         "error_budget": ErrorBudgetConfig,
         "slo": None,  # SLO는 별도 처리 (SLOConfigRuntime)
+        "governance": GovernanceConfig,
     }
 
     def __init__(self):
@@ -1074,6 +1077,77 @@ class RuntimeConfigManager:
             if slo.get("name") == slo_name:
                 return slo
         return None
+
+    # =========================================================================
+    # Governance Config (RBAC, Emergency Escalation)
+    # =========================================================================
+
+    def get_governance_config(self) -> Dict[str, Any]:
+        """
+        Get Governance configuration.
+
+        Returns:
+            dict: 거버넌스 설정 (임계값, 긴급 모드 자동 복귀 등)
+                - threshold_operator: Operator 승인 상한 (기본: 0.15)
+                - threshold_admin: Admin 승인 상한 (기본: 0.30)
+                - emergency_expiry_hours: 긴급 모드 자동 복귀 시간 (기본: 8)
+                - emergency_warning_hours: 경고 시작 시간 (기본: 4)
+                - default_mode: 기본 운영 모드 (NORMAL/STRICT)
+                - notify_on_emergency: 긴급 모드 전환 시 알림 발송
+        """
+        return self._get_config("governance")
+
+    def update_governance_config(
+        self,
+        threshold_operator: Optional[float] = None,
+        threshold_admin: Optional[float] = None,
+        emergency_expiry_hours: Optional[int] = None,
+        emergency_warning_hours: Optional[int] = None,
+        emergency_final_warning_hours: Optional[int] = None,
+        default_mode: Optional[str] = None,
+        notify_on_emergency: Optional[bool] = None,
+        notify_channels: Optional[list] = None,
+        emergency_slack_channel: Optional[str] = None,
+        emergency_email_recipients: Optional[list] = None,
+        four_eyes_enabled: Optional[bool] = None,
+        four_eyes_expiry_hours: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update Governance configuration.
+
+        Args:
+            threshold_operator: Operator 승인 상한 (0.0~1.0, 기본: 0.15)
+            threshold_admin: Admin 승인 상한 (0.0~1.0, 기본: 0.30)
+            emergency_expiry_hours: 긴급 모드 자동 복귀까지 시간 (기본: 8)
+            emergency_warning_hours: 경고 시작 시간 (기본: 4)
+            emergency_final_warning_hours: 최종 경고 시간 (기본: 6)
+            default_mode: 기본 운영 모드 (NORMAL/STRICT)
+            notify_on_emergency: 긴급 모드 전환 시 알림 발송 여부
+            notify_channels: 알림 채널 목록 (slack, email)
+            emergency_slack_channel: 긴급 알림 Slack 채널
+            emergency_email_recipients: 긴급 알림 이메일 수신자
+            four_eyes_enabled: 4-Eyes (듀얼 승인) 활성화 여부
+            four_eyes_expiry_hours: 4-Eyes 승인 요청 만료 시간
+
+        Returns:
+            dict: 업데이트된 Governance 설정
+        """
+        # Validate thresholds
+        if threshold_operator is not None:
+            if not (0.0 <= threshold_operator <= 1.0):
+                raise ValueError("threshold_operator must be between 0.0 and 1.0")
+        if threshold_admin is not None:
+            if not (0.0 <= threshold_admin <= 1.0):
+                raise ValueError("threshold_admin must be between 0.0 and 1.0")
+
+        # Validate mode
+        if default_mode is not None:
+            if default_mode.upper() not in ("NORMAL", "STRICT"):
+                raise ValueError("default_mode must be 'NORMAL' or 'STRICT'")
+            default_mode = default_mode.upper()
+
+        updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
+        return self._update_config("governance", **updates)
 
     # =========================================================================
     # Chaos Engineering Config
