@@ -72,6 +72,33 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
     try:
+        # Error Budget Gate 체크: 에러 예산 부족 시 Replay 차단
+        try:
+            from selfhealing.services.error_budget_gate import check_automation_allowed
+            
+            gate_result = check_automation_allowed()
+            if not gate_result.allowed:
+                logger.warning(
+                    f"[Circuit Recovery] Blocked by Error Budget Gate: "
+                    f"budget={gate_result.error_budget_percent}% < threshold={gate_result.threshold_percent}%"
+                )
+                return {
+                    "success": False,
+                    "service_name": service_name,
+                    "error": "automation_blocked",
+                    "message": (
+                        f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
+                        "Conditional replay blocked to prevent further errors."
+                    ),
+                    "error_budget_percent": gate_result.error_budget_percent,
+                    "total": 0,
+                    "success_count": 0,
+                    "failed_count": 0,
+                }
+        except ImportError:
+            # Gate not available, continue
+            pass
+
         # Use ProviderRegistry to get repository
         from selfhealing.factory import ProviderRegistry
 

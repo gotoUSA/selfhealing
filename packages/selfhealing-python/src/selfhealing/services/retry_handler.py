@@ -214,6 +214,23 @@ class RetryHandler:
                 logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
         return self._rate_limit_coordinator
 
+    def _check_error_budget_gate(self) -> Optional[Any]:
+        """
+        Check ErrorBudgetGate before retrying.
+        
+        Returns:
+            GateCheckResult if gate is available, None otherwise
+        """
+        try:
+            from selfhealing.services.error_budget_gate import check_automation_allowed
+            return check_automation_allowed()
+        except ImportError:
+            # ErrorBudgetGate not available
+            return None
+        except Exception as e:
+            logger.warning(f"[RetryHandler] ErrorBudgetGate check failed: {e}")
+            return None
+
     def is_rate_limit_error(self, exception: Exception) -> tuple[bool, float | None]:
         """
         Check if an exception indicates a rate limit (429) error.
@@ -352,6 +369,24 @@ class RetryHandler:
                 action=RetryAction.ABORT,
                 attempt=0,
                 error=Exception("Kill Switch is active: self-healing system is disabled"),
+            )
+
+        # ErrorBudgetGate 체크: 에러 예산이 임계치 이하면 재시도 차단
+        gate_result = self._check_error_budget_gate()
+        if gate_result is not None and not gate_result.allowed:
+            logger.warning(
+                f"[RetryHandler] execute blocked by ErrorBudgetGate: "
+                f"budget={gate_result.error_budget_percent}%, "
+                f"threshold={gate_result.threshold_percent}%"
+            )
+            return RetryResult(
+                success=False,
+                action=RetryAction.ABORT,
+                attempt=0,
+                error=Exception(
+                    f"Error budget critically low ({gate_result.error_budget_percent:.1f}%): "
+                    "retry blocked to prevent further errors"
+                ),
             )
 
         attempt = 0

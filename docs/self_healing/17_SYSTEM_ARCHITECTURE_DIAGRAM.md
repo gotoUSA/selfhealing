@@ -1,15 +1,17 @@
 # Self-Healing System Architecture Diagram
 
 > 📅 작성일: 2024-12-24  
-> 📅 업데이트: 2024-12-24 (Phase A 수정 완료)  
+> 📅 업데이트: 2024-12-24 (Phase B 수정 완료)  
 > 🎯 목적: 셀프 힐링 시스템의 핵심 컨트롤러와 컴포넌트 간 연결 관계 시각화  
 > ⚠️ 이 문서는 **실제 코드 분석**을 기반으로 작성되었습니다
 
 ---
 
-## 0. Phase A 수정 완료 사항 (2024-12-24)
+## 0. Phase B 수정 완료 사항 (2024-12-24)
 
-> ✅ 아래 Critical 이슈들이 모두 수정되었습니다.
+> ✅ Phase A + Phase B 이슈들이 모두 수정되었습니다.
+
+### Phase A (Critical) - 완료 ✅
 
 | # | 수정 내용 | 파일 | 상태 |
 |---|----------|------|------|
@@ -17,7 +19,82 @@
 | 2 | **RuntimeConfigManager 연동** | `circuit_breaker/config.py`, `dlq_models.py`, `retry_handler.py` | ✅ 완료 |
 | 3 | **Kill Switch 체크 추가** | `circuit_breaker/manual_control.py`, `replay_service.py`, `retry_handler.py` | ✅ 완료 |
 
-### 수정 상세
+### Phase B (High) - 완료 ✅
+
+| # | 수정 내용 | 파일 | 상태 |
+|---|----------|------|------|
+| 4 | **이벤트 버스 구현** | `services/event_bus.py` | ✅ 완료 |
+| 5 | **EmergencyManager 이벤트 발행** | `services/emergency_mode.py` | ✅ 완료 |
+| 6 | **ErrorBudgetGate 이벤트 발행** | `services/error_budget_gate.py` | ✅ 완료 |
+| 7 | **RetryHandler ErrorBudgetGate 체크** | `services/retry_handler.py` | ✅ 완료 |
+| 8 | **Conditional Replay ErrorBudgetGate 체크** | `adapters/celery/tasks.py` | ✅ 완료 |
+| 9 | **TTL 캐시 (Check on Use 패턴)** | `services/emergency_mode.py` | ✅ 완료 |
+
+### Phase B 수정 상세
+
+**4. SelfHealingEventBus 구현** (신규 생성)
+- 이벤트 타입: EmergencyLevelChanged, ErrorBudgetCritical, CircuitBreakerStateChanged 등
+- Thread-safe 싱글톤 구현
+- 우선순위 기반 핸들러 실행
+- 이벤트 히스토리 저장
+- 간편 함수: `emit_emergency_level_changed()`, `emit_error_budget_critical()` 등
+
+**5. EmergencyManager 이벤트 발행**
+- `activate_manual()`: EmergencyLevelChanged 이벤트 발행
+- `activate_auto()`: EmergencyLevelChanged 이벤트 발행
+- `_do_deactivate()`: EmergencyLevelChanged 이벤트 발행
+
+**6. ErrorBudgetGate 이벤트 발행**
+- `_evaluate()`: 예산 < critical → ERROR_BUDGET_CRITICAL 이벤트
+- `_evaluate()`: critical < 예산 < warning → ERROR_BUDGET_WARNING 이벤트
+
+**7. RetryHandler ErrorBudgetGate 체크**
+- `execute()`: 시작 시 ErrorBudgetGate 체크
+- 예산 부족 시 즉시 ABORT 반환 (재시도 차단)
+
+**8. Conditional Replay ErrorBudgetGate 체크**
+- CB 복구 시 자동 Replay 전에 ErrorBudgetGate 체크
+- 예산 부족 시 Replay 차단 (automation_blocked)
+
+**9. TTL 캐시 (Check on Use 패턴)** ⭐ 
+- **목적**: Celery 의존 없이 상태 동기화 보장
+- **구현 위치**: `GracefulDegradationManager`
+- **동작 방식**:
+  - `get_current_level()`, `get_state()` 호출 시 TTL 확인
+  - 캐시 만료 시 (기본 30초) StateBackend 재조회
+  - 이벤트 버스는 "즉시 캐시 무효화" 역할만 담당
+- **장점**: Celery Beat 태스크 없이도 최대 30초 내 상태 동기화
+- **이벤트 핸들러**: 외부 `EMERGENCY_LEVEL_CHANGED` 이벤트 수신 시 캐시 즉시 무효화
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│               Check on Use Pattern (Celery-Free)                   │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  서비스 A                           서비스 B                        │
+│  ┌──────────────┐                 ┌──────────────┐                 │
+│  │ 상태 변경    │                 │ 상태 조회    │                 │
+│  │ activate()   │                 │ get_level()  │                 │
+│  └──────┬───────┘                 └──────┬───────┘                 │
+│         │                                │                         │
+│         │  1. StateBackend 저장          │ 2-a. 이벤트 수신 시     │
+│         ├──────────────────────────────► │     캐시 즉시 무효화    │
+│         │                                │                         │
+│         │  1-a. 이벤트 발행              │ 2-b. 또는 TTL 만료 시   │
+│         ├─────────────[Event Bus]───────►│     StateBackend 재조회 │
+│         │                                │                         │
+│         ▼                                ▼                         │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                    StateBackend (Source of Truth)            │  │
+│  │                    Redis → File → Memory Fallback            │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase A 수정 상세 (참고)
 
 **1. TieringMiddleware 구현** (신규 생성)
 - EmergencyManager와 연동하여 Emergency Level 기반 트래픽 제어

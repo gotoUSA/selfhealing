@@ -327,8 +327,53 @@ class GracefulDegradationManager:
         self._stop_recovery = threading.Event()
         self._history: List[Dict[str, Any]] = []
         
+        # TTL 기반 캐시 설정 (Check on Use 패턴)
+        self._cache_ttl_seconds: int = 30  # 캐시 유효 시간
+        self._last_load_time: Optional[datetime] = None
+        
+        # 이벤트 버스 구독 등록
+        self._register_event_handlers()
+        
         # 백엔드에서 상태 로드 시도
         self._load_state()
+    
+    def _register_event_handlers(self):
+        """이벤트 버스 핸들러 등록 (캐시 무효화용)."""
+        try:
+            from selfhealing.services.event_bus import get_event_bus, EventType
+            
+            bus = get_event_bus()
+            # 다른 프로세스/인스턴스에서 발생한 이벤트 수신 시 캐시 즉시 무효화
+            bus.subscribe(
+                EventType.EMERGENCY_LEVEL_CHANGED,
+                self._on_external_level_changed,
+            )
+        except Exception as e:
+            logger.debug(f"[EmergencyMode] Event bus registration skipped: {e}")
+    
+    def _on_external_level_changed(self, event) -> None:
+        """외부 이벤트 수신 시 캐시 무효화."""
+        # 자신이 발행한 이벤트가 아닌 경우에만 캐시 무효화
+        if event.source != "emergency_manager":
+            self._invalidate_cache()
+            logger.debug("[EmergencyMode] Cache invalidated by external event")
+    
+    def _invalidate_cache(self) -> None:
+        """캐시 무효화 (다음 조회 시 StateBackend 재조회)."""
+        with self._state_lock:
+            self._last_load_time = None
+    
+    def _is_cache_valid(self) -> bool:
+        """캐시 유효성 확인."""
+        if self._last_load_time is None:
+            return False
+        elapsed = (datetime.now(timezone.utc) - self._last_load_time).total_seconds()
+        return elapsed < self._cache_ttl_seconds
+    
+    def _ensure_fresh_state(self) -> None:
+        """캐시 TTL 확인 후 필요시 StateBackend 재조회 (Check on Use 패턴)."""
+        if not self._is_cache_valid():
+            self._load_state()
     
     def _load_state(self):
         """백엔드에서 상태 로드."""
@@ -342,6 +387,8 @@ class GracefulDegradationManager:
                     f"[EmergencyMode] Loaded state: level={self._state.level.name}, "
                     f"is_active={self._state.is_active}"
                 )
+            # 로드 시간 기록 (TTL 캐시용)
+            self._last_load_time = datetime.now(timezone.utc)
         except Exception as e:
             logger.warning(f"[EmergencyMode] Could not load state: {e}")
     
@@ -361,6 +408,8 @@ class GracefulDegradationManager:
     def get_state(self) -> EmergencyState:
         """현재 상태 조회."""
         with self._state_lock:
+            # TTL 확인 및 필요시 StateBackend 재조회 (Check on Use 패턴)
+            self._ensure_fresh_state()
             # 만료 확인
             self._check_expiration()
             return EmergencyState.from_dict(self._state.to_dict())
@@ -368,6 +417,8 @@ class GracefulDegradationManager:
     def get_current_level(self) -> EmergencyLevel:
         """현재 비상 모드 레벨 조회."""
         with self._state_lock:
+            # TTL 확인 및 필요시 StateBackend 재조회 (Check on Use 패턴)
+            self._ensure_fresh_state()
             self._check_expiration()
             return self._state.level
     
@@ -477,6 +528,13 @@ class GracefulDegradationManager:
                 f"expires_at={self._state.expires_at or 'manual'}"
             )
             
+            # Event Bus 발행: 다른 컴포넌트에 알림
+            self._emit_level_changed_event(
+                new_level=level,
+                previous_level=old_state.level,
+                reason=reason,
+            )
+            
             return self.get_state()
     
     def activate_auto(
@@ -532,6 +590,13 @@ class GracefulDegradationManager:
             logger.warning(
                 f"[EmergencyMode] AUTO-ACTIVATED: level={level.name}, "
                 f"reason={reason}, expires_in={duration_minutes}min"
+            )
+            
+            # Event Bus 발행: 다른 컴포넌트에 알림
+            self._emit_level_changed_event(
+                new_level=level,
+                previous_level=old_state.level,
+                reason=reason,
             )
             
             return self.get_state()
@@ -595,6 +660,13 @@ class GracefulDegradationManager:
         )
         
         logger.info(f"[EmergencyMode] DEACTIVATED by {deactivated_by}: {reason}")
+        
+        # Event Bus 발행: 다른 컴포넌트에 알림
+        self._emit_level_changed_event(
+            new_level=EmergencyLevel.NORMAL,
+            previous_level=old_state.level,
+            reason=reason,
+        )
         
         return self.get_state()
     
@@ -756,6 +828,48 @@ class GracefulDegradationManager:
             # 다음 단계 전 대기
             if self._stop_recovery.wait(config.level_step_delay_seconds):
                 break
+    
+    # -------------------------------------------------------------------------
+    # Event Bus
+    # -------------------------------------------------------------------------
+    
+    def _emit_level_changed_event(
+        self,
+        new_level: EmergencyLevel,
+        previous_level: EmergencyLevel,
+        reason: str = "",
+    ) -> None:
+        """
+        비상 모드 레벨 변경 이벤트 발행.
+        
+        다른 컴포넌트(CB, DLQ, Replay 등)가 이 이벤트를 구독하여
+        비상 상황에 맞게 동작을 조정합니다.
+        """
+        try:
+            from selfhealing.services.event_bus import (
+                get_event_bus,
+                EventType,
+                EventPriority,
+            )
+            
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.EMERGENCY_LEVEL_CHANGED,
+                data={
+                    "level": new_level.value,
+                    "previous_level": previous_level.value,
+                    "level_name": new_level.name,
+                    "previous_level_name": previous_level.name,
+                    "reason": reason,
+                    "is_escalation": new_level.value > previous_level.value,
+                    "is_active": new_level != EmergencyLevel.NORMAL,
+                },
+                source="emergency_manager",
+                priority=EventPriority.HIGH,
+            )
+        except Exception as e:
+            # 이벤트 발행 실패해도 비상 모드 동작에는 영향 없음
+            logger.warning(f"[EmergencyMode] Failed to emit event: {e}")
     
     # -------------------------------------------------------------------------
     # History & Audit

@@ -838,6 +838,9 @@ class ErrorBudgetGate:
         """에러 예산 기반 판정."""
         # 위험 수준 - 차단
         if budget_percent < self._config.critical_threshold_percent:
+            # 이벤트 발행: 에러 예산 임계치 도달
+            self._emit_error_budget_critical_event(budget_percent)
+            
             return GateCheckResult(
                 allowed=False,
                 status=GateStatus.BLOCKED,
@@ -853,6 +856,9 @@ class ErrorBudgetGate:
         
         # 경고 수준 - 허용하되 경고
         if budget_percent < self._config.warning_threshold_percent:
+            # 이벤트 발행: 에러 예산 경고
+            self._emit_error_budget_warning_event(budget_percent)
+            
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.WARNING,
@@ -1072,6 +1078,66 @@ class ErrorBudgetGate:
         with self._lock:
             self._cache = None
             self._cache_time = None
+    
+    # -------------------------------------------------------------------------
+    # Event Bus
+    # -------------------------------------------------------------------------
+    
+    def _emit_error_budget_critical_event(self, budget_percent: float) -> None:
+        """
+        에러 예산 임계치 도달 이벤트 발행.
+        
+        Chaos 실험 자동 차단, 자동 Replay 일시 중지 등
+        다른 컴포넌트가 이 이벤트를 구독하여 반응합니다.
+        """
+        try:
+            from selfhealing.services.event_bus import (
+                get_event_bus,
+                EventType,
+                EventPriority,
+            )
+            
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.ERROR_BUDGET_CRITICAL,
+                data={
+                    "budget_percent": budget_percent,
+                    "threshold": self._config.critical_threshold_percent,
+                    "status": "critical",
+                },
+                source="error_budget_gate",
+                priority=EventPriority.CRITICAL,
+            )
+        except Exception as e:
+            # 이벤트 발행 실패해도 Gate 동작에는 영향 없음
+            logger.warning(f"[ErrorBudgetGate] Failed to emit critical event: {e}")
+    
+    def _emit_error_budget_warning_event(self, budget_percent: float) -> None:
+        """에러 예산 경고 이벤트 발행."""
+        try:
+            from selfhealing.services.event_bus import (
+                get_event_bus,
+                EventType,
+                EventPriority,
+            )
+            
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.ERROR_BUDGET_WARNING,
+                data={
+                    "budget_percent": budget_percent,
+                    "threshold": self._config.warning_threshold_percent,
+                    "status": "warning",
+                },
+                source="error_budget_gate",
+                priority=EventPriority.HIGH,
+            )
+        except Exception as e:
+            logger.warning(f"[ErrorBudgetGate] Failed to emit warning event: {e}")
+    
+    # -------------------------------------------------------------------------
+    # Rate Limiter & Fault Detector Status
+    # -------------------------------------------------------------------------
     
     def get_rate_limiter_status(self) -> Dict[str, Any]:
         """
