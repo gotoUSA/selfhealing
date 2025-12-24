@@ -101,6 +101,13 @@ from selfhealing.api.django.views.drift_threshold import (
     DriftThresholdResetView,
 )
 
+# Metric Sync Views (Phase 1: Poll 제거 + Manual API)
+# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+from selfhealing.api.django.views.metric_sync import (
+    MetricSyncView,
+    DriftReportView,
+)
+
 # Config History & Rollback Views
 from selfhealing.api.django.views.config_history import (
     ConfigHistoryView,
@@ -272,6 +279,13 @@ urlpatterns = [
     # =========================================================================
     path("config/drift-thresholds/", DriftThresholdConfigView.as_view(), name="config-drift-thresholds"),
     path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
+    
+    # =========================================================================
+    # Metric Sync API (Phase 1: Poll 제거 + Manual API)
+    # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    # =========================================================================
+    path("metrics/sync/", MetricSyncView.as_view(), name="metrics-sync"),
+    path("metrics/drift-report/", DriftReportView.as_view(), name="metrics-drift-report"),
     
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)
