@@ -56,7 +56,33 @@ class CircuitBreakerConfig:
 
     @classmethod
     def from_settings(cls) -> "CircuitBreakerConfig":
-        """Load configuration from core config."""
+        """Load configuration from RuntimeConfigManager (preferred) or core config."""
+        # Try RuntimeConfigManager first (runtime-configurable)
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+            manager = get_runtime_config_manager()
+            runtime_config = manager.get_circuit_breaker_config()
+            
+            return cls(
+                enabled=runtime_config.get("enabled", True),
+                failure_threshold=runtime_config.get("failure_threshold", 5),
+                recovery_timeout=runtime_config.get("recovery_timeout", 60),
+                success_threshold=runtime_config.get("success_threshold", 2),
+                manual_override_ttl_minutes=runtime_config.get("manual_override_ttl_minutes", 90),
+                half_open_request_limit=runtime_config.get("half_open_request_limit", 10),
+                max_pending_duration_hours=runtime_config.get("max_pending_duration_hours", 4),
+                max_retry_lifetime_hours=runtime_config.get("max_retry_lifetime_hours", 24),
+                rate_limit_cascade_threshold=runtime_config.get("rate_limit_cascade_threshold", 10),
+                rate_limit_cascade_window_seconds=runtime_config.get("rate_limit_cascade_window_seconds", 60),
+                self_ddos_protection_enabled=runtime_config.get("self_ddos_protection_enabled", True),
+                self_ddos_request_threshold=runtime_config.get("self_ddos_request_threshold", 100),
+                self_ddos_window_seconds=runtime_config.get("self_ddos_window_seconds", 10),
+                self_ddos_backoff_multiplier=runtime_config.get("self_ddos_backoff_multiplier", 2.0),
+            )
+        except Exception:
+            pass  # Fall through to static config
+        
+        # Fallback to static core config
         cb_settings = get_config().circuit_breaker
         return cls(
             enabled=cb_settings.enabled,

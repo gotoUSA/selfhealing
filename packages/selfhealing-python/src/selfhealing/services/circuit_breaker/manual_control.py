@@ -22,6 +22,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_system_enabled() -> bool:
+    """Check if self-healing system is enabled (Kill Switch not activated)."""
+    try:
+        from selfhealing.services.system_control import SystemControlManager
+        manager = SystemControlManager()
+        return manager.is_enabled()
+    except Exception:
+        # If SystemControlManager not available, assume enabled
+        return True
+
+
 class ManualControlMixin:
     """
     Mixin class providing manual control functionality for CircuitBreakerService.
@@ -66,6 +77,17 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
+        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        if not _is_system_enabled():
+            logger.warning(
+                f"[CircuitBreaker] force_open blocked: Kill Switch is active. "
+                f"service={service_name}"
+            )
+            return CircuitBreakerResult.failed(
+                service_name=service_name,
+                error="Kill Switch is active: self-healing system is disabled",
+            )
+
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
             controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
@@ -159,6 +181,17 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
+        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        if not _is_system_enabled():
+            logger.warning(
+                f"[CircuitBreaker] force_close blocked: Kill Switch is active. "
+                f"service={service_name}"
+            )
+            return CircuitBreakerResult.failed(
+                service_name=service_name,
+                error="Kill Switch is active: self-healing system is disabled",
+            )
+
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
             controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)

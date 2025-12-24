@@ -33,6 +33,17 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _is_system_enabled() -> bool:
+    """Check if self-healing system is enabled (Kill Switch not activated)."""
+    try:
+        from selfhealing.services.system_control import SystemControlManager
+        manager = SystemControlManager()
+        return manager.is_enabled()
+    except Exception:
+        # If SystemControlManager not available, assume enabled
+        return True
+
+
 class RetryAction(Enum):
     """Actions that can be taken after a failure."""
 
@@ -78,7 +89,7 @@ class RetryConfig:
     @classmethod
     def from_settings(cls, domain: str = "default") -> "RetryConfig":
         """
-        Load configuration from core config.
+        Load configuration from RuntimeConfigManager (preferred) or core config.
 
         Args:
             domain: Domain name for per-domain overrides
@@ -86,6 +97,25 @@ class RetryConfig:
         Returns:
             RetryConfig instance
         """
+        # Try RuntimeConfigManager first (runtime-configurable)
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+            manager = get_runtime_config_manager()
+            retry_config = manager.get_retry_config()
+            dlq_config = manager.get_dlq_config()
+            
+            return cls(
+                max_attempts=retry_config.get("max_attempts", 3),
+                backoff_base=retry_config.get("backoff_base", 4),
+                backoff_max=int(retry_config.get("max_delay", 180)),
+                jitter_percent=retry_config.get("jitter_percent", 25),
+                enable_dlq=dlq_config.get("enabled", True),
+                domain=domain,
+            )
+        except Exception:
+            pass  # Fall through to static config
+        
+        # Fallback to static core config
         config = get_config()
         retry_settings = config.retry
         dlq_settings = config.dlq
@@ -311,6 +341,19 @@ class RetryHandler:
         Returns:
             RetryResult with the outcome
         """
+        # Kill Switch 체크: 시스템이 비활성화되면 재시도 없이 즉시 실패 반환
+        if not _is_system_enabled():
+            logger.warning(
+                f"[RetryHandler] execute blocked: Kill Switch is active. "
+                f"domain={self.config.domain}"
+            )
+            return RetryResult(
+                success=False,
+                action=RetryAction.ABORT,
+                attempt=0,
+                error=Exception("Kill Switch is active: self-healing system is disabled"),
+            )
+
         attempt = 0
         last_error: Exception | None = None
         retry_history: list[dict[str, Any]] = []

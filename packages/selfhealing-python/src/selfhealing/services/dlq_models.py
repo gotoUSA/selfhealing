@@ -24,15 +24,42 @@ class DLQConfig:
     enabled: bool = True
     retention_days: int = 30
     max_replay_attempts: int = 2
+    max_retries: int = 3
+    retry_delay: int = 60
+    expiry_hours: int = 72
+    batch_size: int = 10
 
     @classmethod
     def from_settings(cls) -> "DLQConfig":
-        """Load configuration from core config."""
+        """Load configuration from RuntimeConfigManager (preferred) or core config."""
+        # Try RuntimeConfigManager first (runtime-configurable)
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+            manager = get_runtime_config_manager()
+            runtime_config = manager.get_dlq_config()
+            
+            return cls(
+                enabled=runtime_config.get("enabled", True),
+                retention_days=runtime_config.get("retention_days", 30),
+                max_replay_attempts=runtime_config.get("max_replay_attempts", 2),
+                max_retries=runtime_config.get("max_retries", 3),
+                retry_delay=runtime_config.get("retry_delay", 60),
+                expiry_hours=runtime_config.get("expiry_hours", 72),
+                batch_size=runtime_config.get("batch_size", 10),
+            )
+        except Exception:
+            pass  # Fall through to static config
+        
+        # Fallback to static core config
         dlq_settings = get_config().dlq
         return cls(
             enabled=dlq_settings.enabled,
             retention_days=dlq_settings.retention_days,
             max_replay_attempts=dlq_settings.max_replay_attempts,
+            max_retries=getattr(dlq_settings, "max_retries", 3),
+            retry_delay=getattr(dlq_settings, "retry_delay", 60),
+            expiry_hours=getattr(dlq_settings, "expiry_hours", 72),
+            batch_size=getattr(dlq_settings, "batch_size", 10),
         )
 
 

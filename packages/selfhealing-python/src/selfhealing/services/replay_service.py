@@ -31,6 +31,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_system_enabled() -> bool:
+    """Check if self-healing system is enabled (Kill Switch not activated)."""
+    try:
+        from selfhealing.services.system_control import SystemControlManager
+        manager = SystemControlManager()
+        return manager.is_enabled()
+    except Exception:
+        # If SystemControlManager not available, assume enabled
+        return True
+
+
 # =============================================================================
 # Replay Result
 # =============================================================================
@@ -291,6 +302,17 @@ class ReplayService:
         Returns:
             ReplayResult indicating success or failure
         """
+        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        if not _is_system_enabled():
+            logger.warning(
+                f"[ReplayService] replay_single blocked: Kill Switch is active. "
+                f"dlq_id={dlq_id}"
+            )
+            return ReplayResult.failed(
+                dlq_id,
+                "Kill Switch is active: self-healing system is disabled"
+            )
+
         # Atomically try to acquire the entry for replay
         # This prevents race conditions where two workers process the same entry
         config_max = self.config["max_replay_attempts"]
@@ -365,6 +387,20 @@ class ReplayService:
         Returns:
             BatchReplayResult with summary and individual results
         """
+        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        if not _is_system_enabled():
+            logger.warning(
+                f"[ReplayService] replay_batch blocked: Kill Switch is active. "
+                f"domain={domain}, failure_type={failure_type}"
+            )
+            return BatchReplayResult(
+                total=0,
+                success_count=0,
+                failed_count=0,
+                skipped_count=0,
+                results=[],
+            )
+
         max_replays = self.config["max_replay_attempts"]
 
         # Get eligible entries using repository
