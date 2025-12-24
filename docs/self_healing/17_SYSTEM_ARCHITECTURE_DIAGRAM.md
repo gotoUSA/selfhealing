@@ -2,6 +2,7 @@
 
 > 📅 작성일: 2024-12-24  
 > 🎯 목적: 셀프 힐링 시스템의 핵심 컨트롤러와 컴포넌트 간 연결 관계 시각화
+> 📝 최종 업데이트: 2024-12-24 (SoC 리팩토링 완료)
 
 ---
 
@@ -284,6 +285,8 @@
 │  │ • store       │  │ • force_open  │  │ • replay      │  │ • check       │  │ • validate │ │
 │  │ • query       │  │ • force_close │  │ • batch       │  │ • allow       │  │ • rollback │ │
 │  │ • cleanup     │  │ • should_allow│  │ • handlers    │  │ • block       │  │            │ │
+│  │               │  │ • manual_ctrl │  │ • governance  │  │               │  │            │ │
+│  │               │  │ • check_recov │  │ • audit_log   │  │               │  │            │ │
 │  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └─────┬──────┘ │
 │          │                  │                  │                  │                │        │
 │          └──────────────────┴──────────────────┴──────────────────┴────────────────┘        │
@@ -463,17 +466,21 @@
 │  "자동화는 막되, 관리는 열어라" - Kill Switch가 활성화된 장애 상황에서도 관리자가                            │
 │  설정을 변경하여 복구할 수 있는 퇴로를 확보함. 설정 변경까지 차단하면 데드락 상태 발생.                      │
 │                                                                                                               │
-│  📋 Thin Task, Fat Service 아키텍처 원칙 (2024-12-24 적용)                                                   │
-│  ────────────────────────────────────────────────────                                                         │
+│  📋 Thin Task, Fat Service 아키텍처 원칙 (2024-12-24 SoC 리팩토링 완료)                                      │
+│  ──────────────────────────────────────────────────────────────────────                                       │
 │  • Celery Task (Thin): 오직 "언제(When)" 실행할지와 비동기 트리거 역할만 수행                                │
 │    - 모든 Task는 service.method() 호출 한 줄로 유지                                                          │
-│    - 비즈니스 로직, 거버넌스 체크 없음                                                                        │
+│    - 비즈니스 로직, 거버넌스 체크, DB 직접 접근 없음                                                         │
+│    - 예: check_circuit_breaker_recovery → service.check_recovery_transitions()                               │
+│    - 예: reset_circuit_breaker → service.manual_control()                                                    │
 │                                                                                                               │
 │  • Service Layer (Fat): 모든 판단 로직(Check on Use) 포함                                                    │
 │    - GovernanceService: 비상모드 만료, 자동 복구                                                             │
 │    - ChaosExecutionService: 실험 실행, SafetyGuard 통합                                                      │
 │    - ConfigApplyService: 설정 적용, Emergency 체크                                                           │
-│    - ReplayService: DLQ 리플레이, 3단계 안전 체크                                                            │
+│    - ReplayService: DLQ 리플레이, check_all_governance() 사용, 자동 Audit 로깅                              │
+│    - CircuitBreakerService: check_recovery_transitions(), manual_control() 메서드 신규 추가                 │
+│    - PaymentRecoveryService: is_circuit_breaker_blocking(), check_governance_for_retry() 신규 추가          │
 │                                                                                                               │
 │  • 공통 체크 로직: governance_checks.py                                                                       │
 │    - require_system_enabled: Kill Switch 체크 데코레이터                                                     │
@@ -484,10 +491,18 @@
 │                                                                                                               │
 │  📋 서비스 레이어 위치 (packages/selfhealing-python/src/selfhealing/services/)                               │
 │  ────────────────────────────────────────────────────────────────────────────                                 │
-│  • governance_checks.py: 공통 거버넌스 체크 (데코레이터, 믹스인, TTL 캐시)                                   │
+│  • governance_checks.py: 공통 거버넌스 체크 (데코레이터, 믹스인, TTL 캐시, check_all_governance)            │
 │  • governance_service.py: GovernanceService (비상모드 관리)                                                  │
-│  • execution_services.py: ChaosExecutionService, ConfigApplyService                                         │
-│  • replay_service.py: ReplayService (DLQ 리플레이)                                                           │
+│  • execution_services.py: ChaosExecutionService, ConfigApplyService (operation_name 파라미터 추가)          │
+│  • replay_service.py: ReplayService (DLQ 리플레이, _replay_single_internal, ReplayResult.blocked 팩토리)   │
+│  • circuit_breaker/service.py: CircuitBreakerService (check_recovery_transitions, manual_control 추가)      │
+│                                                                                                               │
+│  📋 Task→Service 리팩토링 완료 목록 (2024-12-24)                                                             │
+│  ────────────────────────────────────────────────                                                             │
+│  • self_healing_tasks.check_circuit_breaker_recovery: 60줄 DB 조작 → service.check_recovery_transitions()   │
+│  • payment_recovery_tasks.reset_circuit_breaker: 30줄 DB 조작 → service.manual_control()                    │
+│  • payment_recovery_tasks.retry_failed_payment: CB 체크 → recovery.check_governance_for_retry()             │
+│  • payment_recovery_tasks.process_dlq_batch: CB 체크 → recovery.check_governance_for_retry()                │
 │                                                                                                               │
 │  📋 Audit Logging 연동 ("왜 이때 작업이 안 됐지?")                                                           │
 │  ────────────────────────────────────────────────                                                             │

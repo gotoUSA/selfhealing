@@ -200,6 +200,9 @@ class ChaosExecutionService(GovernanceCheckMixin):
             check_kill_switch=True,
             check_emergency=False,  # Chaos 실험은 Emergency 체크 불필요
             check_error_budget=True,
+            operation_name="run_scheduled_experiments",
+            service_name="ChaosExecutionService",
+            domain="chaos",
         )
         
         if not governance_result.allowed:
@@ -512,6 +515,9 @@ class ConfigApplyService(GovernanceCheckMixin):
             check_emergency=True,
             emergency_min_level=2,
             check_error_budget=False,  # 설정 적용은 예산 체크 불필요
+            operation_name="apply_pending_changes",
+            service_name="ConfigApplyService",
+            domain="config",
         )
         
         if not governance_result.allowed:
@@ -609,6 +615,9 @@ class ConfigApplyService(GovernanceCheckMixin):
             check_emergency=True,
             emergency_min_level=2,
             check_error_budget=False,
+            operation_name="apply_graceful_change",
+            service_name="ConfigApplyService",
+            domain="config",
         )
         
         if not governance_result.allowed:

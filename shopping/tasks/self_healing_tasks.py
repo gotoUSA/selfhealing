@@ -89,56 +89,29 @@ def check_circuit_breaker_recovery(self) -> dict:
     Checks if any circuit breakers in OPEN state should transition
     to HALF_OPEN based on recovery timeout.
 
+    This task is a thin wrapper that delegates to CircuitBreakerService.
+    All business logic is in the service layer.
+
     This task should be scheduled to run every minute.
 
     Returns:
         Dictionary with check results
     """
-    from django.conf import settings
-    from django.utils import timezone
-
-    from shopping.models.failed_external_request import CircuitBreakerState
-
-    # Check if circuit breaker is enabled
-    self_healing = getattr(settings, "SELF_HEALING", {})
-    cb_config = self_healing.get("CIRCUIT_BREAKER", {})
-
-    if not cb_config.get("ENABLED", False):
-        return {"success": True, "message": "Circuit breaker disabled, skipping check"}
-
-    recovery_timeout = cb_config.get("RECOVERY_TIMEOUT", 60)
+    from selfhealing.services import get_circuit_breaker_service
 
     logger.debug("[Circuit Check] Checking for circuit breakers to transition")
 
     try:
-        now = timezone.now()
-        transitioned = []
-
-        # Find OPEN circuits that should transition to HALF_OPEN
-        open_circuits = CircuitBreakerState.objects.filter(
-            state="open",
-            opened_at__isnull=False,
-            manually_controlled=False,  # Skip manually controlled circuits
-        )
-
-        for circuit in open_circuits:
-            elapsed = (now - circuit.opened_at).total_seconds()
-
-            if elapsed >= recovery_timeout:
-                circuit.state = "half_open"
-                circuit.success_count = 0
-                circuit.save(update_fields=["state", "success_count", "updated_at"])
-
-                transitioned.append(circuit.service_name)
-                logger.info(
-                    f"[Circuit Check] Transitioned '{circuit.service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
-                )
-
-        return {
-            "success": True,
-            "transitioned": transitioned,
-            "count": len(transitioned),
-        }
+        service = get_circuit_breaker_service()
+        result = service.check_recovery_transitions()
+        
+        if result.get("count", 0) > 0:
+            logger.info(
+                f"[Circuit Check] Transitioned {result['count']} circuit(s): "
+                f"{result.get('transitioned', [])}"
+            )
+        
+        return result
 
     except Exception as e:
         logger.error(f"[Circuit Check] Error: {e}", exc_info=True)

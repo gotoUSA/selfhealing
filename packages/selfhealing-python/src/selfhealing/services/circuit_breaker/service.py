@@ -304,3 +304,114 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 pass  # Metrics not available
             # Trigger conditional replay on auto-close
             self._trigger_conditional_replay(service_name)
+
+    # =========================================================================
+    # Recovery Transition Check (for periodic task)
+    # =========================================================================
+
+    def check_recovery_transitions(self) -> dict:
+        """
+        Check for circuit breakers that should transition from OPEN to HALF_OPEN.
+
+        This method should be called periodically (e.g., every minute) to check
+        if any OPEN circuits have exceeded the recovery timeout and should
+        transition to HALF_OPEN for testing.
+
+        Returns:
+            Dictionary with transitioned service names and count
+        """
+        if not self.is_enabled:
+            return {"success": True, "message": "Circuit breaker disabled", "count": 0}
+
+        transitioned = []
+
+        try:
+            # Get all states and filter for OPEN, non-manually-controlled ones
+            all_states = self.repository.get_all_states()
+            open_states = [
+                s for s in all_states
+                if s.state == CircuitState.OPEN and not s.manually_controlled
+            ]
+
+            for state in open_states:
+                if state.opened_at is None:
+                    continue
+
+                elapsed = (now() - state.opened_at).total_seconds()
+
+                if elapsed >= self.config.recovery_timeout:
+                    # Transition to half-open
+                    self.repository.update_state(
+                        service_name=state.service_name,
+                        state=CircuitState.HALF_OPEN,
+                        success_count=0,
+                    )
+                    transitioned.append(state.service_name)
+                    logger.info(
+                        f"[CircuitBreaker] Transitioned '{state.service_name}' "
+                        f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                    )
+
+            return {
+                "success": True,
+                "transitioned": transitioned,
+                "count": len(transitioned),
+            }
+
+        except Exception as e:
+            logger.error(f"[CircuitBreaker] Error checking recovery transitions: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "transitioned": transitioned,
+                "count": len(transitioned),
+            }
+
+    def manual_control(
+        self,
+        service_name: str,
+        action: str,
+        reason: str = "",
+        controlled_by: Any = None,
+    ) -> CircuitBreakerResult:
+        """
+        Manually control a circuit breaker state.
+
+        Args:
+            service_name: Name of the service
+            action: 'open', 'close', or 'auto'
+            reason: Reason for the control action
+            controlled_by: User who initiated the action
+
+        Returns:
+            CircuitBreakerResult with operation details
+        """
+        state = self.get_or_create_state(service_name)
+        previous_state = state.state
+
+        if action == "open":
+            return self.force_open(
+                service_name=service_name,
+                reason=reason,
+                controlled_by=controlled_by,
+            )
+        elif action == "close":
+            return self.force_close(
+                service_name=service_name,
+                reason=reason,
+                controlled_by=controlled_by,
+            )
+        else:  # auto
+            # Clear manual control flag
+            self.repository.update_state(
+                service_name=service_name,
+                manually_controlled=False,
+            )
+            logger.info(f"[CircuitBreaker] '{service_name}' switched to auto mode")
+            return CircuitBreakerResult(
+                success=True,
+                service_name=service_name,
+                previous_state=previous_state,
+                new_state=state.state,
+                message=f"Circuit breaker for '{service_name}' switched to auto mode",
+            )

@@ -9,6 +9,11 @@ Replay Types:
 - Batch Replay: Operator selects multiple items by filter
 - Conditional Replay: Auto-replay when external system recovers
 
+Thin Task, Fat Service Architecture:
+    - 모든 거버넌스 체크는 이 서비스에서 수행
+    - Celery Task는 단순 위임자 역할만 수행
+    - Audit 로깅은 check_all_governance를 통해 자동 수행
+
 Reference: docs/L3_SELF_HEALING_OPERATIONS.md §2
 """
 
@@ -21,6 +26,10 @@ from typing import TYPE_CHECKING, Any, Optional, Callable
 
 from selfhealing.core.timezone import now
 from selfhealing.core.config import get_config
+from selfhealing.services.governance_checks import (
+    check_all_governance,
+    GovernanceCheckResult,
+)
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
@@ -29,64 +38,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-
-def _is_system_enabled() -> bool:
-    """Check if self-healing system is enabled (Kill Switch not activated)."""
-    try:
-        from selfhealing.services.system_control import SystemControlManager
-        manager = SystemControlManager()
-        return manager.is_enabled()
-    except Exception:
-        # If SystemControlManager not available, assume enabled
-        return True
-
-
-def _is_emergency_blocking() -> tuple[bool, str]:
-    """
-    Check if Emergency Mode blocks replay operations.
-    
-    LEVEL_2 이상에서는 시스템 자원 보호를 위해 자동 리플레이 차단.
-    
-    Returns:
-        (is_blocked, level_name) 튜플
-    """
-    try:
-        from selfhealing.services.emergency_mode import (
-            get_emergency_manager,
-            EmergencyLevel,
-        )
-        
-        manager = get_emergency_manager()
-        level = manager.get_current_level()
-        
-        if level.value >= EmergencyLevel.LEVEL_2.value:
-            return True, level.name
-        return False, level.name
-    except Exception:
-        # EmergencyManager not available, allow replay
-        return False, "UNKNOWN"
-
-
-def _is_error_budget_blocking() -> tuple[bool, float, float]:
-    """
-    Check if ErrorBudgetGate blocks automation.
-    
-    에러 예산이 critical 임계값 이하면 자동화 차단.
-    
-    Returns:
-        (is_blocked, error_budget_percent, threshold_percent) 튜플
-    """
-    try:
-        from selfhealing.services.error_budget_gate import check_automation_allowed
-        
-        gate_result = check_automation_allowed()
-        if not gate_result.allowed:
-            return True, gate_result.error_budget_percent, gate_result.threshold_percent
-        return False, gate_result.error_budget_percent, gate_result.threshold_percent
-    except Exception:
-        # ErrorBudgetGate not available, allow replay
-        return False, 100.0, 0.0
 
 
 # =============================================================================
@@ -113,6 +64,19 @@ class ReplayResult:
     def failed(cls, dlq_id: int, error: str) -> "ReplayResult":
         """Factory for failed replay."""
         return cls(success=False, dlq_id=dlq_id, error=error)
+    
+    @classmethod
+    def blocked(cls, dlq_id: int, governance_result: GovernanceCheckResult) -> "ReplayResult":
+        """Factory for governance-blocked replay."""
+        return cls(
+            success=False,
+            dlq_id=dlq_id,
+            error=governance_result.block_message,
+            data={
+                "blocked": True,
+                "block_reason": governance_result.block_reason.value if governance_result.block_reason else None,
+            },
+        )
 
 
 @dataclass
@@ -124,6 +88,8 @@ class BatchReplayResult:
     failed_count: int = 0
     skipped_count: int = 0
     results: list[ReplayResult] | None = None
+    governance_blocked: bool = False
+    governance_block_reason: str = ""
 
 
 # =============================================================================
@@ -343,10 +309,13 @@ class ReplayService:
         This method uses atomic acquisition to prevent race conditions when
         multiple workers try to replay the same entry simultaneously.
 
-        Safety Checks (in order):
+        Safety Checks (via check_all_governance):
         1. Kill Switch - 시스템 전역 비활성화 체크
         2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
         3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
+
+        Audit Logging:
+        - 차단 발생 시 자동으로 AuditLog에 기록됨
 
         Args:
             dlq_id: ID of the FailedOperation to replay
@@ -354,40 +323,25 @@ class ReplayService:
         Returns:
             ReplayResult indicating success or failure
         """
-        # 1. Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
-        if not _is_system_enabled():
+        # 거버넌스 체크 (Kill Switch, Emergency Mode, Error Budget)
+        # check_all_governance가 차단 시 자동으로 Audit 로깅 수행
+        governance = check_all_governance(
+            check_kill_switch=True,
+            check_emergency=True,
+            emergency_min_level=2,
+            check_error_budget=True,
+            operation_name="replay_single",
+            service_name="ReplayService",
+            domain="dlq",
+            audit_on_block=True,
+        )
+
+        if not governance.allowed:
             logger.warning(
-                f"[ReplayService] replay_single blocked: Kill Switch is active. "
+                f"[ReplayService] replay_single blocked: {governance.block_message}. "
                 f"dlq_id={dlq_id}"
             )
-            return ReplayResult.failed(
-                dlq_id,
-                "Kill Switch is active: self-healing system is disabled"
-            )
-
-        # 2. Emergency Level 체크: LEVEL_2 이상에서는 시스템 자원 보호
-        is_emergency_blocked, emergency_level = _is_emergency_blocking()
-        if is_emergency_blocked:
-            logger.warning(
-                f"[ReplayService] replay_single blocked: Emergency Mode {emergency_level}. "
-                f"dlq_id={dlq_id}"
-            )
-            return ReplayResult.failed(
-                dlq_id,
-                f"Emergency mode {emergency_level} is active: replay blocked to preserve resources"
-            )
-
-        # 3. ErrorBudgetGate 체크: 에러 예산 고갈 시 자동화 차단
-        is_budget_blocked, budget_percent, threshold = _is_error_budget_blocking()
-        if is_budget_blocked:
-            logger.warning(
-                f"[ReplayService] replay_single blocked: Error budget {budget_percent:.1f}% "
-                f"< threshold {threshold:.1f}%. dlq_id={dlq_id}"
-            )
-            return ReplayResult.failed(
-                dlq_id,
-                f"Error budget critically low ({budget_percent:.1f}%): manual mode enforced"
-            )
+            return ReplayResult.blocked(dlq_id, governance)
 
         # Atomically try to acquire the entry for replay
         # This prevents race conditions where two workers process the same entry
@@ -455,10 +409,13 @@ class ReplayService:
         """
         Replay multiple DLQ entries matching criteria.
 
-        Safety Checks (in order):
+        Safety Checks (via check_all_governance):
         1. Kill Switch - 시스템 전역 비활성화 체크
         2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
         3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
+
+        Audit Logging:
+        - 차단 발생 시 자동으로 AuditLog에 기록됨
 
         Args:
             domain: Filter by domain (optional)
@@ -468,10 +425,22 @@ class ReplayService:
         Returns:
             BatchReplayResult with summary and individual results
         """
-        # 1. Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
-        if not _is_system_enabled():
+        # 거버넌스 체크 (Kill Switch, Emergency Mode, Error Budget)
+        # check_all_governance가 차단 시 자동으로 Audit 로깅 수행
+        governance = check_all_governance(
+            check_kill_switch=True,
+            check_emergency=True,
+            emergency_min_level=2,
+            check_error_budget=True,
+            operation_name="replay_batch",
+            service_name="ReplayService",
+            domain=domain or "dlq",
+            audit_on_block=True,
+        )
+
+        if not governance.allowed:
             logger.warning(
-                f"[ReplayService] replay_batch blocked: Kill Switch is active. "
+                f"[ReplayService] replay_batch blocked: {governance.block_message}. "
                 f"domain={domain}, failure_type={failure_type}"
             )
             return BatchReplayResult(
@@ -480,36 +449,8 @@ class ReplayService:
                 failed_count=0,
                 skipped_count=0,
                 results=[],
-            )
-
-        # 2. Emergency Level 체크: LEVEL_2 이상에서는 배치 리플레이 차단
-        is_emergency_blocked, emergency_level = _is_emergency_blocking()
-        if is_emergency_blocked:
-            logger.warning(
-                f"[ReplayService] replay_batch blocked: Emergency Mode {emergency_level}. "
-                f"domain={domain}, failure_type={failure_type}"
-            )
-            return BatchReplayResult(
-                total=0,
-                success_count=0,
-                failed_count=0,
-                skipped_count=0,
-                results=[],
-            )
-
-        # 3. ErrorBudgetGate 체크: 에러 예산 고갈 시 배치 리플레이 차단
-        is_budget_blocked, budget_percent, threshold = _is_error_budget_blocking()
-        if is_budget_blocked:
-            logger.warning(
-                f"[ReplayService] replay_batch blocked: Error budget {budget_percent:.1f}% "
-                f"< threshold {threshold:.1f}%. domain={domain}"
-            )
-            return BatchReplayResult(
-                total=0,
-                success_count=0,
-                failed_count=0,
-                skipped_count=0,
-                results=[],
+                governance_blocked=True,
+                governance_block_reason=governance.block_message,
             )
 
         max_replays = self.config["max_replay_attempts"]
@@ -528,7 +469,8 @@ class ReplayService:
         )
 
         for entry in entries:
-            result = self.replay_single(entry.id)
+            # 개별 replay는 거버넌스 체크 스킵 (배치에서 이미 체크함)
+            result = self._replay_single_internal(entry.id)
             batch_result.results.append(result)
 
             if result.success:
@@ -543,6 +485,58 @@ class ReplayService:
         )
 
         return batch_result
+
+    def _replay_single_internal(self, dlq_id: int) -> ReplayResult:
+        """
+        Internal replay without governance check.
+        
+        Used by replay_batch to avoid redundant governance checks.
+        """
+        config_max = self.config["max_replay_attempts"]
+
+        failed_op_data = self.repository.try_acquire_for_replay(dlq_id, config_max)
+
+        if failed_op_data is None:
+            existing = self.repository.get_by_id(dlq_id)
+            if existing is None:
+                return ReplayResult.failed(dlq_id, "DLQ entry not found")
+            elif existing.status != "pending":
+                return ReplayResult.failed(dlq_id, f"Cannot replay: status is '{existing.status}'")
+            else:
+                return ReplayResult.failed(dlq_id, "max_replays_exceeded")
+
+        handler = get_replay_handler(failed_op_data.domain)
+
+        try:
+            result = handler.replay(failed_op_data)
+        except Exception as e:
+            logger.error(f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}", exc_info=True)
+            self.repository.complete_replay(
+                id=dlq_id,
+                success=False,
+                note=f"Handler crash: {type(e).__name__}: {str(e)[:200]}",
+                error_details={
+                    "type": type(e).__name__,
+                    "message": str(e)[:500],
+                    "occurred_at": now().isoformat(),
+                    "escalated_to": "requires_review",
+                },
+            )
+            return ReplayResult.failed(dlq_id, f"internal_error: {type(e).__name__}")
+
+        self.repository.complete_replay(
+            id=dlq_id,
+            success=result.success,
+            resolution_type="auto_replay" if result.success else "",
+            note=result.message if result.success else (result.error or "Replay failed"),
+        )
+
+        if result.success:
+            logger.info(f"[ReplayService] DLQ entry {dlq_id} replayed successfully")
+        else:
+            logger.warning(f"[ReplayService] DLQ entry {dlq_id} replay failed: {result.error}")
+
+        return result
 
     # =========================================================================
     # Conditional Replay (Circuit Breaker Recovery)

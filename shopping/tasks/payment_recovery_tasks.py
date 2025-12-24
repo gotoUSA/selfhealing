@@ -53,14 +53,10 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
     config = get_recovery_config()
 
     try:
-        # 1. Circuit Breaker 확인
-        if not recovery.check_circuit_breaker():
-            logger.warning(f"Circuit Breaker OPEN: payment_id={payment_id}")
-            return {
-                "status": "circuit_breaker_open",
-                "payment_id": payment_id,
-                "message": "Circuit Breaker is OPEN. Retry skipped.",
-            }
+        # 1. 거버넌스 체크 (서비스 레이어에서 수행)
+        governance_block = recovery.check_governance_for_retry(payment_id, "retry_failed_payment")
+        if governance_block:
+            return governance_block
 
         # 2. Payment 조회
         try:
@@ -317,8 +313,9 @@ def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = N
 
     recovery = get_payment_recovery_handler()
 
-    # Circuit Breaker 확인
-    if not recovery.check_circuit_breaker():
+    # 거버넌스 체크 (서비스 레이어에서 수행)
+    governance_block = recovery.check_governance_for_retry(0, "process_dlq_batch")
+    if governance_block:
         logger.warning("Circuit Breaker OPEN: DLQ 배치 처리 건너뜀")
         return {
             "status": "skipped",
@@ -403,6 +400,9 @@ def reset_circuit_breaker(
     운영자가 PG 장애 감지 시 수동으로 Open하거나,
     복구 확인 후 Close할 수 있습니다.
 
+    This task is a thin wrapper that delegates to CircuitBreakerService.
+    All business logic is in the service layer.
+
     Args:
         service_name: 서비스명
         action: 'open', 'close', 'auto'
@@ -412,39 +412,48 @@ def reset_circuit_breaker(
     Returns:
         처리 결과
     """
-    from ..models.failed_external_request import CircuitBreakerState
+    from selfhealing.services import get_circuit_breaker_service
     from ..models.user import User
 
-    state, created = CircuitBreakerState.objects.get_or_create(
-        service_name=service_name,
-        defaults={"state": "closed"},
-    )
+    logger.info(f"Circuit Breaker 제어 요청: service={service_name}, action={action}")
 
-    controlled_by = None
-    if controlled_by_id:
-        try:
-            controlled_by = User.objects.get(pk=controlled_by_id)
-        except User.DoesNotExist:
-            pass
+    try:
+        controlled_by = None
+        if controlled_by_id:
+            try:
+                controlled_by = User.objects.get(pk=controlled_by_id)
+            except User.DoesNotExist:
+                pass
 
-    previous_state = state.state
+        service = get_circuit_breaker_service()
+        result = service.manual_control(
+            service_name=service_name,
+            action=action,
+            reason=reason,
+            controlled_by=controlled_by,
+        )
 
-    if action == "open":
-        state.force_open(controlled_by=controlled_by, reason=reason)
-        logger.warning(f"Circuit Breaker 수동 OPEN: service={service_name}, reason={reason}")
-    elif action == "close":
-        state.force_close(controlled_by=controlled_by, reason=reason)
-        logger.info(f"Circuit Breaker 수동 CLOSE: service={service_name}, reason={reason}")
-    else:
-        # auto: 현재 상태 유지, 수동 제어 해제
-        state.manually_controlled = False
-        state.save(update_fields=["manually_controlled", "updated_at"])
-        logger.info(f"Circuit Breaker 자동 모드로 전환: service={service_name}")
+        log_func = logger.warning if action == "open" else logger.info
+        log_func(
+            f"Circuit Breaker 제어 완료: service={service_name}, action={action}, "
+            f"result={result.success}"
+        )
 
-    return {
-        "status": "completed",
-        "service_name": service_name,
-        "previous_state": previous_state,
-        "current_state": state.state,
-        "action": action,
-    }
+        return {
+            "status": "completed",
+            "success": result.success,
+            "service_name": service_name,
+            "previous_state": result.previous_state,
+            "current_state": result.new_state,
+            "action": action,
+            "message": result.message,
+        }
+
+    except Exception as e:
+        logger.error(f"Circuit Breaker 제어 실패: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "service_name": service_name,
+            "action": action,
+            "error": str(e),
+        }

@@ -132,6 +132,42 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
     def __init__(self):
         self.config = getattr(settings, "PAYMENT_RECOVERY", {})
 
+    # =========================================================================
+    # Governance Integration
+    # =========================================================================
+
+    def is_circuit_breaker_blocking(self, service_name: str = "toss_payment") -> tuple[bool, str]:
+        """
+        Circuit Breaker가 차단 중인지 확인합니다.
+
+        Returns:
+            (is_blocked, reason) 튜플
+        """
+        if not self.check_circuit_breaker(service_name):
+            return True, f"Circuit Breaker is OPEN for {service_name}"
+        return False, ""
+
+    def check_governance_for_retry(
+        self,
+        payment_id: int,
+        operation_name: str = "payment_retry",
+    ) -> dict | None:
+        """
+        결제 재시도 전 거버넌스 체크를 수행합니다.
+
+        Returns:
+            차단 시 결과 dict, 허용 시 None
+        """
+        is_blocked, reason = self.is_circuit_breaker_blocking()
+        if is_blocked:
+            logger.warning(f"[PaymentRecovery] {operation_name} blocked: {reason}")
+            return {
+                "status": "circuit_breaker_open",
+                "payment_id": payment_id,
+                "message": reason,
+            }
+        return None
+
     def get_backoff_delay(self, attempt: int) -> int:
         """지수 백오프 지연 시간 계산"""
         base = self.config.get("RETRY_BACKOFF_BASE", 4)
