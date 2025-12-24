@@ -62,6 +62,12 @@ class AuditAction(str, Enum):
     SECURITY_INCIDENT = "security_incident"
     SECURITY_ALERT = "security_alert"
 
+    # Governance (자동화 차단 추적)
+    GOVERNANCE_BLOCKED = "governance_blocked"
+    GOVERNANCE_KILL_SWITCH = "governance_kill_switch"
+    GOVERNANCE_EMERGENCY = "governance_emergency"
+    GOVERNANCE_ERROR_BUDGET = "governance_error_budget"
+
     # System
     CONFIG_CHANGE = "config_change"
     MANUAL_OVERRIDE = "manual_override"
@@ -323,5 +329,48 @@ class AuditLogAdapter(ABC):
                 },
                 success=success,
                 error_message=error_message,
+            )
+        )
+
+    def log_governance_blocked(
+        self,
+        block_reason: str,
+        operation_name: str,
+        details: Optional[dict[str, Any]] = None,
+        service_name: Optional[str] = None,
+        domain: Optional[str] = None,
+    ) -> None:
+        """
+        거버넌스에 의해 자동화가 차단된 경우 기록.
+
+        이 메서드는 '왜 이때 작업이 안 됐지?'라는 질문에
+        명확한 답변을 제공합니다.
+
+        Args:
+            block_reason: 차단 사유 (kill_switch, emergency_mode, error_budget)
+            operation_name: 차단된 작업 이름
+            details: 추가 상세 정보 (emergency_level, budget_percent 등)
+            service_name: 관련 서비스 이름
+            domain: 도메인 (payment, point 등)
+        """
+        # block_reason에 따라 적절한 action 선택
+        action_map = {
+            "kill_switch": AuditAction.GOVERNANCE_KILL_SWITCH,
+            "emergency_mode": AuditAction.GOVERNANCE_EMERGENCY,
+            "error_budget": AuditAction.GOVERNANCE_ERROR_BUDGET,
+        }
+        action = action_map.get(block_reason, AuditAction.GOVERNANCE_BLOCKED)
+
+        self.log(
+            AuditEntry(
+                action=action,
+                service_name=service_name,
+                domain=domain,
+                target_type="automation",
+                target_id=operation_name,
+                reason=f"Governance blocked: {block_reason}",
+                details=details or {},
+                success=False,
+                error_message=f"Operation '{operation_name}' blocked by {block_reason}",
             )
         )

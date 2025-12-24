@@ -231,6 +231,44 @@ from .system_control import (
     is_dry_run,
     should_execute_action,
 )
+from .governance_checks import (
+    # Result types
+    BlockReason,
+    GovernanceCheckResult,
+    # Check functions
+    is_system_enabled,
+    is_emergency_blocking,
+    is_error_budget_blocking,
+    check_all_governance,
+    invalidate_governance_cache,
+    # Decorators
+    require_system_enabled,
+    require_not_emergency,
+    require_error_budget,
+    require_governance,
+    # Mixin
+    GovernanceCheckMixin,
+    # Cache
+    TTLCache,
+)
+from .governance_service import (
+    GovernanceService,
+    ExpiryCheckResult,
+    NotificationResult as GovernanceNotificationResult,
+    get_governance_service,
+)
+from .execution_services import (
+    # Chaos Execution
+    ChaosExecutionService,
+    ExperimentExecutionResult,
+    DailyReportResult,
+    ApprovalCleanupResult,
+    PendingApprovalCheckResult,
+    get_chaos_execution_service,
+    # Config Apply
+    ConfigApplyService,
+    get_config_apply_service,
+)
 from .factory import (
     # Repository factory functions
     create_failed_operation_repository,
@@ -404,6 +442,35 @@ __all__ = [
     "is_selfhealing_enabled",
     "is_dry_run",
     "should_execute_action",
+    # Governance Checks (Thin Task, Fat Service support)
+    "BlockReason",
+    "GovernanceCheckResult",
+    "is_system_enabled",
+    "is_emergency_blocking",
+    "is_error_budget_blocking",
+    "check_all_governance",
+    "invalidate_governance_cache",
+    "require_system_enabled",
+    "require_not_emergency",
+    "require_error_budget",
+    "require_governance",
+    "GovernanceCheckMixin",
+    "TTLCache",
+    # Governance Service (Emergency Mode Management)
+    "GovernanceService",
+    "ExpiryCheckResult",
+    "GovernanceNotificationResult",
+    "get_governance_service",
+    # Chaos Execution Service
+    "ChaosExecutionService",
+    "ExperimentExecutionResult",
+    "DailyReportResult",
+    "ApprovalCleanupResult",
+    "PendingApprovalCheckResult",
+    "get_chaos_execution_service",
+    # Config Apply Service
+    "ConfigApplyService",
+    "get_config_apply_service",
     # Factory (for DI and testing)
     "create_failed_operation_repository",
     "create_circuit_breaker_repository",

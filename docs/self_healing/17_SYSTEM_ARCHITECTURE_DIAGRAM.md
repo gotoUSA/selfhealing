@@ -456,18 +456,50 @@
 │  config_apply.py     │     ❌      │       ❌          │    ✅    │ 관리자 수동 조작 허용 (복구 경로 확보)   │
 │  drift_detection.py  │     ❌      │       ❌          │    ❌    │ 분석/경고만 수행 (안전한 읽기 작업)      │
 │  governance.py       │     ❌      │       ❌          │    ✅    │ 긴급모드 관리 (자체가 Emergency 관련)    │
-│  dlq_replay.py       │     ❌      │       ✅          │    ✅    │ LEVEL_2↑ 시 자동 리플레이 차단          │
+│  dlq_replay.py       │     ✅      │       ✅          │    ✅    │ LEVEL_2↑ 시 자동 리플레이 차단          │
 │                                                                                                               │
 │  📋 Kill Switch 설계 철학                                                                                     │
 │  ───────────────────────                                                                                      │
 │  "자동화는 막되, 관리는 열어라" - Kill Switch가 활성화된 장애 상황에서도 관리자가                            │
 │  설정을 변경하여 복구할 수 있는 퇴로를 확보함. 설정 변경까지 차단하면 데드락 상태 발생.                      │
-│                                                                                                               ││  📋 서비스 레이어 아키텍처 원칙                                                                               │
-│  ─────────────────────────────                                                                                │
-│  • 모든 안전 체크는 서비스 레이어(ReplayService 등)에서 수행                                                  │
-│  • Celery Task는 단순 위임자 역할만 수행 (ReplayService 호출)                                                 │
-│  • Celery 없이도 서비스 레이어 단독 사용 가능 (테스트 용이성)                                                 │
-│                                                                                                               │└─────────────────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                                               │
+│  📋 Thin Task, Fat Service 아키텍처 원칙 (2024-12-24 적용)                                                   │
+│  ────────────────────────────────────────────────────                                                         │
+│  • Celery Task (Thin): 오직 "언제(When)" 실행할지와 비동기 트리거 역할만 수행                                │
+│    - 모든 Task는 service.method() 호출 한 줄로 유지                                                          │
+│    - 비즈니스 로직, 거버넌스 체크 없음                                                                        │
+│                                                                                                               │
+│  • Service Layer (Fat): 모든 판단 로직(Check on Use) 포함                                                    │
+│    - GovernanceService: 비상모드 만료, 자동 복구                                                             │
+│    - ChaosExecutionService: 실험 실행, SafetyGuard 통합                                                      │
+│    - ConfigApplyService: 설정 적용, Emergency 체크                                                           │
+│    - ReplayService: DLQ 리플레이, 3단계 안전 체크                                                            │
+│                                                                                                               │
+│  • 공통 체크 로직: governance_checks.py                                                                       │
+│    - require_system_enabled: Kill Switch 체크 데코레이터                                                     │
+│    - require_not_emergency: Emergency Level 체크 데코레이터                                                  │
+│    - require_error_budget: ErrorBudget 체크 데코레이터                                                       │
+│    - GovernanceCheckMixin: 서비스에서 상속받아 사용                                                          │
+│    - Audit Logging: 차단 발생 시 자동으로 AuditLogAdapter에 기록                                            │
+│                                                                                                               │
+│  📋 서비스 레이어 위치 (packages/selfhealing-python/src/selfhealing/services/)                               │
+│  ────────────────────────────────────────────────────────────────────────────                                 │
+│  • governance_checks.py: 공통 거버넌스 체크 (데코레이터, 믹스인, TTL 캐시)                                   │
+│  • governance_service.py: GovernanceService (비상모드 관리)                                                  │
+│  • execution_services.py: ChaosExecutionService, ConfigApplyService                                         │
+│  • replay_service.py: ReplayService (DLQ 리플레이)                                                           │
+│                                                                                                               │
+│  📋 Audit Logging 연동 ("왜 이때 작업이 안 됐지?")                                                           │
+│  ────────────────────────────────────────────────                                                             │
+│  거버넌스 체크에서 차단이 발생하면 자동으로 AuditLogAdapter를 통해 기록됩니다:                               │
+│  • AuditAction.GOVERNANCE_BLOCKED: 일반 차단                                                                 │
+│  • AuditAction.GOVERNANCE_KILL_SWITCH: Kill Switch에 의한 차단                                              │
+│  • AuditAction.GOVERNANCE_EMERGENCY: 비상 모드에 의한 차단                                                   │
+│  • AuditAction.GOVERNANCE_ERROR_BUDGET: 에러 예산 고갈에 의한 차단                                           │
+│                                                                                                               │
+│  기록 정보: operation_name, service_name, domain, block_reason, details (레벨, 예산 등)                     │
+│                                                                                                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -3,20 +3,26 @@ Chaos Scheduler Celery Tasks
 
 Celery Beat-based tasks for autonomous chaos experiment execution.
 
+Thin Task, Fat Service Architecture:
+    - 이 파일의 Celery Task들은 단순 위임자 역할만 수행
+    - 모든 비즈니스 로직은 ChaosExecutionService에서 처리
+    - 안전 체크 (Kill Switch, ErrorBudget)는 서비스 레이어에서 수행
+
 Features:
 - Scheduled experiment execution
-- Pre-flight safety checks
+- Pre-flight safety checks (via ChaosExecutionService)
 - Daily resilience report generation
 - Pending approval cleanup
 
-Reference: docs/self_healing/CHAOS_ENGINEERING.md
+Reference:
+- docs/self_healing/CHAOS_ENGINEERING.md
+- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -30,275 +36,72 @@ def run_scheduled_experiments() -> Dict[str, Any]:
     """
     Run scheduled chaos experiments.
     
-    This is the main entry point for the Celery Beat scheduler.
-    Called at regular intervals (default: every 5 minutes).
+    This function is a thin wrapper that delegates to ChaosExecutionService.
+    All governance checks and safety validations are performed in the service layer.
     
-    Workflow:
-    1. Get due experiments from scheduler
-    2. Run pre-flight safety checks
-    3. Execute approved experiments
-    4. Record results
+    Called at regular intervals (default: every 5 minutes) via Celery Beat.
     
     Returns:
         Summary of execution results
     """
-    from selfhealing.services.chaos.scheduler import get_chaos_scheduler
-    from selfhealing.services.chaos.safety_guard import get_safety_guard
+    from selfhealing.services.execution_services import get_chaos_execution_service
     
-    results = {
-        "checked": 0,
-        "executed": 0,
-        "skipped": 0,
-        "blocked": 0,
-        "errors": [],
-        "experiments": [],
-    }
+    service = get_chaos_execution_service()
+    result = service.run_scheduled_experiments()
     
-    try:
-        scheduler = get_chaos_scheduler()
-        safety_guard = get_safety_guard()
-        
-        # Get experiments that are due for execution
-        due_experiments = scheduler.get_due_experiments()
-        results["checked"] = len(due_experiments)
-        
-        if not due_experiments:
-            logger.debug("[ChaosScheduler] No experiments due for execution")
-            return results
-        
-        logger.info(f"[ChaosScheduler] Found {len(due_experiments)} due experiments")
-        
-        for experiment in due_experiments:
-            try:
-                # Check if globally killed
-                if scheduler.is_kill_switch_active():
-                    logger.warning(
-                        f"[ChaosScheduler] Kill switch active, skipping {experiment.id}"
-                    )
-                    results["blocked"] += 1
-                    results["experiments"].append({
-                        "id": experiment.id,
-                        "status": "blocked",
-                        "reason": "kill_switch_active",
-                    })
-                    continue
-                
-                # Pre-flight safety check
-                safety_result = safety_guard.pre_flight_check(
-                    experiment_type=experiment.experiment_type,
-                    blast_radius=experiment.blast_radius,
-                    target_service=experiment.target_service,
-                )
-                
-                if not safety_result.is_safe:
-                    logger.warning(
-                        f"[ChaosScheduler] Safety check failed for {experiment.id}: "
-                        f"{safety_result.block_reasons}"
-                    )
-                    scheduler.skip_experiment(
-                        experiment.id,
-                        reason=f"Safety check failed: {safety_result.block_reasons}",
-                    )
-                    results["skipped"] += 1
-                    results["experiments"].append({
-                        "id": experiment.id,
-                        "status": "skipped",
-                        "reason": str(safety_result.block_reasons),
-                    })
-                    continue
-                
-                # Check approval status for high-risk experiments
-                if experiment.requires_approval and not experiment.is_approved:
-                    logger.info(
-                        f"[ChaosScheduler] Experiment {experiment.id} awaiting approval"
-                    )
-                    results["blocked"] += 1
-                    results["experiments"].append({
-                        "id": experiment.id,
-                        "status": "pending_approval",
-                    })
-                    continue
-                
-                # Execute the experiment
-                exec_result = scheduler.execute_experiment(experiment.id)
-                
-                if exec_result.success:
-                    results["executed"] += 1
-                    results["experiments"].append({
-                        "id": experiment.id,
-                        "status": "executed",
-                        "result": exec_result.to_dict() if hasattr(exec_result, 'to_dict') else str(exec_result),
-                    })
-                    logger.info(f"[ChaosScheduler] Executed experiment {experiment.id}")
-                else:
-                    results["errors"].append({
-                        "id": experiment.id,
-                        "error": str(exec_result.error) if hasattr(exec_result, 'error') else "Unknown error",
-                    })
-                    logger.error(f"[ChaosScheduler] Failed to execute {experiment.id}")
-                
-            except Exception as e:
-                logger.exception(f"[ChaosScheduler] Error executing {experiment.id}")
-                results["errors"].append({
-                    "id": experiment.id,
-                    "error": str(e),
-                })
-        
-        logger.info(
-            f"[ChaosScheduler] Completed: {results['executed']} executed, "
-            f"{results['skipped']} skipped, {results['blocked']} blocked"
-        )
-        
-    except Exception as e:
-        logger.exception("[ChaosScheduler] Error in run_scheduled_experiments")
-        results["errors"].append({"error": str(e)})
-    
-    return results
+    return result.to_dict()
 
 
 def generate_daily_resilience_report() -> Dict[str, Any]:
     """
     Generate daily resilience report.
     
-    Called once per day (default: 6 AM UTC) to summarize
-    the previous day's chaos experiments and system resilience.
+    This function is a thin wrapper that delegates to ChaosExecutionService.
+    Called once per day (default: 6 AM UTC).
     
     Returns:
         Report summary
     """
-    from selfhealing.services.chaos.reports import get_report_generator
+    from selfhealing.services.execution_services import get_chaos_execution_service
     
-    result = {
-        "success": False,
-        "report_id": None,
-        "grade": None,
-        "error": None,
-    }
+    service = get_chaos_execution_service()
+    result = service.generate_daily_report()
     
-    try:
-        generator = get_report_generator()
-        report = generator.generate_daily_report()
-        
-        result["success"] = True
-        result["report_id"] = report.report_id
-        result["grade"] = report.grade
-        result["summary"] = {
-            "total_experiments": report.total_experiments,
-            "passed": report.passed_count,
-            "failed": report.failed_count,
-            "sla_compliance": report.sla_compliance_percent,
-        }
-        
-        logger.info(
-            f"[ChaosScheduler] Daily report generated: {report.report_id}, "
-            f"grade={report.grade}"
-        )
-        
-    except Exception as e:
-        logger.exception("[ChaosScheduler] Error generating daily report")
-        result["error"] = str(e)
-    
-    return result
+    return result.to_dict()
 
 
 def cleanup_expired_approvals() -> Dict[str, Any]:
     """
     Clean up expired approval requests.
     
-    Marks approval requests as expired if they exceed
-    the configured timeout (default: 24 hours).
+    This function is a thin wrapper that delegates to ChaosExecutionService.
     
     Returns:
         Cleanup summary
     """
-    from selfhealing.services.chaos.scheduler import get_chaos_scheduler
-    from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
+    from selfhealing.services.execution_services import get_chaos_execution_service
     
-    result = {
-        "schedule_expired": 0,
-        "blast_radius_expired": 0,
-        "errors": [],
-    }
+    service = get_chaos_execution_service()
+    result = service.cleanup_expired_approvals()
     
-    try:
-        scheduler = get_chaos_scheduler()
-        manager = get_blast_radius_manager()
-        
-        # Expire schedule approvals
-        result["schedule_expired"] = scheduler.expire_pending_approvals()
-        
-        # Expire blast radius approvals
-        result["blast_radius_expired"] = manager.expire_pending_approvals()
-        
-        total = result["schedule_expired"] + result["blast_radius_expired"]
-        if total > 0:
-            logger.info(f"[ChaosScheduler] Expired {total} pending approvals")
-        
-    except Exception as e:
-        logger.exception("[ChaosScheduler] Error cleaning up approvals")
-        result["errors"].append(str(e))
-    
-    return result
+    return result.to_dict()
 
 
 def check_and_alert_pending_approvals() -> Dict[str, Any]:
     """
     Check for pending approvals and send alerts.
     
-    Notifies operators about pending high-risk experiments
-    that require manual approval.
+    This function is a thin wrapper that delegates to ChaosExecutionService.
     
     Returns:
         Alert summary
     """
-    from selfhealing.services.chaos.scheduler import get_chaos_scheduler
-    from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
+    from selfhealing.services.execution_services import get_chaos_execution_service
     
-    result = {
-        "pending_schedules": 0,
-        "pending_blast_radius": 0,
-        "alerts_sent": 0,
-    }
+    service = get_chaos_execution_service()
+    result = service.check_pending_approvals()
     
-    try:
-        scheduler = get_chaos_scheduler()
-        manager = get_blast_radius_manager()
-        
-        pending_schedules = scheduler.list_schedules(pending_approval_only=True)
-        pending_blast = manager.get_pending_approvals()
-        
-        result["pending_schedules"] = len(pending_schedules)
-        result["pending_blast_radius"] = len(pending_blast)
-        
-        total_pending = result["pending_schedules"] + result["pending_blast_radius"]
-        
-        if total_pending > 0:
-            # Send notification via configured channels
-            logger.info(
-                f"[ChaosScheduler] {total_pending} experiments pending approval"
-            )
-            
-            # Notification integration: Configure SELFHEALING_NOTIFICATION_WEBHOOK
-            # environment variable to enable Slack/Teams/PagerDuty notifications.
-            # See docs/self_healing/NOTIFICATION_SETUP.md for configuration.
-            try:
-                from selfhealing.services.notification import send_pending_approval_alert
-                send_pending_approval_alert(
-                    pending_count=total_pending,
-                    schedules=pending_schedules,
-                    blast_radius=pending_blast,
-                )
-                result["alerts_sent"] = 1
-            except ImportError:
-                # Notification service not configured - log only
-                result["alerts_sent"] = 0
-                result["notification_status"] = "not_configured"
-        
-    except Exception as e:
-        logger.exception("[ChaosScheduler] Error checking pending approvals")
-        result["error"] = str(e)
-    
-    return result
+    return result.to_dict()
 
 
 # =============================================================================

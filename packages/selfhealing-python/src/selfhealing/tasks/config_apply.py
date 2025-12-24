@@ -3,11 +3,17 @@ Configuration Apply Tasks.
 
 Celery tasks for applying scheduled/delayed configuration changes.
 
+Thin Task, Fat Service Architecture:
+    - 이 파일의 Celery Task들은 단순 위임자 역할만 수행
+    - 모든 비즈니스 로직은 ConfigApplyService에서 처리
+    - 거버넌스 체크 (Emergency Mode)도 서비스 레이어에서 수행
+
 Tasks:
 - apply_pending_config_changes: Apply all due pending changes
 - apply_graceful_config_change: Wait for in-progress ops, then apply
 
-Phase C: Emergency Mode 체크 추가 - 비상 모드 LEVEL_2 이상에서 설정 적용 차단
+Reference:
+- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8
 """
 
 import logging
@@ -16,36 +22,6 @@ from datetime import datetime, timezone
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
-
-
-def _is_emergency_blocking() -> tuple[bool, str]:
-    """
-    비상 모드로 인해 설정 적용이 차단되어야 하는지 확인.
-
-    LEVEL_2 이상에서는 시스템 안정성을 위해 설정 변경을 차단합니다.
-    단, 긴급 복구를 위한 emergency 관련 설정은 허용합니다.
-
-    Returns:
-        (is_blocked, reason) 튜플
-    """
-    try:
-        from selfhealing.services.emergency_mode import (
-            get_emergency_manager,
-            EmergencyLevel,
-        )
-
-        manager = get_emergency_manager()
-        level = manager.get_current_level()
-
-        # LEVEL_2 이상에서는 설정 적용 차단
-        if level.value >= EmergencyLevel.LEVEL_2.value:
-            return True, f"Emergency mode active (level={level.name}). Config changes blocked."
-
-        return False, ""
-    except Exception as e:
-        # EmergencyManager 로드 실패 시 안전하게 허용
-        logger.warning(f"[ConfigTask] Could not check emergency mode: {e}")
-        return False, ""
 
 
 @shared_task(
@@ -58,82 +34,26 @@ def apply_pending_config_changes(self):
     """
     Apply all pending configuration changes that are due.
 
+    This task is a thin wrapper that delegates to ConfigApplyService.
+    All governance checks (Emergency Mode) are performed in the service layer.
+
+    Note:
+        - Kill Switch는 체크하지 않음 (복구 퇴로 확보)
+        - Emergency Mode LEVEL_2+ 시 차단
+
     This task should be scheduled to run periodically (e.g., every 5 seconds)
     via Celery Beat.
-
-    Example Celery Beat config:
-        CELERY_BEAT_SCHEDULE = {
-            'apply-pending-configs': {
-                'task': 'selfhealing.apply_pending_config_changes',
-                'schedule': 5.0,  # Every 5 seconds
-            },
-        }
     """
-    from selfhealing.services.pending_config import get_pending_config_service
-    from selfhealing.services.runtime_config import get_runtime_config_manager
+    from selfhealing.services.execution_services import get_config_apply_service
 
     try:
-        # Phase C: Emergency Mode 체크 - LEVEL_2 이상에서는 설정 적용 차단
-        is_blocked, block_reason = _is_emergency_blocking()
-        if is_blocked:
-            logger.warning(f"[ConfigTask] {block_reason}")
-            return {
-                "status": "blocked",
-                "reason": block_reason,
-                "message": "Config changes blocked during emergency mode",
-            }
+        service = get_config_apply_service()
+        result = service.apply_pending_changes()
 
-        pending_service = get_pending_config_service()
-        config_manager = get_runtime_config_manager()
+        if result.get("status") == "blocked":
+            logger.warning(f"[ConfigTask] Blocked: {result.get('reason')}")
 
-        # Get all due changes
-        due_changes = pending_service.get_due_changes()
-
-        if not due_changes:
-            return {"status": "success", "applied": 0, "message": "No pending changes due"}
-
-        applied_count = 0
-        failed_count = 0
-        results = []
-
-        for change in due_changes:
-            try:
-                # Apply the change
-                result = config_manager.apply_pending_change(change.id)
-
-                if result.get("status") == "applied":
-                    applied_count += 1
-                    logger.info(f"[ConfigTask] Applied pending change {change.id}")
-                else:
-                    failed_count += 1
-                    logger.error(f"[ConfigTask] Failed to apply {change.id}: {result.get('error')}")
-
-                results.append(
-                    {
-                        "id": change.id,
-                        "config_type": change.config_type,
-                        "status": result.get("status"),
-                    }
-                )
-            except Exception as e:
-                failed_count += 1
-                pending_service.mark_failed(change.id, str(e))
-                logger.error(f"[ConfigTask] Exception applying {change.id}: {e}", exc_info=True)
-                results.append(
-                    {
-                        "id": change.id,
-                        "config_type": change.config_type,
-                        "status": "error",
-                        "error": str(e),
-                    }
-                )
-
-        return {
-            "status": "success",
-            "applied": applied_count,
-            "failed": failed_count,
-            "results": results,
-        }
+        return result
 
     except Exception as e:
         logger.error(f"[ConfigTask] Error in apply_pending_config_changes: {e}", exc_info=True)
@@ -150,66 +70,34 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
     """
     Apply a configuration change gracefully.
 
+    This task is a thin wrapper that delegates to ConfigApplyService.
     Waits for in-progress operations to complete before applying.
-    Uses exponential backoff with max retries.
 
     Args:
         pending_id: ID of the pending configuration change
         max_wait_seconds: Maximum time to wait for in-progress ops
     """
-    from selfhealing.services.pending_config import get_pending_config_service
-    from selfhealing.services.runtime_config import get_runtime_config_manager
+    from selfhealing.services.execution_services import get_config_apply_service
 
     try:
-        # Phase C: Emergency Mode 체크 - LEVEL_2 이상에서는 설정 적용 차단
-        is_blocked, block_reason = _is_emergency_blocking()
-        if is_blocked:
-            logger.warning(f"[ConfigTask] {block_reason} (graceful change {pending_id})")
+        service = get_config_apply_service()
+        result = service.apply_graceful_change(pending_id, max_wait_seconds)
+
+        if result.get("status") == "blocked":
             # 비상 모드에서는 재시도하여 비상 모드 해제 후 적용
             if self.request.retries < self.max_retries:
                 logger.info(f"[ConfigTask] Will retry after emergency mode ends")
-                raise self.retry(countdown=30)  # 30초 후 재시도
-            return {
-                "status": "blocked",
-                "pending_id": pending_id,
-                "reason": block_reason,
-            }
-
-        pending_service = get_pending_config_service()
-        config_manager = get_runtime_config_manager()
-
-        # Get the pending change
-        change = pending_service.get_pending_change(pending_id)
-        if not change:
-            return {"status": "error", "error": f"Pending change {pending_id} not found"}
-
-        if change.status != "pending":
-            return {"status": "error", "error": f"Change {pending_id} is not pending"}
-
-        # Check if we've exceeded max wait time
-        created = datetime.fromisoformat(change.created_at)
-        elapsed = (datetime.now(timezone.utc) - created).total_seconds()
-
-        if elapsed > max_wait_seconds:
-            # Waited long enough, apply anyway
-            logger.warning(f"[ConfigTask] Graceful wait exceeded {max_wait_seconds}s for {pending_id}, " f"applying anyway")
-            result = config_manager.apply_pending_change(pending_id)
+                raise self.retry(countdown=30)
             return result
 
-        # Check if there are in-progress operations
-        # For now, we use a simple heuristic - check if there are active requests
-        # In production, this could check:
-        # - Active circuit breaker half-open tests
-        # - In-flight retry operations
-        # - Pending DLQ replays
-        has_in_progress = _check_in_progress_operations(change.config_type)
-
-        if has_in_progress:
-            logger.info(f"[ConfigTask] Waiting for in-progress ops for {pending_id}, " f"retry {self.request.retries + 1}")
+        if result.get("status") == "retry":
+            # 진행 중인 작업이 있으면 재시도
+            logger.info(
+                f"[ConfigTask] Waiting for in-progress ops for {pending_id}, "
+                f"retry {self.request.retries + 1}"
+            )
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
 
-        # No in-progress operations, apply the change
-        result = config_manager.apply_pending_change(pending_id)
         return result
 
     except Exception as e:
@@ -218,49 +106,15 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
             logger.warning(f"[ConfigTask] Max retries reached for {pending_id}, applying anyway")
             try:
                 from selfhealing.services.runtime_config import get_runtime_config_manager
-
                 config_manager = get_runtime_config_manager()
                 return config_manager.apply_pending_change(pending_id)
             except Exception as apply_error:
                 from selfhealing.services.pending_config import get_pending_config_service
-
                 pending_service = get_pending_config_service()
                 pending_service.mark_failed(pending_id, str(apply_error))
                 raise
 
         raise self.retry(exc=e)
-
-
-def _check_in_progress_operations(config_type: str) -> bool:
-    """
-    Check if there are in-progress operations for a config type.
-
-    This is a simplified implementation. In production, you might:
-    - Check active circuit breaker half-open tests
-    - Check running retry operations
-    - Check in-flight DLQ replays
-    - Use metrics/gauges to determine activity
-
-    Args:
-        config_type: The configuration type
-
-    Returns:
-        True if there are in-progress operations
-    """
-    # For now, always return False (no blocking)
-    # This can be enhanced to actually check for in-progress operations
-
-    if config_type == "circuit_breaker":
-        # Could check: are there any half-open circuit breakers being tested?
-        pass
-    elif config_type == "dlq":
-        # Could check: is there an active DLQ replay in progress?
-        pass
-    elif config_type == "retry":
-        # Could check: are there active retry loops?
-        pass
-
-    return False
 
 
 @shared_task(name="selfhealing.cleanup_expired_config_changes")
@@ -286,3 +140,4 @@ def cleanup_expired_config_changes(max_age_hours: int = 24):
             "status": "error",
             "error": str(e),
         }
+
