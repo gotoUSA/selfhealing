@@ -374,6 +374,35 @@ class GovernanceConfig:
 
 
 @dataclass
+class DriftThresholdConfig:
+    """
+    Drift 임계값 설정.
+
+    운영자가 동적으로 조정할 수 있으며,
+    변경 시 Audit 로그가 기록됩니다.
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
+
+    Thresholds (임계값):
+        - warning: 5% - 경고, 로그만 기록
+        - critical: 20% - 심각, 알림 발송
+        - incident: 50% - 인시던트, 이벤트 유실 의심
+
+    Reference:
+    - docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    """
+
+    # 임계값 (0.0 ~ 1.0)
+    warning_threshold: float = 0.05     # 5%
+    critical_threshold: float = 0.20    # 20%
+    incident_threshold: float = 0.50    # 50%
+
+    # 알림 설정
+    alert_enabled: bool = True
+    incident_auto_create: bool = True
+
+
+@dataclass
 class SelfHealingConfig:
     """
     Main configuration for the self-healing system.

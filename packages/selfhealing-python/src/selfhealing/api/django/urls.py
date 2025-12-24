@@ -114,6 +114,8 @@ from selfhealing.api.django.views.governance import (
     MetricStatusView,
     GovernanceReconcileView,
     GovernanceModeView,
+    GovernanceRBACStatusView,
+    GovernanceConfigView,
     DeprecatedMetricSyncView,
     DeprecatedDriftReportView,
 )
@@ -311,6 +313,13 @@ urlpatterns = [
     # Control - 정합성 조정 및 모드 전환
     path("governance/reconcile/", GovernanceReconcileView.as_view(), name="governance-reconcile"),
     path("governance/mode/", GovernanceModeView.as_view(), name="governance-mode"),
+    
+    # =========================================================================
+    # Governance RBAC Status & Config API (Phase 2)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # =========================================================================
+    path("governance/status/", GovernanceRBACStatusView.as_view(), name="governance-status"),
+    path("config/governance/", GovernanceConfigView.as_view(), name="config-governance"),
     
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)

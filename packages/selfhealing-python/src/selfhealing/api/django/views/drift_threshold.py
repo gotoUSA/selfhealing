@@ -2,13 +2,16 @@
 Drift Threshold Configuration API Views.
 
 REST API endpoints for Drift threshold management.
+Now integrated with RuntimeConfigManager for centralized config management.
 
 Endpoints:
 - GET  /api/self-healing/config/drift-thresholds/       - Get drift threshold config
 - PUT  /api/self-healing/config/drift-thresholds/       - Update drift threshold config
 - POST /api/self-healing/config/drift-thresholds/reset/ - Reset to defaults
 
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+Reference: 
+- docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md (Phase 2)
 """
 
 import logging
@@ -22,14 +25,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
-from selfhealing.models.drift_config import DriftThresholdConfig
-from selfhealing.core.state_backend import get_state_backend
-from selfhealing.services.config_history import get_config_history_service
+from selfhealing.services.runtime_config import get_runtime_config_manager
 
 logger = logging.getLogger(__name__)
 
-# Storage key for drift threshold config
-DRIFT_THRESHOLD_CONFIG_KEY = "drift_threshold_config"
+
+def _get_threshold_percent_display(config: Dict[str, Any]) -> Dict[str, str]:
+    """임계값을 퍼센트 문자열로 반환."""
+    return {
+        "warning": f"{config.get('warning_threshold', 0.05) * 100:.1f}%",
+        "critical": f"{config.get('critical_threshold', 0.20) * 100:.1f}%",
+        "incident": f"{config.get('incident_threshold', 0.50) * 100:.1f}%",
+    }
 
 
 class DriftThresholdConfigView(APIView):
@@ -41,6 +48,7 @@ class DriftThresholdConfigView(APIView):
 
     Drift 임계값을 동적으로 조정할 수 있습니다.
     변경 시 Audit 로그가 기록됩니다.
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
 
     Thresholds:
         - warning_threshold: 5% (기본) - 경고 로그
@@ -57,13 +65,14 @@ class DriftThresholdConfigView(APIView):
     def get(self, request: Request) -> Response:
         """현재 Drift 임계값 설정 조회."""
         try:
-            config = self._get_config()
+            manager = get_runtime_config_manager()
+            config = manager.get_drift_threshold_config()
 
             return Response(
                 {
                     "status": "success",
-                    "config": config.to_dict(),
-                    "thresholds_percent": config.get_threshold_percent_display(),
+                    "config": config,
+                    "thresholds_percent": _get_threshold_percent_display(config),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 status=status.HTTP_200_OK,
@@ -78,7 +87,7 @@ class DriftThresholdConfigView(APIView):
     def put(self, request: Request) -> Response:
         """Drift 임계값 설정 업데이트."""
         try:
-            current = self._get_config()
+            manager = get_runtime_config_manager()
             actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
 
             # 요청 데이터 검증
@@ -121,43 +130,30 @@ class DriftThresholdConfigView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # 새 설정 생성 (검증 포함)
+            # RuntimeConfigManager를 통해 업데이트 (검증 및 History 자동 처리)
             try:
-                new_config = current.update(actor_id=actor_id, **update_fields)
+                new_config = manager.update_drift_threshold_config(
+                    changed_by=actor_id,
+                    reason=f"API update: {list(update_fields.keys())}",
+                    **update_fields
+                )
             except ValueError as e:
                 return Response(
                     {"status": "error", "error": str(e)},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # 저장
-            backend = get_state_backend()
-            backend.set(DRIFT_THRESHOLD_CONFIG_KEY, new_config.to_dict())
-
-            # ConfigHistory에 버전 저장 (감사 추적용)
-            try:
-                history_service = get_config_history_service()
-                history_service.save_version(
-                    config_type="drift_threshold",
-                    values=new_config.to_dict(),
-                    changed_by=actor_id,
-                    reason=f"Updated fields: {list(update_fields.keys())}",
-                )
-            except Exception as history_err:
-                # History 저장 실패해도 설정 변경은 성공으로 처리 (Graceful Degradation)
-                logger.warning(f"[DriftThresholdAPI] History save failed: {history_err}")
-
             # Audit 로깅
             logger.info(
                 f"[DriftThresholdAPI] Config updated by {actor_id}: "
-                f"before={current.to_dict()}, after={new_config.to_dict()}"
+                f"fields={list(update_fields.keys())}"
             )
 
             return Response(
                 {
                     "status": "updated",
-                    "config": new_config.to_dict(),
-                    "thresholds_percent": new_config.get_threshold_percent_display(),
+                    "config": new_config,
+                    "thresholds_percent": _get_threshold_percent_display(new_config),
                     "updated_by": actor_id,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
@@ -171,19 +167,6 @@ class DriftThresholdConfigView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def _get_config(self) -> DriftThresholdConfig:
-        """저장된 설정 로드 또는 기본값 반환."""
-        try:
-            backend = get_state_backend()
-            data = backend.get(DRIFT_THRESHOLD_CONFIG_KEY)
-
-            if data:
-                return DriftThresholdConfig.from_dict(data)
-        except Exception as e:
-            logger.warning(f"[DriftThresholdAPI] Failed to load config: {e}")
-
-        return DriftThresholdConfig()  # 기본값
-
 
 class DriftThresholdResetView(APIView):
     """
@@ -192,6 +175,7 @@ class DriftThresholdResetView(APIView):
     POST /api/self-healing/config/drift-thresholds/reset/
 
     Drift 임계값을 기본값으로 리셋합니다.
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
     """
 
     permission_classes = [IsSelfHealingAdmin]
@@ -200,42 +184,19 @@ class DriftThresholdResetView(APIView):
         """Drift 임계값 기본값으로 리셋."""
         try:
             actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
-            backend = get_state_backend()
+            manager = get_runtime_config_manager()
 
-            # 현재 설정 조회 (Audit용)
-            current_data = backend.get(DRIFT_THRESHOLD_CONFIG_KEY)
-
-            # 기본값으로 리셋
-            default = DriftThresholdConfig(
-                updated_at=datetime.now(timezone.utc).isoformat(),
-                updated_by=actor_id,
-            )
-            backend.set(DRIFT_THRESHOLD_CONFIG_KEY, default.to_dict())
-
-            # ConfigHistory에 버전 저장 (감사 추적용)
-            try:
-                history_service = get_config_history_service()
-                history_service.save_version(
-                    config_type="drift_threshold",
-                    values=default.to_dict(),
-                    changed_by=actor_id,
-                    reason="Reset to default values",
-                )
-            except Exception as history_err:
-                # History 저장 실패해도 리셋은 성공으로 처리 (Graceful Degradation)
-                logger.warning(f"[DriftThresholdAPI] History save failed: {history_err}")
+            # RuntimeConfigManager를 통해 리셋
+            default_config = manager.reset_drift_threshold_config(changed_by=actor_id)
 
             # Audit 로깅
-            logger.info(
-                f"[DriftThresholdAPI] Config reset by {actor_id}: "
-                f"before={current_data}, after={default.to_dict()}"
-            )
+            logger.info(f"[DriftThresholdAPI] Config reset by {actor_id}")
 
             return Response(
                 {
                     "status": "reset",
-                    "config": default.to_dict(),
-                    "thresholds_percent": default.get_threshold_percent_display(),
+                    "config": default_config,
+                    "thresholds_percent": _get_threshold_percent_display(default_config),
                     "reset_by": actor_id,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
@@ -253,5 +214,4 @@ class DriftThresholdResetView(APIView):
 __all__ = [
     "DriftThresholdConfigView",
     "DriftThresholdResetView",
-    "DRIFT_THRESHOLD_CONFIG_KEY",
 ]

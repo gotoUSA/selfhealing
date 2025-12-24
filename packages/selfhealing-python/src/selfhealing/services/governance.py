@@ -316,6 +316,8 @@ class EmergencyModeTracker:
                 - should_auto_restore: 자동 복귀 필요 여부
                 - hours_elapsed: 경과 시간
                 - hours_remaining: 남은 시간
+                - expires_at: 만료 시각 (ISO format)
+                - time_remaining_hours: 남은 시간 (hours)
         """
         with self._lock:
             state = self._load_state()
@@ -328,6 +330,8 @@ class EmergencyModeTracker:
                     "should_auto_restore": False,
                     "hours_elapsed": 0,
                     "hours_remaining": 0,
+                    "expires_at": None,
+                    "time_remaining_hours": None,
                 }
 
             config = self._get_governance_config()
@@ -340,6 +344,9 @@ class EmergencyModeTracker:
             elapsed = now - activated_at
             hours_elapsed = elapsed.total_seconds() / 3600
             hours_remaining = max(0, expiry_hours - hours_elapsed)
+            
+            # Calculate expiry time
+            expires_at = activated_at + timedelta(hours=expiry_hours)
 
             should_warn = (
                 hours_elapsed >= warning_hours
@@ -361,6 +368,8 @@ class EmergencyModeTracker:
                 "should_auto_restore": should_auto_restore,
                 "hours_elapsed": round(hours_elapsed, 2),
                 "hours_remaining": round(hours_remaining, 2),
+                "expires_at": expires_at.isoformat(),
+                "time_remaining_hours": round(hours_remaining, 2),
                 "warning_hours": warning_hours,
                 "final_warning_hours": final_warning_hours,
                 "expiry_hours": expiry_hours,

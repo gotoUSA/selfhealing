@@ -46,6 +46,7 @@ from selfhealing.core.config import (
     MetricsConfig,
     ErrorBudgetConfig,
     GovernanceConfig,
+    DriftThresholdConfig,
 )
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.core.apply_strategy import (
@@ -92,6 +93,7 @@ class RuntimeConfigManager:
         "error_budget": "runtime_config:error_budget",
         "slo": "runtime_config:slo",
         "governance": "runtime_config:governance",
+        "drift_threshold": "runtime_config:drift_threshold",
     }
 
     # Default config classes
@@ -110,6 +112,7 @@ class RuntimeConfigManager:
         "error_budget": ErrorBudgetConfig,
         "slo": None,  # SLO는 별도 처리 (SLOConfigRuntime)
         "governance": GovernanceConfig,
+        "drift_threshold": DriftThresholdConfig,
     }
 
     def __init__(self):
@@ -1148,6 +1151,110 @@ class RuntimeConfigManager:
 
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("governance", **updates)
+
+    # =========================================================================
+    # Drift Threshold Config (Phase 2 통합)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # =========================================================================
+
+    def get_drift_threshold_config(self) -> Dict[str, Any]:
+        """
+        Get Drift Threshold configuration.
+
+        Returns:
+            dict: Drift 임계값 설정
+                - warning_threshold: 경고 임계값 (기본: 0.05 = 5%)
+                - critical_threshold: 심각 임계값 (기본: 0.20 = 20%)
+                - incident_threshold: 인시던트 임계값 (기본: 0.50 = 50%)
+                - alert_enabled: 알림 활성화 여부
+                - incident_auto_create: 인시던트 자동 생성 여부
+        """
+        return self._get_config("drift_threshold")
+
+    def update_drift_threshold_config(
+        self,
+        warning_threshold: Optional[float] = None,
+        critical_threshold: Optional[float] = None,
+        incident_threshold: Optional[float] = None,
+        alert_enabled: Optional[bool] = None,
+        incident_auto_create: Optional[bool] = None,
+        changed_by: str = "system",
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Update Drift Threshold configuration.
+
+        Args:
+            warning_threshold: 경고 임계값 (0.0~1.0, 기본: 0.05)
+            critical_threshold: 심각 임계값 (0.0~1.0, 기본: 0.20)
+            incident_threshold: 인시던트 임계값 (0.0~1.0, 기본: 0.50)
+            alert_enabled: 알림 활성화 여부
+            incident_auto_create: 인시던트 자동 생성 여부
+            changed_by: 변경한 사용자
+            reason: 변경 사유
+
+        Returns:
+            dict: 업데이트된 Drift Threshold 설정
+            
+        Raises:
+            ValueError: 임계값이 올바른 순서가 아닌 경우
+        """
+        # Get current values for validation
+        current = self._get_config("drift_threshold")
+        
+        # Apply updates to copies for validation
+        new_warning = warning_threshold if warning_threshold is not None else current.get("warning_threshold", 0.05)
+        new_critical = critical_threshold if critical_threshold is not None else current.get("critical_threshold", 0.20)
+        new_incident = incident_threshold if incident_threshold is not None else current.get("incident_threshold", 0.50)
+        
+        # Validate thresholds order
+        if not (0 < new_warning < new_critical < new_incident <= 1.0):
+            raise ValueError(
+                f"Thresholds must be: 0 < warning < critical < incident <= 1.0. "
+                f"Got: warning={new_warning}, critical={new_critical}, incident={new_incident}"
+            )
+
+        updates = {
+            k: v for k, v in {
+                "warning_threshold": warning_threshold,
+                "critical_threshold": critical_threshold,
+                "incident_threshold": incident_threshold,
+                "alert_enabled": alert_enabled,
+                "incident_auto_create": incident_auto_create,
+            }.items() if v is not None
+        }
+        
+        return self._update_config(
+            "drift_threshold",
+            changed_by=changed_by,
+            reason=reason or f"Updated fields: {list(updates.keys())}",
+            **updates
+        )
+
+    def reset_drift_threshold_config(self, changed_by: str = "system") -> Dict[str, Any]:
+        """
+        Reset Drift Threshold configuration to defaults.
+
+        Args:
+            changed_by: 변경한 사용자
+
+        Returns:
+            dict: 기본값으로 리셋된 설정
+        """
+        from dataclasses import asdict
+        
+        default_config = asdict(DriftThresholdConfig())
+        self._save_config("drift_threshold", default_config)
+        
+        self._save_to_history(
+            config_type="drift_threshold",
+            values=default_config,
+            changed_by=changed_by,
+            reason="Reset to default values",
+        )
+        
+        logger.info(f"[RuntimeConfig] Drift threshold config reset by {changed_by}")
+        return default_config
 
     # =========================================================================
     # Chaos Engineering Config
