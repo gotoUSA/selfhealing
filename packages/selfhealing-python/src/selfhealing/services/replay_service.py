@@ -42,6 +42,53 @@ def _is_system_enabled() -> bool:
         return True
 
 
+def _is_emergency_blocking() -> tuple[bool, str]:
+    """
+    Check if Emergency Mode blocks replay operations.
+    
+    LEVEL_2 이상에서는 시스템 자원 보호를 위해 자동 리플레이 차단.
+    
+    Returns:
+        (is_blocked, level_name) 튜플
+    """
+    try:
+        from selfhealing.services.emergency_mode import (
+            get_emergency_manager,
+            EmergencyLevel,
+        )
+        
+        manager = get_emergency_manager()
+        level = manager.get_current_level()
+        
+        if level.value >= EmergencyLevel.LEVEL_2.value:
+            return True, level.name
+        return False, level.name
+    except Exception:
+        # EmergencyManager not available, allow replay
+        return False, "UNKNOWN"
+
+
+def _is_error_budget_blocking() -> tuple[bool, float, float]:
+    """
+    Check if ErrorBudgetGate blocks automation.
+    
+    에러 예산이 critical 임계값 이하면 자동화 차단.
+    
+    Returns:
+        (is_blocked, error_budget_percent, threshold_percent) 튜플
+    """
+    try:
+        from selfhealing.services.error_budget_gate import check_automation_allowed
+        
+        gate_result = check_automation_allowed()
+        if not gate_result.allowed:
+            return True, gate_result.error_budget_percent, gate_result.threshold_percent
+        return False, gate_result.error_budget_percent, gate_result.threshold_percent
+    except Exception:
+        # ErrorBudgetGate not available, allow replay
+        return False, 100.0, 0.0
+
+
 # =============================================================================
 # Replay Result
 # =============================================================================
@@ -296,13 +343,18 @@ class ReplayService:
         This method uses atomic acquisition to prevent race conditions when
         multiple workers try to replay the same entry simultaneously.
 
+        Safety Checks (in order):
+        1. Kill Switch - 시스템 전역 비활성화 체크
+        2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
+        3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
+
         Args:
             dlq_id: ID of the FailedOperation to replay
 
         Returns:
             ReplayResult indicating success or failure
         """
-        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        # 1. Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
         if not _is_system_enabled():
             logger.warning(
                 f"[ReplayService] replay_single blocked: Kill Switch is active. "
@@ -311,6 +363,30 @@ class ReplayService:
             return ReplayResult.failed(
                 dlq_id,
                 "Kill Switch is active: self-healing system is disabled"
+            )
+
+        # 2. Emergency Level 체크: LEVEL_2 이상에서는 시스템 자원 보호
+        is_emergency_blocked, emergency_level = _is_emergency_blocking()
+        if is_emergency_blocked:
+            logger.warning(
+                f"[ReplayService] replay_single blocked: Emergency Mode {emergency_level}. "
+                f"dlq_id={dlq_id}"
+            )
+            return ReplayResult.failed(
+                dlq_id,
+                f"Emergency mode {emergency_level} is active: replay blocked to preserve resources"
+            )
+
+        # 3. ErrorBudgetGate 체크: 에러 예산 고갈 시 자동화 차단
+        is_budget_blocked, budget_percent, threshold = _is_error_budget_blocking()
+        if is_budget_blocked:
+            logger.warning(
+                f"[ReplayService] replay_single blocked: Error budget {budget_percent:.1f}% "
+                f"< threshold {threshold:.1f}%. dlq_id={dlq_id}"
+            )
+            return ReplayResult.failed(
+                dlq_id,
+                f"Error budget critically low ({budget_percent:.1f}%): manual mode enforced"
             )
 
         # Atomically try to acquire the entry for replay
@@ -379,6 +455,11 @@ class ReplayService:
         """
         Replay multiple DLQ entries matching criteria.
 
+        Safety Checks (in order):
+        1. Kill Switch - 시스템 전역 비활성화 체크
+        2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
+        3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
+
         Args:
             domain: Filter by domain (optional)
             failure_type: Filter by failure type (optional)
@@ -387,11 +468,41 @@ class ReplayService:
         Returns:
             BatchReplayResult with summary and individual results
         """
-        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
+        # 1. Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
         if not _is_system_enabled():
             logger.warning(
                 f"[ReplayService] replay_batch blocked: Kill Switch is active. "
                 f"domain={domain}, failure_type={failure_type}"
+            )
+            return BatchReplayResult(
+                total=0,
+                success_count=0,
+                failed_count=0,
+                skipped_count=0,
+                results=[],
+            )
+
+        # 2. Emergency Level 체크: LEVEL_2 이상에서는 배치 리플레이 차단
+        is_emergency_blocked, emergency_level = _is_emergency_blocking()
+        if is_emergency_blocked:
+            logger.warning(
+                f"[ReplayService] replay_batch blocked: Emergency Mode {emergency_level}. "
+                f"domain={domain}, failure_type={failure_type}"
+            )
+            return BatchReplayResult(
+                total=0,
+                success_count=0,
+                failed_count=0,
+                skipped_count=0,
+                results=[],
+            )
+
+        # 3. ErrorBudgetGate 체크: 에러 예산 고갈 시 배치 리플레이 차단
+        is_budget_blocked, budget_percent, threshold = _is_error_budget_blocking()
+        if is_budget_blocked:
+            logger.warning(
+                f"[ReplayService] replay_batch blocked: Error budget {budget_percent:.1f}% "
+                f"< threshold {threshold:.1f}%. domain={domain}"
             )
             return BatchReplayResult(
                 total=0,

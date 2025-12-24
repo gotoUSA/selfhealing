@@ -206,3 +206,99 @@
 | B | TTL 캐시 (Check on Use 패턴) | ✅ |
 | C | Safe Defaults 추가 (governance, l2_storage, drift_threshold) | ✅ |
 | C | config_apply Task 안전 체크 | ✅ |
+| C | ReplayService 안전 체크 통합 | ✅ |
+| C | Celery Task 단순화 (서비스 위임) | ✅ |
+| C | AuditService 다이어그램 추가 | ✅ |
+
+---
+
+## Phase C 추가 수정 (2024-12-24)
+
+### 12. ReplayService 안전 체크 통합 ✅
+
+**파일**: `services/replay_service.py`
+
+**추가된 함수**:
+- `_is_emergency_blocking()`: Emergency Level 체크 (LEVEL_2+ 차단)
+- `_is_error_budget_blocking()`: ErrorBudgetGate 체크
+
+**변경된 메서드**:
+- `replay_single()`: 3단계 안전 체크 추가
+- `replay_batch()`: 3단계 안전 체크 추가
+
+**안전 체크 순서** (서비스 레이어에서 수행):
+```
+1. Kill Switch 체크     → 시스템 전역 비활성화
+2. Emergency Level 체크 → LEVEL_2+ 시 자원 보호
+3. ErrorBudgetGate 체크 → 에러 예산 고갈 시 자동화 차단
+```
+
+**설계 원칙**:
+- 모든 안전 체크는 서비스 레이어(ReplayService)에서 수행
+- Celery Task는 단순 위임자 역할만 수행
+- Celery 없이도 ReplayService 단독 사용 가능
+
+### 13. Celery Task 단순화 ✅
+
+**파일**: `adapters/celery/tasks.py`
+
+**변경된 함수**:
+- `replay_single_dlq_entry()`: ReplayService.replay_single() 위임
+- `replay_batch_by_domain()`: ReplayService.replay_batch() 위임
+
+**이전 구조** (문제):
+```
+Celery Task
+├── Emergency Level 체크 (중복)
+├── ErrorBudgetGate 체크 (중복)
+└── Repository 직접 사용 ❌
+```
+
+**새 구조** (개선):
+```
+Celery Task (단순 위임자)
+└── ReplayService 호출만
+
+ReplayService (모든 안전 체크)
+├── Kill Switch 체크
+├── Emergency Level 체크
+├── ErrorBudgetGate 체크
+└── Repository 사용
+```
+
+**장점**:
+- 단일 책임 원칙 준수
+- 테스트 용이성 향상
+- 코드 중복 제거
+- Celery 독립성 확보
+
+### 14. 아키텍처 다이어그램 수정 ✅
+
+**파일**: `17_SYSTEM_ARCHITECTURE_DIAGRAM.md`
+
+**Section 3 수정 - AuditService 추가**:
+```
+┌───────────────────────────────────────────────────┐
+│                  AuditService                     │
+│                                                   │
+│  listen: ALL EVENTS (LevelChanged, StateChanged, │
+│          ConfigUpdated, BudgetCritical, etc.)    │
+│  → Persistent Logging to AuditLogRepository      │
+│  → Compliance Trail (SOX, GDPR)                  │
+│                                                   │
+└───────────────────────────────────────────────────┘
+```
+
+**Section 8 수정 - 매트릭스 비고란 추가**:
+- `dlq_replay.py`: Emergency 체크 ❌ → ✅ 변경
+- Kill Switch 설계 철학 명시: "자동화는 막되, 관리는 열어라"
+- 각 태스크별 상세 비고 추가
+
+**리뷰 반영 결과**:
+
+| 리뷰 항목 | 결정 | 근거 |
+|----------|------|------|
+| DLQ Replay → Emergency | ✅ 구현 | LEVEL_3 시 자원 보호 필요 |
+| Config Apply → Kill Switch | ❌ 유지 | 복구 퇴로 확보 (데드락 방지) |
+| AuditService 추가 | ✅ 추가 | 컴플라이언스 추적성 확보 |
+| 안전 체크 서비스 레이어 이동 | ✅ 구현 | Celery 독립성 및 단일 책임 |

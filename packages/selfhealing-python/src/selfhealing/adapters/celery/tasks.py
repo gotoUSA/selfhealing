@@ -461,7 +461,10 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     """
     Replay a single DLQ entry.
 
-    This task is triggered by operators via admin UI or API.
+    This task delegates to ReplayService which handles all safety checks:
+    - Kill Switch
+    - Emergency Level (LEVEL_2+)
+    - ErrorBudgetGate
 
     Args:
         dlq_id: ID of the FailedOperation to replay
@@ -469,79 +472,24 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     Returns:
         Dictionary with replay result
     """
-    logger.info(f"[DLQ Replay] Starting replay for DLQ entry: {dlq_id}")
+    logger.info(f"[DLQ Replay Task] Starting replay for DLQ entry: {dlq_id}")
 
     try:
-        # Error Budget Gate Check (수동 모드 강제 전환)
-        try:
-            from selfhealing.services.error_budget_gate import (
-                check_automation_allowed,
-            )
-            
-            gate_result = check_automation_allowed()
-            if not gate_result.allowed:
-                logger.warning(
-                    f"[DLQ Replay] Blocked by Error Budget Gate: "
-                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
-                )
-                return {
-                    "success": False,
-                    "dlq_id": dlq_id,
-                    "error": "automation_blocked",
-                    "message": (
-                        f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
-                        f"Manual mode enforced. Please process manually."
-                    ),
-                    "manual_mode_enforced": True,
-                    "error_budget_percent": gate_result.error_budget_percent,
-                }
-        except ImportError:
-            # Gate not available, continue
-            pass
+        from selfhealing.services.replay_service import ReplayService
 
-        # Use ProviderRegistry to get repository
-        from selfhealing.factory import ProviderRegistry
-
-        try:
-            repo = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError):
-            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
-
-            repo = DjangoFailedOperationRepository()
-
-        operation = repo.get_by_id(dlq_id)
-
-        if not operation:
-            logger.warning(f"[DLQ Replay] DLQ entry {dlq_id} not found")
-            return {
-                "success": False,
-                "dlq_id": dlq_id,
-                "error": "Entry not found",
-            }
-
-        # Here you would implement the actual replay logic
-        # For now, we just log and mark as completed
-        logger.info(f"[DLQ Replay] Would replay operation {dlq_id}: {operation.domain}/{operation.failure_type}")
-
-        # In a real implementation:
-        # result = execute_replay(operation)
-        # if result.success:
-        #     repo.mark_completed(dlq_id)
-        # else:
-        #     repo.increment_retry(dlq_id, result.error)
+        service = ReplayService()
+        result = service.replay_single(dlq_id)
 
         return {
-            "success": True,
+            "success": result.success,
             "dlq_id": dlq_id,
-            "message": f"Replayed operation {dlq_id}",
-            "data": {
-                "domain": operation.domain,
-                "failure_type": operation.failure_type,
-            },
+            "message": result.message if result.success else "",
+            "error": result.error,
+            "data": result.data,
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Replay] Unexpected error replaying DLQ entry {dlq_id}: {e}")
+        logger.error(f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}")
         return {
             "success": False,
             "dlq_id": dlq_id,
@@ -566,6 +514,11 @@ def replay_batch_by_domain(
     """
     Replay all pending DLQ entries for a specific domain.
 
+    This task delegates to ReplayService which handles all safety checks:
+    - Kill Switch
+    - Emergency Level (LEVEL_2+)
+    - ErrorBudgetGate
+
     Args:
         domain: The domain to filter by (payment, point, inventory, etc.)
         max_items: Maximum number of items to replay
@@ -573,80 +526,32 @@ def replay_batch_by_domain(
     Returns:
         Dictionary with batch replay summary
     """
-    logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}")
+    logger.info(f"[DLQ Batch Replay Task] Starting batch replay for domain={domain}, max_items={max_items}")
 
     try:
-        # Error Budget Gate Check (수동 모드 강제 전환)
-        try:
-            from selfhealing.services.error_budget_gate import (
-                check_automation_allowed,
-            )
-            
-            gate_result = check_automation_allowed()
-            if not gate_result.allowed:
-                logger.warning(
-                    f"[DLQ Batch Replay] Blocked by Error Budget Gate: "
-                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
-                )
-                return {
-                    "success": False,
-                    "domain": domain,
-                    "error": "automation_blocked",
-                    "message": (
-                        f"Error budget critically low ({gate_result.error_budget_percent:.1f}%). "
-                        f"Manual mode enforced. Please process manually."
-                    ),
-                    "manual_mode_enforced": True,
-                    "error_budget_percent": gate_result.error_budget_percent,
-                    "total": 0,
-                    "success_count": 0,
-                    "failed_count": 0,
-                }
-        except ImportError:
-            # Gate not available, continue
-            pass
+        from selfhealing.services.replay_service import ReplayService
 
-        # Use ProviderRegistry to get repository
-        from selfhealing.factory import ProviderRegistry
-
-        try:
-            repo = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError):
-            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
-
-            repo = DjangoFailedOperationRepository()
-
-        pending = repo.get_pending(domain=domain, limit=max_items)
-
-        success_count = 0
-        failed_count = 0
-
-        for operation in pending:
-            # Here you would implement the actual replay logic
-            logger.info(f"[DLQ Batch Replay] Would replay operation {operation.id}")
-            # result = execute_replay(operation)
-            # if result.success:
-            #     repo.mark_completed(operation.id)
-            #     success_count += 1
-            # else:
-            #     repo.increment_retry(operation.id, result.error)
-            #     failed_count += 1
-
-        logger.info(f"[DLQ Batch Replay] Completed: total={len(pending)}, " f"success={success_count}, failed={failed_count}")
+        service = ReplayService()
+        result = service.replay_batch(domain=domain, max_items=max_items)
 
         return {
-            "success": True,
+            "success": result.success_count > 0 or result.total == 0,
             "domain": domain,
-            "total": len(pending),
-            "success_count": success_count,
-            "failed_count": failed_count,
+            "total": result.total,
+            "success_count": result.success_count,
+            "failed_count": result.failed_count,
+            "skipped_count": result.skipped_count,
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Batch Replay] Unexpected error: {e}")
+        logger.error(f"[DLQ Batch Replay Task] Unexpected error: {e}")
         return {
             "success": False,
+            "domain": domain,
             "error": str(e),
+            "total": 0,
+            "success_count": 0,
+            "failed_count": 0,
         }
 
 
