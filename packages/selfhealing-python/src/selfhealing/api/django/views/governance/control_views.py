@@ -1,0 +1,202 @@
+"""
+Governance Control Views.
+
+정합성 조정, 모드 전환 등 Control 관련 View 클래스들입니다.
+
+Reference:
+- docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+
+from rest_framework import status
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from selfhealing.api.django.permissions import IsSelfHealingAdmin
+from selfhealing.api.django.views.governance.service import get_governance_service
+
+logger = logging.getLogger(__name__)
+
+
+class GovernanceReconcileView(APIView):
+    """
+    POST /api/self-healing/governance/reconcile/
+    
+    수동 정합성 조정 API (Control).
+    
+    기존 /metrics/sync/ 를 대체하며, 더 전문적인 "정합성 조정" 네이밍 사용.
+    
+    Permissions:
+        - IsAdmin: selfhealing_admin 그룹 또는 superuser만 접근 가능
+    
+    Request Body:
+        - domains (list, optional): 조정할 도메인 목록
+        - dry_run (bool, optional): True면 리포트만 생성
+        - reason (str, optional): 조정 사유 (Audit용)
+    
+    Response:
+        - reconciliation_result: 조정 결과
+        - reconciled_at: 조정 시각
+        - actor: 수행자
+        - results: 도메인별 조정 결과
+        - summary: 요약 정보
+    
+    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    """
+    
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request: Request) -> Response:
+        """정합성 조정 수행."""
+        from selfhealing.api.django.serializers.metric_sync import (
+            MetricSyncRequestSerializer,
+        )
+        
+        serializer = MetricSyncRequestSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                {"error": "Invalid request", "details": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        validated = serializer.validated_data
+        domains = validated.get("domains")
+        dry_run = validated.get("dry_run", False)
+        reason = validated.get("reason", "")
+        
+        # 사용자 이름 추출
+        actor = "unknown"
+        if request.user and request.user.is_authenticated:
+            actor = request.user.username
+        
+        try:
+            service = get_governance_service()
+            result = service.reconcile(
+                domains=domains,
+                dry_run=dry_run,
+                actor=actor,
+                reason=reason,
+            )
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.exception(f"[Governance] Reconcile failed: {e}")
+            return Response(
+                {
+                    "reconciliation_result": "failed",
+                    "error": str(e),
+                    "reconciled_at": datetime.now(timezone.utc).isoformat(),
+                    "actor": actor,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class GovernanceModeView(APIView):
+    """
+    POST /api/self-healing/governance/mode/
+    
+    운영 모드 강제 전환 API (Control - 비상 스위치).
+    
+    엔진의 지능(Operating Mode)을 수동으로 제어합니다.
+    
+    Permissions:
+        - IsAdmin: selfhealing_admin 그룹 또는 superuser만 접근 가능
+        - 권장: IsSuperUser (비상 기능이므로 더 높은 권한 권장)
+    
+    Request Body:
+        - mode (str, required): "NORMAL" | "CAUTIOUS" | "STRICT" | "EMERGENCY"
+        - reason (str, optional): 전환 사유 (Audit용)
+    
+    Response:
+        - status: "mode_changed"
+        - changed_at: 전환 시각
+        - actor: 수행자
+        - previous_mode: 이전 모드
+        - current_mode: 현재 모드
+        - reason: 사유
+        - warning: 모드별 경고 메시지
+    
+    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    """
+    
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request: Request) -> Response:
+        """운영 모드 전환."""
+        mode = request.data.get("mode")
+        reason = request.data.get("reason", "")
+        
+        if not mode:
+            return Response(
+                {
+                    "error": "mode is required",
+                    "valid_modes": ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # 사용자 이름 추출
+        actor = "unknown"
+        if request.user and request.user.is_authenticated:
+            actor = request.user.username
+        
+        try:
+            service = get_governance_service()
+            result = service.set_mode(
+                mode=mode,
+                actor=actor,
+                reason=reason,
+            )
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except ValueError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception(f"[Governance] Mode change failed: {e}")
+            return Response(
+                {
+                    "status": "failed",
+                    "error": str(e),
+                    "changed_at": datetime.now(timezone.utc).isoformat(),
+                    "actor": actor,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+    
+    def get(self, request: Request) -> Response:
+        """현재 운영 모드 조회."""
+        try:
+            from selfhealing.metrics.reliability_manager import get_reliability_manager
+            
+            manager = get_reliability_manager()
+            mode = manager.get_global_mode()
+            
+            return Response({
+                "current_mode": mode.value if hasattr(mode, 'value') else str(mode),
+                "valid_modes": ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"],
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.exception(f"[Governance] Mode query failed: {e}")
+            return Response(
+                {"error": str(e), "current_mode": "unknown"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+__all__ = [
+    "GovernanceReconcileView",
+    "GovernanceModeView",
+]
