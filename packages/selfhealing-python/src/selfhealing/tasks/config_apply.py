@@ -6,6 +6,8 @@ Celery tasks for applying scheduled/delayed configuration changes.
 Tasks:
 - apply_pending_config_changes: Apply all due pending changes
 - apply_graceful_config_change: Wait for in-progress ops, then apply
+
+Phase C: Emergency Mode 체크 추가 - 비상 모드 LEVEL_2 이상에서 설정 적용 차단
 """
 
 import logging
@@ -14,6 +16,36 @@ from datetime import datetime, timezone
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
+
+
+def _is_emergency_blocking() -> tuple[bool, str]:
+    """
+    비상 모드로 인해 설정 적용이 차단되어야 하는지 확인.
+
+    LEVEL_2 이상에서는 시스템 안정성을 위해 설정 변경을 차단합니다.
+    단, 긴급 복구를 위한 emergency 관련 설정은 허용합니다.
+
+    Returns:
+        (is_blocked, reason) 튜플
+    """
+    try:
+        from selfhealing.services.emergency_mode import (
+            get_emergency_manager,
+            EmergencyLevel,
+        )
+
+        manager = get_emergency_manager()
+        level = manager.get_current_level()
+
+        # LEVEL_2 이상에서는 설정 적용 차단
+        if level.value >= EmergencyLevel.LEVEL_2.value:
+            return True, f"Emergency mode active (level={level.name}). Config changes blocked."
+
+        return False, ""
+    except Exception as e:
+        # EmergencyManager 로드 실패 시 안전하게 허용
+        logger.warning(f"[ConfigTask] Could not check emergency mode: {e}")
+        return False, ""
 
 
 @shared_task(
@@ -41,6 +73,16 @@ def apply_pending_config_changes(self):
     from selfhealing.services.runtime_config import get_runtime_config_manager
 
     try:
+        # Phase C: Emergency Mode 체크 - LEVEL_2 이상에서는 설정 적용 차단
+        is_blocked, block_reason = _is_emergency_blocking()
+        if is_blocked:
+            logger.warning(f"[ConfigTask] {block_reason}")
+            return {
+                "status": "blocked",
+                "reason": block_reason,
+                "message": "Config changes blocked during emergency mode",
+            }
+
         pending_service = get_pending_config_service()
         config_manager = get_runtime_config_manager()
 
@@ -119,6 +161,20 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
     from selfhealing.services.runtime_config import get_runtime_config_manager
 
     try:
+        # Phase C: Emergency Mode 체크 - LEVEL_2 이상에서는 설정 적용 차단
+        is_blocked, block_reason = _is_emergency_blocking()
+        if is_blocked:
+            logger.warning(f"[ConfigTask] {block_reason} (graceful change {pending_id})")
+            # 비상 모드에서는 재시도하여 비상 모드 해제 후 적용
+            if self.request.retries < self.max_retries:
+                logger.info(f"[ConfigTask] Will retry after emergency mode ends")
+                raise self.retry(countdown=30)  # 30초 후 재시도
+            return {
+                "status": "blocked",
+                "pending_id": pending_id,
+                "reason": block_reason,
+            }
+
         pending_service = get_pending_config_service()
         config_manager = get_runtime_config_manager()
 
