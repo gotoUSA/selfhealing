@@ -108,6 +108,16 @@ from selfhealing.api.django.views.metric_sync import (
     DriftReportView,
 )
 
+# Governance API Views (New Unified Hub)
+# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+from selfhealing.api.django.views.governance import (
+    MetricStatusView,
+    GovernanceReconcileView,
+    GovernanceModeView,
+    DeprecatedMetricSyncView,
+    DeprecatedDriftReportView,
+)
+
 # Config History & Rollback Views
 from selfhealing.api.django.views.config_history import (
     ConfigHistoryView,
@@ -281,11 +291,26 @@ urlpatterns = [
     path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
     
     # =========================================================================
-    # Metric Sync API (Phase 1: Poll 제거 + Manual API)
+    # Metric Sync API (Phase 1: Poll 제거 + Manual API) - DEPRECATED
+    # 새로운 API: /metrics/status/, /governance/reconcile/, /governance/mode/
     # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     # =========================================================================
-    path("metrics/sync/", MetricSyncView.as_view(), name="metrics-sync"),
-    path("metrics/drift-report/", DriftReportView.as_view(), name="metrics-drift-report"),
+    # Deprecated endpoints (with Warning headers + redirect to new endpoints)
+    path("metrics/sync/", DeprecatedMetricSyncView.as_view(), name="metrics-sync"),
+    path("metrics/drift-report/", DeprecatedDriftReportView.as_view(), name="metrics-drift-report"),
+    
+    # =========================================================================
+    # Governance API (New Unified Hub)
+    # 관찰(Observability): GET /metrics/status/
+    # 제어(Control): POST /governance/reconcile/, POST /governance/mode/
+    # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    # =========================================================================
+    # Observability - 통합 상태 조회
+    path("metrics/status/", MetricStatusView.as_view(), name="metrics-status"),
+    
+    # Control - 정합성 조정 및 모드 전환
+    path("governance/reconcile/", GovernanceReconcileView.as_view(), name="governance-reconcile"),
+    path("governance/mode/", GovernanceModeView.as_view(), name="governance-mode"),
     
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)

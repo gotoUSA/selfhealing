@@ -448,6 +448,44 @@ class MetricReliabilityManager:
             if old_mode != OperatingMode.STRICT:
                 self._notify_mode_change(domain, OperatingMode.STRICT)
     
+    def get_global_mode(self) -> OperatingMode:
+        """
+        전역 운영 모드 조회.
+        
+        Returns:
+            현재 전역 모드
+        """
+        return self._global_mode
+    
+    def force_global_mode(
+        self,
+        mode: OperatingMode,
+        reason: str = "manual",
+    ) -> None:
+        """
+        전역 운영 모드 강제 전환.
+        
+        모든 도메인에 동일한 모드를 적용합니다.
+        
+        Args:
+            mode: 목표 운영 모드
+            reason: 전환 이유
+        """
+        with self._lock:
+            old_mode = self._global_mode
+            self._global_mode = mode
+            
+            logger.warning(
+                f"[Reliability] Global mode changed: {old_mode.value} → {mode.value} ({reason})"
+            )
+            
+            # 모든 도메인에 동일 모드 적용
+            for domain, state in self._states.items():
+                if state.operating_mode != mode:
+                    state.operating_mode = mode
+                    state.stabilization_start = None if mode == OperatingMode.STRICT else time.time()
+                    self._notify_mode_change(domain, mode)
+    
     def reset(self) -> None:
         """모든 상태 리셋."""
         with self._lock:

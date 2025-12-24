@@ -183,6 +183,175 @@ Phase 1 구현은 다음 파일들에서 확인할 수 있습니다:
 | `selfhealing/api/django/urls.py` | URL 라우팅 |
 | `tests/api/test_metric_sync_api.py` | 단위 테스트 |
 
+### 3.8 통합 거버넌스 API (API 리팩토링)
+
+Phase 1의 API가 성숙해짐에 따라, 엔드포인트 파편화를 방지하고 더 전문적인 네이밍을 적용한 **통합 거버넌스 허브**로 재구성되었습니다.
+
+#### 3.8.1 새로운 API 구조
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  통합 거버넌스 API 구조                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  관찰 (Observability)                                       │
+│  ───────────────────                                        │
+│  GET /api/self-healing/metrics/status/                      │
+│  └── 모든 신뢰성 지표를 한눈에 파악 (SSOT)                  │
+│                                                             │
+│  제어 (Control)                                             │
+│  ─────────────                                              │
+│  POST /api/self-healing/governance/reconcile/               │
+│  └── 수동 정합성 조정 ("sync"보다 전문적 네이밍)            │
+│                                                             │
+│  POST /api/self-healing/governance/mode/                    │
+│  └── 운영 모드 강제 전환 (비상 스위치)                      │
+│                                                             │
+│  [Deprecated - 하위 호환용]                                  │
+│  ─────────────────────────                                  │
+│  POST /api/self-healing/metrics/sync/                       │
+│  └── Warning 헤더 + /governance/reconcile/로 전달           │
+│                                                             │
+│  GET /api/self-healing/metrics/drift-report/                │
+│  └── Warning 헤더 + /metrics/status/로 전달                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 3.8.2 Status API 응답 구조
+
+**GET /api/self-healing/metrics/status/**
+
+```json
+{
+  "generated_at": "2024-12-24T10:30:00Z",
+  "operating_mode": "NORMAL",
+  "overall_health": "healthy",
+  
+  "sync_status": {
+    "last_sync_at": "2024-12-24T10:25:00Z",
+    "last_sync_actor": "startup_hydration",
+    "is_stale": false,
+    "consecutive_syncs": 5
+  },
+  
+  "snapshot_health": {
+    "age_seconds": 300,
+    "is_valid": true,
+    "path": "/var/lib/selfhealing/metrics"
+  },
+  
+  "drift_summary": {
+    "total_drifts": 0,
+    "critical_drifts": 0,
+    "domains_with_drift": []
+  },
+  
+  "domains": {
+    "payment": {
+      "reliability_level": "high",
+      "operating_mode": "normal",
+      "consecutive_syncs": 5,
+      "dlq_pending": {"value": 3, "is_synced": true}
+    },
+    "point": {
+      "reliability_level": "medium",
+      "operating_mode": "normal",
+      "consecutive_syncs": 3,
+      "dlq_pending": {"value": 1, "is_synced": true}
+    }
+  },
+  
+  "next_sync_expected_at": "2024-12-24T10:35:00Z"
+}
+```
+
+> **Note**: `next_sync_expected_at`는 Startup Hydration의 Jitter가 적용된 경우 다음 예상 동기화 시간을 보여줍니다. 이 필드는 운영자의 불안감을 해소하는 역할을 합니다.
+
+#### 3.8.3 Reconcile API
+
+**POST /api/self-healing/governance/reconcile/**
+
+```json
+// Request
+{
+  "domains": ["payment", "point"],
+  "dry_run": false,
+  "reason": "Scheduled maintenance"
+}
+
+// Response
+{
+  "reconciliation_result": "completed",
+  "reconciled_at": "2024-12-24T10:30:00Z",
+  "actor": "admin",
+  "dry_run": false,
+  "results": {
+    "payment": {
+      "dlq_pending": {"before": 0, "after": 2, "drift": 2}
+    }
+  },
+  "summary": {
+    "total_drifts_detected": 1,
+    "total_drifts_corrected": 1
+  }
+}
+```
+
+#### 3.8.4 Mode API
+
+**POST /api/self-healing/governance/mode/**
+
+```json
+// Request
+{
+  "mode": "STRICT",
+  "reason": "Emergency response"
+}
+
+// Response
+{
+  "status": "mode_changed",
+  "changed_at": "2024-12-24T10:30:00Z",
+  "actor": "admin",
+  "previous_mode": "normal",
+  "current_mode": "strict",
+  "reason": "Emergency response",
+  "warning": "STRICT 모드에서는 모든 보호 기능이 활성화됩니다. 성능 저하 가능."
+}
+```
+
+유효한 모드:
+- `NORMAL` - 정상 운영
+- `CAUTIOUS` - 주의 모드 (점진적 복구 중)
+- `STRICT` - 엄격 모드 (보수적 설정 적용)
+- `EMERGENCY` - 비상 모드 (최소 기능만 작동)
+
+#### 3.8.5 Deprecated API 처리
+
+기존 API는 **하위 호환성**을 위해 유지되지만, 다음 헤더와 함께 응답합니다:
+
+```http
+HTTP/1.1 200 OK
+Warning: 299 - "Deprecated API: Use POST /api/self-healing/governance/reconcile/ instead"
+Deprecation: true
+Link: </api/self-healing/governance/reconcile/>; rel="successor-version"
+```
+
+이 방식은:
+- 기존 연동 시스템이 즉시 깨지지 않음
+- 개발자에게 마이그레이션 필요성을 알림
+- Tech Due Diligence에서 "성숙한 플랫폼"으로 평가받음
+
+#### 3.8.6 구현 파일
+
+| 파일 | 설명 |
+|------|------|
+| `selfhealing/api/django/views/governance.py` | 통합 거버넌스 View 및 Service |
+| `selfhealing/metrics/reliability_manager.py` | 신뢰도 관리자 (모드 전환 포함) |
+| `selfhealing/api/django/urls.py` | URL 라우팅 (새 API + Deprecated) |
+| `tests/api/test_governance_api.py` | 단위 테스트 (19개) |
+
 ---
 
 ## 4. Phase 2: Startup Hydration
@@ -949,3 +1118,4 @@ Phase 5 구현은 다음 파일들에서 확인할 수 있습니다:
 | 1.0 | 2024-12-24 | 초안 작성 - 비침습적 Drift 전략 |
 | 2.0 | 2024-12-24 | Phase 4: Air-Gap 어댑터 패턴 구현 |
 | 3.0 | 2024-12-24 | Phase 5: 메트릭 신뢰도 시스템 (비상망) 구현 |
+| 4.0 | 2024-12-24 | 통합 거버넌스 API 리팩토링 - 관찰/제어 분리, Deprecated API 처리 |

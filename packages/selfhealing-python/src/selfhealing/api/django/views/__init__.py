@@ -127,6 +127,22 @@ from selfhealing.api.django.views.chaos import (
     PendingApprovalsView,
 )
 
+# Governance API Views (New Unified Hub)
+# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+from selfhealing.api.django.views.governance import (
+    # Service
+    GovernanceService,
+    get_governance_service,
+    reset_governance_service,
+    # New API Views
+    MetricStatusView,
+    GovernanceReconcileView,
+    GovernanceModeView,
+    # Deprecated Views (with Warning headers)
+    DeprecatedMetricSyncView,
+    DeprecatedDriftReportView,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -219,4 +235,13 @@ __all__ = [
     "ReportGenerateView",
     "GradeHistoryView",
     "PendingApprovalsView",
+    # Governance API (New Unified Hub)
+    "GovernanceService",
+    "get_governance_service",
+    "reset_governance_service",
+    "MetricStatusView",
+    "GovernanceReconcileView",
+    "GovernanceModeView",
+    "DeprecatedMetricSyncView",
+    "DeprecatedDriftReportView",
 ]
