@@ -277,14 +277,23 @@ SELFHEALING_SYNC_JITTER_MAX = 60        # 최대 지연 (초)
 
 ### 4.5 체크리스트
 
-- [ ] `SelfhealingConfig.ready()` 구현
-- [ ] 중복 실행 방지 로직 (`_hydration_done` 플래그)
-- [ ] Jitter 적용 (`threading.Timer`)
-- [ ] DB 연결 확인 (`connection.ensure_connection()`)
-- [ ] Graceful Degradation (예외 시 경고 로그만)
-- [ ] 설정 변수 추가 (`SELFHEALING_SYNC_ON_STARTUP`, `SELFHEALING_SYNC_JITTER_MAX`)
-- [ ] 단위 테스트 작성
+- [x] `SelfhealingConfig.ready()` 구현
+- [x] 중복 실행 방지 로직 (`_hydration_done` 플래그)
+- [x] Jitter 적용 (`threading.Timer`)
+- [x] DB 연결 확인 (`connection.ensure_connection()`)
+- [x] Graceful Degradation (예외 시 경고 로그만)
+- [x] 설정 변수 추가 (`SELFHEALING_SYNC_ON_STARTUP`, `SELFHEALING_SYNC_JITTER_MAX`)
+- [x] 단위 테스트 작성
 - [ ] 문서 업데이트
+
+### 4.6 구현 파일
+
+Phase 2 구현은 다음 파일들에서 확인할 수 있습니다:
+
+| 파일 | 설명 |
+|------|------|
+| `selfhealing/adapters/django/apps.py` | SelfHealingConfig.ready() + 비동기 Hydration |
+| `tests/unit/test_startup_hydration.py` | 단위 테스트 (14개) |
 
 ---
 
