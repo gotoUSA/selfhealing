@@ -428,13 +428,14 @@ Phase 3 구현은 다음 파일들에서 확인할 수 있습니다:
 
 ---
 
-## 6. Phase 4: Redis Air-Gap (선택)
+## 6. Phase 4: Redis Air-Gap (어댑터 패턴)
 
 ### 6.1 목표
 
 - 비즈니스 DB와 Self-Healing 엔진 사이에 **캐시 레이어** 도입
 - 엔진은 오직 Redis만 조회 (DB 직접 접근 완전 차단)
 - 비즈니스 레이어가 Redis에 요약 상태 기록
+- **어댑터 패턴으로 구현하여 필요시에만 활성화**
 
 ### 6.2 아키텍처
 
@@ -451,8 +452,8 @@ Phase 3 구현은 다음 파일들에서 확인할 수 있습니다:
 │         ▼                                                   │
 │  ┌──────────────┐                                          │
 │  │    Redis     │  ← 요약 상태 저장소 (Air-Gap)             │
-│  │  (L2 Cache)  │     • selfhealing:summary:dlq:payment=5  │
-│  └──────────────┘     • selfhealing:summary:cb:toss=closed │
+│  │  (L2 Cache)  │     • sh:airgap:dlq:payment:pending=5    │
+│  └──────────────┘     • sh:airgap:cb:toss:state=closed     │
 │         │                                                   │
 │         │ (Self-Healing 엔진 읽기 전용)                     │
 │         ▼                                                   │
@@ -464,18 +465,187 @@ Phase 3 구현은 다음 파일들에서 확인할 수 있습니다:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 구현 시점
+### 6.3 어댑터 계층 구조
 
-- **현재 단계에서는 보류**
-- Phase 1~3 완료 후 필요성 재평가
-- L2 Storage 개념이 이미 있으므로 자연스럽게 통합 가능
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Air-Gap Adapter 계층 구조                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  AirGapStorageAdapter (Protocol)                            │
+│  ├── NullAirGapAdapter      # 기본: 비활성화 (Passthrough)   │
+│  ├── RedisAirGapAdapter     # Redis 기반 Air-Gap            │
+│  └── InMemoryAirGapAdapter  # 테스트/개발용 (향후)          │
+│                                                             │
+│  Factory: get_airgap_adapter()                              │
+│  ├── SELFHEALING_AIRGAP_ENABLED=false → NullAirGapAdapter   │
+│  └── SELFHEALING_AIRGAP_ENABLED=true  → RedisAirGapAdapter  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### 6.4 선행 조건
+### 6.4 인터페이스 정의
 
-- [ ] Phase 1~3 완료
-- [ ] L2 Storage (Redis) 안정화
-- [ ] 비즈니스 레이어의 요약 기록 로직 구현 필요
-- [ ] Redis 장애 시 Fallback 전략 수립
+```python
+# selfhealing/adapters/airgap/base.py
+
+@runtime_checkable
+class AirGapStorageAdapter(Protocol):
+    """Air-Gap 저장소 어댑터 인터페이스."""
+    
+    def write_summary(self, key: str, value: Any, ttl: int = None) -> bool:
+        """요약 상태 기록 (비즈니스 레이어에서 호출)"""
+        ...
+    
+    def read_summary(self, key: str) -> Any:
+        """요약 상태 조회 (Self-Healing 엔진에서 호출)"""
+        ...
+    
+    def delete_summary(self, key: str) -> bool:
+        """요약 상태 삭제"""
+        ...
+    
+    def increment(self, key: str, amount: int = 1) -> int:
+        """카운터 증가 (atomic)"""
+        ...
+    
+    def decrement(self, key: str, amount: int = 1) -> int:
+        """카운터 감소 (음수 방지, atomic)"""
+        ...
+    
+    def is_enabled(self) -> bool:
+        """Air-Gap 활성화 여부"""
+        ...
+```
+
+### 6.5 NullAirGapAdapter (기본값 = 비활성화)
+
+```python
+# selfhealing/adapters/airgap/null_adapter.py
+
+class NullAirGapAdapter(BaseAirGapAdapter):
+    """비활성화 시 사용 - 기존 동작 그대로 유지"""
+    
+    def write_summary(self, key: str, value: Any, ttl: int = None) -> bool:
+        return True  # 아무것도 안 함, 성공으로 간주
+    
+    def read_summary(self, key: str) -> Any:
+        return None  # 항상 None → 기존 로직 사용해야 함
+    
+    def is_enabled(self) -> bool:
+        return False
+```
+
+### 6.6 RedisAirGapAdapter
+
+```python
+# selfhealing/adapters/airgap/redis_adapter.py
+
+class RedisAirGapAdapter(BaseAirGapAdapter):
+    """Redis 기반 Air-Gap 저장소"""
+    
+    def __init__(self, redis_client, prefix="sh:airgap:", default_ttl=3600):
+        self.redis = redis_client
+        self.prefix = prefix
+        self.default_ttl = default_ttl
+    
+    def write_summary(self, key: str, value: Any, ttl: int = None) -> bool:
+        redis_key = f"{self.prefix}{key}"
+        self.redis.setex(redis_key, ttl or self.default_ttl, serialize(value))
+        return True
+    
+    def read_summary(self, key: str) -> Any:
+        redis_key = f"{self.prefix}{key}"
+        return deserialize(self.redis.get(redis_key))
+    
+    def decrement(self, key: str, amount: int = 1) -> int:
+        # Lua 스크립트로 원자적 음수 방지
+        lua_script = """
+        local current = redis.call('GET', KEYS[1])
+        if current == false then return 0 end
+        local new_value = math.max(0, tonumber(current) - tonumber(ARGV[1]))
+        redis.call('SET', KEYS[1], new_value)
+        return new_value
+        """
+        return self.redis.eval(lua_script, 1, key, amount)
+    
+    def is_enabled(self) -> bool:
+        return self.redis.ping()
+```
+
+### 6.7 사용 예시
+
+```python
+from selfhealing.adapters.airgap import get_airgap_adapter
+from selfhealing.adapters.airgap.base import AirGapKeys
+
+# 어댑터 가져오기 (설정에 따라 Null 또는 Redis)
+adapter = get_airgap_adapter()
+
+# 비즈니스 레이어: DLQ 적재 시
+if adapter.is_enabled():
+    adapter.increment(AirGapKeys.dlq_pending("payment"))
+
+# Self-Healing 엔진: 메트릭 조회 시
+if adapter.is_enabled():
+    count = adapter.read_summary(AirGapKeys.dlq_pending("payment"))
+else:
+    # 기존 로직 (예: DB 직접 조회 또는 Push 기반 Gauge)
+    count = dlq_pending_gauge.get("payment")
+```
+
+### 6.8 설정
+
+```python
+# settings.py 또는 환경 변수
+
+# Air-Gap 활성화 여부 (기본: false = 비활성화)
+SELFHEALING_AIRGAP_ENABLED = False
+
+# Redis 연결 URL (활성화 시 필요)
+SELFHEALING_AIRGAP_REDIS_URL = "redis://localhost:6379/1"
+
+# 키 접두사
+SELFHEALING_AIRGAP_PREFIX = "sh:airgap:"
+
+# 기본 TTL (초)
+SELFHEALING_AIRGAP_TTL = 3600
+```
+
+### 6.9 체크리스트
+
+- [x] Phase 1~3 완료
+- [x] `AirGapStorageAdapter` Protocol 정의 (`base.py`)
+- [x] `NullAirGapAdapter` 구현 (`null_adapter.py`)
+- [x] `RedisAirGapAdapter` 구현 (`redis_adapter.py`)
+- [x] Factory 구현 (`factory.py`)
+- [x] `AirGapKeys` 헬퍼 클래스 구현
+- [x] 단위 테스트 작성
+- [ ] 비즈니스 레이어 연동 (선택적)
+- [ ] 통합 테스트 작성 (선택적)
+
+### 6.10 구현 파일
+
+Phase 4 구현은 다음 파일들에서 확인할 수 있습니다:
+
+| 파일 | 설명 |
+|------|------|
+| `selfhealing/adapters/airgap/__init__.py` | 모듈 진입점 |
+| `selfhealing/adapters/airgap/base.py` | Protocol 및 Base 클래스, AirGapKeys |
+| `selfhealing/adapters/airgap/null_adapter.py` | NullAirGapAdapter (비활성화용) |
+| `selfhealing/adapters/airgap/redis_adapter.py` | RedisAirGapAdapter (Redis 기반) |
+| `selfhealing/adapters/airgap/factory.py` | Factory 함수 |
+| `tests/self_healing/unit/test_airgap_adapter.py` | 단위 테스트 |
+
+### 6.11 장점
+
+| 장점 | 설명 |
+|------|------|
+| **기존 패턴과 일관성** | `MetricSourceAdapter` 등 기존 어댑터 체계와 동일 |
+| **플러그 & 플레이** | 설정 하나로 활성화/비활성화 (`SELFHEALING_AIRGAP_ENABLED`) |
+| **Graceful Fallback** | Redis 장애 시 `NullAirGapAdapter`로 자동 전환 |
+| **테스트 용이** | Mock 어댑터로 쉽게 테스트 가능 |
+| **확장성** | 나중에 Redis 대신 Memcached, DynamoDB 등으로 교체 가능 |
 
 ---
 
@@ -551,9 +721,219 @@ class TestPushEvents:
     def test_circuit_breaker_trip_updates_gauge(self): ...
 ```
 
+### 8.4 Phase 4 테스트
+
+```python
+class TestAirGapAdapter:
+    def test_null_adapter_is_passthrough(self): ...
+    def test_redis_adapter_read_write(self): ...
+    def test_factory_returns_correct_adapter(self): ...
+    def test_fallback_to_null_on_redis_failure(self): ...
+```
+
+### 8.5 Phase 5 테스트
+
+```python
+class TestSyncInfo:
+    def test_initial_state_is_unknown(self): ...
+    def test_mark_synced_updates_status(self): ...
+    def test_staleness_detection(self): ...
+    def test_recovery_progress(self): ...
+
+class TestMetricSnapshotStorage:
+    def test_atomic_write(self): ...
+    def test_save_and_load_value(self): ...
+    def test_age_tracking(self): ...
+    def test_max_age_enforcement(self): ...
+
+class TestMetricReliabilityManager:
+    def test_initial_state_is_strict(self): ...
+    def test_sync_success_improves_reliability(self): ...
+    def test_gradual_stabilization(self): ...
+    def test_force_strict_mode(self): ...
+```
+
 ---
 
-## 9. 관련 문서
+## 9. Phase 5: 메트릭 시스템 장애 대비 ("최후의 비상망")
+
+### 9.1 목표
+
+- 메트릭 시스템 장애 시에도 Self-Healing이 안전하게 동작
+- 데이터 신뢰도 투명하게 표시
+- 점진적 복구로 급격한 상태 변화 방지
+
+### 9.2 3계층 비상망
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    메트릭 신뢰성 계층                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [Layer 1] 신뢰도 플래그 (Sync Status)                      │
+│  ─────────────────────────────────                          │
+│  • SafeGaugeChild.is_synced → 데이터 신선도                 │
+│  • staleness_threshold → 자동 stale 감지 (기본 5분)         │
+│  • Prometheus 라벨 is_synced="true/false"                   │
+│                                                             │
+│  [Layer 2] L1 로컬 스냅샷 (Last Known Good)                 │
+│  ─────────────────────────────────                          │
+│  • Write-to-Temp-and-Rename 원자적 쓰기                     │
+│  • 스냅샷 나이(age) 추적                                    │
+│  • max_age 초과 시 기본값으로 fallback                      │
+│                                                             │
+│  [Layer 3] Conservative Fallback (Strict Mode)              │
+│  ─────────────────────────────────                          │
+│  • 데이터 불확실 시 보수적 설정 적용                        │
+│  • 점진적 안정화 기간 (Stabilization Period)                │
+│  • STRICT → CAUTIOUS → NORMAL 단계적 복구                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 9.3 신뢰도 플래그 (Layer 1)
+
+SafeGaugeChild에 sync status 추가:
+
+```python
+class SafeGaugeChild:
+    def __init__(self, ...):
+        self._sync_info = SyncInfo(
+            staleness_threshold=300.0,  # 5분
+            stabilization_duration=60.0,  # 안정화 1분
+        )
+    
+    @property
+    def is_synced(self) -> bool:
+        """데이터 신뢰 가능 여부."""
+        self._sync_info.check_staleness()
+        return self._sync_info.is_synced
+    
+    def inc(self, amount=1):
+        ...
+        self._sync_info.mark_synced("push")
+```
+
+### 9.4 L1 스냅샷 (Layer 2)
+
+```python
+from selfhealing.metrics.snapshot_storage import MetricSnapshotStorage
+
+storage = MetricSnapshotStorage("/var/lib/selfhealing/metrics")
+
+# 저장 (Write-to-Temp-and-Rename)
+storage.save_value("dlq_pending", "payment", 5, immediate=True)
+
+# 로드 (나이 체크 포함)
+value = storage.load_value("dlq_pending", "payment", max_age=3600)
+```
+
+### 9.5 Conservative Fallback (Layer 3)
+
+```python
+from selfhealing.metrics.reliability_manager import MetricReliabilityManager
+
+manager = MetricReliabilityManager()
+
+# 동기화 성공 보고
+manager.report_sync_success("payment", "push", value=5)
+
+# 상태 확인
+state = manager.get_reliability_state("payment")
+if state.operating_mode == OperatingMode.STRICT:
+    # 보수적 설정 적용
+    apply_conservative_limits()
+elif state.is_recovering:
+    # 점진적 완화
+    progress = state.stabilization_progress  # 0.0 ~ 1.0
+    apply_gradual_limits(progress)
+```
+
+### 9.6 운영 모드 전환
+
+```
+┌─────────────┐     동기화 성공     ┌─────────────┐
+│   STRICT    │ ─────────────────> │  CAUTIOUS   │
+│ (보수적)    │                    │ (안정화 중) │
+└─────────────┘                    └─────────────┘
+      ▲                                  │
+      │ 데이터 stale/실패                │ 안정화 완료
+      │                                  │ (consecutive syncs)
+      │                                  ▼
+      │                            ┌─────────────┐
+      └─────────────────────────── │   NORMAL    │
+                                   │ (정상 운영) │
+                                   └─────────────┘
+```
+
+### 9.7 설정
+
+```python
+# settings.py
+
+# 신뢰도 임계값
+SELFHEALING_STALENESS_THRESHOLD = 300  # 5분
+SELFHEALING_STABILIZATION_DURATION = 60  # 1분
+SELFHEALING_CONSECUTIVE_SYNCS_FOR_NORMAL = 3
+
+# 스냅샷 저장소
+SELFHEALING_SNAPSHOT_DIR = "/var/lib/selfhealing/metrics"
+SELFHEALING_SNAPSHOT_MAX_AGE = 3600  # 1시간
+```
+
+### 9.8 체크리스트
+
+- [x] `SyncInfo` 클래스 구현 (신뢰도 상태 추적)
+- [x] `SafeGaugeChild`에 sync status 통합
+- [x] `MetricSnapshotStorage` 구현 (원자적 쓰기)
+- [x] `MetricReliabilityManager` 구현 (모드 관리)
+- [x] 점진적 안정화 로직 구현
+- [x] 단위 테스트 작성
+- [ ] Prometheus 메트릭 export 연동 (선택)
+- [ ] Grafana 대시보드 경고 표시 (선택)
+
+### 9.9 구현 파일
+
+Phase 5 구현은 다음 파일들에서 확인할 수 있습니다:
+
+| 파일 | 설명 |
+|------|------|
+| `selfhealing/metrics/safe_gauge.py` | SyncInfo, SafeGaugeChild 신뢰도 확장 |
+| `selfhealing/metrics/snapshot_storage.py` | L1 스냅샷 저장소 |
+| `selfhealing/metrics/reliability_manager.py` | 신뢰도 관리자 + 모드 전환 |
+| `tests/self_healing/unit/test_metric_reliability.py` | 단위 테스트 |
+
+---
+
+## 10. Fallback 계층 종합
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    메트릭 데이터 Fallback 계층               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1순위: 실시간 Push 이벤트 (Phase 3)                        │
+│      │   └─ is_synced=true, reliability=HIGH               │
+│      ▼                                                      │
+│  2순위: DB 조회 (Manual Sync, Phase 1)                      │
+│      │   └─ is_synced=true, reliability=HIGH               │
+│      ▼                                                      │
+│  3순위: Redis Air-Gap (Phase 4)                             │
+│      │   └─ is_synced=true, reliability=MEDIUM             │
+│      ▼                                                      │
+│  4순위: L1 로컬 스냅샷 (Phase 5)                            │
+│      │   └─ is_synced=false, reliability=LOW               │
+│      ▼                                                      │
+│  5순위: Safe Defaults (Stage 16)                            │
+│          └─ is_synced=false, reliability=UNKNOWN            │
+│          └─ operating_mode=STRICT                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 11. 관련 문서
 
 - [14_METRIC_COLLECTION_CORE.md](14_METRIC_COLLECTION_CORE.md) - 수집 전략 기본
 - [15_METRIC_COLLECTION_ADVANCED.md](15_METRIC_COLLECTION_ADVANCED.md) - Drift 감지 상세 (업데이트 예정)
@@ -562,8 +942,10 @@ class TestPushEvents:
 
 ---
 
-## 10. 변경 이력
+## 12. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0 | 2024-12-24 | 초안 작성 - 비침습적 Drift 전략 |
+| 2.0 | 2024-12-24 | Phase 4: Air-Gap 어댑터 패턴 구현 |
+| 3.0 | 2024-12-24 | Phase 5: 메트릭 신뢰도 시스템 (비상망) 구현 |

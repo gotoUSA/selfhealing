@@ -12,23 +12,134 @@ Design Philosophy:
 - SafeGauge provides "plug-and-play" experience for buyers while
   internally preventing the -1 dashboard embarrassment.
 
+Enhanced Features (Phase 5 - Metric Reliability):
+- Sync Status Tracking: last_sync_time and is_synced for data freshness
+- Staleness Detection: Auto-mark as stale after threshold
+- Stabilization Period: Gradual recovery from strict mode
+
 Example:
     >>> from prometheus_client import Gauge
     >>> raw_gauge = Gauge("my_gauge", "desc", ["domain"])
     >>> safe = SafeGauge(raw_gauge)
     >>> safe.labels(domain="payment").dec()  # Won't go below 0
+    >>> safe.labels(domain="payment").is_synced  # Check if data is fresh
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import time
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from prometheus_client import Gauge
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Sync Status and Reliability Types
+# =============================================================================
+
+
+class SyncStatus(Enum):
+    """메트릭 동기화 상태."""
+    SYNCED = "synced"           # 정상 동기화됨
+    STALE = "stale"             # 동기화 지연 (staleness threshold 초과)
+    UNKNOWN = "unknown"         # 초기 상태 또는 알 수 없음
+    RECOVERING = "recovering"   # Strict Mode에서 복구 중
+
+
+@dataclass
+class SyncInfo:
+    """메트릭 동기화 정보."""
+    status: SyncStatus = SyncStatus.UNKNOWN
+    last_sync_time: Optional[float] = None  # Unix timestamp
+    last_sync_source: str = "none"  # "push", "hydration", "manual", "snapshot"
+    staleness_threshold: float = 300.0  # 5분 (초)
+    stabilization_start: Optional[float] = None  # 복구 시작 시간
+    stabilization_duration: float = 60.0  # 안정화 기간 (초)
+    
+    @property
+    def age_seconds(self) -> Optional[float]:
+        """마지막 동기화 이후 경과 시간 (초)."""
+        if self.last_sync_time is None:
+            return None
+        return time.time() - self.last_sync_time
+    
+    @property
+    def is_synced(self) -> bool:
+        """데이터가 신뢰할 수 있는지 여부."""
+        if self.status == SyncStatus.SYNCED:
+            age = self.age_seconds
+            if age is not None and age > self.staleness_threshold:
+                return False
+            return True
+        return False
+    
+    @property
+    def is_recovering(self) -> bool:
+        """복구 중인지 여부."""
+        if self.status != SyncStatus.RECOVERING:
+            return False
+        if self.stabilization_start is None:
+            return False
+        elapsed = time.time() - self.stabilization_start
+        return elapsed < self.stabilization_duration
+    
+    @property
+    def recovery_progress(self) -> float:
+        """복구 진행률 (0.0 ~ 1.0)."""
+        if not self.is_recovering or self.stabilization_start is None:
+            return 1.0
+        elapsed = time.time() - self.stabilization_start
+        return min(1.0, elapsed / self.stabilization_duration)
+    
+    def mark_synced(self, source: str = "push") -> None:
+        """동기화 완료 마킹."""
+        now = time.time()
+        
+        if self.status in (SyncStatus.STALE, SyncStatus.UNKNOWN):
+            # Stale에서 복구 → 안정화 기간 시작
+            self.status = SyncStatus.RECOVERING
+            self.stabilization_start = now
+            logger.info(f"[SyncInfo] Starting stabilization period ({self.stabilization_duration}s)")
+        elif self.status == SyncStatus.RECOVERING:
+            # 복구 중 계속 동기화 → 안정화 기간 유지
+            if not self.is_recovering:
+                # 안정화 기간 완료 → 정상 상태로 전환
+                self.status = SyncStatus.SYNCED
+                self.stabilization_start = None
+                logger.info("[SyncInfo] Stabilization complete, now SYNCED")
+        else:
+            self.status = SyncStatus.SYNCED
+        
+        self.last_sync_time = now
+        self.last_sync_source = source
+    
+    def mark_stale(self, reason: str = "timeout") -> None:
+        """Stale 상태로 마킹."""
+        if self.status != SyncStatus.STALE:
+            logger.warning(f"[SyncInfo] Marked as STALE: {reason}")
+        self.status = SyncStatus.STALE
+        self.stabilization_start = None
+    
+    def check_staleness(self) -> bool:
+        """
+        Staleness 자동 체크.
+        
+        Returns:
+            True if now stale, False otherwise
+        """
+        if self.status == SyncStatus.SYNCED:
+            age = self.age_seconds
+            if age is not None and age > self.staleness_threshold:
+                self.mark_stale(f"age {age:.1f}s > threshold {self.staleness_threshold}s")
+                return True
+        return False
 
 
 class SafeGaugeChild:
@@ -38,6 +149,11 @@ class SafeGaugeChild:
     Prevents the gauge from going negative by clamping at 0.
     This is critical for preventing "-1 pending items" on dashboards
     after server restarts when the in-memory counter starts at 0.
+
+    Enhanced with sync status tracking (Phase 5):
+    - Tracks last_sync_time for data freshness indication
+    - Auto-detects staleness based on threshold
+    - Supports stabilization period for gradual recovery
 
     Thread Safety:
         Uses a lock to ensure atomic read-check-update operations.
@@ -49,13 +165,21 @@ class SafeGaugeChild:
         The Lazy Sync (Reconciler) will correct any drift periodically.
     """
 
-    def __init__(self, gauge_child: Any, label_values: Dict[str, str]):
+    def __init__(
+        self, 
+        gauge_child: Any, 
+        label_values: Dict[str, str],
+        staleness_threshold: float = 300.0,
+        stabilization_duration: float = 60.0,
+    ):
         """
         Initialize SafeGaugeChild.
 
         Args:
             gauge_child: The original Prometheus Gauge child (labeled)
             label_values: Label key-value pairs for logging
+            staleness_threshold: Seconds before data is considered stale (default: 5분)
+            stabilization_duration: Seconds for gradual recovery (default: 60초)
         """
         self._gauge_child = gauge_child
         self._label_values = label_values
@@ -65,6 +189,38 @@ class SafeGaugeChild:
         # Reconciler will sync periodically
         self._shadow_value: float = 0.0
         self._initialized = False
+        
+        # Sync status tracking (Phase 5)
+        self._sync_info = SyncInfo(
+            staleness_threshold=staleness_threshold,
+            stabilization_duration=stabilization_duration,
+        )
+
+    @property
+    def sync_info(self) -> SyncInfo:
+        """동기화 정보 조회."""
+        return self._sync_info
+    
+    @property
+    def is_synced(self) -> bool:
+        """데이터 신뢰 가능 여부."""
+        self._sync_info.check_staleness()
+        return self._sync_info.is_synced
+    
+    @property
+    def is_recovering(self) -> bool:
+        """복구 중 여부."""
+        return self._sync_info.is_recovering
+    
+    @property
+    def last_sync_time(self) -> Optional[float]:
+        """마지막 동기화 시간."""
+        return self._sync_info.last_sync_time
+    
+    @property
+    def sync_age_seconds(self) -> Optional[float]:
+        """마지막 동기화 이후 경과 시간."""
+        return self._sync_info.age_seconds
 
     def inc(self, amount: float = 1) -> None:
         """
@@ -77,6 +233,7 @@ class SafeGaugeChild:
             self._shadow_value += amount
             self._gauge_child.inc(amount)
             self._initialized = True
+            self._sync_info.mark_synced("push")
 
     def dec(self, amount: float = 1) -> None:
         """
@@ -115,13 +272,16 @@ class SafeGaugeChild:
                     f"This may indicate event ordering issues after restart. "
                     f"Reconciler will sync correct value on next cycle."
                 )
+            
+            self._sync_info.mark_synced("push")
 
-    def set(self, value: float) -> None:
+    def set(self, value: float, source: str = "manual") -> None:
         """
         Set the gauge to a specific value.
 
         Args:
             value: Value to set (clamped to 0 if negative)
+            source: Sync source identifier (default: "manual")
         """
         with self._lock:
             if value < 0:
@@ -132,6 +292,7 @@ class SafeGaugeChild:
             self._shadow_value = value
             self._gauge_child.set(value)
             self._initialized = True
+            self._sync_info.mark_synced(source)
 
     def get_shadow_value(self) -> float:
         """
@@ -143,7 +304,7 @@ class SafeGaugeChild:
         with self._lock:
             return self._shadow_value
 
-    def sync_from_source(self, actual_value: float) -> None:
+    def sync_from_source(self, actual_value: float, source: str = "reconciler") -> None:
         """
         Sync shadow value from authoritative source (Reconciler callback).
 
@@ -152,6 +313,7 @@ class SafeGaugeChild:
 
         Args:
             actual_value: Actual value from DB or external source
+            source: Sync source identifier (e.g., "hydration", "manual", "snapshot")
         """
         with self._lock:
             if actual_value < 0:
@@ -160,8 +322,40 @@ class SafeGaugeChild:
             self._shadow_value = actual_value
             self._gauge_child.set(actual_value)
             self._initialized = True
+            self._sync_info.mark_synced(source)
             if old_shadow != actual_value:
                 logger.info(f"[SafeGauge] Synced from source: {old_shadow} -> {actual_value}. " f"labels={self._label_values}")
+
+    def mark_stale(self, reason: str = "external") -> None:
+        """
+        수동으로 stale 상태 마킹.
+        
+        Args:
+            reason: Stale 이유
+        """
+        with self._lock:
+            self._sync_info.mark_stale(reason)
+
+    def get_reliability_info(self) -> Dict[str, Any]:
+        """
+        메트릭 신뢰도 정보 반환.
+        
+        Returns:
+            신뢰도 정보 딕셔너리
+        """
+        with self._lock:
+            self._sync_info.check_staleness()
+            return {
+                "is_synced": self._sync_info.is_synced,
+                "status": self._sync_info.status.value,
+                "last_sync_time": self._sync_info.last_sync_time,
+                "last_sync_source": self._sync_info.last_sync_source,
+                "age_seconds": self._sync_info.age_seconds,
+                "is_recovering": self._sync_info.is_recovering,
+                "recovery_progress": self._sync_info.recovery_progress,
+                "shadow_value": self._shadow_value,
+                "labels": self._label_values,
+            }
 
 
 class SafeGauge:
@@ -360,6 +554,8 @@ def safe_set_gauge(
 
 
 __all__ = [
+    "SyncStatus",
+    "SyncInfo",
     "SafeGauge",
     "SafeGaugeChild",
     "clamp_non_negative",
