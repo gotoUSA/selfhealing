@@ -410,24 +410,58 @@ CONFIG_CLASSES = {
 | 6 | 테스트 작성 | 2h | ✅ |
 | **합계** | | **14h (2일)** | ✅ |
 
-### Phase 2: Config 통합 (다음 주)
+### Phase 2: Config 통합 ✅ 완료 (2025-12-24)
 
-| 순서 | 작업 | 예상 시간 |
-|------|------|----------|
-| 1 | Drift Threshold 통합 | 4h |
-| 2 | Tiering 통합 | 8h |
-| 3 | Emergency Config 일부 병합 | 4h |
-| 4 | 거버넌스 상태 API | 4h |
-| **합계** | | **20h (2.5일)** |
+| 순서 | 작업 | 예상 시간 | 상태 |
+|------|------|----------|------|
+| 1 | DriftThresholdConfig 통합 | 4h | ✅ |
+| 2 | GovernanceRBACStatusView API | 4h | ✅ |
+| 3 | GovernanceConfigView API | 2h | ✅ |
+| 4 | DriftThresholdConfigView 리팩토링 | 2h | ✅ |
+| 5 | EmergencyModeTracker expires_at 개선 | 2h | ✅ |
+| 6 | 테스트 작성 (20개) | 4h | ✅ |
+| **합계** | | **18h (2.25일)** | ✅ |
 
-### Phase 3: 고급 기능 (필요시)
+**구현된 기능:**
+- `DriftThresholdConfig` 데이터클래스 (core/config.py)
+- RuntimeConfigManager에 drift_threshold 키 추가
+- `GET /api/self-healing/governance/status/` - RBAC 상태 조회
+- `GET/PUT /api/self-healing/config/governance/` - 거버넌스 설정
+- EmergencyModeTracker에 expires_at, time_remaining_hours 추가
 
-| 순서 | 작업 | 예상 시간 |
-|------|------|----------|
-| 1 | L2 Storage Config 통합 | 4h |
-| 2 | Chaos Config 부분 통합 | 12h |
-| 3 | 4-Eyes Approval 워크플로우 | 16h |
-| **합계** | | **32h (4일)** |
+### Phase 3: 고급 기능 ✅ 완료 (2025-12-24)
+
+| 순서 | 작업 | 예상 시간 | 상태 |
+|------|------|----------|------|
+| 1 | L2StorageConfig 데이터클래스 생성 | 2h | ✅ |
+| 2 | ChaosConfig 데이터클래스 생성 | 2h | ✅ |
+| 3 | RuntimeConfigManager에 l2_storage, chaos 키 추가 | 2h | ✅ |
+| 4 | ApprovalRequest 데이터클래스 생성 | 2h | ✅ |
+| 5 | 4-Eyes Approval Workflow API 구현 | 4h | ✅ |
+| 6 | L2StorageConfigManagedView API 구현 | 2h | ✅ |
+| 7 | 테스트 작성 (27개) | 4h | ✅ |
+| **합계** | | **18h (2.25일)** | ✅ |
+
+**구현된 기능:**
+
+1. **L2 Storage Config 통합**
+   - `L2StorageConfig` 데이터클래스 (core/config.py)
+   - RuntimeConfigManager에 l2_storage 키 추가
+   - `get/update/reset_l2_storage_config()` 메서드
+   - `GET/PUT /api/self-healing/config/l2-storage/` API
+
+2. **Chaos Config 통합**
+   - `ChaosConfig` 데이터클래스 (core/config.py)
+   - RuntimeConfigManager에 chaos 키 추가 (기존 메서드와 통합)
+
+3. **4-Eyes Approval Workflow**
+   - `ApprovalRequest` 데이터클래스 (core/config.py)
+   - `create/approve/reject_request()` 메서드
+   - `expire_old_requests()`, `get_pending_requests_for_user()` 메서드
+   - `POST /api/self-healing/governance/approval-requests/` - 요청 생성
+   - `GET /api/self-healing/governance/approval-requests/` - 요청 목록
+   - `POST /api/self-healing/governance/approval-requests/{id}/approve/` - 승인
+   - `POST /api/self-healing/governance/approval-requests/{id}/reject/` - 거부
 
 ---
 
@@ -446,3 +480,5 @@ CONFIG_CLASSES = {
 |------|------|----------|
 | 2025-12-24 | 1.0 | 초기 작성 - 전체 구현 계획 정리 |
 | 2025-12-24 | 1.1 | Phase 1 완료 - GovernanceConfig, EmergencyModeTracker, Celery Beat 태스크, 테스트 |
+| 2025-12-24 | 1.2 | Phase 2 완료 - DriftThresholdConfig 통합, GovernanceRBACStatusView, GovernanceConfigView |
+| 2025-12-24 | 1.3 | Phase 3 완료 - L2StorageConfig, ChaosConfig, 4-Eyes Approval Workflow |

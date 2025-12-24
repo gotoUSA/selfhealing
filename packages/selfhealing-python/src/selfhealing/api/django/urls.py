@@ -118,6 +118,11 @@ from selfhealing.api.django.views.governance import (
     GovernanceConfigView,
     DeprecatedMetricSyncView,
     DeprecatedDriftReportView,
+    # Phase 3: 4-Eyes Approval & L2 Storage
+    ApprovalRequestListView,
+    ApprovalRequestApproveView,
+    ApprovalRequestRejectView,
+    L2StorageConfigManagedView,
 )
 
 # Config History & Rollback Views
@@ -320,6 +325,20 @@ urlpatterns = [
     # =========================================================================
     path("governance/status/", GovernanceRBACStatusView.as_view(), name="governance-status"),
     path("config/governance/", GovernanceConfigView.as_view(), name="config-governance"),
+    
+    # =========================================================================
+    # 4-Eyes Approval Workflow API (Phase 3)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # =========================================================================
+    path("governance/approval-requests/", ApprovalRequestListView.as_view(), name="approval-requests-list"),
+    path("governance/approval-requests/<str:request_id>/approve/", ApprovalRequestApproveView.as_view(), name="approval-request-approve"),
+    path("governance/approval-requests/<str:request_id>/reject/", ApprovalRequestRejectView.as_view(), name="approval-request-reject"),
+    
+    # =========================================================================
+    # L2 Storage Config API (Phase 3 - RuntimeConfigManager Integration)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # =========================================================================
+    path("config/l2-storage/", L2StorageConfigManagedView.as_view(), name="config-l2-storage"),
     
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)

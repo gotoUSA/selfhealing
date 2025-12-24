@@ -403,6 +403,128 @@ class DriftThresholdConfig:
 
 
 @dataclass
+class L2StorageConfig:
+    """
+    L2 Storage 런타임 설정.
+
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
+    서버 재시작 없이 API로 변경 가능합니다.
+
+    Timeouts:
+        - redis_timeout_ms: Redis 연결 타임아웃
+        - database_timeout_ms: DB 연결 타임아웃
+        - fallback_timeout_ms: 폴백 타임아웃
+
+    Shadow Logging:
+        - shadow_log_enabled: 그림자 로깅 활성화
+        - shadow_log_max_entries: 최대 로그 엔트리 수
+
+    Health Check:
+        - health_check_interval_seconds: 헬스체크 주기
+        - health_check_timeout_ms: 헬스체크 타임아웃
+
+    Reference:
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
+    """
+
+    # Timeouts (ms)
+    redis_timeout_ms: int = 50
+    database_timeout_ms: int = 200
+    fallback_timeout_ms: int = 100
+
+    # Shadow Logging
+    shadow_log_enabled: bool = True
+    shadow_log_max_entries: int = 1000
+
+    # Reconciliation Jitter
+    reconciliation_jitter_min_seconds: float = 0.0
+    reconciliation_jitter_max_seconds: float = 5.0
+
+    # Health Check
+    health_check_interval_seconds: float = 30.0
+    health_check_timeout_ms: int = 100
+
+
+@dataclass
+class ChaosConfig:
+    """
+    Chaos Engineering 설정.
+
+    SafetyGuard, BlastRadius 등 Chaos 실험 안전 설정.
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
+
+    Safety Guard:
+        - max_blast_radius: 최대 영향 범위 (0.0 ~ 1.0)
+        - max_failure_rate: 최대 장애 비율 (0.0 ~ 1.0)
+        - auto_rollback_enabled: 자동 롤백 활성화
+
+    Experiment Controls:
+        - dry_run_default: 기본 Dry Run 모드
+        - require_approval: 실험 전 승인 필요
+
+    Reference:
+    - docs/self_healing/09c_CONFIGURATION_CHAOS.md
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
+    """
+
+    # Safety Guard
+    max_blast_radius: float = 0.10      # 최대 10% 영향
+    max_failure_rate: float = 0.20      # 최대 20% 장애율
+    auto_rollback_enabled: bool = True  # 자동 롤백 활성화
+    rollback_threshold: float = 0.05    # 5% 에러율 초과 시 롤백
+
+    # Experiment Controls
+    dry_run_default: bool = True        # 기본적으로 Dry Run
+    require_approval: bool = False      # 승인 필요 여부
+    experiment_timeout_seconds: int = 300  # 실험 타임아웃 (5분)
+
+    # Stop Conditions
+    stop_on_error_rate: float = 0.10    # 10% 에러율에서 중지
+    stop_on_latency_increase_pct: float = 50.0  # 50% 레이턴시 증가 시 중지
+
+
+@dataclass
+class ApprovalRequest:
+    """
+    4-Eyes Approval Request (듀얼 승인 요청).
+
+    Admin A가 요청 → Admin B가 승인/거부하는 워크플로우.
+    금융권 컴플라이언스 요구사항 충족.
+
+    Workflow:
+        1. Admin A: 요청 생성 (PENDING)
+        2. Admin B: 알림 수신
+        3. Admin B: 24시간 내 APPROVED/REJECTED
+        4. 만료 시: EXPIRED
+
+    Reference:
+    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
+    - PCI-DSS Dual Control Requirements
+    """
+
+    id: str = ""
+    request_type: str = ""  # config_change, mode_change, emergency_action
+    description: str = ""
+
+    # 요청자
+    requested_by: str = ""
+    requested_at: str = ""  # ISO format
+
+    # 승인자
+    approved_by: str = ""
+    approved_at: str = ""  # ISO format
+
+    # 상태: PENDING, APPROVED, REJECTED, EXPIRED
+    status: str = "PENDING"
+
+    # 요청 데이터
+    payload: Dict[str, Any] = field(default_factory=dict)
+
+    # 만료 시간 (기본 24시간)
+    expires_at: str = ""  # ISO format
+
+
+@dataclass
 class SelfHealingConfig:
     """
     Main configuration for the self-healing system.
