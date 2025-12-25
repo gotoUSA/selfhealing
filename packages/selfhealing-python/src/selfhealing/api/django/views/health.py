@@ -4,19 +4,24 @@ Self-Healing Health & Metrics Views.
 REST API endpoints for health checks and metrics.
 
 Endpoints:
-- GET  /api/self-healing/health/ - Health check
+- GET  /api/self-healing/health/ - Health check (V3: cached)
 - GET  /api/self-healing/health/live/ - Kubernetes liveness probe
 - GET  /api/self-healing/health/ready/ - Kubernetes readiness probe
 - GET  /api/self-healing/health/pool/ - Connection pool health
-- GET  /api/self-healing/health/ping/ - Simple ping
+- GET  /api/self-healing/health/ping/ - Simple ping (V3: ultra-lightweight)
 - GET  /api/self-healing/metrics/ - Get metrics
 
 Note:
 - 비즈니스 로직은 HealthCheckService로 분리됨
 - View는 Request/Response 처리만 담당
+
+V3 Optimization:
+- L1 In-process cache (2s TTL) + L2 Redis cache (15s TTL)
+- Target: P95 < 50ms for all L3 observability endpoints
 """
 
 import logging
+import time
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -28,20 +33,63 @@ from selfhealing.services.health_check import get_health_check_service
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# V3 Cache Helpers
+# =============================================================================
+
+def _get_cached_response(cache_key: str, compute_fn, use_cache: bool = True):
+    """
+    Get response with V3 multi-tier cache.
+    
+    Falls back gracefully if precomputed_cache module not available.
+    """
+    if not use_cache:
+        return compute_fn()
+        
+    try:
+        from selfhealing.services.precomputed_cache import get_cached_response
+        return get_cached_response(cache_key, compute_fn)
+    except ImportError:
+        # Fallback if precomputed_cache not available
+        return compute_fn()
+
+
 class SelfHealingHealthView(APIView):
     """
     Self-Healing System Health Check.
 
     GET /api/self-healing/health/
+    
+    V3 Optimization: Uses multi-tier cache for P95 < 10ms target.
     """
 
     permission_classes = []  # Public endpoint
 
     def get(self, request):
-        """Get self-healing system health."""
-        service = get_health_check_service()
-        health = service.get_overall_health()
-        return Response(health.to_dict())
+        """Get self-healing system health (V3: cached)."""
+        # Check if cache bypass requested
+        use_cache = request.query_params.get("nocache", "").lower() != "true"
+        
+        try:
+            from selfhealing.services.precomputed_cache import (
+                get_cached_health,
+                CACHE_KEY_HEALTH,
+                compute_health_status,
+            )
+            
+            if use_cache:
+                data = get_cached_health()
+            else:
+                data = compute_health_status()
+                data["_cache"] = {"hit": "BYPASSED"}
+                
+            return Response(data)
+            
+        except ImportError:
+            # Fallback if precomputed_cache not available
+            service = get_health_check_service()
+            health = service.get_overall_health()
+            return Response(health.to_dict())
 
 
 class LivenessView(APIView):
@@ -113,15 +161,27 @@ class ConnectionPoolHealthView(APIView):
 
 def simple_health_ping(request):
     """
-    Minimal health check with lowest overhead.
+    Ultra-lightweight health check with absolute minimum overhead.
 
     GET /api/self-healing/health/ping/
 
-    Just returns 'pong' - useful for load balancer checks.
+    V3 Optimization:
+    - No database access
+    - No service layer calls
+    - No authentication
+    - Target: < 1ms response time
+    
+    Returns 'pong' - useful for load balancer checks and L3 baseline.
     """
     from django.http import JsonResponse
-
-    return JsonResponse({"ping": "pong"})
+    
+    # Ultra-lightweight: just return static response
+    # No imports, no computation, no DB - pure HTTP response
+    return JsonResponse(
+        {"ping": "pong", "status": "alive"},
+        # Hint to client: cache for 1 second
+        headers={"Cache-Control": "max-age=1"},
+    )
 
 
 class SelfHealingMetricsView(APIView):

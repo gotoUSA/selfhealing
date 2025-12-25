@@ -230,7 +230,27 @@ def pool_status(request):
     SQLAlchemy Pool 사용 시 실제 Pool 상태를, 아니면 PostgreSQL 통계를 반환.
 
     GET /api/self-healing/stress/pool-status/
+    
+    V3 Optimization: Uses multi-tier cache for P95 < 30ms target.
+    Query Parameters:
+    - nocache: Set to "true" to bypass cache
     """
+    # V3: Check cache bypass
+    use_cache = request.GET.get("nocache", "").lower() != "true"
+    
+    if use_cache:
+        try:
+            from selfhealing.services.precomputed_cache import get_cached_pool_status
+            data = get_cached_pool_status()
+            
+            # Pool 고갈 시 503 반환
+            if data.get("status") == "exhausted":
+                return JsonResponse(data, status=503)
+            return JsonResponse(data)
+        except ImportError:
+            pass  # Fall through to direct computation
+    
+    # Direct computation
     try:
         # SQLAlchemy Pool 정보 먼저 시도
         pool_info = get_pool_info()

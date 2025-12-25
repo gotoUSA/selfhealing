@@ -19,6 +19,11 @@ Stage 1: L3 통합 베이스라인 테스트 (Happy Load + L3 Observability)
 - P99 임계값: 200ms (운영 기준 500ms에서 축소)
 - L3 엔드포인트: 200만 success (403/404는 failure로 처리)
 
+🚀 V3 Performance Optimization:
+- /health/ping/ 초경량 엔드포인트 추가 (Target: <1ms)
+- Multi-tier cache: L1 TTLCache (2s) + L2 Redis (15s)
+- Target: L3 endpoints P95 < 50ms
+
 실행:
     locust -f load_tests/scenarios/load/stage1_happy_load.py --host=http://localhost:8000 --users=5 --spawn-rate=2 --run-time=1m --headless
 """
@@ -60,10 +65,12 @@ _l3_stats = {
     "engine_status_checks": 0,
     "error_budget_checks": 0,
     "circuit_breaker_checks": 0,
+    "ping_checks": 0,  # V3: Ultra-lightweight ping endpoint
     # L3 endpoint latencies
     "engine_latencies": [],
     "error_budget_latencies": [],
     "cb_latencies": [],
+    "ping_latencies": [],  # V3: Ping latencies
     # SLA from RuntimeConfig
     "dynamic_sla_targets": None,
     # Final verification
@@ -73,6 +80,8 @@ _l3_stats = {
     "all_cb_closed": True,
     # Rate Limit tracking (자체 보호 동작 추적)
     "rate_limited_count": 0,
+    # V3: Cache hit tracking
+    "cache_hits": {"L1": 0, "L2": 0, "MISS": 0},
 }
 
 
@@ -248,6 +257,7 @@ class HappyLoadUser(HttpUser):
         
         부하 중 L3 엔진이 상태를 정확히 인식하는지 검증
         /health/ 엔드포인트는 인증 불필요
+        V3: Multi-tier cache 사용으로 P95 < 10ms 목표
         """
         global _l3_stats
         start_time = time.time()
@@ -263,6 +273,12 @@ class HappyLoadUser(HttpUser):
             
             if response.status_code == 200:
                 data = response.json()
+                # V3: Cache hit tracking
+                cache_info = data.get("_cache", {})
+                cache_hit = cache_info.get("hit", "MISS")
+                if cache_hit in _l3_stats["cache_hits"]:
+                    _l3_stats["cache_hits"][cache_hit] += 1
+                    
                 # health status 확인
                 status = data.get("status", "unknown")
                 if status != "healthy":
@@ -276,6 +292,39 @@ class HappyLoadUser(HttpUser):
                 # 403/404등 실제 에러는 실패 처리
                 response.failure(f"Engine health check failed: {response.status_code}")
 
+    @task(2)
+    @tag("l3", "observability", "v3")
+    def check_health_ping(self):
+        """
+        V3 Ultra-lightweight Health Ping
+        
+        /health/ping/ 엔드포인트 - 최소 오버헤드 (<1ms 목표)
+        미들웨어 바이패스, DB 없음, 서비스 레이어 없음
+        """
+        global _l3_stats
+        start_time = time.time()
+        
+        with self.client.get(
+            f"{SH_API}/health/ping/",
+            name=f"{STAGE_NAME} [L3-V3] GET /health/ping/",
+            catch_response=True,
+        ) as response:
+            latency_ms = (time.time() - start_time) * 1000
+            _l3_stats["ping_latencies"].append(latency_ms)
+            _l3_stats["ping_checks"] += 1
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("ping") == "pong":
+                    response.success()
+                else:
+                    response.failure("Invalid ping response")
+            elif response.status_code == 429:
+                _l3_stats["rate_limited_count"] += 1
+                response.success()
+            else:
+                response.failure(f"Ping failed: {response.status_code}")
+
     @task(1)
     @tag("l3", "observability", "error-budget")
     def check_error_budget(self):
@@ -283,6 +332,7 @@ class HappyLoadUser(HttpUser):
         Error Budget 상태 확인
         
         /error-budget/status/ 엔드포인트 사용
+        V3: Multi-tier cache 사용으로 P95 < 20ms 목표
         주의: /l2-storage/health/는 IsAdminUser 필요하므로 사용하지 않음
         """
         global _l3_stats
@@ -299,8 +349,15 @@ class HappyLoadUser(HttpUser):
             
             if response.status_code == 200:
                 data = response.json()
+                # V3: Cache hit tracking
+                cache_info = data.get("_cache", {})
+                cache_hit = cache_info.get("hit", "MISS")
+                if cache_hit in _l3_stats["cache_hits"]:
+                    _l3_stats["cache_hits"][cache_hit] += 1
+                    
                 # Error Budget 상태 확인
-                burn_rate = data.get("burn_rate_1h", 0)
+                budget_data = data.get("data", data)
+                burn_rate = budget_data.get("burn_rate_1h", 0)
                 _l3_stats["final_burn_rate"] = burn_rate
                 response.success()
             elif response.status_code == 429:
@@ -321,6 +378,7 @@ class HappyLoadUser(HttpUser):
         
         Happy Path에서 Pool 상태 모니터링
         /stress/pool-status/ 엔드포인트 사용 (인증 불필요)
+        V3: Multi-tier cache 사용으로 P95 < 30ms 목표
         """
         global _l3_stats
         start_time = time.time()
@@ -336,6 +394,12 @@ class HappyLoadUser(HttpUser):
             
             if response.status_code == 200:
                 data = response.json()
+                # V3: Cache hit tracking
+                cache_info = data.get("_cache", {})
+                cache_hit = cache_info.get("hit", "MISS")
+                if cache_hit in _l3_stats["cache_hits"]:
+                    _l3_stats["cache_hits"][cache_hit] += 1
+                    
                 # Pool 상태 확인 (available 필드)
                 pool_status = data.get("pool", {})
                 if not pool_status.get("available", True):
@@ -472,15 +536,22 @@ def on_test_stop(environment, **kwargs):
         print("⚠️ Pool CB: OPEN 상태 감지됨")
 
     # =========================================================================
-    # Part 5: Governance Overhead 측정
+    # Part 5: Governance Overhead 측정 (V3 Enhanced)
     # =========================================================================
-    print("\n⚡ [Part 5] L3 Governance Overhead 측정")
+    print("\n⚡ [Part 5] L3 Governance Overhead 측정 (V3)")
     print("-" * 50)
     
     overhead_passed = True
-    overhead_threshold = 50  # ms
+    # V3: 더 엄격한 타겟
+    overhead_targets = {
+        "Health Ping": 5,      # V3: <5ms target (previously N/A)
+        "Engine Status": 10,   # V3: <10ms target (previously 50ms)
+        "Error Budget": 20,    # V3: <20ms target (previously 50ms)
+        "Circuit Breaker": 30, # V3: <30ms target (previously 50ms)
+    }
     
     for endpoint_name, latencies in [
+        ("Health Ping", _l3_stats.get("ping_latencies", [])),
         ("Engine Status", _l3_stats.get("engine_latencies", [])),
         ("Error Budget", _l3_stats.get("error_budget_latencies", [])),
         ("Circuit Breaker", _l3_stats.get("cb_latencies", [])),
@@ -490,21 +561,35 @@ def on_test_stop(environment, **kwargs):
             p95_idx = int(len(sorted_latencies) * 0.95)
             p95 = sorted_latencies[min(p95_idx, len(sorted_latencies) - 1)]
             avg = statistics.mean(latencies)
+            target = overhead_targets.get(endpoint_name, 50)
             
-            status = "✅" if p95 <= overhead_threshold else "⚠️"
-            print(f"{status} {endpoint_name}: P95={p95:.1f}ms, Avg={avg:.1f}ms (목표 <{overhead_threshold}ms)")
+            status = "✅" if p95 <= target else "⚠️"
+            print(f"{status} {endpoint_name}: P95={p95:.1f}ms, Avg={avg:.1f}ms (목표 <{target}ms)")
             
-            if p95 > overhead_threshold * 2:  # 2배 초과 시 경고
+            if p95 > target * 2:  # 2배 초과 시 경고
                 overhead_passed = False
 
     # =========================================================================
-    # Part 6: L3 Observability 통계
+    # Part 6: L3 Observability 통계 (V3 Enhanced)
     # =========================================================================
-    print("\n📈 [Part 6] L3 Observability 통계")
+    print("\n📈 [Part 6] L3 Observability 통계 (V3)")
     print("-" * 50)
+    print(f"Health Ping Checks: {_l3_stats.get('ping_checks', 0)}회")
     print(f"Engine Status Checks: {_l3_stats.get('engine_status_checks', 0)}회")
     print(f"Error Budget Checks: {_l3_stats.get('error_budget_checks', 0)}회")
     print(f"Circuit Breaker Checks: {_l3_stats.get('circuit_breaker_checks', 0)}회")
+    
+    # V3: Cache Hit 통계
+    cache_hits = _l3_stats.get("cache_hits", {})
+    total_cache_ops = sum(cache_hits.values())
+    if total_cache_ops > 0:
+        l1_hits = cache_hits.get("L1", 0)
+        l2_hits = cache_hits.get("L2", 0)
+        misses = cache_hits.get("MISS", 0)
+        print(f"\n🗄️ V3 Cache Statistics:")
+        print(f"   L1 Hits: {l1_hits} ({l1_hits/total_cache_ops*100:.1f}%)")
+        print(f"   L2 Hits: {l2_hits} ({l2_hits/total_cache_ops*100:.1f}%)")
+        print(f"   Misses: {misses} ({misses/total_cache_ops*100:.1f}%)")
     
     # Rate Limit 통계 (L3 자체 보호 동작)
     rate_limited = _l3_stats.get("rate_limited_count", 0)

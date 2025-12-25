@@ -4,7 +4,7 @@ Error Budget API Views.
 REST API endpoints for Error Budget management and Deployment Policy.
 
 Endpoints:
-- GET  /api/self-healing/error-budget/status/           - Get Error Budget status
+- GET  /api/self-healing/error-budget/status/           - Get Error Budget status (V3: cached)
 - GET  /api/self-healing/error-budget/history/          - Get budget consumption history
 - GET  /api/self-healing/deployment-policy/verdict/     - Get deployment verdict
 - POST /api/self-healing/deployment-policy/acknowledge/ - Acknowledge freeze
@@ -18,6 +18,10 @@ FAIL-SAFE DESIGN:
 - Error Budget 시스템 장애 시 → 기본값 PROCEED (fail-open)
 - 배포를 막는 것보다 시스템 가용성이 더 중요
 - 장애 시에도 CI/CD 파이프라인이 중단되지 않도록 보장
+
+V3 Optimization:
+- L1 In-process cache (2s TTL) + L2 Redis cache (15s TTL)
+- Target: P95 < 20ms for /error-budget/status/
 """
 
 import logging
@@ -60,6 +64,9 @@ class ErrorBudgetStatusView(APIView):
 
     Query Parameters:
     - slo_name: SLO name to check (default: "availability")
+    - nocache: Set to "true" to bypass cache (V3)
+    
+    V3 Optimization: Uses multi-tier cache for P95 < 20ms target.
     """
 
     permission_classes = [IsAuthenticated]
@@ -67,7 +74,17 @@ class ErrorBudgetStatusView(APIView):
     def get(self, request: Request) -> Response:
         try:
             slo_name = request.query_params.get("slo_name", "availability")
+            use_cache = request.query_params.get("nocache", "").lower() != "true"
+            
+            # V3: Use cached response for default SLO
+            if use_cache and slo_name == "availability":
+                try:
+                    from selfhealing.services.precomputed_cache import get_cached_error_budget
+                    return Response(get_cached_error_budget())
+                except ImportError:
+                    pass  # Fall through to direct computation
 
+            # Direct computation for non-default SLO or if cache unavailable
             service = get_error_budget_service()
             budget_status = service.get_budget_status(slo_name)
 
