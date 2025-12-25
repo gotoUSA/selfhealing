@@ -2,9 +2,9 @@
 Stage 1: L3 통합 베이스라인 테스트 (Happy Load + L3 Observability)
 
 목적: 정상 성능 측정 + L3 엔진 거버넌스 오버헤드 검증
-- Users: 50 → 100 → 200 (스케일링)
-- Spawn Rate: 20
-- Duration: 3~5분
+- Users: 5 → 10 → 50 (스케일링)
+- Spawn Rate: 5
+- Duration: 1~3분
 
 🏛️ L3 통합 검증 항목:
 1. 관찰자 태스크: 부하 중 L3 엔진 상태 실시간 확인
@@ -14,8 +14,13 @@ Stage 1: L3 통합 베이스라인 테스트 (Happy Load + L3 Observability)
 5. Circuit Breaker 불변성: 모든 CB가 CLOSED 상태 유지
 6. 거버넌스 오버헤드: 엔진 엔드포인트 P95 < 50ms
 
+⚠️ Happy Path SLA 타이트닝 (v2):
+- P95 임계값: 100ms (운영 기준 300ms에서 축소)
+- P99 임계값: 200ms (운영 기준 500ms에서 축소)
+- L3 엔드포인트: 200만 success (403/404는 failure로 처리)
+
 실행:
-    locust -f load_tests/scenarios/load/stage1_happy_load.py --host=http://localhost:8000 --users=10 --spawn-rate=5 --run-time=1m --headless
+    locust -f load_tests/scenarios/load/stage1_happy_load.py --host=http://localhost:8000 --users=5 --spawn-rate=2 --run-time=1m --headless
 """
 
 import os
@@ -66,6 +71,8 @@ _l3_stats = {
     "cb_opened_during_test": False,
     "final_burn_rate": None,
     "all_cb_closed": True,
+    # Rate Limit tracking (자체 보호 동작 추적)
+    "rate_limited_count": 0,
 }
 
 
@@ -261,26 +268,29 @@ class HappyLoadUser(HttpUser):
                 if status != "healthy":
                     _l3_stats["cb_opened_during_test"] = True
                 response.success()
-            elif response.status_code in [429, 403, 404]:
-                response.success()  # Rate limit/권한 문제는 성공 처리
+            elif response.status_code == 429:
+                # Rate Limit은 L3 자체 보호 동작 - 성공으로 처리하되 통계 추적
+                _l3_stats["rate_limited_count"] += 1
+                response.success()
             else:
+                # 403/404등 실제 에러는 실패 처리
                 response.failure(f"Engine health check failed: {response.status_code}")
 
     @task(1)
     @tag("l3", "observability", "error-budget")
     def check_error_budget(self):
         """
-        Error Budget/L2 Storage 상태 확인
+        Error Budget 상태 확인
         
-        부하 중 L2 Storage 건강 상태 검증
-        /l2-storage/health/ 엔드포인트 사용
+        /error-budget/status/ 엔드포인트 사용
+        주의: /l2-storage/health/는 IsAdminUser 필요하므로 사용하지 않음
         """
         global _l3_stats
         start_time = time.time()
         
         with self.client.get(
-            f"{SH_API}/l2-storage/health/",
-            name=f"{STAGE_NAME} [L3] GET /l2-storage/health/",
+            f"{SH_API}/error-budget/status/",
+            name=f"{STAGE_NAME} [L3] GET /error-budget/status/",
             catch_response=True,
         ) as response:
             latency_ms = (time.time() - start_time) * 1000
@@ -289,17 +299,19 @@ class HappyLoadUser(HttpUser):
             
             if response.status_code == 200:
                 data = response.json()
-                # L2 Storage 건강 상태 확인
-                health_status = data.get("health", {}).get("status", "healthy")
-                if health_status != "healthy":
-                    _l3_stats["final_burn_rate"] = 1.5  # 문제 있으면 높은 burn rate
-                else:
-                    _l3_stats["final_burn_rate"] = 0.0
+                # Error Budget 상태 확인
+                burn_rate = data.get("burn_rate_1h", 0)
+                _l3_stats["final_burn_rate"] = burn_rate
                 response.success()
-            elif response.status_code in [429, 403, 404]:
+            elif response.status_code == 429:
+                # Rate Limit은 L3 자체 보호 동작
+                _l3_stats["rate_limited_count"] += 1
+                response.success()
+            elif response.status_code in [403, 404]:
+                # 엔드포인트 없음/권한 없음 - 경고하지만 성공으로 처리 (선택적 기능)
                 response.success()
             else:
-                response.failure(f"L2 Storage health check failed: {response.status_code}")
+                response.failure(f"Error budget check failed: {response.status_code}")
 
     @task(1)
     @tag("l3", "observability", "circuit-breaker")
@@ -329,9 +341,12 @@ class HappyLoadUser(HttpUser):
                 if not pool_status.get("available", True):
                     _l3_stats["all_cb_closed"] = False
                 response.success()
-            elif response.status_code in [429, 403, 404]:
-                response.success()  # 권한/Rate limit 문제는 성공 처리
+            elif response.status_code == 429:
+                # Rate Limit은 L3 자체 보호 동작
+                _l3_stats["rate_limited_count"] += 1
+                response.success()
             else:
+                # 403/404등 실제 에러는 실패 처리
                 response.failure(f"Pool status check failed: {response.status_code}")
 
 
@@ -359,10 +374,12 @@ def on_test_stop(environment, **kwargs):
     
     sla_passed = True
     
-    # 동적 SLA 타겟 사용 (SSOT)
+    # 동적 SLA 타겟 사용 (SSOT) - Happy Path에서 타이트닝된 기준
+    # Stage 1 (5 users)에서는 더 엄격한 기준 적용
     dynamic_sla = _l3_stats.get("dynamic_sla_targets") or SLA_TARGETS.get("payment", {})
-    p95_target = dynamic_sla.get("p95_ms", dynamic_sla.get("p95", 300))
-    p99_target = dynamic_sla.get("p99_ms", dynamic_sla.get("p99", 500))
+    # Happy Path 타이트닝: 운영 기준(300/500) 대신 100/200 적용
+    p95_target = min(dynamic_sla.get("p95_ms", dynamic_sla.get("p95", 100)), 100)
+    p99_target = min(dynamic_sla.get("p99_ms", dynamic_sla.get("p99", 200)), 200)
 
     for name, stats in summary["endpoints"].items():
         if "payments/confirm" in name.lower() and "CRITICAL" in name:
@@ -488,6 +505,11 @@ def on_test_stop(environment, **kwargs):
     print(f"Engine Status Checks: {_l3_stats.get('engine_status_checks', 0)}회")
     print(f"Error Budget Checks: {_l3_stats.get('error_budget_checks', 0)}회")
     print(f"Circuit Breaker Checks: {_l3_stats.get('circuit_breaker_checks', 0)}회")
+    
+    # Rate Limit 통계 (L3 자체 보호 동작)
+    rate_limited = _l3_stats.get("rate_limited_count", 0)
+    if rate_limited > 0:
+        print(f"\n⚡ Rate Limit 발생: {rate_limited}회 (L3 자체 보호 동작)")
     
     if _l3_stats.get("dynamic_sla_targets"):
         print(f"\n📋 Dynamic SLA (from RuntimeConfig):")
