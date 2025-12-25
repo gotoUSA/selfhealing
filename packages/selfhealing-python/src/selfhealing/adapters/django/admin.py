@@ -30,7 +30,8 @@ class FailedOperationAdmin(admin.ModelAdmin):
         "domain",
         "failure_type",
         "status_display",
-        "order_id",
+        "entity_type",
+        "entity_id",
         "user_id",
         "retry_count",
         "created_at",
@@ -49,15 +50,17 @@ class FailedOperationAdmin(admin.ModelAdmin):
         "failure_type",
         "error_code",
         "error_message",
-        "order_id",
+        "entity_type",
+        "entity_id",
         "user_id",
     ]
 
     readonly_fields = [
         "domain",
         "failure_type",
-        "order_id",
-        "payment_id",
+        "entity_type",
+        "entity_id",
+        "entity_refs",
         "user_id",
         "snapshot_data",
         "error_code",
@@ -94,7 +97,7 @@ class FailedOperationAdmin(admin.ModelAdmin):
         (
             "References",
             {
-                "fields": ("order_id", "payment_id", "user_id"),
+                "fields": ("entity_type", "entity_id", "entity_refs", "user_id"),
             },
         ),
         (
@@ -433,8 +436,9 @@ class SecurityIncidentAdmin(admin.ModelAdmin):
         "description",
         "context",
         "raw_request",
-        "order_id",
-        "payment_id",
+        "entity_type",
+        "entity_id",
+        "entity_refs",
         "created_at",
     ]
 
@@ -460,7 +464,7 @@ class SecurityIncidentAdmin(admin.ModelAdmin):
         (
             "Related Objects",
             {
-                "fields": ("order_id", "payment_id"),
+                "fields": ("entity_type", "entity_id", "entity_refs"),
             },
         ),
         (

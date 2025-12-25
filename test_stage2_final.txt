@@ -1,0 +1,43 @@
+
+======================================================================
+STAGE 2: IDEMPOTENCY + SELFHEALING INTEGRATION TEST RESULTS
+======================================================================
+
+[Part 1] Idempotency Verification
+--------------------------------------------------
+  [PASS] IDEMPOTENCY TEST PASSED
+  No duplicate payments were processed
+
+[Part 2] Selfhealing Idempotency Config
+--------------------------------------------------
+  Config Checks: 49
+  Idempotency TTL: N/A (auth required)s
+
+================================================================================
+[METRICS] CUSTOM METRICS SUMMARY
+================================================================================
+Elapsed: 59.22s
+Total Requests: 1017
+RPS: 17.17
+Error Rate: 3.15%
+--------------------------------------------------------------------------------
+Endpoint                                    Count      P95      P99    P99.9   Err%
+--------------------------------------------------------------------------------
+[Stage2-L3] [Setup] Fetch Products             10    80.0ms    80.0ms    80.0ms   0.0%
+[Stage2-L3] POST /api/auth/login/              10   408.2ms   408.2ms   408.2ms   0.0%
+[Stage2-L3] [L3] GET /dashboard/summary/       40    78.3ms    80.1ms    80.1ms   0.0%
+[Stage2-L3] [L3] GET /health/                  32   216.2ms   273.4ms   273.4ms   0.0%
+[Stage2-L3] POST /api/cart/clear/             120    76.3ms   105.6ms   107.0ms   0.8%
+[Stage2-L3] [L3] GET /error-budget/statu       42    46.8ms    74.4ms    74.4ms   0.0%
+[Stage2-L3] POST /api/cart/add_item/          120   110.8ms   193.6ms   222.1ms   0.0%
+[Stage2-L3] GET /api/cart/items/              120    24.4ms    78.7ms   225.1ms   0.0%
+[Stage2-L3] POST /api/orders/                 120    75.3ms   148.5ms   199.1ms   0.0%
+[Stage2-L3] GET /api/orders/{id}/             119    16.3ms    18.4ms    18.8ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        46    54.5ms    59.0ms    59.0ms   0.0%
+[Stage2-L3] [L3] GET /circuit-breaker/po       48    26.4ms    79.2ms    79.2ms   0.0%
+[Stage2-L3] [L3] GET /dlq/list/                37    27.8ms   107.2ms   107.2ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        42    54.4ms    57.5ms    57.5ms   0.0%
+[Stage2-L3] [L3] GET /config/idempotency       49    34.5ms   217.4ms   217.4ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        31    54.9ms    55.9ms    55.9ms 100.0%
+[Stage2-L3] POST /api/payments/confirm/        31    55.4ms    55.7ms    55.7ms   0.0%
+================================================================================

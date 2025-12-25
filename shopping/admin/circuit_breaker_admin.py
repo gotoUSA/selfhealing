@@ -30,7 +30,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
         "failure_count",
         "success_count",
         "manually_controlled_display",
-        "controlled_by",
+        "controlled_by_id",
         "opened_at",
         "updated_at",
     ]
@@ -79,7 +79,7 @@ class CircuitBreakerStateAdmin(admin.ModelAdmin):
         (
             "Manual Control",
             {
-                "fields": ("manually_controlled", "controlled_by", "control_reason"),
+                "fields": ("manually_controlled", "controlled_by_id", "control_reason"),
             },
         ),
         (

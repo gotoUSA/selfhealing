@@ -874,8 +874,6 @@ class DLQService:
         domain: str,
         failure_type: str,
         user_id: Optional[int] = None,
-        order_id: Optional[str] = None,
-        payment_id: Optional[str] = None,
         error_message: str = "Test failure for load testing",
         snapshot_data: Optional[Dict[str, Any]] = None,
         request_data: Optional[Dict[str, Any]] = None,
@@ -894,14 +892,12 @@ class DLQService:
             domain: Business domain (e.g., "payment", "point")
             failure_type: Failure type (e.g., "PG_TIMEOUT")
             user_id: User ID (optional)
-            order_id: Order ID (optional)
-            payment_id: Payment ID (optional)
             error_message: Error message (default: "Test failure for load testing")
             snapshot_data: Snapshot data (optional)
             request_data: Request data (optional)
             response_data: Response data (optional)
             metadata: Additional metadata (optional)
-            entity_type: Entity type (default: "test")
+            entity_type: Entity type (e.g., "order", "payment", "test")
             entity_id: Entity ID (optional)
             created_by: Creator identifier (optional)
 
@@ -927,20 +923,19 @@ class DLQService:
             entry = FailedOperation.objects.create(
                 domain=domain,
                 failure_type=failure_type,
-                order_id=order_id,
-                payment_id=payment_id,
                 user_id=user_id,
                 error_code="TEST_ERROR",
                 error_message=error_message,
                 snapshot_data=snapshot_data or {},
                 request_data=request_data or {},
                 response_data=response_data or {},
+                # Domain-neutral entity reference (DB columns)
+                entity_type=entity_type,
+                entity_id=entity_id,
                 metadata={
                     "test": True,
                     "created_by": created_by,
                     "source": "DLQService.create_test_entry",
-                    "entity_type": entity_type,
-                    "entity_id": entity_id,
                     **(metadata or {}),
                 },
                 recommended_action=FailedOperation.RecommendedAction.REPLAY,
@@ -949,7 +944,8 @@ class DLQService:
 
             logger.info(
                 f"[DLQService] Test entry created: id={entry.id}, "
-                f"domain={domain}, failure_type={failure_type}"
+                f"domain={domain}, failure_type={failure_type}, "
+                f"entity_type={entity_type}, entity_id={entity_id}"
             )
 
             return {
@@ -957,6 +953,8 @@ class DLQService:
                 "dlq_id": entry.id,
                 "domain": domain,
                 "failure_type": failure_type,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
             }
 
         except Exception as e:

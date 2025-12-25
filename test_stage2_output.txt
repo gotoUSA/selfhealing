@@ -1,0 +1,782 @@
+[2025-12-26 00:21:19,145] DESKTOP-A0EPTKG/INFO/locust.main: Starting Locust 2.42.5
+[2025-12-26 00:21:19,145] DESKTOP-A0EPTKG/INFO/locust.main: Run time limit set to 60 seconds
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         0     0(0.00%) |      0       0       0      0 |    0.00        0.00
+
+[2025-12-26 00:21:19,147] DESKTOP-A0EPTKG/INFO/locust.runners: Ramping to 10 users at a rate of 5.00 per second
+[2025-12-26 00:21:20,158] DESKTOP-A0EPTKG/INFO/locust.runners: All users spawned: {"IdempotencyUser": 10} (10 total users)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                   2     0(0.00%) |     24      21      28     22 |    0.00        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                  2     0(0.00%) |     22      19      26     19 |    0.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                               2     0(0.00%) |     77      71      83     71 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                  2     0(0.00%) |     19      19      20     19 |    0.00        0.00
+POST     [Stage2-L3] POST /api/orders/                                                      2     0(0.00%) |     68      65      70     65 |    0.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                      2     0(0.00%) |     55      54      56     54 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          2     0(0.00%) |     24      16      31     17 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           1     0(0.00%) |     37      37      37     37 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                    2     0(0.00%) |     38      34      42     34 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         2     0(0.00%) |     18      10      26     10 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      1     0(0.00%) |     17      17      17     17 |    0.00        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                        40     0(0.00%) |    115      10     301     71 |    0.00        0.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                   9     0(0.00%) |     24      17      38     22 |    1.00        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                  9     0(0.00%) |     18      12      26     19 |    1.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    5.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                               9     0(0.00%) |     73      49      97     71 |    1.00        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 10     0(0.00%) |     69      19     161     58 |    1.00        0.00
+POST     [Stage2-L3] POST /api/orders/                                                      9     0(0.00%) |     61      21      78     64 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                      3     0(0.00%) |     53      51      56     54 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                                2   2(100.00%) |     51      50      53     50 |    0.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                                2     0(0.00%) |     51      49      52     50 |    0.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                               4     0(0.00%) |     54      51      59     52 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 1     0(0.00%) |      7       7       7      7 |    0.00        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          2     0(0.00%) |     24      16      31     17 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           2     0(0.00%) |     23       8      37      8 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                    4     0(0.00%) |     29      15      42     24 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         4     0(0.00%) |     16      10      26     14 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      1     0(0.00%) |     17      17      17     17 |    0.50        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    5.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                        91     2(2.20%) |     77       7     301     56 |   20.00        0.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  14     0(0.00%) |     22      13      38     20 |    2.25        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 14     0(0.00%) |     16      10      26     14 |    2.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    2.50        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              15     0(0.00%) |     77      49     195     64 |    2.25        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 15     0(0.00%) |     64      19     161     57 |    2.25        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     14     0(0.00%) |     60      21      78     61 |    2.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                      4     0(0.00%) |     54      51      56     54 |    0.75        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                                4   4(100.00%) |     50      47      53     49 |    0.50        0.50
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                                4     0(0.00%) |     51      49      53     51 |    0.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                               6     0(0.00%) |     53      49      59     52 |    0.75        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 3     0(0.00%) |      6       5       7      6 |    0.25        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          2     0(0.00%) |     24      16      31     17 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           5     0(0.00%) |     17       8      37     14 |    0.25        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                    5     0(0.00%) |     25      11      42     24 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         5     0(0.00%) |     15      10      26     14 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      2     0(0.00%) |     13       9      17     10 |    0.25        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    2.50        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       132     4(3.03%) |     66       5     301     52 |   21.00        0.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  18     0(0.00%) |     20      13      38     18 |    2.33        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 17     0(0.00%) |     16      10      26     14 |    2.33        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    1.67        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              18     0(0.00%) |     75      49     195     64 |    2.33        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 18     0(0.00%) |     62      19     161     56 |    2.33        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     18     0(0.00%) |     61      21      78     62 |    2.33        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                      5     0(0.00%) |     53      48      56     54 |    0.67        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                                5   5(100.00%) |     50      47      53     50 |    0.67        0.67
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                                5     0(0.00%) |     51      49      53     51 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                               7     0(0.00%) |     52      49      59     52 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 4     0(0.00%) |      6       5       7      6 |    0.33        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          3     0(0.00%) |     19       9      31     17 |    0.33        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           6     0(0.00%) |     16       8      37     11 |    0.83        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                    8     0(0.00%) |     19       8      42     12 |    0.83        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         6     0(0.00%) |     13       5      26     11 |    0.83        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      4     0(0.00%) |     10       5      17      7 |    0.33        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    1.67        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       162     5(3.09%) |     59       5     301     51 |   21.33        0.67
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  25     0(0.00%) |     19      13      38     17 |    2.12        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 25     0(0.00%) |     14       8      26     12 |    2.12        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    1.25        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              25     0(0.00%) |     71      49     195     64 |    2.12        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 25     0(0.00%) |     60      19     161     55 |    2.12        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     25     0(0.00%) |     61      21      78     62 |    2.12        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                      8     0(0.00%) |     52      48      56     51 |    0.62        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                                9   9(100.00%) |     51      47      57     51 |    0.62        0.62
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                                9     0(0.00%) |     50      46      53     51 |    0.62        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                               8     0(0.00%) |     52      48      59     51 |    0.88        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 5     0(0.00%) |      6       5       7      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          3     0(0.00%) |     19       9      31     17 |    0.38        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           7     0(0.00%) |     14       7      37     11 |    0.75        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   10     0(0.00%) |     16       4      42      9 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         6     0(0.00%) |     13       5      26     11 |    0.75        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      4     0(0.00%) |     10       5      17      7 |    0.38        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    1.25        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       214     9(4.21%) |     55       4     301     51 |   19.62        0.62
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  29     0(0.00%) |     18      13      38     16 |    2.50        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 29     0(0.00%) |     14       8      26     12 |    2.50        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    1.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              29     0(0.00%) |     70      49     195     63 |    2.50        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 31     0(0.00%) |     60      19     161     55 |    2.50        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     29     0(0.00%) |     61      21      78     61 |    2.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     10     0(0.00%) |     51      48      56     49 |    0.80        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               10  10(100.00%) |     51      47      57     50 |    0.90        0.90
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               10     0(0.00%) |     50      46      53     51 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                               9     0(0.00%) |     51      48      59     51 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 7     0(0.00%) |      6       5       8      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          4     0(0.00%) |     15       5      31     10 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                           9     0(0.00%) |     13       4      37     11 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   12     0(0.00%) |     14       4      42      8 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         6     0(0.00%) |     13       5      26     11 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      6     0(0.00%) |      8       4      17      6 |    0.40        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    1.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       250    10(4.00%) |     52       4     301     50 |   21.30        0.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  35     0(0.00%) |     17      13      38     16 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 35     0(0.00%) |     13       8      26     11 |    2.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              35     0(0.00%) |     68      49     195     63 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 35     0(0.00%) |     59      19     161     55 |    2.70        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     35     0(0.00%) |     61      21      78     61 |    2.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     12     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               13  13(100.00%) |     50      47      57     50 |    1.00        1.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               13     0(0.00%) |     50      46      53     50 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              10     0(0.00%) |     51      48      59     51 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                 9     0(0.00%) |      6       4       8      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          4     0(0.00%) |     15       5      31     10 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          10     0(0.00%) |     12       4      37     11 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   15     0(0.00%) |     12       4      42      8 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                         8     0(0.00%) |     11       5      26     10 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      7     0(0.00%) |      7       4      17      6 |    0.40        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       296    13(4.39%) |     49       4     301     50 |   20.20        1.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  40     0(0.00%) |     17      13      38     15 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 40     0(0.00%) |     13       8      26     11 |    2.70        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              40     0(0.00%) |     67      49     195     62 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 40     0(0.00%) |     58      19     161     54 |    2.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     40     0(0.00%) |     60      21      78     60 |    2.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     15     0(0.00%) |     50      46      56     49 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               13  13(100.00%) |     50      47      57     50 |    1.10        1.10
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               13     0(0.00%) |     50      46      53     50 |    1.30        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              11     0(0.00%) |     51      48      59     51 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                10     0(0.00%) |      6       4       8      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          4     0(0.00%) |     15       5      31     10 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          11     0(0.00%) |     11       4      37     11 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   16     0(0.00%) |     12       4      42      8 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        11     0(0.00%) |     10       4      26      7 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                      8     0(0.00%) |      7       4      17      5 |    0.60        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       332    13(3.92%) |     47       4     301     50 |   21.10        1.10
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  42     0(0.00%) |     17      13      38     15 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 42     0(0.00%) |     12       8      26     11 |    2.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              42     0(0.00%) |     67      49     195     62 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 42     0(0.00%) |     58      19     161     54 |    2.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     42     0(0.00%) |     60      21      78     60 |    2.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     16     0(0.00%) |     50      46      56     49 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               14  14(100.00%) |     51      47      57     50 |    1.10        1.10
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               14     0(0.00%) |     50      46      53     50 |    1.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              12     0(0.00%) |     51      48      59     50 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                12     0(0.00%) |      5       4       8      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          5     0(0.00%) |     13       5      31     10 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          13     0(0.00%) |     12       4      37     11 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   17     0(0.00%) |     11       4      42      8 |    1.10        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        11     0(0.00%) |     10       4      26      7 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     10     0(0.00%) |      6       4      17      5 |    0.60        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       354    14(3.95%) |     46       4     301     49 |   20.40        1.10
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  45     0(0.00%) |     17      12      38     15 |    2.50        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 45     0(0.00%) |     12       8      26     11 |    2.50        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              45     0(0.00%) |     67      49     195     63 |    2.50        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 45     0(0.00%) |     58      19     161     54 |    2.50        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     45     0(0.00%) |     60      21      78     60 |    2.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     17     0(0.00%) |     50      46      56     49 |    1.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               14  14(100.00%) |     51      47      57     50 |    0.90        0.90
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               14     0(0.00%) |     50      46      53     50 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              14     0(0.00%) |     51      47      59     50 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                13     0(0.00%) |      5       4       8      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          7     0(0.00%) |     11       5      31      9 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          16     0(0.00%) |     11       4      37      7 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   19     0(0.00%) |     11       4      42      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        11     0(0.00%) |     10       4      26      7 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     12     0(0.00%) |      6       4      17      5 |    0.70        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       382    14(3.66%) |     45       4     301     49 |   19.70        0.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  50     0(0.00%) |     16      12      38     15 |    2.00        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 50     0(0.00%) |     12       8      26     11 |    2.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              50     0(0.00%) |     67      49     195     62 |    2.00        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 50     0(0.00%) |     58      19     161     54 |    2.00        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     50     0(0.00%) |     60      21      92     60 |    2.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     18     0(0.00%) |     50      46      56     49 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               16  16(100.00%) |     50      47      57     50 |    0.50        0.50
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               16     0(0.00%) |     50      46      53     51 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              16     0(0.00%) |     50      47      59     50 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                15     0(0.00%) |      5       4       9      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          8     0(0.00%) |     11       5      31      6 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          17     0(0.00%) |     10       4      37      7 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   21     0(0.00%) |     10       4      42      6 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        11     0(0.00%) |     10       4      26      7 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     15     0(0.00%) |      6       4      17      5 |    0.80        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       423    16(3.78%) |     44       4     301     49 |   16.70        0.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  57     0(0.00%) |     17      12      52     15 |    2.20        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 57     0(0.00%) |     12       8      26     11 |    2.20        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              57     0(0.00%) |     68      16     195     63 |    2.20        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 58     0(0.00%) |     59      19     161     55 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     57     0(0.00%) |     61      21      92     60 |    2.20        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     20     0(0.00%) |     50      46      56     49 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               16  16(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               16     0(0.00%) |     50      46      53     51 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              20     0(0.00%) |     50      47      59     50 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                16     0(0.00%) |      5       4       9      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                          9     0(0.00%) |     10       4      31      6 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          17     0(0.00%) |     10       4      37      7 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   24     0(0.00%) |     10       4      42      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        12     0(0.00%) |      9       4      26      7 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     15     0(0.00%) |      6       4      17      5 |    1.00        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       471    16(3.40%) |     44       4     301     49 |   18.00        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  60     0(0.00%) |     17      12      52     15 |    2.10        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 60     0(0.00%) |     12       8      26     11 |    2.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              60     0(0.00%) |     69      16     195     63 |    2.10        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 60     0(0.00%) |     60      19     161     55 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     60     0(0.00%) |     62      21      92     60 |    2.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     22     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               18  18(100.00%) |     50      47      57     50 |    0.30        0.30
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               18     0(0.00%) |     50      46      53     50 |    0.30        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              20     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                17     0(0.00%) |      5       4       9      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         10     0(0.00%) |      9       4      31      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          18     0(0.00%) |     10       4      37      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   28     0(0.00%) |      9       4      42      6 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        13     0(0.00%) |      9       4      26      7 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     16     0(0.00%) |      6       4      17      5 |    0.80        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       500    18(3.60%) |     43       4     301     49 |   16.50        0.30
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  66     0(0.00%) |     18      12     105     15 |    2.10        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 66     0(0.00%) |     12       8      33     11 |    2.10        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              66     0(0.00%) |     68      16     195     63 |    2.10        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 66     0(0.00%) |     59      19     161     55 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     66     0(0.00%) |     63      21     132     60 |    2.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     24     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               21  21(100.00%) |     50      47      57     50 |    0.50        0.50
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               21     0(0.00%) |     50      46      54     50 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              21     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                19     0(0.00%) |      5       4       9      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         10     0(0.00%) |      9       4      31      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          20     0(0.00%) |      9       4      37      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   30     0(0.00%) |      9       4      42      5 |    1.20        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        15     0(0.00%) |      9       4      26      7 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     16     0(0.00%) |      6       4      17      5 |    0.80        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       547    21(3.84%) |     43       4     301     49 |   17.20        0.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  71     0(0.00%) |     18      12     105     15 |    2.30        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 71     0(0.00%) |     12       8      33     10 |    2.30        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              71     0(0.00%) |     68      16     195     63 |    2.40        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 72     0(0.00%) |     59      19     161     55 |    2.40        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     71     0(0.00%) |     63      21     132     60 |    2.30        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     26     0(0.00%) |     50      46      56     49 |    0.80        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               23  23(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               23     0(0.00%) |     50      46      54     50 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              22     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                19     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         10     0(0.00%) |      9       4      31      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          21     0(0.00%) |      9       4      37      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   30     0(0.00%) |      9       4      42      5 |    1.30        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        19     0(0.00%) |      8       4      26      7 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     17     0(0.00%) |      6       4      17      5 |    0.60        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       586    23(3.92%) |     43       4     301     49 |   18.70        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  76     0(0.00%) |     18      12     105     15 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 76     0(0.00%) |     12       8      33     10 |    2.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              76     0(0.00%) |     68      16     195     63 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 77     0(0.00%) |     58      19     161     54 |    2.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     76     0(0.00%) |     63      21     132     60 |    2.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     28     0(0.00%) |     50      46      56     49 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               25  25(100.00%) |     50      47      57     50 |    0.90        0.90
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               25     0(0.00%) |     50      46      54     50 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              23     0(0.00%) |     50      47      59     50 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                20     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         13     0(0.00%) |     10       4      31      6 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          24     0(0.00%) |      9       4      37      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   30     0(0.00%) |      9       4      42      5 |    1.10        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        19     0(0.00%) |      8       4      26      7 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     18     0(0.00%) |      6       4      17      5 |    0.50        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       626    25(3.99%) |     42       4     301     49 |   20.40        0.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  78     0(0.00%) |     18      12     105     15 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 78     0(0.00%) |     12       8      33     10 |    2.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              78     0(0.00%) |     68      16     195     63 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 78     0(0.00%) |     58      19     161     54 |    2.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     78     0(0.00%) |     62      21     132     60 |    2.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     29     0(0.00%) |     50      46      56     49 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               26  26(100.00%) |     50      47      57     50 |    0.90        0.90
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               26     0(0.00%) |     50      46      55     50 |    0.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              23     0(0.00%) |     50      47      59     50 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                22     0(0.00%) |      5       4       9      5 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         17     0(0.00%) |     10       4      31      8 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          25     0(0.00%) |      9       4      37      6 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   31     0(0.00%) |      9       4      42      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        20     0(0.00%) |      8       4      26      6 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     21     0(0.00%) |      7       4      21      5 |    0.30        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       650    26(4.00%) |     42       4     301     49 |   20.20        0.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  81     0(0.00%) |     18      12     105     15 |    2.20        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 81     0(0.00%) |     12       8      33     10 |    2.30        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              81     0(0.00%) |     68      16     195     63 |    2.20        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 81     0(0.00%) |     59      19     161     55 |    2.20        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     81     0(0.00%) |     63      21     132     60 |    2.30        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     29     0(0.00%) |     50      46      56     49 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               28  28(100.00%) |     50      47      57     50 |    1.00        1.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               28     0(0.00%) |     52      46      98     50 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              23     0(0.00%) |     50      47      59     50 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                24     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         19     0(0.00%) |      9       4      31      7 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          25     0(0.00%) |      9       4      37      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   34     0(0.00%) |     11       4      54      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        21     0(0.00%) |      8       4      26      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     22     0(0.00%) |      7       4      21      5 |    0.50        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       678    28(4.13%) |     42       4     301     49 |   18.80        1.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  86     0(0.00%) |     18      12     105     15 |    2.00        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 85     0(0.00%) |     12       8      33     10 |    2.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              86     0(0.00%) |     67      16     195     63 |    2.00        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 87     0(0.00%) |     58      14     161     54 |    2.00        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     85     0(0.00%) |     63      21     132     60 |    2.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     31     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               28  28(100.00%) |     50      47      57     50 |    1.00        1.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               28     0(0.00%) |     52      46      98     50 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              26     0(0.00%) |     50      47      59     50 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                24     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         21     0(0.00%) |      9       4      31      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          26     0(0.00%) |      9       4      37      6 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   35     0(0.00%) |     11       4      54      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        23     0(0.00%) |      8       4      26      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     23     0(0.00%) |      6       4      21      5 |    0.60        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       714    28(3.92%) |     41       4     301     49 |   17.40        1.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  88     0(0.00%) |     18      12     105     15 |    2.00        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 88     0(0.00%) |     12       8      33     10 |    2.00        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              88     0(0.00%) |     67      16     195     63 |    1.90        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 89     0(0.00%) |     58      14     161     54 |    1.90        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     88     0(0.00%) |     63      21     132     60 |    2.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     31     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               29  29(100.00%) |     50      47      57     50 |    0.80        0.80
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               29     0(0.00%) |     52      46      98     50 |    0.80        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              28     0(0.00%) |     50      47      59     50 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                25     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         22     0(0.00%) |      9       4      31      6 |    1.10        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          28     0(0.00%) |      9       4      37      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   36     0(0.00%) |     11       4      54      6 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        24     0(0.00%) |      8       4      26      6 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     27     0(0.00%) |      6       4      21      5 |    0.70        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       740    29(3.92%) |     41       4     301     49 |   16.80        0.80
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  92     0(0.00%) |     18      12     105     15 |    1.70        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 92     0(0.00%) |     12       8      33     10 |    1.70        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              92     0(0.00%) |     67      16     195     63 |    1.70        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 92     0(0.00%) |     58      14     161     54 |    1.70        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     92     0(0.00%) |     63      21     132     60 |    1.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     32     0(0.00%) |     50      46      56     49 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               30  30(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               30     0(0.00%) |     52      46      98     50 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              30     0(0.00%) |     50      47      59     50 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                28     0(0.00%) |      5       4       9      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         22     0(0.00%) |      9       4      31      6 |    1.20        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          28     0(0.00%) |      9       4      37      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   39     0(0.00%) |     10       4      54      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        25     0(0.00%) |      8       4      26      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     31     0(0.00%) |      7       4      21      5 |    1.00        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       775    30(3.87%) |     40       4     301     49 |   15.50        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                  97     0(0.00%) |     17      11     105     15 |    1.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                 97     0(0.00%) |     12       8      33     10 |    1.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                              97     0(0.00%) |     66      16     195     63 |    1.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                 97     0(0.00%) |     58      14     161     54 |    1.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                     97     0(0.00%) |     62      21     132     60 |    1.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     34     0(0.00%) |     50      46      56     50 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               32  32(100.00%) |     50      47      57     50 |    0.50        0.50
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               32     0(0.00%) |     51      46      98     50 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              31     0(0.00%) |     50      47      59     50 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                31     0(0.00%) |      5       4       9      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         24     0(0.00%) |      8       4      31      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          29     0(0.00%) |      9       4      37      5 |    0.40        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   39     0(0.00%) |     10       4      54      6 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        25     0(0.00%) |      8       4      26      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     33     0(0.00%) |      7       4      21      5 |    1.20        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       815    32(3.93%) |     40       4     301     48 |   15.00        0.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 101     0(0.00%) |     17      11     105     15 |    1.90        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                101     0(0.00%) |     12       8      33     10 |    1.90        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             101     0(0.00%) |     66      16     195     63 |    1.90        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                101     0(0.00%) |     58      14     161     54 |    1.90        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    101     0(0.00%) |     62      21     132     60 |    1.90        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     35     0(0.00%) |     50      46      56     50 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               34  34(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               34     0(0.00%) |     51      46      98     49 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              32     0(0.00%) |     50      47      59     50 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                32     0(0.00%) |      5       4       9      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         26     0(0.00%) |      8       4      31      6 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          32     0(0.00%) |      8       4      37      5 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   40     0(0.00%) |     10       4      54      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        26     0(0.00%) |      8       4      26      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     33     0(0.00%) |      7       4      21      5 |    1.30        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       849    34(4.00%) |     40       4     301     48 |   16.50        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 106     0(0.00%) |     17      11     105     15 |    2.10        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                106     0(0.00%) |     11       8      33     10 |    2.10        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             107     0(0.00%) |     66      16     195     63 |    2.10        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                107     0(0.00%) |     58      14     161     54 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    106     0(0.00%) |     62      21     132     60 |    2.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     36     0(0.00%) |     50      46      56     50 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               34  34(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               34     0(0.00%) |     51      46      98     49 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              36     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                34     0(0.00%) |      5       4       9      5 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         27     0(0.00%) |      8       4      31      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          36     0(0.00%) |      8       4      37      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   40     0(0.00%) |     10       4      54      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        26     0(0.00%) |      8       4      26      6 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     34     0(0.00%) |      7       4      21      5 |    1.10        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       889    34(3.82%) |     40       4     301     48 |   17.50        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 110     0(0.00%) |     17      11     105     15 |    2.10        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                110     0(0.00%) |     11       8      33     10 |    2.10        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             110     0(0.00%) |     66      16     195     63 |    2.10        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                110     0(0.00%) |     57      14     161     54 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    110     0(0.00%) |     62      21     132     59 |    2.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     38     0(0.00%) |     50      46      56     50 |    0.50        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               36  36(100.00%) |     50      47      57     50 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               36     0(0.00%) |     51      46      98     49 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              36     0(0.00%) |     50      47      59     50 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                35     0(0.00%) |      5       4       9      5 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         27     0(0.00%) |      8       4      31      6 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          37     0(0.00%) |      8       4      37      5 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   44     0(0.00%) |     10       4      54      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        27     0(0.00%) |      8       4      26      6 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     36     0(0.00%) |      7       4      21      5 |    1.10        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       922    36(3.90%) |     39       4     301     48 |   17.70        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 116     0(0.00%) |     17      11     105     15 |    2.10        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                116     0(0.00%) |     11       8      33     10 |    2.10        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             116     0(0.00%) |     65      16     195     63 |    2.10        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                117     0(0.00%) |     57      14     161     54 |    2.10        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    116     0(0.00%) |     62      21     132     59 |    2.10        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     39     0(0.00%) |     50      46      56     50 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               39  39(100.00%) |     50      47      57     51 |    0.60        0.60
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               39     0(0.00%) |     51      46      98     49 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              38     0(0.00%) |     50      47      59     50 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                36     0(0.00%) |      5       4       9      5 |    1.00        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         30     0(0.00%) |      8       4      31      5 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          37     0(0.00%) |      8       4      37      5 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   44     0(0.00%) |     10       4      54      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        27     0(0.00%) |      8       4      26      6 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     36     0(0.00%) |      7       4      21      5 |    0.80        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       966    39(4.04%) |     39       4     301     48 |   17.40        0.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 120     0(0.00%) |     17      11     105     15 |    2.40        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                120     0(0.00%) |     11       8      33     10 |    2.40        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             120     0(0.00%) |     65      16     195     63 |    2.40        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                120     0(0.00%) |     57      14     161     54 |    2.40        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    120     0(0.00%) |     62      21     132     59 |    2.40        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     40     0(0.00%) |     50      46      56     49 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               40  40(100.00%) |     50      47      57     51 |    0.90        0.90
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               40     0(0.00%) |     50      46      98     49 |    0.80        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              40     0(0.00%) |     50      47      59     50 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                38     0(0.00%) |      5       4       9      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         31     0(0.00%) |      8       4      31      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          37     0(0.00%) |      8       4      37      5 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   45     0(0.00%) |     10       4      54      5 |    0.50        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        29     0(0.00%) |      7       4      26      5 |    0.20        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     39     0(0.00%) |      6       4      21      5 |    0.60        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       999    40(4.00%) |     39       4     301     48 |   19.00        0.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 127     0(0.00%) |     17      11     105     15 |    2.30        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                127     0(0.00%) |     11       8      33     10 |    2.30        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             127     0(0.00%) |     66      16     195     63 |    2.30        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                127     0(0.00%) |     57      14     161     54 |    2.30        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    127     0(0.00%) |     62      21     132     60 |    2.30        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     42     0(0.00%) |     50      46      56     49 |    0.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               44  44(100.00%) |     50      47      57     51 |    0.80        0.80
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               44     0(0.00%) |     50      46      98     49 |    0.80        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              41     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                40     0(0.00%) |      5       4      10      5 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         32     0(0.00%) |      7       4      31      5 |    0.70        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          37     0(0.00%) |      8       4      37      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   46     0(0.00%) |     10       4      54      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        29     0(0.00%) |      7       4      26      5 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     40     0(0.00%) |      7       4      31      5 |    0.50        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                      1050    44(4.19%) |     39       4     301     48 |   18.40        0.80
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 132     0(0.00%) |     17      11     105     15 |    2.60        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                131     0(0.00%) |     11       8      33     10 |    2.60        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.00        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             132     0(0.00%) |     66      16     195     63 |    2.60        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                132     0(0.00%) |     57      14     161     54 |    2.60        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    131     0(0.00%) |     62      21     132     59 |    2.60        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     43     0(0.00%) |     50      46      56     50 |    0.70        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               46  46(100.00%) |     50      47      57     51 |    1.00        1.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               46     0(0.00%) |     50      46      98     48 |    1.00        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              42     0(0.00%) |     50      47      59     50 |    0.90        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                44     0(0.00%) |      5       4      10      5 |    0.80        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         34     0(0.00%) |      7       4      31      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          38     0(0.00%) |      8       4      37      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   46     0(0.00%) |     10       4      54      5 |    0.60        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        29     0(0.00%) |      7       4      26      5 |    0.30        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     42     0(0.00%) |      7       4      31      5 |    0.70        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                      1088    46(4.23%) |     39       4     301     48 |   20.20        1.00
+
+[2025-12-26 00:22:18,248] DESKTOP-A0EPTKG/INFO/locust.main: --run-time limit reached, shutting down
+[2025-12-26 00:22:18,430] DESKTOP-A0EPTKG/INFO/locust.main: Shutting down (exit code 1)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      [Stage2-L3] GET /api/cart/items/                                                 133     0(0.00%) |     17      11     105     15 |    2.24        0.00
+GET      [Stage2-L3] GET /api/orders/{id}/                                                133     0(0.00%) |     11       8      33     10 |    2.24        0.00
+POST     [Stage2-L3] POST /api/auth/login/                                                 10     0(0.00%) |    276     258     301    270 |    0.17        0.00
+POST     [Stage2-L3] POST /api/cart/add_item/                                             134     0(0.00%) |     67      16     272     63 |    2.26        0.00
+POST     [Stage2-L3] POST /api/cart/clear/                                                134     0(0.00%) |     57      14     161     54 |    2.26        0.00
+POST     [Stage2-L3] POST /api/orders/                                                    133     0(0.00%) |     62      21     132     60 |    2.24        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                     43     0(0.00%) |     50      46      56     50 |    0.73        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                               47  47(100.00%) |     50      47      57     51 |    0.79        0.79
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                               47     0(0.00%) |     50      46      98     49 |    0.79        0.00
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                              43     0(0.00%) |     50      47      59     50 |    0.73        0.00
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                45     0(0.00%) |      7       4      86      5 |    0.76        0.00
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                         34     0(0.00%) |      7       4      31      5 |    0.57        0.00
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                          38     0(0.00%) |      8       4      37      5 |    0.64        0.00
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                   47     0(0.00%) |     10       4      54      5 |    0.79        0.00
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                        29     0(0.00%) |      7       4      26      5 |    0.49        0.00
+GET      [Stage2-L3] [L3] GET /health/                                                     42     0(0.00%) |      7       4      31      5 |    0.71        0.00
+GET      [Stage2-L3] [Setup] Fetch Products                                                10     0(0.00%) |    110      38     184     89 |    0.17        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                      1102    47(4.26%) |     39       4     301     48 |   18.59        0.79
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      [Stage2-L3] GET /api/cart/items/                                                       15     16     17     18     24     27     39     53    110    110    110    133
+GET      [Stage2-L3] GET /api/orders/{id}/                                                      10     11     12     13     16     20     25     27     34     34     34    133
+POST     [Stage2-L3] POST /api/auth/login/                                                     280    280    300    300    300    300    300    300    300    300    300     10
+POST     [Stage2-L3] POST /api/cart/add_item/                                                   63     65     68     70     84     90     99    200    270    270    270    134
+POST     [Stage2-L3] POST /api/cart/clear/                                                      54     56     57     59     70     80    120    140    160    160    160    134
+POST     [Stage2-L3] POST /api/orders/                                                          60     62     64     67     73     78    100    110    130    130    130    133
+POST     [Stage2-L3] POST /api/payments/confirm/ [1st]                                          50     50     51     52     54     54     56     56     56     56     56     43
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]                                    51     51     52     53     54     55     57     57     57     57     57     47
+POST     [Stage2-L3] POST /api/payments/confirm/ [RAPID-DUP]                                    49     51     51     52     54     56     99     99     99     99     99     47
+POST     [Stage2-L3] POST /api/payments/confirm/ [TAMPER-1st]                                   50     51     51     52     52     54     60     60     60     60     60     43
+GET      [Stage2-L3] [L3] GET /circuit-breaker/pool/status/                                      5      6      6      6      8     10     86     86     86     86     86     45
+GET      [Stage2-L3] [L3] GET /config/idempotency/                                               6      6      9     10     13     18     31     31     31     31     31     34
+GET      [Stage2-L3] [L3] GET /dashboard/summary/                                                5      6      7     11     15     25     38     38     38     38     38     38
+GET      [Stage2-L3] [L3] GET /dlq/list/                                                         5      6      9     13     24     39     55     55     55     55     55     47
+GET      [Stage2-L3] [L3] GET /error-budget/status/                                              5      7      8     11     14     16     26     26     26     26     26     29
+GET      [Stage2-L3] [L3] GET /health/                                                           5      6      9      9     12     18     32     32     32     32     32     42
+GET      [Stage2-L3] [Setup] Fetch Products                                                    100    130    160    180    180    180    180    180    180    180    180     10
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             48     54     58     60     65     75    100    200    300    300    300   1102
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+47                 POST [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]: HTTPError('400 Client Error: Bad Request for url: [Stage2-L3] POST /api/payments/confirm/ [RAPID-1st]')
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+======================================================================
+STAGE 2: IDEMPOTENCY + SELFHEALING INTEGRATION TEST RESULTS
+======================================================================
+
+[Part 1] Idempotency Verification
+--------------------------------------------------
+  [PASS] IDEMPOTENCY TEST PASSED
+  No duplicate payments were processed
+
+[Part 2] Selfhealing Idempotency Config
+--------------------------------------------------
+  Config Checks: 34
+  Idempotency TTL: N/A (admin auth required)
+  [INFO] Could not verify idempotency TTL (requires admin access)
+
+[Part 3] DLQ (Dead Letter Queue) Monitoring
+--------------------------------------------------
+  DLQ Checks: 47
+  DLQ monitoring data not available
+
+[Part 4] L3 Governance & Circuit Breaker
+--------------------------------------------------
+  CB Pool Status Checks: 45
+  CB Pool Available: True
+  CB Opened During Test: False
+  Rate Limited: 195 (L3 self-protection)
+  [PASS] L3 GOVERNANCE PASSED
+
+[Part 5] L3 Observability Statistics
+--------------------------------------------------
+  Health Checks: 42
+  Error Budget Checks: 29
+  Dashboard Checks: 38
+  Cache Hits: L1=40.0%, L2=0.0%, MISS=60.0%
+
+[Part 6] L3 Health Latency
+--------------------------------------------------
+  Avg: 7.6ms, P95: 17.7ms
+  [PASS] LATENCY TARGET MET (<50ms)
+
+[Part 7] Overall Metrics
+--------------------------------------------------
+  Total Requests: 1102
+  Error Rate: 4.26%
+
+[Part 8] Selfhealing Integration Summary
+--------------------------------------------------
+  Total Selfhealing API Calls: 164
+  Rate Limited by L3: 195
+
+======================================================================
+[PASS] ALL TESTS PASSED - Stage 2 Complete!
+   - Idempotency: VERIFIED
+   - Selfhealing Integration: VERIFIED
+   - L3 Governance: STABLE
+======================================================================
+
+================================================================================
+[METRICS] CUSTOM METRICS SUMMARY
+================================================================================
+Elapsed: 59.28s
+Total Requests: 1102
+RPS: 18.59
+Error Rate: 4.26%
+--------------------------------------------------------------------------------
+Endpoint                                    Count      P95      P99    P99.9   Err%
+--------------------------------------------------------------------------------
+[Stage2-L3] [Setup] Fetch Products             10   184.8ms   184.8ms   184.8ms   0.0%
+[Stage2-L3] POST /api/auth/login/              10   301.7ms   301.7ms   301.7ms   0.0%
+[Stage2-L3] POST /api/cart/clear/             134    80.0ms   144.7ms   161.2ms   0.0%
+[Stage2-L3] [L3] GET /error-budget/statu       29    15.7ms    26.2ms    26.2ms   0.0%
+[Stage2-L3] [L3] GET /dlq/list/                47    38.9ms    54.7ms    54.7ms   0.0%
+[Stage2-L3] [L3] GET /dashboard/summary/       38    25.4ms    37.8ms    37.8ms   0.0%
+[Stage2-L3] POST /api/cart/add_item/          134    89.7ms   195.5ms   272.5ms   0.0%
+[Stage2-L3] GET /api/cart/items/              133    26.7ms    52.6ms   105.6ms   0.0%
+[Stage2-L3] POST /api/orders/                 133    78.1ms   111.3ms   132.4ms   0.0%
+[Stage2-L3] GET /api/orders/{id}/             133    19.8ms    26.7ms    33.6ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        43    54.2ms    56.1ms    56.1ms   0.0%
+[Stage2-L3] [L3] GET /health/                  42    17.7ms    31.6ms    31.6ms   0.0%
+[Stage2-L3] [L3] GET /config/idempotency       34    18.0ms    31.2ms    31.2ms   0.0%
+[Stage2-L3] [L3] GET /circuit-breaker/po       45     9.5ms    86.2ms    86.2ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        43    54.2ms    59.7ms    59.7ms   0.0%
+[Stage2-L3] POST /api/payments/confirm/        47    54.9ms    57.2ms    57.2ms 100.0%
+[Stage2-L3] POST /api/payments/confirm/        47    55.7ms    98.8ms    98.8ms   0.0%
+================================================================================

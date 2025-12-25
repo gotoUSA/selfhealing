@@ -1,0 +1,28 @@
+
+======================================================================
+
+================================================================================
+[METRICS] CUSTOM METRICS SUMMARY
+================================================================================
+Elapsed: 29.31s
+Total Requests: 2029
+RPS: 69.22
+Error Rate: 0.0%
+--------------------------------------------------------------------------------
+Endpoint                                    Count      P95      P99    P99.9   Err%
+--------------------------------------------------------------------------------
+[Stage1-L3] [Setup] Fetch Products             40   150.1ms   152.6ms   152.6ms   0.0%
+[Stage1-L3] POST /api/auth/login/             100  1690.1ms  2098.1ms  2098.1ms   0.0%
+[Stage1-L3] POST /api/cart/add_item/          379   157.6ms   855.0ms  1239.4ms   0.0%
+[Stage1-L3] POST /api/cart/clear/              69   550.4ms  1133.9ms  1133.9ms   0.0%
+[Stage1-L3] GET /api/cart/items/              158   166.6ms  1515.4ms  1574.7ms   0.0%
+[Stage1-L3] POST /api/orders/                  69   157.5ms   667.2ms   667.2ms   0.0%
+[Stage1-L3] GET /api/orders/{id}/              67    50.2ms  1045.0ms  1045.0ms   0.0%
+[Stage1-L3] [L3-V3] GET /health/ping/         173   141.7ms   689.7ms   999.9ms   0.0%
+[Stage1-L3] GET /api/products/                404   518.7ms  1050.7ms  1234.2ms   0.0%
+[Stage1-L3] POST /api/payments/confirm/        67    73.4ms   229.1ms   229.1ms   0.0%
+[Stage1-L3] GET /api/products/{id}/           260   253.4ms   995.2ms  1584.0ms   0.0%
+[Stage1-L3] [L3] GET /error-budget/statu       82   281.0ms  1139.9ms  1139.9ms   0.0%
+[Stage1-L3] [L3] GET /stress/pool-status       77    82.9ms   562.9ms   562.9ms   0.0%
+[Stage1-L3] [L3] GET /health/                  84   122.4ms  1054.7ms  1054.7ms   0.0%
+================================================================================

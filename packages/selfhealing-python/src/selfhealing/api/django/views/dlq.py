@@ -446,9 +446,6 @@ class DLQTestCreateView(APIView):
         domain = request.data.get("domain")
         failure_type = request.data.get("failure_type")
 
-        # Build entity_refs from request data
-        entity_refs = request.data.get("entity_refs", {})
-
         try:
             service = get_dlq_service()
             result = service.create_test_entry(
@@ -457,7 +454,6 @@ class DLQTestCreateView(APIView):
                 user_id=request.user.id if request.user else None,
                 entity_type=request.data.get("entity_type", "test"),
                 entity_id=request.data.get("entity_id", ""),
-                entity_refs=entity_refs,
                 error_message=request.data.get("error_message", "Test failure for load testing"),
                 snapshot_data=request.data.get("snapshot_data"),
                 request_data=request.data.get("request_data"),

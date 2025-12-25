@@ -8,6 +8,7 @@
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -80,7 +81,12 @@ class Command(BaseCommand):
                 # load_test_user_0은 admin 권한 부여 (Stage 10 Self-Healing API 테스트용)
                 if i == 0:
                     user.is_staff = True
+                    user.is_superuser = True  # Self-Healing Admin API 접근을 위해 superuser 권한 추가
                     user.save()
+                    
+                    # selfhealing_admin 그룹에 추가 (IsSelfHealingAdmin 권한)
+                    admin_group, _ = Group.objects.get_or_create(name="selfhealing_admin")
+                    user.groups.add(admin_group)
 
                 created_users.append(username)
 

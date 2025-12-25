@@ -1,0 +1,946 @@
+[2025-12-26 01:01:46,550] DESKTOP-A0EPTKG/INFO/locust.main: Starting Locust 2.42.5
+[2025-12-26 01:01:46,551] DESKTOP-A0EPTKG/INFO/locust.main: Run time limit set to 60 seconds
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         0     0(0.00%) |      0       0       0      0 |    0.00        0.00
+
+[2025-12-26 01:01:46,553] DESKTOP-A0EPTKG/INFO/locust.runners: Ramping to 10 users at a rate of 5.00 per second
+[2025-12-26 01:01:47,554] DESKTOP-A0EPTKG/INFO/locust.runners: All users spawned: {"LatencyUser": 10} (10 total users)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                            3     0(0.00%) |    298     275     325    300 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                  1     0(0.00%) |     68      68      68     68 |    0.00        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      1     0(0.00%) |      9       9       9      9 |    0.00        0.00
+GET      [Stage3-L3] GET /l2-storage/status/                                                1     0(0.00%) |     14      14      14     14 |    0.00        0.00
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                               1     0(0.00%) |    156     156     156    156 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                  1     0(0.00%) |     72      72      72     72 |    0.00        0.00
+POST     [Stage3-L3] POST /api/orders/                                                      1     0(0.00%) |     95      95      95     95 |    0.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                  1     0(0.00%) |     37      37      37     37 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                        30     0(0.00%) |    335       9     956    160 |    0.00        0.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    1.50        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                  4     0(0.00%) |     35      18      68     22 |    0.50        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      2     0(0.00%) |     19       9      29      9 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 2     0(0.00%) |     39      14      64     15 |    0.00        0.00
+GET      [Stage3-L3] GET /error-budget/status/                                              1     0(0.00%) |      7       7       7      7 |    0.00        0.00
+GET      [Stage3-L3] GET /health/                                                           1     0(0.00%) |     31      31      31     31 |    0.00        0.00
+GET      [Stage3-L3] GET /l2-storage/status/                                                2     0(0.00%) |     11       8      14      9 |    0.50        0.00
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    1.50        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                               4     0(0.00%) |    232     156     321    220 |    0.50        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                  4     0(0.00%) |     58      40      72     60 |    0.50        0.00
+POST     [Stage3-L3] POST /api/orders/                                                      4     0(0.00%) |     74      42      95     79 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                  3     0(0.00%) |     48      37      54     52 |    0.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              1   1(100.00%) |     52      52      52     52 |    0.00        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        1     0(0.00%) |     15      15      15     15 |    0.00        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         1     0(0.00%) |    158     158     158    158 |    0.00        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        1     0(0.00%) |     92      92      92     92 |    0.00        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               1     0(0.00%) |    113     113     113    113 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    5.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                        62     1(1.61%) |    266       7     956     96 |   11.00        0.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    2.50        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                  5     0(0.00%) |     31      15      68     22 |    1.00        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      3    1(33.33%) |     15       6      29      9 |    0.50        0.00
+GET      [Stage3-L3] GET /dashboard/summary/                                                3   3(100.00%) |     11       6      13     13 |    0.00        0.00
+GET      [Stage3-L3] GET /dlq/list/                                                         3     0(0.00%) |     14      11      18     12 |    0.00        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 2     0(0.00%) |     39      14      64     15 |    0.25        0.00
+GET      [Stage3-L3] GET /error-budget/status/                                              2     0(0.00%) |      8       7       8      8 |    0.00        0.00
+GET      [Stage3-L3] GET /health/                                                           3    2(66.67%) |     14       5      31      7 |    0.25        0.00
+GET      [Stage3-L3] GET /l2-storage/status/                                                2     0(0.00%) |     11       8      14      9 |    0.25        0.00
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    2.50        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                               5     0(0.00%) |    198      62     321    220 |    1.00        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                  5     0(0.00%) |     57      40      72     60 |    1.00        0.00
+POST     [Stage3-L3] POST /api/orders/                                                      5     0(0.00%) |     72      42      95     79 |    1.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                  3     0(0.00%) |     48      37      54     52 |    0.75        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              1   1(100.00%) |     52      52      52     52 |    0.25        0.25
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        2     0(0.00%) |     33      15      51     16 |    0.25        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         2     0(0.00%) |    103      48     158     49 |    0.25        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        1     0(0.00%) |     92      92      92     92 |    0.25        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 3     0(0.00%) |     88      47     151     66 |    0.00        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.25        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    2.50        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                        82     7(8.54%) |    210       5     956     64 |   14.75        0.25
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    1.67        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                  7     0(0.00%) |     24       8      68     18 |    0.67        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      7    3(42.86%) |      9       5      29      6 |    0.50        0.17
+GET      [Stage3-L3] GET /dashboard/summary/                                                4   4(100.00%) |     10       6      13      9 |    0.50        0.50
+GET      [Stage3-L3] GET /dlq/list/                                                         4     0(0.00%) |     14      11      18     12 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.33        0.00
+GET      [Stage3-L3] GET /error-budget/status/                                              3     0(0.00%) |      8       7       8      8 |    0.33        0.00
+GET      [Stage3-L3] GET /health/                                                           3    2(66.67%) |     14       5      31      7 |    0.17        0.00
+GET      [Stage3-L3] GET /l2-storage/status/                                                2     0(0.00%) |     11       8      14      9 |    0.33        0.00
+GET      [Stage3-L3] GET /status/ (CB)                                                      1   1(100.00%) |      5       5       5      5 |    0.00        0.00
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    1.67        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                               7     0(0.00%) |    159      61     321    160 |    0.67        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                  8     0(0.00%) |     55      40      72     54 |    0.67        0.00
+POST     [Stage3-L3] POST /api/orders/                                                      7     0(0.00%) |     67      42      95     62 |    0.67        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                  5     0(0.00%) |     50      37      54     53 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              2   2(100.00%) |     51      49      52     49 |    0.17        0.17
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        3     0(0.00%) |     40      15      52     52 |    0.33        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         2     0(0.00%) |    103      48     158     49 |    0.17        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        1     0(0.00%) |     92      92      92     92 |    0.17        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 4     0(0.00%) |     91      47     151     66 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.17        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    1.67        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       105   13(12.38%) |    171       5     956     55 |   12.33        0.83
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    1.25        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 11     0(0.00%) |     20       8      68     16 |    0.75        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      7    3(42.86%) |      9       5      29      6 |    0.50        0.12
+GET      [Stage3-L3] GET /dashboard/summary/                                                5   5(100.00%) |      9       4      13      9 |    0.50        0.50
+GET      [Stage3-L3] GET /dlq/list/                                                         4     0(0.00%) |     14      11      18     12 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.38        0.12
+GET      [Stage3-L3] GET /error-budget/status/                                              3     0(0.00%) |      8       7       8      8 |    0.38        0.00
+GET      [Stage3-L3] GET /health/                                                           4    3(75.00%) |     22       5      46      7 |    0.38        0.25
+GET      [Stage3-L3] GET /l2-storage/status/                                                5    3(60.00%) |      7       4      14      5 |    0.25        0.00
+GET      [Stage3-L3] GET /status/ (CB)                                                      1   1(100.00%) |      5       5       5      5 |    0.12        0.12
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    1.25        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              11     0(0.00%) |    141      59     321     65 |    0.88        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 11     0(0.00%) |     55      40      72     54 |    0.88        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     11     0(0.00%) |     60      17      95     59 |    0.75        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                  7     0(0.00%) |     50      37      54     52 |    0.62        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              2   2(100.00%) |     51      49      52     49 |    0.12        0.12
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         1     0(0.00%) |     48      48      48     48 |    0.00        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.00        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        5     0(0.00%) |     42      15      52     46 |    0.38        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         2     0(0.00%) |    103      48     158     49 |    0.25        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        1     0(0.00%) |     92      92      92     92 |    0.12        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 4     0(0.00%) |     91      47     151     66 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.25        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    1.25        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       131   18(13.74%) |    146       4     956     54 |   12.25        1.25
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    1.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 16     0(0.00%) |     17       8      68     12 |    1.10        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      8    4(50.00%) |      9       5      29      6 |    0.70        0.30
+GET      [Stage3-L3] GET /dashboard/summary/                                                5   5(100.00%) |      9       4      13      9 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                         5     0(0.00%) |     13       9      18     12 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.30        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              3     0(0.00%) |      8       7       8      8 |    0.30        0.00
+GET      [Stage3-L3] GET /health/                                                           4    3(75.00%) |     22       5      46      7 |    0.40        0.30
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.30        0.10
+GET      [Stage3-L3] GET /status/ (CB)                                                      1   1(100.00%) |      5       5       5      5 |    0.10        0.10
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    1.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              16     0(0.00%) |    116      58     321     63 |    1.10        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 16     0(0.00%) |     55      40      72     54 |    1.10        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     16     0(0.00%) |     60      17      95     59 |    1.10        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 11     0(0.00%) |     50      37      55     51 |    0.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              2   2(100.00%) |     51      49      52     49 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         2     0(0.00%) |     49      48      50     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        7     0(0.00%) |     44      15      52     47 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         4     0(0.00%) |     75      45     158     49 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        2     0(0.00%) |     48       4      92      5 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 5     0(0.00%) |     82      46     151     66 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    1.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       165   20(12.12%) |    125       4     956     53 |   12.80        1.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.70        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 17     0(0.00%) |     17       8      68     12 |    1.40        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                      9    5(55.56%) |      8       5      29      6 |    0.70        0.40
+GET      [Stage3-L3] GET /dashboard/summary/                                                7   7(100.00%) |      8       4      13      7 |    0.50        0.50
+GET      [Stage3-L3] GET /dlq/list/                                                         7     0(0.00%) |     12       9      18     11 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.30        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              4    1(25.00%) |      7       5       8      7 |    0.30        0.00
+GET      [Stage3-L3] GET /health/                                                           5    4(80.00%) |     19       5      46      7 |    0.40        0.30
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.40        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                      2   2(100.00%) |      5       5       6      6 |    0.10        0.10
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.70        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              17     0(0.00%) |    113      58     321     63 |    1.50        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 17     0(0.00%) |     55      40      72     55 |    1.50        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     17     0(0.00%) |     60      17      95     59 |    1.40        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 12     0(0.00%) |     50      37      55     50 |    1.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              2   2(100.00%) |     51      49      52     49 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         2     0(0.00%) |     49      48      50     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                        9     0(0.00%) |     44      15      52     47 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         6     0(0.00%) |     68      45     158     49 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        2     0(0.00%) |     48       4      92      5 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 7     0(0.00%) |     72      46     151     48 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       184   26(14.13%) |    115       4     956     51 |   13.50        1.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 22     0(0.00%) |     15       8      68     10 |    1.30        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     10    6(60.00%) |      8       5      29      5 |    0.70        0.50
+GET      [Stage3-L3] GET /dashboard/summary/                                                7   7(100.00%) |      8       4      13      7 |    0.50        0.50
+GET      [Stage3-L3] GET /dlq/list/                                                         8     0(0.00%) |     12       9      18     11 |    0.60        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.20        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              5    2(40.00%) |      6       5       8      7 |    0.40        0.10
+GET      [Stage3-L3] GET /health/                                                           5    4(80.00%) |     19       5      46      7 |    0.30        0.30
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.50        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                      3   3(100.00%) |      9       5      15      6 |    0.10        0.10
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              22     0(0.00%) |    101      58     321     62 |    1.30        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 22     0(0.00%) |     54      40      72     54 |    1.30        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     22     0(0.00%) |     60      17      95     59 |    1.30        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 15     0(0.00%) |     50      37      55     50 |    0.90        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              4   4(100.00%) |     48      46      52     47 |    0.10        0.10
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         2     0(0.00%) |     49      48      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       11     0(0.00%) |     45      15      52     48 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         7     0(0.00%) |     67      45     158     49 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        2     0(0.00%) |     48       4      92      5 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 8     0(0.00%) |     69      46     151     48 |    0.60        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       217   31(14.29%) |    104       4     956     51 |   11.80        2.10
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 23     0(0.00%) |     14       8      68     10 |    1.70        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     11    7(63.64%) |      8       4      29      5 |    0.70        0.50
+GET      [Stage3-L3] GET /dashboard/summary/                                                8   8(100.00%) |      8       4      13      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                         9     0(0.00%) |     12       9      18     11 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 3    1(33.33%) |     28       5      64     15 |    0.10        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              5    2(40.00%) |      6       5       8      7 |    0.20        0.10
+GET      [Stage3-L3] GET /health/                                                           8    7(87.50%) |     14       4      46      5 |    0.40        0.40
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.40        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                      4   4(100.00%) |      8       4      15      6 |    0.30        0.30
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              23     0(0.00%) |     99      58     321     62 |    1.70        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 23     0(0.00%) |     54      40      72     54 |    1.70        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     23     0(0.00%) |     59      17      95     59 |    1.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 16     0(0.00%) |     50      37      55     50 |    1.20        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              4   4(100.00%) |     48      46      52     47 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         2     0(0.00%) |     49      48      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       13     0(0.00%) |     45      15      52     48 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         7     0(0.00%) |     67      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        2     0(0.00%) |     48       4      92      5 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 9     0(0.00%) |     66      45     151     48 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               2     0(0.00%) |     80      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       232   37(15.95%) |     99       4     956     50 |   13.40        2.40
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 25     0(0.00%) |     14       8      68     10 |    1.70        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     12    8(66.67%) |      7       4      29      5 |    0.70        0.60
+GET      [Stage3-L3] GET /dashboard/summary/                                                8   8(100.00%) |      8       4      13      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                         9     0(0.00%) |     12       9      18     11 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 4    2(50.00%) |     22       4      64      6 |    0.00        0.00
+GET      [Stage3-L3] GET /error-budget/status/                                              5    2(40.00%) |      6       5       8      7 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          12   11(91.67%) |     11       4      46      5 |    0.50        0.50
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.40        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                      7   7(100.00%) |      6       4      15      6 |    0.30        0.30
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              25     0(0.00%) |     96      58     321     62 |    1.60        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 25     0(0.00%) |     54      40      72     54 |    1.60        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     25     0(0.00%) |     59      17      95     59 |    1.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 16     0(0.00%) |     50      37      55     50 |    1.10        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              5   5(100.00%) |     48      46      52     48 |    0.30        0.30
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         3     0(0.00%) |     48      47      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           1     0(0.00%) |     48      48      48     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       13     0(0.00%) |     45      15      52     48 |    0.90        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                         7     0(0.00%) |     67      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        3     0(0.00%) |     48       4      92     48 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 9     0(0.00%) |     66      45     151     48 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       255   47(18.43%) |     93       4     956     49 |   13.30        2.70
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 30     0(0.00%) |     14       8      68     10 |    1.40        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     12    8(66.67%) |      7       4      29      5 |    0.50        0.50
+GET      [Stage3-L3] GET /dashboard/summary/                                                9   9(100.00%) |      7       4      13      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                         9     0(0.00%) |     12       9      18     11 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 4    2(50.00%) |     22       4      64      6 |    0.10        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              5    2(40.00%) |      6       5       8      7 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          13   12(92.31%) |     11       4      46      5 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                                6    4(66.67%) |      7       4      14      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                      9   9(100.00%) |      7       4      15      6 |    0.50        0.50
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              30     0(0.00%) |     90      58     321     62 |    1.40        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 30     0(0.00%) |     54      40      72     54 |    1.40        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     30     0(0.00%) |     63      17     181     59 |    1.40        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 18     0(0.00%) |     50      37      55     50 |    0.90        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              7   7(100.00%) |     49      46      53     49 |    0.30        0.30
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         3     0(0.00%) |     48      47      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           2     0(0.00%) |     49      48      50     48 |    0.00        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       13     0(0.00%) |     45      15      52     48 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        10     0(0.00%) |     65      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        3     0(0.00%) |     48       4      92     48 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 9     0(0.00%) |     66      45     151     48 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       287   53(18.47%) |     88       4     956     50 |   12.20        2.90
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 35     0(0.00%) |     13       8      68     10 |    1.30        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     12    8(66.67%) |      7       4      29      5 |    0.40        0.40
+GET      [Stage3-L3] GET /dashboard/summary/                                               11  11(100.00%) |      9       4      22      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                         9     0(0.00%) |     12       9      18     11 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 5    3(60.00%) |     19       4      64      6 |    0.10        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              5    2(40.00%) |      6       5       8      7 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          15   14(93.33%) |     15       4      76      6 |    0.80        0.80
+GET      [Stage3-L3] GET /l2-storage/status/                                                7    5(71.43%) |     12       4      48      5 |    0.10        0.10
+GET      [Stage3-L3] GET /status/ (CB)                                                      9   9(100.00%) |      7       4      15      6 |    0.70        0.70
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              35     0(0.00%) |     85      18     321     63 |    1.40        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 35     0(0.00%) |     54      17      85     55 |    1.40        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     35     0(0.00%) |     63      17     181     60 |    1.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 21     0(0.00%) |     50      37      55     50 |    0.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              7   7(100.00%) |     49      46      53     49 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         3     0(0.00%) |     48      47      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           3     0(0.00%) |     48      47      50     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       14     0(0.00%) |     45      15      52     48 |    0.70        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        12     0(0.00%) |     66      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        3     0(0.00%) |     48       4      92     48 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 9     0(0.00%) |     66      45     151     48 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       320   59(18.44%) |     83       4     956     50 |   12.30        3.10
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 39     0(0.00%) |     13       8      68     10 |    1.60        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     13    9(69.23%) |      7       4      29      5 |    0.30        0.30
+GET      [Stage3-L3] GET /dashboard/summary/                                               11  11(100.00%) |      9       4      22      6 |    0.60        0.60
+GET      [Stage3-L3] GET /dlq/list/                                                         9     0(0.00%) |     12       9      18     11 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 5    3(60.00%) |     19       4      64      6 |    0.10        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              6    3(50.00%) |      6       4       8      5 |    0.10        0.10
+GET      [Stage3-L3] GET /health/                                                          16   15(93.75%) |     14       4      76      5 |    1.00        1.00
+GET      [Stage3-L3] GET /l2-storage/status/                                                8    6(75.00%) |     11       4      48      5 |    0.10        0.10
+GET      [Stage3-L3] GET /status/ (CB)                                                      9   9(100.00%) |      7       4      15      6 |    0.80        0.80
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              39     0(0.00%) |     83      18     321     63 |    1.60        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 39     0(0.00%) |     53      12      85     55 |    1.60        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     39     0(0.00%) |     63      17     181     60 |    1.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 23     0(0.00%) |     50      37      55     50 |    0.80        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.50        0.50
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         5     0(0.00%) |     48      46      51     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           3     0(0.00%) |     48      47      50     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       14     0(0.00%) |     45      15      52     48 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        13     0(0.00%) |     65      45     158     49 |    0.70        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        4     0(0.00%) |     47       4      92     46 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                 9     0(0.00%) |     66      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       347   64(18.44%) |     80       4     956     50 |   13.00        3.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 43     0(0.00%) |     13       8      68     10 |    1.70        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     13    9(69.23%) |      7       4      29      5 |    0.30        0.30
+GET      [Stage3-L3] GET /dashboard/summary/                                               11  11(100.00%) |      9       4      22      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                        10     0(0.00%) |     12       9      18     11 |    0.20        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 5    3(60.00%) |     19       4      64      6 |    0.20        0.20
+GET      [Stage3-L3] GET /error-budget/status/                                              6    3(50.00%) |      6       4       8      5 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          20   19(95.00%) |     13       4      76      6 |    1.10        1.10
+GET      [Stage3-L3] GET /l2-storage/status/                                                9    7(77.78%) |     11       4      48      5 |    0.10        0.10
+GET      [Stage3-L3] GET /status/ (CB)                                                     10  10(100.00%) |      7       4      15      6 |    0.60        0.60
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              43     0(0.00%) |     82      18     321     63 |    1.70        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 44     0(0.00%) |     53      12      85     55 |    1.70        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     43     0(0.00%) |     62      17     181     60 |    1.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 25     0(0.00%) |     50      37      58     50 |    0.80        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.50        0.50
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         6     0(0.00%) |     49      46      53     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           4     0(0.00%) |     49      47      50     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       14     0(0.00%) |     45      15      52     48 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        15     0(0.00%) |     63      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        4     0(0.00%) |     47       4      92     46 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                10     0(0.00%) |     65      45     151     48 |    0.20        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       378   70(18.52%) |     77       4     956     50 |   13.10        3.40
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 48     0(0.00%) |     13       8      68     11 |    1.90        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     13    9(69.23%) |      7       4      29      5 |    0.20        0.20
+GET      [Stage3-L3] GET /dashboard/summary/                                               12  12(100.00%) |      9       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        10     0(0.00%) |     12       9      18     11 |    0.10        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 7    3(42.86%) |     16       4      64      8 |    0.20        0.20
+GET      [Stage3-L3] GET /error-budget/status/                                              6    3(50.00%) |      6       4       8      5 |    0.10        0.10
+GET      [Stage3-L3] GET /health/                                                          21   20(95.24%) |     13       4      76      6 |    1.10        1.10
+GET      [Stage3-L3] GET /l2-storage/status/                                                9    7(77.78%) |     11       4      48      5 |    0.20        0.20
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.50        0.50
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              48     0(0.00%) |     82      18     321     63 |    1.90        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 48     0(0.00%) |     55      12     107     55 |    1.90        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     48     0(0.00%) |     61      17     181     60 |    1.90        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 26     0(0.00%) |     50      37      58     50 |    0.90        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                         7     0(0.00%) |     49      46      53     50 |    0.40        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           6     0(0.00%) |     49      47      51     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       14     0(0.00%) |     45      15      52     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        15     0(0.00%) |     63      45     158     49 |    0.70        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        5     0(0.00%) |     53       4      92     48 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                10     0(0.00%) |     65      45     151     48 |    0.10        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       408   73(17.89%) |     74       4     956     50 |   13.70        3.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 50     0(0.00%) |     13       8      68     11 |    2.10        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     14   10(71.43%) |      7       4      29      5 |    0.10        0.10
+GET      [Stage3-L3] GET /dashboard/summary/                                               14  14(100.00%) |      8       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        11     0(0.00%) |     12       9      18     11 |    0.10        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                 7    3(42.86%) |     16       4      64      8 |    0.20        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              7    3(42.86%) |      6       4       8      7 |    0.10        0.10
+GET      [Stage3-L3] GET /health/                                                          22   21(95.45%) |     12       4      76      6 |    1.10        1.10
+GET      [Stage3-L3] GET /l2-storage/status/                                                9    7(77.78%) |     11       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.60        0.50
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              51     0(0.00%) |     81      18     321     63 |    2.10        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 51     0(0.00%) |     55      12     107     55 |    2.10        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     50     0(0.00%) |     61      17     181     60 |    2.10        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 26     0(0.00%) |     50      37      58     50 |    1.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.30        0.30
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        10     0(0.00%) |     50      46      55     50 |    0.30        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           6     0(0.00%) |     49      47      51     48 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       15     0(0.00%) |     46      15      52     48 |    0.10        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        17     0(0.00%) |     61      45     158     49 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        5     0(0.00%) |     53       4      92     48 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                11     0(0.00%) |     68      45     151     49 |    0.10        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               5     0(0.00%) |     60      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       431   77(17.87%) |     72       4     956     50 |   14.50        2.80
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 52     0(0.00%) |     13       8      68     11 |    2.00        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     15   11(73.33%) |      7       4      29      5 |    0.10        0.10
+GET      [Stage3-L3] GET /dashboard/summary/                                               14  14(100.00%) |      8       4      22      6 |    0.40        0.40
+GET      [Stage3-L3] GET /dlq/list/                                                        12     0(0.00%) |     12       9      18     11 |    0.20        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                10    6(60.00%) |     13       4      64      6 |    0.30        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                              8    4(50.00%) |      6       4       8      5 |    0.20        0.10
+GET      [Stage3-L3] GET /health/                                                          23   22(95.65%) |     12       4      76      6 |    1.00        1.00
+GET      [Stage3-L3] GET /l2-storage/status/                                               11    9(81.82%) |     10       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.40        0.30
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              52     0(0.00%) |     81      18     321     63 |    1.80        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 52     0(0.00%) |     55      12     107     54 |    1.80        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     52     0(0.00%) |     61      17     181     60 |    1.80        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 27     0(0.00%) |     50      37      58     50 |    0.90        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        10     0(0.00%) |     50      46      55     50 |    0.50        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           7     0(0.00%) |     49      47      51     51 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       17     0(0.00%) |     46      15      52     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        17     0(0.00%) |     61      45     158     49 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        5     0(0.00%) |     53       4      92     48 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                12     0(0.00%) |     66      45     151     48 |    0.20        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               6     0(0.00%) |     58      46     113     47 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       452   85(18.81%) |     70       4     956     50 |   13.70        2.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 56     0(0.00%) |     13       8      68     11 |    1.80        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     16   12(75.00%) |      7       4      29      5 |    0.30        0.30
+GET      [Stage3-L3] GET /dashboard/summary/                                               14  14(100.00%) |      8       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        14     0(0.00%) |     12       9      18     11 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                12    8(66.67%) |     12       4      64      6 |    0.50        0.30
+GET      [Stage3-L3] GET /error-budget/status/                                              8    4(50.00%) |      6       4       8      5 |    0.20        0.10
+GET      [Stage3-L3] GET /health/                                                          23   22(95.65%) |     12       4      76      6 |    0.80        0.80
+GET      [Stage3-L3] GET /l2-storage/status/                                               12   10(83.33%) |      9       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.30        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              56     0(0.00%) |     79      18     321     63 |    1.80        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 56     0(0.00%) |     55      12     107     55 |    1.80        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     56     0(0.00%) |     60      17     181     60 |    1.80        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 28     0(0.00%) |     50      37      58     50 |    0.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              8   8(100.00%) |     49      46      53     48 |    0.10        0.10
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        12     0(0.00%) |     50      46      55     50 |    0.70        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           7     0(0.00%) |     49      47      51     51 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       17     0(0.00%) |     46      15      52     48 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        19     0(0.00%) |     60      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        6     0(0.00%) |     52       4      92     47 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                14     0(0.00%) |     63      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               6     0(0.00%) |     58      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       482   89(18.46%) |     68       4     956     50 |   13.50        2.40
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 58     0(0.00%) |     13       8      68     11 |    1.60        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     18   14(77.78%) |      6       4      29      5 |    0.30        0.30
+GET      [Stage3-L3] GET /dashboard/summary/                                               14  14(100.00%) |      8       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        14     0(0.00%) |     12       9      18     11 |    0.50        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                14   10(71.43%) |     11       4      64      6 |    0.60        0.40
+GET      [Stage3-L3] GET /error-budget/status/                                              8    4(50.00%) |      6       4       8      5 |    0.20        0.10
+GET      [Stage3-L3] GET /health/                                                          24   23(95.83%) |     12       4      76      5 |    0.70        0.70
+GET      [Stage3-L3] GET /l2-storage/status/                                               12   10(83.33%) |      9       4      48      5 |    0.50        0.50
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.30        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              58     0(0.00%) |     79      18     321     63 |    1.60        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 58     0(0.00%) |     55      12     107     55 |    1.60        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     58     0(0.00%) |     60      17     181     60 |    1.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 29     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                              9   9(100.00%) |     50      46      53     49 |    0.00        0.00
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        12     0(0.00%) |     50      46      55     50 |    0.70        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           8     0(0.00%) |     49      46      51     48 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       19     0(0.00%) |     46      15      52     48 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        21     0(0.00%) |     59      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        6     0(0.00%) |     52       4      92     47 |    0.30        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                14     0(0.00%) |     63      45     151     48 |    0.50        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               7     0(0.00%) |     57      46     113     48 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       503   95(18.89%) |     67       4     956     50 |   13.20        2.50
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 59     0(0.00%) |     13       8      68     11 |    1.50        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     20   16(80.00%) |      6       4      29      5 |    0.50        0.50
+GET      [Stage3-L3] GET /dashboard/summary/                                               16  16(100.00%) |      8       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        15     0(0.00%) |     12       9      18     11 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                14   10(71.43%) |     11       4      64      6 |    0.80        0.60
+GET      [Stage3-L3] GET /error-budget/status/                                              9    5(55.56%) |      6       4       8      6 |    0.20        0.10
+GET      [Stage3-L3] GET /health/                                                          26   25(96.15%) |     11       4      76      5 |    0.50        0.50
+GET      [Stage3-L3] GET /l2-storage/status/                                               14   12(85.71%) |      9       4      48      5 |    0.40        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                     12   11(91.67%) |      7       4      15      6 |    0.30        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              60     0(0.00%) |     78      18     321     62 |    1.50        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 60     0(0.00%) |     55      12     107     54 |    1.50        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     59     0(0.00%) |     60      17     181     60 |    1.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 29     0(0.00%) |     50      37      58     50 |    0.30        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             10  10(100.00%) |     50      46      53     49 |    0.10        0.10
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        12     0(0.00%) |     50      46      55     50 |    0.60        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           8     0(0.00%) |     49      46      51     48 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       19     0(0.00%) |     46      15      52     48 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        22     0(0.00%) |     58      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        6     0(0.00%) |     52       4      92     47 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                15     0(0.00%) |     62      45     151     48 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       523  105(20.08%) |     66       4     956     49 |   12.70        2.70
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 65     0(0.00%) |     12       8      68     10 |    1.30        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     21   17(80.95%) |      6       4      29      5 |    0.50        0.50
+GET      [Stage3-L3] GET /dashboard/summary/                                               16  16(100.00%) |      8       4      22      6 |    0.50        0.50
+GET      [Stage3-L3] GET /dlq/list/                                                        15     0(0.00%) |     12       9      18     11 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                14   10(71.43%) |     11       4      64      6 |    0.80        0.70
+GET      [Stage3-L3] GET /error-budget/status/                                              9    5(55.56%) |      6       4       8      6 |    0.30        0.20
+GET      [Stage3-L3] GET /health/                                                          26   25(96.15%) |     11       4      76      5 |    0.50        0.50
+GET      [Stage3-L3] GET /l2-storage/status/                                               15   13(86.67%) |      9       4      48      5 |    0.50        0.50
+GET      [Stage3-L3] GET /status/ (CB)                                                     14   13(92.86%) |      7       4      15      6 |    0.00        0.00
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              65     0(0.00%) |     77      18     321     62 |    1.30        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 65     0(0.00%) |     54      12     107     54 |    1.30        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     65     0(0.00%) |     60      17     181     59 |    1.30        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 32     0(0.00%) |     50      37      58     50 |    0.30        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             11  11(100.00%) |     50      46      53     50 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        13     0(0.00%) |     50      46      55     50 |    0.60        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                           9     0(0.00%) |     49      46      51     48 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       20     0(0.00%) |     46      15      52     47 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        23     0(0.00%) |     57      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        6     0(0.00%) |     52       4      92     47 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                15     0(0.00%) |     62      45     151     48 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       557  110(19.75%) |     64       4     956     49 |   12.00        3.10
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 68     0(0.00%) |     12       8      68     10 |    1.50        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     23   19(82.61%) |      6       4      29      5 |    0.70        0.70
+GET      [Stage3-L3] GET /dashboard/summary/                                               16  16(100.00%) |      8       4      22      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        15     0(0.00%) |     12       9      18     11 |    0.40        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                15   11(73.33%) |     11       4      64      6 |    0.70        0.70
+GET      [Stage3-L3] GET /error-budget/status/                                              9    5(55.56%) |      6       4       8      6 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          28   27(96.43%) |     11       4      76      6 |    0.40        0.40
+GET      [Stage3-L3] GET /l2-storage/status/                                               15   13(86.67%) |      9       4      48      5 |    0.60        0.60
+GET      [Stage3-L3] GET /status/ (CB)                                                     14   13(92.86%) |      7       4      15      6 |    0.20        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              68     0(0.00%) |     76      18     321     62 |    1.50        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 68     0(0.00%) |     54      12     107     54 |    1.50        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     68     0(0.00%) |     60      17     181     59 |    1.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 32     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             12  12(100.00%) |     50      46      53     50 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        13     0(0.00%) |     50      46      55     50 |    0.50        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          10     0(0.00%) |     49      46      51     48 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       22     0(0.00%) |     46      15      52     47 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        24     0(0.00%) |     57      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        7     0(0.00%) |     51       4      92     47 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                15     0(0.00%) |     62      45     151     48 |    0.40        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       580  116(20.00%) |     63       4     956     49 |   12.80        3.30
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 71     0(0.00%) |     12       8      68     10 |    1.60        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     26   22(84.62%) |      6       4      29      5 |    0.70        0.70
+GET      [Stage3-L3] GET /dashboard/summary/                                               16  16(100.00%) |      8       4      22      6 |    0.20        0.20
+GET      [Stage3-L3] GET /dlq/list/                                                        16     0(0.00%) |     12       9      18     11 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                16   12(75.00%) |     10       4      64      6 |    0.60        0.60
+GET      [Stage3-L3] GET /error-budget/status/                                              9    5(55.56%) |      6       4       8      6 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          29   28(96.55%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               16   14(87.50%) |      8       4      48      5 |    0.50        0.50
+GET      [Stage3-L3] GET /status/ (CB)                                                     14   13(92.86%) |      7       4      15      6 |    0.20        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              71     0(0.00%) |     76      18     321     62 |    1.60        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 71     0(0.00%) |     54      12     107     54 |    1.60        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     71     0(0.00%) |     60      17     181     59 |    1.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 35     0(0.00%) |     50      37      58     50 |    0.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             12  12(100.00%) |     50      46      53     50 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.30        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          10     0(0.00%) |     49      46      51     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       23     0(0.00%) |     46      15      52     47 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        25     0(0.00%) |     57      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        7     0(0.00%) |     51       4      92     47 |    0.20        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                16     0(0.00%) |     61      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       606  122(20.13%) |     62       4     956     49 |   13.10        3.40
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 73     0(0.00%) |     12       8      68     10 |    1.40        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     27   23(85.19%) |      8       4      56      5 |    0.90        0.90
+GET      [Stage3-L3] GET /dashboard/summary/                                               16  16(100.00%) |      8       4      22      6 |    0.20        0.20
+GET      [Stage3-L3] GET /dlq/list/                                                        17     0(0.00%) |     12       9      18     11 |    0.20        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                17   13(76.47%) |     11       4      64      6 |    0.50        0.50
+GET      [Stage3-L3] GET /error-budget/status/                                             10    6(60.00%) |      6       4       8      6 |    0.10        0.10
+GET      [Stage3-L3] GET /health/                                                          30   29(96.67%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               16   14(87.50%) |      8       4      48      5 |    0.40        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                     20   19(95.00%) |      7       4      17      6 |    0.20        0.20
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              73     0(0.00%) |     76      18     321     62 |    1.40        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 73     0(0.00%) |     54      12     107     54 |    1.40        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     73     0(0.00%) |     60      17     181     59 |    1.40        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 35     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             14  14(100.00%) |     50      46      53     50 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          10     0(0.00%) |     49      46      51     48 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       23     0(0.00%) |     46      15      52     47 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        25     0(0.00%) |     57      45     158     49 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        8     0(0.00%) |     51       4      92     47 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                17     0(0.00%) |     61      45     151     48 |    0.20        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       629  134(21.30%) |     61       4     956     49 |   11.80        3.30
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 74     0(0.00%) |     12       8      68     10 |    1.40        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     30   26(86.67%) |      8       4      56      5 |    0.80        0.80
+GET      [Stage3-L3] GET /dashboard/summary/                                               17  17(100.00%) |      8       4      22      6 |    0.20        0.20
+GET      [Stage3-L3] GET /dlq/list/                                                        17     0(0.00%) |     12       9      18     11 |    0.20        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                17   13(76.47%) |     11       4      64      6 |    0.30        0.30
+GET      [Stage3-L3] GET /error-budget/status/                                             11    7(63.64%) |      6       4       8      6 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          30   29(96.67%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               17   15(88.24%) |      8       4      48      5 |    0.40        0.40
+GET      [Stage3-L3] GET /status/ (CB)                                                     20   19(95.00%) |      7       4      17      6 |    0.50        0.50
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              74     0(0.00%) |     76      18     321     62 |    1.40        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 74     0(0.00%) |     54      12     107     54 |    1.40        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     74     0(0.00%) |     60      17     181     59 |    1.40        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 36     0(0.00%) |     50      37      58     50 |    0.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             14  14(100.00%) |     50      46      53     50 |    0.30        0.30
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          10     0(0.00%) |     49      46      51     48 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       25     0(0.00%) |     48      15      77     48 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        26     0(0.00%) |     56      45     158     49 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                        9     0(0.00%) |     52       4      92     48 |    0.10        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                17     0(0.00%) |     61      45     151     48 |    0.20        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       644  140(21.74%) |     60       4     956     49 |   11.60        3.30
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 75     0(0.00%) |     12       8      68     11 |    1.40        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     30   26(86.67%) |      8       4      56      5 |    1.20        1.20
+GET      [Stage3-L3] GET /dashboard/summary/                                               18  18(100.00%) |      8       4      22      6 |    0.10        0.10
+GET      [Stage3-L3] GET /dlq/list/                                                        18     0(0.00%) |     12       9      18     11 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                17   13(76.47%) |     11       4      64      6 |    0.30        0.30
+GET      [Stage3-L3] GET /error-budget/status/                                             12    8(66.67%) |      6       4       8      6 |    0.10        0.10
+GET      [Stage3-L3] GET /health/                                                          33   32(96.97%) |     11       4      76      6 |    0.40        0.40
+GET      [Stage3-L3] GET /l2-storage/status/                                               18   16(88.89%) |      8       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     20   19(95.00%) |      7       4      17      6 |    0.80        0.80
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              75     0(0.00%) |     76      18     321     62 |    1.40        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 75     0(0.00%) |     55      12     107     55 |    1.40        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     75     0(0.00%) |     60      17     181     59 |    1.40        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 36     0(0.00%) |     50      37      58     50 |    0.60        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             14  14(100.00%) |     50      46      53     50 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.20        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          11     0(0.00%) |     49      46      52     51 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       27     0(0.00%) |     48      15      77     48 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        26     0(0.00%) |     56      45     158     49 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                       12     0(0.00%) |     51       4      92     48 |    0.30        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                18     0(0.00%) |     60      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               8     0(0.00%) |     55      46     113     47 |    0.10        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       662  146(22.05%) |     60       4     956     49 |   12.20        3.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 79     0(0.00%) |     12       8      68     10 |    1.20        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     33   29(87.88%) |      8       4      56      6 |    1.00        1.00
+GET      [Stage3-L3] GET /dashboard/summary/                                               18  18(100.00%) |      8       4      22      6 |    0.20        0.20
+GET      [Stage3-L3] GET /dlq/list/                                                        18     0(0.00%) |     12       9      18     11 |    0.20        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                17   13(76.47%) |     11       4      64      6 |    0.30        0.30
+GET      [Stage3-L3] GET /error-budget/status/                                             13    9(69.23%) |      6       4       8      6 |    0.20        0.20
+GET      [Stage3-L3] GET /health/                                                          34   33(97.06%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               18   16(88.89%) |      8       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     22   21(95.45%) |      7       4      17      6 |    0.60        0.60
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              79     0(0.00%) |     75      18     321     62 |    1.20        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 79     0(0.00%) |     55      12     107     55 |    1.20        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     79     0(0.00%) |     60      17     181     59 |    1.20        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 38     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             15  15(100.00%) |     50      46      53     50 |    0.40        0.40
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          12     0(0.00%) |     49      46      52     49 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       27     0(0.00%) |     48      15      77     48 |    0.80        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        28     0(0.00%) |     56      45     158     49 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                       12     0(0.00%) |     51       4      92     48 |    0.40        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                18     0(0.00%) |     60      45     151     48 |    0.20        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                               9     0(0.00%) |     55      46     113     48 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       692  154(22.25%) |     59       4     956     49 |   11.10        3.60
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 80     0(0.00%) |     12       8      68     10 |    1.00        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     34   30(88.24%) |      8       4      56      6 |    0.80        0.80
+GET      [Stage3-L3] GET /dashboard/summary/                                               19  19(100.00%) |      8       4      22      6 |    0.20        0.20
+GET      [Stage3-L3] GET /dlq/list/                                                        19     0(0.00%) |     12       9      18     12 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                17   13(76.47%) |     11       4      64      6 |    0.20        0.20
+GET      [Stage3-L3] GET /error-budget/status/                                             13    9(69.23%) |      6       4       8      6 |    0.30        0.30
+GET      [Stage3-L3] GET /health/                                                          35   34(97.14%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               18   16(88.89%) |      8       4      48      5 |    0.30        0.30
+GET      [Stage3-L3] GET /status/ (CB)                                                     22   21(95.45%) |      7       4      17      6 |    0.80        0.80
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              80     0(0.00%) |     75      18     321     62 |    1.10        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 80     0(0.00%) |     55      12     107     55 |    1.10        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     80     0(0.00%) |     60      17     181     59 |    1.00        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 39     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             15  15(100.00%) |     50      46      53     50 |    0.20        0.20
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          12     0(0.00%) |     49      46      52     49 |    0.30        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       29     0(0.00%) |     48      15      77     48 |    0.50        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        29     0(0.00%) |     56      45     158     49 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                       13     0(0.00%) |     51       4      92     48 |    0.50        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                19     0(0.00%) |     60      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                              11     0(0.00%) |     54      46     113     48 |    0.00        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       708  157(22.18%) |     58       4     956     49 |   10.50        3.40
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.00        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 83     0(0.00%) |     13       8      68     11 |    1.10        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     35   31(88.57%) |      8       4      56      6 |    0.90        0.90
+GET      [Stage3-L3] GET /dashboard/summary/                                               21  21(100.00%) |      9       4      33      6 |    0.30        0.30
+GET      [Stage3-L3] GET /dlq/list/                                                        20     0(0.00%) |     17       9     104     12 |    0.30        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                19   14(73.68%) |     16       4     102      6 |    0.10        0.10
+GET      [Stage3-L3] GET /error-budget/status/                                             13    9(69.23%) |      6       4       8      6 |    0.40        0.40
+GET      [Stage3-L3] GET /health/                                                          35   34(97.14%) |     11       4      76      6 |    0.60        0.60
+GET      [Stage3-L3] GET /l2-storage/status/                                               18   16(88.89%) |      8       4      48      5 |    0.20        0.20
+GET      [Stage3-L3] GET /status/ (CB)                                                     24   22(91.67%) |      7       4      17      6 |    0.80        0.80
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.00        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              83     0(0.00%) |     77      18     321     62 |    1.20        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 84     0(0.00%) |     55      12     107     55 |    1.20        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     83     0(0.00%) |     63      17     266     59 |    1.10        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 40     0(0.00%) |     50      37      58     50 |    0.50        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             17  17(100.00%) |     65      46     289     52 |    0.30        0.30
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        14     0(0.00%) |     49      46      55     48 |    0.10        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          12     0(0.00%) |     49      46      52     49 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       30     0(0.00%) |     48      15      77     48 |    0.60        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        30     0(0.00%) |     57      45     158     49 |    0.40        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                       13     0(0.00%) |     51       4      92     48 |    0.60        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                20     0(0.00%) |     61      45     151     48 |    0.30        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                              12     0(0.00%) |     77      46     329     48 |    0.30        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       736  164(22.28%) |     59       4     956     49 |   11.50        3.60
+
+[2025-12-26 01:02:45,332] DESKTOP-A0EPTKG/INFO/locust.main: --run-time limit reached, shutting down
+[2025-12-26 01:02:45,519] DESKTOP-A0EPTKG/ERROR/root: Uncaught exception in event handler: 
+Traceback (most recent call last):
+  File "C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\site-packages\locust\event.py", line 47, in fire
+    handler(**kwargs)
+  File "C:\Users\admin\Desktop\python\CRUD\myproject\load_tests\scenarios\load\stage3_latency.py", line 914, in on_test_stop
+    print("\u23f1\ufe0f  STAGE 3: LATENCY + SELF-HEALING 실제 동작 검증 결과")
+UnicodeEncodeError: 'cp949' codec can't encode character '\u23f1' in position 0: illegal multibyte sequence
+
+[2025-12-26 01:02:45,522] DESKTOP-A0EPTKG/INFO/locust.main: Shutting down (exit code 1)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+POST     [Stage3-L3] Admin Login                                                           10     0(0.00%) |    544     275     692    660 |    0.17        0.00
+GET      [Stage3-L3] GET /api/orders/{id}/                                                 85     0(0.00%) |     13       8      68     11 |    1.45        0.00
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                     36   32(88.89%) |      8       4      56      6 |    0.61        0.54
+GET      [Stage3-L3] GET /dashboard/summary/                                               21  21(100.00%) |      9       4      33      6 |    0.36        0.36
+GET      [Stage3-L3] GET /dlq/list/                                                        20     0(0.00%) |     17       9     104     12 |    0.34        0.00
+GET      [Stage3-L3] GET /emergency/status/                                                19   14(73.68%) |     16       4     102      6 |    0.32        0.24
+GET      [Stage3-L3] GET /error-budget/status/                                             13    9(69.23%) |      6       4       8      6 |    0.22        0.15
+GET      [Stage3-L3] GET /health/                                                          35   34(97.14%) |     11       4      76      6 |    0.60        0.58
+GET      [Stage3-L3] GET /l2-storage/status/                                               18   16(88.89%) |      8       4      48      5 |    0.31        0.27
+GET      [Stage3-L3] GET /status/ (CB)                                                     24   22(91.67%) |      7       4      17      6 |    0.41        0.37
+POST     [Stage3-L3] POST /api/auth/login/                                                 10     0(0.00%) |    622     393     709    680 |    0.17        0.00
+POST     [Stage3-L3] POST /api/cart/add_item/                                              85     0(0.00%) |     77      18     321     62 |    1.45        0.00
+POST     [Stage3-L3] POST /api/cart/clear/                                                 85     0(0.00%) |     56      12     133     55 |    1.45        0.00
+POST     [Stage3-L3] POST /api/orders/                                                     85     0(0.00%) |     63      17     266     59 |    1.45        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                 41     0(0.00%) |     50      37      58     50 |    0.70        0.00
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                             17  17(100.00%) |     65      46     289     52 |    0.29        0.29
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                        15     0(0.00%) |     50      46      55     50 |    0.26        0.00
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                          12     0(0.00%) |     49      46      52     49 |    0.20        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                       31     0(0.00%) |     49      15      82     48 |    0.53        0.00
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                        30     0(0.00%) |     57      45     158     49 |    0.51        0.00
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                       13     0(0.00%) |     51       4      92     48 |    0.22        0.00
+POST     [Stage3-L3] POST /dlq/test-create/                                                20     0(0.00%) |     61      45     151     48 |    0.34        0.00
+POST     [Stage3-L3] POST /emergency/trigger/                                              12     0(0.00%) |     77      46     329     48 |    0.20        0.00
+GET      [Stage3-L3] [Setup] Fetch Products                                                10     0(0.00%) |    249      29     956     96 |    0.17        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                       747  165(22.09%) |     59       4     956     49 |   12.72        2.81
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+POST     [Stage3-L3] Admin Login                                                               660    670    690    690    690    690    690    690    690    690    690     10
+GET      [Stage3-L3] GET /api/orders/{id}/                                                      11     12     15     16     19     22     32     68     68     68     68     85
+GET      [Stage3-L3] GET /circuit-breaker/pool/status/                                           6      6      7      7     11     30     56     56     56     56     56     36
+GET      [Stage3-L3] GET /dashboard/summary/                                                     6      8     10     12     14     22     34     34     34     34     34     21
+GET      [Stage3-L3] GET /dlq/list/                                                             12     15     16     18     19    100    100    100    100    100    100     20
+GET      [Stage3-L3] GET /emergency/status/                                                      6     12     15     17     64    100    100    100    100    100    100     19
+GET      [Stage3-L3] GET /error-budget/status/                                                   6      6      7      8      8      9      9      9      9      9      9     13
+GET      [Stage3-L3] GET /health/                                                                6      7     10     14     23     46     77     77     77     77     77     35
+GET      [Stage3-L3] GET /l2-storage/status/                                                     5      6      8      8     15     48     48     48     48     48     48     18
+GET      [Stage3-L3] GET /status/ (CB)                                                           6      9     10     12     15     16     17     17     17     17     17     24
+POST     [Stage3-L3] POST /api/auth/login/                                                     680    680    690    690    710    710    710    710    710    710    710     10
+POST     [Stage3-L3] POST /api/cart/add_item/                                                   62     64     66     69    120    180    260    320    320    320    320     85
+POST     [Stage3-L3] POST /api/cart/clear/                                                      55     56     57     58     62     72    110    130    130    130    130     85
+POST     [Stage3-L3] POST /api/orders/                                                          59     62     63     64     71     95    180    270    270    270    270     85
+POST     [Stage3-L3] POST /api/payments/confirm/ [LATENCY]                                      50     52     53     53     55     56     58     58     58     58     58     41
+POST     [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]                                  52     53     53     53     62    290    290    290    290    290    290     17
+POST     [Stage3-L3] POST /confirm/ [CB-BLOCK-TEST]                                             50     51     53     54     54     55     55     55     55     55     55     15
+POST     [Stage3-L3] POST /confirm/ [RECOVERY-CB]                                               51     51     51     51     52     52     52     52     52     52     52     12
+POST     [Stage3-L3] POST /control/ [CB-FORCE-CLOSE]                                            48     49     50     52     55     77     83     83     83     83     83     31
+POST     [Stage3-L3] POST /control/ [CB-FORCE-OPEN]                                             49     52     59     64     85     92    160    160    160    160    160     30
+POST     [Stage3-L3] POST /control/ [INJECT-FAILURE]                                            48     49     51     60     75     92     92     92     92     92     92     13
+POST     [Stage3-L3] POST /dlq/test-create/                                                     49     52     66     83    100    150    150    150    150    150    150     20
+POST     [Stage3-L3] POST /emergency/trigger/                                                   49     50     55     55    110    330    330    330    330    330    330     12
+GET      [Stage3-L3] [Setup] Fetch Products                                                    100    120    130    870    960    960    960    960    960    960    960     10
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             49     55     59     61     71    130    660    690    960    960    960    747
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+17                 POST [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]: HTTPError('400 Client Error: Bad Request for url: [Stage3-L3] POST /api/payments/confirm/ [TIMEOUT-1st]')
+4                  GET [Stage3-L3] GET /dashboard/summary/: Dashboard summary failed: 500                              
+32                 GET [Stage3-L3] GET /circuit-breaker/pool/status/: CB Pool status failed: 429                       
+17                 GET [Stage3-L3] GET /dashboard/summary/: Dashboard summary failed: 429                              
+34                 GET [Stage3-L3] GET /health/: Health check failed: 429                                              
+22                 GET [Stage3-L3] GET /status/ (CB): CB status failed: 429                                            
+14                 GET [Stage3-L3] GET /emergency/status/: Emergency status failed: 429                                
+16                 GET [Stage3-L3] GET /l2-storage/status/: L2 Storage status failed: 429                              
+9                  GET [Stage3-L3] GET /error-budget/status/: Error Budget status failed: 429                          
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+======================================================================
+
+================================================================================
+[METRICS] CUSTOM METRICS SUMMARY
+================================================================================
+Elapsed: 58.96s
+Total Requests: 747
+RPS: 12.67
+Error Rate: 22.09%
+--------------------------------------------------------------------------------
+Endpoint                                    Count      P95      P99    P99.9   Err%
+--------------------------------------------------------------------------------
+[Stage3-L3] [Setup] Fetch Products             10   956.9ms   956.9ms   956.9ms   0.0%
+[Stage3-L3] POST /api/auth/login/              10   709.3ms   709.3ms   709.3ms   0.0%
+[Stage3-L3] Admin Login                        10   692.4ms   692.4ms   692.4ms   0.0%
+[Stage3-L3] GET /circuit-breaker/pool/st       36    29.7ms    56.4ms    56.4ms  88.9%
+[Stage3-L3] GET /l2-storage/status/            18    48.2ms    48.2ms    48.2ms  88.9%
+[Stage3-L3] POST /api/cart/clear/              85    72.1ms   133.1ms   133.1ms   0.0%
+[Stage3-L3] POST /api/cart/add_item/           85   181.1ms   321.9ms   321.9ms   0.0%
+[Stage3-L3] POST /api/orders/                  85    95.5ms   266.2ms   266.2ms   0.0%
+[Stage3-L3] GET /api/orders/{id}/              85    22.0ms    68.4ms    68.4ms   0.0%
+[Stage3-L3] POST /api/payments/confirm/        41    56.2ms    58.3ms    58.3ms   0.0%
+[Stage3-L3] POST /control/ [CB-FORCE-OPE       30    92.0ms   158.0ms   158.0ms   0.0%
+[Stage3-L3] POST /emergency/trigger/           12   329.6ms   329.6ms   329.6ms   0.0%
+[Stage3-L3] GET /emergency/status/             19   102.5ms   102.5ms   102.5ms  73.7%
+[Stage3-L3] POST /control/ [CB-FORCE-CLO       31    77.3ms    82.7ms    82.7ms   0.0%
+[Stage3-L3] GET /health/                       35    46.5ms    76.8ms    76.8ms  97.1%
+[Stage3-L3] POST /control/ [INJECT-FAILU       13    92.2ms    92.2ms    92.2ms   0.0%
+[Stage3-L3] POST /api/payments/confirm/        17   290.0ms   290.0ms   290.0ms 100.0%
+[Stage3-L3] GET /error-budget/status/          13     8.8ms     8.8ms     8.8ms  69.2%
+[Stage3-L3] POST /dlq/test-create/             20   151.1ms   151.1ms   151.1ms   0.0%
+[Stage3-L3] GET /dlq/list/                     20   104.8ms   104.8ms   104.8ms   0.0%
+[Stage3-L3] GET /dashboard/summary/            21    22.1ms    33.6ms    33.6ms 100.0%
+[Stage3-L3] GET /status/ (CB)                  24    15.6ms    17.3ms    17.3ms  91.7%
+[Stage3-L3] POST /confirm/ [RECOVERY-CB]       12    52.2ms    52.2ms    52.2ms   0.0%
+[Stage3-L3] POST /confirm/ [CB-BLOCK-TES       15    55.4ms    55.4ms    55.4ms   0.0%
+================================================================================
