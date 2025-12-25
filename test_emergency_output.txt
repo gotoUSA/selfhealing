@@ -1,8 +1,0 @@
-..........................................                               [100%]
-============================== warnings summary ===============================
-tests\self_healing\unit\test_emergency_mode.py:16
-  C:\Users\admin\Desktop\python\CRUD\myproject\tests\self_healing\unit\test_emergency_mode.py:16: DeprecationWarning: Importing from old module paths is deprecated and will be removed in a future version. Please migrate to 'selfhealing' package. See packages/selfhealing-python/docs/MIGRATION.md for details.
-    from selfhealing.services.emergency_mode import (
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-42 passed, 1 warning in 0.41s

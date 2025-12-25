@@ -929,13 +929,16 @@ class DLQService:
                 snapshot_data=snapshot_data or {},
                 request_data=request_data or {},
                 response_data=response_data or {},
-                # Domain-neutral entity reference (DB columns)
+                # Domain-neutral entity reference (DB columns for indexing)
                 entity_type=entity_type,
                 entity_id=entity_id,
+                # Also store in metadata for flexibility and backward compatibility
                 metadata={
                     "test": True,
                     "created_by": created_by,
                     "source": "DLQService.create_test_entry",
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     **(metadata or {}),
                 },
                 recommended_action=FailedOperation.RecommendedAction.REPLAY,
