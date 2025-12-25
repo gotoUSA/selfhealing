@@ -90,6 +90,10 @@ class SelfHealingConfig(AppConfig):
     # Phase 2: Startup Hydration - 중복 실행 방지
     _hydration_done = False
     _hydration_lock = threading.Lock()
+    
+    # V3: Pre-computed Cache Worker - 중복 실행 방지
+    _cache_worker_started = False
+    _cache_worker_lock = threading.Lock()
 
     def ready(self):
         """
@@ -101,6 +105,7 @@ class SelfHealingConfig(AppConfig):
         3. Log environment variable snapshot for audit trail
         4. Validate config with Safe Defaults (Phase 6)
         5. Hydrate metric gauges with jitter (Phase 2)
+        6. Start pre-computed cache worker (V3 Optimization)
         
         Note: Environment snapshot is logged here (not in post_migrate) because
         env vars can change on every restart, not just during migrations.
@@ -134,6 +139,10 @@ class SelfHealingConfig(AppConfig):
         # Hydrate metric gauges with jitter (Phase 2: Startup Hydration)
         # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
         self._schedule_gauge_hydration()
+        
+        # V3: Start pre-computed cache worker for L3 observability endpoints
+        # Reference: load_tests/results/stage1_l3_baseline_2025-12-25.md
+        self._start_precomputed_cache_worker()
     
     def _log_env_snapshot(self):
         """
@@ -323,6 +332,71 @@ class SelfHealingConfig(AppConfig):
                 f"[SelfHealing] Gauge hydration failed (non-fatal): {e}. "
                 f"Gauges will be updated on next event or manual sync."
             )
+
+    # =========================================================================
+    # V3: Pre-computed Cache Worker
+    # Reference: load_tests/results/stage1_l3_baseline_2025-12-25.md
+    # =========================================================================
+
+    def _start_precomputed_cache_worker(self):
+        """
+        Start pre-computed cache worker for L3 observability endpoints.
+        
+        V3 최적화: L3 엔드포인트 P95 < 50ms 달성을 위한 사전 계산 캐시.
+        - /health/ - 7-9ms (was 92ms)
+        - /error-budget/status/ - 7-9ms (was 111ms)
+        - /stress/pool-status/ - 13-41ms (was 168ms)
+        
+        Graceful Degradation:
+        - 실패해도 서버 기동은 계속 (캐시 없이 직접 계산으로 fallback)
+        """
+        # 설정에서 비활성화된 경우
+        if not getattr(settings, "SELFHEALING_PRECOMPUTED_CACHE_ENABLED", True):
+            logger.debug("[SelfHealing] Pre-computed cache disabled by settings")
+            return
+        
+        # 중복 실행 방지
+        with self._cache_worker_lock:
+            if self._cache_worker_started:
+                logger.debug("[SelfHealing] Pre-computed cache worker already started")
+                return
+            SelfHealingConfig._cache_worker_started = True
+        
+        try:
+            from selfhealing.services.precomputed_cache import (
+                register_default_compute_functions,
+                start_precomputed_cache,
+            )
+            
+            # Register compute functions for L3 endpoints
+            register_default_compute_functions()
+            
+            # Start background worker
+            start_precomputed_cache()
+            
+            logger.info(
+                "[SelfHealing] Pre-computed cache worker started "
+                "(L3 observability endpoints: health, error-budget, pool-status)"
+            )
+            
+        except ImportError:
+            logger.debug("[SelfHealing] precomputed_cache module not available")
+        except Exception as e:
+            # Graceful Degradation: 실패해도 서버 기동은 계속
+            logger.warning(
+                f"[SelfHealing] Failed to start pre-computed cache worker (non-fatal): {e}. "
+                f"L3 endpoints will compute on-demand."
+            )
+
+    @classmethod
+    def reset_cache_worker_state(cls):
+        """
+        Pre-computed cache worker 상태 리셋 (테스트용).
+        
+        단위 테스트에서 중복 실행 방지 플래그를 리셋합니다.
+        """
+        with cls._cache_worker_lock:
+            cls._cache_worker_started = False
 
     @classmethod
     def reset_hydration_state(cls):
