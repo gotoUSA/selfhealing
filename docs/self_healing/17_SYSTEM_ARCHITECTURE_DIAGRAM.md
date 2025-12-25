@@ -2,7 +2,7 @@
 
 > 📅 작성일: 2024-12-24  
 > 🎯 목적: 셀프 힐링 시스템의 핵심 컨트롤러와 컴포넌트 간 연결 관계 시각화
-> 📝 최종 업데이트: 2024-12-24 (SoC 리팩토링 완료)
+> 📝 최종 업데이트: 2025-12-25 (코드 검증 및 오류 수정)
 
 ---
 
@@ -19,7 +19,7 @@
 │  │    │ RuntimeConfig     │    │ SystemControl     │    │ Emergency         │              │    │
 │  │    │ Manager           │    │ Manager           │    │ Manager           │              │    │
 │  │    │                   │    │                   │    │                   │              │    │
-│  │    │ • 21개 Config     │    │ • Kill Switch     │    │ • Level 0~3      │              │    │
+│  │    │ • 18개 Config     │    │ • Kill Switch     │    │ • Level 0~3      │              │    │
 │  │    │ • Apply Strategy  │    │ • Dry Run Mode    │    │ • Traffic Tier   │              │    │
 │  │    │ • Config History  │    │ • 전역 ON/OFF     │    │ • 자동 만료      │              │    │
 │  │    └─────────┬─────────┘    └─────────┬─────────┘    └─────────┬─────────┘              │    │
@@ -50,7 +50,7 @@
 │                            RuntimeConfigManager (Singleton)                              │
 │                                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                              21개 Config Types                                      │ │
+│  │                              18개 Config Types                                      │ │
 │  │                                                                                     │ │
 │  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌───────────────┐  │ │
 │  │  │ circuit_breaker │  │ dlq             │  │ retry           │  │ sla           │  │ │
@@ -76,11 +76,11 @@
 │  │  │ • 4-eyes 설정   │  │ • critical 20%  │  │ • shadow_log    │  │ • dry_run     │  │ │
 │  │  └─────────────────┘  └─────────────────┘  └─────────────────┘  └───────────────┘  │ │
 │  │                                                                                     │ │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────────────┐  │ │
-│  │  │ slo             │  │ emergency       │  │ approval_requests (4-Eyes)          │  │ │
-│  │  │ • definitions   │  │ • auto_trigger  │  │ • PENDING → APPROVED/REJECTED       │  │ │
-│  │  │ • targets       │  │ • recovery      │  │ • 듀얼 승인 워크플로우              │  │ │
-│  │  └─────────────────┘  └─────────────────┘  └─────────────────────────────────────┘  │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐                                           │ │
+│  │  │ slo             │  │ emergency       │  ※ approval_requests는 governance의   │ │
+│  │  │ • definitions   │  │ • auto_trigger  │    4-Eyes 워크플로우 저장소로 사용     │ │
+│  │  │ • targets       │  │ • recovery      │    (별도 Config Type이 아닌 내부 키)   │ │
+│  │  └─────────────────┘  └─────────────────┘                                           │ │
 │  │                                                                                     │ │
 │  └────────────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                          │
@@ -358,13 +358,13 @@
        │ • emergency_expiry_hours                    
        │ • four_eyes_enabled            
 
- l2_storage ─────────────────────────────────► L2StorageManager
+ l2_storage ─────────────────────────────────► L2StorageConfig (StateBackend 설정)
        │                                             
        │ • redis_timeout_ms                          
        │ • shadow_log_enabled           
        │ • reconciliation_jitter        
 
- drift_threshold ────────────────────────────► DriftDetector
+ drift_threshold ────────────────────────────► SLADriftDetector
        │                                             
        │ • warning_percent                           
        │ • critical_percent             
@@ -382,7 +382,7 @@
        │ • critical/high/medium_channel 
        │ • slack_block_text_limit       
 
- metrics ────────────────────────────────────► MetricsCollector
+ metrics ────────────────────────────────────► Prometheus Export 설정
        │                                              
        │ • jitter_enabled                            
        │ • jitter_max_delay_seconds     
@@ -398,11 +398,15 @@
 │                              Safe Default 적용 체계                                          │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                              │
-│  📋 Safe Default 정의됨 (21개 타입)                                                          │
-│  ───────────────────────────────────                                                         │
+│  📋 Safe Default 정의됨 (18개 타입 - SAFE_DEFAULTS 기준)                                     │
+│  ─────────────────────────────────────────────────────────                                   │
 │  circuit_breaker, dlq, retry, rate_limit, sla, slo, security, forensic,                     │
 │  logging, notification, metrics, error_budget, idempotency, chaos, emergency,               │
 │  governance, l2_storage, drift_threshold                                                    │
+│                                                                                              │
+│  📋 STORAGE_KEYS (18개 키 - RuntimeConfigManager 저장소)                                     │
+│  ─────────────────────────────────────────────────────────                                   │
+│  위 18개 + approval_requests (governance 4-Eyes 워크플로우용 내부 저장소)                   │
 │                                                                                              │
 │  🔴 Fatal Configs (위반 시 Quarantine Mode)                                                  │
 │  ──────────────────────────────────────────                                                  │
@@ -480,7 +484,6 @@
 │    - ConfigApplyService: 설정 적용, Emergency 체크                                                           │
 │    - ReplayService: DLQ 리플레이, check_all_governance() 사용, 자동 Audit 로깅                              │
 │    - CircuitBreakerService: check_recovery_transitions(), manual_control() 메서드 신규 추가                 │
-│    - PaymentRecoveryService: is_circuit_breaker_blocking(), check_governance_for_retry() 신규 추가          │
 │                                                                                                               │
 │  • 공통 체크 로직: governance_checks.py                                                                       │
 │    - require_system_enabled: Kill Switch 체크 데코레이터                                                     │
@@ -500,9 +503,6 @@
 │  📋 Task→Service 리팩토링 완료 목록 (2024-12-24)                                                             │
 │  ────────────────────────────────────────────────                                                             │
 │  • self_healing_tasks.check_circuit_breaker_recovery: 60줄 DB 조작 → service.check_recovery_transitions()   │
-│  • payment_recovery_tasks.reset_circuit_breaker: 30줄 DB 조작 → service.manual_control()                    │
-│  • payment_recovery_tasks.retry_failed_payment: CB 체크 → recovery.check_governance_for_retry()             │
-│  • payment_recovery_tasks.process_dlq_batch: CB 체크 → recovery.check_governance_for_retry()                │
 │                                                                                                               │
 │  📋 Audit Logging 연동 ("왜 이때 작업이 안 됐지?")                                                           │
 │  ────────────────────────────────────────────────                                                             │
