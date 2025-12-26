@@ -106,6 +106,7 @@ class SelfHealingConfig(AppConfig):
         4. Validate config with Safe Defaults (Phase 6)
         5. Hydrate metric gauges with jitter (Phase 2)
         6. Start pre-computed cache worker (V3 Optimization)
+        7. Bootstrap core domains (Stage 5: Domain Bootstrap)
         
         Note: Environment snapshot is logged here (not in post_migrate) because
         env vars can change on every restart, not just during migrations.
@@ -143,6 +144,10 @@ class SelfHealingConfig(AppConfig):
         # V3: Start pre-computed cache worker for L3 observability endpoints
         # Reference: load_tests/results/stage1_l3_baseline_2025-12-25.md
         self._start_precomputed_cache_worker()
+        
+        # Stage 5: Bootstrap core domains for Circuit Breaker monitoring
+        # Reference: Stage 5 Rollback Healing Test Review
+        self._bootstrap_core_domains()
     
     def _log_env_snapshot(self):
         """
@@ -407,3 +412,65 @@ class SelfHealingConfig(AppConfig):
         """
         with cls._hydration_lock:
             cls._hydration_done = False
+
+    def _bootstrap_core_domains(self):
+        """
+        Bootstrap core domains for Circuit Breaker monitoring.
+        
+        Stage 5: Domain Bootstrap
+        - 핵심 도메인을 미리 등록하여 테스트 시작 시 unknown 상태 방지
+        - settings.SELFHEALING_CORE_DOMAINS에서 도메인 목록 읽기
+        - 각 도메인에 대해 CircuitBreakerState.get_or_create()
+        
+        Reference: Stage 5 Rollback Healing Test Review
+        """
+        try:
+            from selfhealing.adapters.django.models import CircuitBreakerState
+            
+            core_domains = getattr(settings, 'SELFHEALING_CORE_DOMAINS', [])
+            
+            if not core_domains:
+                logger.debug("[SelfHealing] No core domains configured for bootstrap")
+                return
+            
+            created_domains = []
+            existing_domains = []
+            
+            for domain in core_domains:
+                try:
+                    obj, created = CircuitBreakerState.objects.get_or_create(
+                        service_name=domain,
+                        defaults={
+                            "state": "CLOSED",
+                            "failure_count": 0,
+                            "success_count": 0,
+                            "last_failure_time": None,
+                            "notes": "Bootstrapped on startup",
+                        }
+                    )
+                    if created:
+                        created_domains.append(domain)
+                    else:
+                        existing_domains.append(domain)
+                except Exception as e:
+                    logger.warning(
+                        f"[SelfHealing] Failed to bootstrap domain '{domain}': {e}"
+                    )
+            
+            if created_domains:
+                logger.info(
+                    f"[SelfHealing] Core domains bootstrapped: {created_domains}"
+                )
+            
+            if existing_domains:
+                logger.debug(
+                    f"[SelfHealing] Core domains already existed: {existing_domains}"
+                )
+                
+        except ImportError:
+            logger.debug("[SelfHealing] CircuitBreakerState model not available")
+        except Exception as e:
+            # Best-effort: 실패해도 시스템은 시작
+            logger.warning(
+                f"[SelfHealing] Failed to bootstrap core domains (non-fatal): {e}"
+            )

@@ -274,6 +274,23 @@ if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 # ==========================================================================
+# Self-Healing Core Domains (Domain Bootstrap)
+# ==========================================================================
+# 핵심 도메인을 미리 등록하여 테스트 시작 시 unknown 상태 방지
+# 시스템 시작 시 AppConfig.ready()에서 자동 초기화됨
+# Reference: Stage 5 Rollback Healing Test Review
+
+SELFHEALING_CORE_DOMAINS = [
+    "payment",      # 결제 서비스 - 최우선 감시 대상
+    "inventory",    # 재고 서비스 - 롤백 검증 핵심
+    "order",        # 주문 서비스
+    "product",      # 상품 서비스
+    "database",     # 데이터베이스
+    "cart",         # 장바구니 서비스
+    "auth",         # 인증 서비스
+]
+
+# ==========================================================================
 # Component imports (Social Auth, Payment, etc.)
 # ==========================================================================
 

@@ -119,7 +119,7 @@ class SelfHealingClient:
             base_config = get_config()
             self._config = SelfHealingConfig(
                 host=host or base_config.host,
-                auth_mode=auth_mode or base_config.auth_mode,
+                auth_type=auth_mode or base_config.auth_type,
                 timeout=timeout or base_config.timeout,
             )
         
