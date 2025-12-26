@@ -35,6 +35,7 @@ from .config import (
     CircuitBreakerConfig,
     CircuitBreakerResult,
     CircuitState,
+    FallbackResult,
 )
 
 # Rate limit tracking
@@ -66,6 +67,7 @@ __all__ = [
     "CircuitBreakerConfig",
     "CircuitBreakerResult",
     "CircuitState",
+    "FallbackResult",
     # Rate limit tracking
     "RateLimitTracker",
     "get_rate_limit_tracker",
