@@ -66,6 +66,9 @@ services:
       - PAYMENT_CB_RECOVERY_TIMEOUT=60
       - PAYMENT_CB_SUCCESS_THRESHOLD=2
       - PAYMENT_DLQ_ENABLED=true
+      # Stage 48: X-Test-Mode Configuration
+      - CHAOS_ENABLED=true
+      - ENVIRONMENT=development
     depends_on:
       db:
         condition: service_healthy

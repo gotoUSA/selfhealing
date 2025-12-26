@@ -471,6 +471,32 @@ urlpatterns = [
     path("l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"),
 ]
 
+# =============================================================================
+# X-Test-Mode Endpoints (Stage 48: Chaos Proof)
+# Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
+# =============================================================================
+# Always available but protected by X-Test-Mode header + environment checks
+from selfhealing.api.django.views.xtest_mode import (
+    InjectCBFailureView,
+    ResetCBView,
+    CBStatusDetailView,
+    InjectErrorBudgetView,
+    SystemSnapshotView,
+    FastFailTestView,
+    TriggerCBRecoveryView,
+)
+
+urlpatterns += [
+    # X-Test-Mode: Chaos Monkey API (requires X-Test-Mode: chaos-monkey header)
+    path("xtest/inject-cb-failure/", InjectCBFailureView.as_view(), name="xtest-inject-cb-failure"),
+    path("xtest/reset-cb/", ResetCBView.as_view(), name="xtest-reset-cb"),
+    path("xtest/cb-status/", CBStatusDetailView.as_view(), name="xtest-cb-status"),
+    path("xtest/inject-error-budget/", InjectErrorBudgetView.as_view(), name="xtest-inject-error-budget"),
+    path("xtest/snapshot/", SystemSnapshotView.as_view(), name="xtest-snapshot"),
+    path("xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"),
+    path("xtest/trigger-cb-recovery/", TriggerCBRecoveryView.as_view(), name="xtest-trigger-cb-recovery"),
+]
+
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)
 if getattr(settings, "DEBUG", False) or getattr(settings, "ENABLE_STRESS_TESTS", False):
     from selfhealing.api.django.stress_views import (

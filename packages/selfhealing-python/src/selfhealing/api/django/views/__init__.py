@@ -143,6 +143,18 @@ from selfhealing.api.django.views.governance import (
     DeprecatedDriftReportView,
 )
 
+# X-Test-Mode Views (Stage 48: Chaos Proof)
+# Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
+from selfhealing.api.django.views.xtest_mode import (
+    XTestModeMixin,
+    InjectCBFailureView,
+    ResetCBView,
+    CBStatusDetailView,
+    InjectErrorBudgetView,
+    SystemSnapshotView,
+    FastFailTestView,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -244,4 +256,12 @@ __all__ = [
     "GovernanceModeView",
     "DeprecatedMetricSyncView",
     "DeprecatedDriftReportView",
+    # X-Test-Mode Views (Stage 48)
+    "XTestModeMixin",
+    "InjectCBFailureView",
+    "ResetCBView",
+    "CBStatusDetailView",
+    "InjectErrorBudgetView",
+    "SystemSnapshotView",
+    "FastFailTestView",
 ]

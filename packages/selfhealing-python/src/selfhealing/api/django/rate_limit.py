@@ -475,6 +475,14 @@ class HybridRateLimitMiddleware:
         if not request.path.startswith(CONTROL_API_PATH_PREFIX):
             return self.get_response(request)
         
+        # X-Test-Mode bypass for chaos testing (Stage 48)
+        # Only bypass if CHAOS_ENABLED=true and not in production
+        if self._should_bypass_for_xtest(request):
+            response = self.get_response(request)
+            response["X-RateLimit-Mode"] = "xtest-bypass"
+            response["X-RateLimit-Remaining"] = "unlimited"
+            return response
+        
         # Get runtime config (Phase 3 API Control)
         config = get_rate_limit_config()
         rate_limit = config["control_api_rate_limit"]
@@ -516,6 +524,50 @@ class HybridRateLimitMiddleware:
         response["X-RateLimit-Limit"] = str(rate_limit if mode == "normal" else emergency_limit)
         
         return response
+    
+    def _should_bypass_for_xtest(self, request: HttpRequest) -> bool:
+        """
+        Check if request should bypass rate limiting for X-Test-Mode.
+        
+        Conditions:
+        1. X-Test-Mode: chaos-monkey header present
+        2. CHAOS_ENABLED=true environment variable
+        3. Not in production environment
+        
+        Returns:
+            True if rate limit should be bypassed
+        """
+        import os
+        
+        # Check header
+        xtest_header = request.META.get("HTTP_X_TEST_MODE", "")
+        if xtest_header != "chaos-monkey":
+            return False
+        
+        # Block in production
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        if environment == "production":
+            logger.warning(
+                "[RateLimit] X-Test-Mode bypass blocked in production"
+            )
+            return False
+        
+        # Check CHAOS_ENABLED
+        chaos_enabled = os.getenv("CHAOS_ENABLED", "false").lower() == "true"
+        
+        try:
+            from django.conf import settings
+            debug_mode = getattr(settings, "DEBUG", False)
+        except Exception:
+            debug_mode = False
+        
+        if not debug_mode and not chaos_enabled:
+            return False
+        
+        logger.info(
+            f"[RateLimit] X-Test-Mode bypass for path: {request.path}"
+        )
+        return True
     
     def _get_client_key(self, request: HttpRequest) -> str:
         """Generate rate limit key (IP + User)."""
