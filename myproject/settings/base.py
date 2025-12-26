@@ -75,6 +75,11 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "shopping.User"
 
 MIDDLEWARE = [
+    # === Stage 50: Health Bridge (DB-independent, 최상단 위치 필수!) ===
+    # Worker Saturation 방지: DB 죽어도 /health/l3 즉시 응답
+    "selfhealing.api.django.middleware.HealthBridgeMiddleware",
+    
+    # === Django Core Middlewares ===
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -83,7 +88,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    # Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
+    
+    # === Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback) ===
     "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
 ]
 
