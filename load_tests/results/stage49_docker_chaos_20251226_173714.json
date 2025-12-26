@@ -1,0 +1,496 @@
+{
+  "test_name": "Stage 49: Docker Chaos - DB Blackout",
+  "test_started_at": "2025-12-26T17:37:15.192282",
+  "test_ended_at": "2025-12-26T17:41:48.721344",
+  "db_container": "myproject-db-1",
+  "phases": {
+    "phase_1": {
+      "name": "Pre-Chaos State Recording",
+      "container_running": true,
+      "cb_status": {
+        "status": "success",
+        "service": "database",
+        "cb_state": "closed",
+        "failure_count": 0,
+        "success_count": 0,
+        "last_failure_time": null,
+        "opened_at": null,
+        "manually_controlled": true,
+        "config": {
+          "failure_threshold": 5,
+          "recovery_timeout": 60,
+          "success_threshold": 2,
+          "minimum_calls": 10
+        },
+        "timestamp": "2025-12-26T08:37:16.278820+00:00"
+      },
+      "snapshot": {
+        "status": "success",
+        "snapshot": {
+          "timestamp": "2025-12-26T08:37:16.382707+00:00",
+          "cpu_percent": 0.0,
+          "memory_percent": 21.7,
+          "memory_used_mb": 2161.2578125,
+          "memory_available_mb": 7785.46484375,
+          "db_active_connections": 1,
+          "circuit_breakers": {
+            "auto_open_test_6f434ea2": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "auto_open_test_cb5caf4b": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_02823719": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_04a79f9d": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_065f93d0": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_0dbafefa": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_126dc84c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_1c3b940c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_1d088221": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_2e9a5dce": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_38646c13": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_4c93caab": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_4e85b438": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_5944ef53": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_740e9d3f": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_74c8d8ed": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_8b03df03": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_bcc10456": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_c04b26b5": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_c796c9f8": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_d88ab13d": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_e137b02c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_e4ae22b2": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_eed52fd8": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_f9a132c4": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_fb90c967": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "database": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "inventory": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "notification": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "order": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "payment": {
+              "state": "open",
+              "failure_count": 0
+            },
+            "test_cb_48": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "test_cb_new": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "test_service_48": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "toss_payment": {
+              "state": "open",
+              "failure_count": 0
+            }
+          },
+          "error_budget": {
+            "error": "cannot import name 'get_error_budget_service' from 'selfhealing.services' (/code/packages/selfhealing-python/src/selfhealing/services/__init__.py)"
+          }
+        }
+      },
+      "timestamp": "2025-12-26T17:37:16.393676",
+      "passed": true
+    },
+    "phase_2": {
+      "name": "DB Container Stop",
+      "stop_time": "2025-12-26T17:37:16.394677",
+      "success": true,
+      "timestamp": "2025-12-26T17:37:16.685293",
+      "passed": true
+    },
+    "phase_3": {
+      "name": "CB OPEN Detection",
+      "waited_seconds": 42.95143246650696,
+      "cb_opened": false,
+      "detection_time": null,
+      "timestamp": "2025-12-26T17:37:59.637249",
+      "passed": false
+    },
+    "phase_4": {
+      "name": "503 Fast Fail Verification",
+      "response_times_ms": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "status_codes": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "fast_fail_count": 10,
+      "avg_response_time_ms": 0.0,
+      "all_fast_fail": true,
+      "timestamp": "2025-12-26T17:39:44.757757",
+      "passed": true
+    },
+    "phase_5": {
+      "name": "DB Container Recovery",
+      "restart_time": "2025-12-26T17:39:44.757757",
+      "success": true,
+      "timestamp": "2025-12-26T17:39:47.175627",
+      "passed": true
+    },
+    "phase_6": {
+      "name": "CB CLOSED Recovery",
+      "waited_seconds": 121.3717474937439,
+      "cb_closed": false,
+      "recovery_time": null,
+      "final_cb_status": {
+        "status": "success",
+        "service": "database",
+        "cb_state": "closed",
+        "failure_count": 0,
+        "success_count": 0,
+        "last_failure_time": null,
+        "opened_at": null,
+        "manually_controlled": true,
+        "config": {
+          "failure_threshold": 5,
+          "recovery_timeout": 60,
+          "success_threshold": 2,
+          "minimum_calls": 10
+        },
+        "timestamp": "2025-12-26T08:41:48.566275+00:00"
+      },
+      "timestamp": "2025-12-26T17:41:48.567526",
+      "passed": false
+    },
+    "phase_7": {
+      "name": "Final Verification",
+      "api_status_code": 200,
+      "api_response_time_ms": 33.400774002075195,
+      "api_recovered": true,
+      "cb_status": {
+        "status": "success",
+        "service": "database",
+        "cb_state": "closed",
+        "failure_count": 0,
+        "success_count": 0,
+        "last_failure_time": null,
+        "opened_at": null,
+        "manually_controlled": true,
+        "config": {
+          "failure_threshold": 5,
+          "recovery_timeout": 60,
+          "success_threshold": 2,
+          "minimum_calls": 10
+        },
+        "timestamp": "2025-12-26T08:41:48.605729+00:00"
+      },
+      "snapshot": {
+        "status": "success",
+        "snapshot": {
+          "timestamp": "2025-12-26T08:41:48.709168+00:00",
+          "cpu_percent": 0.0,
+          "memory_percent": 22.6,
+          "memory_used_mb": 2243.23046875,
+          "memory_available_mb": 7703.4921875,
+          "db_active_connections": 1,
+          "circuit_breakers": {
+            "auto_open_test_6f434ea2": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "auto_open_test_cb5caf4b": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_02823719": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_04a79f9d": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_065f93d0": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_0dbafefa": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_126dc84c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_1c3b940c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_1d088221": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_2e9a5dce": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_38646c13": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_4c93caab": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_4e85b438": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_5944ef53": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_740e9d3f": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_74c8d8ed": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_8b03df03": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_bcc10456": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_c04b26b5": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_c796c9f8": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_d88ab13d": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_e137b02c": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_e4ae22b2": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_eed52fd8": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_f9a132c4": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "cancel_storm_test_fb90c967": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "database": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "inventory": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "notification": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "order": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "payment": {
+              "state": "open",
+              "failure_count": 0
+            },
+            "test_cb_48": {
+              "state": "closed",
+              "failure_count": 0
+            },
+            "test_cb_new": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "test_service_48": {
+              "state": "open",
+              "failure_count": 5
+            },
+            "toss_payment": {
+              "state": "open",
+              "failure_count": 0
+            }
+          },
+          "error_budget": {
+            "error": "cannot import name 'get_error_budget_service' from 'selfhealing.services' (/code/packages/selfhealing-python/src/selfhealing/services/__init__.py)"
+          }
+        }
+      },
+      "timestamp": "2025-12-26T17:41:48.720831",
+      "passed": true
+    }
+  },
+  "timeline": [
+    {
+      "timestamp": "2025-12-26T17:37:15.192282",
+      "event": "TEST_START",
+      "details": "Docker Chaos test started"
+    },
+    {
+      "timestamp": "2025-12-26T17:37:16.685293",
+      "event": "DB_STOP",
+      "details": "Container myproject-db-1 stopped"
+    },
+    {
+      "timestamp": "2025-12-26T17:37:16.685816",
+      "event": "PHASE_2_COMPLETE",
+      "details": "DB container stopped"
+    },
+    {
+      "timestamp": "2025-12-26T17:39:44.757757",
+      "event": "FAST_FAIL_VERIFIED",
+      "details": "Avg response: 0.00ms"
+    },
+    {
+      "timestamp": "2025-12-26T17:39:45.088279",
+      "event": "DB_START",
+      "details": "Container myproject-db-1 started"
+    },
+    {
+      "timestamp": "2025-12-26T17:39:47.188709",
+      "event": "PHASE_5_COMPLETE",
+      "details": "DB container restarted"
+    },
+    {
+      "timestamp": "2025-12-26T17:41:48.721344",
+      "event": "API_RECOVERED",
+      "details": "Status: 200, Time: 33.40ms"
+    },
+    {
+      "timestamp": "2025-12-26T17:41:48.721344",
+      "event": "TEST_END",
+      "details": "Result: PARTIAL"
+    }
+  ],
+  "success_criteria": {
+    "cb_auto_open": false,
+    "fast_fail": true,
+    "cb_auto_recovery": false,
+    "api_recovered": true
+  },
+  "final_result": "PARTIAL"
+}
