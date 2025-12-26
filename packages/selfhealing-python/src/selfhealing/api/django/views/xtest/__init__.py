@@ -1,8 +1,5 @@
 """
-Stage 48: X-Test-Mode (Chaos Monkey) Control Views
-
-REFACTORED: 이 파일은 하위 호환성을 위해 유지됩니다.
-실제 구현은 xtest/ 패키지로 이동되었습니다.
+X-Test-Mode (Chaos Monkey) Control Views Package
 
 Rate Limiter(L1)를 우회하여 L2/L3 동작을 직접 관찰하기 위한 테스트 전용 API.
 
@@ -29,39 +26,51 @@ Stage 51 Observability:
 - GET  /api/self-healing/xtest/healing-incidents/ - 인시던트 목록
 """
 
-# Re-export all from xtest package for backward compatibility
-from .xtest import (
-    # Base utilities
+# Base utilities
+from .base import (
     XTestModeMixin,
-    collect_system_snapshot,
     add_healing_event,
     add_healing_incident,
+    collect_system_snapshot,
     get_healing_events,
     get_healing_events_count,
     get_healing_incidents,
     get_healing_incidents_count,
-    # Circuit Breaker views
-    InjectCBFailureView,
-    ResetCBView,
+)
+
+# Circuit Breaker views
+from .circuit_breaker import (
     CBStatusDetailView,
     FastFailTestView,
+    InjectCBFailureView,
+    ResetCBView,
     TriggerCBRecoveryView,
-    # Error Budget views
+)
+
+# Error Budget views
+from .error_budget import (
     InjectErrorBudgetView,
-    # Snapshot views
+)
+
+# Snapshot views
+from .snapshot import (
     SystemSnapshotView,
-    # Observability views (Stage 51)
-    HealingTimelineView,
+)
+
+# Observability views (Stage 51)
+from .observability import (
     BlastRadiusTestView,
+    GetHealingIncidentsView,
+    HealingTimelineView,
     MultiServiceBlastRadiusView,
     PostmortemGeneratorView,
     RecordHealingEventView,
-    GetHealingIncidentsView,
-    # Legacy aliases
-    _collect_system_snapshot,
-    _add_healing_event,
-    _add_healing_incident,
 )
+
+# Legacy aliases for backward compatibility
+_collect_system_snapshot = collect_system_snapshot
+_add_healing_event = add_healing_event
+_add_healing_incident = add_healing_incident
 
 __all__ = [
     # Base utilities
