@@ -137,6 +137,9 @@ from selfhealing.api.django.views.config_history import (
 from selfhealing.api.django.views.error_budget import (
     ErrorBudgetStatusView,
     ErrorBudgetHistoryView,
+    ErrorBudgetRecordView,
+    ErrorBudgetExhaustView,
+    ErrorBudgetResetSimulationView,
     DeploymentVerdictView,
     DeploymentFreezeAcknowledgeView,
     DeploymentOverrideView,
@@ -380,6 +383,10 @@ urlpatterns = [
     # Error Budget API
     path("error-budget/status/", ErrorBudgetStatusView.as_view(), name="error-budget-status"),
     path("error-budget/history/", ErrorBudgetHistoryView.as_view(), name="error-budget-history"),
+    # Chaos Engineering / Test APIs for Error Budget
+    path("error-budget/record/", ErrorBudgetRecordView.as_view(), name="error-budget-record"),
+    path("error-budget/exhaust/", ErrorBudgetExhaustView.as_view(), name="error-budget-exhaust"),
+    path("error-budget/reset-simulation/", ErrorBudgetResetSimulationView.as_view(), name="error-budget-reset-simulation"),
     # Deployment Policy API
     path("deployment-policy/verdict/", DeploymentVerdictView.as_view(), name="deployment-verdict"),
     path("deployment-policy/acknowledge/", DeploymentFreezeAcknowledgeView.as_view(), name="deployment-acknowledge"),

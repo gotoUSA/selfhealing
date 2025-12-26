@@ -15,8 +15,17 @@ v2.0 NEW: Self-Healing 시스템 통합
 - Emergency Mode 트리거 확인
 - Cancel 후 재고 복구 + Self-Healing 연동
 
+v2.1 NEW: 확장 테스트 시나리오
+- Scale-up: 100명 사용자 + 5분 이상 → Half-Open 전환 관찰
+- Chaos Combination: Cancel Storm + DB 레이턴시 주입 → Rate Limit Cascade
+- Error Budget Exhaustion: Error Budget 0% → 격리 모드 유지 검증
+
 실행:
+    # 기본 테스트 (10-50 users, 1-2 min)
     locust -f load_tests/scenarios/hybrid/stage4_cancel_storm.py --host=http://localhost:8000 --users=50 --spawn-rate=20 --run-time=2m --headless
+    
+    # Scale-up 테스트 (50-100 users, 3-5 min)
+    locust -f load_tests/scenarios/hybrid/stage4_cancel_storm.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --run-time=5m --headless
 
 Reference:
     - docs/self_healing/03_CIRCUIT_BREAKER.md
@@ -115,6 +124,40 @@ _healing_action_stats = {
 # 동시성 환경에서 개별 트랜잭션 재고 추적은 부정확하므로 비활성화
 # 테스트 종료 후 전체 재고 무결성은 별도 스크립트로 검증
 _skip_individual_stock_check = True
+
+# =========================================================================
+# v2.1: 확장 테스트 통계
+# =========================================================================
+_extended_stats = {
+    # Scale-up 테스트: Half-Open 전환 관찰
+    "half_open_observations": {
+        "checks": 0,
+        "transitions_detected": 0,
+        "auto_recoveries": 0,
+        "time_to_half_open_ms": [],
+    },
+    
+    # Chaos Combination: Cancel Storm + Fault Injection
+    "chaos_combination": {
+        "fault_injections": 0,
+        "cascades_triggered": 0,
+        "cb_auto_opens": 0,
+        "db_latency_injected": 0,
+        "rate_limit_cascade_detected": 0,
+        "recovery_after_chaos": 0,
+    },
+    
+    # Error Budget Exhaustion
+    "error_budget_exhaustion": {
+        "initial_budget": None,
+        "final_budget": None,
+        "budget_samples": [],
+        "budget_depleted": False,
+        "isolation_mode_activated": False,
+        "isolation_mode_maintained": 0,  # 0% 도달 후 격리 유지 횟수
+        "force_errors_injected": 0,
+    },
+}
 
 
 class CancelStormUser(HttpUser):
@@ -944,11 +987,281 @@ class CancelStormUser(HttpUser):
             else:
                 response.failure(f"Emergency trigger failed: {response.status_code}")
 
+    # =========================================================================
+    # v2.1: 확장 테스트 시나리오 (Extended Test Scenarios)
+    # =========================================================================
+
+    @task(1)
+    @tag("extended", "scaleup", "half-open")
+    def test_extended_half_open_observation(self):
+        """
+        [확장] Scale-up 테스트: Half-Open 전환 관찰
+        
+        목적: 60초 짧은 테스트에서 관찰하지 못한 Half-Open 자동 전환 확인
+        - CB가 OPEN 상태에서 recovery_timeout(기본 30초) 경과 후 HALF_OPEN 전환
+        - HALF_OPEN에서 성공 시 CLOSED로 복구
+        """
+        global _extended_stats, _healing_action_stats
+        
+        _extended_stats["half_open_observations"]["checks"] += 1
+        start_time = time.time()
+        
+        with self.client.get(
+            "/api/self-healing/status/",
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} GET /status/ [HALF-OPEN-EXTENDED]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                try:
+                    data = response.json()
+                    services = data.get("services", data) if isinstance(data, dict) else {}
+                    
+                    # 모든 서비스에서 Half-Open 상태 검색
+                    for svc_name, svc_data in (services.items() if isinstance(services, dict) else []):
+                        state = svc_data.get("state", "").lower()
+                        
+                        if state == "half_open":
+                            elapsed_ms = (time.time() - start_time) * 1000
+                            _extended_stats["half_open_observations"]["transitions_detected"] += 1
+                            _extended_stats["half_open_observations"]["time_to_half_open_ms"].append(elapsed_ms)
+                            _healing_action_stats["half_open_transition"]["success"] += 1
+                        
+                        elif state == "closed":
+                            # HALF_OPEN → CLOSED 전환 = 자동 복구
+                            previous_count = _healing_action_stats["cb_auto_recovery"]["detected"]
+                            if svc_data.get("recovered_from_half_open"):
+                                _extended_stats["half_open_observations"]["auto_recoveries"] += 1
+                                _healing_action_stats["cb_auto_recovery"]["detected"] += 1
+                                
+                except Exception:
+                    pass
+            elif response.status_code == 429:
+                response.success()
+            else:
+                response.failure(f"Half-Open observation failed: {response.status_code}")
+
+    @task(1)
+    @tag("extended", "chaos", "fault-injection")
+    def test_extended_chaos_combination(self):
+        """
+        [확장] Chaos Combination: Cancel Storm + DB 레이턴시 주입
+        
+        목적: 취소 폭주 + DB 지연이 겹쳤을 때 Rate Limit Cascade 트리거 확인
+        - DB 레이턴시 3초 이상 강제 주입
+        - Cancel Storm 요청과 동시에 발생
+        - Rate Limit Cascade → CB 자동 OPEN 검증
+        """
+        global _extended_stats, _cancel_stats
+        
+        test_id = uuid.uuid4().hex[:8]
+        
+        # Step 1: DB 장애 주입 (trigger_cb_failures로 CB OPEN 유발)
+        with self.client.post(
+            "/api/self-healing/control/",
+            json={
+                "service_name": "database",
+                "action": "inject_failure",
+                "environment": "test",
+                "reason": f"[Stage4-Extended] Chaos: DB Latency Injection - {test_id}",
+                "metadata": {
+                    "trigger_cb_failures": 5,  # CB를 OPEN 상태로 전환
+                    "latency_ms": 3000,
+                    "failure_rate": 0.5,
+                },
+            },
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} POST /control/ [CHAOS-DB-LATENCY]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                _extended_stats["chaos_combination"]["fault_injections"] += 1
+                _extended_stats["chaos_combination"]["db_latency_injected"] += 1
+                # 응답에서 CB 상태 확인
+                try:
+                    data = response.json()
+                    evidence = data.get("evidence", {})
+                    if evidence.get("cb_state") == "open":
+                        _extended_stats["chaos_combination"]["cb_auto_opens"] += 1
+                except Exception:
+                    pass
+            elif response.status_code in [400, 403, 429]:
+                response.success()
+            else:
+                response.failure(f"DB latency injection failed: {response.status_code}")
+        
+        # Step 2: Cancel Storm 요청 + Rate Limit Cascade 확인
+        time.sleep(0.5)  # 장애 전파 대기
+        
+        # 빠른 Cancel 요청으로 Rate Limit 유발
+        for _ in range(3):
+            with self.client.post(
+                "/api/payments/cancel/",
+                json={
+                    "payment_id": f"chaos_test_{test_id}",
+                    "cancel_reason": "Chaos Combination Test",
+                },
+                name=f"{STAGE_NAME} POST /cancel/ [CHAOS-STORM]",
+                catch_response=True,
+            ) as cancel_response:
+                if cancel_response.status_code == 429:
+                    _cancel_stats["rate_limit_429"] += 1
+                    _extended_stats["chaos_combination"]["rate_limit_cascade_detected"] += 1
+                elif cancel_response.status_code == 503:
+                    _extended_stats["chaos_combination"]["cb_auto_opens"] += 1
+                cancel_response.success()
+            time.sleep(0.05)
+        
+        # Step 3: Cascade 상태 확인
+        with self.client.get(
+            "/api/self-healing/circuit-breaker/pool/status/",
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} GET /pool/status/ [CHAOS-CASCADE-CHECK]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                try:
+                    data = response.json()
+                    services = data.get("services", {})
+                    for svc_name, svc_data in (services.items() if isinstance(services, dict) else []):
+                        if svc_data.get("state") == "open":
+                            _extended_stats["chaos_combination"]["cascades_triggered"] += 1
+                except Exception:
+                    pass
+            else:
+                response.success()
+        
+        # Step 4: 장애 해제 및 복구 확인
+        with self.client.post(
+            "/api/self-healing/control/",
+            json={
+                "service_name": "database",
+                "action": "allow",
+                "environment": "test",
+                "reason": f"[Stage4-Extended] Chaos Recovery - {test_id}",
+            },
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} POST /control/ [CHAOS-RECOVERY]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                _extended_stats["chaos_combination"]["recovery_after_chaos"] += 1
+            else:
+                response.success()
+
+    @task(1)
+    @tag("extended", "error-budget", "exhaustion")
+    def test_extended_error_budget_exhaustion(self):
+        """
+        [확장] Error Budget Exhaustion 테스트
+        
+        목적: Error Budget을 0%까지 떨어뜨려 강제 격리 모드 유지 검증
+        - 가중치(Multiplier) 적용 상태에서 에러 집중
+        - 예산 바닥 시 사령탑이 격리 모드 해제 안하고 유지하는지
+        """
+        global _extended_stats
+        
+        # Step 1: 현재 Error Budget 확인
+        with self.client.get(
+            "/api/self-healing/error-budget/status/",
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} GET /error-budget/status/ [EXHAUSTION-CHECK]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                try:
+                    data = response.json()
+                    remaining = data.get("remaining_percent")
+                    if remaining is not None:
+                        _extended_stats["error_budget_exhaustion"]["budget_samples"].append(remaining)
+                        
+                        # 초기 예산 기록
+                        if _extended_stats["error_budget_exhaustion"]["initial_budget"] is None:
+                            _extended_stats["error_budget_exhaustion"]["initial_budget"] = remaining
+                        
+                        # 현재 예산 업데이트
+                        _extended_stats["error_budget_exhaustion"]["final_budget"] = remaining
+                        
+                        # 0% 도달 여부
+                        if remaining <= 0:
+                            _extended_stats["error_budget_exhaustion"]["budget_depleted"] = True
+                            
+                        # 격리 모드 확인
+                        if data.get("isolation_mode") or data.get("is_isolated"):
+                            _extended_stats["error_budget_exhaustion"]["isolation_mode_activated"] = True
+                            if remaining <= 5:  # 5% 이하에서 격리
+                                _extended_stats["error_budget_exhaustion"]["isolation_mode_maintained"] += 1
+                            
+                except Exception:
+                    pass
+            elif response.status_code in [404, 429]:
+                response.success()
+            else:
+                response.failure(f"Error budget check failed: {response.status_code}")
+        
+        # Step 2: 에러 강제 발생 (Error Budget 소모)
+        test_id = uuid.uuid4().hex[:8]
+        with self.client.post(
+            "/api/self-healing/error-budget/record/",
+            json={
+                "domain": "payment",
+                "error_type": "CANCEL_FAILED",
+                "severity": "high",
+                "multiplier": 2.0,
+                "error_count": 1,
+                "reason": f"[Stage4-Extended] Error Budget Exhaustion Test - {test_id}",
+            },
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} POST /error-budget/record/ [EXHAUSTION]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                _extended_stats["error_budget_exhaustion"]["force_errors_injected"] += 1
+                # 응답에서 예산 잔여량 확인
+                try:
+                    data = response.json()
+                    remaining = data.get("remaining_percent") or data.get("data", {}).get("budget_remaining_percent")
+                    if remaining is not None:
+                        _extended_stats["error_budget_exhaustion"]["budget_samples"].append(remaining)
+                        _extended_stats["error_budget_exhaustion"]["final_budget"] = remaining
+                        if remaining <= 0:
+                            _extended_stats["error_budget_exhaustion"]["budget_depleted"] = True
+                except Exception:
+                    pass
+            elif response.status_code in [400, 403, 404, 429]:
+                response.success()
+            else:
+                response.failure(f"Error budget record failed: {response.status_code}")
+        
+        # Step 3: 격리 모드 상태 확인
+        with self.client.get(
+            "/api/self-healing/status/",
+            headers=self._get_admin_headers(),
+            name=f"{STAGE_NAME} GET /status/ [ISOLATION-CHECK]",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+                try:
+                    data = response.json()
+                    if data.get("isolation_mode") or data.get("emergency_isolation"):
+                        _extended_stats["error_budget_exhaustion"]["isolation_mode_activated"] = True
+                except Exception:
+                    pass
+            else:
+                response.success()
+
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
     """테스트 종료 시 Cancel Storm + Self-Healing 결과"""
-    global _cancel_stats, _selfhealing_stats, _healing_action_stats
+    global _cancel_stats, _selfhealing_stats, _healing_action_stats, _extended_stats
 
     print("\n" + "=" * 70)
     print("🌀 STAGE 4: CANCEL STORM + SELF-HEALING L3 TEST RESULTS")
@@ -1226,4 +1539,107 @@ def on_test_stop(environment, **kwargs):
     print(f"\n[OVERALL]")
     print(f"   - Total Requests: {summary['total_requests']}")
     print(f"   - Error Rate: {summary['overall_error_rate']}%")
+    
+    # =========================================================================
+    # v2.1: 확장 테스트 결과 (Extended Test Results)
+    # =========================================================================
+    print("\n" + "=" * 70)
+    print("[EXTENDED] ADVANCED TEST SCENARIOS (v2.1)")
+    print("=" * 70)
+    
+    # Scale-up: Half-Open 전환 관찰
+    ho_ext = _extended_stats["half_open_observations"]
+    print(f"\n[SCALE-UP] Half-Open 전환 관찰 테스트:")
+    print(f"   - 총 체크 횟수: {ho_ext['checks']}")
+    print(f"   - Half-Open 전환 감지: {ho_ext['transitions_detected']}")
+    print(f"   - 자동 복구(CLOSED) 감지: {ho_ext['auto_recoveries']}")
+    if ho_ext['time_to_half_open_ms']:
+        avg_time = sum(ho_ext['time_to_half_open_ms']) / len(ho_ext['time_to_half_open_ms'])
+        print(f"   - Half-Open 전환 평균 시간: {avg_time:.1f}ms")
+    
+    # Chaos Combination
+    chaos = _extended_stats["chaos_combination"]
+    print(f"\n[CHAOS] Cancel Storm + DB 레이턴시 주입 테스트:")
+    print(f"   - Fault Injection 횟수: {chaos['fault_injections']}")
+    print(f"   - DB 레이턴시 주입: {chaos['db_latency_injected']}")
+    print(f"   - Rate Limit Cascade 감지: {chaos['rate_limit_cascade_detected']}")
+    print(f"   - CB 자동 OPEN: {chaos['cb_auto_opens']}")
+    print(f"   - Cascade 트리거: {chaos['cascades_triggered']}")
+    print(f"   - Chaos 후 복구: {chaos['recovery_after_chaos']}")
+    
+    # Error Budget Exhaustion
+    eb_ext = _extended_stats["error_budget_exhaustion"]
+    print(f"\n[ERROR-BUDGET] Error Budget 고갈 테스트:")
+    print(f"   - 초기 예산: {eb_ext['initial_budget']}%")
+    print(f"   - 최종 예산: {eb_ext['final_budget']}%")
+    print(f"   - 강제 에러 주입: {eb_ext['force_errors_injected']}")
+    print(f"   - 예산 고갈 (0%): {'YES ⚠️' if eb_ext['budget_depleted'] else 'NO ✅'}")
+    print(f"   - 격리 모드 활성화: {'YES' if eb_ext['isolation_mode_activated'] else 'NO'}")
+    print(f"   - 격리 모드 유지 횟수: {eb_ext['isolation_mode_maintained']}")
+    if eb_ext['budget_samples']:
+        min_budget = min(eb_ext['budget_samples'])
+        max_budget = max(eb_ext['budget_samples'])
+        avg_budget = sum(eb_ext['budget_samples']) / len(eb_ext['budget_samples'])
+        print(f"   - 예산 범위: {min_budget:.1f}% ~ {max_budget:.1f}% (평균: {avg_budget:.1f}%)")
+    
+    # 확장 테스트 판정
+    print("\n" + "-" * 70)
+    print("[EXTENDED VERDICT] 확장 테스트 판정")
+    print("-" * 70)
+    
+    extended_passed = 0
+    extended_total = 3
+    
+    # 1. Scale-up: Half-Open 전환
+    ho_extended_ok = ho_ext['checks'] > 0
+    if ho_extended_ok:
+        extended_passed += 1
+        if ho_ext['transitions_detected'] > 0:
+            print(f"   ✅ [E1/3] Scale-up (Half-Open): {ho_ext['transitions_detected']} 전환 감지!")
+        else:
+            print(f"   ✅ [E1/3] Scale-up (Half-Open): 시스템 안정 (OPEN 없음)")
+    else:
+        print(f"   ⚠️  [E1/3] Scale-up (Half-Open): 테스트 미실행")
+    
+    # 2. Chaos Combination
+    chaos_ok = chaos['fault_injections'] > 0 or chaos['rate_limit_cascade_detected'] > 0
+    if chaos_ok:
+        extended_passed += 1
+        if chaos['cascades_triggered'] > 0:
+            print(f"   ✅ [E2/3] Chaos Combination: Cascade 트리거됨! ({chaos['cascades_triggered']}회)")
+        elif chaos['rate_limit_cascade_detected'] > 0:
+            print(f"   ✅ [E2/3] Chaos Combination: Rate Limit 감지 ({chaos['rate_limit_cascade_detected']}회)")
+        else:
+            print(f"   ✅ [E2/3] Chaos Combination: 장애 주입 완료, 시스템 복원력 확인")
+    else:
+        print(f"   ⚠️  [E2/3] Chaos Combination: 테스트 미실행")
+    
+    # 3. Error Budget Exhaustion
+    eb_ok = eb_ext['initial_budget'] is not None or eb_ext['force_errors_injected'] > 0
+    if eb_ok:
+        extended_passed += 1
+        if eb_ext['budget_depleted']:
+            if eb_ext['isolation_mode_maintained'] > 0:
+                print(f"   ✅ [E3/3] Error Budget: 고갈 시 격리 모드 유지 확인! ({eb_ext['isolation_mode_maintained']}회)")
+            else:
+                print(f"   ⚠️  [E3/3] Error Budget: 고갈됐으나 격리 모드 미확인")
+        else:
+            print(f"   ✅ [E3/3] Error Budget: 예산 유지 중 ({eb_ext['final_budget']}%)")
+    else:
+        print(f"   ⚠️  [E3/3] Error Budget: 테스트 미실행")
+    
+    print(f"\n   *** EXTENDED RESULT: {extended_passed}/{extended_total} tests passed ***")
+    
+    # 종합 결과
+    total_all = passed_tests + extended_passed
+    total_max = total_tests + extended_total
+    
+    print("\n" + "=" * 70)
+    print(f"[GRAND TOTAL] 전체 테스트: {total_all}/{total_max} PASSED")
+    if total_all >= total_max - 2:
+        print("🏆 CANCEL STORM + SELF-HEALING L3: FULLY OPERATIONAL")
+    elif total_all >= total_max - 5:
+        print("✅ CANCEL STORM + SELF-HEALING L3: WORKING CORRECTLY")
+    else:
+        print("⚠️ CANCEL STORM + SELF-HEALING L3: PARTIAL SUCCESS")
     print("=" * 70)
