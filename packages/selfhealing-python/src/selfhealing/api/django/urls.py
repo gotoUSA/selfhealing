@@ -484,6 +484,13 @@ from selfhealing.api.django.views.xtest_mode import (
     SystemSnapshotView,
     FastFailTestView,
     TriggerCBRecoveryView,
+    # Stage 51: Observability & Blast Radius
+    HealingTimelineView,
+    BlastRadiusTestView,
+    PostmortemGeneratorView,
+    RecordHealingEventView,
+    GetHealingIncidentsView,
+    MultiServiceBlastRadiusView,
 )
 
 urlpatterns += [
@@ -495,6 +502,13 @@ urlpatterns += [
     path("xtest/snapshot/", SystemSnapshotView.as_view(), name="xtest-snapshot"),
     path("xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"),
     path("xtest/trigger-cb-recovery/", TriggerCBRecoveryView.as_view(), name="xtest-trigger-cb-recovery"),
+    # Stage 51: Observability & Blast Radius
+    path("xtest/healing-timeline/", HealingTimelineView.as_view(), name="xtest-healing-timeline"),
+    path("xtest/blast-radius-test/", BlastRadiusTestView.as_view(), name="xtest-blast-radius-test"),
+    path("xtest/generate-postmortem/", PostmortemGeneratorView.as_view(), name="xtest-generate-postmortem"),
+    path("xtest/record-healing-event/", RecordHealingEventView.as_view(), name="xtest-record-healing-event"),
+    path("xtest/healing-incidents/", GetHealingIncidentsView.as_view(), name="xtest-healing-incidents"),
+    path("xtest/multi-blast-radius/", MultiServiceBlastRadiusView.as_view(), name="xtest-multi-blast-radius"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

@@ -1,0 +1,70 @@
+{
+  "test_started_at": "2025-12-26T18:32:04.926222",
+  "test_ended_at": "2025-12-26T18:32:10.740586",
+  "scenario_51_1": {
+    "name": "Timeline & Event Recording",
+    "passed": true,
+    "events_recorded": 1,
+    "timeline_events": 1,
+    "snapshot_has_resources": true,
+    "timestamp": "2025-12-26T18:32:04.927735"
+  },
+  "scenario_51_2": {
+    "name": "Single Blast Radius Isolation",
+    "passed": true,
+    "affected_service": "payment",
+    "unaffected_services": [
+      "database",
+      "product",
+      "cart",
+      "auth"
+    ],
+    "isolation_verified": true,
+    "timestamp": "2025-12-26T18:32:06.192836"
+  },
+  "scenario_51_3": {
+    "name": "Multi Blast Radius Matrix",
+    "passed": true,
+    "isolation_score_percent": 100.0,
+    "matrix": {
+      "payment": {
+        "affects": [],
+        "does_not_affect": [
+          "external_api",
+          "cache"
+        ]
+      },
+      "external_api": {
+        "affects": [],
+        "does_not_affect": [
+          "payment",
+          "cache"
+        ]
+      },
+      "cache": {
+        "affects": [],
+        "does_not_affect": [
+          "payment",
+          "external_api"
+        ]
+      }
+    },
+    "timestamp": "2025-12-26T18:32:07.886518"
+  },
+  "scenario_51_4": {
+    "name": "Postmortem Auto-Generation",
+    "passed": true,
+    "incident_id": "HEAL-2025-1226-0932",
+    "has_timeline": true,
+    "has_snapshot": true,
+    "has_auto_actions": true,
+    "timestamp": "2025-12-26T18:32:08.958713"
+  },
+  "scenario_51_5": {
+    "name": "Full Observability Cycle",
+    "passed": true,
+    "total_cycle_time_seconds": 0.0,
+    "all_scenarios_passed": true,
+    "timestamp": "2025-12-26T18:32:10.740586"
+  }
+}
