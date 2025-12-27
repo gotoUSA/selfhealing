@@ -647,6 +647,121 @@ class ConfigValidationResult:
     def is_valid(self) -> bool:
         return not self.has_fatal_violations
 
+    def add_fatal_violation(self, config_type: str, key: str, error_msg: str) -> None:
+        """Fatal 설정 위반 기록."""
+        if config_type not in self.fatal_violations:
+            self.fatal_violations[config_type] = {}
+        self.fatal_violations[config_type][key] = error_msg
+
+    def add_non_fatal_warning(self, config_type: str, key: str, error_msg: str) -> None:
+        """Non-fatal 경고 기록."""
+        if config_type not in self.non_fatal_warnings:
+            self.non_fatal_warnings[config_type] = {}
+        self.non_fatal_warnings[config_type][key] = error_msg
+
+
+# config_type -> config attribute 매핑 (상수)
+_CONFIG_TYPE_MAPPING: Dict[str, str] = {
+    "circuit_breaker": "circuit_breaker",
+    "dlq": "dlq",
+    "retry": "retry",
+    "sla": "sla",
+    "security": "security",
+    "forensic": "forensic",
+    "metrics": "metrics",
+    "notification": "notification",
+    "rate_limit": "rate_limit",
+    "idempotency": "idempotency",
+    "chaos": "chaos",
+    "error_budget": "error_budget",
+}
+
+
+def _handle_fatal_violation(
+    result: ConfigValidationResult,
+    config_type: str,
+    key: str,
+    current: Any,
+    error_msg: str,
+    log_changes: bool,
+) -> None:
+    """Fatal 설정 위반 처리."""
+    result.add_fatal_violation(config_type, key, error_msg)
+    if log_changes:
+        logger.error(
+            f"[FATAL] Invalid {config_type}.{key}={current!r}, "
+            f"this is a critical config violation!"
+        )
+
+
+def _handle_non_fatal_violation(
+    result: ConfigValidationResult,
+    sub_config: Any,
+    config_type: str,
+    key: str,
+    current: Any,
+    safe_value: Any,
+    error_msg: str,
+    log_changes: bool,
+) -> None:
+    """Non-fatal 설정 위반 처리 및 Safe Default 적용."""
+    result.add_non_fatal_warning(config_type, key, error_msg)
+    if log_changes:
+        logger.warning(
+            f"[Startup] Invalid {config_type}.{key}={current!r}, "
+            f"applying safe default: {safe_value!r}"
+        )
+    try:
+        setattr(sub_config, key, safe_value)
+        result.changes_count += 1
+    except AttributeError:
+        # frozen dataclass의 경우
+        if log_changes:
+            logger.warning(f"[Startup] Cannot modify frozen {config_type}.{key}")
+
+
+def _validate_single_config_value(
+    result: ConfigValidationResult,
+    sub_config: Any,
+    config_type: str,
+    key: str,
+    safe_value: Any,
+    log_changes: bool,
+) -> None:
+    """단일 설정 값 검증 및 처리."""
+    current = getattr(sub_config, key, None)
+
+    if is_valid_value(config_type, key, current):
+        return  # 유효한 값이면 조기 반환
+
+    error_msg = f"Invalid value {current!r}, expected safe default: {safe_value!r}"
+
+    if is_fatal_config(config_type, key):
+        _handle_fatal_violation(result, config_type, key, current, error_msg, log_changes)
+    else:
+        _handle_non_fatal_violation(
+            result, sub_config, config_type, key, current, safe_value, error_msg, log_changes
+        )
+
+
+def _finalize_validation(
+    result: ConfigValidationResult,
+    log_changes: bool,
+    raise_on_fatal: bool,
+) -> None:
+    """검증 완료 후 처리 (로깅 및 예외 발생)."""
+    if log_changes and result.changes_count > 0:
+        logger.info(f"[Startup] Applied {result.changes_count} safe default(s)")
+
+    if result.has_fatal_violations:
+        if log_changes:
+            logger.critical(
+                f"[FATAL] {len(result.fatal_violations)} fatal config violations detected! "
+                f"Types: {list(result.fatal_violations.keys())}"
+            )
+        if raise_on_fatal:
+            raise FatalConfigError(result.fatal_violations)
+
 
 def validate_startup_config(config: Any, log_changes: bool = True, raise_on_fatal: bool = False) -> int:
     """
@@ -672,78 +787,18 @@ def validate_startup_config(config: Any, log_changes: bool = True, raise_on_fata
     """
     result = ConfigValidationResult()
 
-    # config_type -> config attribute 매핑
-    config_mapping = {
-        "circuit_breaker": "circuit_breaker",
-        "dlq": "dlq",
-        "retry": "retry",
-        "sla": "sla",
-        "security": "security",
-        "forensic": "forensic",
-        "metrics": "metrics",
-        "notification": "notification",
-        "rate_limit": "rate_limit",
-        "idempotency": "idempotency",
-        "chaos": "chaos",
-        "error_budget": "error_budget",
-    }
-
-    for config_type, attr_name in config_mapping.items():
+    for config_type, attr_name in _CONFIG_TYPE_MAPPING.items():
         sub_config = getattr(config, attr_name, None)
         if sub_config is None:
             continue
 
         defaults = SAFE_DEFAULTS.get(config_type, {})
-
         for key, safe_value in defaults.items():
-            current = getattr(sub_config, key, None)
-
-            if not is_valid_value(config_type, key, current):
-                is_fatal = is_fatal_config(config_type, key)
-                error_msg = f"Invalid value {current!r}, expected safe default: {safe_value!r}"
-
-                if is_fatal:
-                    # Fatal 설정 위반 기록
-                    if config_type not in result.fatal_violations:
-                        result.fatal_violations[config_type] = {}
-                    result.fatal_violations[config_type][key] = error_msg
-
-                    if log_changes:
-                        logger.error(
-                            f"[FATAL] Invalid {config_type}.{key}={current!r}, " f"this is a critical config violation!"
-                        )
-                else:
-                    # Non-fatal: Safe Default 적용
-                    if config_type not in result.non_fatal_warnings:
-                        result.non_fatal_warnings[config_type] = {}
-                    result.non_fatal_warnings[config_type][key] = error_msg
-
-                    if log_changes:
-                        logger.warning(
-                            f"[Startup] Invalid {config_type}.{key}={current!r}, " f"applying safe default: {safe_value!r}"
-                        )
-                    try:
-                        setattr(sub_config, key, safe_value)
-                        result.changes_count += 1
-                    except AttributeError:
-                        # frozen dataclass의 경우
-                        if log_changes:
-                            logger.warning(f"[Startup] Cannot modify frozen {config_type}.{key}")
-
-    if log_changes and result.changes_count > 0:
-        logger.info(f"[Startup] Applied {result.changes_count} safe default(s)")
-
-    # Fatal 위반 처리
-    if result.has_fatal_violations:
-        if log_changes:
-            logger.critical(
-                f"[FATAL] {len(result.fatal_violations)} fatal config violations detected! "
-                f"Types: {list(result.fatal_violations.keys())}"
+            _validate_single_config_value(
+                result, sub_config, config_type, key, safe_value, log_changes
             )
 
-        if raise_on_fatal:
-            raise FatalConfigError(result.fatal_violations)
-
+    _finalize_validation(result, log_changes, raise_on_fatal)
     return result.changes_count
 
 
