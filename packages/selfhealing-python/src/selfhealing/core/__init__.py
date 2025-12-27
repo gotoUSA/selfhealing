@@ -158,6 +158,9 @@ from selfhealing.core.action_executor import (
     get_action_executor,
     execute_action,
 )
+from selfhealing.core.state_cache import CBStateCache
+from selfhealing.core.degraded_mode_handler import DegradedModeHandler
+from selfhealing.core.adaptive_jitter import AdaptiveJitter
 
 __all__ = [
     # Types
@@ -290,4 +293,8 @@ __all__ = [
     "ActionExecutor",
     "get_action_executor",
     "execute_action",
+    # Platinum SLA Optimization
+    "CBStateCache",
+    "DegradedModeHandler",
+    "AdaptiveJitter",
 ]

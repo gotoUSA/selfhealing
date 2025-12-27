@@ -86,6 +86,16 @@ except ImportError:
     start_decision_span = None
     end_decision_span = None
 
+# =============================================================================
+# Health Checker Adapters (Platinum SLA Optimization)
+# =============================================================================
+from selfhealing.adapters.health_checker import (
+    HealthCheckStrategy,
+    TTLCacheStrategy,
+    LinuxTCPInfoStrategy,
+    PortableHealthChecker,
+)
+
 
 __all__ = [
     # =========================================================================
@@ -114,4 +124,11 @@ __all__ = [
     "emit_selfhealing_event",
     "start_decision_span",
     "end_decision_span",
+    # =========================================================================
+    # Health Checker Adapters (Platinum SLA Optimization)
+    # =========================================================================
+    "HealthCheckStrategy",
+    "TTLCacheStrategy",
+    "LinuxTCPInfoStrategy",
+    "PortableHealthChecker",
 ]

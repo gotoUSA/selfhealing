@@ -14,6 +14,10 @@ from selfhealing.utils.time import (
     add_seconds,
     format_duration,
 )
+from selfhealing.utils.async_logger import (
+    AsyncHealingLogger,
+    EventSeverity,
+)
 
 __all__ = [
     "utc_now",
@@ -24,4 +28,7 @@ __all__ = [
     "is_expired",
     "add_seconds",
     "format_duration",
+    # Platinum SLA Optimization
+    "AsyncHealingLogger",
+    "EventSeverity",
 ]
