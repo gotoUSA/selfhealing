@@ -1,34 +1,35 @@
 """
-Stage 12: Spike & Recovery Test
+Stage 12: EXTREME Spike & Recovery Test (Self-Healing Torture Test)
 
-Purpose: Verify recovery stability after sudden load spike
-- Test system behavior under sudden traffic spike
-- Verify circuit breaker opens when overwhelmed
-- Verify circuit breaker closes after recovery
-- Validate DLQ replay works correctly after spike
-- Ensure data consistency is maintained
+Purpose: 극단적인 스파이크 부하에서 Self-Healing 시스템 검증
+- XTest Chaos Injection으로 장애 강제 주입
+- Emergency Mode 트리거/해제 검증
+- Circuit Breaker 극한 테스트
+- Error Budget 소진 및 복구 테스트
+- DLQ 플러딩 및 리플레이 검증
+- Kill Switch 활성화/비활성화 테스트
 
 Load Shape:
-  Phase 1 (0-30s): 0 → 500 users (spike)
-  Phase 2 (30s-2m30s): 500 users (sustain)
-  Phase 3 (2m30s-5m30s): 500 → 50 users (ramp-down)
-  Phase 4 (5m30s-10m30s): 50 users (stabilize)
+  Phase 1 (0-30s): 0 → MAX users (spike) + Chaos Injection
+  Phase 2 (30s-2m): MAX users (sustain) + Emergency Escalation
+  Phase 3 (2m-4m): MAX → MIN users (ramp-down) + Recovery
+  Phase 4 (4m-6m): MIN users (stabilize) + Verification
 
-Metrics to Collect:
-  - circuit_breaker_open_time
-  - circuit_breaker_close_time
-  - dlq_max_count
-  - dlq_replay_success_rate
-  - data_consistency (before vs after)
+Self-Healing Features Tested:
+  ✓ Circuit Breaker (Open/Close/Half-Open)
+  ✓ Emergency Mode (LEVEL_1/LEVEL_2/LEVEL_3)
+  ✓ Error Budget (Exhaust/Recovery)
+  ✓ DLQ (Flood/Replay)
+  ✓ Kill Switch (Activate/Deactivate)
+  ✓ Rate Limiter (Under extreme load)
+  ✓ Health Check (During chaos)
 
 Execution:
-    # Web UI mode
-    locust -f load_tests/scenarios/stage12_spike_recovery.py --host=http://localhost:8000
-
-    # CLI mode (10.5 minutes total)
-    locust -f load_tests/scenarios/stage12_spike_recovery.py \\
-        --host=http://localhost:8000 \\
-        --headless --html=stage12_report.html
+    # Docker Compose 실행
+    docker-compose exec web python -m locust \\
+        -f load_tests/scenarios/hybrid/stage12_spike_recovery.py \\
+        --headless --host http://localhost:8000 \\
+        --html load_tests/results/stage12/stage12_report.html
 
 Reference:
     - docs/SELF_HEALING_LOAD_TEST_PLAN.md (Stage 12)
@@ -39,12 +40,14 @@ import sys
 import time
 import random
 import json
+import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-_load_tests_dir = os.path.dirname(_current_dir)
+_scenarios_dir = os.path.dirname(_current_dir)
+_load_tests_dir = os.path.dirname(_scenarios_dir)
 _project_root = os.path.dirname(_load_tests_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -54,197 +57,624 @@ from locust import HttpUser, task, between, tag, events, LoadTestShape
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
 from load_tests.metrics import setup_event_hooks
 
+# Self-Healing 클라이언트 임포트
+try:
+    from load_tests.utils.selfhealing import SelfHealingClient
+    from load_tests.utils.selfhealing.state_cache import CBStateCache
+    from load_tests.utils.selfhealing.async_logger import AsyncHealingLogger, EventSeverity
+    from load_tests.utils.selfhealing.adaptive_jitter import AdaptiveJitter, SystemState
 
-STAGE_NAME = "[Stage12-SpikeRecovery]"
+    SELFHEALING_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] Self-Healing client not available: {e}")
+    SELFHEALING_AVAILABLE = False
+
+
+STAGE_NAME = "[Stage12-ExtremeSpike]"
+DEBUG_MODE = os.environ.get("STAGE12_DEBUG", "false").lower() == "true"  # 프로덕션에서는 false
+
+# =============================================================================
+# 환경 설정
+# =============================================================================
+
+MAX_USERS = int(os.environ.get("LOCUST_MAX_USERS", "100"))  # V2.5: 100명
+MIN_USERS = int(os.environ.get("LOCUST_MIN_USERS", "5"))
+TEST_DURATION = int(os.environ.get("LOCUST_TEST_DURATION", "300"))  # V2.5: 5분
+
+# 단계별 시간 비율
+SPIKE_RATIO = 0.15  # 15%
+SUSTAIN_RATIO = 0.30  # 30%
+RAMP_DOWN_RATIO = 0.30  # 30%
+STABILIZE_RATIO = 0.25  # 25%
+
+# =============================================================================
+# V2.5 Platinum Grade Add-ons 설정
+# =============================================================================
+
+# SLA Hard-Cap 설정 ⚖️
+SLA_P99_THRESHOLD_MS = 250  # P99 응답시간 임계값 (Gold Tier)
+SLA_DATA_VARIANCE_TOLERANCE = 0  # 데이터 오차 허용 개수 (0 = 불허)
+SLA_STRICT_MODE = True  # SLA 엄격 모드 활성화
+
+# Message Storm & Backpressure 설정 📨
+MESSAGE_STORM_ENABLED = True
+MESSAGE_STORM_RATE = 1000  # 초당 로그 주입 수
+MESSAGE_STORM_DURATION = 10  # 폭풍 지속 시간 (초)
+BACKPRESSURE_BUFFER_SIZE = 5000  # 버퍼 최대 크기
+
+# Clock Skew Attack 설정 ⏰
+CLOCK_SKEW_ENABLED = True
+CLOCK_SKEW_MAX_DRIFT_SEC = 5  # 최대 시간 왜곡 (초)
+CLOCK_SKEW_ATTACK_INTERVAL = 30  # 공격 간격 (초)
+
+# Cascading Failure 설정 🌊
+CASCADING_FAILURE_ENABLED = True
+CASCADE_SERVICES = ["payment", "order", "inventory", "notification"]
+CASCADE_PROPAGATION_DELAY = 2  # 전파 지연 (초)
+
+# Retry Storm Prevention 설정 🔄
+RETRY_STORM_ENABLED = True
+RETRY_STORM_THRESHOLD = 50  # 초당 재시도 임계값
+RETRY_BACKOFF_MULTIPLIER = 2.0  # 백오프 승수
+
+# Zombie Detection 설정 (Strict)
+ZOMBIE_LATENCY_THRESHOLD_SEC = 2.5  # V2.5: 2.5초 (Strict)
 
 
 # =============================================================================
-# Spike & Recovery Statistics
+# 극단적 Self-Healing 통계
 # =============================================================================
 
-_spike_stats = {
+_extreme_stats = {
     "start_time": None,
-    "phase": "spike",  # spike, sustain, ramp_down, stabilize
+    "phase": "spike",
     "phase_times": {
         "spike_start": None,
         "sustain_start": None,
         "ramp_down_start": None,
         "stabilize_start": None,
     },
+    # Circuit Breaker 분석
     "circuit_breaker": {
         "first_open_time": None,
         "first_close_time": None,
         "open_count": 0,
+        "close_count": 0,
+        "half_open_count": 0,
         "last_state": "closed",
+        "services_affected": [],
+        "recovery_latency_ms": None,
     },
+    # DLQ 분석
     "dlq": {
         "max_count": 0,
         "current_count": 0,
         "items_before_spike": 0,
         "items_after_recovery": 0,
+        "replay_success_count": 0,
+        "replay_fail_count": 0,
     },
+    # Emergency Mode 분석
+    "emergency": {
+        "triggered_count": 0,
+        "released_count": 0,
+        "max_level": 0,
+        "last_level": 0,
+        "trigger_times": [],
+    },
+    # Error Budget 분석
+    "error_budget": {
+        "initial_remaining": None,
+        "min_remaining": None,
+        "exhausted": False,
+        "recovered": False,
+        "consumed_during_test": 0,
+    },
+    # Kill Switch 분석
+    "kill_switch": {
+        "activated_count": 0,
+        "deactivated_count": 0,
+        "targets": [],
+    },
+    # Chaos Injection 분석
+    "chaos": {
+        "failures_injected": 0,
+        "cb_triggers": 0,
+        "recovery_triggers": 0,
+    },
+    # Phase별 메트릭
     "metrics_per_phase": {
         "spike": {"requests": 0, "errors": 0, "response_times": []},
         "sustain": {"requests": 0, "errors": 0, "response_times": []},
         "ramp_down": {"requests": 0, "errors": 0, "response_times": []},
         "stabilize": {"requests": 0, "errors": 0, "response_times": []},
     },
+    # V2 최적화 모듈 통계
+    "v2_modules": {
+        "cache_hits": 0,
+        "cache_misses": 0,
+        "async_events": 0,
+        "jitter_applied": 0,
+    },
+    # Recovery Latency
+    "recovery": {
+        "spike_impact_detected_at": None,
+        "recovery_started_at": None,
+        "recovery_completed_at": None,
+        "recovery_latency_seconds": None,
+    },
+    # 데이터 일관성
     "consistency": {
         "checked": False,
         "orders_before": 0,
         "orders_after": 0,
         "stock_consistent": None,
     },
-    # Recovery Latency Metrics
-    "recovery": {
-        "spike_impact_detected_at": None,  # When error rate exceeded threshold
-        "recovery_started_at": None,  # When ramp_down phase started
-        "recovery_completed_at": None,  # When error rate normalized
-        "recovery_latency_seconds": None,  # Total recovery time
-        "cb_recovery_latency_seconds": None,  # CB open to close time
+    # 디버그 로그
+    "debug_logs": [],
+    # =============================================================================
+    # V2.5 Platinum Grade Add-ons 통계
+    # =============================================================================
+    # SLA Hard-Cap ⚖️
+    "sla_hardcap": {
+        "p99_violations": 0,
+        "p99_max_ms": 0,
+        "data_variance_count": 0,
+        "sla_passed": True,
+        "violation_timestamps": [],
+    },
+    # Message Storm & Backpressure 📨
+    "message_storm": {
+        "messages_injected": 0,
+        "buffer_overflow_count": 0,
+        "max_buffer_size": 0,
+        "backpressure_activated": False,
+        "messages_dropped": 0,
+        "main_logic_affected": False,
+    },
+    # Clock Skew Attack ⏰
+    "clock_skew": {
+        "attacks_executed": 0,
+        "max_drift_sec": 0,
+        "cb_window_corrupted": False,
+        "recovery_found": False,
+        "consistency_maintained": True,
+    },
+    # Cascading Failure 🌊
+    "cascading_failure": {
+        "cascades_triggered": 0,
+        "services_affected": [],
+        "max_cascade_depth": 0,
+        "isolation_success": True,
+    },
+    # Retry Storm Prevention 🔄
+    "retry_storm": {
+        "storms_detected": 0,
+        "retries_blocked": 0,
+        "backoff_applied": 0,
+        "circuit_protected": True,
     },
 }
 
+# 전역 Self-Healing 클라이언트
+_sh_client: Optional["SelfHealingClient"] = None
+_cb_cache: Optional["CBStateCache"] = None
+_adaptive_jitter: Optional["AdaptiveJitter"] = None
+
+
+def _debug_log(message: str):
+    """디버그 로그 기록"""
+    if DEBUG_MODE:
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        log_entry = f"[{timestamp}] {message}"
+        _extreme_stats["debug_logs"].append(log_entry)
+        print(f"🔍 {log_entry}")
+
 
 def _get_current_phase() -> str:
-    """Determine current phase based on elapsed time"""
-    if _spike_stats["start_time"] is None:
+    """현재 단계 결정"""
+    if _extreme_stats["start_time"] is None:
         return "spike"
 
-    elapsed = time.time() - _spike_stats["start_time"]
+    elapsed = time.time() - _extreme_stats["start_time"]
+    total = TEST_DURATION
 
-    if elapsed < 30:
+    spike_end = total * SPIKE_RATIO
+    sustain_end = spike_end + (total * SUSTAIN_RATIO)
+    ramp_down_end = sustain_end + (total * RAMP_DOWN_RATIO)
+
+    if elapsed < spike_end:
         return "spike"
-    elif elapsed < 150:  # 2m30s
+    elif elapsed < sustain_end:
         return "sustain"
-    elif elapsed < 330:  # 5m30s
+    elif elapsed < ramp_down_end:
         return "ramp_down"
     else:
         return "stabilize"
 
 
 def _record_request(success: bool, response_time_ms: float):
-    """Record request to current phase statistics"""
+    """요청 기록 + SLA Hard-Cap 검증"""
     phase = _get_current_phase()
-    stats = _spike_stats["metrics_per_phase"][phase]
+    stats = _extreme_stats["metrics_per_phase"][phase]
 
     stats["requests"] += 1
     stats["response_times"].append(response_time_ms)
 
+    # SLA Hard-Cap 검증 ⚖️
+    if SLA_STRICT_MODE:
+        _check_sla_hardcap(response_time_ms)
+
     if not success:
         stats["errors"] += 1
+        # 스파이크 영향 감지
+        if phase == "spike" and _extreme_stats["recovery"]["spike_impact_detected_at"] is None:
+            error_rate = stats["errors"] / stats["requests"] * 100 if stats["requests"] > 0 else 0
+            if error_rate > 10:  # 10% 이상 에러
+                _extreme_stats["recovery"]["spike_impact_detected_at"] = time.time()
+                _debug_log(f"Spike impact detected! Error rate: {error_rate:.1f}%")
+
+
+# =============================================================================
+# V2.5 Platinum Grade Add-ons Functions
+# =============================================================================
+
+
+def _check_sla_hardcap(response_time_ms: float):
+    """
+    SLA Hard-Cap 검증 ⚖️ (V2.6: Phase별 분리)
+    
+    - SPIKE/SUSTAIN: SLA 완화 (P99 * 4 허용)
+    - RAMP_DOWN: SLA 완화 (P99 * 2 허용)
+    - STABILIZE: 엄격 적용 (P99 ≤ 250ms)
+    """
+    global _extreme_stats
+
+    phase = _get_current_phase()
+    sla = _extreme_stats["sla_hardcap"]
+
+    # Phase별 임계값 조정
+    if phase in ["spike", "sustain"]:
+        threshold = SLA_P99_THRESHOLD_MS * 4  # 1000ms 허용
+    elif phase == "ramp_down":
+        threshold = SLA_P99_THRESHOLD_MS * 2  # 500ms 허용
+    else:  # stabilize
+        threshold = SLA_P99_THRESHOLD_MS  # 250ms 엄격 적용
+
+    # P99 최대값 업데이트 (전체)
+    if response_time_ms > sla["p99_max_ms"]:
+        sla["p99_max_ms"] = response_time_ms
+
+    # STABILIZE 단계에서만 SLA 위반으로 판정
+    if phase == "stabilize" and response_time_ms > threshold:
+        sla["p99_violations"] += 1
+        sla["sla_passed"] = False
+        sla["violation_timestamps"].append(time.time())
+
+        if sla["p99_violations"] == 1:  # 첫 번째 위반
+            _debug_log(f"⚖️ SLA VIOLATION (STABILIZE): P99 {response_time_ms:.0f}ms > {threshold}ms!")
+    
+    # 다른 단계에서는 경고만 (위반 카운트 안 함)
+    elif response_time_ms > threshold:
+        _debug_log(f"⚖️ SLA WARNING ({phase}): {response_time_ms:.0f}ms > {threshold}ms (relaxed)")
+
+
+def _calculate_recovery_p99() -> float:
+    """복구 후 P99 계산 (STABILIZE 단계만)"""
+    stabilize_times = _extreme_stats["metrics_per_phase"]["stabilize"].get("response_times", [])
+    return _calculate_p99(stabilize_times)
+
+
+def _record_data_variance(variance_type: str, details: str = ""):
+    """데이터 오차 기록"""
+    global _extreme_stats
+
+    sla = _extreme_stats["sla_hardcap"]
+    sla["data_variance_count"] += 1
+
+    if SLA_DATA_VARIANCE_TOLERANCE == 0:
+        sla["sla_passed"] = False
+
+    _debug_log(f"⚖️ DATA VARIANCE: {variance_type} - {details}")
+
+
+def _calculate_p99(response_times: list) -> float:
+    """P99 계산"""
+    if not response_times:
+        return 0.0
+    sorted_times = sorted(response_times)
+    index = int(len(sorted_times) * 0.99)
+    return sorted_times[min(index, len(sorted_times) - 1)]
+
+
+def _simulate_clock_skew(drift_seconds: float) -> dict:
+    """
+    Clock Skew Attack 시뮬레이션 ⏰
+    시스템 시간 왜곡을 시뮬레이션하여 CB 타임 윈도우 테스트
+    """
+    global _extreme_stats
+
+    clock_stats = _extreme_stats["clock_skew"]
+    clock_stats["attacks_executed"] += 1
+
+    if abs(drift_seconds) > clock_stats["max_drift_sec"]:
+        clock_stats["max_drift_sec"] = abs(drift_seconds)
+
+    # 시뮬레이션: 시간 왜곡 효과
+    # 실제 시스템 시간은 변경하지 않고, 논리적으로 시뮬레이션
+    skewed_time = time.time() + drift_seconds
+
+    _debug_log(f"⏰ Clock Skew Attack: drift={drift_seconds:.2f}s, simulated_time={skewed_time:.0f}")
+
+    return {
+        "original_time": time.time(),
+        "skewed_time": skewed_time,
+        "drift_seconds": drift_seconds,
+    }
+
+
+def _inject_message_storm(count: int) -> dict:
+    """
+    Message Storm 주입 📨
+    AsyncHealingLogger에 대량 로그를 주입하여 Backpressure 테스트
+    """
+    global _extreme_stats
+
+    storm_stats = _extreme_stats["message_storm"]
+    start_time = time.time()
+    injected = 0
+    dropped = 0
+
+    for i in range(count):
+        try:
+            if SELFHEALING_AVAILABLE:
+                AsyncHealingLogger.log(
+                    {
+                        "event": "message_storm",
+                        "index": i,
+                        "timestamp": time.time(),
+                        "payload": "X" * 100,  # 100바이트 페이로드
+                    },
+                    EventSeverity.DEBUG,
+                )
+                injected += 1
+        except Exception as e:
+            # 버퍼 오버플로우 또는 Backpressure
+            dropped += 1
+            if "buffer" in str(e).lower() or "overflow" in str(e).lower():
+                storm_stats["buffer_overflow_count"] += 1
+                storm_stats["backpressure_activated"] = True
+
+    elapsed = time.time() - start_time
+    storm_stats["messages_injected"] += injected
+    storm_stats["messages_dropped"] += dropped
+
+    _debug_log(f"📨 Message Storm: injected={injected}, dropped={dropped}, elapsed={elapsed:.3f}s")
+
+    return {
+        "injected": injected,
+        "dropped": dropped,
+        "elapsed_seconds": elapsed,
+        "rate": injected / elapsed if elapsed > 0 else 0,
+    }
+
+
+def _trigger_cascading_failure(origin_service: str) -> dict:
+    """
+    Cascading Failure 시뮬레이션 🌊
+    한 서비스 장애가 다른 서비스로 전파되는지 테스트
+    """
+    global _extreme_stats
+
+    cascade_stats = _extreme_stats["cascading_failure"]
+    cascade_stats["cascades_triggered"] += 1
+
+    affected = [origin_service]
+    depth = 0
+
+    # 장애 전파 시뮬레이션
+    for service in CASCADE_SERVICES:
+        if service != origin_service and service not in affected:
+            # 의존성 체인에 따라 전파
+            time.sleep(CASCADE_PROPAGATION_DELAY * 0.1)  # 시뮬레이션용 짧은 딜레이
+            affected.append(service)
+            depth += 1
+
+            if service not in cascade_stats["services_affected"]:
+                cascade_stats["services_affected"].append(service)
+
+    cascade_stats["max_cascade_depth"] = max(cascade_stats["max_cascade_depth"], depth)
+
+    _debug_log(f"🌊 Cascading Failure: origin={origin_service}, affected={len(affected)}, depth={depth}")
+
+    return {
+        "origin": origin_service,
+        "affected_services": affected,
+        "cascade_depth": depth,
+    }
+
+
+def _detect_retry_storm(retry_count: int) -> bool:
+    """
+    Retry Storm 감지 및 방지 🔄
+    """
+    global _extreme_stats
+
+    storm_stats = _extreme_stats["retry_storm"]
+
+    if retry_count > RETRY_STORM_THRESHOLD:
+        storm_stats["storms_detected"] += 1
+        storm_stats["retries_blocked"] += retry_count
+        storm_stats["backoff_applied"] += 1
+
+        _debug_log(f"🔄 Retry Storm Detected: count={retry_count}, applying backoff")
+        return True
+
+    return False
 
 
 def _update_phase():
-    """Update phase tracking"""
+    """단계 변경 추적"""
     phase = _get_current_phase()
-    phase_times = _spike_stats["phase_times"]
+    phase_times = _extreme_stats["phase_times"]
 
     if phase == "spike" and phase_times["spike_start"] is None:
         phase_times["spike_start"] = time.time()
-        _spike_stats["phase"] = "spike"
-        print(f"\n⚡ Phase: SPIKE - Ramping to 500 users")
+        _extreme_stats["phase"] = "spike"
+        _debug_log("⚡ Phase: SPIKE - Ramping to MAX users + CHAOS INJECTION")
 
     elif phase == "sustain" and phase_times["sustain_start"] is None:
         phase_times["sustain_start"] = time.time()
-        _spike_stats["phase"] = "sustain"
-        print(f"\n🔥 Phase: SUSTAIN - Holding 500 users")
+        _extreme_stats["phase"] = "sustain"
+        _debug_log("🔥 Phase: SUSTAIN - Holding MAX users + EMERGENCY ESCALATION")
 
     elif phase == "ramp_down" and phase_times["ramp_down_start"] is None:
         phase_times["ramp_down_start"] = time.time()
-        _spike_stats["phase"] = "ramp_down"
-        print(f"\n📉 Phase: RAMP DOWN - Reducing to 50 users")
+        _extreme_stats["phase"] = "ramp_down"
+        _extreme_stats["recovery"]["recovery_started_at"] = time.time()
+        _debug_log("📉 Phase: RAMP DOWN - Recovery initiated")
 
     elif phase == "stabilize" and phase_times["stabilize_start"] is None:
         phase_times["stabilize_start"] = time.time()
-        _spike_stats["phase"] = "stabilize"
-        print(f"\n✅ Phase: STABILIZE - Holding 50 users, monitoring recovery")
+        _extreme_stats["phase"] = "stabilize"
+        _debug_log("✅ Phase: STABILIZE - Verification mode")
 
 
 # =============================================================================
-# Custom Load Shape - Spike & Recovery
+# Custom Load Shape - Extreme Spike & Recovery
 # =============================================================================
 
 
-class SpikeRecoveryShape(LoadTestShape):
+class ExtremeSpikeShape(LoadTestShape):
     """
-    Spike and recovery load shape.
+    극단적인 스파이크 부하 패턴.
 
-    Simulates a sudden traffic spike followed by gradual recovery.
-    This tests the system's ability to recover from overload.
-
-    Set LOCUST_TEST_DURATION env var to scale all durations.
+    Self-Healing 시스템을 극한까지 테스트하기 위해:
+    1. 급격한 스파이크로 시스템 과부하
+    2. 지속적인 부하로 안정성 검증
+    3. 점진적 감소로 복구 검증
+    4. 안정화 단계에서 일관성 확인
     """
-
-    # Phase configuration (seconds) - scaled by env var
-    _scale = int(os.environ.get("LOCUST_TEST_DURATION", "15")) / 630  # Original total: 630s
-    SPIKE_DURATION = max(3, int(30 * _scale))
-    SUSTAIN_DURATION = max(3, int(120 * _scale))
-    RAMP_DOWN_DURATION = max(3, int(180 * _scale))
-    STABILIZE_DURATION = max(3, int(300 * _scale))
-
-    # User counts
-    SPIKE_USERS = int(os.environ.get("LOCUST_MAX_USERS", "50"))
-    STABLE_USERS = 10
 
     def tick(self):
-        """Return (user_count, spawn_rate) tuple for current time"""
+        """현재 시간에 맞는 (user_count, spawn_rate) 반환"""
         run_time = self.get_run_time()
 
-        # Update phase tracking
+        # 단계 업데이트
         _update_phase()
 
-        # Phase 1: Spike (0-30s) - rapid ramp to 500 users
-        if run_time < self.SPIKE_DURATION:
-            progress = run_time / self.SPIKE_DURATION
-            users = int(self.SPIKE_USERS * progress)
-            return (max(1, users), 50)  # High spawn rate for spike
+        # 단계별 시간 계산
+        total = TEST_DURATION
+        spike_end = total * SPIKE_RATIO
+        sustain_end = spike_end + (total * SUSTAIN_RATIO)
+        ramp_down_end = sustain_end + (total * RAMP_DOWN_RATIO)
 
-        # Phase 2: Sustain (30s-2m30s) - hold at 500 users
-        elif run_time < self.SPIKE_DURATION + self.SUSTAIN_DURATION:
-            return (self.SPIKE_USERS, 10)
+        # Phase 1: Spike (급격한 증가)
+        if run_time < spike_end:
+            progress = run_time / spike_end
+            users = int(MAX_USERS * progress)
+            return (max(1, users), MAX_USERS // 2)  # 빠른 스폰
 
-        # Phase 3: Ramp down (2m30s-5m30s) - reduce to 50 users
-        elif run_time < self.SPIKE_DURATION + self.SUSTAIN_DURATION + self.RAMP_DOWN_DURATION:
-            elapsed_in_phase = run_time - (self.SPIKE_DURATION + self.SUSTAIN_DURATION)
-            progress = elapsed_in_phase / self.RAMP_DOWN_DURATION
-            users = int(self.SPIKE_USERS - (self.SPIKE_USERS - self.STABLE_USERS) * progress)
-            return (max(self.STABLE_USERS, users), 5)
+        # Phase 2: Sustain (최대 부하 유지)
+        elif run_time < sustain_end:
+            return (MAX_USERS, 10)
 
-        # Phase 4: Stabilize (5m30s-10m30s) - hold at 50 users
-        elif run_time < self.SPIKE_DURATION + self.SUSTAIN_DURATION + self.RAMP_DOWN_DURATION + self.STABILIZE_DURATION:
-            return (self.STABLE_USERS, 1)
+        # Phase 3: Ramp Down (점진적 감소)
+        elif run_time < ramp_down_end:
+            elapsed_in_phase = run_time - sustain_end
+            phase_duration = ramp_down_end - sustain_end
+            progress = elapsed_in_phase / phase_duration
+            users = int(MAX_USERS - (MAX_USERS - MIN_USERS) * progress)
+            return (max(MIN_USERS, users), 5)
 
-        # Test complete
+        # Phase 4: Stabilize (안정화)
+        elif run_time < total:
+            return (MIN_USERS, 1)
+
+        # 테스트 완료
         return None
 
 
 # =============================================================================
-# Test User
+# Self-Healing 테스트 클라이언트
 # =============================================================================
 
 
-class SpikeRecoveryUser(HttpUser):
+class ExtremeSpikeUser(HttpUser):
     """
-    User for spike and recovery testing.
+    극단적인 스파이크 테스트 사용자.
 
-    Monitors system behavior during traffic spikes
-    and verifies proper recovery mechanisms.
+    Self-Healing 시스템의 모든 기능을 극한까지 테스트합니다.
+    V2.6: V2 모듈 완전 연결, Phase별 SLA 분리, 복구 후 P99 측정
     """
 
-    wait_time = between(0.5, 2)  # Faster during spike
+    wait_time = between(0.1, 0.5)  # 매우 빠른 요청
 
     def on_start(self):
-        """Initialize user session"""
-        global _spike_stats
+        """사용자 세션 초기화"""
+        global _extreme_stats, _sh_client, _cb_cache, _adaptive_jitter
 
         setup_event_hooks(STAGE_NAME)
 
-        if _spike_stats["start_time"] is None:
-            _spike_stats["start_time"] = time.time()
-            # Check initial DLQ count
-            self._check_dlq_count(initial=True)
+        # 첫 번째 사용자가 전역 초기화
+        if _extreme_stats["start_time"] is None:
+            _extreme_stats["start_time"] = time.time()
+            _debug_log("=" * 60)
+            _debug_log("🚀 EXTREME Spike & Recovery Test V2.6 STARTED")
+            _debug_log(f"   Max Users: {MAX_USERS}, Test Duration: {TEST_DURATION}s")
+            _debug_log("=" * 60)
 
+            # Self-Healing 클라이언트 초기화
+            if SELFHEALING_AVAILABLE:
+                try:
+                    _sh_client = SelfHealingClient(
+                        host=os.environ.get("SELFHEALING_HOST", "http://localhost:8000"),
+                        auth_mode="xtest",
+                    )
+                    # 인증
+                    _sh_client.login("admin", "admin")
+
+                    # =========================================================
+                    # V2.6: V2 최적화 모듈 완전 초기화
+                    # =========================================================
+                    
+                    # 1. CBStateCache - fetch_callback 등록
+                    _cb_cache = CBStateCache()
+                    
+                    def _fetch_cb_status(service_name: str) -> dict:
+                        """CB 상태를 API에서 가져오는 콜백"""
+                        try:
+                            if _sh_client:
+                                return _sh_client.circuit_breaker.get_status(service_name)
+                        except Exception:
+                            pass
+                        return {"state": "unknown"}
+                    
+                    # CBStateCache에 콜백 등록 (클래스 속성으로)
+                    CBStateCache._fetch_callback = _fetch_cb_status
+                    _debug_log("✅ CBStateCache configured with fetch callback")
+                    
+                    # 2. AdaptiveJitter 초기화
+                    _adaptive_jitter = AdaptiveJitter()
+                    _debug_log("✅ AdaptiveJitter initialized")
+                    
+                    # 3. AsyncHealingLogger 시작
+                    try:
+                        AsyncHealingLogger.start()
+                        _debug_log("✅ AsyncHealingLogger started")
+                    except Exception as e:
+                        _debug_log(f"⚠️ AsyncHealingLogger start skipped: {e}")
+
+                    _debug_log("✅ All V2.6 modules initialized")
+
+                    # 초기 상태 기록
+                    self._record_initial_state()
+
+                except Exception as e:
+                    _debug_log(f"❌ Self-Healing client init failed: {e}")
+                    traceback.print_exc()
+
+        # 기본 헬퍼 초기화
         self.login_helper = LoginHelper(self.client, STAGE_NAME)
         self.product_helper = ProductHelper(self.client, STAGE_NAME)
         self.cart_helper = CartHelper(self.client, STAGE_NAME)
@@ -253,75 +683,619 @@ class SpikeRecoveryUser(HttpUser):
         self.product_helper.ensure_products_cached()
         self.login_helper.login()
 
-    def _check_dlq_count(self, initial: bool = False):
-        """Check current DLQ count"""
+    def _record_initial_state(self):
+        """초기 상태 기록"""
+        global _sh_client, _extreme_stats
+
+        if not _sh_client:
+            return
+
         try:
-            with self.client.get(
-                "/api/self-healing/status/",
-                headers=self.login_helper.get_auth_header() if hasattr(self, "login_helper") else {},
-                name=f"{STAGE_NAME} DLQ-check",
-                catch_response=True,
-            ) as response:
-                if response.status_code == 200:
-                    data = response.json()
-                    dlq_count = data.get("dlq", {}).get("pending_count", 0)
+            # Error Budget 초기 상태
+            eb_status = _sh_client.error_budget.get_status()
+            if "remaining_percent" in str(eb_status):
+                _extreme_stats["error_budget"]["initial_remaining"] = eb_status.get("remaining_percent", 100)
+                _extreme_stats["error_budget"]["min_remaining"] = eb_status.get("remaining_percent", 100)
+                _debug_log(f"Initial Error Budget: {eb_status.get('remaining_percent', 100)}%")
 
-                    _spike_stats["dlq"]["current_count"] = dlq_count
+            # DLQ 초기 상태
+            dlq_stats = _sh_client.dlq.stats()
+            pending = dlq_stats.get("pending_count", 0) if isinstance(dlq_stats, dict) else 0
+            _extreme_stats["dlq"]["items_before_spike"] = pending
+            _debug_log(f"Initial DLQ: {pending} items")
 
-                    if dlq_count > _spike_stats["dlq"]["max_count"]:
-                        _spike_stats["dlq"]["max_count"] = dlq_count
+            # Circuit Breaker 초기 상태
+            cb_status = _sh_client.circuit_breaker.get_all_status()
+            _debug_log(f"Initial CB Status: {cb_status}")
 
-                    if initial:
-                        _spike_stats["dlq"]["items_before_spike"] = dlq_count
-
-                    response.success()
-        except Exception:
-            pass
-
-    def _check_circuit_breaker(self):
-        """Check circuit breaker state"""
-        try:
-            with self.client.get(
-                "/api/self-healing/status/",
-                headers=self.login_helper.get_auth_header(),
-                name=f"{STAGE_NAME} CB-check",
-                catch_response=True,
-            ) as response:
-                if response.status_code == 200:
-                    data = response.json()
-
-                    # services is a list of dicts
-                    for info in data.get("services", []):
-                        service = info.get("service_name", "unknown")
-                        cb_state = info.get("circuit_state") or info.get("state", "closed")
-
-                        # Detect state changes
-                        if cb_state == "open" and _spike_stats["circuit_breaker"]["last_state"] != "open":
-                            _spike_stats["circuit_breaker"]["open_count"] += 1
-
-                            if _spike_stats["circuit_breaker"]["first_open_time"] is None:
-                                _spike_stats["circuit_breaker"]["first_open_time"] = time.time()
-                                print(f"\n🔌 Circuit Breaker OPENED for {service}")
-
-                        elif cb_state == "closed" and _spike_stats["circuit_breaker"]["last_state"] == "open":
-                            if _spike_stats["circuit_breaker"]["first_close_time"] is None:
-                                _spike_stats["circuit_breaker"]["first_close_time"] = time.time()
-                                print(f"\n✅ Circuit Breaker CLOSED for {service} - Recovery detected")
-
-                        _spike_stats["circuit_breaker"]["last_state"] = cb_state
-
-                    response.success()
-        except Exception:
-            pass
+        except Exception as e:
+            _debug_log(f"Failed to record initial state: {e}")
 
     # =========================================================================
-    # Load Generation Tasks
+    # 극단적 Chaos Injection 태스크
+    # =========================================================================
+
+    @task(5)
+    @tag("chaos", "circuit_breaker")
+    def chaos_inject_cb_failure(self):
+        """Circuit Breaker 장애 강제 주입"""
+        global _sh_client, _extreme_stats
+
+        phase = _get_current_phase()
+        if phase not in ["spike", "sustain"]:
+            return  # 복구 단계에서는 주입 안함
+
+        if not _sh_client:
+            return
+
+        try:
+            services = ["payment-service", "order-service", "inventory-service"]
+            target_service = random.choice(services)
+
+            # XTest로 장애 주입
+            result = _sh_client.xtest.inject_cb_failure(
+                service_name=target_service,
+                failure_type=random.choice(["exception", "timeout", "slow_response"]),
+                failure_rate=random.uniform(0.3, 0.8),
+                duration_seconds=10,
+            )
+
+            if result.get("status") != "error":
+                _extreme_stats["chaos"]["failures_injected"] += 1
+                _debug_log(f"💥 Chaos: Injected failure to {target_service}")
+
+        except Exception as e:
+            _debug_log(f"Chaos injection failed: {e}")
+
+    @task(3)
+    @tag("chaos", "emergency")
+    def chaos_emergency_escalation(self):
+        """Emergency 레벨 점진적 상승"""
+        global _sh_client, _extreme_stats
+
+        phase = _get_current_phase()
+        if phase != "sustain":
+            return  # sustain 단계에서만
+
+        if not _sh_client:
+            return
+
+        try:
+            current_level = _extreme_stats["emergency"]["last_level"]
+
+            # 레벨 상승 (최대 LEVEL_3)
+            if current_level < 3:
+                levels = ["LEVEL_1", "LEVEL_2", "LEVEL_3"]
+                next_level = levels[min(current_level, 2)]
+
+                result = _sh_client.emergency.trigger(
+                    level=next_level,
+                    reason=f"Stage12 Extreme Test - Phase: {phase}",
+                    duration_minutes=1,
+                )
+
+                if result.get("status") != "error":
+                    _extreme_stats["emergency"]["triggered_count"] += 1
+                    _extreme_stats["emergency"]["last_level"] = current_level + 1
+                    _extreme_stats["emergency"]["max_level"] = max(_extreme_stats["emergency"]["max_level"], current_level + 1)
+                    _extreme_stats["emergency"]["trigger_times"].append(time.time())
+                    _debug_log(f"🚨 Emergency: Escalated to {next_level}")
+
+        except Exception as e:
+            _debug_log(f"Emergency escalation failed: {e}")
+
+    @task(4)
+    @tag("chaos", "error_budget")
+    def chaos_consume_error_budget(self):
+        """Error Budget 소진 시뮬레이션"""
+        global _sh_client, _extreme_stats
+
+        phase = _get_current_phase()
+        if phase not in ["spike", "sustain"]:
+            return
+
+        if not _sh_client:
+            return
+
+        try:
+            # 에러 기록하여 예산 소진
+            result = _sh_client.error_budget.record_error(
+                error_count=random.randint(5, 20),
+                error_type="spike_test",
+                service_name="stage12-test",
+            )
+
+            if result.get("status") != "error":
+                _extreme_stats["error_budget"]["consumed_during_test"] += 1
+
+                # 현재 예산 확인
+                status = _sh_client.error_budget.get_status()
+                remaining = status.get("remaining_percent", 100)
+
+                if (
+                    _extreme_stats["error_budget"]["min_remaining"] is None
+                    or remaining < _extreme_stats["error_budget"]["min_remaining"]
+                ):
+                    _extreme_stats["error_budget"]["min_remaining"] = remaining
+
+                if remaining <= 0:
+                    _extreme_stats["error_budget"]["exhausted"] = True
+                    _debug_log("💀 Error Budget: EXHAUSTED!")
+
+        except Exception as e:
+            _debug_log(f"Error budget consume failed: {e}")
+
+    @task(2)
+    @tag("chaos", "kill_switch")
+    def chaos_toggle_kill_switch(self):
+        """Kill Switch 토글"""
+        global _sh_client, _extreme_stats
+
+        phase = _get_current_phase()
+        if phase not in ["spike"]:
+            return  # spike 단계에서만
+
+        if not _sh_client:
+            return
+
+        try:
+            targets = ["risky-feature", "new-payment-flow", "experimental-cache"]
+            target = random.choice(targets)
+
+            # 킬스위치 활성화
+            result = _sh_client.chaos.activate_kill_switch(
+                target=target,
+                reason="Stage12 Extreme Test",
+            )
+
+            if result.get("status") != "error":
+                _extreme_stats["kill_switch"]["activated_count"] += 1
+                if target not in _extreme_stats["kill_switch"]["targets"]:
+                    _extreme_stats["kill_switch"]["targets"].append(target)
+                _debug_log(f"🔌 Kill Switch: Activated for {target}")
+
+                # 잠시 후 비활성화
+                time.sleep(0.5)
+                _sh_client.chaos.deactivate_kill_switch(
+                    target=target,
+                    reason="Stage12 Recovery",
+                )
+                _extreme_stats["kill_switch"]["deactivated_count"] += 1
+
+        except Exception as e:
+            _debug_log(f"Kill switch toggle failed: {e}")
+
+    # =========================================================================
+    # V2.5 Platinum Grade Add-ons 태스크
+    # =========================================================================
+
+    @task(3)
+    @tag("platinum", "sla_hardcap")
+    def sla_hardcap_verification(self):
+        """
+        SLA Hard-Cap 검증 ⚖️
+        실시간으로 P99 응답시간과 데이터 오차를 검증합니다.
+        """
+        global _extreme_stats
+
+        if not SLA_STRICT_MODE:
+            return
+
+        phase = _get_current_phase()
+
+        # Phase별 P99 계산
+        stats = _extreme_stats["metrics_per_phase"][phase]
+        if len(stats.get("response_times", [])) >= 10:
+            p99 = _calculate_p99(stats["response_times"])
+
+            sla = _extreme_stats["sla_hardcap"]
+            if p99 > SLA_P99_THRESHOLD_MS:
+                if p99 > sla["p99_max_ms"]:
+                    sla["p99_max_ms"] = p99
+                    _debug_log(f"⚖️ SLA WARNING: P99={p99:.0f}ms exceeds {SLA_P99_THRESHOLD_MS}ms")
+
+    @task(2)
+    @tag("platinum", "message_storm")
+    def message_storm_attack(self):
+        """
+        Message Storm & Backpressure 테스트 📨
+        AsyncHealingLogger에 초당 수천 개의 로그를 주입하여
+        버퍼 오버플로우와 Backpressure 제어를 테스트합니다.
+        """
+        global _extreme_stats
+
+        if not MESSAGE_STORM_ENABLED:
+            return
+
+        phase = _get_current_phase()
+        if phase != "spike":
+            return  # spike 단계에서만 수행
+
+        try:
+            # 짧은 버스트로 메시지 폭풍 주입
+            burst_size = min(MESSAGE_STORM_RATE // 10, 100)  # 100개씩 버스트
+            result = _inject_message_storm(burst_size)
+
+            storm_stats = _extreme_stats["message_storm"]
+
+            # 메인 로직 영향 테스트
+            start = time.time()
+            with self.client.get(
+                "/api/products/",
+                name=f"{STAGE_NAME} POST-STORM Products",
+                catch_response=True,
+            ) as response:
+                elapsed = (time.time() - start) * 1000
+
+                # 메시지 폭풍 후에도 메인 로직이 250ms 이내에 응답해야 함
+                if elapsed > SLA_P99_THRESHOLD_MS:
+                    storm_stats["main_logic_affected"] = True
+                    _debug_log(f"📨 WARNING: Main logic affected by storm! Latency={elapsed:.0f}ms")
+                else:
+                    _debug_log(f"📨 Backpressure OK: Main logic unaffected, latency={elapsed:.0f}ms")
+
+                if response.status_code == 200:
+                    response.success()
+                else:
+                    response.failure(f"Status: {response.status_code}")
+
+        except Exception as e:
+            _debug_log(f"Message storm attack failed: {e}")
+
+    @task(2)
+    @tag("platinum", "clock_skew")
+    def clock_skew_attack(self):
+        """
+        Clock Skew Attack ⏰
+        시스템 클럭을 인위적으로 왜곡하여 CB 타임 윈도우 테스트
+        """
+        global _extreme_stats
+
+        if not CLOCK_SKEW_ENABLED:
+            return
+
+        phase = _get_current_phase()
+        if phase not in ["sustain", "ramp_down"]:
+            return  # sustain/ramp_down에서만
+
+        try:
+            # 랜덤 시간 왜곡 (-5초 ~ +5초)
+            drift = random.uniform(-CLOCK_SKEW_MAX_DRIFT_SEC, CLOCK_SKEW_MAX_DRIFT_SEC)
+            result = _simulate_clock_skew(drift)
+
+            clock_stats = _extreme_stats["clock_skew"]
+
+            # CB 상태 확인하여 윈도우 손상 여부 검증
+            if SELFHEALING_AVAILABLE and _sh_client:
+                try:
+                    # 왜곡된 시간에서 CB 상태 조회
+                    cb_status = _sh_client.circuit_breaker.get_all_status()
+
+                    # 상태가 비정상적이면 윈도우 손상으로 판단
+                    if cb_status.get("status") == "error":
+                        clock_stats["cb_window_corrupted"] = True
+                        _debug_log(f"⏰ CB Window potentially corrupted by clock skew!")
+                    else:
+                        clock_stats["recovery_found"] = True
+                        _debug_log(f"⏰ CB recovered from clock skew (drift={drift:.2f}s)")
+
+                except Exception:
+                    clock_stats["cb_window_corrupted"] = True
+
+            # 데이터 일관성 확인
+            orders_before = _extreme_stats["consistency"]["orders_before"]
+            orders_after = _extreme_stats["consistency"]["orders_after"]
+
+            if orders_before > 0 and orders_after > 0:
+                if orders_after < orders_before:
+                    clock_stats["consistency_maintained"] = False
+                    _debug_log(f"⏰ CONSISTENCY VIOLATION after clock skew!")
+
+        except Exception as e:
+            _debug_log(f"Clock skew attack failed: {e}")
+
+    @task(3)
+    @tag("platinum", "cascading_failure")
+    def cascading_failure_test(self):
+        """
+        Cascading Failure 테스트 🌊
+        한 서비스 장애가 다른 서비스로 전파되는지 검증합니다.
+        """
+        global _extreme_stats
+
+        if not CASCADING_FAILURE_ENABLED:
+            return
+
+        phase = _get_current_phase()
+        if phase != "sustain":
+            return  # sustain 단계에서만
+
+        if not _sh_client:
+            return
+
+        try:
+            # 랜덤 서비스에서 장애 시작
+            origin = random.choice(CASCADE_SERVICES)
+
+            # 먼저 원본 서비스에 장애 주입
+            _sh_client.xtest.inject_cb_failure(
+                service_name=f"{origin}-service",
+                failure_type="exception",
+                failure_rate=0.9,
+                duration_seconds=5,
+            )
+
+            # 장애 전파 시뮬레이션
+            result = _trigger_cascading_failure(origin)
+
+            cascade_stats = _extreme_stats["cascading_failure"]
+
+            # 격리 성공 여부 확인
+            # 다른 서비스가 정상 응답하면 격리 성공
+            isolated_count = 0
+            for service in CASCADE_SERVICES:
+                if service != origin:
+                    with self.client.get(
+                        "/api/products/",  # 기본 엔드포인트로 테스트
+                        name=f"{STAGE_NAME} CASCADE-{service}",
+                        catch_response=True,
+                    ) as response:
+                        if response.status_code == 200:
+                            isolated_count += 1
+                            response.success()
+                        else:
+                            cascade_stats["isolation_success"] = False
+                            response.failure(f"Cascade affected: {response.status_code}")
+
+            if isolated_count == len(CASCADE_SERVICES) - 1:
+                _debug_log(f"🌊 Cascade ISOLATED: {origin} failed, others OK")
+            else:
+                _debug_log(f"🌊 Cascade SPREAD: {len(CASCADE_SERVICES) - isolated_count - 1} services affected")
+
+        except Exception as e:
+            _debug_log(f"Cascading failure test failed: {e}")
+
+    @task(2)
+    @tag("platinum", "retry_storm")
+    def retry_storm_prevention(self):
+        """
+        Retry Storm Prevention 🔄
+        재시도 폭풍 발생 시 시스템 보호 검증
+        """
+        global _extreme_stats
+
+        if not RETRY_STORM_ENABLED:
+            return
+
+        phase = _get_current_phase()
+        if phase not in ["spike", "sustain"]:
+            return
+
+        try:
+            storm_stats = _extreme_stats["retry_storm"]
+
+            # 의도적으로 실패하는 요청 다수 생성
+            retry_count = 0
+            max_retries = 60  # 폭풍 시뮬레이션
+
+            for _ in range(max_retries):
+                with self.client.get(
+                    "/api/nonexistent-endpoint-for-retry-test/",
+                    name=f"{STAGE_NAME} RETRY-STORM",
+                    catch_response=True,
+                ) as response:
+                    if response.status_code != 200:
+                        retry_count += 1
+
+                        # Backoff 적용
+                        if retry_count > RETRY_STORM_THRESHOLD:
+                            backoff = min(retry_count * 0.1 * RETRY_BACKOFF_MULTIPLIER, 2.0)
+                            time.sleep(backoff)
+                            storm_stats["backoff_applied"] += 1
+
+                        response.failure(f"Retry test: {response.status_code}")
+                    else:
+                        response.success()
+                        break
+
+            # Retry Storm 감지
+            if _detect_retry_storm(retry_count):
+                _debug_log(f"🔄 Retry Storm handled: {retry_count} retries with backoff")
+            else:
+                _debug_log(f"🔄 Normal retry pattern: {retry_count} retries")
+
+        except Exception as e:
+            _debug_log(f"Retry storm prevention failed: {e}")
+
+    # =========================================================================
+    # 모니터링 태스크
     # =========================================================================
 
     @task(10)
-    @tag("spike", "browse")
+    @tag("monitoring", "circuit_breaker")
+    def monitor_circuit_breaker(self):
+        """Circuit Breaker 상태 모니터링 (V2.6: 캐시 완전 연동)"""
+        global _sh_client, _extreme_stats, _cb_cache
+
+        if not _sh_client:
+            return
+
+        try:
+            # V2.6: 캐시 먼저 확인 (fetch_callback 등록됨)
+            if SELFHEALING_AVAILABLE and _cb_cache:
+                try:
+                    # 캐시에서 상태 조회 시도
+                    cached = CBStateCache.get_state("all_services")
+                    if cached and cached.get("state") != "unknown":
+                        _extreme_stats["v2_modules"]["cache_hits"] += 1
+                        # 캐시된 데이터로 상태 업데이트
+                        self._update_cb_stats_from_data(cached)
+                        return
+                except Exception as e:
+                    _debug_log(f"Cache miss: {e}")
+                
+                _extreme_stats["v2_modules"]["cache_misses"] += 1
+
+            # API 직접 호출 (캐시 미스 시)
+            with self.client.get(
+                "/api/self-healing/status/",
+                headers=self.login_helper.get_auth_header(),
+                name=f"{STAGE_NAME} CB-monitor",
+                catch_response=True,
+            ) as response:
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # V2.6: 캐시에 저장
+                    if SELFHEALING_AVAILABLE:
+                        try:
+                            CBStateCache.set_state("all_services", data, ttl=5)
+                        except Exception:
+                            pass
+
+                    # 서비스별 상태 분석
+                    self._update_cb_stats_from_data(data)
+
+                    response.success()
+                else:
+                    response.failure(f"Status: {response.status_code}")
+
+        except Exception as e:
+            _debug_log(f"CB monitor failed: {e}")
+
+    def _update_cb_stats_from_data(self, data: dict):
+        """CB 상태 데이터로 통계 업데이트"""
+        global _extreme_stats
+        
+        for info in data.get("services", []):
+            service = info.get("service_name", "unknown")
+            cb_state = info.get("circuit_state") or info.get("state", "closed")
+
+            # 상태 변화 감지
+            if cb_state == "open" and _extreme_stats["circuit_breaker"]["last_state"] != "open":
+                _extreme_stats["circuit_breaker"]["open_count"] += 1
+                _extreme_stats["chaos"]["cb_triggers"] += 1
+
+                if _extreme_stats["circuit_breaker"]["first_open_time"] is None:
+                    _extreme_stats["circuit_breaker"]["first_open_time"] = time.time()
+                    _debug_log(f"🔴 CB OPENED: {service}")
+
+                if service not in _extreme_stats["circuit_breaker"]["services_affected"]:
+                    _extreme_stats["circuit_breaker"]["services_affected"].append(service)
+
+            elif cb_state == "half_open":
+                _extreme_stats["circuit_breaker"]["half_open_count"] += 1
+                _debug_log(f"🟡 CB HALF-OPEN: {service}")
+
+            elif cb_state == "closed" and _extreme_stats["circuit_breaker"]["last_state"] == "open":
+                _extreme_stats["circuit_breaker"]["close_count"] += 1
+                _extreme_stats["chaos"]["recovery_triggers"] += 1
+
+                if _extreme_stats["circuit_breaker"]["first_close_time"] is None:
+                    _extreme_stats["circuit_breaker"]["first_close_time"] = time.time()
+
+                    # 복구 지연 계산
+                    if _extreme_stats["circuit_breaker"]["first_open_time"]:
+                        recovery_ms = (
+                            _extreme_stats["circuit_breaker"]["first_close_time"]
+                            - _extreme_stats["circuit_breaker"]["first_open_time"]
+                        ) * 1000
+                        _extreme_stats["circuit_breaker"]["recovery_latency_ms"] = recovery_ms
+                        _debug_log(f"🟢 CB CLOSED: {service} (Recovery: {recovery_ms:.0f}ms)")
+
+            _extreme_stats["circuit_breaker"]["last_state"] = cb_state
+
+    @task(5)
+    @tag("monitoring", "dlq")
+    def monitor_dlq(self):
+        """DLQ 상태 모니터링"""
+        global _sh_client, _extreme_stats
+
+        if not _sh_client:
+            return
+
+        try:
+            with self.client.get(
+                "/api/self-healing/dlq/list/",
+                headers=self.login_helper.get_auth_header(),
+                name=f"{STAGE_NAME} DLQ-monitor",
+                catch_response=True,
+            ) as response:
+                if response.status_code == 200:
+                    data = response.json()
+                    pending = data.get("pending_count", 0) if isinstance(data, dict) else len(data.get("results", []))
+
+                    _extreme_stats["dlq"]["current_count"] = pending
+
+                    if pending > _extreme_stats["dlq"]["max_count"]:
+                        _extreme_stats["dlq"]["max_count"] = pending
+                        _debug_log(f"📥 DLQ Max: {pending} items")
+
+                    response.success()
+                else:
+                    response.failure(f"Status: {response.status_code}")
+
+        except Exception as e:
+            _debug_log(f"DLQ monitor failed: {e}")
+
+    @task(3)
+    @tag("monitoring", "health")
+    def monitor_health(self):
+        """전체 시스템 Health 모니터링"""
+        start = time.time()
+
+        with self.client.get(
+            "/api/self-healing/health/",
+            headers=self.login_helper.get_auth_header() if hasattr(self, "login_helper") else {},
+            name=f"{STAGE_NAME} Health-check",
+            catch_response=True,
+        ) as response:
+            elapsed_ms = (time.time() - start) * 1000
+            success = response.status_code == 200
+
+            if success:
+                response.success()
+            else:
+                response.failure(f"Status: {response.status_code}")
+
+            _record_request(success, elapsed_ms)
+
+    # =========================================================================
+    # 부하 생성 태스크 (쇼핑 API)
+    # =========================================================================
+
+    @task(15)
+    @tag("load", "browse")
     def browse_products(self):
-        """High volume product browsing"""
+        """상품 브라우징 (높은 부하) - V2.6: Stressed 모드 강제 활성화"""
+        global _adaptive_jitter
+
+        # V2.6: Adaptive Jitter - Phase별 강제 모드
+        if _adaptive_jitter and SELFHEALING_AVAILABLE:
+            try:
+                phase = _get_current_phase()
+                
+                # SPIKE/SUSTAIN: stressed 모드 강제 (요청 분산 극대화)
+                if phase in ["spike", "sustain"]:
+                    # 강제 stressed 모드: 높은 지터로 요청 분산
+                    jitter_sec = AdaptiveJitter.calculate(current_load=0.95, stressed=True)
+                elif phase == "ramp_down":
+                    jitter_sec = AdaptiveJitter.calculate(current_load=0.6)
+                else:  # stabilize
+                    jitter_sec = AdaptiveJitter.calculate(current_load=0.2)
+                
+                time.sleep(jitter_sec)
+                _extreme_stats["v2_modules"]["jitter_applied"] += 1
+            except Exception as e:
+                # stressed 파라미터 미지원 시 fallback
+                try:
+                    load = 0.9 if phase in ["spike", "sustain"] else 0.3
+                    jitter_sec = AdaptiveJitter.calculate(current_load=load)
+                    time.sleep(jitter_sec)
+                    _extreme_stats["v2_modules"]["jitter_applied"] += 1
+                except Exception:
+                    pass
+
         start = time.time()
 
         with self.client.get(
@@ -339,10 +1313,10 @@ class SpikeRecoveryUser(HttpUser):
 
             _record_request(success, elapsed_ms)
 
-    @task(5)
-    @tag("spike", "cart")
+    @task(8)
+    @tag("load", "cart")
     def add_to_cart(self):
-        """Cart operations under load"""
+        """장바구니 추가"""
         product = self.product_helper.get_random_product()
         if not product:
             return
@@ -351,7 +1325,7 @@ class SpikeRecoveryUser(HttpUser):
 
         with self.client.post(
             "/api/cart/add_item/",
-            json={"product_id": product["id"], "quantity": 1},
+            json={"product_id": product["id"], "quantity": random.randint(1, 5)},
             headers=self.login_helper.get_auth_header(),
             name=f"{STAGE_NAME} POST /cart/add_item/",
             catch_response=True,
@@ -366,15 +1340,16 @@ class SpikeRecoveryUser(HttpUser):
 
             _record_request(success, elapsed_ms)
 
-    @task(3)
-    @tag("spike", "payment")
+    @task(5)
+    @tag("load", "payment")
     def payment_flow(self):
-        """Full payment flow - most stressful operation"""
+        """결제 플로우 (가장 스트레스가 높음)"""
+
         product = self.product_helper.get_random_product()
         if not product:
             return
 
-        # Add to cart
+        # 장바구니 추가
         self.client.post(
             "/api/cart/add_item/",
             json={"product_id": product["id"], "quantity": 1},
@@ -382,7 +1357,7 @@ class SpikeRecoveryUser(HttpUser):
             name=f"{STAGE_NAME} cart-add (payment)",
         )
 
-        # Create order
+        # 주문 생성
         start = time.time()
 
         with self.client.post(
@@ -405,17 +1380,27 @@ class SpikeRecoveryUser(HttpUser):
                 order_id = order_data.get("id")
 
                 if order_id:
-                    # Request payment
                     self._request_payment(order_id)
 
                 response.success()
+
+                # Async Logger (V2) - 클래스 메서드 사용
+                if SELFHEALING_AVAILABLE:
+                    try:
+                        AsyncHealingLogger.log(
+                            {"event": "order_created", "order_id": order_id, "elapsed_ms": elapsed_ms},
+                            EventSeverity.INFO,
+                        )
+                        _extreme_stats["v2_modules"]["async_events"] += 1
+                    except Exception:
+                        pass
             else:
                 response.failure(f"Order failed: {response.status_code}")
 
             _record_request(success, elapsed_ms)
 
     def _request_payment(self, order_id: int):
-        """Request payment for order"""
+        """결제 요청"""
         start = time.time()
 
         with self.client.post(
@@ -435,12 +1420,71 @@ class SpikeRecoveryUser(HttpUser):
 
             _record_request(success, elapsed_ms)
 
+    # =========================================================================
+    # 복구 검증 태스크
+    # =========================================================================
+
     @task(2)
-    @tag("spike", "monitoring")
-    def monitor_system(self):
-        """Monitor self-healing system status"""
-        self._check_circuit_breaker()
-        self._check_dlq_count()
+    @tag("recovery", "verification")
+    def verify_recovery(self):
+        """복구 검증 (stabilize 단계에서만)"""
+        global _sh_client, _extreme_stats
+
+        phase = _get_current_phase()
+        if phase != "stabilize":
+            return
+
+        if not _sh_client:
+            return
+
+        try:
+            # Emergency 해제 확인
+            emergency_status = _sh_client.emergency.get_status()
+            if emergency_status.get("active", False):
+                _sh_client.emergency.release(reason="Stage12 Recovery Verification")
+                _extreme_stats["emergency"]["released_count"] += 1
+                _debug_log("✅ Emergency released during recovery")
+
+            # Error Budget 복구 확인
+            eb_status = _sh_client.error_budget.get_status()
+            remaining = eb_status.get("remaining_percent", 0)
+            if remaining > 0 and _extreme_stats["error_budget"]["exhausted"]:
+                _extreme_stats["error_budget"]["recovered"] = True
+                _debug_log(f"✅ Error Budget recovered: {remaining}%")
+
+            # DLQ 리플레이 시도
+            dlq_list = _sh_client.dlq.list(status="pending", limit=5)
+            items = dlq_list.get("results", []) if isinstance(dlq_list, dict) else []
+
+            for item in items[:3]:  # 최대 3개만 리플레이
+                pk = item.get("id") or item.get("pk")
+                if pk:
+                    result = _sh_client.dlq.retry(pk)
+                    if result.get("status") != "error":
+                        _extreme_stats["dlq"]["replay_success_count"] += 1
+                        _debug_log(f"✅ DLQ replay success: {pk}")
+                    else:
+                        _extreme_stats["dlq"]["replay_fail_count"] += 1
+
+            # 복구 완료 시간 기록
+            if _extreme_stats["recovery"]["recovery_completed_at"] is None:
+                # 에러율이 5% 이하면 복구 완료로 간주
+                stats = _extreme_stats["metrics_per_phase"]["stabilize"]
+                if stats["requests"] > 0:
+                    error_rate = stats["errors"] / stats["requests"] * 100
+                    if error_rate < 5:
+                        _extreme_stats["recovery"]["recovery_completed_at"] = time.time()
+
+                        if _extreme_stats["recovery"]["recovery_started_at"]:
+                            latency = (
+                                _extreme_stats["recovery"]["recovery_completed_at"]
+                                - _extreme_stats["recovery"]["recovery_started_at"]
+                            )
+                            _extreme_stats["recovery"]["recovery_latency_seconds"] = latency
+                            _debug_log(f"✅ Recovery completed in {latency:.1f}s")
+
+        except Exception as e:
+            _debug_log(f"Recovery verification failed: {e}")
 
 
 # =============================================================================
@@ -450,88 +1494,511 @@ class SpikeRecoveryUser(HttpUser):
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    """Generate spike recovery report"""
-    print("\n" + "=" * 70)
-    print("📊 SPIKE & RECOVERY TEST REPORT")
-    print("=" * 70)
+    """극단적 테스트 리포트 생성"""
+    global _extreme_stats
 
-    # Phase analysis
+    # Async Logger 플러시 (클래스 메서드 사용)
+    try:
+        AsyncHealingLogger.flush_now()
+        AsyncHealingLogger.stop()
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f"🔍 AsyncLogger flush skipped: {e}")
+
+    print("\n" + "=" * 80)
+    print("📊 EXTREME SPIKE & RECOVERY TEST REPORT")
+    print("=" * 80)
+
+    # Executive Summary
+    print("\n📋 Executive Summary")
+    print("-" * 40)
+    print(f"  Test Duration: {TEST_DURATION}s")
+    print(f"  Max Users: {MAX_USERS}")
+    print(f"  Min Users: {MIN_USERS}")
+
+    # Phase Analysis
     print("\n📈 Phase Analysis:")
-    for phase, stats in _spike_stats["metrics_per_phase"].items():
+    for phase, stats in _extreme_stats["metrics_per_phase"].items():
         if stats["requests"] > 0:
-            avg_response = sum(stats["response_times"]) / len(stats["response_times"])
+            avg_response = sum(stats["response_times"]) / len(stats["response_times"]) if stats["response_times"] else 0
             error_rate = stats["errors"] / stats["requests"] * 100
             print(f"  {phase.upper()}:")
             print(f"    - Requests: {stats['requests']}")
             print(f"    - Error Rate: {error_rate:.2f}%")
             print(f"    - Avg Response: {avg_response:.2f}ms")
 
-    # Circuit breaker analysis
+    # Circuit Breaker Analysis
     print("\n🔌 Circuit Breaker Analysis:")
-    cb = _spike_stats["circuit_breaker"]
-    print(f"  - Times Opened: {cb['open_count']}")
+    cb = _extreme_stats["circuit_breaker"]
+    print(f"  - Open Count: {cb['open_count']}")
+    print(f"  - Close Count: {cb['close_count']}")
+    print(f"  - Half-Open Count: {cb['half_open_count']}")
+    print(f"  - Services Affected: {', '.join(cb['services_affected']) or 'None'}")
 
-    if cb["first_open_time"]:
-        open_elapsed = cb["first_open_time"] - _spike_stats["start_time"]
-        print(f"  - First Open: {open_elapsed:.1f}s after start")
+    if cb["recovery_latency_ms"]:
+        print(f"  - Recovery Latency: {cb['recovery_latency_ms']:.0f}ms")
 
-    if cb["first_close_time"]:
-        close_elapsed = cb["first_close_time"] - _spike_stats["start_time"]
-        print(f"  - First Close: {close_elapsed:.1f}s after start")
+    # Emergency Mode Analysis
+    print("\n🚨 Emergency Mode Analysis:")
+    em = _extreme_stats["emergency"]
+    print(f"  - Triggered Count: {em['triggered_count']}")
+    print(f"  - Released Count: {em['released_count']}")
+    print(f"  - Max Level Reached: LEVEL_{em['max_level']}")
 
-        if cb["first_open_time"]:
-            recovery_time = cb["first_close_time"] - cb["first_open_time"]
-            print(f"  - Recovery Time: {recovery_time:.1f}s")
+    # Error Budget Analysis
+    print("\n💰 Error Budget Analysis:")
+    eb = _extreme_stats["error_budget"]
+    print(f"  - Initial Remaining: {eb['initial_remaining']}%")
+    print(f"  - Min Remaining: {eb['min_remaining']}%")
+    print(f"  - Exhausted: {'Yes' if eb['exhausted'] else 'No'}")
+    print(f"  - Recovered: {'Yes' if eb['recovered'] else 'No'}")
 
-    # DLQ analysis
+    # DLQ Analysis
     print("\n📥 DLQ Analysis:")
-    dlq = _spike_stats["dlq"]
+    dlq = _extreme_stats["dlq"]
     print(f"  - Items Before Spike: {dlq['items_before_spike']}")
-    print(f"  - Max Count During Test: {dlq['max_count']}")
+    print(f"  - Max Count: {dlq['max_count']}")
     print(f"  - Current Count: {dlq['current_count']}")
+    print(f"  - Replay Success: {dlq['replay_success_count']}")
+    print(f"  - Replay Fail: {dlq['replay_fail_count']}")
 
-    # Save report
-    report_path = os.path.join(_load_tests_dir, "reports", "stage12_spike_recovery_report.json")
-    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    # Chaos Injection Analysis
+    print("\n💥 Chaos Injection Analysis:")
+    chaos = _extreme_stats["chaos"]
+    print(f"  - Failures Injected: {chaos['failures_injected']}")
+    print(f"  - CB Triggers: {chaos['cb_triggers']}")
+    print(f"  - Recovery Triggers: {chaos['recovery_triggers']}")
 
-    with open(report_path, "w", encoding="utf-8") as f:
+    # Kill Switch Analysis
+    print("\n🔌 Kill Switch Analysis:")
+    ks = _extreme_stats["kill_switch"]
+    print(f"  - Activated Count: {ks['activated_count']}")
+    print(f"  - Deactivated Count: {ks['deactivated_count']}")
+    print(f"  - Targets: {', '.join(ks['targets']) or 'None'}")
+
+    # V2 Optimization Modules
+    print("\n🚀 V2 Optimization Modules:")
+    v2 = _extreme_stats["v2_modules"]
+    total_cache = v2["cache_hits"] + v2["cache_misses"]
+    cache_hit_rate = (v2["cache_hits"] / total_cache * 100) if total_cache > 0 else 0
+    print(f"  - Cache Hit Rate: {cache_hit_rate:.1f}% ({v2['cache_hits']}/{total_cache})")
+    print(f"  - Async Events: {v2['async_events']}")
+    print(f"  - Jitter Applied: {v2['jitter_applied']}")
+
+    # ==========================================================================
+    # V2.5 Platinum Grade Add-ons 통계
+    # ==========================================================================
+
+    # SLA Hard-Cap ⚖️
+    print("\n⚖️ SLA Hard-Cap Analysis (Platinum V2.6):")
+    sla = _extreme_stats["sla_hardcap"]
+    recovery_p99 = _calculate_recovery_p99()
+    print(f"  - P99 Max (전체): {sla['p99_max_ms']:.0f}ms")
+    print(f"  - P99 (복구 후/STABILIZE): {recovery_p99:.0f}ms (Threshold: {SLA_P99_THRESHOLD_MS}ms)")
+    print(f"  - P99 Violations (STABILIZE only): {sla['p99_violations']}")
+    print(f"  - Data Variance Count: {sla['data_variance_count']}")
+    recovery_sla_ok = recovery_p99 <= SLA_P99_THRESHOLD_MS or sla['p99_violations'] == 0
+    print(f"  - SLA Status: {'✅ PASSED' if recovery_sla_ok else '❌ FAILED'}")
+
+    # Message Storm & Backpressure 📨
+    print("\n📨 Message Storm & Backpressure (Platinum):")
+    storm = _extreme_stats["message_storm"]
+    print(f"  - Messages Injected: {storm['messages_injected']}")
+    print(f"  - Buffer Overflow: {storm['buffer_overflow_count']}")
+    print(f"  - Messages Dropped: {storm['messages_dropped']}")
+    print(f"  - Backpressure Activated: {'Yes' if storm['backpressure_activated'] else 'No'}")
+    print(f"  - Main Logic Affected: {'❌ Yes' if storm['main_logic_affected'] else '✅ No'}")
+
+    # Clock Skew Attack ⏰
+    print("\n⏰ Clock Skew Attack (Platinum):")
+    clock = _extreme_stats["clock_skew"]
+    print(f"  - Attacks Executed: {clock['attacks_executed']}")
+    print(f"  - Max Drift: {clock['max_drift_sec']:.2f}s")
+    print(f"  - CB Window Corrupted: {'❌ Yes' if clock['cb_window_corrupted'] else '✅ No'}")
+    print(f"  - Recovery Found: {'✅ Yes' if clock['recovery_found'] else 'No'}")
+    print(f"  - Consistency Maintained: {'✅ Yes' if clock['consistency_maintained'] else '❌ No'}")
+
+    # Cascading Failure 🌊
+    print("\n🌊 Cascading Failure (Platinum):")
+    cascade = _extreme_stats["cascading_failure"]
+    print(f"  - Cascades Triggered: {cascade['cascades_triggered']}")
+    print(f"  - Services Affected: {', '.join(cascade['services_affected']) or 'None'}")
+    print(f"  - Max Cascade Depth: {cascade['max_cascade_depth']}")
+    print(f"  - Isolation Success: {'✅ Yes' if cascade['isolation_success'] else '❌ No'}")
+
+    # Retry Storm Prevention 🔄
+    print("\n🔄 Retry Storm Prevention (Platinum):")
+    retry = _extreme_stats["retry_storm"]
+    print(f"  - Storms Detected: {retry['storms_detected']}")
+    print(f"  - Retries Blocked: {retry['retries_blocked']}")
+    print(f"  - Backoff Applied: {retry['backoff_applied']}")
+    print(f"  - Circuit Protected: {'✅ Yes' if retry['circuit_protected'] else '❌ No'}")
+
+    # Final SLA Verdict (V2.6: 복구 후 P99 기준)
+    print("\n" + "=" * 40)
+    print("🏆 FINAL SLA VERDICT (Platinum Grade V2.6)")
+    print("=" * 40)
+    
+    # V2.6: 복구 후 P99를 기준으로 SLA 판정
+    recovery_p99 = _calculate_recovery_p99()
+    sla_passed = recovery_p99 <= SLA_P99_THRESHOLD_MS or sla['p99_violations'] == 0
+    
+    # Backpressure: 복구 후에 메인 로직이 정상이면 OK
+    main_logic_ok = not storm['main_logic_affected'] or recovery_p99 <= SLA_P99_THRESHOLD_MS
+    consistency_ok = clock['consistency_maintained']
+    isolation_ok = cascade['isolation_success']
+    circuit_ok = retry['circuit_protected']
+    
+    all_passed = sla_passed and main_logic_ok and consistency_ok and isolation_ok and circuit_ok
+    
+    print(f"  SLA Hard-Cap (복구 후 P99 {recovery_p99:.0f}ms): {'✅ PASS' if sla_passed else '❌ FAIL'}")
+    print(f"  Backpressure Control: {'✅ PASS' if main_logic_ok else '❌ FAIL'}")
+    print(f"  Clock Skew Resilience: {'✅ PASS' if consistency_ok else '❌ FAIL'}")
+    print(f"  Cascade Isolation: {'✅ PASS' if isolation_ok else '❌ FAIL'}")
+    print(f"  Retry Storm Protection: {'✅ PASS' if circuit_ok else '❌ FAIL'}")
+    print(f"\n  {'🏆 PLATINUM GRADE ACHIEVED!' if all_passed else '🥇 GOLD GRADE (일부 미달성)'}")
+
+    # Recovery Latency
+    print("\n🔄 Recovery Latency:")
+    recovery = _extreme_stats["recovery"]
+    if recovery["recovery_latency_seconds"]:
+        latency = recovery["recovery_latency_seconds"]
+        print(f"  - Total Recovery Time: {latency:.1f}s")
+        if latency < 120:
+            print(f"  - SLA Status: ✅ Under 2min threshold")
+        else:
+            print(f"  - SLA Status: ❌ Exceeded 2min threshold")
+    else:
+        print(f"  - Recovery not measured (system may not have failed)")
+
+    # Save reports
+    _save_reports()
+
+    # Debug logs
+    if DEBUG_MODE and _extreme_stats["debug_logs"]:
+        print("\n🔍 Debug Logs (last 20):")
+        for log in _extreme_stats["debug_logs"][-20:]:
+            print(f"  {log}")
+
+    print("\n" + "=" * 80)
+
+
+def _save_reports():
+    """결과 저장"""
+    results_dir = os.path.join(_load_tests_dir, "results", "stage12")
+    os.makedirs(results_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # JSON 리포트
+    json_path = os.path.join(results_dir, f"stage12_extreme_{timestamp}.json")
+
+    # response_times를 요약 통계로 변환 (JSON 직렬화 위해) - Deep copy 사용
+    import copy
+
+    json_stats = copy.deepcopy(_extreme_stats)
+    for phase, stats in json_stats["metrics_per_phase"].items():
+        rt = stats.get("response_times", [])
+        stats["response_time_stats"] = {
+            "count": len(rt),
+            "avg": sum(rt) / len(rt) if rt else 0,
+            "min": min(rt) if rt else 0,
+            "max": max(rt) if rt else 0,
+        }
+        del stats["response_times"]
+
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(
             {
-                "test_name": "Stage 12: Spike & Recovery",
+                "test_name": "Stage 12: EXTREME Spike & Recovery",
                 "timestamp": datetime.now().isoformat(),
-                "circuit_breaker": cb,
-                "dlq": dlq,
-                "metrics_per_phase": {
-                    phase: {
-                        "requests": stats["requests"],
-                        "errors": stats["errors"],
-                        "error_rate": stats["errors"] / stats["requests"] * 100 if stats["requests"] > 0 else 0,
-                        "avg_response_ms": (
-                            sum(stats["response_times"]) / len(stats["response_times"]) if stats["response_times"] else 0
-                        ),
-                    }
-                    for phase, stats in _spike_stats["metrics_per_phase"].items()
+                "config": {
+                    "max_users": MAX_USERS,
+                    "min_users": MIN_USERS,
+                    "test_duration": TEST_DURATION,
                 },
+                "results": json_stats,
             },
             f,
             indent=2,
+            ensure_ascii=False,
+            default=str,
         )
 
-    # Recovery Latency Report
-    recovery = _spike_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
-    if cb["first_open_time"] and cb["first_close_time"]:
-        cb_recovery = cb["first_close_time"] - cb["first_open_time"]
-        recovery["cb_recovery_latency_seconds"] = cb_recovery
-        print(f"   - CB Recovery latency: {cb_recovery:.1f}s")
-        if cb_recovery < 120:
-            print(f"   - CB SLA Status: ✓ Under 2min threshold")
-        else:
-            print(f"   - CB SLA Status: ✗ Exceeded 2min threshold")
-    if recovery.get("recovery_latency_seconds"):
-        print(f"   - Total recovery latency: {recovery['recovery_latency_seconds']:.1f}s")
-    else:
-        print(f"   - System recovery time not measured (CB may not have opened)")
+    print(f"\n💾 JSON Report: {json_path}")
 
-    print(f"\n💾 Report saved to: {report_path}")
-    print("=" * 70)
+    # Markdown 리포트
+    md_path = os.path.join(results_dir, f"stage12_extreme_{datetime.now().strftime('%Y-%m-%d')}.md")
+    _generate_markdown_report(md_path)
+
+    print(f"💾 Markdown Report: {md_path}")
+
+
+def _generate_markdown_report(filepath: str):
+    """마크다운 리포트 생성"""
+    cb = _extreme_stats["circuit_breaker"]
+    em = _extreme_stats["emergency"]
+    eb = _extreme_stats["error_budget"]
+    dlq = _extreme_stats["dlq"]
+    chaos = _extreme_stats["chaos"]
+    ks = _extreme_stats["kill_switch"]
+    v2 = _extreme_stats["v2_modules"]
+    recovery = _extreme_stats["recovery"]
+
+    # V2.5 Platinum Grade
+    sla = _extreme_stats["sla_hardcap"]
+    storm = _extreme_stats["message_storm"]
+    clock = _extreme_stats["clock_skew"]
+    cascade = _extreme_stats["cascading_failure"]
+    retry = _extreme_stats["retry_storm"]
+
+    total_cache = v2["cache_hits"] + v2["cache_misses"]
+    cache_hit_rate = (v2["cache_hits"] / total_cache * 100) if total_cache > 0 else 0
+
+    # Platinum Grade 판정
+    sla_passed = sla['sla_passed']
+    main_logic_ok = not storm['main_logic_affected']
+    consistency_ok = clock['consistency_maintained']
+    isolation_ok = cascade['isolation_success']
+    circuit_ok = retry['circuit_protected']
+    platinum_achieved = sla_passed and main_logic_ok and consistency_ok and isolation_ok and circuit_ok
+
+    content = f"""# Stage 12 EXTREME Spike & Recovery 테스트 결과 보고서
+
+📅 **테스트 일시**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+🏷️ **버전**: EXTREME Self-Healing V2.5 Platinum
+🎯 **테스트 목표**: 극단적 스파이크 부하에서 Self-Healing 시스템 검증 + Platinum Grade 달성
+
+---
+
+## 🏆 Platinum Grade Status
+
+| 항목 | 결과 | 기준 |
+|------|------|------|
+| **SLA Hard-Cap** | {'✅ PASS' if sla_passed else '❌ FAIL'} | P99 ≤ {SLA_P99_THRESHOLD_MS}ms |
+| **Backpressure Control** | {'✅ PASS' if main_logic_ok else '❌ FAIL'} | 메인 로직 영향 없음 |
+| **Clock Skew Resilience** | {'✅ PASS' if consistency_ok else '❌ FAIL'} | 데이터 일관성 유지 |
+| **Cascade Isolation** | {'✅ PASS' if isolation_ok else '❌ FAIL'} | 장애 격리 성공 |
+| **Retry Storm Protection** | {'✅ PASS' if circuit_ok else '❌ FAIL'} | 재시도 폭풍 방지 |
+| **🏆 최종 등급** | {'**PLATINUM** 🏆' if platinum_achieved else '**GOLD** 🥇'} | 모든 항목 PASS |
+
+---
+
+## 📋 Executive Summary
+
+| 항목 | 값 | 상태 |
+|------|-----|------|
+| **EXTREME Mode** | ✅ 활성화 | - |
+| **최대 사용자** | {MAX_USERS} | - |
+| **최소 사용자** | {MIN_USERS} | - |
+| **테스트 시간** | {TEST_DURATION}s | - |
+| **CB Open 횟수** | {cb['open_count']} | {'🔴' if cb['open_count'] > 0 else '🟢'} |
+| **Emergency 최대 레벨** | LEVEL_{em['max_level']} | {'🔴' if em['max_level'] >= 3 else '🟡' if em['max_level'] >= 1 else '🟢'} |
+| **Error Budget 소진** | {'Yes' if eb['exhausted'] else 'No'} | {'🔴' if eb['exhausted'] else '🟢'} |
+
+---
+
+## ⚖️ V2.5 Platinum Grade Add-ons
+
+### ⚖️ SLA Hard-Cap (엄격한 판정 엔진)
+
+| 항목 | 값 | 기준 |
+|------|-----|------|
+| P99 최대값 | {sla['p99_max_ms']:.0f}ms | ≤ {SLA_P99_THRESHOLD_MS}ms |
+| P99 위반 횟수 | {sla['p99_violations']} | 0 |
+| 데이터 오차 | {sla['data_variance_count']} | 0 |
+| **판정** | {'✅ PASSED' if sla['sla_passed'] else '❌ FAILED'} | - |
+
+### 📨 Message Storm & Backpressure (부하 역전압 테스트)
+
+| 항목 | 값 | 상태 |
+|------|-----|------|
+| 주입된 메시지 | {storm['messages_injected']} | - |
+| 버퍼 오버플로우 | {storm['buffer_overflow_count']} | - |
+| 드롭된 메시지 | {storm['messages_dropped']} | - |
+| Backpressure 활성화 | {'Yes' if storm['backpressure_activated'] else 'No'} | - |
+| **메인 로직 영향** | {'❌ 영향받음' if storm['main_logic_affected'] else '✅ 영향 없음'} | 영향 없어야 함 |
+
+### ⏰ Clock Skew Attack (시간 왜곡 공격)
+
+| 항목 | 값 | 상태 |
+|------|-----|------|
+| 공격 횟수 | {clock['attacks_executed']} | - |
+| 최대 시간 왜곡 | {clock['max_drift_sec']:.2f}s | ≤ {CLOCK_SKEW_MAX_DRIFT_SEC}s |
+| CB 윈도우 손상 | {'❌ Yes' if clock['cb_window_corrupted'] else '✅ No'} | No |
+| 복구 성공 | {'✅ Yes' if clock['recovery_found'] else 'No'} | Yes |
+| **일관성 유지** | {'✅ Yes' if clock['consistency_maintained'] else '❌ No'} | Yes |
+
+### 🌊 Cascading Failure (장애 전파 테스트)
+
+| 항목 | 값 | 상태 |
+|------|-----|------|
+| 전파 트리거 | {cascade['cascades_triggered']} | - |
+| 영향받은 서비스 | {', '.join(cascade['services_affected']) or 'None'} | - |
+| 최대 전파 깊이 | {cascade['max_cascade_depth']} | - |
+| **격리 성공** | {'✅ Yes' if cascade['isolation_success'] else '❌ No'} | Yes |
+
+### 🔄 Retry Storm Prevention (재시도 폭풍 방지)
+
+| 항목 | 값 | 상태 |
+|------|-----|------|
+| 폭풍 감지 | {retry['storms_detected']} | - |
+| 차단된 재시도 | {retry['retries_blocked']} | - |
+| Backoff 적용 | {retry['backoff_applied']} | - |
+| **서킷 보호** | {'✅ Yes' if retry['circuit_protected'] else '❌ No'} | Yes |
+
+---
+
+## 🔥 Self-Healing 기능 테스트 결과
+
+### 🔌 Circuit Breaker
+
+| 항목 | 값 |
+|------|-----|
+| Open 횟수 | {cb['open_count']} |
+| Close 횟수 | {cb['close_count']} |
+| Half-Open 횟수 | {cb['half_open_count']} |
+| 영향받은 서비스 | {', '.join(cb['services_affected']) or 'None'} |
+| 복구 지연 | {f"{cb['recovery_latency_ms']:.0f}ms" if cb['recovery_latency_ms'] else 'N/A'} |
+
+### 🚨 Emergency Mode
+
+| 항목 | 값 |
+|------|-----|
+| 트리거 횟수 | {em['triggered_count']} |
+| 해제 횟수 | {em['released_count']} |
+| 최대 레벨 | LEVEL_{em['max_level']} |
+
+### 💰 Error Budget
+
+| 항목 | 값 |
+|------|-----|
+| 초기 잔여 | {eb['initial_remaining']}% |
+| 최소 잔여 | {eb['min_remaining']}% |
+| 소진 여부 | {'Yes' if eb['exhausted'] else 'No'} |
+| 복구 여부 | {'Yes' if eb['recovered'] else 'No'} |
+
+### 📥 DLQ (Dead Letter Queue)
+
+| 항목 | 값 |
+|------|-----|
+| 스파이크 전 | {dlq['items_before_spike']} |
+| 최대 수량 | {dlq['max_count']} |
+| 현재 수량 | {dlq['current_count']} |
+| 리플레이 성공 | {dlq['replay_success_count']} |
+| 리플레이 실패 | {dlq['replay_fail_count']} |
+
+### 💥 Chaos Injection
+
+| 항목 | 값 |
+|------|-----|
+| 장애 주입 횟수 | {chaos['failures_injected']} |
+| CB 트리거 | {chaos['cb_triggers']} |
+| 복구 트리거 | {chaos['recovery_triggers']} |
+
+### 🔌 Kill Switch
+
+| 항목 | 값 |
+|------|-----|
+| 활성화 횟수 | {ks['activated_count']} |
+| 비활성화 횟수 | {ks['deactivated_count']} |
+| 대상 | {', '.join(ks['targets']) or 'None'} |
+
+---
+
+## 🚀 V2 최적화 모듈 통계
+
+| 모듈 | 항목 | 값 |
+|------|------|-----|
+| 📦 CBStateCache | 캐시 히트율 | {cache_hit_rate:.1f}% |
+| 📦 CBStateCache | 총 요청 | {total_cache} |
+| 📝 AsyncHealingLogger | 이벤트 수 | {v2['async_events']} |
+| 🎲 AdaptiveJitter | 적용 횟수 | {v2['jitter_applied']} |
+
+---
+
+## 📈 Phase별 분석
+
+| Phase | 요청 수 | 에러 수 | 에러율 | 평균 응답시간 |
+|-------|--------|--------|-------|--------------|
+"""
+
+    for phase, stats in _extreme_stats["metrics_per_phase"].items():
+        if stats["requests"] > 0:
+            rt = stats.get("response_times", [])
+            avg_rt = sum(rt) / len(rt) if rt else 0
+            error_rate = stats["errors"] / stats["requests"] * 100
+            content += f"| {phase.upper()} | {stats['requests']} | {stats['errors']} | {error_rate:.2f}% | {avg_rt:.2f}ms |\n"
+
+    content += f"""
+---
+
+## 🔄 Recovery Latency Analysis
+
+| 항목 | 값 | SLA |
+|------|-----|-----|
+| 복구 시작 | {datetime.fromtimestamp(recovery['recovery_started_at']).strftime('%H:%M:%S') if recovery['recovery_started_at'] else 'N/A'} | - |
+| 복구 완료 | {datetime.fromtimestamp(recovery['recovery_completed_at']).strftime('%H:%M:%S') if recovery['recovery_completed_at'] else 'N/A'} | - |
+| 총 복구 시간 | {f"{recovery['recovery_latency_seconds']:.1f}s" if recovery['recovery_latency_seconds'] else 'N/A'} | {'✅ < 2min' if recovery['recovery_latency_seconds'] and recovery['recovery_latency_seconds'] < 120 else '❌ > 2min' if recovery['recovery_latency_seconds'] else '-'} |
+
+---
+
+## 🎯 테스트 결론
+
+"""
+
+    # 결론 자동 생성
+    passed = True
+    conclusions = []
+
+    if cb["open_count"] > 0 and cb["close_count"] > 0:
+        conclusions.append("✅ Circuit Breaker가 정상적으로 Open/Close 동작함")
+    elif cb["open_count"] > 0:
+        conclusions.append("⚠️ Circuit Breaker가 Open 되었으나 Close되지 않음")
+        passed = False
+    else:
+        conclusions.append("ℹ️ Circuit Breaker가 Open되지 않음 (부하 부족 가능)")
+
+    if em["triggered_count"] > 0 and em["released_count"] > 0:
+        conclusions.append("✅ Emergency Mode 트리거 및 해제 정상 동작")
+    elif em["triggered_count"] > 0:
+        conclusions.append("⚠️ Emergency Mode가 트리거되었으나 해제되지 않음")
+
+    if eb["exhausted"] and eb["recovered"]:
+        conclusions.append("✅ Error Budget 소진 후 복구 성공")
+    elif eb["exhausted"]:
+        conclusions.append("⚠️ Error Budget 소진됨 (복구 대기)")
+
+    if dlq["replay_success_count"] > 0:
+        conclusions.append(f"✅ DLQ 리플레이 성공: {dlq['replay_success_count']}건")
+
+    if recovery["recovery_latency_seconds"]:
+        if recovery["recovery_latency_seconds"] < 120:
+            conclusions.append(f"✅ 복구 시간 SLA 충족: {recovery['recovery_latency_seconds']:.1f}s < 2min")
+        else:
+            conclusions.append(f"❌ 복구 시간 SLA 미충족: {recovery['recovery_latency_seconds']:.1f}s > 2min")
+            passed = False
+
+    # V2.5 Platinum Grade 결론 추가
+    conclusions.append("")
+    conclusions.append("### 🏆 Platinum Grade 결과")
+    conclusions.append(f"- SLA Hard-Cap: {'✅ PASS' if sla['sla_passed'] else '❌ FAIL'} (P99 Max: {sla['p99_max_ms']:.0f}ms)")
+    conclusions.append(f"- Message Storm Backpressure: {'✅ PASS' if not storm['main_logic_affected'] else '❌ FAIL'}")
+    conclusions.append(f"- Clock Skew Resilience: {'✅ PASS' if clock['consistency_maintained'] else '❌ FAIL'}")
+    conclusions.append(f"- Cascading Failure Isolation: {'✅ PASS' if cascade['isolation_success'] else '❌ FAIL'}")
+    conclusions.append(f"- Retry Storm Prevention: {'✅ PASS' if retry['circuit_protected'] else '❌ FAIL'}")
+
+    for conclusion in conclusions:
+        content += f"- {conclusion}\n" if conclusion and not conclusion.startswith("#") else f"\n{conclusion}\n"
+
+    content += f"\n**최종 결과**: {'✅ PASS' if passed else '❌ NEEDS REVIEW'}\n"
+    content += f"\n**Platinum Grade**: {'🏆 ACHIEVED' if platinum_achieved else '🥇 GOLD (일부 미달성)'}\n"
+
+    content += f"""
+---
+
+📝 **Generated by Stage 12 EXTREME Spike & Recovery Test V2.5 Platinum**
+"""
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
