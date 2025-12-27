@@ -1,0 +1,64 @@
+{
+  "test_name": "Stage 7 EXTREME: Race + Chaos Storm",
+  "timestamp": "2025-12-27T13:53:19.367453",
+  "race_condition": {
+    "total_attempts": 42048,
+    "unique_orders": 626,
+    "payments_success": 0,
+    "payments_failed": 41995,
+    "double_success": 0,
+    "passed": true
+  },
+  "lock_poisoning": {
+    "attempts": 6881,
+    "ghost_detected": 3395,
+    "ghost_healed": 3395,
+    "remaining": 0,
+    "passed": true
+  },
+  "cb_domino": {
+    "injections": 2493,
+    "domino_triggered": 0,
+    "recoveries": 194
+  },
+  "self_healing": {
+    "events": 5886,
+    "blast_radius_tests": 617,
+    "snapshots": 2103
+  },
+  "reconciliation": {
+    "passed": true,
+    "checks": [
+      "✅ No double payments",
+      "✅ No ghost locks remaining"
+    ],
+    "errors": [
+      "⚠️ 30 CBs still open: ['auto_open_test_6f434ea2', 'auto_open_test_cb5caf4b', 'cancel_storm_test_02823719', 'cancel_storm_test_04a79f9d', 'cancel_storm_test_065f93d0']"
+    ],
+    "pool_stats": {
+      "total_orders": 200,
+      "pending_orders": 200,
+      "completed_orders": 0,
+      "locked_orders": 0
+    },
+    "summary": {
+      "total_race_attempts": 42048,
+      "payments_success": 0,
+      "payments_failed": 41995,
+      "double_success": 0,
+      "lock_poison_attempts": 6881,
+      "ghost_locks_detected": 3395,
+      "ghost_locks_healed": 3395,
+      "cb_injections": 2493,
+      "cb_domino_triggered": 0,
+      "cb_recoveries": 194,
+      "healing_events": 5886,
+      "blast_radius_tests": 617
+    }
+  },
+  "performance": {
+    "total_requests": 47337,
+    "error_rate": 0.03
+  },
+  "errors": []
+}
