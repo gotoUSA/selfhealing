@@ -73,15 +73,23 @@ from locust import HttpUser, task, between, tag, events
 try:
     from load_tests.utils.selfhealing import SelfHealingClient
     from load_tests.utils.selfhealing.config import configure, SelfHealingConfig
+    # V2 최적화 모듈
+    from load_tests.utils.selfhealing.state_cache import CBStateCache
+    from load_tests.utils.selfhealing.async_logger import AsyncHealingLogger, EventSeverity
+    from load_tests.utils.selfhealing.defaults import SafeDefaults
+    from load_tests.utils.selfhealing.adaptive_jitter import AdaptiveJitter, SystemState
     SELFHEALING_AVAILABLE = True
+    V2_OPTIMIZATIONS_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️ SelfHealing utilities not available: {e}")
     SELFHEALING_AVAILABLE = False
+    V2_OPTIMIZATIONS_AVAILABLE = False
 
 
 STAGE_NAME = "[Stage10-EXTREME]"
 DEBUG_MODE = os.environ.get("STAGE10_DEBUG", "false").lower() == "true"
 ZERO_VARIANCE_ENABLED = os.environ.get("STAGE10_ZERO_VARIANCE", "false").lower() == "true"
+V2_OPTIMIZATIONS_ENABLED = os.environ.get("STAGE10_V2_OPTIMIZATIONS", "true").lower() == "true"
 
 
 def debug_log(message: str):
@@ -259,6 +267,15 @@ CURRENT_SLA_TIER = SLATier.from_string(_sla_tier_str)
 # Global validators
 _sla_validator = SLAValidator(CURRENT_SLA_TIER)
 _zero_variance_validator = None  # 테스트 시작 시 초기화
+
+# V2 최적화 통계 (Platinum SLA 달성용)
+_v2_optimization_stats = {
+    "cache_stats": {},
+    "async_logger_stats": {},
+    "jitter_stats": {},
+    "degraded_mode_triggered": 0,
+    "total_time_saved_ms": 0,
+}
 
 
 # =============================================================================
@@ -523,6 +540,7 @@ class ExtremeSelfHealingUser(HttpUser):
         연쇄 장애 시나리오
         
         여러 서비스에 동시 장애를 주입하여 연쇄 장애 상황을 시뮬레이션합니다.
+        V2: CBStateCache, AsyncHealingLogger, AdaptiveJitter 활용
         """
         scenario = "cascading_failure"
         debug_log(f"Starting {scenario}")
@@ -554,6 +572,15 @@ class ExtremeSelfHealingUser(HttpUser):
                     if response.status_code == 200:
                         injection_results.append({"service": service, "status": "blocked"})
                         _extreme_stats.record_component("circuit_breaker", "triggered")
+                        
+                        # V2: 비동기 이벤트 로깅 (논블로킹)
+                        if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                            AsyncHealingLogger.log_cb_event(
+                                service=service,
+                                state="BLOCKED",
+                                reason="Cascading failure test"
+                            )
+                        
                         response.success()
                     else:
                         response.failure(f"Block failed: {response.status_code}")
@@ -561,8 +588,18 @@ class ExtremeSelfHealingUser(HttpUser):
             _extreme_stats.record_extreme_event("cascading_failures")
             _extreme_stats.record_extreme_event("simultaneous_failures")
             
-            # 시스템 상태 확인
-            time.sleep(1)
+            # V2: AdaptiveJitter 적용 (Thundering Herd 방지)
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                AdaptiveJitter.apply_jitter_sleep()
+            else:
+                time.sleep(1)
+            
+            # V2: 캐시된 상태 확인 시도
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                for service in failed_services:
+                    cached_state = CBStateCache.get_state(service)
+                    if cached_state:
+                        debug_log(f"Cached state for {service}: {cached_state.get('state', 'unknown')}")
             
             with self.client.get(
                 "/api/self-healing/status/",
@@ -583,6 +620,12 @@ class ExtremeSelfHealingUser(HttpUser):
             
             # 복구 시도
             recovery_start = time.time()
+            
+            # V2: 복구 전 AdaptiveJitter 적용 (Thundering Herd 방지)
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                jitter_ms = AdaptiveJitter.calculate_ms()
+                debug_log(f"Applying recovery jitter: {jitter_ms}ms")
+            
             for service in failed_services:
                 with self.client.post(
                     f"/api/self-healing/reset/{service}/",
@@ -593,6 +636,16 @@ class ExtremeSelfHealingUser(HttpUser):
                 ) as response:
                     if response.status_code == 200:
                         _extreme_stats.record_component("circuit_breaker", "recovered")
+                        
+                        # V2: 캐시 무효화 (복구 후 새로운 상태 반영)
+                        if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                            CBStateCache.invalidate(service)
+                            AsyncHealingLogger.log_recovery_event(
+                                service=service,
+                                recovery_time_ms=(time.time() - recovery_start) * 1000,
+                                success=True
+                            )
+                        
                         response.success()
                     else:
                         response.failure(f"Reset failed: {response.status_code}")
@@ -636,6 +689,15 @@ class ExtremeSelfHealingUser(HttpUser):
                 ) as response:
                     if response.status_code in [200, 201]:
                         _extreme_stats.record_component("circuit_breaker", "triggered")
+                        
+                        # V2: 비동기 이벤트 로깅
+                        if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                            AsyncHealingLogger.log_cb_event(
+                                service=service,
+                                state="TRIGGERED",
+                                reason="Brain storm CB injection"
+                            )
+                        
                         response.success()
                     else:
                         # XTest endpoint가 없을 수 있음 - 대체 방법 시도
@@ -659,6 +721,15 @@ class ExtremeSelfHealingUser(HttpUser):
                 if response.status_code in [200, 201]:
                     _extreme_stats.record_component("emergency_mode", "triggered")
                     debug_log(f"Emergency {emergency_level} triggered")
+                    
+                    # V2: 비동기 이벤트 로깅
+                    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                        AsyncHealingLogger.log_emergency_event(
+                            level=emergency_level,
+                            action="trigger",
+                            reason="Brain storm test"
+                        )
+                    
                     response.success()
                 else:
                     debug_log(f"Emergency trigger failed: {response.status_code} - {response.text}")
@@ -702,6 +773,10 @@ class ExtremeSelfHealingUser(HttpUser):
             # 5. 복구
             recovery_start = time.time()
             
+            # V2: AdaptiveJitter 적용 (복구 전 지터)
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                AdaptiveJitter.apply_jitter_sleep()
+            
             # Emergency 해제
             with self.client.post(
                 "/api/self-healing/emergency/release/",
@@ -712,6 +787,15 @@ class ExtremeSelfHealingUser(HttpUser):
             ) as response:
                 if response.status_code in [200, 201]:
                     _extreme_stats.record_component("emergency_mode", "released")
+                    
+                    # V2: 비동기 이벤트 로깅
+                    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                        AsyncHealingLogger.log_emergency_event(
+                            level="NORMAL",
+                            action="release",
+                            reason="Brain storm recovery"
+                        )
+                    
                     response.success()
                 else:
                     response.failure(f"Emergency release failed: {response.status_code}")
@@ -726,6 +810,16 @@ class ExtremeSelfHealingUser(HttpUser):
             ) as response:
                 if response.status_code == 200:
                     _extreme_stats.record_component("circuit_breaker", "recovered")
+                    
+                    # V2: 캐시 무효화 및 복구 이벤트 로깅
+                    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                        CBStateCache.invalidate(service)
+                        AsyncHealingLogger.log_recovery_event(
+                            service=service,
+                            recovery_time_ms=(time.time() - recovery_start) * 1000,
+                            success=True
+                        )
+                    
                     response.success()
                 else:
                     response.failure(f"CB reset failed: {response.status_code}")
@@ -784,7 +878,24 @@ class ExtremeSelfHealingUser(HttpUser):
             _extreme_stats.record_component("circuit_breaker", "triggered")
             debug_log(f"Death spiral: {failures}/{rapid_fire_count} failures injected")
             
-            # CB 상태 확인
+            # V2: 비동기 이벤트 로깅
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                AsyncHealingLogger.log_cb_event(
+                    service=service,
+                    state="STRESSED",
+                    reason=f"Death spiral - {failures} failures injected"
+                )
+            
+            # V2: 상태 확인 전 AdaptiveJitter 적용
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                AdaptiveJitter.apply_jitter_sleep()
+            
+            # CB 상태 확인 (V2: 캐시 사용)
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                cached_state = CBStateCache.get_state(service)
+                if cached_state:
+                    debug_log(f"Cached CB state: {cached_state.get('state', 'unknown')}")
+            
             with self.client.get(
                 f"/api/self-healing/status/{service}/",
                 headers=self._get_headers(),
@@ -804,6 +915,10 @@ class ExtremeSelfHealingUser(HttpUser):
             # 복구 시도
             recovery_start = time.time()
             
+            # V2: 복구 전 AdaptiveJitter
+            if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                AdaptiveJitter.apply_jitter_sleep()
+            
             with self.client.post(
                 f"/api/self-healing/reset/{service}/",
                 json={"reason": "Death spiral recovery"},
@@ -813,6 +928,16 @@ class ExtremeSelfHealingUser(HttpUser):
             ) as response:
                 if response.status_code in [200, 201]:
                     _extreme_stats.record_component("circuit_breaker", "recovered")
+                    
+                    # V2: 캐시 무효화 및 복구 이벤트 로깅
+                    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+                        CBStateCache.invalidate(service)
+                        AsyncHealingLogger.log_recovery_event(
+                            service=service,
+                            recovery_time_ms=(time.time() - recovery_start) * 1000,
+                            success=True
+                        )
+                    
                     response.success()
                 else:
                     response.failure(f"Reset failed: {response.status_code}")
@@ -1273,6 +1398,10 @@ def on_test_start(environment, **kwargs):
         )
         _zero_variance_validator.take_snapshot("start")
     
+    # V2 최적화 모듈 초기화
+    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+        _init_v2_optimizations(environment)
+    
     print("\n" + "=" * 80)
     print(f"🔥 {STAGE_NAME} EXTREME Self-Healing Integration Test V2 Started")
     print("=" * 80)
@@ -1283,6 +1412,16 @@ def on_test_start(environment, **kwargs):
     print(f"   - SLA Tier: {sla['emoji']} {sla['name']} (P99 ≤ {sla['p99']}ms, P99.9 ≤ {sla['p99_9']}ms)")
     print(f"   - Zero Variance: {'✅ 활성화' if ZERO_VARIANCE_ENABLED else '❌ 비활성화'}")
     print(f"   - CB Jitter: {EXTREME_CONFIG['cb_jitter_min_ms']}~{EXTREME_CONFIG['cb_jitter_max_ms']}ms")
+    
+    # V2 최적화 모듈 상태 표시
+    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+        print("\n🚀 V2 최적화 모듈 (Platinum SLA 달성용):")
+        print("   - CBStateCache: ✅ TTL 캐싱 + Polling Jitter 활성화")
+        print("   - AsyncHealingLogger: ✅ 비동기 이벤트 버퍼링 활성화")
+        print("   - SafeDefaults: ✅ Degraded Mode Fallback 준비됨")
+        print("   - AdaptiveJitter: ✅ 상황 기반 지능형 지터 활성화")
+    else:
+        print("\n⚠️ V2 최적화 모듈: 비활성화")
     
     print("\n📋 극한 테스트 시나리오:")
     print("   🔥 Cascading Failure - 다중 서비스 동시 장애")
@@ -1300,11 +1439,122 @@ def on_test_start(environment, **kwargs):
     print("=" * 80 + "\n")
 
 
+def _init_v2_optimizations(environment):
+    """V2 최적화 모듈 초기화"""
+    import requests
+    
+    host = environment.host
+    
+    # 1. CBStateCache 설정
+    def fetch_cb_state(service):
+        try:
+            resp = requests.get(f"{host}/api/self-healing/status/{service}/", timeout=5)
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception as e:
+            debug_log(f"CB state fetch failed for {service}: {e}")
+            return None
+    
+    # V2.2 최적화: 더 짧은 TTL, 더 빠른 응답
+    CBStateCache.configure(
+        fetch_callback=fetch_cb_state,
+        base_ttl=3.0,      # 5.0 → 3.0 (더 신선한 데이터)
+        jitter_range=0.3,  # 0.5 → 0.3 (더 좁은 지터)
+        min_ttl=2.0,       # 3.0 → 2.0 (위험 시 더 빠른 갱신)
+        max_ttl=6.0        # 10.0 → 6.0 (여유 시에도 적당히)
+    )
+    
+    # 서비스 캐시 워밍업 (V2.2: 모든 서비스 + 기본 상태 프리로드)
+    CBStateCache.warm_up(EXTREME_CONFIG["services"])
+    # 추가 프리워밍: 자주 사용되는 서비스 먼저 캐싱
+    for svc in ["payment", "order", "inventory"]:
+        CBStateCache.get_state(svc)
+    debug_log("CBStateCache V2.2 configured and pre-warmed")
+    
+    # 2. AsyncHealingLogger 설정 (V2.2: 더 빠른 플러시)
+    def send_events_batch(events):
+        try:
+            requests.post(
+                f"{host}/api/self-healing/events/batch/",
+                json={"events": events},
+                timeout=5  # 10 → 5 (더 빠른 타임아웃)
+            )
+        except Exception as e:
+            debug_log(f"Batch event send failed: {e}")
+    
+    AsyncHealingLogger.configure(
+        flush_callback=send_events_batch,
+        batch_size=5,        # 10 → 5 (더 빠른 플러시)
+        flush_interval=2.0,  # 5.0 → 2.0 (더 빠른 응답)
+        max_queue_size=5000  # 10000 → 5000 (메모리 최적화)
+    )
+    AsyncHealingLogger.start()
+    debug_log("AsyncHealingLogger V2.2 started")
+    
+    # 3. AdaptiveJitter 설정 (V2.2: Relaxed 진입 조건 완화)
+    AdaptiveJitter.configure_thresholds(
+        error_budget_danger=0.15,  # 0.2 → 0.15 (더 엄격한 위험 감지)
+        error_budget_safe=0.8,     # 0.5 → 0.8 (Relaxed 진입 더 쉽게)
+        load_high=0.9,             # 0.8 → 0.9 (부하 임계점 상향)
+        load_low=0.5               # 0.3 → 0.5 (Relaxed 진입 더 쉽게)
+    )
+    AdaptiveJitter.configure_jitter_ranges(
+        relaxed=(0, 0.02),     # (0, 0.05) → (0, 0.02) (더 빠른 복구)
+        normal=(0.02, 0.06),   # (0.03, 0.1) → (0.02, 0.06) (더 빠른 복구)
+        stressed=(0.05, 0.15)  # (0.1, 0.3) → (0.05, 0.15) (더 빠른 복구)
+    )
+    debug_log("AdaptiveJitter configured")
+    
+    # 4. SafeDefaults 초기 설정
+    SafeDefaults.set('RECOVERY_SLA_GOLD_P99', CURRENT_SLA_TIER.value["p99"])
+    SafeDefaults.set('JITTER_MIN_MS', EXTREME_CONFIG['cb_jitter_min_ms'])
+    SafeDefaults.set('JITTER_MAX_MS', EXTREME_CONFIG['cb_jitter_max_ms'])
+    debug_log("SafeDefaults configured")
+    
+    # 5. 에러 버짓 조회하여 AdaptiveJitter/CBStateCache에 연동 (최적화 #3)
+    _fetch_and_update_error_budget(host)
+
+
+def _fetch_and_update_error_budget(host: str):
+    """에러 버짓 조회 후 최적화 모듈에 상태 전달."""
+    import requests
+    
+    try:
+        resp = requests.get(f"{host}/api/self-healing/error-budget/status/", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            # 에러 버짓 남은 비율 계산
+            remaining = data.get("remaining_percent", 100) / 100.0
+            
+            # AdaptiveJitter에 에러 버짓 상태 전달
+            AdaptiveJitter.update_cache(error_budget=remaining)
+            
+            # CBStateCache에도 상태 전달 (동적 TTL용)
+            CBStateCache.update_system_state(error_budget_remaining=remaining)
+            
+            debug_log(f"Error budget synced: {remaining*100:.1f}% remaining")
+            
+            # 여유 상황이면 Relaxed 모드로 지터 최소화
+            if remaining > 0.5:
+                debug_log("System in RELAXED state - minimizing jitter")
+        else:
+            debug_log(f"Error budget fetch failed: {resp.status_code}")
+    except Exception as e:
+        debug_log(f"Error budget sync failed: {e}")
+
+
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
     """테스트 종료 시 실행"""
     _extreme_stats.end_test()
     stats = _extreme_stats.get_stats()
+    
+    # V2 최적화 모듈 정리 및 통계 수집
+    v2_opt_stats = None
+    if V2_OPTIMIZATIONS_AVAILABLE and V2_OPTIMIZATIONS_ENABLED:
+        v2_opt_stats = _collect_v2_optimization_stats()
+        _cleanup_v2_optimizations()
     
     # SLA 검증
     sla_result = _sla_validator.validate()
@@ -1318,6 +1568,34 @@ def on_test_stop(environment, **kwargs):
     print("\n" + "=" * 80)
     print(f"✅ {STAGE_NAME} EXTREME Test V2 Completed")
     print("=" * 80)
+    
+    # V2 최적화 모듈 통계
+    if v2_opt_stats:
+        print("\n🚀 V2 최적화 모듈 통계:")
+        print(f"   📦 CBStateCache:")
+        cache_stats = v2_opt_stats.get("cache_stats", {})
+        print(f"      - 캐시 히트율: {cache_stats.get('hit_rate', 0)*100:.1f}%")
+        print(f"      - 총 요청: {cache_stats.get('total_requests', 0)}")
+        print(f"      - 캐시 히트: {cache_stats.get('cache_hits', 0)}")
+        print(f"      - 캐시 미스: {cache_stats.get('cache_misses', 0)}")
+        
+        print(f"   📝 AsyncHealingLogger:")
+        logger_stats = v2_opt_stats.get("async_logger_stats", {})
+        print(f"      - 총 이벤트: {logger_stats.get('events_logged', 0)}")
+        print(f"      - 플러시된 이벤트: {logger_stats.get('events_flushed', 0)}")
+        print(f"      - 즉시 플러시: {logger_stats.get('immediate_flushes', 0)}")
+        print(f"      - 배치 플러시: {logger_stats.get('batch_flushes', 0)}")
+        
+        print(f"   🎲 AdaptiveJitter:")
+        jitter_stats = v2_opt_stats.get("jitter_stats", {})
+        print(f"      - Relaxed 모드: {jitter_stats.get('relaxed_count', 0)}회")
+        print(f"      - Normal 모드: {jitter_stats.get('normal_count', 0)}회")
+        print(f"      - Stressed 모드: {jitter_stats.get('stressed_count', 0)}회")
+        print(f"      - 평균 지터: {jitter_stats.get('avg_jitter_ms', 0):.1f}ms")
+        
+        print(f"   ⚠️ SafeDefaults:")
+        print(f"      - Degraded Mode 진입: {v2_opt_stats.get('degraded_mode_triggered', 0)}회")
+        print(f"      - 현재 상태: {'Degraded' if SafeDefaults.is_degraded() else 'Normal'}")
     
     # V2 NEW: SLA Tier 검증 결과
     print(f"\n💎 SLA Tier 검증 결과: {sla_result['tier_emoji']} {sla_result['tier']}")
@@ -1397,8 +1675,57 @@ def on_test_stop(environment, **kwargs):
         "sla_result": sla_result,
         "zero_variance_result": zv_result,
         "overall_passed": overall_passed,
+        "optimizations": v2_opt_stats,
     }
     _save_results(stats, environment)
+
+
+def _collect_v2_optimization_stats():
+    """V2 최적화 모듈 통계 수집"""
+    stats = {}
+    
+    try:
+        stats["cache_stats"] = CBStateCache.get_stats()
+    except Exception as e:
+        debug_log(f"Failed to get cache stats: {e}")
+        stats["cache_stats"] = {}
+    
+    try:
+        stats["async_logger_stats"] = AsyncHealingLogger.get_stats()
+    except Exception as e:
+        debug_log(f"Failed to get logger stats: {e}")
+        stats["async_logger_stats"] = {}
+    
+    try:
+        stats["jitter_stats"] = AdaptiveJitter.get_stats()
+    except Exception as e:
+        debug_log(f"Failed to get jitter stats: {e}")
+        stats["jitter_stats"] = {}
+    
+    try:
+        stats["degraded_mode_triggered"] = 1 if SafeDefaults.is_degraded() else 0
+        stats["degraded_duration_s"] = SafeDefaults.get_degraded_duration()
+    except Exception as e:
+        debug_log(f"Failed to get SafeDefaults stats: {e}")
+        stats["degraded_mode_triggered"] = 0
+    
+    return stats
+
+
+def _cleanup_v2_optimizations():
+    """V2 최적화 모듈 정리"""
+    try:
+        AsyncHealingLogger.flush_now()
+        AsyncHealingLogger.stop()
+        debug_log("AsyncHealingLogger stopped")
+    except Exception as e:
+        debug_log(f"Failed to stop AsyncHealingLogger: {e}")
+    
+    try:
+        CBStateCache.invalidate_all()
+        debug_log("CBStateCache cleared")
+    except Exception as e:
+        debug_log(f"Failed to clear CBStateCache: {e}")
 
 
 def _save_results(stats: dict, environment):

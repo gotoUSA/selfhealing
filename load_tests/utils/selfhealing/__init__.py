@@ -69,6 +69,12 @@ from .dashboard import DashboardClient
 from .xtest import XTestClient
 from .reconciliation import ReconciliationClient
 
+# V2 최적화 모듈 (Platinum SLA 달성용)
+from .state_cache import CBStateCache
+from .async_logger import AsyncHealingLogger, EventSeverity
+from .defaults import SafeDefaults
+from .adaptive_jitter import AdaptiveJitter, SystemState
+
 
 class SelfHealingClient:
     """
@@ -256,4 +262,11 @@ __all__ = [
     "DashboardClient",
     "XTestClient",
     "ReconciliationClient",
+    # V2 최적화 모듈 (Platinum SLA)
+    "CBStateCache",
+    "AsyncHealingLogger",
+    "EventSeverity",
+    "SafeDefaults",
+    "AdaptiveJitter",
+    "SystemState",
 ]
