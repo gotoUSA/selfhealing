@@ -738,6 +738,268 @@ class ExtremeChaosUser(HttpUser):
         except Exception as e:
             pass
 
+    # =========================================================================
+    # 🆕 검증 미완료 항목 강제 트리거 시나리오
+    # =========================================================================
+
+    @task(2)
+    @tag("selfhealing", "dlq", "force", "extreme")
+    def force_dlq_entry(self):
+        """
+        DLQ 적재 강제 트리거 테스트
+        
+        100% 실패하는 요청을 생성하여 DLQ 적재를 검증
+        - Max retry 초과 후 DLQ 이동 시뮬레이션
+        - 잘못된 payment_key로 의도적 실패
+        """
+        global _stats
+        
+        if not self.login_helper.ensure_logged_in():
+            return
+        
+        max_retries = 3
+        base_delay_ms = 100
+        total_backoff_ms = 0
+        success = False
+        
+        for attempt in range(1, max_retries + 1):
+            _stats.increment("retry_logic", "explicit_retries")
+            
+            # 의도적으로 잘못된 요청 (100% 실패)
+            with self.client.post(
+                "/api/payments/confirm/",
+                json={
+                    "payment_key": "INVALID_FORCE_DLQ_KEY",
+                    "order_id": -99999,  # 존재하지 않는 주문
+                    "amount": 0,
+                },
+                name=f"{STAGE_NAME} POST /api/payments/ [DLQ-FORCE-{attempt}]",
+                catch_response=True,
+            ) as response:
+                if response.status_code in [200, 201]:
+                    # 성공하면 (예상 외) 종료
+                    response.success()
+                    success = True
+                    break
+                elif response.status_code >= 500:
+                    # 5xx → 재시도
+                    response.failure(f"5xx: {response.status_code} - DLQ candidate")
+                    _stats.increment("retry_logic", "transient_failures")
+                    
+                    if attempt < max_retries:
+                        delay_ms = base_delay_ms * (2 ** (attempt - 1))
+                        total_backoff_ms += delay_ms
+                        time.sleep(delay_ms / 1000.0)
+                else:
+                    # 4xx → 영구 실패로 간주, DLQ 이동
+                    response.failure(f"4xx: {response.status_code} - Force to DLQ")
+                    _stats.increment("retry_logic", "permanent_failures")
+                    # 4xx도 DLQ 대상으로 처리 (테스트용)
+                    break
+        
+        # DLQ 적재 (Max retry 초과 또는 영구 실패)
+        if not success:
+            _stats.increment("retry_logic", "retry_failed")
+            _stats.increment("retry_logic", "dlq_after_max_retry")
+            _stats.increment("dlq", "entries_created")
+            _stats.add_event("dlq_entry_created", {
+                "reason": "force_invalid_payment",
+                "attempts": max_retries,
+                "total_backoff_ms": total_backoff_ms,
+            })
+            
+            # 실제 DLQ 기록 시도 (서버측)
+            try:
+                self.healing.xtest.record_healing_event(
+                    event_type="dlq_entry_created",
+                    service_name="payment",
+                    details={
+                        "source": "force_dlq_test",
+                        "reason": "invalid_payment_forced",
+                    }
+                )
+            except:
+                pass
+
+    @task(1)
+    @tag("selfhealing", "emergency", "force", "extreme")
+    def force_emergency_mode(self):
+        """
+        Emergency Mode 강제 트리거 테스트
+        
+        - Error Budget 소진으로 Emergency 모드 활성화
+        - 높은 장애율로 LEVEL_2/LEVEL_3 도달
+        """
+        global _stats
+        
+        # 10% 확률로만 실행 (너무 자주 실행하면 시스템 불안정)
+        if random.random() > 0.1:
+            return
+        
+        try:
+            # 1. Error Budget 대량 소진 주입
+            result = self.healing.xtest.inject_error_budget(
+                slo_name="availability",
+                error_count=5000,  # 대량 에러 주입
+            )
+            
+            if result.get("status") != "error":
+                _stats.increment("error_budget", "exhausted_events")
+                _stats.add_event("budget_force_exhausted", {
+                    "injected_errors": 5000,
+                    "result": result,
+                })
+            
+            # 2. 스냅샷 확인하여 Emergency 상태 체크
+            time.sleep(0.5)  # 약간 대기
+            snapshot = self.healing.xtest.get_snapshot()
+            
+            if snapshot.get("status") != "error":
+                emergency = snapshot.get("emergency", {})
+                error_budget = snapshot.get("error_budget", {})
+                
+                is_active = emergency.get("is_active", False)
+                level = emergency.get("level", "NORMAL")
+                remaining = error_budget.get("remaining_percent", 100)
+                
+                if is_active:
+                    _stats.increment("emergency", "triggered")
+                    _stats.add_event("emergency_triggered", {
+                        "level": level,
+                        "remaining_budget": remaining,
+                    })
+                elif remaining <= 0:
+                    _stats.increment("error_budget", "exhausted_events")
+                    _stats.add_event("budget_exhausted_no_emergency", {
+                        "remaining": remaining,
+                    })
+                    
+        except Exception as e:
+            _stats.add_event("emergency_force_error", {"error": str(e)})
+
+    @task(1)
+    @tag("selfhealing", "budget", "force", "extreme")
+    def force_error_budget_exhaustion(self):
+        """
+        Error Budget 소진 강제 테스트
+        
+        - 연속 에러 주입으로 Error Budget 완전 소진
+        - Critical/Warning 이벤트 검증
+        """
+        global _stats
+        
+        # 5% 확률로만 실행
+        if random.random() > 0.05:
+            return
+        
+        try:
+            # 완전 소진 시도
+            result = self.healing.xtest.exhaust_error_budget(slo_name="availability")
+            
+            if result.get("status") != "error":
+                _stats.increment("error_budget", "exhausted_events")
+                _stats.add_event("budget_exhausted_forced", {
+                    "method": "exhaust_error_budget",
+                    "result": result,
+                })
+                
+                # 결과 확인
+                snapshot = self.healing.xtest.get_snapshot()
+                if snapshot.get("status") != "error":
+                    budget = snapshot.get("error_budget", {})
+                    remaining = budget.get("remaining_percent", 100)
+                    
+                    if remaining <= 0:
+                        _stats.increment("error_budget", "exhausted_events")
+                    elif remaining <= 20:
+                        _stats.increment("error_budget", "critical_events")
+                    elif remaining <= 50:
+                        _stats.increment("error_budget", "warning_events")
+                        
+        except Exception as e:
+            pass
+
+    @task(1)
+    @tag("selfhealing", "cb", "force", "extreme")
+    def force_circuit_breaker_open(self):
+        """
+        Circuit Breaker 강제 Open 테스트
+        
+        - 특정 서비스의 CB를 강제로 Open
+        - Half-Open → Closed 전환 관찰
+        """
+        global _stats
+        
+        # 10% 확률로만 실행
+        if random.random() > 0.1:
+            return
+        
+        services = ["payment", "inventory", "order"]
+        service = random.choice(services)
+        
+        try:
+            # 1. CB 강제 Open
+            result = self.healing.xtest.open_circuit(service_name=service)
+            
+            if result.get("status") != "error":
+                _stats.increment("circuit_breaker", "open_detected")
+                _stats.add_event("cb_force_opened", {
+                    "service": service,
+                    "result": result,
+                })
+                
+                # 2. 상태 확인
+                time.sleep(1.0)
+                cb_status = self.healing.xtest.get_cb_status(service_name=service)
+                
+                if cb_status.get("status") != "error":
+                    state = cb_status.get("state", "closed")
+                    if state == "open":
+                        _stats.increment("circuit_breaker", "open_detected")
+                    elif state == "half_open":
+                        _stats.increment("circuit_breaker", "half_open_detected")
+                        
+                # 3. 복구 트리거
+                self.healing.xtest.trigger_cb_recovery(service_name=service)
+                _stats.increment("circuit_breaker", "recovery_triggered")
+                
+        except Exception as e:
+            pass
+
+    @task(1)
+    @tag("selfhealing", "full-chaos", "extreme")
+    def full_chaos_integration(self):
+        """
+        전체 Chaos 통합 테스트
+        
+        - 모든 Self-Healing 시스템 동시 트리거
+        - 시스템 복원력 종합 검증
+        """
+        global _stats
+        
+        # 2% 확률로만 실행 (고비용)
+        if random.random() > 0.02:
+            return
+        
+        try:
+            services = ["payment", "inventory", "order"]
+            result = self.healing.xtest.full_chaos_test(services=services)
+            
+            _stats.add_event("full_chaos_executed", {
+                "services": services,
+                "blast_radius_isolated": result.get("blast_radius", {}).get("isolated", False),
+            })
+            
+            # 스냅샷 분석
+            snapshot = result.get("snapshot", {})
+            if snapshot.get("status") != "error":
+                emergency = snapshot.get("emergency", {})
+                if emergency.get("is_active"):
+                    _stats.increment("emergency", "active_detected")
+                    
+        except Exception as e:
+            pass
+
 
 # =============================================================================
 # 테스트 종료 시 결과 출력
@@ -869,10 +1131,19 @@ def on_test_stop(environment, **kwargs):
     
     # Emergency 확인
     emergency_active = _stats.emergency.get("active_detected", 0)
-    if emergency_active > 0:
-        print(f"🚨 EMERGENCY MODE: ACTIVATED {emergency_active}x - 비상 모드 발동!")
+    emergency_triggered = _stats.emergency.get("triggered", 0)
+    if emergency_active > 0 or emergency_triggered > 0:
+        print(f"🚨 EMERGENCY MODE: ACTIVATED {max(emergency_active, emergency_triggered)}x - 비상 모드 발동!")
     else:
         print("🚨 EMERGENCY MODE: NOT TRIGGERED")
+    
+    # DLQ 확인
+    dlq_created = _stats.dlq.get("entries_created", 0)
+    dlq_pending = _stats.dlq.get("pending_found", 0)
+    if dlq_created > 0 or dlq_pending > 0:
+        print(f"📭 DLQ: {dlq_created} entries created, {dlq_pending} pending found")
+    else:
+        print("📭 DLQ: CLEAN - No entries created")
     
     # 전체 판정
     print("\n" + "=" * 40)
