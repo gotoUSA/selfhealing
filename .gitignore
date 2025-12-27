@@ -46,11 +46,15 @@ htmlcov/
 coverage.xml
 *.cover
 
-# Load test reports
+# Load test reports & results (JSON files are auto-generated, only .md summaries tracked)
 load_tests/reports/*.html
 load_tests/reports/*.json
 load_tests/reports/*.csv
 !load_tests/reports/.gitkeep
+
+# Test results JSON files (only summary .md files should be committed)
+load_tests/results/**/*.json
+!load_tests/results/**/*.md
 
 # Migrations (선택사항 - 팀 프로젝트면 포함)
 # */migrations/*.py
