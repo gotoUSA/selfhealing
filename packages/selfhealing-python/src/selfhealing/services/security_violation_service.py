@@ -296,6 +296,46 @@ class SecurityViolationService:
             )
             return SecurityViolationResult.failed(str(e))
 
+    def record_violation(
+        self,
+        violation_type: str,
+        details: dict[str, Any] | None = None,
+        request_info: dict[str, Any] | None = None,
+        user_id: Optional[int] = None,
+    ) -> SecurityViolationResult:
+        """
+        Simplified interface for recording a violation.
+        
+        This is a convenience method that wraps handle_violation for cases
+        like CorruptionShield where simpler parameter passing is needed.
+        
+        Args:
+            violation_type: Type of violation (e.g., "corruption_injection_attempt")
+            details: Violation details dict (becomes description + raw_request_data)
+            request_info: Optional request info with 'ip', 'user_agent'
+            user_id: Optional associated user ID
+            
+        Returns:
+            SecurityViolationResult with incident ID and action taken
+        """
+        # Build description from details
+        description = ""
+        if details:
+            layer = details.get("layer", "unknown")
+            message = details.get("message", "")
+            field = details.get("field", "")
+            description = f"[{layer}] {message}"
+            if field:
+                description += f" (field: {field})"
+        
+        return self.handle_violation(
+            violation_type=violation_type,
+            request_info=request_info,
+            user_id=user_id,
+            description=description,
+            raw_request_data=details,
+        )
+
     def _take_protective_action(
         self,
         violation_type: str,

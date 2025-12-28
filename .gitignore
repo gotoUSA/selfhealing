@@ -67,3 +67,5 @@ db.sqlite3.backup
 
 # Runtime state files (auto-generated)
 logs/selfhealing_state/*.json
+*.csv
+*.jsonl
