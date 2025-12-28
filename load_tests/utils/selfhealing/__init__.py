@@ -75,6 +75,10 @@ from .async_logger import AsyncHealingLogger, EventSeverity
 from .defaults import SafeDefaults
 from .adaptive_jitter import AdaptiveJitter, SystemState
 
+# V3 최적화 모듈 (Adaptive Throttling + Corruption Shield)
+from .throttle import AdaptiveThrottleClient
+from .corruption_shield import CorruptionShieldClient
+
 
 class SelfHealingClient:
     """
@@ -153,6 +157,9 @@ class SelfHealingClient:
         self.dashboard = DashboardClient(self._base_client)
         self.xtest = XTestClient(self._base_client)
         self.reconciliation = ReconciliationClient(self._base_client)
+        # V3: Adaptive Throttle & Corruption Shield
+        self.throttle = AdaptiveThrottleClient(self._base_client)
+        self.corruption_shield = CorruptionShieldClient(self._base_client)
 
     # =========================================================================
     # Convenience Methods (자주 사용되는 기능에 대한 바로가기)
@@ -269,4 +276,7 @@ __all__ = [
     "SafeDefaults",
     "AdaptiveJitter",
     "SystemState",
+    # V3 최적화 모듈 (Adaptive Throttling + Corruption Shield)
+    "AdaptiveThrottleClient",
+    "CorruptionShieldClient",
 ]
