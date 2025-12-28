@@ -82,10 +82,18 @@ try:
     from load_tests.utils.selfhealing.state_cache import CBStateCache
     from load_tests.utils.selfhealing.async_logger import AsyncHealingLogger, EventSeverity
     from load_tests.utils.selfhealing.adaptive_jitter import AdaptiveJitter, SystemState
+    # V4 Controller 임포트 (분리된 모듈)
+    from load_tests.utils.selfhealing.controller import (
+        SelfHealingController, get_controller, reset_controller,
+        SLA_P99_THRESHOLD_MS as CTRL_SLA_P99,
+        SLA_CRITICAL_MS as CTRL_SLA_CRITICAL,
+    )
     SELFHEALING_AVAILABLE = True
 except ImportError as e:
     print(f"[WARN] Self-Healing client not available: {e}")
     SELFHEALING_AVAILABLE = False
+    SelfHealingController = None
+    get_controller = None
 
 
 STAGE_NAME = "[Stage13-RepeatedSpike-EXTREME]"
@@ -506,440 +514,61 @@ class RepeatedSpikeExtremeShape(LoadTestShape):
 
 
 # =============================================================================
-# Self-Healing Controller
+# Self-Healing Controller (분리된 모듈 사용)
 # =============================================================================
 
-class SelfHealingController:
+# SelfHealingController는 load_tests.utils.selfhealing.controller에서 import
+# 이 파일에서는 전역 _extreme_stats를 사용하는 래퍼 함수만 정의
+
+def _get_stage13_controller() -> 'SelfHealingController':
     """
-    극한 테스트를 위한 Self-Healing 제어 클래스.
+    Stage13 전용 컨트롤러 인스턴스 반환.
+    
+    분리된 SelfHealingController를 사용하되,
+    이 시나리오 전용 콜백을 연결합니다.
     """
+    if not SELFHEALING_AVAILABLE or get_controller is None:
+        return None
     
-    def __init__(self, http_client=None):
-        """Initialize with optional HTTP client for Locust integration."""
-        self.client: Optional[SelfHealingClient] = None
-        self._http_client = http_client
-        self._last_cb_state: Dict[str, str] = {}
-        self._last_chaos_injection = 0
-        self._chaos_interval = 10  # 10초마다 카오스 주입
-        self._initialized = False
+    def stats_callback(key: str, value):
+        """Update _extreme_stats with controller stats."""
+        keys = key.split(".")
+        target = _extreme_stats
+        for k in keys[:-1]:
+            if k not in target:
+                target[k] = {}
+            target = target[k]
         
-        # 🔥 V2.8 Aggressive Healing State
-        self._cb_failure_counts: Dict[str, int] = {}  # 서비스별 실패 카운트
-        self._current_rate_limit_percent = 100  # 현재 rate limit (%)
-        self._current_jitter_ms = JITTER_MIN_MS  # 현재 지터 값
-        self._last_response_times: List[float] = []  # 최근 응답시간 (rolling window)
-        self._response_window_size = 20  # 롤링 윈도우 크기
-    
-    def initialize(self):
-        """Initialize Self-Healing client."""
-        if not SELFHEALING_AVAILABLE:
-            _debug_log("Self-Healing client not available", "WARN")
-            return False
-        
-        try:
-            host = os.environ.get("SELFHEALING_HOST", "http://localhost:8000")
-            self.client = SelfHealingClient(host=host, auth_mode="xtest")
-            
-            # Attempt login
-            username = os.environ.get("SELFHEALING_USERNAME", "admin")
-            password = os.environ.get("SELFHEALING_PASSWORD", "admin")
-            login_success = self.client.login(username, password)
-            
-            if login_success:
-                _debug_log("✅ Self-Healing client initialized and logged in", "INFO")
-                self._initialized = True
-                return True
-            else:
-                _debug_log("⚠️ Self-Healing login failed, continuing without auth", "WARN")
-                self._initialized = True
-                return True
-        except Exception as e:
-            _debug_log(f"❌ Self-Healing client init failed: {e}", "ERROR")
-            return False
-    
-    def inject_chaos_for_phase(self, phase: str, cycle: int):
-        """Inject chaos appropriate for the current phase."""
-        if not self._initialized or not self.client:
-            return
-        
-        current_time = time.time()
-        if current_time - self._last_chaos_injection < self._chaos_interval:
-            return
-        
-        self._last_chaos_injection = current_time
-        cycle_num = cycle + 1
-        
-        try:
-            if phase == "spike":
-                self._inject_spike_chaos(cycle_num)
-            elif phase == "sustain":
-                self._inject_sustain_chaos(cycle_num)
-            elif phase == "recovery":
-                self._inject_recovery_actions(cycle_num)
-            elif phase == "cool":
-                self._verify_recovery(cycle_num)
-        except Exception as e:
-            _debug_log(f"Chaos injection error: {e}", "ERROR")
-    
-    def _inject_spike_chaos(self, cycle_num: int):
-        """Spike phase: Inject failures to trigger circuit breakers."""
-        _debug_log(f"💥 Cycle {cycle_num} SPIKE: Injecting failures", "CHAOS")
-        
-        # 랜덤 서비스에 장애 주입
-        target_service = random.choice(CHAOS_SERVICES)
-        
-        try:
-            # CB 장애 주입 via XTest
-            result = self.client.xtest.inject_cb_failure(
-                service_name=target_service,
-                failure_type="exception",
-                failure_rate=0.8,  # 80% 실패율
-                duration_seconds=20,
-            )
-            _extreme_stats["chaos"]["failures_injected"] += 1
-            _ensure_cycle_stats(cycle_num - 1)
-            _extreme_stats["cycles"][cycle_num - 1]["chaos_injected"].append({
-                "type": "cb_failure",
-                "service": target_service,
-                "result": result.get("status", "unknown"),
-            })
-            _debug_log(f"   → Injected CB failure to {target_service}: {result}", "CHAOS")
-        except Exception as e:
-            _debug_log(f"   → CB failure injection failed: {e}", "ERROR")
-        
-        # Error Budget 소진 시도
-        try:
-            result = self.client.xtest.inject_error_budget(
-                slo_name="availability",
-                error_count=ERROR_BUDGET_DRAIN_PER_CYCLE * 10,
-            )
-            _debug_log(f"   → Error budget injection: {result}", "CHAOS")
-        except Exception as e:
-            _debug_log(f"   → Error budget injection failed: {e}", "ERROR")
-    
-    def _inject_sustain_chaos(self, cycle_num: int):
-        """Sustain phase: Multi-blast radius and cascade testing."""
-        _debug_log(f"🌊 Cycle {cycle_num} SUSTAIN: Multi-blast radius test", "CHAOS")
-        
-        try:
-            # Multi-Blast Radius 테스트
-            result = self.client.xtest.test_multi_blast_radius(
-                services=CASCADE_SERVICES[:2],  # 2개 서비스만
-                failure_type="latency",
-            )
-            _extreme_stats["chaos"]["blast_radius_tests"] += 1
-            _debug_log(f"   → Blast radius test: {result}", "CHAOS")
-        except Exception as e:
-            _debug_log(f"   → Blast radius test failed: {e}", "ERROR")
-        
-        # Latency 주입
-        try:
-            target = random.choice(CHAOS_SERVICES)
-            result = self.client.chaos.xtest_inject_latency(
-                target=target,
-                latency_ms=500,
-                duration_seconds=15,
-            )
-            _extreme_stats["chaos"]["latency_injections"] += 1
-            _debug_log(f"   → Latency injection to {target}: {result}", "CHAOS")
-        except Exception as e:
-            _debug_log(f"   → Latency injection failed: {e}", "ERROR")
-        
-        # Emergency 에스컬레이션 테스트
-        try:
-            level = f"LEVEL_{min(cycle_num, 3)}"
-            result = self.client.emergency.trigger(
-                level=level,
-                reason=f"Stage13 Cycle {cycle_num} Sustain Test",
-                duration_minutes=1,
-            )
-            _extreme_stats["emergency"]["escalations"].append({
-                "cycle": cycle_num,
-                "level": level,
-            })
-            if cycle_num > _extreme_stats["emergency"]["max_level_reached"]:
-                _extreme_stats["emergency"]["max_level_reached"] = cycle_num
-            _debug_log(f"   → Emergency triggered to {level}: {result}", "CHAOS")
-        except Exception as e:
-            _debug_log(f"   → Emergency trigger failed: {e}", "ERROR")
-    
-    def _inject_recovery_actions(self, cycle_num: int):
-        """Recovery phase: Trigger healing mechanisms."""
-        _debug_log(f"🔄 Cycle {cycle_num} RECOVERY: Triggering healing", "HEAL")
-        
-        try:
-            # CB 복구 트리거
-            for service in CHAOS_SERVICES[:2]:
-                result = self.client.xtest.trigger_cb_recovery(service_name=service)
-                _extreme_stats["chaos"]["recovery_triggers"] += 1
-                _debug_log(f"   → CB recovery triggered for {service}: {result}", "HEAL")
-        except Exception as e:
-            _debug_log(f"   → CB recovery trigger failed: {e}", "ERROR")
-        
-        try:
-            # Emergency 해제
-            result = self.client.emergency.release(
-                reason=f"Stage13 Cycle {cycle_num} Recovery"
-            )
-            _extreme_stats["emergency"]["recovery_successes"] += 1
-            _debug_log(f"   → Emergency released: {result}", "HEAL")
-        except Exception as e:
-            _extreme_stats["emergency"]["recovery_failures"] += 1
-            _debug_log(f"   → Emergency release failed: {e}", "ERROR")
-        
-        try:
-            # DLQ 리플레이
-            result = self.client.dlq.replay(batch_size=50)
-            replayed = result.get("replayed", 0)
-            _extreme_stats["dlq"]["total_replayed"] += replayed
-            _debug_log(f"   → DLQ replayed: {replayed} items", "HEAL")
-        except Exception as e:
-            _debug_log(f"   → DLQ replay failed: {e}", "ERROR")
-    
-    def _verify_recovery(self, cycle_num: int):
-        """Cool phase: Verify system has recovered."""
-        _debug_log(f"✅ Cycle {cycle_num} COOL: Verifying recovery", "VERIFY")
-        
-        try:
-            # 전체 상태 확인
-            status = self.client.get_overall_status()
-            
-            # CB 상태 확인
-            cb_status = status.get("circuit_breakers", {})
-            services = cb_status.get("services", [])
-            open_count = sum(1 for s in services if s.get("circuit_state") == "open")
-            
-            if open_count == 0:
-                _debug_log(f"   → All circuit breakers closed ✓", "VERIFY")
-            else:
-                _debug_log(f"   → {open_count} circuit breakers still open!", "WARN")
-            
-            # Emergency 상태 확인
-            emergency = status.get("emergency", {})
-            em_level = emergency.get("level", emergency.get("current_level", "NORMAL"))
-            if em_level in ("NORMAL", "LEVEL_0", None):
-                _debug_log(f"   → Emergency mode normal ✓", "VERIFY")
-            else:
-                _debug_log(f"   → Emergency still at {em_level}", "WARN")
-            
-            # Error budget 확인
-            error_budget = status.get("error_budget", {})
-            remaining = error_budget.get("remaining_percent", 100)
-            _debug_log(f"   → Error budget remaining: {remaining}%", "VERIFY")
-            
-            # 스냅샷 저장
-            snapshot = self.client.xtest.get_snapshot()
-            _debug_log(f"   → Snapshot captured", "VERIFY")
-            
-        except Exception as e:
-            _debug_log(f"   → Verification error: {e}", "ERROR")
-        
-        try:
-            # Chaos 리셋
-            result = self.client.chaos.xtest_reset_all()
-            _debug_log(f"   → Chaos reset: {result}", "VERIFY")
-        except Exception as e:
-            _debug_log(f"   → Chaos reset failed: {e}", "ERROR")
-    
-    def check_and_update_cb_state(self, http_client=None):
-        """Check circuit breaker states and record transitions."""
-        if not self._initialized or not self.client:
-            return
-        
-        try:
-            status = self.client.circuit_breaker.get_all_status()
-            services = status.get("services", [])
-            
-            for svc in services:
-                service_name = svc.get("service_name", "unknown")
-                current_state = svc.get("circuit_state") or svc.get("state", "closed")
-                last_state = self._last_cb_state.get(service_name, "closed")
-                
-                if current_state != last_state:
-                    _record_cb_transition(service_name, last_state, current_state)
-                    self._last_cb_state[service_name] = current_state
-        except Exception as e:
-            _debug_log(f"CB state check error: {e}", "ERROR")
-    
-    def get_dlq_stats(self):
-        """Get DLQ statistics."""
-        if not self._initialized or not self.client:
-            return {}
-        
-        try:
-            return self.client.dlq.stats()
-        except Exception:
-            return {}
-    
-    def get_throttle_stats(self):
-        """Get adaptive throttle statistics."""
-        if not self._initialized or not self.client:
-            return {}
-        
-        try:
-            return self.client.throttle.get_stats()
-        except Exception:
-            return {}
-    
-    def get_corruption_shield_stats(self):
-        """Get corruption shield statistics."""
-        if not self._initialized or not self.client:
-            return {}
-        
-        try:
-            return self.client.corruption_shield.get_stats()
-        except Exception:
-            return {}
-    
-    # =========================================================================
-    # 🔥 V2.8 Aggressive Healing Methods
-    # =========================================================================
-    
-    def record_response_time(self, response_time_ms: float, service: str = "default"):
-        """
-        Record response time and trigger aggressive healing if needed.
-        
-        리뷰 피드백:
-        - 300ms 초과 → limit 50% 삭감
-        - 500ms 초과 → 즉시 대응 (SLA_CRITICAL)
-        """
-        # 롤링 윈도우에 추가
-        self._last_response_times.append(response_time_ms)
-        if len(self._last_response_times) > self._response_window_size:
-            self._last_response_times.pop(0)
-        
-        # 🔥 300ms 초과 시 즉시 limit 50% 삭감
-        if response_time_ms > SLA_AGGRESSIVE_THRESHOLD_MS:
-            self._apply_aggressive_rate_cut()
-        
-        # 🔥 500ms 초과 시 SLA CRITICAL 대응
-        if response_time_ms > SLA_CRITICAL_MS:
-            self._handle_sla_critical(response_time_ms, service)
-        
-        # 🔥 지터 자동 조정
-        self._adjust_jitter(response_time_ms)
-    
-    def _apply_aggressive_rate_cut(self):
-        """300ms 초과 시 rate limit 50% 삭감."""
-        old_limit = self._current_rate_limit_percent
-        self._current_rate_limit_percent = max(
-            RATE_LIMIT_MIN_REQUESTS_PER_SEC / RATE_LIMIT_MAX_REQUESTS_PER_SEC * 100,
-            self._current_rate_limit_percent * RATE_LIMIT_AGGRESSIVE_CUT
-        )
-        
-        if old_limit != self._current_rate_limit_percent:
-            _extreme_stats["throttle"]["aggressive_cuts"] += 1
-            _extreme_stats["throttle"]["current_limit_percent"] = self._current_rate_limit_percent
-            _extreme_stats["throttle"]["limit_adjustments"] += 1
-            _debug_log(
-                f"🔥 AGGRESSIVE CUT: Rate limit {old_limit:.0f}% → {self._current_rate_limit_percent:.0f}%",
-                "THROTTLE"
-            )
-    
-    def _handle_sla_critical(self, response_time_ms: float, service: str):
-        """500ms 초과 시 즉시 대응."""
-        _debug_log(
-            f"🚨 SLA CRITICAL: {service} responded in {response_time_ms:.0f}ms (> {SLA_CRITICAL_MS}ms)",
-            "CRITICAL"
-        )
-        
-        # XTest 에러를 CB 카운트에 추가
-        self._cb_failure_counts[service] = self._cb_failure_counts.get(service, 0) + 1
-        _extreme_stats["aggressive_cb"]["xtest_errors_counted"] += 1
-        
-        # 🔥 3회 실패 시 강제 CB Open 트리거
-        if self._cb_failure_counts[service] >= CB_FAILURE_THRESHOLD:
-            self._force_cb_open(service)
-            self._cb_failure_counts[service] = 0  # 리셋
-    
-    def _force_cb_open(self, service: str):
-        """강제로 Circuit Breaker Open 트리거 (3회 실패)."""
-        _debug_log(f"🔌 FORCED CB OPEN for {service} (reached {CB_FAILURE_THRESHOLD} failures)", "CB")
-        _extreme_stats["aggressive_cb"]["forced_opens"] += 1
-        _record_cb_transition(service, "closed", "open")
-        
-        # XTest를 통해 실제 CB Open 요청
-        if self._initialized and self.client:
-            try:
-                self.client.xtest.force_cb_open(service_name=service)
-            except Exception as e:
-                _debug_log(f"   → Force CB open API failed: {e}", "ERROR")
-    
-    def _adjust_jitter(self, response_time_ms: float):
-        """
-        응답 시간에 따라 AdaptiveJitter 자동 조정.
-        
-        리뷰 피드백: 응답 지연시 AdaptiveJitter가 최대치로 작동
-        """
-        if response_time_ms > SLA_AGGRESSIVE_THRESHOLD_MS:
-            # 지연 발생 → 지터 증가 (최대 2배씩)
-            old_jitter = self._current_jitter_ms
-            self._current_jitter_ms = min(
-                JITTER_MAX_MS,
-                self._current_jitter_ms * JITTER_ESCALATION_FACTOR
-            )
-            
-            if self._current_jitter_ms != old_jitter:
-                _extreme_stats["adaptive_jitter"]["escalations"] += 1
-                _extreme_stats["adaptive_jitter"]["current_jitter_ms"] = self._current_jitter_ms
-                
-                if self._current_jitter_ms >= JITTER_MAX_MS:
-                    _extreme_stats["adaptive_jitter"]["max_jitter_reached"] = True
-                    _debug_log(f"⚡ JITTER MAX REACHED: {JITTER_MAX_MS}ms", "JITTER")
-                else:
-                    _debug_log(
-                        f"⚡ Jitter escalated: {old_jitter:.0f}ms → {self._current_jitter_ms:.0f}ms",
-                        "JITTER"
-                    )
+        final_key = keys[-1]
+        if isinstance(target.get(final_key), (int, float)) and isinstance(value, (int, float)):
+            target[final_key] = target.get(final_key, 0) + value
+        elif isinstance(target.get(final_key), list):
+            target[final_key].append(value)
         else:
-            # 정상 응답 → 점진적 지터 감소
-            if self._current_jitter_ms > JITTER_MIN_MS:
-                self._current_jitter_ms = max(
-                    JITTER_MIN_MS,
-                    self._current_jitter_ms * 0.9  # 10% 감소
-                )
-                _extreme_stats["adaptive_jitter"]["current_jitter_ms"] = self._current_jitter_ms
+            target[final_key] = value
     
-    def get_current_jitter_ms(self) -> float:
-        """현재 적용할 지터 값 반환."""
-        return self._current_jitter_ms
-    
-    def get_current_rate_limit_percent(self) -> float:
-        """현재 rate limit 비율 반환."""
-        return self._current_rate_limit_percent
-    
-    def should_skip_request(self) -> bool:
-        """Rate limit에 따라 요청 스킵 여부 결정."""
-        if self._current_rate_limit_percent >= 100:
-            return False
-        return random.random() * 100 > self._current_rate_limit_percent
-    
-    def recover_rate_limit(self):
-        """정상 응답 시 rate limit 점진적 복구."""
-        if self._current_rate_limit_percent < 100:
-            old_limit = self._current_rate_limit_percent
-            self._current_rate_limit_percent = min(
-                100,
-                self._current_rate_limit_percent * (1 + RATE_LIMIT_RECOVERY_STEP)
-            )
-            _extreme_stats["throttle"]["current_limit_percent"] = self._current_rate_limit_percent
-            
-            if self._current_rate_limit_percent >= 100:
-                _extreme_stats["aggressive_cb"]["quick_recoveries"] += 1
-                _debug_log("✅ Rate limit fully recovered to 100%", "THROTTLE")
+    return get_controller(
+        chaos_services=CHAOS_SERVICES,
+        cascade_services=CASCADE_SERVICES,
+        error_budget_drain_per_cycle=ERROR_BUDGET_DRAIN_PER_CYCLE,
+        debug_callback=_debug_log,
+        stats_callback=stats_callback,
+    )
 
 
-# Global controller instance
-_controller: Optional[SelfHealingController] = None
+# Global controller instance (래퍼)
+_controller: Optional['SelfHealingController'] = None
 
 
-def get_controller() -> SelfHealingController:
-    """Get or create global controller instance."""
-    global _controller
-    if _controller is None:
-        _controller = SelfHealingController()
-        _controller.initialize()
-    return _controller
+def _record_cb_transition(service: str, from_state: str, to_state: str):
+    """Record CB transition to _extreme_stats."""
+    _extreme_stats["cb_transitions"].append({
+        "service": service,
+        "from": from_state,
+        "to": to_state,
+        "timestamp": datetime.now().isoformat(),
+    })
+    _debug_log(f"🔌 CB Transition: {service} {from_state} → {to_state}", "CB")
 
 
 # =============================================================================
