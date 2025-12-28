@@ -7,6 +7,74 @@
 
 ---
 
+## 📊 기존 구현 현황 (중복 방지 가이드)
+
+> ⚠️ **중요**: 아래 기능들은 이미 `load_tests/utils/selfhealing/` 모듈에 구현되어 있습니다.
+> 신규 개발 시 기존 코드를 **확장**하세요. 이중 구현을 피하세요!
+
+### ✅ 이미 구현된 기능 (확장만 필요)
+
+| 문서 제안 기능 | 기존 구현 위치 | 상태 |
+|---------------|---------------|------|
+| **Drift Detection** | `governance.py` → `get_drift_report()` | ✅ 구현됨 |
+| | `l2_storage.py` → `has_drift()`, `get_drift_stats()` | ✅ 구현됨 |
+| | `runtime_config.py` → `get_drift_thresholds()` | ✅ 구현됨 |
+| **Rollback** | `governance.py` → `rollback_change_request()` | ✅ 구현됨 |
+| | `runtime_config.py` → `rollback()` | ✅ 구현됨 |
+| **Blast Radius** | `chaos.py` → `get_blast_radius_policy()`, `check_blast_radius()` | ✅ 구현됨 |
+| | `xtest.py` → `test_blast_radius()`, `test_multi_blast_radius()` | ✅ 구현됨 |
+| **Compliance** | `governance.py` → `get_compliance_status()`, `run_compliance_check()` | ✅ 구현됨 |
+
+### ❌ 신규 구현 필요
+
+| 기능 | 상세 문서 | 우선순위 |
+|------|----------|----------|
+| **Discovery Stage** | [30번 문서](30_DNA_DRIFT_DISCOVERY.md) | Phase 2 |
+| **Unknown Module Strict Mode** | [30번 문서](30_DNA_DRIFT_DISCOVERY.md) | Phase 1 |
+| **Mutation DNA** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 3 |
+| **FinOps DNA** | [32번 문서](32_DNA_ENTERPRISE_FEATURES.md) | Phase 2 |
+| **Self-Learning DNA** | [32번 문서](32_DNA_ENTERPRISE_FEATURES.md) | Phase 3 |
+| **Metrics vs DNA 충돌** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
+| **Dependency Graph** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
+| **Zero-Base 시나리오** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 4 |
+
+### 📁 기존 모듈 파일 목록 (28개)
+
+```
+load_tests/utils/selfhealing/
+├── adaptive_jitter.py     # 적응형 지터
+├── alerts.py              # 알림 시스템
+├── async_logger.py        # 비동기 로거
+├── auth.py                # 인증
+├── base.py                # 베이스 클래스
+├── chaos.py               # 🔴 Blast Radius 포함!
+├── circuit_breaker.py     # 서킷 브레이커
+├── config.py              # 설정
+├── controller.py          # 통합 컨트롤러
+├── corruption_shield.py   # 데이터 무결성
+├── dashboard.py           # 🔴 Drift Report 포함!
+├── defaults.py            # 기본값
+├── dlq.py                 # DLQ 관리
+├── emergency.py           # 비상 모드
+├── error_budget.py        # 에러 버짓
+├── governance.py          # 🔴 Compliance, Rollback, Drift 포함!
+├── health.py              # 헬스체크
+├── l2_storage.py          # 🔴 Drift Reconciliation 포함!
+├── observability.py       # 관측성
+├── rate_limiter.py        # Rate Limit
+├── reconciliation.py      # 정합성
+├── runtime_config.py      # 🔴 Rollback, Drift 포함!
+├── stage_dna.py           # Stage DNA 핵심
+├── state_cache.py         # 상태 캐시
+├── system.py              # 시스템 정보
+├── throttle.py            # 스로틀링
+├── tiering.py             # 계층화
+├── xtest.py               # 🔴 Blast Radius 테스트 포함!
+└── __init__.py
+```
+
+---
+
 ## 1. Executive Summary
 
 ### 1.1 Stage DNA란?

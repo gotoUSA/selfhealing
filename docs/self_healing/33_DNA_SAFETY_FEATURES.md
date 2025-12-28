@@ -8,6 +8,87 @@
 
 ---
 
+## ⚠️ 기존 구현 현황 (중복 주의!)
+
+### ✅ Rollback 관련 기존 구현
+
+| 기능 | 파일 | 함수 | 비고 |
+|------|------|------|------|
+| 변경 요청 롤백 | `governance.py` | `rollback_change_request()` | POST /governance/changes/{id}/rollback/ |
+| 설정 롤백 | `runtime_config.py` | `rollback()` | POST /config/{type}/rollback/ |
+| 설정 히스토리 | `runtime_config.py` | `get_config_history()` | GET /config/{type}/history/ |
+
+### ✅ Blast Radius 관련 기존 구현
+
+| 기능 | 파일 | 함수 | 비고 |
+|------|------|------|------|
+| 정책 조회 | `chaos.py` | `get_blast_radius_policy()` | GET /chaos/config/blast-radius/ |
+| 정책 설정 | `chaos.py` | `set_blast_radius_policy()` | POST /chaos/config/blast-radius/ |
+| 영향 범위 체크 | `chaos.py` | `check_blast_radius()` | 영향 범위 계산 |
+| 단일 테스트 | `xtest.py` | `test_blast_radius()` | 단일 서비스 영향 테스트 |
+| 다중 테스트 | `xtest.py` | `test_multi_blast_radius()` | 다중 서비스 영향 테스트 |
+| 통합 테스트 | `controller.py` | `_internal_stats["blast_radius_tests"]` | 테스트 통계 |
+
+### 🆕 이 문서의 신규 기능
+
+| 기능 | 기존 대비 차이 | 구현 필요 |
+|------|---------------|----------|
+| **Rollback DNA (확장)** | 기존: 수동 롤백 API → 신규: Stage DNA 기반 자동 트리거 | ✅ 필요 (확장) |
+| **스냅샷 관리** | 기존 없음 → 자동 상태 스냅샷 | ✅ 필요 |
+| **Blast Radius DNA (확장)** | 기존: 테스트용 → 신규: Stage DNA 레벨 격리 정책 | ✅ 필요 (확장) |
+| **서비스 그래프 기반 격리** | 기존 없음 → 의존성 기반 자동 격리 | ✅ 필요 |
+
+### 구현 시 주의사항
+
+```python
+# ❌ 잘못된 구현 - 중복!
+class RollbackDNA:
+    def rollback_config(self, config_type, version):
+        # 직접 API 호출 - runtime_config.py와 중복!
+        response = requests.post(f"/config/{config_type}/rollback/")
+
+# ✅ 올바른 구현 - 기존 활용!
+class RollbackDNA:
+    def __init__(self, runtime_config: RuntimeConfigClient, governance: GovernanceClient):
+        self.config = runtime_config
+        self.governance = governance
+    
+    def auto_rollback_on_trigger(self, stage_dna: Dict):
+        # 기존 클라이언트 활용 + 자동 트리거 로직 추가
+        triggers = stage_dna.get("rollback", {}).get("triggers", {})
+        if self._check_triggers(triggers):
+            return self.config.rollback(
+                config_type="all",
+                version=self._get_last_stable_version(),
+                reason="Auto-rollback by DNA trigger"
+            )
+```
+
+```python
+# ❌ 잘못된 Blast Radius 구현
+class BlastRadiusDNA:
+    def check_impact(self, service):
+        # 직접 계산 - chaos.py와 중복!
+        pass
+
+# ✅ 올바른 구현
+class BlastRadiusDNA:
+    def __init__(self, chaos: ChaosClient, xtest: XTestClient):
+        self.chaos = chaos
+        self.xtest = xtest
+    
+    def get_dna_isolation_policy(self, stage_dna: Dict):
+        # 기존 blast_radius 정책 + Stage DNA 기반 확장
+        base_policy = self.chaos.get_blast_radius_policy()
+        dna_policy = stage_dna.get("blast_radius", {})
+        return self._merge_policies(base_policy, dna_policy)
+```
+
+> 💡 **핵심 원칙**: `chaos.py`, `runtime_config.py`, `governance.py`의
+> 기존 API를 활용하고, **Stage DNA 통합 로직만 추가**하세요.
+
+---
+
 ## 1. Rollback DNA (Phase 1)
 
 ### 1.1 문제 정의

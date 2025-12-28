@@ -8,6 +8,48 @@
 
 ---
 
+## ⚠️ 기존 구현 현황 (중복 주의!)
+
+### ✅ Compliance 관련 기존 구현
+
+| 기능 | 파일 | 함수 | 비고 |
+|------|------|------|------|
+| Compliance 상태 | `governance.py` | `get_compliance_status()` | GET /governance/compliance/status/ |
+| Compliance 체크 | `governance.py` | `run_compliance_check()` | POST /governance/compliance/check/ |
+| 준수 여부 확인 | `governance.py` | `is_compliant()` | Boolean 반환 |
+
+### 🆕 이 문서의 신규 기능
+
+| 기능 | 기존 대비 차이 | 구현 필요 |
+|------|---------------|----------|
+| **FinOps DNA** | 완전 신규 - 비용 제한/추적 | ✅ 필요 |
+| **Compliance DNA (확장)** | 기존: 단순 상태 조회 → 신규: DORA 2025, PCI-DSS 자동 증명 | ✅ 필요 (확장) |
+| **Self-Learning DNA** | 완전 신규 - ML 기반 자동 튜닝 | ✅ 필요 |
+
+### 구현 시 주의사항
+
+```python
+# ❌ 잘못된 구현 - 중복!
+class ComplianceDNA:
+    def check_compliance(self):
+        # 직접 API 호출 - governance.py와 중복!
+        response = requests.get("/governance/compliance/status/")
+
+# ✅ 올바른 구현 - 기존 활용!
+class ComplianceDNA:
+    def __init__(self, governance_client: GovernanceClient):
+        self.governance = governance_client
+    
+    def check_dora_compliance(self):
+        # 기존 클라이언트 활용 + DORA 로직 추가
+        base_status = self.governance.get_compliance_status()
+        return self._analyze_dora_requirements(base_status)
+```
+
+> 💡 **핵심 원칙**: `governance.py`의 기존 API를 활용하고, **비즈니스 로직만 추가**하세요.
+
+---
+
 ## 1. FinOps DNA (Phase 2)
 
 ### 1.1 문제 정의

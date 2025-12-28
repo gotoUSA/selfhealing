@@ -7,6 +7,33 @@
 
 ---
 
+## ⚠️ 기존 구현 현황 (중복 주의!)
+
+### ✅ Drift 관련 기존 구현
+
+| 기능 | 파일 | 함수 | 비고 |
+|------|------|------|------|
+| Drift Report 조회 | `governance.py` | `get_drift_report()` | GET /metrics/drift-report/ |
+| Drift Stats 조회 | `l2_storage.py` | `get_drift_stats()` | GET /l2-storage/drift/stats/ |
+| Drift 히스토리 | `l2_storage.py` | `get_drift_history()` | GET /l2-storage/drift/history/ |
+| Drift 발생 여부 | `l2_storage.py` | `has_drift()` | Boolean 반환 |
+| Drift 조정 | `l2_storage.py` | `trigger_reconcile()` | POST /l2-storage/drift/reconcile/ |
+| Drift 임계값 | `runtime_config.py` | `get_drift_thresholds()` | GET /config/drift-thresholds/ |
+| Dashboard Drift | `dashboard.py` | `get_drift_report()` | Deprecated |
+
+### 🆕 이 문서의 신규 기능
+
+| 기능 | 기존 대비 차이 | 구현 필요 |
+|------|---------------|----------|
+| **Unknown Module Strict Mode** | 기존: 경고만 출력 → 신규: 테스트 차단 | ✅ 필요 |
+| **Discovery Stage** | 완전 신규 - 테스트 누락 자동 탐지 | ✅ 필요 |
+| **DNA Drift (테스트 레벨)** | 기존은 API Drift → 신규는 Stage DNA Drift | ✅ 필요 |
+
+> 💡 **구현 시 주의**: Drift 관련 API 호출은 기존 `l2_storage.py`, `governance.py`를 사용하고,
+> **Stage DNA 레벨의 Drift 감지 로직만 신규 구현**하세요.
+
+---
+
 ## 1. 개요
 
 ### 1.1 DNA Drift란?
