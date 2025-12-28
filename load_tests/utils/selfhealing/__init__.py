@@ -79,6 +79,9 @@ from .adaptive_jitter import AdaptiveJitter, SystemState
 from .throttle import AdaptiveThrottleClient
 from .corruption_shield import CorruptionShieldClient
 
+# V4 Controller (극한 테스트용 통합 컨트롤러)
+from .controller import SelfHealingController, get_controller, reset_controller
+
 
 class SelfHealingClient:
     """
@@ -279,4 +282,8 @@ __all__ = [
     # V3 최적화 모듈 (Adaptive Throttling + Corruption Shield)
     "AdaptiveThrottleClient",
     "CorruptionShieldClient",
+    # V4 Controller (극한 테스트용 통합 컨트롤러)
+    "SelfHealingController",
+    "get_controller",
+    "reset_controller",
 ]
