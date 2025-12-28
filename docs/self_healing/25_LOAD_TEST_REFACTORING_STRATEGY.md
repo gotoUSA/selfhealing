@@ -940,7 +940,7 @@ Week 5: Phase 4 - 결과 정리 및 마무리
 - [x] `load_tests/core/mixins.py` - AdminAuthMixin, SelfHealingMixin, CBMonitorMixin, XTestModeMixin, PhaseManagerMixin
 - [x] `load_tests/core/reporting.py` - ReportGenerator (JSON, Markdown, HTML)
 - [x] `load_tests/core/constants.py` - Endpoints, Headers, SLA, LoadConfig, Services, EmergencyLevels, TestModes
-- [ ] 단위 테스트 작성
+- [x] 단위 테스트 작성 ✅ (`load_tests/core/tests/simple_test.py` - 4개 모듈 전체 통과)
 
 ### Phase 2 완료 기준
 - [ ] `load_tests/utils/selfhealing/controller.py` 분리
@@ -965,6 +965,7 @@ Week 5: Phase 4 - 결과 정리 및 마무리
 |------|------|----------|--------|
 | 2025-12-28 | 1.0 | 초기 문서 작성 | GitHub Copilot |
 | 2025-12-28 | 1.1 | **Phase 1 완료** - core 모듈 5개 파일 생성 | GitHub Copilot |
+| 2025-12-28 | 1.2 | **Phase 1 테스트 완료** - 단위 테스트 4개 모듈 전체 통과, 데드락 버그 수정 | GitHub Copilot |
 
 ---
 

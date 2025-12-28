@@ -191,6 +191,23 @@ class BaseTestStats:
                     "metadata": scenario.get("metadata", {}),
                 }
             
+            # get_summary를 락 외부에서 호출하지 않고 인라인 계산
+            total = self.passed + self.failed
+            all_response_times = []
+            for scenario in self.scenarios.values():
+                all_response_times.extend(scenario.get("response_times", []))
+            
+            summary = {
+                "total_requests": total,
+                "passed": self.passed,
+                "failed": self.failed,
+                "success_rate": self.passed / max(1, total) * 100,
+                "avg_response_time_ms": statistics.mean(all_response_times) if all_response_times else 0,
+                "p95_response_time_ms": self._percentile(all_response_times, 95) if all_response_times else 0,
+                "p99_response_time_ms": self._percentile(all_response_times, 99) if all_response_times else 0,
+                "scenario_count": len(self.scenarios),
+            }
+            
             return {
                 "scenarios": scenarios_with_stats,
                 "passed": self.passed,
@@ -198,7 +215,7 @@ class BaseTestStats:
                 "success_rate": self.passed / max(1, self.passed + self.failed) * 100,
                 "timestamp": self.timestamp or datetime.now().isoformat(),
                 "healing_actions": dict(self.healing_actions),
-                "summary": self.get_summary(),
+                "summary": summary,
             }
     
     def reset(self) -> None:
