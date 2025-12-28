@@ -39,7 +39,6 @@ import os
 import sys
 import time
 import random
-import json
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -56,6 +55,7 @@ from locust import HttpUser, task, between, tag, events, LoadTestShape
 
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
 from load_tests.metrics import setup_event_hooks
+from load_tests.reports import print_console_report, save_all_reports
 
 # Self-Healing 클라이언트 임포트
 try:
@@ -1494,7 +1494,7 @@ class ExtremeSpikeUser(HttpUser):
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    """극단적 테스트 리포트 생성"""
+    """극단적 테스트 리포트 생성 - 공통 보고서 모듈 사용"""
     global _extreme_stats
 
     # Async Logger 플러시 (클래스 메서드 사용)
@@ -1505,500 +1505,34 @@ def on_test_stop(environment, **kwargs):
         if DEBUG_MODE:
             print(f"🔍 AsyncLogger flush skipped: {e}")
 
-    print("\n" + "=" * 80)
-    print("📊 EXTREME SPIKE & RECOVERY TEST REPORT")
-    print("=" * 80)
+    # 설정 딕셔너리 준비
+    config = {
+        "test_duration": TEST_DURATION,
+        "max_users": MAX_USERS,
+        "min_users": MIN_USERS,
+        "sla_p99_threshold_ms": SLA_P99_THRESHOLD_MS,
+        "clock_skew_max_drift_sec": CLOCK_SKEW_MAX_DRIFT_SEC,
+    }
 
-    # Executive Summary
-    print("\n📋 Executive Summary")
-    print("-" * 40)
-    print(f"  Test Duration: {TEST_DURATION}s")
-    print(f"  Max Users: {MAX_USERS}")
-    print(f"  Min Users: {MIN_USERS}")
+    # 콘솔 보고서 출력
+    print_console_report(_extreme_stats, config)
 
-    # Phase Analysis
-    print("\n📈 Phase Analysis:")
-    for phase, stats in _extreme_stats["metrics_per_phase"].items():
-        if stats["requests"] > 0:
-            avg_response = sum(stats["response_times"]) / len(stats["response_times"]) if stats["response_times"] else 0
-            error_rate = stats["errors"] / stats["requests"] * 100
-            print(f"  {phase.upper()}:")
-            print(f"    - Requests: {stats['requests']}")
-            print(f"    - Error Rate: {error_rate:.2f}%")
-            print(f"    - Avg Response: {avg_response:.2f}ms")
+    # 파일 보고서 저장
+    results_dir = os.path.join(_load_tests_dir, "results", "stage12")
+    save_all_reports(
+        stats=_extreme_stats,
+        config=config,
+        results_dir=results_dir,
+        stage_name="stage12",
+        debug_logs=_extreme_stats.get("debug_logs"),
+        debug_mode=DEBUG_MODE
+    )
 
-    # Circuit Breaker Analysis
-    print("\n🔌 Circuit Breaker Analysis:")
-    cb = _extreme_stats["circuit_breaker"]
-    print(f"  - Open Count: {cb['open_count']}")
-    print(f"  - Close Count: {cb['close_count']}")
-    print(f"  - Half-Open Count: {cb['half_open_count']}")
-    print(f"  - Services Affected: {', '.join(cb['services_affected']) or 'None'}")
-
-    if cb["recovery_latency_ms"]:
-        print(f"  - Recovery Latency: {cb['recovery_latency_ms']:.0f}ms")
-
-    # Emergency Mode Analysis
-    print("\n🚨 Emergency Mode Analysis:")
-    em = _extreme_stats["emergency"]
-    print(f"  - Triggered Count: {em['triggered_count']}")
-    print(f"  - Released Count: {em['released_count']}")
-    print(f"  - Max Level Reached: LEVEL_{em['max_level']}")
-
-    # Error Budget Analysis
-    print("\n💰 Error Budget Analysis:")
-    eb = _extreme_stats["error_budget"]
-    print(f"  - Initial Remaining: {eb['initial_remaining']}%")
-    print(f"  - Min Remaining: {eb['min_remaining']}%")
-    print(f"  - Exhausted: {'Yes' if eb['exhausted'] else 'No'}")
-    print(f"  - Recovered: {'Yes' if eb['recovered'] else 'No'}")
-
-    # DLQ Analysis
-    print("\n📥 DLQ Analysis:")
-    dlq = _extreme_stats["dlq"]
-    print(f"  - Items Before Spike: {dlq['items_before_spike']}")
-    print(f"  - Max Count: {dlq['max_count']}")
-    print(f"  - Current Count: {dlq['current_count']}")
-    print(f"  - Replay Success: {dlq['replay_success_count']}")
-    print(f"  - Replay Fail: {dlq['replay_fail_count']}")
-
-    # Chaos Injection Analysis
-    print("\n💥 Chaos Injection Analysis:")
-    chaos = _extreme_stats["chaos"]
-    print(f"  - Failures Injected: {chaos['failures_injected']}")
-    print(f"  - CB Triggers: {chaos['cb_triggers']}")
-    print(f"  - Recovery Triggers: {chaos['recovery_triggers']}")
-
-    # Kill Switch Analysis
-    print("\n🔌 Kill Switch Analysis:")
-    ks = _extreme_stats["kill_switch"]
-    print(f"  - Activated Count: {ks['activated_count']}")
-    print(f"  - Deactivated Count: {ks['deactivated_count']}")
-    print(f"  - Targets: {', '.join(ks['targets']) or 'None'}")
-
-    # V2 Optimization Modules
-    print("\n🚀 V2 Optimization Modules:")
-    v2 = _extreme_stats["v2_modules"]
-    total_cache = v2["cache_hits"] + v2["cache_misses"]
-    cache_hit_rate = (v2["cache_hits"] / total_cache * 100) if total_cache > 0 else 0
-    print(f"  - Cache Hit Rate: {cache_hit_rate:.1f}% ({v2['cache_hits']}/{total_cache})")
-    print(f"  - Async Events: {v2['async_events']}")
-    print(f"  - Jitter Applied: {v2['jitter_applied']}")
-
-    # ==========================================================================
-    # V2.5 Platinum Grade Add-ons 통계
-    # ==========================================================================
-
-    # SLA Hard-Cap ⚖️
-    print("\n⚖️ SLA Hard-Cap Analysis (Platinum V2.6):")
-    sla = _extreme_stats["sla_hardcap"]
-    recovery_p99 = _calculate_recovery_p99()
-    print(f"  - P99 Max (전체): {sla['p99_max_ms']:.0f}ms")
-    print(f"  - P99 (복구 후/STABILIZE): {recovery_p99:.0f}ms (Threshold: {SLA_P99_THRESHOLD_MS}ms)")
-    print(f"  - P99 Violations (STABILIZE only): {sla['p99_violations']}")
-    print(f"  - Data Variance Count: {sla['data_variance_count']}")
-    recovery_sla_ok = recovery_p99 <= SLA_P99_THRESHOLD_MS or sla['p99_violations'] == 0
-    print(f"  - SLA Status: {'✅ PASSED' if recovery_sla_ok else '❌ FAILED'}")
-
-    # Message Storm & Backpressure 📨
-    print("\n📨 Message Storm & Backpressure (Platinum):")
-    storm = _extreme_stats["message_storm"]
-    print(f"  - Messages Injected: {storm['messages_injected']}")
-    print(f"  - Buffer Overflow: {storm['buffer_overflow_count']}")
-    print(f"  - Messages Dropped: {storm['messages_dropped']}")
-    print(f"  - Backpressure Activated: {'Yes' if storm['backpressure_activated'] else 'No'}")
-    print(f"  - Main Logic Affected: {'❌ Yes' if storm['main_logic_affected'] else '✅ No'}")
-
-    # Clock Skew Attack ⏰
-    print("\n⏰ Clock Skew Attack (Platinum):")
-    clock = _extreme_stats["clock_skew"]
-    print(f"  - Attacks Executed: {clock['attacks_executed']}")
-    print(f"  - Max Drift: {clock['max_drift_sec']:.2f}s")
-    print(f"  - CB Window Corrupted: {'❌ Yes' if clock['cb_window_corrupted'] else '✅ No'}")
-    print(f"  - Recovery Found: {'✅ Yes' if clock['recovery_found'] else 'No'}")
-    print(f"  - Consistency Maintained: {'✅ Yes' if clock['consistency_maintained'] else '❌ No'}")
-
-    # Cascading Failure 🌊
-    print("\n🌊 Cascading Failure (Platinum):")
-    cascade = _extreme_stats["cascading_failure"]
-    print(f"  - Cascades Triggered: {cascade['cascades_triggered']}")
-    print(f"  - Services Affected: {', '.join(cascade['services_affected']) or 'None'}")
-    print(f"  - Max Cascade Depth: {cascade['max_cascade_depth']}")
-    print(f"  - Isolation Success: {'✅ Yes' if cascade['isolation_success'] else '❌ No'}")
-
-    # Retry Storm Prevention 🔄
-    print("\n🔄 Retry Storm Prevention (Platinum):")
-    retry = _extreme_stats["retry_storm"]
-    print(f"  - Storms Detected: {retry['storms_detected']}")
-    print(f"  - Retries Blocked: {retry['retries_blocked']}")
-    print(f"  - Backoff Applied: {retry['backoff_applied']}")
-    print(f"  - Circuit Protected: {'✅ Yes' if retry['circuit_protected'] else '❌ No'}")
-
-    # Final SLA Verdict (V2.6: 복구 후 P99 기준)
-    print("\n" + "=" * 40)
-    print("🏆 FINAL SLA VERDICT (Platinum Grade V2.6)")
-    print("=" * 40)
-    
-    # V2.6: 복구 후 P99를 기준으로 SLA 판정
-    recovery_p99 = _calculate_recovery_p99()
-    sla_passed = recovery_p99 <= SLA_P99_THRESHOLD_MS or sla['p99_violations'] == 0
-    
-    # Backpressure: 복구 후에 메인 로직이 정상이면 OK
-    main_logic_ok = not storm['main_logic_affected'] or recovery_p99 <= SLA_P99_THRESHOLD_MS
-    consistency_ok = clock['consistency_maintained']
-    isolation_ok = cascade['isolation_success']
-    circuit_ok = retry['circuit_protected']
-    
-    all_passed = sla_passed and main_logic_ok and consistency_ok and isolation_ok and circuit_ok
-    
-    print(f"  SLA Hard-Cap (복구 후 P99 {recovery_p99:.0f}ms): {'✅ PASS' if sla_passed else '❌ FAIL'}")
-    print(f"  Backpressure Control: {'✅ PASS' if main_logic_ok else '❌ FAIL'}")
-    print(f"  Clock Skew Resilience: {'✅ PASS' if consistency_ok else '❌ FAIL'}")
-    print(f"  Cascade Isolation: {'✅ PASS' if isolation_ok else '❌ FAIL'}")
-    print(f"  Retry Storm Protection: {'✅ PASS' if circuit_ok else '❌ FAIL'}")
-    print(f"\n  {'🏆 PLATINUM GRADE ACHIEVED!' if all_passed else '🥇 GOLD GRADE (일부 미달성)'}")
-
-    # Recovery Latency
-    print("\n🔄 Recovery Latency:")
-    recovery = _extreme_stats["recovery"]
-    if recovery["recovery_latency_seconds"]:
-        latency = recovery["recovery_latency_seconds"]
-        print(f"  - Total Recovery Time: {latency:.1f}s")
-        if latency < 120:
-            print(f"  - SLA Status: ✅ Under 2min threshold")
-        else:
-            print(f"  - SLA Status: ❌ Exceeded 2min threshold")
-    else:
-        print(f"  - Recovery not measured (system may not have failed)")
-
-    # Save reports
-    _save_reports()
-
-    # Debug logs
-    if DEBUG_MODE and _extreme_stats["debug_logs"]:
+    # Debug logs (추가 출력)
+    if DEBUG_MODE and _extreme_stats.get("debug_logs"):
         print("\n🔍 Debug Logs (last 20):")
         for log in _extreme_stats["debug_logs"][-20:]:
             print(f"  {log}")
 
     print("\n" + "=" * 80)
 
-
-def _save_reports():
-    """결과 저장"""
-    results_dir = os.path.join(_load_tests_dir, "results", "stage12")
-    os.makedirs(results_dir, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # JSON 리포트
-    json_path = os.path.join(results_dir, f"stage12_extreme_{timestamp}.json")
-
-    # response_times를 요약 통계로 변환 (JSON 직렬화 위해) - Deep copy 사용
-    import copy
-
-    json_stats = copy.deepcopy(_extreme_stats)
-    for phase, stats in json_stats["metrics_per_phase"].items():
-        rt = stats.get("response_times", [])
-        stats["response_time_stats"] = {
-            "count": len(rt),
-            "avg": sum(rt) / len(rt) if rt else 0,
-            "min": min(rt) if rt else 0,
-            "max": max(rt) if rt else 0,
-        }
-        del stats["response_times"]
-
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "test_name": "Stage 12: EXTREME Spike & Recovery",
-                "timestamp": datetime.now().isoformat(),
-                "config": {
-                    "max_users": MAX_USERS,
-                    "min_users": MIN_USERS,
-                    "test_duration": TEST_DURATION,
-                },
-                "results": json_stats,
-            },
-            f,
-            indent=2,
-            ensure_ascii=False,
-            default=str,
-        )
-
-    print(f"\n💾 JSON Report: {json_path}")
-
-    # Markdown 리포트
-    md_path = os.path.join(results_dir, f"stage12_extreme_{datetime.now().strftime('%Y-%m-%d')}.md")
-    _generate_markdown_report(md_path)
-
-    print(f"💾 Markdown Report: {md_path}")
-
-
-def _generate_markdown_report(filepath: str):
-    """마크다운 리포트 생성"""
-    cb = _extreme_stats["circuit_breaker"]
-    em = _extreme_stats["emergency"]
-    eb = _extreme_stats["error_budget"]
-    dlq = _extreme_stats["dlq"]
-    chaos = _extreme_stats["chaos"]
-    ks = _extreme_stats["kill_switch"]
-    v2 = _extreme_stats["v2_modules"]
-    recovery = _extreme_stats["recovery"]
-
-    # V2.5 Platinum Grade
-    sla = _extreme_stats["sla_hardcap"]
-    storm = _extreme_stats["message_storm"]
-    clock = _extreme_stats["clock_skew"]
-    cascade = _extreme_stats["cascading_failure"]
-    retry = _extreme_stats["retry_storm"]
-
-    total_cache = v2["cache_hits"] + v2["cache_misses"]
-    cache_hit_rate = (v2["cache_hits"] / total_cache * 100) if total_cache > 0 else 0
-
-    # Platinum Grade 판정
-    sla_passed = sla['sla_passed']
-    main_logic_ok = not storm['main_logic_affected']
-    consistency_ok = clock['consistency_maintained']
-    isolation_ok = cascade['isolation_success']
-    circuit_ok = retry['circuit_protected']
-    platinum_achieved = sla_passed and main_logic_ok and consistency_ok and isolation_ok and circuit_ok
-
-    content = f"""# Stage 12 EXTREME Spike & Recovery 테스트 결과 보고서
-
-📅 **테스트 일시**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-🏷️ **버전**: EXTREME Self-Healing V2.5 Platinum
-🎯 **테스트 목표**: 극단적 스파이크 부하에서 Self-Healing 시스템 검증 + Platinum Grade 달성
-
----
-
-## 🏆 Platinum Grade Status
-
-| 항목 | 결과 | 기준 |
-|------|------|------|
-| **SLA Hard-Cap** | {'✅ PASS' if sla_passed else '❌ FAIL'} | P99 ≤ {SLA_P99_THRESHOLD_MS}ms |
-| **Backpressure Control** | {'✅ PASS' if main_logic_ok else '❌ FAIL'} | 메인 로직 영향 없음 |
-| **Clock Skew Resilience** | {'✅ PASS' if consistency_ok else '❌ FAIL'} | 데이터 일관성 유지 |
-| **Cascade Isolation** | {'✅ PASS' if isolation_ok else '❌ FAIL'} | 장애 격리 성공 |
-| **Retry Storm Protection** | {'✅ PASS' if circuit_ok else '❌ FAIL'} | 재시도 폭풍 방지 |
-| **🏆 최종 등급** | {'**PLATINUM** 🏆' if platinum_achieved else '**GOLD** 🥇'} | 모든 항목 PASS |
-
----
-
-## 📋 Executive Summary
-
-| 항목 | 값 | 상태 |
-|------|-----|------|
-| **EXTREME Mode** | ✅ 활성화 | - |
-| **최대 사용자** | {MAX_USERS} | - |
-| **최소 사용자** | {MIN_USERS} | - |
-| **테스트 시간** | {TEST_DURATION}s | - |
-| **CB Open 횟수** | {cb['open_count']} | {'🔴' if cb['open_count'] > 0 else '🟢'} |
-| **Emergency 최대 레벨** | LEVEL_{em['max_level']} | {'🔴' if em['max_level'] >= 3 else '🟡' if em['max_level'] >= 1 else '🟢'} |
-| **Error Budget 소진** | {'Yes' if eb['exhausted'] else 'No'} | {'🔴' if eb['exhausted'] else '🟢'} |
-
----
-
-## ⚖️ V2.5 Platinum Grade Add-ons
-
-### ⚖️ SLA Hard-Cap (엄격한 판정 엔진)
-
-| 항목 | 값 | 기준 |
-|------|-----|------|
-| P99 최대값 | {sla['p99_max_ms']:.0f}ms | ≤ {SLA_P99_THRESHOLD_MS}ms |
-| P99 위반 횟수 | {sla['p99_violations']} | 0 |
-| 데이터 오차 | {sla['data_variance_count']} | 0 |
-| **판정** | {'✅ PASSED' if sla['sla_passed'] else '❌ FAILED'} | - |
-
-### 📨 Message Storm & Backpressure (부하 역전압 테스트)
-
-| 항목 | 값 | 상태 |
-|------|-----|------|
-| 주입된 메시지 | {storm['messages_injected']} | - |
-| 버퍼 오버플로우 | {storm['buffer_overflow_count']} | - |
-| 드롭된 메시지 | {storm['messages_dropped']} | - |
-| Backpressure 활성화 | {'Yes' if storm['backpressure_activated'] else 'No'} | - |
-| **메인 로직 영향** | {'❌ 영향받음' if storm['main_logic_affected'] else '✅ 영향 없음'} | 영향 없어야 함 |
-
-### ⏰ Clock Skew Attack (시간 왜곡 공격)
-
-| 항목 | 값 | 상태 |
-|------|-----|------|
-| 공격 횟수 | {clock['attacks_executed']} | - |
-| 최대 시간 왜곡 | {clock['max_drift_sec']:.2f}s | ≤ {CLOCK_SKEW_MAX_DRIFT_SEC}s |
-| CB 윈도우 손상 | {'❌ Yes' if clock['cb_window_corrupted'] else '✅ No'} | No |
-| 복구 성공 | {'✅ Yes' if clock['recovery_found'] else 'No'} | Yes |
-| **일관성 유지** | {'✅ Yes' if clock['consistency_maintained'] else '❌ No'} | Yes |
-
-### 🌊 Cascading Failure (장애 전파 테스트)
-
-| 항목 | 값 | 상태 |
-|------|-----|------|
-| 전파 트리거 | {cascade['cascades_triggered']} | - |
-| 영향받은 서비스 | {', '.join(cascade['services_affected']) or 'None'} | - |
-| 최대 전파 깊이 | {cascade['max_cascade_depth']} | - |
-| **격리 성공** | {'✅ Yes' if cascade['isolation_success'] else '❌ No'} | Yes |
-
-### 🔄 Retry Storm Prevention (재시도 폭풍 방지)
-
-| 항목 | 값 | 상태 |
-|------|-----|------|
-| 폭풍 감지 | {retry['storms_detected']} | - |
-| 차단된 재시도 | {retry['retries_blocked']} | - |
-| Backoff 적용 | {retry['backoff_applied']} | - |
-| **서킷 보호** | {'✅ Yes' if retry['circuit_protected'] else '❌ No'} | Yes |
-
----
-
-## 🔥 Self-Healing 기능 테스트 결과
-
-### 🔌 Circuit Breaker
-
-| 항목 | 값 |
-|------|-----|
-| Open 횟수 | {cb['open_count']} |
-| Close 횟수 | {cb['close_count']} |
-| Half-Open 횟수 | {cb['half_open_count']} |
-| 영향받은 서비스 | {', '.join(cb['services_affected']) or 'None'} |
-| 복구 지연 | {f"{cb['recovery_latency_ms']:.0f}ms" if cb['recovery_latency_ms'] else 'N/A'} |
-
-### 🚨 Emergency Mode
-
-| 항목 | 값 |
-|------|-----|
-| 트리거 횟수 | {em['triggered_count']} |
-| 해제 횟수 | {em['released_count']} |
-| 최대 레벨 | LEVEL_{em['max_level']} |
-
-### 💰 Error Budget
-
-| 항목 | 값 |
-|------|-----|
-| 초기 잔여 | {eb['initial_remaining']}% |
-| 최소 잔여 | {eb['min_remaining']}% |
-| 소진 여부 | {'Yes' if eb['exhausted'] else 'No'} |
-| 복구 여부 | {'Yes' if eb['recovered'] else 'No'} |
-
-### 📥 DLQ (Dead Letter Queue)
-
-| 항목 | 값 |
-|------|-----|
-| 스파이크 전 | {dlq['items_before_spike']} |
-| 최대 수량 | {dlq['max_count']} |
-| 현재 수량 | {dlq['current_count']} |
-| 리플레이 성공 | {dlq['replay_success_count']} |
-| 리플레이 실패 | {dlq['replay_fail_count']} |
-
-### 💥 Chaos Injection
-
-| 항목 | 값 |
-|------|-----|
-| 장애 주입 횟수 | {chaos['failures_injected']} |
-| CB 트리거 | {chaos['cb_triggers']} |
-| 복구 트리거 | {chaos['recovery_triggers']} |
-
-### 🔌 Kill Switch
-
-| 항목 | 값 |
-|------|-----|
-| 활성화 횟수 | {ks['activated_count']} |
-| 비활성화 횟수 | {ks['deactivated_count']} |
-| 대상 | {', '.join(ks['targets']) or 'None'} |
-
----
-
-## 🚀 V2 최적화 모듈 통계
-
-| 모듈 | 항목 | 값 |
-|------|------|-----|
-| 📦 CBStateCache | 캐시 히트율 | {cache_hit_rate:.1f}% |
-| 📦 CBStateCache | 총 요청 | {total_cache} |
-| 📝 AsyncHealingLogger | 이벤트 수 | {v2['async_events']} |
-| 🎲 AdaptiveJitter | 적용 횟수 | {v2['jitter_applied']} |
-
----
-
-## 📈 Phase별 분석
-
-| Phase | 요청 수 | 에러 수 | 에러율 | 평균 응답시간 |
-|-------|--------|--------|-------|--------------|
-"""
-
-    for phase, stats in _extreme_stats["metrics_per_phase"].items():
-        if stats["requests"] > 0:
-            rt = stats.get("response_times", [])
-            avg_rt = sum(rt) / len(rt) if rt else 0
-            error_rate = stats["errors"] / stats["requests"] * 100
-            content += f"| {phase.upper()} | {stats['requests']} | {stats['errors']} | {error_rate:.2f}% | {avg_rt:.2f}ms |\n"
-
-    content += f"""
----
-
-## 🔄 Recovery Latency Analysis
-
-| 항목 | 값 | SLA |
-|------|-----|-----|
-| 복구 시작 | {datetime.fromtimestamp(recovery['recovery_started_at']).strftime('%H:%M:%S') if recovery['recovery_started_at'] else 'N/A'} | - |
-| 복구 완료 | {datetime.fromtimestamp(recovery['recovery_completed_at']).strftime('%H:%M:%S') if recovery['recovery_completed_at'] else 'N/A'} | - |
-| 총 복구 시간 | {f"{recovery['recovery_latency_seconds']:.1f}s" if recovery['recovery_latency_seconds'] else 'N/A'} | {'✅ < 2min' if recovery['recovery_latency_seconds'] and recovery['recovery_latency_seconds'] < 120 else '❌ > 2min' if recovery['recovery_latency_seconds'] else '-'} |
-
----
-
-## 🎯 테스트 결론
-
-"""
-
-    # 결론 자동 생성
-    passed = True
-    conclusions = []
-
-    if cb["open_count"] > 0 and cb["close_count"] > 0:
-        conclusions.append("✅ Circuit Breaker가 정상적으로 Open/Close 동작함")
-    elif cb["open_count"] > 0:
-        conclusions.append("⚠️ Circuit Breaker가 Open 되었으나 Close되지 않음")
-        passed = False
-    else:
-        conclusions.append("ℹ️ Circuit Breaker가 Open되지 않음 (부하 부족 가능)")
-
-    if em["triggered_count"] > 0 and em["released_count"] > 0:
-        conclusions.append("✅ Emergency Mode 트리거 및 해제 정상 동작")
-    elif em["triggered_count"] > 0:
-        conclusions.append("⚠️ Emergency Mode가 트리거되었으나 해제되지 않음")
-
-    if eb["exhausted"] and eb["recovered"]:
-        conclusions.append("✅ Error Budget 소진 후 복구 성공")
-    elif eb["exhausted"]:
-        conclusions.append("⚠️ Error Budget 소진됨 (복구 대기)")
-
-    if dlq["replay_success_count"] > 0:
-        conclusions.append(f"✅ DLQ 리플레이 성공: {dlq['replay_success_count']}건")
-
-    if recovery["recovery_latency_seconds"]:
-        if recovery["recovery_latency_seconds"] < 120:
-            conclusions.append(f"✅ 복구 시간 SLA 충족: {recovery['recovery_latency_seconds']:.1f}s < 2min")
-        else:
-            conclusions.append(f"❌ 복구 시간 SLA 미충족: {recovery['recovery_latency_seconds']:.1f}s > 2min")
-            passed = False
-
-    # V2.5 Platinum Grade 결론 추가
-    conclusions.append("")
-    conclusions.append("### 🏆 Platinum Grade 결과")
-    conclusions.append(f"- SLA Hard-Cap: {'✅ PASS' if sla['sla_passed'] else '❌ FAIL'} (P99 Max: {sla['p99_max_ms']:.0f}ms)")
-    conclusions.append(f"- Message Storm Backpressure: {'✅ PASS' if not storm['main_logic_affected'] else '❌ FAIL'}")
-    conclusions.append(f"- Clock Skew Resilience: {'✅ PASS' if clock['consistency_maintained'] else '❌ FAIL'}")
-    conclusions.append(f"- Cascading Failure Isolation: {'✅ PASS' if cascade['isolation_success'] else '❌ FAIL'}")
-    conclusions.append(f"- Retry Storm Prevention: {'✅ PASS' if retry['circuit_protected'] else '❌ FAIL'}")
-
-    for conclusion in conclusions:
-        content += f"- {conclusion}\n" if conclusion and not conclusion.startswith("#") else f"\n{conclusion}\n"
-
-    content += f"\n**최종 결과**: {'✅ PASS' if passed else '❌ NEEDS REVIEW'}\n"
-    content += f"\n**Platinum Grade**: {'🏆 ACHIEVED' if platinum_achieved else '🥇 GOLD (일부 미달성)'}\n"
-
-    content += f"""
----
-
-📝 **Generated by Stage 12 EXTREME Spike & Recovery Test V2.5 Platinum**
-"""
-
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
