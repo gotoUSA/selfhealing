@@ -355,3 +355,362 @@ class ChaosClient:
         """배포 안전 여부."""
         status = self.get_safety_status()
         return status.get("is_safe", False)
+    
+    # =========================================================================
+    # Chaos Config API (신규 추가 - Gap 분석 기반)
+    # Reference: selfhealing/api/django/urls.py
+    # =========================================================================
+    
+    def get_safety_guard_config(self) -> Dict[str, Any]:
+        """
+        안전장치 설정 조회.
+        
+        GET /chaos/config/safety-guard/
+        """
+        response = self.client.api_get("chaos/config/safety-guard/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_safety_guard_config(self, **kwargs) -> Dict[str, Any]:
+        """
+        안전장치 설정 변경.
+        
+        POST /chaos/config/safety-guard/
+        """
+        response = self.client.api_post("chaos/config/safety-guard/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_blast_radius_policy(self) -> Dict[str, Any]:
+        """
+        폭발반경 정책 조회.
+        
+        GET /chaos/config/blast-radius/
+        """
+        response = self.client.api_get("chaos/config/blast-radius/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_blast_radius_policy(self, **kwargs) -> Dict[str, Any]:
+        """
+        폭발반경 정책 설정.
+        
+        POST /chaos/config/blast-radius/
+        """
+        response = self.client.api_post("chaos/config/blast-radius/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_scheduler_config(self) -> Dict[str, Any]:
+        """
+        스케줄러 설정 조회.
+        
+        GET /chaos/config/scheduler/
+        """
+        response = self.client.api_get("chaos/config/scheduler/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_scheduler_config(self, **kwargs) -> Dict[str, Any]:
+        """
+        스케줄러 설정 변경.
+        
+        POST /chaos/config/scheduler/
+        """
+        response = self.client.api_post("chaos/config/scheduler/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_report_config(self) -> Dict[str, Any]:
+        """
+        리포트 설정 조회.
+        
+        GET /chaos/config/reports/
+        """
+        response = self.client.api_get("chaos/config/reports/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_report_config(self, **kwargs) -> Dict[str, Any]:
+        """
+        리포트 설정 변경.
+        
+        POST /chaos/config/reports/
+        """
+        response = self.client.api_post("chaos/config/reports/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_stop_conditions_config(self) -> Dict[str, Any]:
+        """
+        정지 조건 설정 조회.
+        
+        GET /chaos/config/stop-conditions/
+        """
+        response = self.client.api_get("chaos/config/stop-conditions/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_stop_conditions_config(self, **kwargs) -> Dict[str, Any]:
+        """
+        정지 조건 설정 변경.
+        
+        POST /chaos/config/stop-conditions/
+        """
+        response = self.client.api_post("chaos/config/stop-conditions/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_ttl_config(self) -> Dict[str, Any]:
+        """
+        TTL 설정 조회.
+        
+        GET /chaos/config/ttl/
+        """
+        response = self.client.api_get("chaos/config/ttl/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_ttl_config(self, **kwargs) -> Dict[str, Any]:
+        """
+        TTL 설정 변경.
+        
+        POST /chaos/config/ttl/
+        """
+        response = self.client.api_post("chaos/config/ttl/", json=kwargs)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_dry_run_config(self) -> Dict[str, Any]:
+        """
+        드라이런 설정 조회.
+        
+        GET /chaos/config/dry-run/
+        """
+        response = self.client.api_get("chaos/config/dry-run/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_dry_run_config(self, enabled: bool = True) -> Dict[str, Any]:
+        """
+        드라이런 설정 변경.
+        
+        POST /chaos/config/dry-run/
+        """
+        response = self.client.api_post("chaos/config/dry-run/", json={"enabled": enabled})
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # Chaos Schedule Approval & Execute API (신규 추가)
+    # =========================================================================
+    
+    def approve_schedule(
+        self,
+        schedule_id: str,
+        comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        스케줄 승인.
+        
+        POST /chaos/schedules/{schedule_id}/approve/
+        """
+        data = {}
+        if comment:
+            data["comment"] = comment
+        
+        response = self.client.api_post(f"chaos/schedules/{schedule_id}/approve/", json=data)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def execute_schedule(self, schedule_id: str) -> Dict[str, Any]:
+        """
+        스케줄 즉시 실행.
+        
+        POST /chaos/schedules/{schedule_id}/execute/
+        """
+        response = self.client.api_post(f"chaos/schedules/{schedule_id}/execute/")
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # Chaos Kill Switch API (Self-Healing 전용)
+    # =========================================================================
+    
+    def get_chaos_kill_switch(self) -> Dict[str, Any]:
+        """
+        카오스 킬스위치 상태 조회.
+        
+        GET /chaos/kill-switch/
+        """
+        response = self.client.api_get("chaos/kill-switch/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_chaos_kill_switch(self, enabled: bool, reason: str = "") -> Dict[str, Any]:
+        """
+        카오스 킬스위치 설정.
+        
+        POST /chaos/kill-switch/
+        """
+        response = self.client.api_post(
+            "chaos/kill-switch/",
+            json={"enabled": enabled, "reason": reason},
+        )
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def kill_all_chaos(self, reason: str = "Emergency stop") -> Dict[str, Any]:
+        """
+        모든 카오스 실험 즉시 중지.
+        
+        POST /chaos/control/kill-all/
+        """
+        response = self.client.api_post("chaos/control/kill-all/", json={"reason": reason})
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # Chaos Safety & Blast Radius Check API (신규 추가)
+    # =========================================================================
+    
+    def chaos_safety_check(self) -> Dict[str, Any]:
+        """
+        카오스 안전 체크.
+        
+        GET /chaos/safety-check/
+        POST /chaos/safety-check/
+        """
+        response = self.client.api_get("chaos/safety-check/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def run_chaos_safety_check(self) -> Dict[str, Any]:
+        """
+        카오스 안전 체크 실행.
+        
+        POST /chaos/safety-check/
+        """
+        response = self.client.api_post("chaos/safety-check/")
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def check_blast_radius(
+        self,
+        experiment_type: Optional[str] = None,
+        target: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        폭발반경 체크.
+        
+        POST /chaos/blast-radius/check/
+        """
+        data = {}
+        if experiment_type:
+            data["experiment_type"] = experiment_type
+        if target:
+            data["target"] = target
+        
+        response = self.client.api_post("chaos/blast-radius/check/", json=data)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # Chaos Reports API (신규 추가)
+    # =========================================================================
+    
+    def list_chaos_reports(
+        self,
+        limit: int = 50,
+        status: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        카오스 리포트 목록 조회.
+        
+        GET /chaos/reports/
+        """
+        params = {"limit": limit}
+        if status:
+            params["status"] = status
+        
+        response = self.client.api_get("chaos/reports/", params=params)
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_chaos_report(self, report_id: str) -> Dict[str, Any]:
+        """
+        카오스 리포트 상세 조회.
+        
+        GET /chaos/reports/{report_id}/
+        """
+        response = self.client.api_get(f"chaos/reports/{report_id}/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def generate_chaos_report(
+        self,
+        experiment_id: Optional[str] = None,
+        schedule_id: Optional[str] = None,
+        include_metrics: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        카오스 리포트 생성.
+        
+        POST /chaos/reports/generate/
+        """
+        data = {"include_metrics": include_metrics}
+        if experiment_id:
+            data["experiment_id"] = experiment_id
+        if schedule_id:
+            data["schedule_id"] = schedule_id
+        
+        response = self.client.api_post("chaos/reports/generate/", json=data)
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_grade_history(self, limit: int = 50) -> Dict[str, Any]:
+        """
+        카오스 등급 이력 조회.
+        
+        GET /chaos/reports/grades/
+        """
+        response = self.client.api_get("chaos/reports/grades/", params={"limit": limit})
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def list_pending_approvals(self) -> Dict[str, Any]:
+        """
+        대기 중인 승인 목록 조회.
+        
+        GET /chaos/pending-approvals/
+        """
+        response = self.client.api_get("chaos/pending-approvals/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}

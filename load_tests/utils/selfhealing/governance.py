@@ -330,3 +330,160 @@ class GovernanceClient:
         """컴플라이언스 준수 여부."""
         status = self.get_compliance_status()
         return status.get("is_compliant", False)
+    
+    # =========================================================================
+    # Metrics Status API (신규 추가 - Gap 분석 기반)
+    # Reference: selfhealing/api/django/urls.py
+    # =========================================================================
+    
+    def get_metrics_status(self) -> Dict[str, Any]:
+        """
+        메트릭 상태 조회.
+        
+        GET /metrics/status/
+        """
+        response = self.client.api_get("metrics/status/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def sync_metrics(self) -> Dict[str, Any]:
+        """
+        메트릭 동기화 (Deprecated - governance/reconcile/ 사용 권장).
+        
+        POST /metrics/sync/
+        """
+        response = self.client.api_post("metrics/sync/")
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_drift_report(self) -> Dict[str, Any]:
+        """
+        드리프트 리포트 조회 (Deprecated - metrics/status/ 사용 권장).
+        
+        GET /metrics/drift-report/
+        """
+        response = self.client.api_get("metrics/drift-report/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # Governance Reconcile & Mode API (신규 추가)
+    # =========================================================================
+    
+    def reconcile(self, force: bool = False) -> Dict[str, Any]:
+        """
+        거버넌스 정합성 조정.
+        
+        POST /governance/reconcile/
+        """
+        response = self.client.api_post("governance/reconcile/", json={"force": force})
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_governance_mode(self) -> Dict[str, Any]:
+        """
+        거버넌스 모드 조회.
+        
+        GET /governance/mode/
+        """
+        response = self.client.api_get("governance/mode/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def set_governance_mode(self, mode: str, reason: str = "") -> Dict[str, Any]:
+        """
+        거버넌스 모드 변경.
+        
+        POST /governance/mode/
+        
+        Args:
+            mode: 모드 (strict, relaxed, audit-only 등)
+            reason: 변경 사유
+        """
+        response = self.client.api_post(
+            "governance/mode/",
+            json={"mode": mode, "reason": reason},
+        )
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def get_governance_status(self) -> Dict[str, Any]:
+        """
+        거버넌스 RBAC 상태 조회.
+        
+        GET /governance/status/
+        """
+        response = self.client.api_get("governance/status/")
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    # =========================================================================
+    # 4-Eyes Approval Workflow API (신규 추가)
+    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # =========================================================================
+    
+    def list_approval_requests(
+        self,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        승인 요청 목록 조회.
+        
+        GET /governance/approval-requests/
+        """
+        params = {"limit": limit}
+        if status:
+            params["status"] = status
+        
+        response = self.client.api_get("governance/approval-requests/", params=params)
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def approve_approval_request(
+        self,
+        request_id: str,
+        comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        승인 요청 승인 (4-Eyes Approval).
+        
+        POST /governance/approval-requests/{request_id}/approve/
+        """
+        data = {}
+        if comment:
+            data["comment"] = comment
+        
+        response = self.client.api_post(
+            f"governance/approval-requests/{request_id}/approve/",
+            json=data,
+        )
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
+    
+    def reject_approval_request(
+        self,
+        request_id: str,
+        reason: str,
+    ) -> Dict[str, Any]:
+        """
+        승인 요청 거부 (4-Eyes Approval).
+        
+        POST /governance/approval-requests/{request_id}/reject/
+        """
+        response = self.client.api_post(
+            f"governance/approval-requests/{request_id}/reject/",
+            json={"reason": reason},
+        )
+        if response.status_code in (200, 201):
+            return response.json()
+        return {"status": "error", "status_code": response.status_code}
