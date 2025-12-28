@@ -30,6 +30,20 @@
 > 💡 **구현 가이드**: 이 문서의 기능들은 모두 신규이지만,
 > 기존 모듈의 **데이터를 활용**하여 구현해야 합니다.
 
+### 📁 구현 위치 가이드
+
+이 문서의 기능들은 **테스트 전용**입니다 (런타임 코드 불필요):
+
+| 기능 | 테스트 코드 | 연계 모듈 | 용도 |
+|------|----------|----------|------|
+| **Metrics vs DNA 충돌** | `load_tests/utils/selfhealing/dna_metrics.py` | `observability.py` | CI/CD에서 SLA 불일치 감지 |
+| **Dependency Graph** | `load_tests/utils/selfhealing/dna_graph.py` | `chaos.py`, `xtest.py` | 장애 연쇄 범위 분석 |
+| **Mutation DNA** | `load_tests/utils/selfhealing/dna_mutation.py` | `chaos.py` | 진화적 테스트 |
+| **Zero-Base 시나리오** | `load_tests/utils/selfhealing/dna_zerobase.py` | 없음 | 최소 모듈 테스트 |
+
+> ℹ️ 이 기능들은 **테스트 시나리오 분석/검증** 목적이므로
+> 런타임 코드(`packages/selfhealing-python/`)가 필요 없습니다.
+
 ---
 
 ## 1. Metrics vs DNA 충돌 감지 (Phase 2)

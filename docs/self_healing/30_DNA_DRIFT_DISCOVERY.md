@@ -32,6 +32,33 @@
 > 💡 **구현 시 주의**: Drift 관련 API 호출은 기존 `l2_storage.py`, `governance.py`를 사용하고,
 > **Stage DNA 레벨의 Drift 감지 로직만 신규 구현**하세요.
 
+### 📁 구현 위치 가이드
+
+이 문서의 기능들은 **테스트 전용**입니다 (런타임 코드 불필요):
+
+| 기능 | 테스트 코드 | 연계 모듈 | 용도 |
+|------|----------|----------|------|
+| **Unknown Module Strict Mode** | `load_tests/utils/selfhealing/stage_dna.py` (확장) | 없음 | DNA 검증 시 테스트 차단 |
+| **DNA Drift (테스트 레벨)** | `load_tests/utils/selfhealing/dna_drift.py` | `governance.py`, `l2_storage.py` | Stage DNA 누락 감지 |
+| **Discovery Stage** | `load_tests/utils/selfhealing/dna_discovery.py` | 없음 | 테스트 누락 자동 탐지 |
+
+#### 기존 Drift API vs 신규 DNA Drift
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  기존 Drift API (l2_storage.py, governance.py)                  │
+│  → 런타임 데이터 드리프트 감지 (L2 저장소 동기화 오류 등)       │
+│  → 예: has_drift(), get_drift_stats(), trigger_reconcile()       │
+├─────────────────────────────────────────────────────────────────┤
+│  신규 DNA Drift (dna_drift.py) - 테스트 전용                    │
+│  → Stage DNA 선언 vs 코드베이스 불일치 감지                     │
+│  → 예: 새 Service 추가되었는데 Stage DNA에 없음 → 경고        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> ℹ️ 기존 `l2_storage.py`의 `has_drift()`는 **런타임 데이터 드리프트**를 감지하고,
+> 신규 `dna_drift.py`는 **Stage DNA 선언 드리프트**를 감지합니다. 다른 목적!
+
 ---
 
 ## 1. 개요

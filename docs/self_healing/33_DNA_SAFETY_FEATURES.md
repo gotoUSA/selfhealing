@@ -87,6 +87,51 @@ class BlastRadiusDNA:
 > 💡 **핵심 원칙**: `chaos.py`, `runtime_config.py`, `governance.py`의
 > 기존 API를 활용하고, **Stage DNA 통합 로직만 추가**하세요.
 
+### 📁 구현 위치 가이드
+
+이 문서의 기능들은 **런타임 코드 + 테스트 클라이언트 + 단위 테스트** 모두 필요:
+
+| 기능 | 런타임 코드 | 단위 테스트 | 테스트 클라이언트 |
+|------|-------------|----------|---------------|
+| **Rollback DNA** | `packages/selfhealing-python/src/selfhealing/services/rollback/` | `tests/self_healing/unit/test_rollback.py` | `load_tests/utils/selfhealing/dna_safety.py` |
+| **Blast Radius DNA** | `packages/selfhealing-python/src/selfhealing/services/blast_radius/` | `tests/self_healing/unit/test_blast_radius.py` | `load_tests/utils/selfhealing/dna_safety.py` |
+
+#### 기존 모듈과의 관계
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  기존 모듈 (이미 구현됨)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│  governance.py     → rollback_change_request()                  │
+│  runtime_config.py → rollback()                                 │
+│  chaos.py          → get_blast_radius_policy()                  │
+│  xtest.py          → test_blast_radius()                        │
+├─────────────────────────────────────────────────────────────────┤
+│                            ↓                                    │
+│  신규 모듈 (Stage DNA 통합)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│  services/rollback/      → 자동 트리거 + 스냅샷 관리          │
+│  services/blast_radius/  → 서비스 그래프 기반 격리               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 구현 순서
+
+```
+1. 런타임 코드 구현 (packages/selfhealing-python/src/selfhealing/services/...)
+   │
+   ├─ 기존 모듈 활용: runtime_config.rollback(), chaos.get_blast_radius_policy()
+   └─ Stage DNA 통합 로직 추가
+   ↓
+2. 단위 테스트 작성 (tests/self_healing/unit/...)
+   ↓
+3. API 엔드포인트 추가 (selfhealing/api/django/views/...)
+   ↓
+4. 테스트 클라이언트 구현 (load_tests/utils/selfhealing/dna_safety.py)
+   ↓
+5. Stage 파일에서 사용
+```
+
 ---
 
 ## 1. Rollback DNA (Phase 1)

@@ -48,6 +48,30 @@ class ComplianceDNA:
 
 > 💡 **핵심 원칙**: `governance.py`의 기존 API를 활용하고, **비즈니스 로직만 추가**하세요.
 
+### 📁 구현 위치 가이드
+
+이 문서의 기능들은 **런타임 코드 + 테스트 클라이언트 + 단위 테스트** 모두 필요:
+
+| 기능 | 런타임 코드 | 단위 테스트 | 테스트 클라이언트 |
+|------|-------------|----------|---------------|
+| **FinOps DNA** | `packages/selfhealing-python/src/selfhealing/services/finops/` | `tests/self_healing/unit/test_finops.py` | `load_tests/utils/selfhealing/dna_finops.py` |
+| **Compliance DNA** | `packages/selfhealing-python/src/selfhealing/services/compliance/` | `tests/self_healing/unit/test_compliance.py` | `load_tests/utils/selfhealing/dna_compliance.py` |
+| **Self-Learning DNA** | `packages/selfhealing-python/src/selfhealing/services/learning/` | `tests/self_healing/unit/test_learning.py` | `load_tests/utils/selfhealing/dna_learning.py` |
+
+#### 구현 순서
+
+```
+1. 런타임 코드 구현 (packages/selfhealing-python/...)
+   ↓
+2. 단위 테스트 작성 (tests/self_healing/unit/...)
+   ↓
+3. API 엔드포인트 추가 (selfhealing/api/django/views/...)
+   ↓
+4. 테스트 클라이언트 구현 (load_tests/utils/selfhealing/...)
+   ↓
+5. Stage 파일에서 사용
+```
+
 ---
 
 ## 1. FinOps DNA (Phase 2)

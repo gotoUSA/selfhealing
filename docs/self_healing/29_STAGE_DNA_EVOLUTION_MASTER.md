@@ -25,18 +25,78 @@
 | | `xtest.py` → `test_blast_radius()`, `test_multi_blast_radius()` | ✅ 구현됨 |
 | **Compliance** | `governance.py` → `get_compliance_status()`, `run_compliance_check()` | ✅ 구현됨 |
 
-### ❌ 신규 구현 필요
+### ❌ 신규 구현 필요 - 구현 위치 가이드
 
-| 기능 | 상세 문서 | 우선순위 |
-|------|----------|----------|
-| **Discovery Stage** | [30번 문서](30_DNA_DRIFT_DISCOVERY.md) | Phase 2 |
-| **Unknown Module Strict Mode** | [30번 문서](30_DNA_DRIFT_DISCOVERY.md) | Phase 1 |
-| **Mutation DNA** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 3 |
-| **FinOps DNA** | [32번 문서](32_DNA_ENTERPRISE_FEATURES.md) | Phase 2 |
-| **Self-Learning DNA** | [32번 문서](32_DNA_ENTERPRISE_FEATURES.md) | Phase 3 |
-| **Metrics vs DNA 충돌** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
-| **Dependency Graph** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
-| **Zero-Base 시나리오** | [31번 문서](31_DNA_ADVANCED_FEATURES.md) | Phase 4 |
+> 🚨 **중요**: 런타임 코드는 `packages/selfhealing-python/`에, 테스트 클라이언트는 `load_tests/utils/selfhealing/`에 구현!
+
+#### 🔴 런타임 코드 (packages/selfhealing-python/src/selfhealing/services/)
+
+| 기능 | 런타임 코드 | 테스트 클라이언트 | 단위 테스트 | 상세 문서 |
+|------|-------------|-----------------|------------|----------|
+| **FinOps DNA** | `services/finops/` | `load_tests/.../dna_finops.py` | `tests/self_healing/unit/test_finops.py` | [32번](32_DNA_ENTERPRISE_FEATURES.md) |
+| **Self-Learning DNA** | `services/learning/` | `load_tests/.../dna_learning.py` | `tests/self_healing/unit/test_learning.py` | [32번](32_DNA_ENTERPRISE_FEATURES.md) |
+| **Rollback DNA (확장)** | `services/rollback/` | `load_tests/.../dna_safety.py` | `tests/self_healing/unit/test_rollback.py` | [33번](33_DNA_SAFETY_FEATURES.md) |
+| **Blast Radius DNA (확장)** | `services/blast_radius/` | `load_tests/.../dna_safety.py` | `tests/self_healing/unit/test_blast_radius.py` | [33번](33_DNA_SAFETY_FEATURES.md) |
+| **Compliance DNA (확장)** | `services/compliance/` | `load_tests/.../dna_compliance.py` | `tests/self_healing/unit/test_compliance.py` | [32번](32_DNA_ENTERPRISE_FEATURES.md) |
+
+#### 🟡 테스트 전용 코드 (load_tests/utils/selfhealing/)
+
+| 기능 | 테스트 코드 | 상세 문서 | 우선순위 |
+|------|----------|----------|----------|
+| **Discovery Stage** | `dna_discovery.py` | [30번](30_DNA_DRIFT_DISCOVERY.md) | Phase 2 |
+| **Unknown Module Strict Mode** | `stage_dna.py` (확장) | [30번](30_DNA_DRIFT_DISCOVERY.md) | Phase 1 |
+| **Mutation DNA** | `dna_mutation.py` | [31번](31_DNA_ADVANCED_FEATURES.md) | Phase 3 |
+| **Metrics vs DNA 충돌** | `dna_metrics.py` | [31번](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
+| **Dependency Graph** | `dna_graph.py` | [31번](31_DNA_ADVANCED_FEATURES.md) | Phase 2 |
+| **Zero-Base 시나리오** | `dna_zerobase.py` | [31번](31_DNA_ADVANCED_FEATURES.md) | Phase 4 |
+| **DNA Drift (테스트 레벨)** | `dna_drift.py` | [30번](30_DNA_DRIFT_DISCOVERY.md) | Phase 2 |
+
+### 📌 프로젝트 구조 요약
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│  packages/selfhealing-python/src/selfhealing/                        │
+│  └─ 🔴 런타임 코드 (프로덕션에서 실행)                                  │
+│     ├── services/finops/         ← FinOps DNA (NEW)                  │
+│     ├── services/learning/       ← Self-Learning DNA (NEW)           │
+│     ├── services/rollback/       ← Rollback DNA 확장 (EXTEND)         │
+│     ├── services/blast_radius/   ← Blast Radius DNA 확장 (EXTEND)     │
+│     └── services/compliance/     ← Compliance DNA 확장 (EXTEND)       │
+│                                                                       │
+├───────────────────────────────────────────────────────────────────────┤
+│  tests/self_healing/unit/                                            │
+│  └─ 🟢 단위 테스트 (런타임 코드 검증)                                    │
+│     ├── test_finops.py                                              │
+│     ├── test_learning.py                                            │
+│     ├── test_rollback.py                                            │
+│     ├── test_blast_radius.py                                        │
+│     └── test_compliance.py                                          │
+│                                                                       │
+├───────────────────────────────────────────────────────────────────────┤
+│  load_tests/utils/selfhealing/                                        │
+│  └─ 🟡 테스트 클라이언트 (API 호출용)                                     │
+│     ├── dna_finops.py        ← FinOps API 클라이언트                   │
+│     ├── dna_learning.py      ← Learning API 클라이언트                 │
+│     ├── dna_safety.py        ← Rollback/BlastRadius 클라이언트        │
+│     ├── dna_compliance.py    ← Compliance API 클라이언트              │
+│     ├── dna_discovery.py     ← 테스트 전용 (런타임 없음)              │
+│     ├── dna_mutation.py      ← 테스트 전용 (런타임 없음)              │
+│     ├── dna_metrics.py       ← 테스트 전용 (런타임 없음)              │
+│     ├── dna_graph.py         ← 테스트 전용 (런타임 없음)              │
+│     ├── dna_drift.py         ← 테스트 전용 (런타임 없음)              │
+│     └── dna_zerobase.py      ← 테스트 전용 (런타임 없음)              │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+### 📝 구현 체크리스트
+
+런타임 기능 구현 시 반드시 다음을 함께 구현:
+
+- [ ] **런타임 코드**: `packages/selfhealing-python/src/selfhealing/services/{feature}/`
+- [ ] **단위 테스트**: `tests/self_healing/unit/test_{feature}.py`
+- [ ] **테스트 클라이언트**: `load_tests/utils/selfhealing/dna_{feature}.py`
+- [ ] **API 엔드포인트**: `selfhealing/api/django/views/{feature}.py`
+- [ ] **URL 등록**: `selfhealing/api/django/urls.py`
 
 ### 📁 기존 모듈 파일 목록 (28개)
 
