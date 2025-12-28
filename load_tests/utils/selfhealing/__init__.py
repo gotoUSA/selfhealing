@@ -82,6 +82,18 @@ from .corruption_shield import CorruptionShieldClient
 # V4 Controller (극한 테스트용 통합 컨트롤러)
 from .controller import SelfHealingController, get_controller, reset_controller
 
+# V5 Stage DNA (의존성 선언 및 검증)
+from .stage_dna import (
+    validate_stage_dna,
+    validate_stage_file,
+    validate_all_stages,
+    generate_stage_dna_template,
+    get_required_modules_for_type,
+    get_recommended_modules_for_type,
+    StageType,
+    ValidationResult,
+)
+
 
 class SelfHealingClient:
     """
@@ -286,4 +298,13 @@ __all__ = [
     "SelfHealingController",
     "get_controller",
     "reset_controller",
+    # V5 Stage DNA (의존성 선언 및 검증)
+    "validate_stage_dna",
+    "validate_stage_file",
+    "validate_all_stages",
+    "generate_stage_dna_template",
+    "get_required_modules_for_type",
+    "get_recommended_modules_for_type",
+    "StageType",
+    "ValidationResult",
 ]

@@ -348,6 +348,138 @@ result = batch_replay_dlq.apply(args=["payment"])
 
 ---
 
-📝 **Hidden Features Discovery Guide v1.0.0**
-📅 **Created**: 2025-12-28
+## 12. Stage DNA - 모듈 의존성 선언 및 검증
+
+### 12.1 개요
+
+Stage DNA는 각 테스트 Stage가 어떤 Self-Healing 모듈을 필요로 하는지 **명시적으로 선언**하고, 
+테스트 실행 전 **자동 검증**하는 시스템입니다.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Stage DNA 시스템                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Stage 파일 상단에 DNA 선언                                  │
+│         ↓                                                    │
+│  validate_stage_dna() 호출                                   │
+│         ↓                                                    │
+│  27번 문서 기준으로 필수/권장 모듈 체크                      │
+│         ↓                                                    │
+│  ✅ Pass / ❌ Fail (누락된 Core 모듈 안내)                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 12.2 Stage DNA 선언 방법
+
+각 Stage 파일 상단에 `STAGE_DNA` 딕셔너리를 추가합니다:
+
+```python
+"""
+Stage 12 - Payment Load Test
+Self-Healing Stage DNA 정의
+"""
+
+STAGE_DNA = {
+    "name": "Stage 12 - Payment Load Test",
+    "type": "load",  # smoke, load, chaos, integration, platinum
+    "required_modules": ["circuit_breaker", "error_budget", "health"],
+    "optional_modules": ["state_cache", "adaptive_jitter"],
+}
+
+# DNA 검증 (테스트 시작 전 자동 체크)
+from load_tests.utils.selfhealing.stage_dna import validate_stage_dna
+validation_result = validate_stage_dna(STAGE_DNA)
+if not validation_result.is_valid:
+    import warnings
+    warnings.warn(str(validation_result))
+```
+
+### 12.3 시나리오 유형별 필수 모듈
+
+| 유형 | 필수 모듈 | 권장 모듈 |
+|-----|----------|----------|
+| **smoke** | `health` | - |
+| **load** | `circuit_breaker`, `error_budget`, `health` | `state_cache`, `adaptive_jitter`, `throttle`, `rate_limiter` |
+| **chaos** | `circuit_breaker`, `chaos`, `xtest`, `emergency`, `dlq`, `health` | `observability`, `corruption_shield` |
+| **integration** | `circuit_breaker`, `dlq`, `observability`, `health` | `reconciliation`, `governance`, `l2_storage` |
+| **platinum** | 전체 Core 모듈 | 전체 최적화 모듈 |
+
+### 12.4 검증 API
+
+```python
+from load_tests.utils.selfhealing import (
+    validate_stage_dna,
+    validate_stage_file,
+    validate_all_stages,
+    generate_stage_dna_template,
+    get_required_modules_for_type,
+    get_recommended_modules_for_type,
+)
+
+# 1. DNA 딕셔너리 직접 검증
+result = validate_stage_dna(STAGE_DNA)
+print(result)  # ✅ PASS 또는 ❌ FAIL
+
+# 2. 파일에서 STAGE_DNA 추출 후 검증
+result = validate_stage_file("load_tests/scenarios/stage12/locustfile.py")
+
+# 3. 전체 Stage 파일 검증
+results = validate_all_stages("load_tests/scenarios", strict=False)
+
+# 4. DNA 템플릿 생성
+template = generate_stage_dna_template("Stage 42 - Platinum", "platinum")
+print(template)
+
+# 5. 특정 유형의 필수/권장 모듈 조회
+required = get_required_modules_for_type("chaos")
+recommended = get_recommended_modules_for_type("chaos")
+```
+
+### 12.5 CLI 사용법
+
+```bash
+# 전체 Stage 검증
+python -m load_tests.utils.selfhealing.stage_dna --dir load_tests/scenarios
+
+# 엄격 모드 (권장 모듈 누락도 실패 처리)
+python -m load_tests.utils.selfhealing.stage_dna --strict
+
+# DNA 템플릿 생성
+python -m load_tests.utils.selfhealing.stage_dna --generate chaos --name "Stage 16 - Chaos Test"
+```
+
+### 12.6 검증 결과 예시
+
+```
+✅ PASS - Stage 12 - Payment Load Test (load)
+
+❌ FAIL - Stage 42 - Platinum Test (platinum)
+  🔴 Missing Core Modules: chaos, xtest, emergency
+  🟡 Missing Recommended: corruption_shield, reconciliation
+  ⚠️ Platinum Stage에서는 SelfHealingController 사용 권장
+
+============================================================
+Stage DNA Validation Summary
+  Total: 51
+  ✅ Passed: 48
+  ❌ Failed: 3
+============================================================
+```
+
+### 12.7 CI/CD 통합
+
+```yaml
+# .github/workflows/test.yml
+- name: Validate Stage DNA
+  run: |
+    python -m load_tests.utils.selfhealing.stage_dna --dir load_tests/scenarios --strict
+```
+
+---
+
+📝 **Hidden Features Discovery Guide v1.1.0**
+📅 **Updated**: 2025-12-28
 📁 **Location**: `docs/self_healing/28_HIDDEN_FEATURES_DISCOVERY.md`
+✅ **Stage DNA 시스템 추가**
