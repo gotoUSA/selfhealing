@@ -4,18 +4,48 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: test_selfhealing
+      POSTGRES_USER: shopping_user
+      POSTGRES_PASSWORD: shopping_pass
+      POSTGRES_DB: shopping_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_db"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Redis for Celery and cache
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Chaos tests runner
+  test-chaos:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/self_healing/chaos/ -v --tb=short --no-cov"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Test runner for selfhealing package
   test:
