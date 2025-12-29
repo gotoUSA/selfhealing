@@ -1,0 +1,260 @@
+"""
+Tests for Circuit Breaker Config
+
+Covers:
+- CircuitState constants
+- CircuitBreakerConfig dataclass
+- from_settings class method
+- CircuitBreakerResult
+- FallbackResult
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+from dataclasses import asdict
+
+
+class TestCircuitState:
+    """Tests for CircuitState constants."""
+    
+    def test_closed_state_value(self):
+        """Test CLOSED state value."""
+        from selfhealing.services.circuit_breaker.config import CircuitState
+        assert CircuitState.CLOSED == "closed"
+    
+    def test_open_state_value(self):
+        """Test OPEN state value."""
+        from selfhealing.services.circuit_breaker.config import CircuitState
+        assert CircuitState.OPEN == "open"
+    
+    def test_half_open_state_value(self):
+        """Test HALF_OPEN state value."""
+        from selfhealing.services.circuit_breaker.config import CircuitState
+        assert CircuitState.HALF_OPEN == "half_open"
+
+
+class TestCircuitBreakerConfig:
+    """Tests for CircuitBreakerConfig dataclass."""
+    
+    def test_default_values(self):
+        """Test default configuration values."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        
+        assert config.enabled is False
+        assert config.failure_threshold == 5
+        assert config.recovery_timeout == 60
+        assert config.success_threshold == 2
+        assert config.minimum_calls == 10
+        assert config.sliding_window_size == 100
+        assert config.failure_rate_threshold == 0.0
+        assert config.fallback_strategy == "block"
+    
+    def test_custom_values(self):
+        """Test custom configuration values."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=10,
+            recovery_timeout=120,
+            success_threshold=5,
+        )
+        
+        assert config.enabled is True
+        assert config.failure_threshold == 10
+        assert config.recovery_timeout == 120
+        assert config.success_threshold == 5
+    
+    def test_error_budget_integration_settings(self):
+        """Test error budget integration configuration."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        assert config.cb_open_burn_rate_multiplier == 10.0
+    
+    def test_governance_parameters(self):
+        """Test governance parameters."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        assert config.manual_override_ttl_minutes == 90
+        assert config.half_open_request_limit == 10
+        assert config.max_pending_duration_hours == 4
+        assert config.max_retry_lifetime_hours == 24
+    
+    def test_rate_limit_cascade_settings(self):
+        """Test rate limit cascade detection settings."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        assert config.rate_limit_cascade_threshold == 10
+        assert config.rate_limit_cascade_window_seconds == 60
+    
+    def test_self_ddos_protection_settings(self):
+        """Test self-DDoS protection settings."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        assert config.self_ddos_protection_enabled is True
+        assert config.self_ddos_request_threshold == 100
+        assert config.self_ddos_window_seconds == 10
+        assert config.self_ddos_backoff_multiplier == 2.0
+    
+    def test_from_settings_fallback(self):
+        """Test from_settings with fallback to defaults."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        # Patch to simulate runtime config not available
+        with patch.dict('sys.modules', {'selfhealing.services.runtime_config': None}):
+            # Should use core config fallback
+            config = CircuitBreakerConfig.from_settings()
+            assert config is not None
+    
+    def test_from_settings_with_runtime_config(self):
+        """Test from_settings with runtime config."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        mock_manager = MagicMock()
+        mock_manager.get_circuit_breaker_config.return_value = {
+            "enabled": True,
+            "failure_threshold": 15,
+            "recovery_timeout": 90,
+        }
+        
+        with patch('selfhealing.services.runtime_config.get_runtime_config_manager', return_value=mock_manager):
+            config = CircuitBreakerConfig.from_settings()
+            assert config.enabled is True
+            assert config.failure_threshold == 15
+            assert config.recovery_timeout == 90
+
+
+class TestCircuitBreakerResult:
+    """Tests for CircuitBreakerResult dataclass."""
+    
+    def test_succeeded_result(self):
+        """Test creating a succeeded result."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerResult
+        
+        result = CircuitBreakerResult.succeeded(
+            service_name="test_service",
+            previous_state="closed",
+            new_state="open",
+            message="Circuit opened",
+        )
+        
+        assert result.success is True
+        assert result.service_name == "test_service"
+        assert result.previous_state == "closed"
+        assert result.new_state == "open"
+        assert result.message == "Circuit opened"
+        assert result.error is None
+    
+    def test_failed_result(self):
+        """Test creating a failed result."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerResult
+        
+        result = CircuitBreakerResult.failed(
+            service_name="test_service",
+            error="Connection failed",
+        )
+        
+        assert result.success is False
+        assert result.service_name == "test_service"
+        assert result.error == "Connection failed"
+    
+    def test_result_dataclass_fields(self):
+        """Test result dataclass fields."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerResult
+        from dataclasses import asdict
+        
+        result = CircuitBreakerResult.succeeded(
+            service_name="test_service",
+            previous_state="closed",
+            new_state="open",
+            message="Test",
+        )
+        
+        d = asdict(result)
+        assert isinstance(d, dict)
+        assert d["success"] is True
+        assert d["service_name"] == "test_service"
+
+
+class TestFallbackResult:
+    """Tests for FallbackResult dataclass."""
+    
+    def test_fallback_result_allow(self):
+        """Test FallbackResult.allow() factory."""
+        from selfhealing.services.circuit_breaker.config import FallbackResult
+        
+        result = FallbackResult.allow()
+        
+        assert result.allowed is True
+        assert result.fallback_used is False
+    
+    def test_fallback_result_block(self):
+        """Test FallbackResult.block() factory."""
+        from selfhealing.services.circuit_breaker.config import FallbackResult
+        
+        result = FallbackResult.block(message="Circuit breaker is open")
+        
+        assert result.allowed is False
+        assert result.fallback_used is False
+        assert result.message == "Circuit breaker is open"
+    
+    def test_fallback_result_from_cache(self):
+        """Test FallbackResult.from_cache() factory."""
+        from selfhealing.services.circuit_breaker.config import FallbackResult
+        
+        cached_data = {"data": "cached"}
+        result = FallbackResult.from_cache(cached_data)
+        
+        assert result.allowed is False
+        assert result.fallback_used is True
+        assert result.fallback_type == "cache"
+        assert result.fallback_data == cached_data
+    
+    def test_fallback_result_to_dlq(self):
+        """Test FallbackResult.to_dlq() factory."""
+        from selfhealing.services.circuit_breaker.config import FallbackResult
+        
+        result = FallbackResult.to_dlq()
+        
+        assert result.allowed is False
+        assert result.fallback_used is True
+        assert result.fallback_type == "dlq"
+    
+    def test_fallback_result_default_response(self):
+        """Test FallbackResult.default_response() factory."""
+        from selfhealing.services.circuit_breaker.config import FallbackResult
+        
+        default_data = {"status": "unavailable"}
+        result = FallbackResult.default_response(default_data)
+        
+        assert result.allowed is False
+        assert result.fallback_used is True
+        assert result.fallback_type == "default"
+        assert result.fallback_data == default_data
+
+
+class TestFallbackStrategies:
+    """Tests for fallback strategy options."""
+    
+    def test_valid_fallback_strategies(self):
+        """Test valid fallback strategy values."""
+        valid_strategies = ["block", "cache", "dlq", "default_response"]
+        
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        for strategy in valid_strategies:
+            config = CircuitBreakerConfig(fallback_strategy=strategy)
+            assert config.fallback_strategy == strategy
+    
+    def test_fallback_cache_ttl_default(self):
+        """Test default fallback cache TTL."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        
+        config = CircuitBreakerConfig()
+        assert config.fallback_cache_ttl_seconds == 300  # 5 minutes
