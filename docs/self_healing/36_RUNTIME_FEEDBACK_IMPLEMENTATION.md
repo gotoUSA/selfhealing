@@ -665,7 +665,93 @@ def apply_adjustment(self, adjustment: AdjustmentDecision) -> bool:
 3. 두 가지 다른 목적이므로 별도 파일로 분리하면 혼란만 가중
 
 ---
+## ⚠️ 장애 대비 복구 전략 (Fallback Strategy)
 
+### 문제 인식
+
+자율 조정 시스템이 **잘못된 결정**을 내리거나 **시스템 자체가 장애**나면?
+
+```
+문제 시나리오:
+1. RuntimeFeedbackLoop이 잘못된 조정을 수행
+2. 시스템 성능이 오히려 악화
+3. 추가 조정 시도 → 악순환
+4. 수동 개입 필요
+```
+
+### 3단계 복구 우선순위 (Tiered Recovery)
+
+| 우선순위 | 전략 | 설명 | 사용 시점 |
+|:---:|---|---|---|
+| 1 | **Last Known Good** | 변경 직전 스냅샷으로 롤백 | 스냅샷이 있을 때 |
+| 2 | **DNA Declared** | DNA에 선언된 Desired 값으로 복구 | 스냅샷이 없거나 실패했을 때 |
+| 3 | **System Defaults** | 하드코딩된 보수적 기본값 | 모든 방법이 실패했을 때 |
+
+### 왜 이 순서인가?
+
+```
+✔️ Last Known Good (직전 상태)
+   - 최소한 그때까지는 작동했음 → 가장 신뢰할 수 있음
+
+✔️ DNA Declared (관리자 선언값)
+   - 관리자가 원하는 상태 → 비즈니스 의도 반영
+
+✔️ System Defaults (시스템 기본값)
+   - 보수적으로 안전한 값 → 최후 수단
+
+❌ Pause Only (조정만 중지)
+   - 현재 "문제 있는 상태"가 유지됨 → 일반적으로 비추천
+```
+
+### AutoRollbackGuard 구현
+
+```python
+# packages/selfhealing-python/src/selfhealing/core/auto_rollback_guard.py
+
+class RecoveryStrategy(Enum):
+    """복구 전략"""
+    LAST_KNOWN_GOOD = "last_known_good"  # 바꾸기 전 상태로 롤백
+    DNA_DECLARED = "dna_declared"        # DNA 선언값으로 복구
+    SYSTEM_DEFAULTS = "system_defaults"  # 하드코딩 기본값 (최후 수단)
+    PAUSE_ONLY = "pause_only"            # 조정만 중지, 현재값 유지
+
+
+class AutoRollbackGuard:
+    """
+    RuntimeFeedbackLoop과 독립적으로 작동하는 안전장치
+    
+    핵심: 피드백 루프 자체가 장애나도 이 가드는 살아있음
+    """
+    
+    # 시스템 기본값 (정말 최후 수단)
+    SYSTEM_DEFAULTS = [
+        SafeDefault("timeout_ms", 5000, "시스템 기본 타임아웃"),
+        SafeDefault("retry_count", 3, "시스템 기본 재시도"),
+        SafeDefault("circuit_breaker_threshold", 0.5, "시스템 기본 CB"),
+    ]
+    
+    def _recover_parameter(self, parameter: str, system_default: float) -> str:
+        # 1단계: Last Known Good
+        if snapshots := self._config_snapshots.get(parameter):
+            return self._apply_last_known_good(parameter, snapshots)
+        
+        # 2단계: DNA Declared
+        if dna_value := self._get_dna_declared_value(parameter):
+            return self._apply_dna_value(parameter, dna_value)
+        
+        # 3단계: System Defaults (최후 수단)
+        return self._apply_system_default(parameter, system_default)
+```
+
+### 하드코딩 문제 해결
+
+| 문제 | 해결 |
+|------|------|
+| SYSTEM_DEFAULTS가 모든 서비스에 맞을까? | DNA 선언값을 먼저 시도 |
+| DNA도 없으면? | 보수적인 SYSTEM_DEFAULTS 사용 |
+| 그마저도 실패하면? | PAUSE_ONLY로 fallback + 알림 |
+
+---
 ## �📚 관련 문서
 
 - [37_CONTINUOUS_AUDIT_IMPLEMENTATION.md](./37_CONTINUOUS_AUDIT_IMPLEMENTATION.md) - 지속적 감사

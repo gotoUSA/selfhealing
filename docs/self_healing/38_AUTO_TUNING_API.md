@@ -612,6 +612,124 @@ urlpatterns += [
 
 ---
 
+## ⚠️ 하드코딩 문제 대책 (Bounds Configuration Strategy)
+
+### 문제 인식
+
+안전 한계(bounds) 값이 코드에 하드코딩되면:
+
+```
+문제:
+- 서비스마다 적절한 한계가 다름
+- 배포 없이 변경 불가
+- 환경(dev/staging/prod)별 차이
+```
+
+### 설정 계층 구조
+
+```
+우선순위 (높음 → 낮음):
+
+1. API 동적 설정 (PUT /api/self-healing/auto-tuning/bounds/)
+2. DNA 선언 (서비스별 Desired bounds)
+3. 환경변수 (BOUNDS_TIMEOUT_MAX=30000)
+4. 코드 기본값 (최후 수단)
+```
+
+### 구현 예제
+
+```python
+# packages/selfhealing-python/src/selfhealing/core/bounds_config.py
+
+import os
+from dataclasses import dataclass, field
+from typing import Dict, Optional
+
+
+@dataclass
+class ParameterBounds:
+    """파라미터별 안전 한계"""
+    min_value: float
+    max_value: float
+    max_change_per_cycle: float = 0.3
+
+
+@dataclass 
+class BoundsConfig:
+    """안전 한계 설정 - 계층형 로드"""
+    
+    # 코드 기본값 (최후 수단)
+    CODE_DEFAULTS: Dict[str, ParameterBounds] = field(default_factory=lambda: {
+        "timeout_ms": ParameterBounds(100, 30000, 0.3),
+        "retry_count": ParameterBounds(0, 10, 0.5),
+        "circuit_breaker_threshold": ParameterBounds(0.1, 0.9, 0.2),
+        "jitter_range": ParameterBounds(0.01, 1.0, 0.5),
+        "rate_limit_rps": ParameterBounds(10, 10000, 0.2),
+    })
+    
+    def get_bounds(self, parameter: str) -> ParameterBounds:
+        """
+        계층형으로 bounds 가져오기
+        
+        우선순위:
+        1. 동적 설정 (런타임 오버라이드)
+        2. 환경변수
+        3. DNA 선언
+        4. 코드 기본값
+        """
+        # 1. 동적 오버라이드 확인
+        if override := self._get_runtime_override(parameter):
+            return override
+        
+        # 2. 환경변수 확인
+        env_prefix = f"BOUNDS_{parameter.upper()}"
+        min_val = os.environ.get(f"{env_prefix}_MIN")
+        max_val = os.environ.get(f"{env_prefix}_MAX")
+        if min_val and max_val:
+            return ParameterBounds(
+                float(min_val), 
+                float(max_val),
+                float(os.environ.get(f"{env_prefix}_CHANGE", "0.3"))
+            )
+        
+        # 3. DNA 선언 확인
+        if dna_bounds := self._get_dna_bounds(parameter):
+            return dna_bounds
+        
+        # 4. 코드 기본값
+        return self.CODE_DEFAULTS.get(
+            parameter, 
+            ParameterBounds(0, float('inf'), 0.3)
+        )
+    
+    def _get_runtime_override(self, parameter: str) -> Optional[ParameterBounds]:
+        """API로 설정된 오버라이드"""
+        # Redis/DB에서 로드
+        return None  # 구현 필요
+    
+    def _get_dna_bounds(self, parameter: str) -> Optional[ParameterBounds]:
+        """DNA 선언에서 bounds 로드"""
+        return None  # DNA 시스템 연동 필요
+```
+
+### API로 동적 변경 가능
+
+```bash
+# 배포 없이 bounds 변경
+curl -X PUT /api/self-healing/auto-tuning/bounds/ \
+  -d '{"parameter": "timeout_ms", "bounds": {"min": 200, "max": 20000}}'
+```
+
+### 환경별 기본값 권장
+
+| 환경 | timeout_max | retry_max | 이유 |
+|------|-------------|-----------|------|
+| dev | 60000 | 5 | 디버깅 여유 |
+| staging | 30000 | 5 | 프로드 유사 |
+| prod | 30000 | 3 | 보수적 운영 |
+
+---
+
 ## 📚 관련 문서
 
 - [36_RUNTIME_FEEDBACK_IMPLEMENTATION.md](./36_RUNTIME_FEEDBACK_IMPLEMENTATION.md) - 런타임 피드백

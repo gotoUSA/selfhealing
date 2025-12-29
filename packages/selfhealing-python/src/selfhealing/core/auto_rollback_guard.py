@@ -108,15 +108,27 @@ class AutoRollbackGuard:
     2. 연속 헬스체크 실패 시 자동 롤백
     3. 긴급 모드: 모든 설정을 안전한 기본값으로 복원
     4. 수동 트리거 지원
+    
+    복구 전략 (우선순위):
+    1. Last Known Good: 바꾸기 직전 상태로 롤백 (가장 안전)
+    2. DNA Declared: DNA에 선언된 Desired 상태로 복구
+    3. System Defaults: 하드코딩된 안전한 기본값 (최후 수단)
     """
     
-    # 안전한 기본값 (긴급 복구용)
-    SAFE_DEFAULTS: List[SafeDefault] = [
-        SafeDefault("timeout_ms", 5000, "안전한 타임아웃"),
-        SafeDefault("retry_count", 3, "안전한 재시도 횟수"),
-        SafeDefault("circuit_breaker_threshold", 0.5, "안전한 CB 임계값"),
-        SafeDefault("jitter_range", 0.1, "안전한 지터 범위"),
-        SafeDefault("rate_limit_rps", 1000, "안전한 Rate Limit"),
+    class RecoveryStrategy(Enum):
+        """복구 전략"""
+        LAST_KNOWN_GOOD = "last_known_good"  # 바꾸기 전 상태로 롤백
+        DNA_DECLARED = "dna_declared"        # DNA 선언값으로 복구
+        SYSTEM_DEFAULTS = "system_defaults"  # 하드코딩 기본값 (최후 수단)
+        PAUSE_ONLY = "pause_only"            # 조정만 중지, 현재값 유지
+    
+    # 시스템 기본값 (정말 최후 수단 - DNA도 스냅샷도 없을 때만 사용)
+    SYSTEM_DEFAULTS: List[SafeDefault] = [
+        SafeDefault("timeout_ms", 5000, "시스템 기본 타임아웃 - 보수적 값"),
+        SafeDefault("retry_count", 3, "시스템 기본 재시도 - 일반적 값"),
+        SafeDefault("circuit_breaker_threshold", 0.5, "시스템 기본 CB - 중간값"),
+        SafeDefault("jitter_range", 0.1, "시스템 기본 지터"),
+        SafeDefault("rate_limit_rps", 1000, "시스템 기본 Rate Limit - 보수적"),
     ]
     
     # 임계값
@@ -346,29 +358,126 @@ class AutoRollbackGuard:
         self._last_rollback_time = datetime.now(timezone.utc)
     
     def _execute_emergency_recovery(self):
-        """긴급 복구 - 모든 설정을 안전한 기본값으로"""
+        """
+        긴급 복구 - 3단계 우선순위 기반 복구
+        
+        복구 우선순위:
+        1. Last Known Good - 직전 스냅샷으로 롤백 (가장 안전)
+        2. DNA Declared - DNA에 선언된 값으로 복구
+        3. System Defaults - 하드코딩 기본값 (최후 수단)
+        
+        왜 이 순서인가?
+        - 직전 상태: 최소한 그 때까지는 작동했음 → 가장 신뢰할 수 있음
+        - DNA 선언값: 관리자가 원하는 Desired 상태
+        - 시스템 기본값: 어떤 서비스에도 적용 가능한 보수적 값
+        """
         self._state = GuardState.EMERGENCY
-        logger.critical("[AutoRollbackGuard] EMERGENCY RECOVERY - Restoring safe defaults")
+        logger.critical("[AutoRollbackGuard] EMERGENCY RECOVERY - Starting tiered recovery")
         
         self._send_alert(
             "emergency_recovery",
-            "🆘 긴급 복구 모드 활성화! 모든 설정을 안전한 기본값으로 복원합니다."
+            "🆘 긴급 복구 모드 활성화! 단계별 복구를 시작합니다."
         )
         
-        for safe_default in self.SAFE_DEFAULTS:
-            try:
-                self.config_applier.apply(safe_default.parameter, safe_default.safe_value)
-                logger.info(
-                    f"[AutoRollbackGuard] Restored {safe_default.parameter} "
-                    f"to safe default: {safe_default.safe_value}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"[AutoRollbackGuard] Failed to restore {safe_default.parameter}: {e}"
-                )
+        # 각 파라미터별로 복구 시도
+        recovery_results: Dict[str, str] = {}
+        
+        for safe_default in self.SYSTEM_DEFAULTS:
+            param = safe_default.parameter
+            recovery_method = self._recover_parameter(param, safe_default.safe_value)
+            recovery_results[param] = recovery_method
+        
+        # 복구 결과 알림
+        self._send_alert(
+            "recovery_complete",
+            f"복구 완료: {recovery_results}"
+        )
         
         self._last_rollback_time = datetime.now(timezone.utc)
         self._state = GuardState.RECOVERING
+    
+    def _recover_parameter(
+        self,
+        parameter: str,
+        system_default: float
+    ) -> str:
+        """
+        개별 파라미터 복구 (3단계 우선순위)
+        
+        Returns:
+            어떤 방법으로 복구했는지 문자열
+        """
+        # 1단계: Last Known Good (직전 스냅샷)
+        if parameter in self._config_snapshots and self._config_snapshots[parameter]:
+            # 스냅샷에서 가장 오래된 것 사용 (마지막 변경 직전 상태)
+            # 가장 최근([-1])이 아니라 첫번째([0])를 사용
+            # 왜냐하면 스냅샷은 변경 전 값이므로, 첫 스냅샷이 가장 안정적
+            snapshots = self._config_snapshots[parameter]
+            if len(snapshots) >= 2:
+                # 최근 변경 직전 상태 (두번째로 오래된 것)
+                last_good_value = snapshots[-2]["value"]
+            else:
+                # 스냅샷이 하나뿐이면 그것 사용
+                last_good_value = snapshots[0]["value"]
+            
+            try:
+                self.config_applier.apply(parameter, last_good_value)
+                logger.info(
+                    f"[AutoRollbackGuard] Recovered {parameter} to "
+                    f"last known good: {last_good_value}"
+                )
+                return f"last_known_good:{last_good_value}"
+            except Exception as e:
+                logger.warning(
+                    f"[AutoRollbackGuard] Last known good failed for {parameter}: {e}"
+                )
+        
+        # 2단계: DNA Declared (DNA 선언값)
+        dna_value = self._get_dna_declared_value(parameter)
+        if dna_value is not None:
+            try:
+                self.config_applier.apply(parameter, dna_value)
+                logger.info(
+                    f"[AutoRollbackGuard] Recovered {parameter} to "
+                    f"DNA declared: {dna_value}"
+                )
+                return f"dna_declared:{dna_value}"
+            except Exception as e:
+                logger.warning(
+                    f"[AutoRollbackGuard] DNA declared failed for {parameter}: {e}"
+                )
+        
+        # 3단계: System Defaults (최후 수단)
+        try:
+            self.config_applier.apply(parameter, system_default)
+            logger.info(
+                f"[AutoRollbackGuard] Recovered {parameter} to "
+                f"system default: {system_default}"
+            )
+            return f"system_default:{system_default}"
+        except Exception as e:
+            logger.error(
+                f"[AutoRollbackGuard] ALL RECOVERY FAILED for {parameter}: {e}"
+            )
+            return "FAILED"
+    
+    def _get_dna_declared_value(self, parameter: str) -> Optional[float]:
+        """
+        DNA에서 선언된 Desired 값을 가져옴
+        
+        DNA는 관리자가 선언한 "원하는 상태"를 담고 있음.
+        selfhealing의 다른 모듈이나 외부 설정에서 가져올 수 있음.
+        """
+        # TODO: 실제 DNA 시스템과 연동
+        # 현재는 config_applier에 get_dna_value 메서드가 있다고 가정
+        if hasattr(self.config_applier, 'get_dna_value'):
+            try:
+                return self.config_applier.get_dna_value(parameter)
+            except Exception:
+                pass
+        
+        # DNA 연동이 없으면 None 반환 → System Default로 fallback
+        return None
     
     def save_snapshot(self, parameter: str, value: float):
         """설정 스냅샷 저장 (롤백용)"""
@@ -427,14 +536,14 @@ class AutoRollbackGuard:
             }
     
     def get_safe_defaults(self) -> List[Dict[str, Any]]:
-        """안전한 기본값 목록 조회"""
+        """안전한 기본값 목록 조회 (시스템 기본값)"""
         return [
             {
                 "parameter": sd.parameter,
                 "safe_value": sd.safe_value,
                 "description": sd.description,
             }
-            for sd in self.SAFE_DEFAULTS
+            for sd in self.SYSTEM_DEFAULTS
         ]
     
     def update_safe_default(
@@ -444,7 +553,7 @@ class AutoRollbackGuard:
         description: Optional[str] = None
     ) -> bool:
         """안전한 기본값 업데이트"""
-        for sd in self.SAFE_DEFAULTS:
+        for sd in self.SYSTEM_DEFAULTS:
             if sd.parameter == parameter:
                 sd.safe_value = safe_value
                 if description:
@@ -453,7 +562,7 @@ class AutoRollbackGuard:
                 return True
         
         # 새로운 파라미터 추가
-        self.SAFE_DEFAULTS.append(SafeDefault(
+        self.SYSTEM_DEFAULTS.append(SafeDefault(
             parameter=parameter,
             safe_value=safe_value,
             description=description or f"Safe default for {parameter}",

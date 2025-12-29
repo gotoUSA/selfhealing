@@ -477,7 +477,89 @@ class ContinuousAuditRecorder:
 | GET | `/api/self-healing/compliance/check/` | 규정 검사 실행 |
 
 ---
+## ⚠️ 하드코딩 문제 대책 (Configuration Strategy)
 
+### 문제 인식
+
+감사 로그 시스템에 하드코딩되면 안 되는 값들:
+
+| 항목 | 하드코딩 위험 | 해결 방법 |
+|------|----------------|------------|
+| 해시 체인 시드 | 노출 시 보안 위험 | 환경변수/시크릿 |
+| 보존 기간 | 규정마다 다름 | 설정 파일 |
+| 알림 수신자 | 조직마다 다름 | 설정 파일 |
+
+### 설정 계층 구조
+
+```
+우선순위 (높음 → 낮음):
+
+1. 환경변수 (AUDIT_HASH_SEED, AUDIT_RETENTION_DAYS)
+2. DNA 선언 (서비스별 설정)
+3. 설정 파일 (settings.py, config.yaml)
+4. 코드 기본값 (최후 수단)
+```
+
+### 구현 예제
+
+```python
+# packages/selfhealing-python/src/selfhealing/services/audit/config.py
+
+import os
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class AuditConfig:
+    """감사 로그 설정 - 환경변수 우선"""
+    
+    # 해시 체인 시드 (환경변수 필수)
+    hash_seed: str = os.environ.get("AUDIT_HASH_SEED", "")
+    
+    # 보존 기간 (규정별 다름)
+    retention_days: int = int(os.environ.get("AUDIT_RETENTION_DAYS", "365"))
+    
+    # 스토리지 백엔드
+    storage_backend: str = os.environ.get("AUDIT_STORAGE", "file")  # file, s3, loki
+    
+    # S3 WORM 설정 (선택)
+    s3_bucket: Optional[str] = os.environ.get("AUDIT_S3_BUCKET")
+    s3_worm_enabled: bool = os.environ.get("AUDIT_S3_WORM", "false").lower() == "true"
+    
+    def __post_init__(self):
+        if not self.hash_seed:
+            raise ValueError(
+                "AUDIT_HASH_SEED 환경변수가 설정되지 않았습니다. "
+                "보안을 위해 반드시 설정하세요."
+            )
+    
+    @classmethod
+    def from_dna(cls, dna_config: dict) -> "AuditConfig":
+        """DNA 선언에서 설정 로드 (환경변수가 우선)"""
+        return cls(
+            hash_seed=os.environ.get("AUDIT_HASH_SEED", dna_config.get("hash_seed", "")),
+            retention_days=int(os.environ.get(
+                "AUDIT_RETENTION_DAYS", 
+                dna_config.get("retention_days", 365)
+            )),
+            storage_backend=os.environ.get(
+                "AUDIT_STORAGE", 
+                dna_config.get("storage", "file")
+            ),
+        )
+```
+
+### 규정별 보존 기간 기본값
+
+| 규정 | 최소 보존 기간 | 권장값 |
+|------|----------------|--------|
+| DORA | 5년 | 7년 |
+| PCI-DSS | 1년 | 3년 |
+| SOC2 | 1년 | 3년 |
+| GDPR | 목적 달성 시까지 | 서비스별 판단 |
+
+---
 ## 📊 Compliance 규정 매핑
 
 ### DORA (Digital Operational Resilience Act)
