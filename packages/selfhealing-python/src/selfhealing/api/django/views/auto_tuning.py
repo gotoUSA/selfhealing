@@ -1,0 +1,390 @@
+"""
+Auto Tuning API Views
+
+자율 조정 제어 API 엔드포인트
+
+Reference: docs/self_healing/38_AUTO_TUNING_API.md
+"""
+
+import logging
+from datetime import datetime
+from typing import Optional
+
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from selfhealing.api.django.permissions import IsSelfHealingAdmin
+
+logger = logging.getLogger(__name__)
+
+
+def _get_auto_tuning_service():
+    """AutoTuningService 인스턴스 가져오기 (Lazy Loading)"""
+    try:
+        from selfhealing.services.auto_tuning import AutoTuningService
+        from selfhealing.factory import get_auto_tuning_service
+        return get_auto_tuning_service()
+    except ImportError:
+        # Factory에서 제공되지 않으면 기본 인스턴스 생성
+        return _create_default_service()
+
+
+def _create_default_service():
+    """기본 AutoTuningService 생성"""
+    from selfhealing.services.auto_tuning import AutoTuningService
+    
+    # 기본 어댑터들
+    class DummyMetricsAdapter:
+        def fetch_current_metrics(self):
+            return {
+                "p99_latency_ms": 0,
+                "error_rate": 0,
+                "retry_exhausted_rate": 0,
+                "throughput_rps": 0,
+            }
+    
+    class DummyConfigProvider:
+        def get(self, key, default=None):
+            return default
+    
+    class DummyConfigApplier:
+        def __init__(self):
+            self._values = {}
+        
+        def get_current(self, parameter):
+            return self._values.get(parameter, 0)
+        
+        def apply(self, parameter, value):
+            self._values[parameter] = value
+            return True
+        
+        def rollback(self, parameter, value):
+            self._values[parameter] = value
+            return True
+    
+    class DummyAuditAdapter:
+        def log(self, entry):
+            logger.info(f"[Audit] {entry}")
+    
+    return AutoTuningService(
+        metrics_adapter=DummyMetricsAdapter(),
+        config_provider=DummyConfigProvider(),
+        config_applier=DummyConfigApplier(),
+        audit_adapter=DummyAuditAdapter(),
+    )
+
+
+# 싱글톤 서비스 인스턴스
+_service_instance = None
+
+
+def get_service():
+    """서비스 인스턴스 (싱글톤)"""
+    global _service_instance
+    if _service_instance is None:
+        _service_instance = _get_auto_tuning_service()
+    return _service_instance
+
+
+class AutoTuningStatusView(APIView):
+    """
+    GET /api/self-healing/auto-tuning/status/
+    
+    자율 조정 시스템 상태 조회
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        service = get_service()
+        return Response(service.get_status())
+
+
+class AutoTuningEnableView(APIView):
+    """
+    POST /api/self-healing/auto-tuning/enable/
+    
+    자율 조정 활성화
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request):
+        service = get_service()
+        reason = request.data.get("reason", "")
+        mode = request.data.get("mode", "automatic")
+        
+        enabled_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.enable(
+            reason=reason,
+            mode=mode,
+            enabled_by=enabled_by,
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningDisableView(APIView):
+    """
+    POST /api/self-healing/auto-tuning/disable/
+    
+    자율 조정 비활성화
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request):
+        service = get_service()
+        reason = request.data.get("reason", "")
+        duration = request.data.get("duration_minutes")
+        notify = request.data.get("notify", True)
+        
+        disabled_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.disable(
+            reason=reason,
+            duration_minutes=duration,
+            disabled_by=disabled_by,
+            notify=notify,
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningModuleEnableView(APIView):
+    """
+    POST /api/self-healing/auto-tuning/{module}/enable/
+    
+    특정 모듈 자율 조정 활성화
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request, module):
+        service = get_service()
+        reason = request.data.get("reason", "")
+        
+        enabled_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.enable_module(
+            module=module,
+            reason=reason,
+            enabled_by=enabled_by,
+        )
+        
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningModuleDisableView(APIView):
+    """
+    POST /api/self-healing/auto-tuning/{module}/disable/
+    
+    특정 모듈 자율 조정 비활성화
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request, module):
+        service = get_service()
+        reason = request.data.get("reason", "")
+        duration = request.data.get("duration_minutes")
+        
+        disabled_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.disable_module(
+            module=module,
+            reason=reason,
+            duration_minutes=duration,
+            disabled_by=disabled_by,
+        )
+        
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningBoundsView(APIView):
+    """
+    GET  /api/self-healing/auto-tuning/bounds/
+    PUT  /api/self-healing/auto-tuning/bounds/
+    
+    안전 한계 조회/수정
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def get(self, request):
+        service = get_service()
+        return Response(service.get_bounds())
+    
+    def put(self, request):
+        service = get_service()
+        
+        parameter = request.data.get("parameter")
+        bounds = request.data.get("bounds", {})
+        reason = request.data.get("reason", "")
+        
+        if not parameter:
+            return Response(
+                {"error": "parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.update_bounds(
+            parameter=parameter,
+            bounds=bounds,
+            reason=reason,
+            updated_by=updated_by,
+        )
+        
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningHistoryView(APIView):
+    """
+    GET /api/self-healing/auto-tuning/history/
+    GET /api/self-healing/auto-tuning/history/{id}/
+    
+    조정 이력 조회
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, history_id: Optional[str] = None):
+        service = get_service()
+        
+        if history_id:
+            # 특정 조정 상세
+            records = service.adjustment_recorder.get_records(limit=1000)
+            for record in records:
+                if record.record_id == history_id:
+                    return Response(record.to_dict())
+            return Response(
+                {"error": "History record not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 목록 조회
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        parameter = request.query_params.get("parameter")
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 20))
+        
+        start_dt = None
+        end_dt = None
+        
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        
+        result = service.get_history(
+            start_date=start_dt,
+            end_date=end_dt,
+            parameter=parameter,
+            page=page,
+            page_size=page_size,
+        )
+        
+        return Response(result)
+
+
+class AutoTuningOverrideView(APIView):
+    """
+    POST   /api/self-healing/auto-tuning/override/
+    DELETE /api/self-healing/auto-tuning/override/{parameter}/
+    
+    수동 조정 (Override)
+    """
+    permission_classes = [IsSelfHealingAdmin]
+    
+    def post(self, request):
+        service = get_service()
+        
+        parameter = request.data.get("parameter")
+        value = request.data.get("value")
+        reason = request.data.get("reason", "")
+        duration = request.data.get("duration_minutes")
+        disable_auto = request.data.get("disable_auto_tuning", True)
+        
+        if not parameter:
+            return Response(
+                {"error": "parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if value is None:
+            return Response(
+                {"error": "value is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        overridden_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.override(
+            parameter=parameter,
+            value=float(value),
+            reason=reason,
+            duration_minutes=duration,
+            disable_auto_tuning=disable_auto,
+            overridden_by=overridden_by,
+        )
+        
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)
+    
+    def delete(self, request, parameter: str):
+        service = get_service()
+        
+        cleared_by = getattr(request.user, 'email', str(request.user))
+        
+        result = service.clear_override(
+            parameter=parameter,
+            cleared_by=cleared_by,
+        )
+        
+        if "error" in result:
+            return Response(result, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AutoTuningMetricsView(APIView):
+    """
+    GET /api/self-healing/auto-tuning/metrics/
+    
+    현재 메트릭 조회
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        service = get_service()
+        return Response(service.get_current_metrics())
+
+
+__all__ = [
+    "AutoTuningStatusView",
+    "AutoTuningEnableView",
+    "AutoTuningDisableView",
+    "AutoTuningModuleEnableView",
+    "AutoTuningModuleDisableView",
+    "AutoTuningBoundsView",
+    "AutoTuningHistoryView",
+    "AutoTuningOverrideView",
+    "AutoTuningMetricsView",
+]

@@ -155,6 +155,20 @@ from selfhealing.api.django.views.xtest_mode import (
     FastFailTestView,
 )
 
+# Auto Tuning Views
+# Reference: docs/self_healing/38_AUTO_TUNING_API.md
+from selfhealing.api.django.views.auto_tuning import (
+    AutoTuningStatusView,
+    AutoTuningEnableView,
+    AutoTuningDisableView,
+    AutoTuningModuleEnableView,
+    AutoTuningModuleDisableView,
+    AutoTuningBoundsView,
+    AutoTuningHistoryView,
+    AutoTuningOverrideView,
+    AutoTuningMetricsView,
+)
+
 __all__ = [
     # Data classes
     "ControlRequest",
@@ -264,4 +278,14 @@ __all__ = [
     "InjectErrorBudgetView",
     "SystemSnapshotView",
     "FastFailTestView",
+    # Auto Tuning Views (Stage 38)
+    "AutoTuningStatusView",
+    "AutoTuningEnableView",
+    "AutoTuningDisableView",
+    "AutoTuningModuleEnableView",
+    "AutoTuningModuleDisableView",
+    "AutoTuningBoundsView",
+    "AutoTuningHistoryView",
+    "AutoTuningOverrideView",
+    "AutoTuningMetricsView",
 ]
