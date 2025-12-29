@@ -72,6 +72,22 @@ class AuditAction(str, Enum):
     CONFIG_CHANGE = "config_change"
     MANUAL_OVERRIDE = "manual_override"
 
+    # Auto Tuning (자율 조정)
+    AUTO_TUNING_ADJUSTMENT = "auto_tuning_adjustment"
+    AUTO_TUNING_ENABLED = "auto_tuning_enabled"
+    AUTO_TUNING_DISABLED = "auto_tuning_disabled"
+    AUTO_TUNING_BOUNDS_CHANGED = "auto_tuning_bounds_changed"
+    AUTO_TUNING_REJECTED = "auto_tuning_rejected"  # 안전 한계 초과
+    AUTO_TUNING_ROLLBACK = "auto_tuning_rollback"
+
+    # DNA Drift (구성 드리프트)
+    DNA_DRIFT_DETECTED = "dna_drift_detected"
+    DNA_DRIFT_RESOLVED = "dna_drift_resolved"
+
+    # Compliance (규정 준수)
+    COMPLIANCE_CHECK = "compliance_check"
+    COMPLIANCE_VIOLATION = "compliance_violation"
+
 
 def _get_default_actor() -> tuple[Optional[str], str]:
     """

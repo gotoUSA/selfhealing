@@ -1,0 +1,679 @@
+"""
+Continuous Audit Recorder - Big 4 스타일 지속적 감사.
+
+모든 자동화된 결정을 위변조 불가능하게 기록합니다.
+보고서 포맷팅은 제공하지 않고, 완전한 raw data만 제공합니다.
+(각 조직은 자체 형식으로 데이터를 가공해야 함)
+
+Design Philosophy:
+- 완전하고 정확한 raw data 기록
+- 해시 체인으로 위변조 방지
+- 쿼리/필터링/익스포트 기능 제공
+- 포맷팅은 사용자 책임
+"""
+
+import json
+import logging
+import os
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Iterator, Callable
+
+from selfhealing.interfaces.audit_adapter import (
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
+)
+from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
+from selfhealing.audit.config import AuditConfig
+
+logger = logging.getLogger(__name__)
+
+
+class ContinuousAuditRecorder:
+    """
+    지속적 감사 기록기.
+    
+    특징:
+    - 해시 체인으로 위변조 방지
+    - 다중 스토리지 백엔드 지원
+    - 규정 위반 시 즉시 알림
+    - Raw data 조회/필터/익스포트 제공
+    - 보고서 포맷팅 미제공 (사용자가 직접 가공)
+    
+    Usage:
+        config = AuditConfig.get_default()
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=FileAuditLogAdapter("logs/audit.jsonl"),
+            config=config,
+        )
+        
+        recorder.record_auto_tuning(
+            parameter="timeout_ms",
+            old_value=5000,
+            new_value=6000,
+            reason="P99 레이턴시 증가",
+            confidence=0.85,
+            metrics_snapshot={"p99_latency_ms": 4200},
+            safety_check={"within_bounds": True},
+        )
+    """
+    
+    def __init__(
+        self,
+        audit_adapter: AuditLogAdapter,
+        config: Optional[AuditConfig] = None,
+        alert_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        state_file: Optional[Path] = None,
+    ):
+        """
+        Initialize ContinuousAuditRecorder.
+        
+        Args:
+            audit_adapter: 감사 로그 저장 어댑터
+            config: 감사 설정 (None이면 환경변수에서 로드)
+            alert_callback: 알림 콜백 (channel, data) -> None
+            state_file: 해시 체인 상태 파일 경로
+        """
+        self.audit_adapter = audit_adapter
+        self.config = config or AuditConfig.get_default()
+        self.alert_callback = alert_callback
+        
+        # 해시 체인 관리자
+        self._hash_manager = HashChainManager(state_file=state_file)
+        self._lock = threading.RLock()
+        
+        # 환경 정보
+        self._environment = os.environ.get("ENVIRONMENT", "development")
+        self._service_name = os.environ.get("SERVICE_NAME", "unknown")
+        self._service_version = os.environ.get("SERVICE_VERSION", "unknown")
+    
+    # ─────────────────────────────────────────────────────────────
+    # 기록 메서드 (Auto Tuning)
+    # ─────────────────────────────────────────────────────────────
+    
+    def record_auto_tuning(
+        self,
+        parameter: str,
+        old_value: Any,
+        new_value: Any,
+        reason: str,
+        confidence: float,
+        metrics_snapshot: Dict[str, Any],
+        safety_check: Dict[str, Any],
+        actor_id: str = "runtime_feedback_loop",
+    ) -> str:
+        """
+        자율 조정 기록.
+        
+        Args:
+            parameter: 조정된 파라미터 이름
+            old_value: 이전 값
+            new_value: 새 값
+            reason: 조정 사유
+            confidence: 신뢰도 (0.0 ~ 1.0)
+            metrics_snapshot: 결정 시점 메트릭
+            safety_check: 안전 검사 결과
+            actor_id: 조정 수행 주체
+            
+        Returns:
+            감사 로그 ID
+        """
+        entry = AuditEntry(
+            action=AuditAction.AUTO_TUNING_ADJUSTMENT,
+            target_type="runtime_config",
+            target_id=parameter,
+            actor_type="system",
+            actor_id=actor_id,
+            service_name=self._service_name,
+            reason=reason,
+            details={
+                "adjustment_type": "automatic",
+                "parameter": parameter,
+                "before": {"value": old_value},
+                "after": {"value": new_value, "confidence": confidence},
+                "reason": reason,
+                "metrics_snapshot": metrics_snapshot,
+                "safety_check": safety_check,
+                "environment": self._environment,
+                "service_version": self._service_version,
+            },
+        )
+        
+        audit_id = self._record_with_integrity(entry)
+        
+        # 알림 발송
+        self._send_alert("auto_tuning", {
+            "parameter": parameter,
+            "old_value": old_value,
+            "new_value": new_value,
+            "reason": reason,
+        })
+        
+        return audit_id
+    
+    def record_auto_tuning_rejected(
+        self,
+        parameter: str,
+        requested_value: Any,
+        current_value: Any,
+        rejection_reason: str,
+        safety_bounds: Dict[str, Any],
+    ) -> str:
+        """안전 한계 초과로 자율 조정 거부됨."""
+        entry = AuditEntry(
+            action=AuditAction.AUTO_TUNING_REJECTED,
+            target_type="runtime_config",
+            target_id=parameter,
+            actor_type="system",
+            actor_id="safety_guard",
+            service_name=self._service_name,
+            reason=rejection_reason,
+            success=False,
+            details={
+                "parameter": parameter,
+                "requested_value": requested_value,
+                "current_value": current_value,
+                "rejection_reason": rejection_reason,
+                "safety_bounds": safety_bounds,
+            },
+        )
+        
+        audit_id = self._record_with_integrity(entry)
+        
+        self._send_alert("auto_tuning_rejected", {
+            "parameter": parameter,
+            "requested_value": requested_value,
+            "rejection_reason": rejection_reason,
+            "severity": "warning",
+        })
+        
+        return audit_id
+    
+    def record_auto_tuning_rollback(
+        self,
+        parameter: str,
+        rolled_back_value: Any,
+        target_value: Any,
+        rollback_reason: str,
+        strategy: str,  # last_known_good, dna_declared, system_defaults
+    ) -> str:
+        """자율 조정 롤백 기록."""
+        entry = AuditEntry(
+            action=AuditAction.AUTO_TUNING_ROLLBACK,
+            target_type="runtime_config",
+            target_id=parameter,
+            actor_type="system",
+            actor_id="auto_rollback_guard",
+            service_name=self._service_name,
+            reason=rollback_reason,
+            details={
+                "parameter": parameter,
+                "rolled_back_value": rolled_back_value,
+                "target_value": target_value,
+                "rollback_reason": rollback_reason,
+                "recovery_strategy": strategy,
+            },
+        )
+        
+        return self._record_with_integrity(entry)
+    
+    # ─────────────────────────────────────────────────────────────
+    # 기록 메서드 (DNA Drift)
+    # ─────────────────────────────────────────────────────────────
+    
+    def record_drift_detected(
+        self,
+        resource_id: str,
+        declared: Dict[str, Any],
+        actual: Dict[str, Any],
+        drifted_fields: List[str],
+        severity: str,  # low, medium, high, critical
+    ) -> str:
+        """
+        DNA Drift 감지 기록.
+        
+        Args:
+            resource_id: 드리프트가 발생한 리소스 ID
+            declared: DNA에 선언된 값
+            actual: 실제 런타임 값
+            drifted_fields: 드리프트된 필드 목록
+            severity: 심각도
+        """
+        entry = AuditEntry(
+            action=AuditAction.DNA_DRIFT_DETECTED,
+            target_type="stage_dna",
+            target_id=resource_id,
+            actor_type="system",
+            actor_id="dna_drift_detector",
+            service_name=self._service_name,
+            reason=f"Configuration drift detected in {len(drifted_fields)} field(s)",
+            details={
+                "drift_type": "configuration_mismatch",
+                "declared": declared,
+                "actual": actual,
+                "drifted_fields": drifted_fields,
+                "severity": severity,
+                "auto_remediation": False,
+            },
+        )
+        
+        audit_id = self._record_with_integrity(entry)
+        
+        # 심각도에 따라 알림
+        if severity in ("high", "critical"):
+            self._send_alert("drift_critical", {
+                "resource_id": resource_id,
+                "drifted_fields": drifted_fields,
+                "severity": severity,
+            })
+        
+        return audit_id
+    
+    def record_drift_resolved(
+        self,
+        resource_id: str,
+        resolved_fields: List[str],
+        resolution_method: str,  # manual, auto_sync, config_update
+    ) -> str:
+        """DNA Drift 해결 기록."""
+        entry = AuditEntry(
+            action=AuditAction.DNA_DRIFT_RESOLVED,
+            target_type="stage_dna",
+            target_id=resource_id,
+            actor_type="system",
+            actor_id="drift_resolver",
+            service_name=self._service_name,
+            reason=f"Drift resolved via {resolution_method}",
+            details={
+                "resolved_fields": resolved_fields,
+                "resolution_method": resolution_method,
+            },
+        )
+        
+        return self._record_with_integrity(entry)
+    
+    # ─────────────────────────────────────────────────────────────
+    # 기록 메서드 (Compliance)
+    # ─────────────────────────────────────────────────────────────
+    
+    def record_compliance_check(
+        self,
+        standards_checked: List[str],
+        results: Dict[str, Any],
+        overall_status: str,  # compliant, compliant_with_warnings, non_compliant
+    ) -> str:
+        """
+        Compliance 검사 결과 기록.
+        
+        Args:
+            standards_checked: 검사한 규정 목록 (예: ["DORA", "PCI-DSS"])
+            results: 규정별 검사 결과
+            overall_status: 전체 준수 상태
+        """
+        entry = AuditEntry(
+            action=AuditAction.COMPLIANCE_CHECK,
+            target_type="self_healing_system",
+            target_id="global",
+            actor_type="system",
+            actor_id="compliance_checker",
+            service_name=self._service_name,
+            reason=f"Compliance check: {overall_status}",
+            success=overall_status != "non_compliant",
+            details={
+                "standards_checked": standards_checked,
+                "results": results,
+                "overall_status": overall_status,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        
+        audit_id = self._record_with_integrity(entry)
+        
+        # 위반 시 알림
+        if overall_status == "non_compliant":
+            self._send_alert("compliance_violation", {
+                "standards_checked": standards_checked,
+                "results": results,
+                "severity": "critical",
+            })
+        
+        return audit_id
+    
+    def record_compliance_violation(
+        self,
+        standard: str,
+        violation_type: str,
+        description: str,
+        remediation_required: bool = True,
+    ) -> str:
+        """Compliance 위반 기록."""
+        entry = AuditEntry(
+            action=AuditAction.COMPLIANCE_VIOLATION,
+            target_type="compliance",
+            target_id=standard,
+            actor_type="system",
+            actor_id="compliance_checker",
+            service_name=self._service_name,
+            reason=description,
+            success=False,
+            details={
+                "standard": standard,
+                "violation_type": violation_type,
+                "description": description,
+                "remediation_required": remediation_required,
+            },
+        )
+        
+        audit_id = self._record_with_integrity(entry)
+        
+        self._send_alert("compliance_violation", {
+            "standard": standard,
+            "violation_type": violation_type,
+            "description": description,
+            "severity": "critical",
+        })
+        
+        return audit_id
+    
+    # ─────────────────────────────────────────────────────────────
+    # 조회 메서드 (Raw Data)
+    # ─────────────────────────────────────────────────────────────
+    
+    def query(
+        self,
+        action: Optional[AuditAction] = None,
+        target_type: Optional[str] = None,
+        target_id: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        감사 로그 조회 (Raw data).
+        
+        Args:
+            action: 액션 유형 필터
+            target_type: 대상 유형 필터
+            target_id: 대상 ID 필터
+            start_time: 시작 시간
+            end_time: 종료 시간
+            limit: 최대 반환 개수
+            
+        Returns:
+            감사 로그 딕셔너리 목록
+        """
+        entries = self.audit_adapter.query(
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+        )
+        
+        return [e.to_dict() for e in entries]
+    
+    def query_auto_tuning_history(
+        self,
+        parameter: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        자율 조정 이력 조회.
+        
+        Args:
+            parameter: 파라미터 이름 필터
+            start_time: 시작 시간
+            end_time: 종료 시간
+            limit: 최대 반환 개수
+            
+        Returns:
+            자율 조정 로그 목록
+        """
+        entries = self.query(
+            action=AuditAction.AUTO_TUNING_ADJUSTMENT,
+            target_type="runtime_config",
+            target_id=parameter,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+        )
+        
+        return entries
+    
+    def query_drift_history(
+        self,
+        resource_id: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        DNA Drift 이력 조회.
+        
+        Returns:
+            드리프트 감지/해결 로그 목록
+        """
+        # DNA_DRIFT_DETECTED와 DNA_DRIFT_RESOLVED 모두 조회
+        detected = self.query(
+            action=AuditAction.DNA_DRIFT_DETECTED,
+            target_id=resource_id,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit // 2,
+        )
+        
+        resolved = self.query(
+            action=AuditAction.DNA_DRIFT_RESOLVED,
+            target_id=resource_id,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit // 2,
+        )
+        
+        # 시간순 정렬
+        all_entries = detected + resolved
+        all_entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        return all_entries[:limit]
+    
+    def query_compliance_history(
+        self,
+        standard: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        Compliance 검사 이력 조회.
+        
+        Returns:
+            규정 준수 검사 로그 목록
+        """
+        return self.query(
+            action=AuditAction.COMPLIANCE_CHECK,
+            target_id=standard or "global",
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+        )
+    
+    # ─────────────────────────────────────────────────────────────
+    # 익스포트 메서드 (Raw Data)
+    # ─────────────────────────────────────────────────────────────
+    
+    def export_jsonl(
+        self,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        action_filter: Optional[List[AuditAction]] = None,
+    ) -> Iterator[str]:
+        """
+        JSON Lines 형식으로 익스포트.
+        
+        각 조직에서 자체 형식으로 변환할 때 사용.
+        
+        Yields:
+            JSON 문자열 (한 줄씩)
+        """
+        entries = self.query(
+            start_time=start_time,
+            end_time=end_time,
+            limit=10000,  # 대량 익스포트
+        )
+        
+        for entry in entries:
+            if action_filter:
+                entry_action = entry.get("action", "")
+                if not any(a.value == entry_action for a in action_filter):
+                    continue
+            yield json.dumps(entry, default=str)
+    
+    def export_csv_compatible(
+        self,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        CSV 변환 가능한 평탄화된 데이터 반환.
+        
+        중첩 구조를 평탄화하여 CSV로 변환하기 쉽게 만듦.
+        
+        Returns:
+            평탄화된 딕셔너리 목록
+        """
+        entries = self.query(
+            start_time=start_time,
+            end_time=end_time,
+            limit=10000,
+        )
+        
+        flattened = []
+        for entry in entries:
+            flat = {
+                "timestamp": entry.get("timestamp"),
+                "action": entry.get("action"),
+                "actor_id": entry.get("actor_id"),
+                "actor_type": entry.get("actor_type"),
+                "target_type": entry.get("target_type"),
+                "target_id": entry.get("target_id"),
+                "service_name": entry.get("service_name"),
+                "reason": entry.get("reason"),
+                "success": entry.get("success"),
+            }
+            
+            # details 평탄화
+            details = entry.get("details", {})
+            for key, value in details.items():
+                if isinstance(value, (dict, list)):
+                    flat[f"details_{key}"] = json.dumps(value)
+                else:
+                    flat[f"details_{key}"] = value
+            
+            flattened.append(flat)
+        
+        return flattened
+    
+    # ─────────────────────────────────────────────────────────────
+    # 무결성 검증
+    # ─────────────────────────────────────────────────────────────
+    
+    def verify_integrity(self) -> Dict[str, Any]:
+        """
+        감사 로그 무결성 검증.
+        
+        Returns:
+            검증 결과 딕셔너리
+        """
+        entries = self.query(limit=10000)
+        
+        verifier = HashChainVerifier()
+        
+        # 엔트리에 integrity 필드가 있으면 검증
+        entries_with_integrity = [
+            e for e in entries 
+            if "integrity" in e.get("details", {})
+        ]
+        
+        if not entries_with_integrity:
+            return {
+                "verified": True,
+                "total_entries": len(entries),
+                "verified_entries": 0,
+                "message": "No entries with integrity information found",
+            }
+        
+        # 무결성 정보를 최상위로 이동
+        for entry in entries_with_integrity:
+            entry["integrity"] = entry.get("details", {}).get("integrity", {})
+        
+        is_valid, error_msg = verifier.verify_chain(entries_with_integrity)
+        issues = verifier.find_tampering(entries_with_integrity) if not is_valid else []
+        
+        result = {
+            "verified": is_valid,
+            "total_entries": len(entries),
+            "verified_entries": len(entries_with_integrity),
+            "chain_state": self._hash_manager.get_state(),
+        }
+        
+        if not is_valid:
+            result["error"] = error_msg
+            result["issues"] = issues
+        
+        return result
+    
+    def get_chain_state(self) -> Dict[str, Any]:
+        """현재 해시 체인 상태 반환."""
+        return self._hash_manager.get_state()
+    
+    # ─────────────────────────────────────────────────────────────
+    # 내부 메서드
+    # ─────────────────────────────────────────────────────────────
+    
+    def _record_with_integrity(self, entry: AuditEntry) -> str:
+        """
+        해시 체인과 함께 기록.
+        
+        Args:
+            entry: 감사 엔트리
+            
+        Returns:
+            감사 로그 ID
+        """
+        with self._lock:
+            # 엔트리를 딕셔너리로 변환
+            entry_dict = entry.to_dict()
+            
+            # 해시 체인 무결성 정보 추가
+            entry_dict = self._hash_manager.add_integrity(entry_dict)
+            
+            # 무결성 정보를 details에 포함
+            entry.details["integrity"] = entry_dict.get("integrity", {})
+            
+            # 기록
+            self.audit_adapter.log(entry)
+            
+            # ID 생성 (timestamp + sequence)
+            integrity = entry_dict.get("integrity", {})
+            audit_id = f"audit-{entry.timestamp.strftime('%Y%m%d%H%M%S')}-{integrity.get('sequence', 0):06d}"
+            
+            logger.debug(f"[ContinuousAudit] Recorded: {entry.action} (id={audit_id})")
+            
+            return audit_id
+    
+    def _send_alert(self, channel: str, data: Dict[str, Any]) -> None:
+        """알림 발송."""
+        if self.alert_callback:
+            try:
+                self.alert_callback(channel, data)
+            except Exception as e:
+                logger.warning(f"[ContinuousAudit] Alert callback failed: {e}")
+        
+        # 설정된 채널로 알림 (확장 가능)
+        if channel in self.config.alert_channels or "all" in self.config.alert_channels:
+            logger.info(f"[ContinuousAudit] Alert: {channel} - {data}")

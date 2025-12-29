@@ -1,8 +1,10 @@
-# Continuous Audit 구현 계획 (Big 4 스타일)
+# Continuous Audit 구현 (Big 4 스타일)
 
 📅 **작성일**: 2025-12-29  
+📅 **구현일**: 2025-12-29  
 🎯 **목적**: 자율 복구 시스템의 지속적 감사 추적 및 규정 준수  
-📋 **버전**: v1.0.0
+📋 **버전**: v1.1.0 (구현 완료)
+✅ **상태**: **구현 완료**
 
 ---
 
@@ -19,6 +21,16 @@ Big 4 회계법인의 핵심 질문:
 - DORA, PCI-DSS, SOC2 규정 준수
 - IT 감사 대응 자동화
 - 책임 추적 가능한 의사결정 로그
+
+### 설계 철학: Raw Data 우선
+
+> **보고서 포맷팅은 제공하지 않음**
+
+각 조직은 자체적인 감사 보고서 형식이 있습니다. 따라서:
+- ✅ 완전하고 정확한 **Raw Data** 기록
+- ✅ 강력한 **쿼리/필터/익스포트** 기능
+- ✅ **JSON Lines / CSV** 익스포트
+- ❌ 특정 형식의 보고서 생성 (사용자 책임)
 
 ---
 
@@ -53,8 +65,8 @@ Big 4 회계법인의 핵심 질문:
 │            │                                                     │
 │            ▼                                                     │
 │   ┌─────────────────┐    ┌─────────────────┐                   │
-│   │ Alert on        │    │ Report          │                   │
-│   │ Violation       │    │ Generator       │                   │
+│   │ Alert on        │    │ Raw Data        │                   │
+│   │ Violation       │    │ Export (JSONL)  │                   │
 │   └─────────────────┘    └─────────────────┘                   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -257,7 +269,85 @@ class AuditAction(str, Enum):
 
 ---
 
-## 🔧 Continuous Audit Recorder
+## 🔧 Continuous Audit Recorder (구현 완료 ✅)
+
+### 실제 구현 위치
+
+```
+packages/selfhealing-python/src/selfhealing/audit/
+├── config.py              # AuditConfig (환경변수 기반)
+├── continuous_audit.py    # ContinuousAuditRecorder
+├── continuous_audit_api.py # REST API 엔드포인트
+└── integrity.py           # HashChainManager, HashChainVerifier
+```
+
+### ContinuousAuditRecorder 사용법
+
+```python
+from selfhealing.audit import ContinuousAuditRecorder, AuditConfig
+from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
+
+# 설정 로드 (환경변수에서 자동 로드)
+config = AuditConfig.get_default()
+
+# 레코더 생성
+adapter = FileAuditLogAdapter("logs/continuous_audit.jsonl", rotate_daily=True)
+recorder = ContinuousAuditRecorder(
+    audit_adapter=adapter,
+    config=config,
+)
+
+# 자율 조정 기록
+audit_id = recorder.record_auto_tuning(
+    parameter="timeout_ms",
+    old_value=5000,
+    new_value=6000,
+    reason="P99 레이턴시가 타임아웃의 80% 이상",
+    confidence=0.85,
+    metrics_snapshot={"p99_latency_ms": 4200, "error_rate": 0.02},
+    safety_check={"within_bounds": True, "bounds": {"min": 100, "max": 30000}},
+)
+
+# DNA Drift 기록
+recorder.record_drift_detected(
+    resource_id="stage14_dlq_api_test",
+    declared={"timeout_ms": 5000},
+    actual={"timeout_ms": 6000},
+    drifted_fields=["timeout_ms"],
+    severity="medium",
+)
+
+# Compliance 검사 기록
+recorder.record_compliance_check(
+    standards_checked=["DORA", "PCI-DSS", "SOC2"],
+    results={"DORA": {"status": "compliant"}},
+    overall_status="compliant",
+)
+```
+
+### Raw Data 조회 및 익스포트
+
+```python
+# 자율 조정 이력 조회
+entries = recorder.query_auto_tuning_history(
+    parameter="timeout_ms",
+    start_time=datetime(2025, 12, 1),
+    limit=100,
+)
+
+# JSON Lines 익스포트 (스트리밍)
+for line in recorder.export_jsonl():
+    print(line)
+
+# CSV 호환 형식 (평탄화된 데이터)
+csv_data = recorder.export_csv_compatible()
+
+# 무결성 검증
+result = recorder.verify_integrity()
+print(result["verified"])  # True/False
+```
+
+### 기존 코드 (계획)
 
 ```python
 # packages/selfhealing-python/src/selfhealing/services/audit/continuous_audit.py
@@ -465,16 +555,40 @@ class ContinuousAuditRecorder:
 
 ---
 
-## 🔗 API 엔드포인트
+## 🔗 API 엔드포인트 (구현 완료 ✅)
+
+### Raw Data 조회 API
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/api/self-healing/audit/logs/` | 감사 로그 조회 |
+| GET | `/api/self-healing/audit/logs/` | 감사 로그 조회 (필터 지원) |
 | GET | `/api/self-healing/audit/logs/{id}/` | 특정 로그 상세 |
-| GET | `/api/self-healing/audit/report/` | 감사 보고서 생성 |
-| GET | `/api/self-healing/audit/integrity/verify/` | 무결성 검증 |
-| GET | `/api/self-healing/compliance/status/` | 규정 준수 상태 |
-| GET | `/api/self-healing/compliance/check/` | 규정 검사 실행 |
+| GET | `/api/self-healing/audit/auto-tuning/` | 자율 조정 이력 |
+| GET | `/api/self-healing/audit/drift/` | DNA Drift 이력 |
+| GET | `/api/self-healing/audit/compliance/` | Compliance 검사 이력 |
+
+### 무결성 검증 API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/self-healing/audit/integrity/verify/` | 해시 체인 무결성 검증 |
+| GET | `/api/self-healing/audit/integrity/state/` | 현재 체인 상태 |
+
+### 익스포트 API (Raw Data)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/self-healing/audit/export/jsonl/` | JSON Lines 스트리밍 익스포트 |
+| GET | `/api/self-healing/audit/export/csv/` | CSV 형식 익스포트 |
+
+### 설정 API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/self-healing/audit/config/` | 현재 감사 설정 조회 |
+
+> **Note**: 보고서 포맷팅 API는 의도적으로 제외됨. 
+> 각 조직에서 익스포트된 Raw Data를 자체 형식으로 가공해야 함.
 
 ---
 ## ⚠️ 하드코딩 문제 대책 (Configuration Strategy)
@@ -596,3 +710,59 @@ class AuditConfig:
 - [36_RUNTIME_FEEDBACK_IMPLEMENTATION.md](./36_RUNTIME_FEEDBACK_IMPLEMENTATION.md) - 런타임 피드백
 - [38_AUTO_TUNING_API.md](./38_AUTO_TUNING_API.md) - 자율 튜닝 API
 - [12_ERROR_BUDGET.md](./12_ERROR_BUDGET.md) - Error Budget Gate
+
+---
+
+## ✅ 구현 현황 (2025-12-29)
+
+### 구현 완료 항목
+
+| 구성 요소 | 파일 | 상태 |
+|----------|------|------|
+| AuditConfig | `audit/config.py` | ✅ 완료 |
+| ContinuousAuditRecorder | `audit/continuous_audit.py` | ✅ 완료 |
+| REST API | `audit/continuous_audit_api.py` | ✅ 완료 |
+| AuditAction 확장 | `interfaces/audit_adapter.py` | ✅ 완료 |
+| 테스트 | `tests/unit/test_continuous_audit.py` | ✅ 28개 통과 |
+
+### 새로 추가된 AuditAction
+
+```python
+# Auto Tuning
+AUTO_TUNING_ADJUSTMENT = "auto_tuning_adjustment"
+AUTO_TUNING_ENABLED = "auto_tuning_enabled"
+AUTO_TUNING_DISABLED = "auto_tuning_disabled"
+AUTO_TUNING_BOUNDS_CHANGED = "auto_tuning_bounds_changed"
+AUTO_TUNING_REJECTED = "auto_tuning_rejected"
+AUTO_TUNING_ROLLBACK = "auto_tuning_rollback"
+
+# DNA Drift
+DNA_DRIFT_DETECTED = "dna_drift_detected"
+DNA_DRIFT_RESOLVED = "dna_drift_resolved"
+
+# Compliance
+COMPLIANCE_CHECK = "compliance_check"
+COMPLIANCE_VIOLATION = "compliance_violation"
+```
+
+### 환경 변수
+
+```bash
+# 필수 (프로덕션)
+AUDIT_HASH_SEED=your-secret-seed
+
+# 선택적
+AUDIT_RETENTION_DAYS=365
+AUDIT_STORAGE=file          # file, s3, loki
+AUDIT_S3_BUCKET=my-bucket
+AUDIT_S3_WORM=true
+AUDIT_ALERT_CHANNELS=slack,pagerduty
+AUDIT_LOG_PATH=logs/continuous_audit.jsonl
+```
+
+### 테스트 결과
+
+```
+$ pytest tests/unit/test_continuous_audit.py -v
+============================= 28 passed in 0.63s ==============================
+```

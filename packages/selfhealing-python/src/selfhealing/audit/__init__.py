@@ -87,6 +87,14 @@ from selfhealing.audit.env_snapshot import (
     TRACKED_PREFIXES,
     SENSITIVE_KEYWORDS,
 )
+from selfhealing.audit.config import (
+    AuditConfig,
+    COMPLIANCE_RETENTION_DAYS,
+    get_recommended_retention,
+)
+from selfhealing.audit.continuous_audit import (
+    ContinuousAuditRecorder,
+)
 
 __all__ = [
     # Main API
@@ -146,4 +154,9 @@ __all__ = [
     "get_env_snapshot_summary",
     "TRACKED_PREFIXES",
     "SENSITIVE_KEYWORDS",
+    # Continuous Audit (Big 4 Style)
+    "AuditConfig",
+    "ContinuousAuditRecorder",
+    "COMPLIANCE_RETENTION_DAYS",
+    "get_recommended_retention",
 ]
