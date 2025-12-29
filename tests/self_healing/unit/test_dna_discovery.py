@@ -194,7 +194,7 @@ class TestDiscoveryStage:
         # URL 호스트 제거
         path = discovery._normalize_path("http://localhost/api/v1/orders/123/")
         assert "localhost" not in path
-        assert path == "/api/v1/orders/*//"  # 숫자가 *로
+        assert path == "/api/v1/orders/*/"  # 숫자가 *로
         
         # 변수 치환
         path = discovery._normalize_path("/api/v1/orders/{order_id}/")
