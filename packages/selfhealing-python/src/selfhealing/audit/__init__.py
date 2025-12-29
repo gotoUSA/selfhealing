@@ -95,6 +95,33 @@ from selfhealing.audit.config import (
 from selfhealing.audit.continuous_audit import (
     ContinuousAuditRecorder,
 )
+from selfhealing.audit.ring_buffer import (
+    RingBuffer,
+    RingBufferStats,
+    BackpressureStrategy,
+)
+from selfhealing.audit.self_audit import (
+    SelfAuditLogger,
+    SelfAuditEvent,
+    SelfAuditStats,
+    self_audit,
+)
+from selfhealing.audit.checksum import (
+    compute_crc32,
+    compute_sha256,
+    verify_crc32,
+    verify_sha256,
+    compute_checksum,
+    verify_checksum,
+    ChecksumResult,
+    checksum_dict,
+    checksum_file,
+    verify_file_checksum,
+)
+from selfhealing.audit.resilient_recorder import (
+    ResilientContinuousAuditRecorder,
+    ResilientRecorderConfig,
+)
 
 __all__ = [
     # Main API
@@ -159,4 +186,27 @@ __all__ = [
     "ContinuousAuditRecorder",
     "COMPLIANCE_RETENTION_DAYS",
     "get_recommended_retention",
+    # Ring Buffer
+    "RingBuffer",
+    "RingBufferStats",
+    "BackpressureStrategy",
+    # Self-Audit
+    "SelfAuditLogger",
+    "SelfAuditEvent",
+    "SelfAuditStats",
+    "self_audit",
+    # Checksum Utilities
+    "compute_crc32",
+    "compute_sha256",
+    "verify_crc32",
+    "verify_sha256",
+    "compute_checksum",
+    "verify_checksum",
+    "ChecksumResult",
+    "checksum_dict",
+    "checksum_file",
+    "verify_file_checksum",
+    # Resilient Recorder
+    "ResilientContinuousAuditRecorder",
+    "ResilientRecorderConfig",
 ]
