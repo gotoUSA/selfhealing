@@ -122,6 +122,16 @@ from selfhealing.audit.resilient_recorder import (
     ResilientContinuousAuditRecorder,
     ResilientRecorderConfig,
 )
+from selfhealing.audit.wal import (
+    WriteAheadLog,
+    WALConfig,
+    WALEntry,
+    WALError,
+    WALCorruptionError,
+    WALState,
+    WALStats,
+    create_wal,
+)
 
 __all__ = [
     # Main API
@@ -209,4 +219,13 @@ __all__ = [
     # Resilient Recorder
     "ResilientContinuousAuditRecorder",
     "ResilientRecorderConfig",
+    # WAL (Write-Ahead Log)
+    "WriteAheadLog",
+    "WALConfig",
+    "WALEntry",
+    "WALError",
+    "WALCorruptionError",
+    "WALState",
+    "WALStats",
+    "create_wal",
 ]
