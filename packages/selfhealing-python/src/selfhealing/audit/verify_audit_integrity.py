@@ -455,8 +455,8 @@ def format_summary_output(summary: VerificationSummary) -> str:
     )
 
 
-def main():
-    """CLI 메인 함수."""
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """ArgumentParser 생성."""
     parser = argparse.ArgumentParser(
         description="Audit Log Integrity Verifier - Hash Chain Verification Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -518,60 +518,90 @@ Exit Codes:
         help="Suppress output, only set exit code",
     )
     
+    return parser
+
+
+def _create_summary_from_result(result: VerificationResult) -> VerificationSummary:
+    """단일 VerificationResult로부터 VerificationSummary 생성."""
+    return VerificationSummary(
+        total_files=1,
+        valid_files=1 if result.is_valid else 0,
+        invalid_files=0 if result.is_valid else 1,
+        error_files=1 if result.error else 0,
+        total_entries=result.total_entries,
+        total_issues=len(result.issues),
+        results=[result],
+    )
+
+
+def _verify_path(
+    verifier: AuditIntegrityVerifier,
+    path: Path,
+    wal_mode: bool,
+    recursive: bool,
+    pattern: Optional[str],
+) -> Optional[VerificationSummary]:
+    """
+    경로 타입에 따라 적절한 검증 수행.
+    
+    Returns:
+        VerificationSummary 또는 None (경로가 유효하지 않은 경우)
+    """
+    if wal_mode:
+        result = verifier.verify_wal_directory(path)
+        return _create_summary_from_result(result)
+    
+    if path.is_file():
+        result = verifier.verify_file(path)
+        return _create_summary_from_result(result)
+    
+    if path.is_dir():
+        return verifier.verify_directory(path, recursive=recursive, pattern=pattern)
+    
+    return None
+
+
+def _format_output(summary: VerificationSummary, format_type: str, verbose: bool) -> str:
+    """출력 형식에 따른 포맷팅."""
+    if format_type == "json":
+        return format_json_output(summary)
+    elif format_type == "summary":
+        return format_summary_output(summary)
+    else:
+        return format_text_output(summary, verbose=verbose)
+
+
+def _get_exit_code(summary: VerificationSummary) -> int:
+    """검증 결과에 따른 종료 코드 반환."""
+    if summary.invalid_files == 0 and summary.error_files == 0:
+        return 0
+    return 1
+
+
+def main() -> None:
+    """CLI 메인 함수."""
+    parser = _create_argument_parser()
     args = parser.parse_args()
     
     verifier = AuditIntegrityVerifier(verbose=args.verbose)
     
     try:
-        # WAL 모드
-        if args.wal:
-            result = verifier.verify_wal_directory(args.path)
-            summary = VerificationSummary(
-                total_files=1,
-                valid_files=1 if result.is_valid else 0,
-                invalid_files=0 if result.is_valid else 1,
-                error_files=1 if result.error else 0,
-                total_entries=result.total_entries,
-                total_issues=len(result.issues),
-                results=[result],
-            )
-        # 단일 파일
-        elif args.path.is_file():
-            result = verifier.verify_file(args.path)
-            summary = VerificationSummary(
-                total_files=1,
-                valid_files=1 if result.is_valid else 0,
-                invalid_files=0 if result.is_valid else 1,
-                error_files=1 if result.error else 0,
-                total_entries=result.total_entries,
-                total_issues=len(result.issues),
-                results=[result],
-            )
-        # 디렉토리
-        elif args.path.is_dir():
-            summary = verifier.verify_directory(
-                args.path,
-                recursive=args.recursive,
-                pattern=args.pattern,
-            )
-        else:
+        summary = _verify_path(
+            verifier=verifier,
+            path=args.path,
+            wal_mode=args.wal,
+            recursive=args.recursive,
+            pattern=args.pattern,
+        )
+        
+        if summary is None:
             print(f"Error: Path not found: {args.path}", file=sys.stderr)
             sys.exit(2)
         
-        # 출력
         if not args.quiet:
-            if args.format == "json":
-                print(format_json_output(summary))
-            elif args.format == "summary":
-                print(format_summary_output(summary))
-            else:
-                print(format_text_output(summary, verbose=args.verbose))
+            print(_format_output(summary, args.format, args.verbose))
         
-        # 종료 코드
-        if summary.invalid_files == 0 and summary.error_files == 0:
-            sys.exit(0)
-        else:
-            sys.exit(1)
+        sys.exit(_get_exit_code(summary))
             
     except KeyboardInterrupt:
         print("\nInterrupted", file=sys.stderr)
