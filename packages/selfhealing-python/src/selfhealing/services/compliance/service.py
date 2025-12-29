@@ -1,0 +1,411 @@
+"""
+Compliance DNA Service - 규정 준수 관리 서비스
+"""
+
+import logging
+import uuid
+from datetime import datetime
+from typing import Dict, List, Optional, Callable, Any
+from threading import Lock
+
+from .models import (
+    ComplianceStandard,
+    ComplianceCheck,
+    ComplianceReport,
+    ComplianceViolation,
+    ViolationSeverity,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# 기본 규정 검사 항목
+DEFAULT_CHECKS: Dict[ComplianceStandard, List[Dict]] = {
+    ComplianceStandard.DORA_2025: [
+        {
+            "check_id": "DORA-001",
+            "name": "ICT Risk Management",
+            "description": "ICT 리스크 관리 프레임워크 확인",
+            "category": "risk",
+        },
+        {
+            "check_id": "DORA-002",
+            "name": "Incident Reporting",
+            "description": "사고 보고 체계 확인",
+            "category": "incident",
+        },
+        {
+            "check_id": "DORA-003",
+            "name": "Resilience Testing",
+            "description": "디지털 운영 복원력 테스트 확인",
+            "category": "testing",
+        },
+        {
+            "check_id": "DORA-004",
+            "name": "Third-Party Risk",
+            "description": "제3자 ICT 리스크 관리 확인",
+            "category": "vendor",
+        },
+    ],
+    ComplianceStandard.PCI_DSS: [
+        {
+            "check_id": "PCI-001",
+            "name": "Secure Network",
+            "description": "보안 네트워크 구성 확인",
+            "category": "network",
+        },
+        {
+            "check_id": "PCI-002",
+            "name": "Cardholder Data Protection",
+            "description": "카드소유자 데이터 보호 확인",
+            "category": "data",
+        },
+        {
+            "check_id": "PCI-003",
+            "name": "Access Control",
+            "description": "접근 제어 확인",
+            "category": "access",
+        },
+        {
+            "check_id": "PCI-004",
+            "name": "Monitoring & Testing",
+            "description": "모니터링 및 테스트 확인",
+            "category": "monitoring",
+        },
+    ],
+    ComplianceStandard.SOC2: [
+        {
+            "check_id": "SOC2-001",
+            "name": "Security",
+            "description": "보안 통제 확인",
+            "category": "security",
+        },
+        {
+            "check_id": "SOC2-002",
+            "name": "Availability",
+            "description": "가용성 확인",
+            "category": "availability",
+        },
+        {
+            "check_id": "SOC2-003",
+            "name": "Confidentiality",
+            "description": "기밀성 확인",
+            "category": "confidentiality",
+        },
+    ],
+}
+
+
+class ComplianceService:
+    """
+    Compliance DNA 서비스
+    
+    규정 준수 상태를 추적하고 리포트를 생성합니다.
+    """
+    
+    _instance: Optional["ComplianceService"] = None
+    _lock = Lock()
+    
+    def __new__(cls) -> "ComplianceService":
+        """싱글톤 패턴"""
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+            
+        self._checks: Dict[str, ComplianceCheck] = {}
+        self._violations: List[ComplianceViolation] = []
+        self._reports: List[ComplianceReport] = []
+        self._check_functions: Dict[str, Callable] = {}
+        self._stage_standards: Dict[str, List[ComplianceStandard]] = {}
+        self._enabled = True
+        self._initialized = True
+        
+        # 기본 검사 항목 로드
+        self._load_default_checks()
+        
+        logger.info("ComplianceService initialized")
+    
+    def _load_default_checks(self) -> None:
+        """기본 검사 항목 로드"""
+        for standard, checks in DEFAULT_CHECKS.items():
+            for check_data in checks:
+                check = ComplianceCheck(
+                    standard=standard,
+                    **check_data,
+                )
+                self._checks[check.check_id] = check
+    
+    def register_check(
+        self,
+        check_id: str,
+        name: str,
+        description: str,
+        standard: ComplianceStandard,
+        category: str = "general",
+        check_function: Optional[Callable[[], bool]] = None,
+    ) -> ComplianceCheck:
+        """
+        규정 검사 항목 등록
+        
+        Args:
+            check_id: 검사 ID
+            name: 검사 이름
+            description: 설명
+            standard: 규정 표준
+            category: 카테고리
+            check_function: 검사 함수
+        
+        Returns:
+            ComplianceCheck: 등록된 검사 항목
+        """
+        check = ComplianceCheck(
+            check_id=check_id,
+            name=name,
+            description=description,
+            standard=standard,
+            category=category,
+            check_function=check_id if check_function else None,
+        )
+        self._checks[check_id] = check
+        
+        if check_function:
+            self._check_functions[check_id] = check_function
+        
+        return check
+    
+    def set_stage_standards(
+        self,
+        stage_name: str,
+        standards: List[ComplianceStandard],
+    ) -> None:
+        """
+        Stage별 적용 규정 설정
+        
+        Args:
+            stage_name: Stage 이름
+            standards: 적용할 규정 목록
+        """
+        self._stage_standards[stage_name] = standards
+        logger.info(f"Standards set for {stage_name}: {[s.value for s in standards]}")
+    
+    def run_check(
+        self,
+        check_id: str,
+        stage_name: str,
+        context: Optional[Dict] = None,
+    ) -> Optional[ComplianceViolation]:
+        """
+        개별 규정 검사 실행
+        
+        Args:
+            check_id: 검사 ID
+            stage_name: Stage 이름
+            context: 검사 컨텍스트
+        
+        Returns:
+            ComplianceViolation: 위반 발견 시 위반 정보, 아니면 None
+        """
+        check = self._checks.get(check_id)
+        if not check or not check.enabled:
+            return None
+        
+        # 검사 함수 실행
+        passed = True
+        details = ""
+        
+        if check_id in self._check_functions:
+            try:
+                passed = self._check_functions[check_id]()
+            except Exception as e:
+                passed = False
+                details = str(e)
+        else:
+            # 기본 검사 (항상 통과)
+            passed = True
+        
+        if not passed:
+            violation = ComplianceViolation(
+                violation_id=str(uuid.uuid4())[:8],
+                check_id=check_id,
+                stage_name=stage_name,
+                standard=check.standard,
+                severity=ViolationSeverity.HIGH if check.required else ViolationSeverity.MEDIUM,
+                message=f"{check.name} 검사 실패",
+                details=details,
+                remediation=f"{check.description}을 확인하세요",
+            )
+            self._violations.append(violation)
+            logger.warning(f"Compliance violation: {check_id} in {stage_name}")
+            return violation
+        
+        return None
+    
+    def run_all_checks(
+        self,
+        stage_name: str,
+        standards: Optional[List[ComplianceStandard]] = None,
+    ) -> ComplianceReport:
+        """
+        모든 규정 검사 실행
+        
+        Args:
+            stage_name: Stage 이름
+            standards: 검사할 규정 목록 (None이면 Stage 설정 사용)
+        
+        Returns:
+            ComplianceReport: 규정 준수 리포트
+        """
+        if standards is None:
+            standards = self._stage_standards.get(stage_name, [])
+        
+        if not standards:
+            standards = [ComplianceStandard.DORA_2025]  # 기본값
+        
+        violations = []
+        passed = 0
+        failed = 0
+        
+        for check_id, check in self._checks.items():
+            if check.standard not in standards:
+                continue
+            if not check.enabled:
+                continue
+            
+            violation = self.run_check(check_id, stage_name)
+            if violation:
+                violations.append(violation)
+                failed += 1
+            else:
+                passed += 1
+        
+        total = passed + failed
+        score = (passed / total * 100) if total > 0 else 100.0
+        
+        report = ComplianceReport(
+            report_id=str(uuid.uuid4())[:8],
+            stage_name=stage_name,
+            standards=standards,
+            total_checks=total,
+            passed_checks=passed,
+            failed_checks=failed,
+            violations=violations,
+            compliance_score=score,
+        )
+        
+        self._reports.append(report)
+        logger.info(
+            f"Compliance report generated: {stage_name}, "
+            f"score={score:.1f}%, violations={len(violations)}"
+        )
+        
+        return report
+    
+    def get_violations(
+        self,
+        stage_name: Optional[str] = None,
+        standard: Optional[ComplianceStandard] = None,
+        unresolved_only: bool = False,
+    ) -> List[ComplianceViolation]:
+        """
+        위반 목록 조회
+        
+        Args:
+            stage_name: Stage 이름 필터
+            standard: 규정 표준 필터
+            unresolved_only: 미해결 위반만
+        
+        Returns:
+            List[ComplianceViolation]: 위반 목록
+        """
+        violations = self._violations
+        
+        if stage_name:
+            violations = [v for v in violations if v.stage_name == stage_name]
+        if standard:
+            violations = [v for v in violations if v.standard == standard]
+        if unresolved_only:
+            violations = [v for v in violations if not v.resolved]
+        
+        return violations
+    
+    def resolve_violation(self, violation_id: str) -> bool:
+        """
+        위반 해결 처리
+        
+        Args:
+            violation_id: 위반 ID
+        
+        Returns:
+            bool: 성공 여부
+        """
+        for violation in self._violations:
+            if violation.violation_id == violation_id:
+                violation.resolved = True
+                violation.resolved_at = datetime.now()
+                logger.info(f"Violation resolved: {violation_id}")
+                return True
+        return False
+    
+    def get_reports(
+        self,
+        stage_name: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ComplianceReport]:
+        """
+        리포트 목록 조회
+        
+        Args:
+            stage_name: Stage 이름 필터
+            limit: 최대 개수
+        
+        Returns:
+            List[ComplianceReport]: 리포트 목록
+        """
+        reports = self._reports[-limit:]
+        
+        if stage_name:
+            reports = [r for r in reports if r.stage_name == stage_name]
+        
+        return reports
+    
+    def get_compliance_status(self, stage_name: str) -> Dict:
+        """
+        Stage 규정 준수 상태 조회
+        
+        Args:
+            stage_name: Stage 이름
+        
+        Returns:
+            Dict: 상태 정보
+        """
+        standards = self._stage_standards.get(stage_name, [])
+        violations = self.get_violations(stage_name=stage_name, unresolved_only=True)
+        reports = self.get_reports(stage_name=stage_name, limit=1)
+        
+        return {
+            "stage_name": stage_name,
+            "standards": [s.value for s in standards],
+            "unresolved_violations": len(violations),
+            "is_compliant": len(violations) == 0,
+            "last_report": reports[0].to_dict() if reports else None,
+        }
+    
+    def enable(self) -> None:
+        """서비스 활성화"""
+        self._enabled = True
+        
+    def disable(self) -> None:
+        """서비스 비활성화"""
+        self._enabled = False
+    
+    def clear(self) -> None:
+        """모든 데이터 초기화 (테스트용)"""
+        self._violations.clear()
+        self._reports.clear()
+        self._stage_standards.clear()

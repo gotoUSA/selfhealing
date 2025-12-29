@@ -37,6 +37,28 @@ Reference:
     - docs/SELF_HEALING_LOAD_TEST_PLAN.md (Stage 14)
 """
 
+# =============================================================================
+# Stage DNA - Self-Healing 모듈 의존성 선언
+# Reference: docs/self_healing/27_SELFHEALING_SCENARIO_MAPPING.md
+# =============================================================================
+STAGE_DNA = {
+    "name": "Stage 14 - DLQ Replay Verification Test",
+    "type": "integration",
+    "required_modules": ["circuit_breaker", "dlq", "health", "observability"],
+    "optional_modules": ["governance", "reconciliation", "l2_storage"],
+}
+
+# DNA 검증 (테스트 시작 전 자동 체크)
+try:
+    from load_tests.utils.selfhealing.stage_dna import validate_stage_dna
+    _dna_result = validate_stage_dna(STAGE_DNA)
+    if not _dna_result.is_valid:
+        import warnings
+        warnings.warn(str(_dna_result))
+except ImportError:
+    pass  # stage_dna 모듈 없으면 스킵
+
+# =============================================================================
 import os
 import sys
 import time

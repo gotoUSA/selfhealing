@@ -92,11 +92,21 @@
 
 런타임 기능 구현 시 반드시 다음을 함께 구현:
 
-- [ ] **런타임 코드**: `packages/selfhealing-python/src/selfhealing/services/{feature}/`
+- [x] **런타임 코드**: `packages/selfhealing-python/src/selfhealing/services/{feature}/` ✅ 완료 (2025-12-29)
 - [x] **단위 테스트**: `tests/self_healing/unit/test_{feature}.py` ✅ Phase 1 완료
 - [x] **테스트 클라이언트**: `load_tests/utils/selfhealing/dna_{feature}.py` ✅ Phase 1 완료
-- [ ] **API 엔드포인트**: `selfhealing/api/django/views/{feature}.py`
-- [ ] **URL 등록**: `selfhealing/api/django/urls.py`
+- [x] **API 엔드포인트**: `selfhealing/api/django/views/{feature}.py` ✅ 완료 (2025-12-29)
+- [x] **URL 등록**: `selfhealing/api/django/urls.py` ✅ 완료 (2025-12-29)
+
+### ✅ 런타임 서비스 구현 완료 (2025-12-29)
+
+| 서비스 | 경로 | API 엔드포인트 |
+|--------|------|---------------|
+| **FinOps DNA** | `services/finops/` | `/api/self-healing/dna/finops/` |
+| **Self-Learning DNA** | `services/learning/` | `/api/self-healing/dna/learning/` |
+| **Rollback DNA** | `services/rollback/` | `/api/self-healing/dna/rollback/` |
+| **Blast Radius DNA** | `services/blast_radius/` | `/api/self-healing/dna/blast-radius/` |
+| **Compliance DNA** | `services/compliance/` | `/api/self-healing/dna/compliance/` |
 
 ### ✅ Phase 1 구현 완료 (2025-12-29)
 

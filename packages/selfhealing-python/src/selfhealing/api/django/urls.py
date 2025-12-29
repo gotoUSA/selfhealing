@@ -472,6 +472,101 @@ urlpatterns = [
 ]
 
 # =============================================================================
+# Stage DNA API Endpoints (Enterprise DNA Features)
+# Reference: docs/self_healing/29_STAGE_DNA_EVOLUTION_MASTER.md
+# =============================================================================
+try:
+    from selfhealing.api.django.views.finops import (
+        FinOpsBudgetView,
+        FinOpsCostView,
+        FinOpsReportView,
+        FinOpsAlertsView,
+    )
+    from selfhealing.api.django.views.learning import (
+        LearningSessionView,
+        LearningPatternView,
+        LearningSuggestionView,
+        LearningMetricView,
+        LearningInsightsView,
+    )
+    from selfhealing.api.django.views.rollback import (
+        RollbackPolicyView,
+        RollbackRequestView,
+        RollbackExecuteView,
+        RollbackCancelView,
+        RollbackHistoryView,
+    )
+    from selfhealing.api.django.views.blast_radius import (
+        BlastRadiusPolicyView as DNABlastRadiusPolicyView,
+        BlastRadiusDependencyView,
+        BlastRadiusAssessmentView,
+        BlastRadiusIsolationView,
+        BlastRadiusGraphView,
+    )
+    from selfhealing.api.django.views.compliance_dna import (
+        ComplianceStandardsView,
+        ComplianceCheckView,
+        ComplianceViolationView,
+        ComplianceReportView,
+    )
+    
+    urlpatterns += [
+        # =====================================================================
+        # FinOps DNA API - 비용 관리
+        # =====================================================================
+        path("dna/finops/budget/", FinOpsBudgetView.as_view(), name="dna-finops-budget-list"),
+        path("dna/finops/budget/<str:stage_name>/", FinOpsBudgetView.as_view(), name="dna-finops-budget"),
+        path("dna/finops/cost/", FinOpsCostView.as_view(), name="dna-finops-cost"),
+        path("dna/finops/report/", FinOpsReportView.as_view(), name="dna-finops-report"),
+        path("dna/finops/alerts/", FinOpsAlertsView.as_view(), name="dna-finops-alerts"),
+        path("dna/finops/alerts/<int:alert_index>/acknowledge/", FinOpsAlertsView.as_view(), name="dna-finops-alert-ack"),
+        
+        # =====================================================================
+        # Self-Learning DNA API - 패턴 학습 및 제안
+        # =====================================================================
+        path("dna/learning/session/<str:action>/", LearningSessionView.as_view(), name="dna-learning-session"),
+        path("dna/learning/patterns/", LearningPatternView.as_view(), name="dna-learning-patterns"),
+        path("dna/learning/suggestions/", LearningSuggestionView.as_view(), name="dna-learning-suggestions"),
+        path("dna/learning/suggestions/<str:suggestion_id>/apply/", LearningSuggestionView.as_view(), name="dna-learning-suggestion-apply"),
+        path("dna/learning/metrics/", LearningMetricView.as_view(), name="dna-learning-metrics"),
+        path("dna/learning/insights/", LearningInsightsView.as_view(), name="dna-learning-insights"),
+        
+        # =====================================================================
+        # Rollback DNA API - 안전한 롤백
+        # =====================================================================
+        path("dna/rollback/policy/<str:stage_name>/", RollbackPolicyView.as_view(), name="dna-rollback-policy"),
+        path("dna/rollback/request/", RollbackRequestView.as_view(), name="dna-rollback-request"),
+        path("dna/rollback/request/<str:request_id>/", RollbackRequestView.as_view(), name="dna-rollback-request-detail"),
+        path("dna/rollback/request/<str:request_id>/execute/", RollbackExecuteView.as_view(), name="dna-rollback-execute"),
+        path("dna/rollback/request/<str:request_id>/cancel/", RollbackCancelView.as_view(), name="dna-rollback-cancel"),
+        path("dna/rollback/history/", RollbackHistoryView.as_view(), name="dna-rollback-history"),
+        
+        # =====================================================================
+        # Blast Radius DNA API - 장애 영향 범위
+        # =====================================================================
+        path("dna/blast-radius/policy/<str:stage_name>/", DNABlastRadiusPolicyView.as_view(), name="dna-blast-radius-policy"),
+        path("dna/blast-radius/dependency/", BlastRadiusDependencyView.as_view(), name="dna-blast-radius-dependency-add"),
+        path("dna/blast-radius/dependency/<str:service_name>/", BlastRadiusDependencyView.as_view(), name="dna-blast-radius-dependency"),
+        path("dna/blast-radius/assessment/", BlastRadiusAssessmentView.as_view(), name="dna-blast-radius-assessment"),
+        path("dna/blast-radius/isolation/", BlastRadiusIsolationView.as_view(), name="dna-blast-radius-isolation-list"),
+        path("dna/blast-radius/isolation/<str:service_name>/", BlastRadiusIsolationView.as_view(), name="dna-blast-radius-isolation"),
+        path("dna/blast-radius/graph/", BlastRadiusGraphView.as_view(), name="dna-blast-radius-graph"),
+        
+        # =====================================================================
+        # Compliance DNA API - 규정 준수
+        # =====================================================================
+        path("dna/compliance/standards/", ComplianceStandardsView.as_view(), name="dna-compliance-standards"),
+        path("dna/compliance/standards/<str:stage_name>/", ComplianceStandardsView.as_view(), name="dna-compliance-stage-standards"),
+        path("dna/compliance/check/<str:stage_name>/", ComplianceCheckView.as_view(), name="dna-compliance-check"),
+        path("dna/compliance/violations/", ComplianceViolationView.as_view(), name="dna-compliance-violations"),
+        path("dna/compliance/violations/<str:violation_id>/resolve/", ComplianceViolationView.as_view(), name="dna-compliance-violation-resolve"),
+        path("dna/compliance/reports/", ComplianceReportView.as_view(), name="dna-compliance-reports"),
+    ]
+except ImportError:
+    # DNA 서비스가 설치되지 않은 경우 스킵
+    pass
+
+# =============================================================================
 # X-Test-Mode Endpoints (Stage 48: Chaos Proof)
 # Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
 # =============================================================================
