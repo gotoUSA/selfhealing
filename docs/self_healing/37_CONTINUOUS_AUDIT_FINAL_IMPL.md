@@ -73,8 +73,8 @@
 │  ┌───────────────────────────────────────────────┼────────────────┐│
 │  │                  Write Path                   │                ││
 │  │  ┌──────────────┐   ┌──────────────┐   ┌─────▼─────┐          ││
-│  │  │Circuit Breaker│──▶│ Primary Store│   │  Local DB │          ││
-│  │  │  (EXISTING)  │   │ (PostgreSQL) │   │ (SQLite)  │          ││
+│  │  │Circuit Breaker│──▶│ Primary Store│   │  Backup   │          ││
+│  │  │  (EXISTING)  │   │(Adapter주입) │   │ (SQLite)  │          ││
 │  │  └──────┬───────┘   └──────────────┘   └───────────┘          ││
 │  │         │                                                      ││
 │  │         │ OPEN                                                 ││
@@ -572,7 +572,32 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
   - TEXT/JSON/SUMMARY 출력 형식
   - CLI 인터페이스 (argparse)
 
-**총 예상 공수: 24h (3일)** → **실제 소요: ~20h** ✅ 완료
+### Phase 4: 비침투 아키텍처 강화 ✅ 완료
+
+| 순서 | 항목 | 작업 | 상태 |
+|------|------|------|------|
+| 1 | WORM 어댑터 | S3ObjectLock/Loki/HTTP 인터페이스 | ✅ 완료 |
+| 2 | Export CLI | 감사 시점 외부 전송 도구 | ✅ 완료 |
+| 3 | Signed Manifest | 머클 루트 + RFC 3161 타임스탬프 | ✅ 완료 |
+| 4 | 문서 정리 | PostgreSQL → Adapter 주입 방식 | ✅ 완료 |
+
+**Phase 4 구현 파일:**
+- `worm_adapters.py` (adapters/audit/) - WORM 저장소 어댑터
+  - S3ObjectLockAdapter: AWS S3 Object Lock (인터페이스)
+  - LokiAdapter: Grafana Loki 푸시
+  - HTTPWebhookAdapter: 범용 HTTP POST
+  - SidecarFileWatcher: 사이드카 패턴 파일 감시자
+- `export.py` - 감사 로그 내보내기 CLI
+  - JSONL/JSON/CSV/Parquet 형식 지원
+  - 시간/액션/Actor 필터링
+  - S3/HTTP 직접 전송
+  - 해시 체인 무결성 검증
+- `signed_manifest.py` - 법적 효력 강화
+  - MerkleTree: 블록체인 수준 무결성 증명
+  - RFC3161Client: 외부 TSA 타임스탬프 발급
+  - SignedManifest: 매니페스트 생성/검증/저장
+
+**총 예상 공수: 24h (3일)** → **실제 소요: ~24h** ✅ 완료
 
 ---
 
@@ -603,7 +628,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
 ### 장애 허용 체인 구현
 
 ```
-Primary (PostgreSQL)
+Primary (Adapter 주입: File/S3/Loki/사용자 정의)
     ↓ 실패
 Fallback (Local File)
     ↓ 실패
@@ -631,7 +656,7 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 
 ## 📚 코드 참조 위치
 
-### 신규 구현 파일 (Phase 1/2)
+### 신규 구현 파일 (Phase 1/2/3)
 
 | 파일 | 경로 | 설명 |
 |------|------|------|
@@ -643,6 +668,14 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 | audit_watchdog.py | `packages/selfhealing-python/src/selfhealing/audit/audit_watchdog.py` | Dead Man's Switch Watchdog |
 | verify_audit_integrity.py | `packages/selfhealing-python/src/selfhealing/audit/verify_audit_integrity.py` | Hash Chain Verifier CLI 도구 |
 | audit_integration.py | `packages/selfhealing-python/src/selfhealing/audit/audit_integration.py` | AsyncLogger ↔ ContinuousAudit 통합 어댑터 |
+
+### 신규 구현 파일 (Phase 4: 비침투 아키텍처)
+
+| 파일 | 경로 | 설명 |
+|------|------|------|
+| worm_adapters.py | `packages/selfhealing-python/src/selfhealing/adapters/audit/worm_adapters.py` | S3/Loki/HTTP WORM 어댑터 + 사이드카 패턴 |
+| export.py | `packages/selfhealing-python/src/selfhealing/audit/export.py` | 감사 로그 내보내기 CLI (JSONL/JSON/CSV/Parquet) |
+| signed_manifest.py | `packages/selfhealing-python/src/selfhealing/audit/signed_manifest.py` | 머클 트리 + RFC 3161 타임스탬프 |
 
 ### 테스트 파일
 
@@ -656,6 +689,9 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 | test_audit_watchdog.py | `packages/selfhealing-python/tests/unit/test_audit_watchdog.py` | 34개 |
 | test_hash_chain_verifier.py | `packages/selfhealing-python/tests/unit/test_hash_chain_verifier.py` | 37개 |
 | test_audit_integration.py | `packages/selfhealing-python/tests/unit/test_audit_integration.py` | 48개 |
+| test_worm_adapters.py | `packages/selfhealing-python/tests/unit/test_worm_adapters.py` | 25개 |
+| test_export.py | `packages/selfhealing-python/tests/unit/test_export.py` | 30개 |
+| test_signed_manifest.py | `packages/selfhealing-python/tests/unit/test_signed_manifest.py` | 35개 |
 
 ### 기존 코드 참조
 
@@ -669,9 +705,59 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 
 ---
 
-*문서 버전: 2.4*  
+## 🏛️ 비침투 아키텍처 원칙
+
+### DB 없는 감사 시스템
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     비침투 감사 아키텍처                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐   ┌──────────────────────────────────────────┐│
+│  │ Application │──▶│ FileAuditLogAdapter (기본값)              ││
+│  │             │   │ - 로컬 JSONL 파일                        ││
+│  └─────────────┘   │ - 해시 체인 무결성                        ││
+│                    │ - 고객사 DB 접근 없음                      ││
+│                    └──────────────────────────────────────────┘│
+│                                  │                              │
+│                    ┌─────────────▼─────────────┐               │
+│                    │      외부 전송 (선택)      │               │
+│                    ├───────────────────────────┤               │
+│                    │ 방법 1: Export CLI        │               │
+│                    │   python -m selfhealing   │               │
+│                    │   .audit.export           │               │
+│                    ├───────────────────────────┤               │
+│                    │ 방법 2: 사이드카           │               │
+│                    │   SidecarFileWatcher      │               │
+│                    │   (별도 프로세스)          │               │
+│                    ├───────────────────────────┤               │
+│                    │ 방법 3: Signed Manifest   │               │
+│                    │   머클 루트 + RFC 3161    │               │
+│                    │   (하루 1회)              │               │
+│                    └───────────────────────────┘               │
+│                                  │                              │
+│                    ┌─────────────▼─────────────┐               │
+│                    │      WORM 저장소 (선택)    │               │
+│                    │ - S3 Object Lock          │               │
+│                    │ - Grafana Loki            │               │
+│                    │ - HTTP Webhook            │               │
+│                    └───────────────────────────┘               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 핵심 원칙
+
+1. **기본값은 로컬 파일**: `FileAuditLogAdapter`가 기본
+2. **DB는 사용자 선택**: Adapter 교체로 사용 가능하지만 우리 책임 아님
+3. **외부 전송은 분리**: 메인 앱과 별도의 시점/프로세스에서 수행
+4. **법적 효력은 해시 체인**: DB 없이도 `SignedManifest`로 무결성 증명
+
+---
+
+*문서 버전: 2.5*  
 *작성일: 2025-01-XX*  
 *최종 업데이트: 2025-12-29*  
-*Phase 1/2/3 + 통합 연결 완료*  
-*전체 테스트: 119개 (Watchdog 34 + Hash Chain Verifier 37 + Integration 48)*  
-*기반: 리뷰어 피드백 + 코드베이스 분석*
+*Phase 1/2/3/4 완료*  
+*전체 테스트: 209개 (기존 119 + WORM 25 + Export 30 + Manifest 35)*  
+*기반: 리뷰어 피드백 + 비침투 아키텍처 원칙*

@@ -161,6 +161,20 @@ from selfhealing.audit.audit_integration import (
     configure_integration,
     create_command_center_callback,
 )
+from selfhealing.audit.export import (
+    AuditExporter,
+    ExportFormat,
+    ExportTarget,
+    ExportOptions,
+    ExportStats,
+)
+from selfhealing.audit.signed_manifest import (
+    MerkleTree,
+    RFC3161Timestamp,
+    RFC3161Client,
+    SignedManifest,
+    ManifestEntry,
+)
 
 __all__ = [
     # Main API
@@ -283,4 +297,16 @@ __all__ = [
     "IntegratedAuditRecorder",
     "configure_integration",
     "create_command_center_callback",
+    # Export CLI Tool
+    "AuditExporter",
+    "ExportFormat",
+    "ExportTarget",
+    "ExportOptions",
+    "ExportStats",
+    # Signed Manifest (Merkle Tree + RFC 3161)
+    "MerkleTree",
+    "RFC3161Timestamp",
+    "RFC3161Client",
+    "SignedManifest",
+    "ManifestEntry",
 ]

@@ -109,13 +109,18 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
     5. Background Flush: 비동기 배치 처리
 
     Fallback Chain:
-        Primary (PostgreSQL/API)
+        Primary (Adapter 주입: File/S3/Loki/사용자 정의)
             ↓ 실패
         Fallback (Local File)
             ↓ 실패
         Syslog (OS-level)
             ↓ 실패
         stderr (최후)
+    
+    비침투 원칙:
+        - 고객사 DB에 직접 접근하지 않음
+        - 기본값: FileAuditLogAdapter (로컬 JSONL)
+        - 고객이 원하면 Adapter를 교체하여 S3/Loki/DB 사용 가능
     """
 
     def __init__(
