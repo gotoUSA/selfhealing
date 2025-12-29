@@ -37,20 +37,20 @@
 | **Self-Audit** | P1 | 감사 시스템 자체 실패 로깅 | ✅ 완료 |
 | **Resilient Recorder** | P1 | 장애 허용 감사 기록기 | ✅ 완료 |
 
-### ❌ 구현 필요 (Phase 3)
+### ✅ Phase 3 구현 완료
 
-| 기능 | 우선순위 | 설명 | 예상 공수 |
-|------|----------|------|-----------|
-| **Audit Watchdog** | P1 | Dead Man's Switch 패턴 | 2h |
-| **Hash Chain Verifier** | P2 | 기록 무결성 검증 CLI 도구 | 4h |
+| 기능 | 우선순위 | 설명 | 상태 |
+|------|----------|------|------|
+| **Audit Watchdog** | P1 | Dead Man's Switch 패턴 | ✅ 완료 |
+| **Hash Chain Verifier** | P2 | 기록 무결성 검증 CLI 도구 | ✅ 완료 |
 
-### 🔗 연결 필요 (통합 작업)
+### ✅ 통합 연결 완료
 
-| 기능 | 현황 | 필요 작업 | 예상 공수 |
-|------|------|-----------|-----------|
-| **ContinuousAuditRecorder ↔ CircuitBreaker** | 미연결 | resilience.py의 CB를 audit recorder에 통합 | 2h |
-| **ContinuousAuditRecorder ↔ SyslogFallback** | 미연결 | 실패 시 자동 syslog 연결 | 1h |
-| **AsyncLogger ↔ ContinuousAudit** | 별도 구현 | 인터페이스 통합 또는 어댑터 | 2h |
+| 기능 | 현황 | 구현 결과 | 상태 |
+|------|------|-----------|------|
+| **ContinuousAuditRecorder ↔ CircuitBreaker** | ✅ 연결됨 | IntegratedAuditRecorder에서 CB 상태 변경 감지 및 전파 | ✅ 완료 |
+| **ContinuousAuditRecorder ↔ SyslogFallback** | ✅ 연결됨 | ResilientContinuousAuditRecorder에서 자동 연결 | ✅ 완료 |
+| **AsyncLogger ↔ ContinuousAudit** | ✅ 연결됨 | AsyncLoggerAdapter + Observer 패턴으로 통합 | ✅ 완료 |
 
 ---
 
@@ -550,14 +550,29 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
   - 손상 감지 및 콜백
   - 컨텍스트 매니저 지원
 
-### Phase 3: External Monitoring (0.5일) - 총 4h
+### Phase 3: External Monitoring (0.5일) - 총 4h ✅ 완료
 
-| 순서 | 항목 | 작업 | 예상 시간 |
-|------|------|------|----------|
-| 1 | Watchdog | 신규 구현 | 2h |
-| 2 | Dead Man's Switch | 외부 연동 설정 | 2h |
+| 순서 | 항목 | 작업 | 예상 시간 | 상태 |
+|------|------|------|----------|------|
+| 1 | Watchdog | 신규 구현 | 2h | ✅ 완료 |
+| 2 | Dead Man's Switch | 외부 연동 설정 | 2h | ✅ 완료 |
 
-**총 예상 공수: 24h (3일)**
+**Phase 3 구현 파일:**
+- `audit_watchdog.py` - Dead Man's Switch Watchdog
+  - Thread-safe 동작 (RLock 기반)
+  - 주기적 heartbeat 전송
+  - 외부/로컬 heartbeat 지원
+  - 연속 실패 감지 및 알림
+  - WatchdogChecker (상태 검사기)
+  - 싱글톤 관리 함수
+- `verify_audit_integrity.py` - Hash Chain Verifier CLI 도구
+  - 단일/다중 파일 검증
+  - 디렉토리 재귀 검증
+  - WAL 파일 검증
+  - TEXT/JSON/SUMMARY 출력 형식
+  - CLI 인터페이스 (argparse)
+
+**총 예상 공수: 24h (3일)** → **실제 소요: ~20h** ✅ 완료
 
 ---
 
@@ -625,6 +640,9 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 | checksum.py | `packages/selfhealing-python/src/selfhealing/audit/checksum.py` | CRC32/SHA256 체크섬 유틸리티 |
 | wal.py | `packages/selfhealing-python/src/selfhealing/audit/wal.py` | Write-Ahead Log with CRC32 Checksum |
 | resilient_recorder.py | `packages/selfhealing-python/src/selfhealing/audit/resilient_recorder.py` | ResilientContinuousAuditRecorder |
+| audit_watchdog.py | `packages/selfhealing-python/src/selfhealing/audit/audit_watchdog.py` | Dead Man's Switch Watchdog |
+| verify_audit_integrity.py | `packages/selfhealing-python/src/selfhealing/audit/verify_audit_integrity.py` | Hash Chain Verifier CLI 도구 |
+| audit_integration.py | `packages/selfhealing-python/src/selfhealing/audit/audit_integration.py` | AsyncLogger ↔ ContinuousAudit 통합 어댑터 |
 
 ### 테스트 파일
 
@@ -635,6 +653,9 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 | test_checksum.py | `tests/self_healing/unit/test_checksum.py` | 28개 |
 | test_wal.py | `tests/self_healing/unit/test_wal.py` | 32개 |
 | test_resilient_recorder.py | `tests/self_healing/unit/test_resilient_recorder.py` | 15개 |
+| test_audit_watchdog.py | `packages/selfhealing-python/tests/unit/test_audit_watchdog.py` | 34개 |
+| test_hash_chain_verifier.py | `packages/selfhealing-python/tests/unit/test_hash_chain_verifier.py` | 37개 |
+| test_audit_integration.py | `packages/selfhealing-python/tests/unit/test_audit_integration.py` | 48개 |
 
 ### 기존 코드 참조
 
@@ -648,8 +669,9 @@ AUDIT_CIRCUIT_BREAKER_TIMEOUT=30
 
 ---
 
-*문서 버전: 2.1*  
+*문서 버전: 2.4*  
 *작성일: 2025-01-XX*  
 *최종 업데이트: 2025-12-29*  
-*Phase 1/2 구현 완료*  
+*Phase 1/2/3 + 통합 연결 완료*  
+*전체 테스트: 119개 (Watchdog 34 + Hash Chain Verifier 37 + Integration 48)*  
 *기반: 리뷰어 피드백 + 코드베이스 분석*

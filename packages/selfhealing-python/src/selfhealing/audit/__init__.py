@@ -132,6 +132,35 @@ from selfhealing.audit.wal import (
     WALStats,
     create_wal,
 )
+from selfhealing.audit.audit_watchdog import (
+    AuditWatchdog,
+    WatchdogConfig,
+    WatchdogState,
+    WatchdogStats,
+    HeartbeatTarget,
+    WatchdogChecker,
+    get_watchdog,
+    start_watchdog,
+    stop_watchdog,
+)
+from selfhealing.audit.verify_audit_integrity import (
+    AuditIntegrityVerifier,
+    VerificationResult,
+    VerificationSummary,
+    OutputFormat,
+)
+from selfhealing.audit.audit_integration import (
+    EventSeverity,
+    AsyncLoggerConfig,
+    AsyncLoggerAdapter,
+    AuditEventType,
+    AuditEventData,
+    AuditEventObserver,
+    AsyncLoggerObserver,
+    IntegratedAuditRecorder,
+    configure_integration,
+    create_command_center_callback,
+)
 
 __all__ = [
     # Main API
@@ -228,4 +257,30 @@ __all__ = [
     "WALState",
     "WALStats",
     "create_wal",
+    # Audit Watchdog (Dead Man's Switch)
+    "AuditWatchdog",
+    "WatchdogConfig",
+    "WatchdogState",
+    "WatchdogStats",
+    "HeartbeatTarget",
+    "WatchdogChecker",
+    "get_watchdog",
+    "start_watchdog",
+    "stop_watchdog",
+    # Audit Integrity Verifier (CLI Tool)
+    "AuditIntegrityVerifier",
+    "VerificationResult",
+    "VerificationSummary",
+    "OutputFormat",
+    # Audit Integration (AsyncLogger + ContinuousAudit)
+    "EventSeverity",
+    "AsyncLoggerConfig",
+    "AsyncLoggerAdapter",
+    "AuditEventType",
+    "AuditEventData",
+    "AuditEventObserver",
+    "AsyncLoggerObserver",
+    "IntegratedAuditRecorder",
+    "configure_integration",
+    "create_command_center_callback",
 ]
