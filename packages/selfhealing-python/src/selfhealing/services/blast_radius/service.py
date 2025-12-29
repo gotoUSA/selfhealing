@@ -156,6 +156,56 @@ class BlastRadiusService:
         assessment_id = str(uuid.uuid4())[:8]
         
         # 연쇄 영향 분석
+        all_affected, dependencies_analyzed = self._analyze_cascading_impact(failing_services)
+        
+        # 영향 수준 결정
+        level = self._determine_blast_radius_level(len(all_affected))
+        
+        # 영향 비율 계산
+        affected_percentage = self._calculate_affected_percentage(len(all_affected))
+        
+        # 연쇄 리스크 체크
+        cascading_risk = self._check_cascading_risk(all_affected)
+        
+        # 추천사항 생성
+        recommendations = self._generate_recommendations(level, cascading_risk, all_affected)
+        
+        assessment = self._create_assessment(
+            assessment_id=assessment_id,
+            stage_name=stage_name,
+            trigger_event=trigger_event,
+            level=level,
+            all_affected=all_affected,
+            total_users=total_users,
+            affected_percentage=affected_percentage,
+            dependencies_analyzed=dependencies_analyzed,
+            cascading_risk=cascading_risk,
+            recommendations=recommendations,
+        )
+        
+        self._assessments.append(assessment)
+        logger.info(
+            f"Impact assessed: {assessment_id}, level={level.value}, "
+            f"affected={len(all_affected)} services"
+        )
+        
+        # 자동 격리 체크
+        self._check_and_auto_isolate(stage_name, level, failing_services)
+        
+        return assessment
+    
+    def _analyze_cascading_impact(
+        self, failing_services: List[str]
+    ) -> tuple[Set[str], int]:
+        """
+        연쇄 영향 분석
+        
+        Args:
+            failing_services: 장애 발생 서비스 목록
+        
+        Returns:
+            tuple: (영향받는 서비스 집합, 분석된 의존성 수)
+        """
         all_affected = set(failing_services)
         to_check = list(failing_services)
         dependencies_analyzed = 0
@@ -171,33 +221,72 @@ class BlastRadiusService:
                     if dep.dependency_type == "sync" and dep.criticality in ["high", "critical"]:
                         to_check.append(dep.source_service)
         
-        # 영향 수준 결정
-        affected_count = len(all_affected)
+        return all_affected, dependencies_analyzed
+    
+    def _determine_blast_radius_level(self, affected_count: int) -> BlastRadiusLevel:
+        """
+        영향 수준 결정
+        
+        Args:
+            affected_count: 영향받는 서비스 수
+        
+        Returns:
+            BlastRadiusLevel: 영향 수준
+        """
         if affected_count <= 1:
-            level = BlastRadiusLevel.ISOLATED
+            return BlastRadiusLevel.ISOLATED
         elif affected_count <= 3:
-            level = BlastRadiusLevel.LIMITED
+            return BlastRadiusLevel.LIMITED
         elif affected_count <= 5:
-            level = BlastRadiusLevel.MODERATE
+            return BlastRadiusLevel.MODERATE
         elif affected_count <= 10:
-            level = BlastRadiusLevel.EXTENSIVE
-        else:
-            level = BlastRadiusLevel.CRITICAL
+            return BlastRadiusLevel.EXTENSIVE
+        return BlastRadiusLevel.CRITICAL
+    
+    def _calculate_affected_percentage(self, affected_count: int) -> float:
+        """
+        영향 비율 계산
         
-        # 영향 비율 계산
-        affected_percentage = (affected_count / max(len(self._get_all_services()), 1)) * 100
+        Args:
+            affected_count: 영향받는 서비스 수
         
-        # 연쇄 리스크 체크
-        cascading_risk = any(
+        Returns:
+            float: 영향 비율
+        """
+        total_services = max(len(self._get_all_services()), 1)
+        return (affected_count / total_services) * 100
+    
+    def _check_cascading_risk(self, all_affected: Set[str]) -> bool:
+        """
+        연쇄 리스크 체크
+        
+        Args:
+            all_affected: 영향받는 서비스 집합
+        
+        Returns:
+            bool: 연쇄 리스크 여부
+        """
+        return any(
             d.dependency_type == "sync" and d.criticality == "critical"
             for d in self._dependencies
             if d.source_service in all_affected or d.target_service in all_affected
         )
-        
-        # 추천사항 생성
-        recommendations = self._generate_recommendations(level, cascading_risk, all_affected)
-        
-        assessment = ImpactAssessment(
+    
+    def _create_assessment(
+        self,
+        assessment_id: str,
+        stage_name: str,
+        trigger_event: str,
+        level: BlastRadiusLevel,
+        all_affected: Set[str],
+        total_users: int,
+        affected_percentage: float,
+        dependencies_analyzed: int,
+        cascading_risk: bool,
+        recommendations: List[str],
+    ) -> ImpactAssessment:
+        """ImpactAssessment 객체 생성"""
+        return ImpactAssessment(
             assessment_id=assessment_id,
             stage_name=stage_name,
             trigger_event=trigger_event,
@@ -209,19 +298,17 @@ class BlastRadiusService:
             cascading_risk=cascading_risk,
             recommendations=recommendations,
         )
-        
-        self._assessments.append(assessment)
-        logger.info(
-            f"Impact assessed: {assessment_id}, level={level.value}, "
-            f"affected={affected_count} services"
-        )
-        
-        # 자동 격리 체크
+    
+    def _check_and_auto_isolate(
+        self,
+        stage_name: str,
+        level: BlastRadiusLevel,
+        failing_services: List[str],
+    ) -> None:
+        """자동 격리 조건 체크 및 실행"""
         policy = self._policies.get(stage_name)
         if policy and policy.auto_isolate and level.value in ["extensive", "critical"]:
             self._auto_isolate(failing_services)
-        
-        return assessment
     
     def _get_all_services(self) -> Set[str]:
         """모든 서비스 목록"""
