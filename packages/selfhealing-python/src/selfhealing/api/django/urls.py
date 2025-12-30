@@ -612,6 +612,8 @@ from selfhealing.api.django.views.xtest_mode import (
     InjectCBFailureView,
     ResetCBView,
     CBStatusDetailView,
+    SwitchToAutoModeView,  # New! For releasing manually_controlled state
+    TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
     InjectErrorBudgetView,
     SystemSnapshotView,
     FastFailTestView,
@@ -630,6 +632,8 @@ urlpatterns += [
     path("xtest/inject-cb-failure/", InjectCBFailureView.as_view(), name="xtest-inject-cb-failure"),
     path("xtest/reset-cb/", ResetCBView.as_view(), name="xtest-reset-cb"),
     path("xtest/cb-status/", CBStatusDetailView.as_view(), name="xtest-cb-status"),
+    path("xtest/switch-to-auto/", SwitchToAutoModeView.as_view(), name="xtest-switch-to-auto"),  # New!
+    path("xtest/try-recovery-transition/", TryRecoveryTransitionView.as_view(), name="xtest-try-recovery-transition"),  # Domain-free
     path("xtest/inject-error-budget/", InjectErrorBudgetView.as_view(), name="xtest-inject-error-budget"),
     path("xtest/snapshot/", SystemSnapshotView.as_view(), name="xtest-snapshot"),
     path("xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"),

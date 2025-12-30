@@ -45,6 +45,8 @@ from .circuit_breaker import (
     InjectCBFailureView,
     ResetCBView,
     TriggerCBRecoveryView,
+    TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
+    SwitchToAutoModeView,  # New! For releasing manually_controlled state
 )
 
 # Error Budget views
@@ -88,6 +90,8 @@ __all__ = [
     "CBStatusDetailView",
     "FastFailTestView",
     "TriggerCBRecoveryView",
+    "TryRecoveryTransitionView",  # Domain-free OPEN → HALF_OPEN
+    "SwitchToAutoModeView",  # New!
     # Error Budget views
     "InjectErrorBudgetView",
     # Snapshot views

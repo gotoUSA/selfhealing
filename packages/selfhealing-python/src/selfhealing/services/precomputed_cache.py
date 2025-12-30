@@ -169,7 +169,8 @@ class L2RedisCache:
             try:
                 from django.core.cache import caches
                 # Use 'default' cache which should be Redis in production
-                self._redis = caches.get("default", caches["default"])
+                # Note: Django caches uses dict-style access, not .get() method
+                self._redis = caches["default"]
                 self._initialized = True
             except Exception as e:
                 logger.warning(f"[PrecomputedCache] Redis not available: {e}")

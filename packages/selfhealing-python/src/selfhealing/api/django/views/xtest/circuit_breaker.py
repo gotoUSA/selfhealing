@@ -430,10 +430,170 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
             )
 
 
+class TryRecoveryTransitionView(XTestModeMixin, APIView):
+    """
+    CB OPEN → HALF_OPEN 전환 시도 API (도메인 프리).
+    
+    POST /api/self-healing/xtest/try-recovery-transition/
+    Body: {"service": "stage15_platinum"}
+    
+    **사람이 개입하는 명시적 전환 API**:
+    - recovery_timeout이 지났으면 OPEN → HALF_OPEN으로 전환
+    - recovery_timeout이 안 지났으면 대기 시간 반환
+    - 도메인 프리: payment/order 등 특정 도메인에 종속되지 않음
+    
+    이 API는 should_allow()를 명시적으로 호출하여
+    CB의 자동 전환 로직을 트리거합니다.
+    """
+    
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    def post(self, request: Request) -> Response:
+        denied = self.check_chaos_permission(request)
+        if denied:
+            return denied
+        
+        service_name = request.data.get("service", "database")
+        
+        try:
+            from selfhealing.services import get_circuit_breaker_service
+            
+            cb_service = get_circuit_breaker_service()
+            
+            # 현재 상태 확인
+            state_before = cb_service.get_or_create_state(service_name)
+            state_str_before = state_before.state
+            opened_at = state_before.opened_at
+            
+            # recovery_timeout 계산
+            remaining_seconds = None
+            recovery_timeout = cb_service.config.recovery_timeout
+            
+            if state_str_before == "open" and opened_at:
+                elapsed = (timezone.now() - opened_at).total_seconds()
+                remaining_seconds = max(0, recovery_timeout - elapsed)
+            
+            # should_allow 호출 - 이것이 OPEN → HALF_OPEN 전환을 트리거함
+            allowed = cb_service.should_allow(service_name)
+            
+            # 전환 후 상태 확인
+            state_after = cb_service.get_or_create_state(service_name)
+            state_str_after = state_after.state
+            
+            transition_occurred = state_str_before != state_str_after
+            
+            logger.info(
+                f"[X-Test-Mode] Try recovery transition for '{service_name}': "
+                f"state={state_str_before}→{state_str_after}, "
+                f"allowed={allowed}, transition={transition_occurred}"
+            )
+            
+            return Response({
+                "status": "success",
+                "service": service_name,
+                "state_before": state_str_before,
+                "state_after": state_str_after,
+                "transition_occurred": transition_occurred,
+                "allowed": allowed,
+                "remaining_seconds": remaining_seconds,
+                "recovery_timeout": recovery_timeout,
+                "opened_at": opened_at.isoformat() if opened_at else None,
+                "message": (
+                    f"Transition {state_str_before}→{state_str_after}" 
+                    if transition_occurred 
+                    else f"No transition yet, remaining: {remaining_seconds:.1f}s" 
+                    if remaining_seconds and remaining_seconds > 0
+                    else f"State is {state_str_after}"
+                ),
+                "timestamp": timezone.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"[X-Test-Mode] Try recovery transition failed: {e}")
+            return Response(
+                {
+                    "status": "error",
+                    "error": "try_recovery_failed",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SwitchToAutoModeView(XTestModeMixin, APIView):
+    """
+    CB를 자동 모드로 전환하는 API (manually_controlled=False 설정).
+    
+    POST /api/self-healing/xtest/switch-to-auto/
+    Body: {"service": "database"}
+    
+    force_open 후 manually_controlled=True 상태를 해제하여
+    recovery_timeout 후 자동으로 HALF_OPEN으로 전환되도록 함.
+    """
+    
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    def post(self, request: Request) -> Response:
+        denied = self.check_chaos_permission(request)
+        if denied:
+            return denied
+        
+        service_name = request.data.get("service", "database")
+        
+        try:
+            from selfhealing.services import get_circuit_breaker_service
+            
+            cb_service = get_circuit_breaker_service()
+            
+            # 현재 상태 확인
+            state_before = cb_service.get_or_create_state(service_name)
+            was_manually_controlled = state_before.manually_controlled
+            
+            # manually_controlled=False로 설정 (auto mode 전환)
+            # clear_manual_control 메서드 사용 (preserve_reason=True로 상태 보존)
+            cb_service.repository.clear_manual_control(
+                service_name=service_name,
+                preserve_reason=True,  # 이유는 보존하되 수동 제어만 해제
+            )
+            
+            # 최종 상태 확인
+            state_after = cb_service.get_or_create_state(service_name)
+            
+            logger.info(
+                f"[X-Test-Mode] CB switched to auto mode for '{service_name}': "
+                f"manually_controlled={was_manually_controlled} → False"
+            )
+            
+            return Response({
+                "status": "success",
+                "service": service_name,
+                "cb_state": state_after.state,
+                "was_manually_controlled": was_manually_controlled,
+                "is_manually_controlled": state_after.manually_controlled,
+                "message": f"Circuit breaker for '{service_name}' switched to auto mode",
+                "timestamp": timezone.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"[X-Test-Mode] Switch to auto mode failed: {e}")
+            return Response(
+                {
+                    "status": "error",
+                    "error": "switch_failed",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 __all__ = [
     "InjectCBFailureView",
     "ResetCBView",
     "CBStatusDetailView",
     "FastFailTestView",
     "TriggerCBRecoveryView",
+    "TryRecoveryTransitionView",
+    "SwitchToAutoModeView",
 ]
