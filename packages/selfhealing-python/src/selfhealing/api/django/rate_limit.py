@@ -360,7 +360,8 @@ class RedisHealthChecker:
         try:
             from django.core.cache import caches
             
-            cache = caches.get("default")
+            # caches is a CacheHandler - use [] indexing, not .get()
+            cache = caches["default"]
             if cache is None:
                 return None
             

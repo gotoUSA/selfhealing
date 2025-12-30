@@ -89,6 +89,11 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     # === Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback) ===
     "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
+    # === Stage 16: Chaos Middleware (HELLMODE 테스트용) ===
+    # X-DB-Lock-Timeout, X-DB-Statement-Timeout 헤더를 처리하여 DB 레벨 타임아웃 주입
+    "myproject.middleware.chaos_middleware.ChaosMiddleware",
+    # Connection Pool 제한 (HELLMODE 시 5개로 제한)
+    "myproject.middleware.chaos_middleware.ConnectionPoolLimiterMiddleware",
 ]
 
 ROOT_URLCONF = "myproject.urls"
