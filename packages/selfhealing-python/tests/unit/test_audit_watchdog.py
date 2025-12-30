@@ -29,7 +29,6 @@ from selfhealing.audit.audit_watchdog import (
     WatchdogConfig,
     WatchdogState,
     WatchdogStats,
-    _reset_for_testing,
     get_watchdog,
     start_watchdog,
     stop_watchdog,
@@ -495,13 +494,10 @@ class TestWatchdogChecker:
 class TestSingletonFunctions:
     """Singleton management function tests."""
 
-    def setup_method(self):
-        """각 테스트 전에 싱글톤 리셋."""
-        _reset_for_testing()
-
-    def teardown_method(self):
-        """각 테스트 후에 싱글톤 정리."""
-        _reset_for_testing()
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self, reset_watchdog_singleton):
+        """각 테스트 전후에 싱글톤 리셋."""
+        pass
 
     def test_get_watchdog(self):
         """get_watchdog 싱글톤 테스트."""

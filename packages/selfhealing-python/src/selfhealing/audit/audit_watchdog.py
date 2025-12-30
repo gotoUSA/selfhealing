@@ -503,21 +503,3 @@ def stop_watchdog() -> None:
         if _watchdog_instance is not None:
             _watchdog_instance.stop()
             _watchdog_instance = None
-
-
-def _reset_for_testing() -> None:
-    """
-    테스트 격리를 위한 싱글톤 리셋.
-    
-    WARNING: 이 함수는 테스트 환경에서만 사용해야 합니다.
-    프로덕션 코드에서 호출하지 마세요.
-    """
-    global _watchdog_instance
-    with _watchdog_lock:
-        if _watchdog_instance is not None:
-            # 기존 인스턴스가 실행 중이면 중지
-            try:
-                _watchdog_instance.stop()
-            except Exception:
-                pass
-        _watchdog_instance = None

@@ -8,6 +8,40 @@ from datetime import datetime
 
 
 # =============================================================================
+# Singleton Reset Fixtures (테스트 격리용)
+# =============================================================================
+
+@pytest.fixture
+def reset_watchdog_singleton():
+    """
+    AuditWatchdog 싱글톤을 테스트 전후로 리셋하는 fixture.
+    
+    Usage:
+        def test_something(reset_watchdog_singleton):
+            # 테스트 코드
+    """
+    import selfhealing.audit.audit_watchdog as aw_module
+    
+    # Setup: 기존 싱글톤 정리
+    if aw_module._watchdog_instance is not None:
+        try:
+            aw_module._watchdog_instance.stop()
+        except Exception:
+            pass
+        aw_module._watchdog_instance = None
+    
+    yield
+    
+    # Teardown: 테스트 후 정리
+    if aw_module._watchdog_instance is not None:
+        try:
+            aw_module._watchdog_instance.stop()
+        except Exception:
+            pass
+        aw_module._watchdog_instance = None
+
+
+# =============================================================================
 # DB 연결 필요 테스트 자동 Skip 설정
 # =============================================================================
 
