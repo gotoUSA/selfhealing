@@ -588,15 +588,557 @@ class FailSecureIsAdminUser:
 
 
 # =============================================================================
+# Self-Healing Middleware (Stage 16 v5.0.0: HEALING PROOF)
+# =============================================================================
+
+
+class SelfHealingMiddleware:
+    """
+    Self-Healing Middleware for automatic failure detection and DLQ storage.
+    
+    이 미들웨어는 다음 기능을 제공합니다:
+    
+    1. **DB 오류 감지**: OperationalError, InterfaceError 등 DB 연결 오류 감지
+    2. **HTTP 5xx 오류 감지**: 502, 503, 504 등 서버 오류 감지  
+    3. **CircuitBreaker 자동 기록**: 실패 발생 시 record_failure() 호출
+    4. **DLQ 자동 적재**: 복구 가능한 요청을 DLQ에 자동 저장
+    5. **Self-Audit 연동**: 해시 체인 로그에 이벤트 기록
+    
+    CRITICAL: 이 Middleware는 HealthBridgeMiddleware 다음에 위치해야 합니다!
+    
+    Usage in settings.py:
+        MIDDLEWARE = [
+            "selfhealing.api.django.middleware.HealthBridgeMiddleware",  # 최상단
+            "selfhealing.api.django.middleware.SelfHealingMiddleware",   # 두 번째
+            "django.middleware.security.SecurityMiddleware",
+            ...
+        ]
+    
+    Stage 16 v5.0.0 (HEALING PROOF):
+    - DB 커넥션 풀 고갈 시 서킷 자동 오픈
+    - 502/503 에러 발생 시 DLQ 자동 적재
+    - 복구 후 자동 리플레이 트리거
+    """
+    
+    # 감시 대상 HTTP 상태 코드
+    MONITORED_STATUS_CODES = {502, 503, 504}
+    
+    # 감시 대상 DB 예외 클래스 (문자열로 저장 - lazy import 위해)
+    MONITORED_DB_ERRORS = (
+        "OperationalError",      # DB 연결 오류, 쿼리 실패
+        "InterfaceError",        # DB 인터페이스 오류
+        "DatabaseError",         # 일반 DB 오류
+        "ConnectionDoesNotExist", # Django 커넥션 미존재
+    )
+    
+    # DLQ 적재 대상 경로 패턴 (결제/주문 관련)
+    DLQ_ELIGIBLE_PATHS = [
+        re.compile(r"^/api/orders/"),
+        re.compile(r"^/api/payments/"),
+        re.compile(r"^/api/cart/"),
+        re.compile(r"^/api/checkout/"),
+        re.compile(r"^/api/points/"),
+        re.compile(r"^/api/webhooks/"),
+    ]
+    
+    # CircuitBreaker 서비스 이름
+    CB_SERVICE_NAME = "database"
+    
+    def __init__(self, get_response: Callable):
+        """Initialize middleware."""
+        self.get_response = get_response
+        self._audit_logger = None
+        self._cb_service = None
+        self._initialized = False
+    
+    def _lazy_init(self) -> None:
+        """Lazy initialization to avoid circular imports."""
+        if self._initialized:
+            return
+        
+        try:
+            from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+            self._cb_service = get_circuit_breaker_service()
+        except Exception as e:
+            logger.warning(f"[SelfHealingMiddleware] CB service init failed: {e}")
+            
+        try:
+            from selfhealing.audit import get_audit_logger
+            self._audit_logger = get_audit_logger()
+        except Exception as e:
+            logger.warning(f"[SelfHealingMiddleware] Audit logger init failed: {e}")
+            
+        self._initialized = True
+    
+    def __call__(self, request: "HttpRequest") -> "HttpResponse":
+        """Process request/response with self-healing logic."""
+        from django.http import JsonResponse
+        
+        self._lazy_init()
+        
+        request_data = self._capture_request_data(request)
+        db_error_context = None
+        
+        try:
+            # DB 오류를 감지하기 위해 try-except로 감싸기
+            response = self.get_response(request)
+            
+        except Exception as e:
+            # DB 관련 예외 감지
+            error_type = type(e).__name__
+            
+            if error_type in self.MONITORED_DB_ERRORS or self._is_db_connection_error(e):
+                db_error_context = {
+                    "error_type": error_type,
+                    "error_message": str(e),
+                    "path": request.path,
+                    "method": request.method,
+                }
+                
+                # CircuitBreaker에 실패 기록
+                self._record_cb_failure(db_error_context)
+                
+                # DLQ에 적재 (복구 가능한 요청인 경우)
+                if self._is_dlq_eligible(request):
+                    self._store_to_dlq(request_data, db_error_context)
+                
+                # 503 응답 반환
+                return JsonResponse(
+                    {
+                        "error": "Service temporarily unavailable",
+                        "code": "DB_CONNECTION_ERROR",
+                        "retry_after": 30,
+                        "dlq_stored": self._is_dlq_eligible(request),
+                    },
+                    status=503,
+                )
+            
+            # DB 오류가 아닌 경우 다시 raise
+            raise
+        
+        # HTTP 5xx 응답 감지
+        if response.status_code in self.MONITORED_STATUS_CODES:
+            error_context = {
+                "error_type": f"HTTP_{response.status_code}",
+                "error_message": f"Server returned {response.status_code}",
+                "path": request.path,
+                "method": request.method,
+            }
+            
+            # CircuitBreaker에 실패 기록
+            self._record_cb_failure(error_context)
+            
+            # DLQ에 적재 (복구 가능한 요청인 경우)
+            if self._is_dlq_eligible(request):
+                self._store_to_dlq(request_data, error_context)
+        
+        else:
+            # 성공 응답일 경우 CircuitBreaker에 성공 기록
+            if response.status_code < 400:
+                self._record_cb_success()
+        
+        return response
+    
+    def _is_db_connection_error(self, error: Exception) -> bool:
+        """Check if the error is a DB connection related error."""
+        error_str = str(error).lower()
+        db_error_keywords = [
+            "connection refused",
+            "too many clients",
+            "connection timed out",
+            "could not connect",
+            "server closed the connection",
+            "connection reset",
+            "pool exhausted",
+            "no connection available",
+        ]
+        return any(keyword in error_str for keyword in db_error_keywords)
+    
+    def _capture_request_data(self, request: "HttpRequest") -> Dict[str, Any]:
+        """Capture request data for DLQ storage."""
+        try:
+            body = {}
+            if request.body:
+                try:
+                    body = json.loads(request.body.decode("utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    body = {"raw": request.body.decode("utf-8", errors="replace")}
+            
+            return {
+                "method": request.method,
+                "path": request.path,
+                "query_string": request.META.get("QUERY_STRING", ""),
+                "body": body,
+                "headers": {
+                    "content_type": request.META.get("CONTENT_TYPE", ""),
+                    "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                    "x_request_id": request.META.get("HTTP_X_REQUEST_ID", ""),
+                    "x_idempotency_key": request.META.get("HTTP_X_IDEMPOTENCY_KEY", ""),
+                },
+                "user_id": getattr(request.user, "id", None) if hasattr(request, "user") else None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"[SelfHealingMiddleware] Request capture failed: {e}")
+            return {"path": getattr(request, "path", "unknown"), "error": str(e)}
+    
+    def _is_dlq_eligible(self, request: "HttpRequest") -> bool:
+        """Check if request is eligible for DLQ storage."""
+        # POST, PUT, PATCH 요청만 DLQ 적재 대상
+        if request.method not in ("POST", "PUT", "PATCH"):
+            return False
+        
+        # 경로 패턴 매칭
+        for pattern in self.DLQ_ELIGIBLE_PATHS:
+            if pattern.match(request.path):
+                return True
+        
+        return False
+    
+    def _record_cb_failure(self, error_context: Dict[str, Any]) -> None:
+        """Record failure to CircuitBreaker."""
+        try:
+            if self._cb_service and self._cb_service.is_enabled:
+                self._cb_service.record_failure(
+                    self.CB_SERVICE_NAME,
+                    error_context=error_context,
+                )
+                logger.info(
+                    f"[SelfHealingMiddleware] CB failure recorded: "
+                    f"service={self.CB_SERVICE_NAME}, "
+                    f"error_type={error_context.get('error_type')}"
+                )
+                
+                # Audit 로그 기록
+                self._log_audit_event("cb_failure_recorded", {
+                    "service": self.CB_SERVICE_NAME,
+                    "error_context": error_context,
+                })
+        except Exception as e:
+            logger.error(f"[SelfHealingMiddleware] CB failure recording failed: {e}")
+    
+    def _record_cb_success(self) -> None:
+        """Record success to CircuitBreaker."""
+        try:
+            if self._cb_service and self._cb_service.is_enabled:
+                self._cb_service.record_success(self.CB_SERVICE_NAME)
+        except Exception as e:
+            # Success recording failure should not affect response
+            pass
+    
+    def _store_to_dlq(
+        self, 
+        request_data: Dict[str, Any], 
+        error_context: Dict[str, Any]
+    ) -> Optional[int]:
+        """Store failed request to DLQ."""
+        try:
+            from selfhealing.services.dlq_service import store_to_dlq
+            
+            # 도메인 추론
+            domain = self._infer_domain(request_data.get("path", ""))
+            
+            result = store_to_dlq(
+                domain=domain,
+                failure_type=error_context.get("error_type", "UNKNOWN"),
+                entity_type="http_request",
+                entity_id=request_data.get("headers", {}).get("x_idempotency_key", ""),
+                user_id=request_data.get("user_id"),
+                error_code=error_context.get("error_type", ""),
+                error_message=error_context.get("error_message", ""),
+                request_data=request_data,
+                response_data={"status_code": 503},
+                metadata={
+                    "source": "SelfHealingMiddleware",
+                    "auto_stored": True,
+                    "path": request_data.get("path"),
+                    "method": request_data.get("method"),
+                },
+                recommended_action="replay",
+                next_action_hint="시스템 정상화 후 자동 리플레이 대상",
+            )
+            
+            if result.success:
+                logger.info(
+                    f"[SelfHealingMiddleware] DLQ stored: "
+                    f"id={result.dlq_id}, domain={domain}, "
+                    f"path={request_data.get('path')}"
+                )
+                
+                # Audit 로그 기록
+                self._log_audit_event("dlq_auto_stored", {
+                    "dlq_id": result.dlq_id,
+                    "domain": domain,
+                    "path": request_data.get("path"),
+                    "error_type": error_context.get("error_type"),
+                })
+                
+                return result.dlq_id
+            else:
+                logger.warning(f"[SelfHealingMiddleware] DLQ storage failed: {result.error}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[SelfHealingMiddleware] DLQ storage error: {e}")
+            return None
+    
+    def _infer_domain(self, path: str) -> str:
+        """Infer domain from request path."""
+        if "/payments/" in path or "/checkout/" in path:
+            return "payment"
+        elif "/orders/" in path:
+            return "order"
+        elif "/points/" in path:
+            return "point"
+        elif "/cart/" in path:
+            return "cart"
+        elif "/webhooks/" in path:
+            return "webhook"
+        else:
+            return "http"
+    
+    def _log_audit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Log event to audit system with hash chain."""
+        try:
+            if self._audit_logger:
+                self._audit_logger.log({
+                    "event_type": event_type,
+                    "source": "SelfHealingMiddleware",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    **data,
+                })
+        except Exception as e:
+            logger.warning(f"[SelfHealingMiddleware] Audit log failed: {e}")
+
+
+# =============================================================================
+# Self-Healing Recovery Event Logger
+# =============================================================================
+
+
+class SelfHealingRecoveryLogger:
+    """
+    Self-Healing 복구 이벤트 로거.
+    
+    DB 붕괴 → 서킷 오픈 → DLQ 적재 → 복구 → 리플레이 완료 과정을
+    해시 체인으로 기록하여 감사 증적을 제공합니다.
+    
+    Usage:
+        recovery_logger = SelfHealingRecoveryLogger()
+        
+        # 복구 이벤트 체인 시작
+        chain_id = recovery_logger.start_recovery_chain(
+            trigger="db_connection_exhausted",
+            affected_services=["database"],
+        )
+        
+        # 이벤트 기록
+        recovery_logger.log_event(chain_id, "circuit_opened", {...})
+        recovery_logger.log_event(chain_id, "dlq_items_stored", {...})
+        recovery_logger.log_event(chain_id, "system_recovered", {...})
+        recovery_logger.log_event(chain_id, "dlq_replay_completed", {...})
+        
+        # 체인 완료
+        summary = recovery_logger.complete_chain(chain_id)
+    """
+    
+    def __init__(self):
+        """Initialize recovery logger."""
+        self._chains: Dict[str, Dict[str, Any]] = {}
+        self._audit_logger = None
+        self._lock = None
+        
+    def _lazy_init(self) -> None:
+        """Lazy initialization."""
+        if self._lock is None:
+            import threading
+            self._lock = threading.Lock()
+            
+        if self._audit_logger is None:
+            try:
+                from selfhealing.audit import get_audit_logger
+                self._audit_logger = get_audit_logger()
+            except Exception:
+                pass
+    
+    def start_recovery_chain(
+        self,
+        trigger: str,
+        affected_services: list[str],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Start a new recovery event chain."""
+        import uuid
+        
+        self._lazy_init()
+        
+        chain_id = f"recovery_{uuid.uuid4().hex[:12]}"
+        
+        chain_data = {
+            "chain_id": chain_id,
+            "trigger": trigger,
+            "affected_services": affected_services,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "events": [],
+            "metadata": metadata or {},
+            "status": "in_progress",
+        }
+        
+        with self._lock:
+            self._chains[chain_id] = chain_data
+        
+        # 시작 이벤트 기록
+        self.log_event(chain_id, "recovery_chain_started", {
+            "trigger": trigger,
+            "affected_services": affected_services,
+        })
+        
+        return chain_id
+    
+    def log_event(
+        self,
+        chain_id: str,
+        event_type: str,
+        data: Dict[str, Any],
+    ) -> bool:
+        """Log an event to the recovery chain."""
+        self._lazy_init()
+        
+        with self._lock:
+            chain = self._chains.get(chain_id)
+            if not chain:
+                logger.warning(f"[RecoveryLogger] Chain not found: {chain_id}")
+                return False
+            
+            event = {
+                "sequence": len(chain["events"]) + 1,
+                "event_type": event_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": data,
+            }
+            
+            chain["events"].append(event)
+        
+        # Audit 로그에도 기록
+        try:
+            if self._audit_logger:
+                self._audit_logger.log({
+                    "recovery_chain_id": chain_id,
+                    "event_type": f"recovery_{event_type}",
+                    "sequence": event["sequence"],
+                    "source": "SelfHealingRecoveryLogger",
+                    **data,
+                })
+        except Exception as e:
+            logger.warning(f"[RecoveryLogger] Audit log failed: {e}")
+        
+        return True
+    
+    def complete_chain(
+        self,
+        chain_id: str,
+        success: bool = True,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Complete a recovery chain and return summary."""
+        self._lazy_init()
+        
+        with self._lock:
+            chain = self._chains.get(chain_id)
+            if not chain:
+                return {"error": f"Chain not found: {chain_id}"}
+            
+            chain["status"] = "completed" if success else "failed"
+            chain["completed_at"] = datetime.now(timezone.utc).isoformat()
+            chain["success"] = success
+            
+            # 소요 시간 계산
+            started = datetime.fromisoformat(chain["started_at"].replace("Z", "+00:00"))
+            completed = datetime.fromisoformat(chain["completed_at"].replace("Z", "+00:00"))
+            chain["duration_seconds"] = (completed - started).total_seconds()
+            
+            if summary:
+                chain["summary"] = summary
+        
+        # 완료 이벤트 기록
+        self.log_event(chain_id, "recovery_chain_completed", {
+            "success": success,
+            "duration_seconds": chain["duration_seconds"],
+            "total_events": len(chain["events"]),
+            "summary": summary or {},
+        })
+        
+        return chain
+    
+    def get_chain(self, chain_id: str) -> Optional[Dict[str, Any]]:
+        """Get a recovery chain by ID."""
+        self._lazy_init()
+        with self._lock:
+            return self._chains.get(chain_id)
+    
+    def generate_audit_report(self, chain_id: str) -> Dict[str, Any]:
+        """Generate audit report for a recovery chain."""
+        chain = self.get_chain(chain_id)
+        if not chain:
+            return {"error": f"Chain not found: {chain_id}"}
+        
+        # 이벤트 타임라인 생성
+        timeline = []
+        for event in chain.get("events", []):
+            timeline.append({
+                "sequence": event["sequence"],
+                "event": event["event_type"],
+                "time": event["timestamp"],
+                "data_summary": {
+                    k: v for k, v in event.get("data", {}).items()
+                    if not k.startswith("_")
+                }
+            })
+        
+        return {
+            "chain_id": chain_id,
+            "status": chain.get("status"),
+            "trigger": chain.get("trigger"),
+            "affected_services": chain.get("affected_services"),
+            "started_at": chain.get("started_at"),
+            "completed_at": chain.get("completed_at"),
+            "duration_seconds": chain.get("duration_seconds"),
+            "success": chain.get("success"),
+            "total_events": len(timeline),
+            "timeline": timeline,
+            "summary": chain.get("summary", {}),
+            "hash_chain_enabled": self._audit_logger is not None,
+        }
+
+
+# Singleton instance
+_recovery_logger: SelfHealingRecoveryLogger | None = None
+
+
+def get_recovery_logger() -> SelfHealingRecoveryLogger:
+    """Get the singleton recovery logger instance."""
+    global _recovery_logger
+    if _recovery_logger is None:
+        _recovery_logger = SelfHealingRecoveryLogger()
+    return _recovery_logger
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
 __all__ = [
+    # Health Bridge
+    "HealthBridgeMiddleware",
     # Access Logging
     "SensitiveEndpointAccessLogger",
     "SensitiveAccessLoggingMiddleware",
     "AccessLogEntry",
     "SENSITIVE_ENDPOINT_PATTERNS",
+    # Self-Healing
+    "SelfHealingMiddleware",
+    "SelfHealingRecoveryLogger",
+    "get_recovery_logger",
     # Fail-Secure Permissions
     "FailSecureIsAuthenticated",
     "FailSecureIsAdminUser",

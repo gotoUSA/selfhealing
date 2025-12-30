@@ -39,6 +39,8 @@ urlpatterns = [
     path("", root_view, name="root"),
     # 관리자 페이지
     path("admin/", admin.site.urls),
+    # Self-Healing API (Stage 16 v5.0.0)
+    path("api/self-healing/", include("selfhealing.api.django.urls")),
     # shopping 앱 URLs 포함
     path("api/", include("shopping.urls")),
     # DRF 인증 URLs (로그인/로그아웃 페이지)

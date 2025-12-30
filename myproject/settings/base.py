@@ -78,6 +78,9 @@ MIDDLEWARE = [
     # === Stage 50: Health Bridge (DB-independent, 최상단 위치 필수!) ===
     # Worker Saturation 방지: DB 죽어도 /health/l3 즉시 응답
     "selfhealing.api.django.middleware.HealthBridgeMiddleware",
+    # === Stage 16 v5.0.0: Self-Healing Middleware ===
+    # DB 오류/502 감지 → CircuitBreaker 기록 + DLQ 자동 적재
+    "selfhealing.api.django.middleware.SelfHealingMiddleware",
     # === Django Core Middlewares ===
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
