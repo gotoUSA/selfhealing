@@ -181,8 +181,8 @@ SAFE_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "four_eyes_enabled": True,  # 4-eyes 원칙 기본 활성화 (안전 우선)
         "approval_timeout_hours": 24,  # 승인 대기 시간
         "max_approval_retries": 3,  # 최대 재승인 요청 횟수
-        "threshold_operator": 2,  # Operator 레벨 임계값
-        "threshold_admin": 3,  # Admin 레벨 임계값
+        "threshold_operator": 0.15,  # Operator 레벨 임계값 (15%)
+        "threshold_admin": 0.30,  # Admin 레벨 임계값 (30%)
         "emergency_expiry_hours": 4,  # 비상 모드 기본 만료 시간
         "audit_log_retention_days": 90,  # 감사 로그 보관 기간
         "require_reason_for_changes": True,  # 변경 사유 필수
@@ -319,8 +319,8 @@ VALIDATION_RULES: Dict[str, Dict[str, Tuple[Any, Any]]] = {
     "governance": {
         "approval_timeout_hours": (1, 168),  # 1시간 ~ 7일
         "max_approval_retries": (1, 10),
-        "threshold_operator": (1, 5),
-        "threshold_admin": (1, 5),
+        "threshold_operator": (0.01, 1.0),  # 1% ~ 100% (백분율)
+        "threshold_admin": (0.01, 1.0),  # 1% ~ 100% (백분율)
         "emergency_expiry_hours": (1, 48),  # 최대 48시간
         "audit_log_retention_days": (7, 365),  # 7일 ~ 1년
     },

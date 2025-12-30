@@ -39,13 +39,19 @@ class FailSafePeriodTracker:
         self._active_period: Optional[FailSafePeriod] = None
         self._lock = threading.RLock()
     
-    def start_period(self, reason: str, component: str = "error_budget_gate") -> FailSafePeriod:
+    def start_period(
+        self,
+        reason: str,
+        component: str = "error_budget_gate",
+        service_name: str = "",
+    ) -> FailSafePeriod:
         """
         Fail-Safe 기간 시작.
         
         Args:
             reason: 발동 사유
             component: 발동 컴포넌트
+            service_name: 대상 서비스 이름 (도메인 프리 설계, 선택적)
             
         Returns:
             생성된 FailSafePeriod
@@ -58,6 +64,7 @@ class FailSafePeriodTracker:
             period = FailSafePeriod(
                 period_id=str(uuid.uuid4()),
                 started_at=now(),
+                service_name=service_name,
                 trigger_reason=reason,
                 trigger_component=component,
             )
@@ -119,6 +126,14 @@ class FailSafePeriodTracker:
         """현재 활성 기간 조회."""
         with self._lock:
             return self._active_period
+    
+    def get_period(self, period_id: str) -> Optional[FailSafePeriod]:
+        """ID로 기간 조회."""
+        with self._lock:
+            for period in self._periods:
+                if period.period_id == period_id:
+                    return period
+            return None
     
     def get_unreconciled_periods(self) -> List[FailSafePeriod]:
         """Reconciliation 대상 기간 조회 (종료된 기간 중 미처리)."""

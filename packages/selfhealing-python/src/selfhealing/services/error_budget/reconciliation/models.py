@@ -23,6 +23,9 @@ class FailSafePeriod:
     started_at: datetime
     ended_at: Optional[datetime] = None
     
+    # 대상 서비스 (도메인 프리 설계)
+    service_name: str = ""
+    
     # 원인 정보
     trigger_reason: str = ""
     trigger_component: str = "error_budget_gate"

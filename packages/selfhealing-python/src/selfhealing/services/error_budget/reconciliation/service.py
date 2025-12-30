@@ -71,36 +71,70 @@ class ErrorBudgetReconciliationService:
     
     def start_failsafe_period(
         self,
-        service_name: str,
         reason: str,
-        triggered_by: str = "system",
+        component: str = "error_budget_gate",
+        service_name: str = "",
     ) -> FailSafePeriod:
-        """Fail-Safe 기간 시작."""
-        return self._period_tracker.start_period(service_name, reason, triggered_by)
+        """
+        Fail-Safe 기간 시작.
+        
+        Args:
+            reason: 발동 사유
+            component: 발동 컴포넌트 (기본: error_budget_gate)
+            service_name: 대상 서비스 이름 (도메인 프리 설계, 선택적)
+            
+        Returns:
+            생성된 FailSafePeriod
+        """
+        return self._period_tracker.start_period(reason, component, service_name)
     
     def end_failsafe_period(
         self,
-        period_id: str,
         auto_calculate_shadow: bool = True,
-    ) -> Optional[FailSafePeriod]:
+    ) -> Optional[ShadowBudget]:
         """
         Fail-Safe 기간 종료 및 Shadow Budget 자동 계산.
+        
+        Returns:
+            auto_calculate_shadow=True이면 ShadowBudget, False이면 None
+            단, short_period_threshold 이하인 경우 자동 제외되어 None 반환
         """
-        period = self._period_tracker.end_period(period_id)
+        period = self._period_tracker.end_period()
         
-        if period and self._config.enabled and auto_calculate_shadow:
-            # Shadow Budget 자동 계산
-            self.calculate_shadow_budget(period_id)
+        if not period:
+            return None
         
-        return period
+        if not self._config.enabled or not auto_calculate_shadow:
+            return None
+        
+        # 짧은 기간 자동 제외
+        if self._config.auto_exclude_short_periods:
+            duration_seconds = (period.ended_at - period.started_at).total_seconds() if period.ended_at else 0
+            if duration_seconds < self._config.short_period_threshold_seconds:
+                # 자동 제외 처리
+                excluded = ExcludedPeriod(
+                    exclusion_id=str(uuid.uuid4()),
+                    started_at=period.started_at,
+                    ended_at=period.ended_at,
+                    reason="Auto-excluded: duration below threshold",
+                    excluded_at=now(),
+                    excluded_by="system",
+                    failsafe_period_id=period.period_id,
+                )
+                self._excluded_periods[period.period_id] = excluded
+                return None
+        
+        # Shadow Budget 계산 및 반환
+        return self.calculate_shadow_budget(period.period_id)
     
-    def record_fail_open(self, period_id: str) -> None:
+    def record_fail_open(self) -> None:
         """Fail-Open 이벤트 기록."""
-        self._period_tracker.record_fail_open(period_id)
+        self._period_tracker.record_fail_open()
     
     def get_active_periods(self) -> List[FailSafePeriod]:
         """활성 Fail-Safe 기간 목록."""
-        return self._period_tracker.get_active_periods()
+        active = self._period_tracker.get_active_period()
+        return [active] if active else []
     
     # =========================================================================
     # Shadow Budget Calculation
