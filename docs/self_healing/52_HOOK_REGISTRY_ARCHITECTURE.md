@@ -258,7 +258,39 @@ packages/selfhealing-python/src/selfhealing/
 │
 ├── api/django/
 │   └── rate_limit.py         # BypassRegistry 사용
+
+packages/selfhealing-python/tests/core/
+├── test_hooks.py             # BypassRegistry 단위 테스트 (22개)
+└── test_bypass_hooks.py      # Resilience 훅 테스트 (37개)
 ```
+
+---
+
+## 구현 상태
+
+### ✅ 완료된 기능
+
+| 기능 | 상태 | 설명 |
+|------|------|------|
+| **BypassRegistry** | ✅ 완료 | Thread-safe 싱글톤, 우선순위 기반 실행 |
+| **BypassResult** | ✅ 완료 | 감사 정보 포함 결과 데이터클래스 |
+| **HookInfo** | ✅ 완료 | 훅 메타데이터 및 통계 추적 |
+| **Resilience Hooks** | ✅ 완료 | platinum, chaos-monkey, stress, integration |
+| **환경 분리** | ✅ 완료 | Production 자동 차단 |
+| **테스트** | ✅ 완료 | 59개 테스트 전체 통과 |
+
+### 테스트 커버리지
+
+```
+tests/core/test_hooks.py           - 22 tests (BypassRegistry 핵심 기능)
+tests/core/test_bypass_hooks.py    - 37 tests (Resilience 훅 & 통합)
+Total: 59 tests PASSED
+```
+
+### 데드락 수정 내역 (2025-12-30)
+
+`get_statistics()` 메서드에서 lock 내부에서 `get_registered_hooks()` 호출 시 
+재진입 데드락(Reentrant Deadlock) 발생 → 인라인 리스트 컴프리헨션으로 수정
 
 ---
 
@@ -270,6 +302,7 @@ packages/selfhealing-python/src/selfhealing/
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Date**: 2025-12-30  
-**Author**: Self-Healing Infrastructure Team
+**Author**: Self-Healing Infrastructure Team  
+**Last Updated**: 2025-12-30 (데드락 수정 및 테스트 완료)

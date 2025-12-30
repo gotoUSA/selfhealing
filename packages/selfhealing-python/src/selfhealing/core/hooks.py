@@ -308,12 +308,25 @@ class BypassRegistry:
             total_invocations = sum(h.invocation_count for h in cls._hooks)
             total_bypasses = sum(h.bypass_count for h in cls._hooks)
             
+            # Build hooks list inside the lock to avoid re-acquiring
+            hooks_list = [
+                {
+                    "name": h.name,
+                    "priority": h.priority,
+                    "description": h.description,
+                    "registered_at": h.registered_at,
+                    "invocation_count": h.invocation_count,
+                    "bypass_count": h.bypass_count,
+                }
+                for h in cls._hooks
+            ]
+            
             return {
                 "total_hooks": len(cls._hooks),
                 "total_invocations": total_invocations,
                 "total_bypasses": total_bypasses,
                 "bypass_rate": total_bypasses / total_invocations if total_invocations > 0 else 0,
-                "hooks": cls.get_registered_hooks(),
+                "hooks": hooks_list,
             }
 
 
