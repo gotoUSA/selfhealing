@@ -165,3 +165,17 @@ import os
 if os.getenv("DISABLE_RATE_LIMITING", "FALSE") == "TRUE":
     # Remove Rate Limit Middleware
     MIDDLEWARE = [m for m in MIDDLEWARE if "RateLimit" not in m]  # noqa: F405
+
+# ==========================================================================
+# Self-Healing Middleware Path Patterns (Test Environment)
+# ==========================================================================
+# 테스트 환경에서는 stress 엔드포인트도 DLQ 대상에 포함
+# 프로덕션 설정(base.py)을 상속받고 테스트 전용 경로 추가
+
+SELF_HEALING_DLQ_ELIGIBLE_PATHS = SELF_HEALING_DLQ_ELIGIBLE_PATHS + [  # noqa: F405
+    r"^/api/self-healing/stress/",  # 테스트 전용: stress 테스트 DLQ 적재 허용
+]
+
+SELF_HEALING_INFRA_FAILURE_PATHS = SELF_HEALING_INFRA_FAILURE_PATHS + [  # noqa: F405
+    r"^/api/self-healing/stress/",  # 테스트 전용: stress 엔드포인트 인프라 장애로 인식
+]

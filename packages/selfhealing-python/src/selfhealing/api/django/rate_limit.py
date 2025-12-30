@@ -476,12 +476,14 @@ class HybridRateLimitMiddleware:
         if not request.path.startswith(CONTROL_API_PATH_PREFIX):
             return self.get_response(request)
         
-        # X-Test-Mode bypass for chaos testing (Stage 48)
-        # Only bypass if CHAOS_ENABLED=true and not in production
-        if self._should_bypass_for_xtest(request):
+        # Hook Registry bypass check (Domain-Free, Audit-Logged)
+        # All bypass logic is now in selfhealing.resilience.bypass_hooks
+        bypass_result = self._check_bypass_registry(request)
+        if bypass_result.bypassed:
             response = self.get_response(request)
-            response["X-RateLimit-Mode"] = "xtest-bypass"
+            response["X-RateLimit-Mode"] = "bypass"
             response["X-RateLimit-Remaining"] = "unlimited"
+            response["X-RateLimit-Bypass-Reason"] = bypass_result.hook_name
             return response
         
         # Get runtime config (Phase 3 API Control)
@@ -526,99 +528,63 @@ class HybridRateLimitMiddleware:
         
         return response
     
-    def _should_bypass_for_xtest(self, request: HttpRequest) -> bool:
+    def _check_bypass_registry(self, request: HttpRequest) -> "BypassResult":
         """
-        Check if request should bypass rate limiting for X-Test-Mode.
+        Check if request should bypass rate limiting via Hook Registry.
         
-        🔥 PLATINUM MODE SUPPORT (2025-12-30):
-        - X-Test-Mode: platinum → Rate Limiter 완전 OFF
-        - X-Test-Bypass-RateLimit: full → Rate Limiter 완전 OFF
+        This method delegates all bypass logic to the BypassRegistry system,
+        which is configured in selfhealing.resilience.bypass_hooks.
         
-        Standard bypass conditions:
-        1. X-Test-Mode header with valid test value
-        2. X-Test-Bypass-RateLimit: true/full header
-        
-        Additional conditions (for non-platinum):
-        - Must not be in production environment
-        - Either CHAOS_ENABLED=true OR DEBUG=true
-        
-        PLATINUM bypasses ALL conditions except production block.
+        All bypass decisions are:
+        - Priority-ordered (higher priority hooks run first)
+        - Audit-logged (for compliance)
+        - Environment-conditional (blocked in production)
         
         Returns:
-            True if rate limit should be bypassed
+            BypassResult with bypass decision and audit information
         """
-        import os
-        
-        # Check X-Test-Mode header
-        xtest_header = request.META.get("HTTP_X_TEST_MODE", "").lower()
-        
-        # Check explicit X-Test-Bypass-RateLimit header
-        bypass_header = request.META.get("HTTP_X_TEST_BYPASS_RATELIMIT", "").lower()
-        
-        # 🔥 PLATINUM MODE: 완전 바이패스 (가장 공격적인 설정)
-        is_platinum = xtest_header == "platinum" or bypass_header == "full"
-        
-        # Supported X-Test-Mode values for standard bypass
-        XTEST_BYPASS_VALUES = {
-            "platinum",       # 🔥 PLATINUM: 완전 바이패스, 한계 테스트
-            "chaos-monkey",   # Stage 48: Chaos testing
-            "extreme",        # Stage 14: Extreme load testing
-            "load-test",      # General load testing
-            "integration",    # Integration testing
-            "stress",         # Stress testing
-            "true",           # Generic test mode
-        }
-        
-        xtest_mode_active = xtest_header in XTEST_BYPASS_VALUES
-        explicit_bypass = bypass_header in ("true", "full")
-        
-        # If neither header is set, don't bypass
-        if not xtest_mode_active and not explicit_bypass:
-            return False
-        
-        # Block in production (PLATINUM도 프로덕션에서는 차단)
-        environment = os.getenv("ENVIRONMENT", "development").lower()
-        if environment == "production":
-            logger.warning(
-                f"[RateLimit] X-Test-Mode bypass blocked in production "
-                f"(mode={xtest_header}, bypass={bypass_header}, platinum={is_platinum})"
-            )
-            return False
-        
-        # 🔥 PLATINUM MODE: DEBUG/CHAOS 체크 스킵, 즉시 바이패스
-        if is_platinum:
-            logger.warning(
-                f"[RateLimit] 🔥 PLATINUM MODE ACTIVATED - Rate Limiter FULLY DISABLED "
-                f"for path: {request.path}"
-            )
-            return True
-        
-        # Standard mode: Check CHAOS_ENABLED or DEBUG mode
-        chaos_enabled = os.getenv("CHAOS_ENABLED", "false").lower() == "true"
-        
         try:
-            from django.conf import settings
-            debug_mode = getattr(settings, "DEBUG", False)
-        except Exception:
-            debug_mode = False
+            from selfhealing.core.hooks import BypassRegistry, BypassResult
+            return BypassRegistry.should_bypass(request)
+        except ImportError:
+            # Fallback if hooks module not available
+            from dataclasses import dataclass
+            
+            @dataclass
+            class FallbackResult:
+                bypassed: bool = False
+                reason: str = "Hook registry not available"
+                hook_name: str = ""
+                priority: int = 0
+            
+            return FallbackResult()
+    
+    # =========================================================================
+    # DEPRECATED: _should_bypass_for_xtest
+    # =========================================================================
+    # This method is kept for backward compatibility but should not be used.
+    # All bypass logic has been moved to selfhealing.resilience.bypass_hooks
+    # via the BypassRegistry pattern.
+    #
+    # Migration: Use _check_bypass_registry() instead.
+    # Removal target: v7.0.0
+    # =========================================================================
+    
+    def _should_bypass_for_xtest(self, request: HttpRequest) -> bool:
+        """
+        DEPRECATED: Use _check_bypass_registry() instead.
         
-        # Allow bypass if CHAOS_ENABLED or DEBUG is true
-        if not debug_mode and not chaos_enabled:
-            logger.info(
-                f"[RateLimit] X-Test-Mode bypass denied: DEBUG={debug_mode}, "
-                f"CHAOS_ENABLED={chaos_enabled}"
-            )
-            return False
-        
-        # Check for rate limit multiplier (optional)
-        multiplier_header = request.META.get("HTTP_X_RATELIMIT_MULTIPLIER", "")
-        multiplier_info = f", multiplier={multiplier_header}" if multiplier_header else ""
-        
-        logger.info(
-            f"[RateLimit] X-Test-Mode bypass granted for path: {request.path} "
-            f"(mode={xtest_header}, explicit_bypass={explicit_bypass}{multiplier_info})"
+        This method is kept for backward compatibility.
+        All bypass logic has been moved to BypassRegistry.
+        """
+        import warnings
+        warnings.warn(
+            "_should_bypass_for_xtest is deprecated, use _check_bypass_registry instead",
+            DeprecationWarning,
+            stacklevel=2
         )
-        return True
+        result = self._check_bypass_registry(request)
+        return result.bypassed
     
     def _get_client_key(self, request: HttpRequest) -> str:
         """Generate rate limit key (IP + User)."""

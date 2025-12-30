@@ -636,25 +636,21 @@ class SelfHealingMiddleware:
         "ConnectionDoesNotExist", # Django 커넥션 미존재
     )
     
-    # DLQ 적재 대상 경로 패턴 (결제/주문 관련 + stress 테스트 포함)
-    DLQ_ELIGIBLE_PATHS = [
-        re.compile(r"^/api/orders/"),
-        re.compile(r"^/api/payments/"),
-        re.compile(r"^/api/cart/"),
-        re.compile(r"^/api/checkout/"),
-        re.compile(r"^/api/points/"),
-        re.compile(r"^/api/webhooks/"),
-        re.compile(r"^/api/self-healing/stress/"),  # v6.1.0: stress 테스트 DLQ 적재 허용
-    ]
+    # DLQ 적재 대상 경로 패턴 - 설정에서 로드 (Domain-Free)
+    # settings.SELF_HEALING_DLQ_ELIGIBLE_PATHS에서 읽어옴
+    # 기본값: 빈 리스트 (프로젝트에서 설정 필요)
+    DLQ_ELIGIBLE_PATHS: list = []  # _load_path_patterns()에서 초기화
     
-    # 인프라 장애로 인식할 경로 패턴 (503 응답 시 CB 실패로 기록)
-    # v6.1.0: stress 엔드포인트의 의도적 503도 "진짜 인프라 장애"로 취급
-    INFRASTRUCTURE_FAILURE_PATHS = [
-        re.compile(r"^/api/self-healing/stress/"),  # 스트레스 테스트 엔드포인트
-        re.compile(r"^/api/orders/"),
-        re.compile(r"^/api/payments/"),
-        re.compile(r"^/api/webhooks/"),
-    ]
+    # 인프라 장애로 인식할 경로 패턴 - 설정에서 로드 (Domain-Free)
+    # settings.SELF_HEALING_INFRA_FAILURE_PATHS에서 읽어옴
+    INFRASTRUCTURE_FAILURE_PATHS: list = []  # _load_path_patterns()에서 초기화
+    
+    # 도메인 추론 매핑 - 설정에서 로드 (Domain-Free)
+    # settings.SELF_HEALING_DOMAIN_MAPPING에서 읽어옴
+    # 형식: {"pattern": "domain"} 예: {"/payments/": "payment"}
+    DOMAIN_MAPPING: dict = {}  # _load_path_patterns()에서 초기화
+    
+    _paths_loaded: bool = False
     
     # CircuitBreaker 서비스 이름
     CB_SERVICE_NAME = "database"
@@ -671,6 +667,9 @@ class SelfHealingMiddleware:
         if self._initialized:
             return
         
+        # 경로 패턴 로드 (한 번만)
+        self._load_path_patterns()
+        
         try:
             from selfhealing.services.circuit_breaker import get_circuit_breaker_service
             self._cb_service = get_circuit_breaker_service()
@@ -684,6 +683,60 @@ class SelfHealingMiddleware:
             logger.warning(f"[SelfHealingMiddleware] Audit logger init failed: {e}")
             
         self._initialized = True
+    
+    @classmethod
+    def _load_path_patterns(cls) -> None:
+        """
+        Load path patterns from Django settings (Domain-Free).
+        
+        settings.py에 다음을 정의하세요:
+        
+        SELF_HEALING_DLQ_ELIGIBLE_PATHS = [
+            r"^/api/orders/",
+            r"^/api/payments/",
+            r"^/api/cart/",
+            ...
+        ]
+        
+        SELF_HEALING_INFRA_FAILURE_PATHS = [
+            r"^/api/orders/",
+            r"^/api/payments/",
+            ...
+        ]
+        
+        SELF_HEALING_DOMAIN_MAPPING = {
+            "/payments/": "payment",
+            "/checkout/": "payment",
+            "/orders/": "order",
+            "/points/": "point",
+            "/cart/": "cart",
+            "/webhooks/": "webhook",
+        }
+        """
+        if cls._paths_loaded:
+            return
+        
+        from django.conf import settings
+        
+        # DLQ 적재 대상 경로
+        dlq_patterns = getattr(settings, "SELF_HEALING_DLQ_ELIGIBLE_PATHS", [])
+        cls.DLQ_ELIGIBLE_PATHS = [re.compile(p) for p in dlq_patterns]
+        
+        # 인프라 장애 경로
+        infra_patterns = getattr(settings, "SELF_HEALING_INFRA_FAILURE_PATHS", [])
+        cls.INFRASTRUCTURE_FAILURE_PATHS = [re.compile(p) for p in infra_patterns]
+        
+        # 도메인 매핑
+        cls.DOMAIN_MAPPING = getattr(settings, "SELF_HEALING_DOMAIN_MAPPING", {})
+        
+        cls._paths_loaded = True
+        
+        logger.info(
+            f"[SelfHealingMiddleware] Loaded patterns: "
+            f"DLQ={len(cls.DLQ_ELIGIBLE_PATHS)}, "
+            f"Infra={len(cls.INFRASTRUCTURE_FAILURE_PATHS)}, "
+            f"Domains={len(cls.DOMAIN_MAPPING)}"
+        )
     
     def __call__(self, request: "HttpRequest") -> "HttpResponse":
         """Process request/response with self-healing logic.
@@ -1021,19 +1074,18 @@ class SelfHealingMiddleware:
             return None
     
     def _infer_domain(self, path: str) -> str:
-        """Infer domain from request path."""
-        if "/payments/" in path or "/checkout/" in path:
-            return "payment"
-        elif "/orders/" in path:
-            return "order"
-        elif "/points/" in path:
-            return "point"
-        elif "/cart/" in path:
-            return "cart"
-        elif "/webhooks/" in path:
-            return "webhook"
-        else:
-            return "http"
+        """
+        Infer domain from request path using configurable mapping.
+        
+        Domain mapping is loaded from settings.SELF_HEALING_DOMAIN_MAPPING.
+        Falls back to "http" if no match found.
+        """
+        # 설정 기반 도메인 매핑 사용 (Domain-Free)
+        for pattern, domain in self.DOMAIN_MAPPING.items():
+            if pattern in path:
+                return domain
+        
+        return "http"
     
     def _log_audit_event(self, event_type: str, data: Dict[str, Any]) -> None:
         """Log event to audit system with hash chain."""

@@ -297,6 +297,39 @@ SELFHEALING_CORE_DOMAINS = [
 ]
 
 # ==========================================================================
+# Self-Healing Middleware Path Patterns (Domain-Free Configuration)
+# ==========================================================================
+# SelfHealingMiddleware가 감시할 경로 패턴을 여기서 설정합니다.
+# 이 설정을 변경하면 인프라 코드 수정 없이 도메인 추가/제거 가능합니다.
+
+# DLQ 적재 대상 경로 (POST, PUT, PATCH 요청만 해당)
+SELF_HEALING_DLQ_ELIGIBLE_PATHS = [
+    r"^/api/orders/",
+    r"^/api/payments/",
+    r"^/api/cart/",
+    r"^/api/checkout/",
+    r"^/api/points/",
+    r"^/api/webhooks/",
+]
+
+# 인프라 장애로 인식할 경로 (503 응답 시 CB 실패로 기록)
+SELF_HEALING_INFRA_FAILURE_PATHS = [
+    r"^/api/orders/",
+    r"^/api/payments/",
+    r"^/api/webhooks/",
+]
+
+# 도메인 추론 매핑 (경로 패턴 -> 도메인 이름)
+SELF_HEALING_DOMAIN_MAPPING = {
+    "/payments/": "payment",
+    "/checkout/": "payment",
+    "/orders/": "order",
+    "/points/": "point",
+    "/cart/": "cart",
+    "/webhooks/": "webhook",
+}
+
+# ==========================================================================
 # Component imports (Social Auth, Payment, etc.)
 # ==========================================================================
 
