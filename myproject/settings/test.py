@@ -157,3 +157,11 @@ SELF_HEALING = {
         "SHORT_CACHE_TTL": 20,  # For short-lived operations
     },
 }
+
+# ==========================================================================
+# 🔥 Disable Rate Limiting for Load Tests
+# ==========================================================================
+import os
+if os.getenv("DISABLE_RATE_LIMITING", "FALSE") == "TRUE":
+    # Remove Rate Limit Middleware
+    MIDDLEWARE = [m for m in MIDDLEWARE if "RateLimit" not in m]  # noqa: F405

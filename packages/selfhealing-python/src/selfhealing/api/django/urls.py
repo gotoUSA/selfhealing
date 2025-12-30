@@ -655,6 +655,13 @@ if getattr(settings, "DEBUG", False) or getattr(settings, "ENABLE_STRESS_TESTS",
         connection_leak_simulation,
         pool_status,
         heavy_concurrent_query,
+        # 🔥 Advisory Lock API - 비침투적 DB 락 테스트
+        advisory_lock_acquire,
+        advisory_lock_contention,
+        controlled_burst_failure,
+        # 🔥 Pool Exhaustion & CB Trigger API
+        pool_exhaust,
+        trigger_cb_failure,
     )
 
     urlpatterns += [
@@ -663,4 +670,11 @@ if getattr(settings, "DEBUG", False) or getattr(settings, "ENABLE_STRESS_TESTS",
         path("stress/leak/", connection_leak_simulation, name="stress-leak"),
         path("stress/pool-status/", pool_status, name="stress-pool-status"),
         path("stress/heavy-query/", heavy_concurrent_query, name="stress-heavy-query"),
+        # 🔥 Advisory Lock API - 비침투적 DB 락 테스트
+        path("stress/advisory-lock/acquire/", advisory_lock_acquire, name="stress-advisory-lock-acquire"),
+        path("stress/advisory-lock/contention/", advisory_lock_contention, name="stress-advisory-lock-contention"),
+        path("stress/burst-failure/", controlled_burst_failure, name="stress-burst-failure"),
+        # 🔥 Pool Exhaustion & CB Trigger API
+        path("stress/pool-exhaust/", pool_exhaust, name="stress-pool-exhaust"),
+        path("stress/trigger-cb-failure/", trigger_cb_failure, name="stress-trigger-cb-failure"),
     ]
