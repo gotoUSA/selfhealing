@@ -266,6 +266,283 @@ MODULE_SIGNATURES: Dict[str, Dict[str, Any]] = {
             "장애 주입 테스트",
         ],
     },
+    # =========================================================================
+    # V2 최적화 모듈 (Platinum SLA 달성용)
+    # =========================================================================
+    "adaptive_jitter": {
+        "imports": [
+            "adaptive_jitter",
+            "AdaptiveJitter",
+            "SystemState",
+        ],
+        "patterns": [
+            r"adaptive_?jitter",
+            r"AdaptiveJitter",
+            r"SystemState\.",
+            r"calculate_?jitter",
+            r"jitter_?ms",
+        ],
+        "api_endpoints": [],
+        "use_cases": [
+            "지능형 Jitter 계산",
+            "Thundering Herd 방지",
+            "시스템 상태 기반 지연",
+        ],
+    },
+    "async_logger": {
+        "imports": [
+            "async_logger",
+            "AsyncHealingLogger",
+            "EventSeverity",
+        ],
+        "patterns": [
+            r"AsyncHealingLogger",
+            r"EventSeverity",
+            r"async_?logger",
+            r"healing_?logger",
+        ],
+        "api_endpoints": [],
+        "use_cases": [
+            "비동기 이벤트 로깅",
+            "배치 이벤트 전송",
+            "복구 경로 최적화",
+        ],
+    },
+    "state_cache": {
+        "imports": [
+            "state_cache",
+            "CBStateCache",
+        ],
+        "patterns": [
+            r"CBStateCache",
+            r"state_?cache",
+            r"get_?state\(",
+            r"cache_?ttl",
+        ],
+        "api_endpoints": [],
+        "use_cases": [
+            "CB 상태 로컬 캐싱",
+            "네트워크 호출 최소화",
+            "Polling Jitter",
+        ],
+    },
+    "defaults": {
+        "imports": [
+            "defaults",
+            "SafeDefaults",
+        ],
+        "patterns": [
+            r"SafeDefaults",
+            r"safe_?defaults",
+            r"degraded_?mode",
+            r"fallback_?config",
+        ],
+        "api_endpoints": [],
+        "use_cases": [
+            "사령탑 연결 실패 시 기본값",
+            "Graceful Degradation",
+            "Fallback 설정",
+        ],
+    },
+    # =========================================================================
+    # V3 최적화 모듈 (Adaptive Throttling + Corruption Shield)
+    # =========================================================================
+    "throttle": {
+        "imports": [
+            "throttle",
+            "AdaptiveThrottleClient",
+        ],
+        "patterns": [
+            r"AdaptiveThrottle",
+            r"throttle",
+            r"gradient",
+            r"rtt_?based",
+            r"/throttle/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/throttle/",
+        ],
+        "use_cases": [
+            "Netflix Gradient 기반 스로틀링",
+            "RTT 기반 동적 Rate Limit",
+            "적응형 부하 제어",
+        ],
+    },
+    "corruption_shield": {
+        "imports": [
+            "corruption_shield",
+            "CorruptionShieldClient",
+        ],
+        "patterns": [
+            r"corruption_?shield",
+            r"CorruptionShield",
+            r"l1_?validation",
+            r"l2_?validation",
+            r"l3_?validation",
+            r"data_?integrity",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/corruption-shield/",
+        ],
+        "use_cases": [
+            "Multi-Layer 데이터 무결성",
+            "SQL Injection/XSS 방어",
+            "이상 탐지 (Z-Score, IQR)",
+        ],
+    },
+    # =========================================================================
+    # 추가 API 클라이언트 모듈
+    # =========================================================================
+    "alerts": {
+        "imports": [
+            "alerts",
+            "AlertsClient",
+        ],
+        "patterns": [
+            r"alerts",
+            r"AlertsClient",
+            r"alert_?rule",
+            r"notification",
+            r"/alerts/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/alerts/",
+        ],
+        "use_cases": [
+            "알림 규칙 관리",
+            "알림 채널 설정",
+            "알림 이력 조회",
+        ],
+    },
+    "l2_storage": {
+        "imports": [
+            "l2_storage",
+            "L2StorageClient",
+        ],
+        "patterns": [
+            r"l2_?storage",
+            r"L2Storage",
+            r"shadow_?log",
+            r"drift_?reconcil",
+            r"/l2-storage/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/l2-storage/",
+        ],
+        "use_cases": [
+            "L2 저장소 상태 관리",
+            "Shadow Log 동기화",
+            "Drift Reconciliation",
+        ],
+    },
+    "tiering": {
+        "imports": [
+            "tiering",
+            "TieringClient",
+        ],
+        "patterns": [
+            r"tiering",
+            r"TieringClient",
+            r"tier_?definition",
+            r"tier_?mapping",
+            r"/config/tiers/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/config/tiers/",
+        ],
+        "use_cases": [
+            "API Tier 정의",
+            "Tier 매핑 설정",
+            "Dry Run 테스트",
+        ],
+    },
+    "dashboard": {
+        "imports": [
+            "dashboard",
+            "DashboardClient",
+        ],
+        "patterns": [
+            r"dashboard",
+            r"DashboardClient",
+            r"pool_?cb",
+            r"control_?action",
+            r"/dashboard/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/dashboard/",
+        ],
+        "use_cases": [
+            "대시보드 요약 조회",
+            "서비스 제어",
+            "Pool Circuit Breaker",
+        ],
+    },
+    "runtime_config": {
+        "imports": [
+            "runtime_config",
+            "RuntimeConfigClient",
+        ],
+        "patterns": [
+            r"runtime_?config",
+            r"RuntimeConfig",
+            r"dynamic_?config",
+            r"config_?reload",
+            r"/config/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/config/",
+        ],
+        "use_cases": [
+            "동적 설정 관리",
+            "런타임 설정 변경",
+            "설정 히스토리",
+        ],
+    },
+    "system": {
+        "imports": [
+            "system",
+            "SystemClient",
+        ],
+        "patterns": [
+            r"SystemClient",
+            r"system_?config",
+            r"log_?level",
+            r"diagnostics",
+            r"/system/",
+        ],
+        "api_endpoints": [
+            "/api/self-healing/system/",
+        ],
+        "use_cases": [
+            "시스템 설정 관리",
+            "로그 레벨 조정",
+            "진단 정보 조회",
+        ],
+    },
+    # =========================================================================
+    # V4 Controller (극한 테스트용 통합 컨트롤러)
+    # =========================================================================
+    "controller": {
+        "imports": [
+            "controller",
+            "SelfHealingController",
+            "get_controller",
+        ],
+        "patterns": [
+            r"SelfHealingController",
+            r"get_?controller",
+            r"inject_?chaos",
+            r"record_?response",
+            r"aggressive_?healing",
+        ],
+        "api_endpoints": [],
+        "use_cases": [
+            "극한 부하 테스트 제어",
+            "Chaos 주입 by Phase",
+            "V2.8 Aggressive Healing",
+            "Emergency 에스컬레이션",
+        ],
+    },
 }
 
 
@@ -345,6 +622,72 @@ RESULT_TO_MODULE_RECOMMENDATIONS: Dict[str, Dict[str, Any]] = {
         ],
         "recommended_modules": ["circuit_breaker", "chaos", "emergency"],
         "reason": "연쇄 장애 시 Circuit Breaker로 격리, Chaos로 사전 테스트, Emergency로 긴급 차단",
+    },
+    # =========================================================================
+    # V2/V3 모듈 관련 추천 패턴 추가
+    # =========================================================================
+    "data_corruption": {
+        "symptoms": [
+            r"corruption",
+            r"invalid\s*data",
+            r"malformed",
+            r"injection",
+            r"xss",
+            r"sql\s*injection",
+        ],
+        "recommended_modules": ["corruption_shield", "l2_storage"],
+        "reason": "데이터 손상 시 Corruption Shield로 Multi-Layer 검증, L2 Storage로 백업 복구",
+    },
+    "high_latency": {
+        "symptoms": [
+            r"high\s*latency",
+            r"slow\s*response",
+            r"rtt\s*(high|exceeded)",
+            r"p99\s*(spike|high)",
+        ],
+        "recommended_modules": ["throttle", "adaptive_jitter", "state_cache"],
+        "reason": "높은 지연 시 Adaptive Throttle로 RTT 기반 조절, State Cache로 네트워크 호출 최소화",
+    },
+    "thundering_herd": {
+        "symptoms": [
+            r"thundering\s*herd",
+            r"spike",
+            r"burst",
+            r"simultaneous\s*(retry|request)",
+        ],
+        "recommended_modules": ["adaptive_jitter", "state_cache", "rate_limiter"],
+        "reason": "Thundering Herd 시 Adaptive Jitter로 분산, State Cache로 중복 요청 감소",
+    },
+    "extreme_load": {
+        "symptoms": [
+            r"extreme\s*load",
+            r"platinum\s*sla",
+            r"aggressive\s*heal",
+            r"chaos\s*inject",
+        ],
+        "recommended_modules": ["controller", "emergency", "chaos"],
+        "reason": "극한 부하 시 Controller로 통합 제어, Emergency 에스컬레이션, Chaos 주입 테스트",
+    },
+    "alert_notification": {
+        "symptoms": [
+            r"alert",
+            r"notification",
+            r"notify",
+            r"slack",
+            r"email\s*notification",
+        ],
+        "recommended_modules": ["alerts", "observability"],
+        "reason": "알림 필요 시 Alerts로 규칙 관리, Observability로 메트릭 기반 알림",
+    },
+    "config_drift": {
+        "symptoms": [
+            r"config\s*(drift|change)",
+            r"setting\s*mismatch",
+            r"runtime\s*config",
+            r"dynamic\s*setting",
+        ],
+        "recommended_modules": ["runtime_config", "reconciliation", "governance"],
+        "reason": "설정 드리프트 시 Runtime Config로 동적 관리, Reconciliation으로 정합성 복구",
     },
 }
 

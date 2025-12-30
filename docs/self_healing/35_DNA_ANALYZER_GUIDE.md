@@ -1,14 +1,26 @@
 # DNA Analyzer 사용 가이드
 
 📅 **작성일**: 2025-12-29  
+📅 **최종 수정**: 2025-12-30  
 🎯 **목적**: DNAAnalyzer를 통한 자동 Stage DNA 분석 및 추천  
-📋 **버전**: v1.0.0
+📋 **버전**: v2.0.0
 
 ---
 
 ## 📌 개요
 
 **DNAAnalyzer**는 Stage DNA의 한계를 극복하기 위해 만들어진 **지능형 분석 도구**입니다.
+
+### 지원 모듈 현황 (v2.0.0)
+
+| 카테고리 | 모듈 수 | 모듈 목록 |
+|----------|---------|-----------|
+| **Core API Clients** | 12개 | circuit_breaker, dlq, health, error_budget, observability, chaos, emergency, rate_limiter, reconciliation, governance, xtest, alerts |
+| **V2 최적화 (Platinum SLA)** | 4개 | adaptive_jitter, async_logger, state_cache, defaults |
+| **V3 최적화 (Throttle/Shield)** | 2개 | throttle, corruption_shield |
+| **추가 API Clients** | 5개 | l2_storage, tiering, dashboard, runtime_config, system |
+| **V4 Controller** | 1개 | controller |
+| **합계** | **24개** | - |
 
 ### 기존 수동 DNA의 문제점
 
@@ -314,3 +326,36 @@ repos:
 - 새 모듈 시그니처: `MODULE_SIGNATURES`에 추가
 - 새 에러 패턴: `RESULT_TO_MODULE_RECOMMENDATIONS`에 추가
 - 새 Gap 패턴: `detect_gaps()` 메서드의 `gap_patterns`에 추가
+
+---
+
+## 📊 v2.0.0 업데이트 내역
+
+### 추가된 MODULE_SIGNATURES (13개 모듈)
+
+| 모듈 | 카테고리 | 설명 |
+|------|----------|------|
+| `adaptive_jitter` | V2 최적화 | 지능형 Jitter 계산, Thundering Herd 방지 |
+| `async_logger` | V2 최적화 | 비동기 이벤트 로깅, 복구 경로 최적화 |
+| `state_cache` | V2 최적화 | CB 상태 로컬 캐싱, 네트워크 호출 최소화 |
+| `defaults` | V2 최적화 | 사령탑 연결 실패 시 기본값, Graceful Degradation |
+| `throttle` | V3 최적화 | Netflix Gradient 기반 스로틀링, RTT 기반 조절 |
+| `corruption_shield` | V3 최적화 | Multi-Layer 데이터 무결성, SQL Injection/XSS 방어 |
+| `alerts` | API Client | 알림 규칙 관리, 알림 채널 설정 |
+| `l2_storage` | API Client | L2 저장소 상태, Shadow Log 동기화 |
+| `tiering` | API Client | API Tier 정의, Tier 매핑 설정 |
+| `dashboard` | API Client | 대시보드 요약, 서비스 제어 |
+| `runtime_config` | API Client | 동적 설정 관리, 런타임 설정 변경 |
+| `system` | API Client | 시스템 설정, 로그 레벨 조정 |
+| `controller` | V4 Controller | 극한 부하 테스트 제어, Chaos 주입 |
+
+### 추가된 RESULT_TO_MODULE_RECOMMENDATIONS (6개 패턴)
+
+| 패턴 | 증상 | 추천 모듈 |
+|------|------|-----------|
+| `data_corruption` | corruption, injection, xss | corruption_shield, l2_storage |
+| `high_latency` | high latency, slow response, p99 spike | throttle, adaptive_jitter, state_cache |
+| `thundering_herd` | spike, burst, simultaneous retry | adaptive_jitter, state_cache, rate_limiter |
+| `extreme_load` | extreme load, platinum sla, chaos inject | controller, emergency, chaos |
+| `alert_notification` | alert, notification, slack | alerts, observability |
+| `config_drift` | config drift, runtime config | runtime_config, reconciliation, governance |
