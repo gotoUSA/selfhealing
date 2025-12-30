@@ -21,7 +21,6 @@ from rest_framework import status
 from selfhealing.api.django.views.drift_threshold import (
     DriftThresholdConfigView,
     DriftThresholdResetView,
-    DRIFT_THRESHOLD_CONFIG_KEY,
 )
 from selfhealing.models.drift_config import DriftThresholdConfig
 
