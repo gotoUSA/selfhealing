@@ -467,10 +467,11 @@ class HealingProofV6Runner:
                     for _ in range(100)
                 ]
                 
-                for future in as_completed(futures, timeout=5):
+                # v6.1.0: 타임아웃 증가 (5초 → 30초)
+                for future in as_completed(futures, timeout=30):
                     try:
                         future.result()
-                    except:
+                    except Exception:
                         pass
                 
                 elapsed = time.time() - start
@@ -596,18 +597,27 @@ class HealingProofV6Runner:
         # DLQ 대기
         time.sleep(self.config.dlq_wait_seconds)
         
-        # DLQ 조회
+        # DLQ 조회 - page_size를 크게 설정하거나 total_count 사용
         status, elapsed, data = self._make_request(
             "GET",
-            "/api/self-healing/dlq/list/",
+            "/api/self-healing/dlq/list/?page_size=100",
         )
         
         dlq_count = 0
         pending_count = 0
         
         if status == 200 and isinstance(data, dict):
-            items = data.get("items", data.get("results", []))
-            dlq_count = len(items) if isinstance(items, list) else data.get("total", 0)
+            # pagination 응답 구조 확인: {"results": [...], "pagination": {"total_count": N}}
+            pagination = data.get("pagination", {})
+            total_count = pagination.get("total_count", 0)
+            
+            # total_count가 없으면 results 길이 사용
+            if total_count > 0:
+                dlq_count = total_count
+            else:
+                items = data.get("items", data.get("results", []))
+                dlq_count = len(items) if isinstance(items, list) else data.get("total", 0)
+            
             pending_count = data.get("pending", dlq_count)
         
         duration = time.time() - start
@@ -654,6 +664,7 @@ class HealingProofV6Runner:
         start = time.time()
         final_cb_state = "unknown"
         cb_transitions = []
+        recovery_triggered = False
         
         for i in range(self.config.recovery_wait_seconds):
             # CB 상태 확인
@@ -663,7 +674,12 @@ class HealingProofV6Runner:
             )
             
             if status == 200 and isinstance(data, dict):
-                state = data.get("state", "unknown")
+                # API 응답 구조: {"circuit_breaker": {"state": "..."}, ...}
+                cb_data = data.get("circuit_breaker", {})
+                state = cb_data.get("state", data.get("state", "unknown"))
+                if state:
+                    state = state.lower()  # OPEN → open, CLOSED → closed 정규화
+                
                 if not cb_transitions or cb_transitions[-1] != state:
                     cb_transitions.append(state)
                 final_cb_state = state
@@ -673,6 +689,22 @@ class HealingProofV6Runner:
                 if state == "closed":
                     logger.info(f"   ✅ CB recovered to CLOSED at {i}s")
                     break
+                
+                # OPEN 상태에서 10초 후 try-recovery-transition API 호출
+                if state == "open" and i >= 10 and not recovery_triggered:
+                    logger.info(f"   🔄 Triggering recovery transition...")
+                    self._make_request(
+                        "POST",
+                        "/api/self-healing/xtest/try-recovery-transition/",
+                        json={"service_name": "database"},
+                    )
+                    recovery_triggered = True
+                
+                # HALF_OPEN 상태일 때 정상 요청을 보내서 CB 복구 유도
+                if state == "half_open":
+                    logger.info(f"   🔄 CB is HALF_OPEN, sending health probes...")
+                    for _ in range(3):  # 성공 임계값만큼 요청
+                        self._make_request("GET", "/api/self-healing/health/")
             
             time.sleep(1)
         

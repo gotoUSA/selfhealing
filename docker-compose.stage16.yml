@@ -102,6 +102,7 @@ services:
       - ENABLE_STRESS_TESTS=true
       - DEBUG=true
       - DISABLE_RATE_LIMITING=TRUE
+      - DISABLE_SELFHEALING_AUTH=true  # 테스트 환경에서 인증 비활성화
       
       # 🔥 Stage16 특수 설정
       - STAGE16_ADVISORY_LOCK_ENABLED=true

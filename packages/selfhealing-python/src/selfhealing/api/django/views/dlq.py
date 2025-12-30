@@ -23,7 +23,12 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import (
+    IsViewer, 
+    IsOperator, 
+    IsSelfHealingAdmin, 
+    IsSelfHealingAuthenticated,
+)
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
 from selfhealing.services.dlq_service import get_dlq_service
 
@@ -39,7 +44,7 @@ class DLQReplayView(APIView):
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsSelfHealingAuthenticated, IsOperator]
 
     def post(self, request):
         """Trigger DLQ replay."""
@@ -85,7 +90,7 @@ class DLQCleanupStatsView(APIView):
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated, IsViewer]
+    permission_classes = [IsSelfHealingAuthenticated, IsViewer]
 
     def get(self, request):
         """Get cleanup statistics."""
@@ -126,7 +131,7 @@ class DLQArchiveView(APIView):
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsSelfHealingAuthenticated, IsOperator]
 
     def post(self, request):
         """Archive old resolved entries."""
@@ -178,7 +183,7 @@ class DLQPurgeView(APIView):
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
+    permission_classes = [IsSelfHealingAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request):
         """Permanently delete archived entries."""
@@ -238,7 +243,7 @@ class DLQListView(APIView):
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated, IsViewer]
+    permission_classes = [IsSelfHealingAuthenticated, IsViewer]
 
     def get(self, request):
         """Get paginated list of DLQ entries."""
@@ -294,7 +299,7 @@ class DLQDetailView(APIView):
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
-    permission_classes = [IsAuthenticated, IsViewer]
+    permission_classes = [IsSelfHealingAuthenticated, IsViewer]
 
     def get(self, request, pk):
         """Get detailed info for a single DLQ entry."""
@@ -329,7 +334,7 @@ class DLQRetryView(APIView):
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsSelfHealingAuthenticated, IsOperator]
 
     def post(self, request, pk):
         """Retry a single DLQ entry."""
@@ -382,7 +387,7 @@ class DLQResolveView(APIView):
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsSelfHealingAuthenticated, IsOperator]
 
     def post(self, request, pk):
         """Manually resolve a DLQ entry."""
@@ -439,7 +444,7 @@ class DLQTestCreateView(APIView):
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
-    permission_classes = [IsAuthenticated, IsSelfHealingAdmin]
+    permission_classes = [IsSelfHealingAuthenticated, IsSelfHealingAdmin]
 
     def post(self, request):
         """Create a test DLQ entry (domain-neutral)."""

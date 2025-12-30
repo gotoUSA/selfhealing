@@ -27,6 +27,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_auth_disabled() -> bool:
+    """Check if SelfHealing auth is disabled for testing."""
+    return os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in ("true", "1", "yes")
+
+
+class IsSelfHealingAuthenticated(BasePermission):
+    """
+    인증된 사용자만 접근 허용 (테스트 환경 바이패스 지원).
+    
+    DISABLE_SELFHEALING_AUTH=true 환경 변수가 설정되면
+    인증 없이도 접근을 허용합니다.
+    """
+    
+    message = "인증이 필요합니다."
+    
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        # 테스트 환경에서 인증 바이패스
+        if _is_auth_disabled():
+            return True
+        
+        return bool(request.user and request.user.is_authenticated)
+
+
 class IsViewer(BasePermission):
     """
     읽기 전용 권한 (Viewer 역할).
@@ -55,6 +78,10 @@ class IsViewer(BasePermission):
         Returns:
             bool: 권한 여부
         """
+        # 테스트 환경에서 인증 바이패스
+        if _is_auth_disabled():
+            return True
+            
         if not request.user or not request.user.is_authenticated:
             return False
 
@@ -98,6 +125,10 @@ class IsOperator(BasePermission):
         Returns:
             bool: 권한 여부
         """
+        # 테스트 환경에서 인증 바이패스
+        if _is_auth_disabled():
+            return True
+            
         if not request.user or not request.user.is_authenticated:
             return False
 
@@ -148,6 +179,10 @@ class IsSelfHealingAdmin(BasePermission):
             Fail-Secure: 예외 발생 시 거부
         """
         try:
+            # 테스트 환경에서 인증 바이패스
+            if _is_auth_disabled():
+                return True
+                
             if not request.user or not request.user.is_authenticated:
                 return False
 

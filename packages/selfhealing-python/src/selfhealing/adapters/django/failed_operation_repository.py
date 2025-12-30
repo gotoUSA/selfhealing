@@ -59,18 +59,48 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
         self,
         domain: str,
         failure_type: str,
-        context: Dict[str, Any],
-        error_message: str,
+        context: Optional[Dict[str, Any]] = None,
+        error_message: str = "",
         max_retries: int = 3,
+        # Extended parameters for full DLQ support
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        error_code: str = "",
+        snapshot_data: Optional[Dict[str, Any]] = None,
+        request_data: Optional[Dict[str, Any]] = None,
+        response_data: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        next_action_hint: str = "",
+        recommended_action: str = "",
     ) -> FailedOperationData:
-        """Create a new failed operation record."""
+        """Create a new failed operation record.
+        
+        Supports both legacy (context parameter) and new (extended parameters) call patterns.
+        """
         FailedOperation = self._get_model()
+
+        # Support both legacy 'context' and new 'snapshot_data' parameter
+        final_snapshot = snapshot_data if snapshot_data is not None else (context if context is not None else {})
+        
+        # Build metadata with any additional context
+        final_metadata = metadata if metadata is not None else {}
+        if next_action_hint:
+            final_metadata["next_action_hint"] = next_action_hint
 
         obj = FailedOperation.objects.create(
             domain=domain,
             failure_type=failure_type,
-            snapshot_data=context,
+            entity_type=entity_type or "",
+            entity_id=entity_id or "",
+            user_id=user_id,
+            error_code=error_code,
             error_message=error_message,
+            snapshot_data=final_snapshot,
+            request_data=request_data or {},
+            response_data=response_data or {},
+            metadata=final_metadata,
+            recommended_action=recommended_action,
             max_retries=max_retries,
             status=OperationStatus.PENDING.value,
         )
@@ -561,3 +591,53 @@ class DjangoFailedOperationRepository(FailedOperationRepository):
             domain=domain,
             status=OperationStatus.PENDING.value,
         ).count()
+
+    # =========================================================================
+    # v6.1.0: Required Abstract Method Implementations
+    # =========================================================================
+
+    def increment_retry_count(self, id: int) -> bool:
+        """Increment retry count and update last_retry_at."""
+        FailedOperation = self._get_model()
+        try:
+            obj = FailedOperation.objects.get(id=id)
+            obj.retry_count = F("retry_count") + 1
+            obj.last_retry_at = timezone.now()
+            obj.save(update_fields=["retry_count", "last_retry_at", "updated_at"])
+            return True
+        except FailedOperation.DoesNotExist:
+            return False
+
+    def mark_as_resolved(
+        self,
+        id: int,
+        resolution_type: str,
+        resolution_note: str = "",
+        resolved_by_id: Optional[int] = None,
+    ) -> bool:
+        """Mark a failed operation as resolved."""
+        FailedOperation = self._get_model()
+        try:
+            obj = FailedOperation.objects.get(id=id)
+            obj.status = OperationStatus.RESOLVED.value if hasattr(OperationStatus, "RESOLVED") else "resolved"
+            obj.resolution_type = resolution_type
+            obj.resolution_note = resolution_note
+            obj.resolved_by_id = resolved_by_id
+            obj.resolved_at = timezone.now()
+            obj.save()
+            return True
+        except FailedOperation.DoesNotExist:
+            return False
+
+    def get_expired_operations(
+        self,
+        before_date: datetime,
+        limit: int = 100,
+    ) -> List[FailedOperationData]:
+        """Get operations that have expired."""
+        FailedOperation = self._get_model()
+        queryset = FailedOperation.objects.filter(
+            created_at__lt=before_date,
+            status=OperationStatus.PENDING.value,
+        ).order_by("created_at")[:limit]
+        return [self._to_data(obj) for obj in queryset]

@@ -533,19 +533,49 @@ class PoolCircuitBreakerMiddleware:
 
 # Circuit Breaker 상태 조회 API
 def circuit_breaker_status(request):
-    """Circuit Breaker 상태 조회 API"""
+    """Circuit Breaker 상태 조회 API
+    
+    v6.1.0: SelfHealingMiddleware의 CircuitBreakerService 상태도 포함
+    """
     cb = pool_circuit_breaker
     stats = cb.get_stats()
+    
+    # v6.1.0: CircuitBreakerService 상태도 조회 (SelfHealingMiddleware에서 사용)
+    cb_service_state = "unknown"
+    cb_service_failure_count = 0
+    try:
+        from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+        cb_service = get_circuit_breaker_service()
+        if cb_service and cb_service.is_enabled:
+            state_data = cb_service.get_or_create_state("database")
+            cb_service_state = state_data.state if hasattr(state_data, 'state') else str(state_data)
+            cb_service_failure_count = getattr(state_data, 'failure_count', 0)
+    except Exception as e:
+        logger.debug(f"[circuit_breaker_status] CB service state lookup failed: {e}")
+    
+    # 두 CB 중 하나라도 OPEN이면 OPEN으로 표시
+    combined_state = stats["state"]
+    if cb_service_state in ("open", "OPEN", "half_open", "HALF_OPEN"):
+        combined_state = cb_service_state.upper()
 
     return JsonResponse(
         {
             "circuit_breaker": {
-                "state": stats["state"],
-                "failure_count": stats["failure_count"],
+                "state": combined_state,  # v6.1.0: 통합된 상태
+                "failure_count": max(stats["failure_count"], cb_service_failure_count),
                 "success_count": stats["success_count"],
                 "failure_threshold": cb._failure_threshold,
                 "success_threshold": cb._success_threshold,
                 "recovery_timeout_seconds": cb._recovery_timeout,
+            },
+            "pool_circuit_breaker": {
+                "state": stats["state"],
+                "failure_count": stats["failure_count"],
+            },
+            "service_circuit_breaker": {
+                "state": cb_service_state,
+                "failure_count": cb_service_failure_count,
+                "service_name": "database",
             },
             "pool": stats["pool_status"],
             "statistics": stats["stats"],
