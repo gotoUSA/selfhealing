@@ -1,1 +1,0 @@
-"""Django integration tests package."""
