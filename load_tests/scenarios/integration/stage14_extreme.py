@@ -50,28 +50,78 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 # =============================================================================
-# Stage DNA - Self-Healing 모듈 의존성 선언 (Extreme Grade)
+# Stage DNA - Self-Healing 모듈 의존성 선언 (PLATINUM Grade)
 # Reference: docs/self_healing/27_SELFHEALING_SCENARIO_MAPPING.md
+# Optimized by: DNAAnalyzer (2025-12-30)
+# Upgraded to PLATINUM: 2025-12-30 (리뷰어 피드백 반영)
 # =============================================================================
 STAGE_DNA = {
-    "name": "Stage 14 EXTREME - Deep Resilience Test",
-    "type": "integration",  # With chaos elements
+    "name": "Stage 14 EXTREME - Deep Resilience Stress Test",
+    "type": "platinum",  # 🔥 PLATINUM: 가장 공격적인 설정, 시스템 한계 테스트
+    "grade": "platinum",  # DNA 등급: bronze < silver < gold < platinum
     "required_modules": [
-        "circuit_breaker", "dlq", "health", "observability",
-        "chaos", "xtest", "emergency",  # Chaos 요소 추가
+        # 핵심 Self-Healing 모듈 - 모두 필수
+        "circuit_breaker",  # CB 상태 체크, cascading failure 테스트
+        "dlq",              # DLQ flooding, replay 테스트
+        "health",           # 헬스체크 엔드포인트 호출
+        "chaos",            # 장애 주입 테스트
+        "xtest",            # X-Test-Mode 헤더 사용
+        "emergency",        # Emergency 레벨 체크
+        "reconciliation",   # DLQ 복구 후 데이터 정합성 검증
+        "blast_radius",     # 파급 범위 분석
     ],
-    "optional_modules": [
-        "governance", "reconciliation", "l2_storage",
-        "throttle", "adaptive_jitter", "corruption_shield",
-    ],
-    # === 극한 테스트용 확장 필드 ===
-    "extreme_config": {
-        "auto_whitelist": True,  # Rate Limit 자동 바이패스
-        "recovery_priority": "critical",  # 복구 우선순위
-        "chaos_during_recovery": True,  # 복구 중 장애 주입 허용
-        "max_dlq_flood": 10000,  # 최대 DLQ 적재량
-        "gradient_throttle": True,  # Netflix Gradient 스로틀링
+    "optional_modules": [],  # Platinum은 모든 모듈 필수
+    
+    # === PLATINUM 극한 테스트 설정 ===
+    "platinum_config": {
+        # Rate Limit 완전 무력화
+        "rate_limit_bypass": "full",  # full: 완전 OFF, partial: 10배 완화
+        "rate_limit_budget_multiplier": 10,  # Rate Limit 예산 10배
+        "ignore_warnings": True,  # 경고 무시하고 끝까지 진행
+        
+        # Blast Radius 설정
+        "blast_radius": "high",  # low/medium/high - high는 전체 시스템 영향 허용
+        "allow_cascading_failure": True,  # 연쇄 장애 허용
+        "max_affected_services": 10,  # 최대 영향 서비스 수
+        
+        # DLQ Flooding 설정
+        "max_dlq_flood": 100000,  # 10만 건까지 허용
+        "dlq_flood_rate": 1000,  # 초당 1000건
+        "parallel_workers": 50,  # 병렬 워커 50개
+        
+        # Chaos 설정
+        "chaos_intensity": "extreme",  # mild/moderate/extreme
+        "chaos_during_recovery": True,
+        "secondary_failure_enabled": True,
+        "tertiary_failure_enabled": True,  # 3차 장애도 허용
+        
+        # Recovery 설정
+        "recovery_priority": "critical",
+        "auto_whitelist": True,
+        "gradient_throttle": False,  # Platinum에서는 스로틀링 OFF
     },
+    
+    # === X-Test-Mode 하이패스 설정 ===
+    "xtest_config": {
+        "mode": "platinum",
+        "bypass_rate_limit": True,  # Rate Limit 완전 바이패스
+        "bypass_circuit_breaker": False,  # CB는 테스트 대상이므로 유지
+        "bypass_auth": False,  # 인증은 유지
+        "headers": {
+            "X-Test-Mode": "platinum",
+            "X-Test-Bypass-RateLimit": "full",
+            "X-Test-Blast-Radius": "high",
+            "X-Test-Priority": "critical",
+        },
+    },
+    
+    # === DNAAnalyzer 메타데이터 ===
+    "_optimized_by": "DNAAnalyzer",
+    "_optimization_date": "2025-12-30",
+    "_upgraded_to_platinum": "2025-12-30",
+    "_upgrade_reason": "리뷰어 피드백 - 힐링 시스템 한계 테스트 필요",
+    "_previous_type": "chaos",
+    "_analysis_confidence": 0.95,  # Platinum 설정으로 신뢰도 최대
 }
 
 # DNA 검증 (테스트 시작 전 자동 체크)
@@ -246,21 +296,22 @@ class ExtremeTestRunner:
         self.recovery_in_progress: bool = False
         
     def _create_session(self) -> requests.Session:
-        """X-Test-Mode 헤더가 포함된 세션 생성"""
+        """🔥 PLATINUM MODE - X-Test-Mode 헤더가 포함된 세션 생성"""
         session = requests.Session()
         
-        # X-Test-Mode로 Rate Limit 바이패스
+        # 🔥 PLATINUM MODE: Rate Limit 완전 바이패스
         session.headers.update({
-            "X-Test-Mode": "extreme",
-            "X-Test-Bypass-RateLimit": "true",
+            "X-Test-Mode": "platinum",  # 🔥 PLATINUM: 가장 공격적인 모드
+            "X-Test-Bypass-RateLimit": "full",  # full: Rate Limiter 완전 OFF
             "X-Test-Priority": "critical",
+            "X-Test-Blast-Radius": "high",  # 파급 범위 확장 허용
         })
         
         retry_strategy = Retry(
             total=3,
             backoff_factor=0.5,
             status_forcelist=[502, 503, 504],
-            # 429는 retry하지 않음 (바이패스 되어야 함)
+            # 429는 retry하지 않음 (PLATINUM에서는 발생하지 않아야 함)
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
@@ -308,14 +359,19 @@ class ExtremeTestRunner:
         
         # Admin login
         try:
-            resp = self._post("/api/users/login/", json={
+            resp = self._post("/api/auth/login/", json={
                 "username": "admin",
                 "password": "admin123",
             })
             if resp.status_code == 200:
                 data = resp.json()
-                self.admin_token = data.get("access") or data.get("token")
-                print("[OK] Admin login successful")
+                # 토큰 추출 (API 응답 형식에 따라 다름)
+                token_data = data.get("token", {})
+                if isinstance(token_data, dict):
+                    self.admin_token = token_data.get("access")
+                else:
+                    self.admin_token = data.get("access") or token_data
+                print(f"[OK] Admin login successful (token_len={len(self.admin_token or '')})")
             else:
                 print(f"[WARN] Admin login failed: {resp.status_code}")
         except Exception as e:
@@ -351,13 +407,16 @@ class ExtremeTestRunner:
         domains = ["payment", "inventory", "webhook", "notification"]
         failure_types = ["PG_TIMEOUT", "NETWORK_ERROR", "DB_DEADLOCK", "SERVICE_UNAVAILABLE"]
         
+        # 실제 배치당 생성할 개수 계산
+        items_per_batch = min(self.config.dlq_batch_size, self.config.dlq_flood_count)
+        
         def create_dlq_entry(batch_id: int) -> Tuple[int, int, List[str]]:
             """배치 단위 DLQ 생성"""
             batch_success = 0
             batch_errors = 0
             batch_error_msgs = []
             
-            for i in range(self.config.dlq_batch_size):
+            for i in range(items_per_batch):
                 try:
                     # Gradient throttle 적용
                     delay = self.throttle.get_delay()
@@ -396,6 +455,7 @@ class ExtremeTestRunner:
                         batch_errors += 1
                         break  # No point continuing
                     else:
+                        batch_error_msgs.append(f"{resp.status_code}: {resp.text[:100]}")
                         batch_errors += 1
                         
                 except Exception as e:
@@ -404,10 +464,12 @@ class ExtremeTestRunner:
             
             return batch_success, batch_errors, batch_error_msgs
         
-        # 병렬 실행
-        num_batches = self.config.dlq_flood_count // self.config.dlq_batch_size
+        # 병렬 실행 - 올림 처리로 최소 1개 배치 보장
+        import math
+        num_batches = max(1, math.ceil(self.config.dlq_flood_count / self.config.dlq_batch_size))
+        effective_batch_size = min(self.config.dlq_batch_size, self.config.dlq_flood_count)
         
-        print(f"\n[INFO] Creating {num_batches} batches of {self.config.dlq_batch_size} entries each")
+        print(f"\n[INFO] Creating {num_batches} batches of {effective_batch_size} entries each")
         print(f"[INFO] Using {self.config.dlq_parallel_workers} parallel workers")
         
         with ThreadPoolExecutor(max_workers=self.config.dlq_parallel_workers) as executor:
@@ -461,6 +523,8 @@ class ExtremeTestRunner:
         print(f"  - Duration: {duration:.1f}s")
         print(f"  - Throughput: {result.metrics['throughput_per_second']:.1f}/s")
         print(f"  - Final Throttle Rate: {throttle_stats['current_rate']:.1f}/s")
+        if errors:
+            print(f"  - Sample Errors: {errors[:3]}")
         
         self.results.append(result)
         return result

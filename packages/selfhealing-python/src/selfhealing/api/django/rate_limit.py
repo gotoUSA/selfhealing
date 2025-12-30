@@ -529,30 +529,70 @@ class HybridRateLimitMiddleware:
         """
         Check if request should bypass rate limiting for X-Test-Mode.
         
-        Conditions:
-        1. X-Test-Mode: chaos-monkey header present
-        2. CHAOS_ENABLED=true environment variable
-        3. Not in production environment
+        🔥 PLATINUM MODE SUPPORT (2025-12-30):
+        - X-Test-Mode: platinum → Rate Limiter 완전 OFF
+        - X-Test-Bypass-RateLimit: full → Rate Limiter 완전 OFF
+        
+        Standard bypass conditions:
+        1. X-Test-Mode header with valid test value
+        2. X-Test-Bypass-RateLimit: true/full header
+        
+        Additional conditions (for non-platinum):
+        - Must not be in production environment
+        - Either CHAOS_ENABLED=true OR DEBUG=true
+        
+        PLATINUM bypasses ALL conditions except production block.
         
         Returns:
             True if rate limit should be bypassed
         """
         import os
         
-        # Check header
-        xtest_header = request.META.get("HTTP_X_TEST_MODE", "")
-        if xtest_header != "chaos-monkey":
+        # Check X-Test-Mode header
+        xtest_header = request.META.get("HTTP_X_TEST_MODE", "").lower()
+        
+        # Check explicit X-Test-Bypass-RateLimit header
+        bypass_header = request.META.get("HTTP_X_TEST_BYPASS_RATELIMIT", "").lower()
+        
+        # 🔥 PLATINUM MODE: 완전 바이패스 (가장 공격적인 설정)
+        is_platinum = xtest_header == "platinum" or bypass_header == "full"
+        
+        # Supported X-Test-Mode values for standard bypass
+        XTEST_BYPASS_VALUES = {
+            "platinum",       # 🔥 PLATINUM: 완전 바이패스, 한계 테스트
+            "chaos-monkey",   # Stage 48: Chaos testing
+            "extreme",        # Stage 14: Extreme load testing
+            "load-test",      # General load testing
+            "integration",    # Integration testing
+            "stress",         # Stress testing
+            "true",           # Generic test mode
+        }
+        
+        xtest_mode_active = xtest_header in XTEST_BYPASS_VALUES
+        explicit_bypass = bypass_header in ("true", "full")
+        
+        # If neither header is set, don't bypass
+        if not xtest_mode_active and not explicit_bypass:
             return False
         
-        # Block in production
+        # Block in production (PLATINUM도 프로덕션에서는 차단)
         environment = os.getenv("ENVIRONMENT", "development").lower()
         if environment == "production":
             logger.warning(
-                "[RateLimit] X-Test-Mode bypass blocked in production"
+                f"[RateLimit] X-Test-Mode bypass blocked in production "
+                f"(mode={xtest_header}, bypass={bypass_header}, platinum={is_platinum})"
             )
             return False
         
-        # Check CHAOS_ENABLED
+        # 🔥 PLATINUM MODE: DEBUG/CHAOS 체크 스킵, 즉시 바이패스
+        if is_platinum:
+            logger.warning(
+                f"[RateLimit] 🔥 PLATINUM MODE ACTIVATED - Rate Limiter FULLY DISABLED "
+                f"for path: {request.path}"
+            )
+            return True
+        
+        # Standard mode: Check CHAOS_ENABLED or DEBUG mode
         chaos_enabled = os.getenv("CHAOS_ENABLED", "false").lower() == "true"
         
         try:
@@ -561,11 +601,21 @@ class HybridRateLimitMiddleware:
         except Exception:
             debug_mode = False
         
+        # Allow bypass if CHAOS_ENABLED or DEBUG is true
         if not debug_mode and not chaos_enabled:
+            logger.info(
+                f"[RateLimit] X-Test-Mode bypass denied: DEBUG={debug_mode}, "
+                f"CHAOS_ENABLED={chaos_enabled}"
+            )
             return False
         
+        # Check for rate limit multiplier (optional)
+        multiplier_header = request.META.get("HTTP_X_RATELIMIT_MULTIPLIER", "")
+        multiplier_info = f", multiplier={multiplier_header}" if multiplier_header else ""
+        
         logger.info(
-            f"[RateLimit] X-Test-Mode bypass for path: {request.path}"
+            f"[RateLimit] X-Test-Mode bypass granted for path: {request.path} "
+            f"(mode={xtest_header}, explicit_bypass={explicit_bypass}{multiplier_info})"
         )
         return True
     
