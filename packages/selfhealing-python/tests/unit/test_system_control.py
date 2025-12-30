@@ -191,112 +191,129 @@ class TestSystemControlManager:
     """Tests for SystemControlManager."""
     
     @pytest.fixture(autouse=True)
-    def reset_singleton(self):
-        """Reset singleton before each test."""
-        from selfhealing.api.django.views import system_control
+    def reset_singleton(self, monkeypatch):
+        """Reset singleton before each test with complete isolation."""
+        from selfhealing.api.django.views import system_control as view_module
+        from selfhealing.services import system_control as service_module
         from selfhealing.core import state_backend
+        from selfhealing.core.state_backend import MemoryStateBackend
         
-        # Reset singletons
-        system_control._system_control = None
-        system_control.SystemControlManager._instance = None
-        state_backend._backend_instance = None
+        # Create a fresh MemoryStateBackend for this test
+        fresh_backend = MemoryStateBackend()
+        
+        # Mock get_state_backend in ALL modules that import it
+        monkeypatch.setattr(
+            state_backend,
+            "get_state_backend",
+            lambda: fresh_backend
+        )
+        monkeypatch.setattr(
+            service_module,
+            "get_state_backend",
+            lambda: fresh_backend
+        )
+        
+        # Also set the backend instance directly
+        state_backend._backend_instance = fresh_backend
+        
+        # Reset ALL singletons
+        view_module._system_control = None
+        service_module._system_control = None
+        service_module.SystemControlManager._instance = None
         
         yield
         
         # Cleanup after test
-        system_control._system_control = None
-        system_control.SystemControlManager._instance = None
+        view_module._system_control = None
+        service_module._system_control = None
+        service_module.SystemControlManager._instance = None
         state_backend._backend_instance = None
     
     def test_default_enabled(self):
         """Should be enabled by default."""
-        with patch.dict("os.environ", {"SELFHEALING_STATE_BACKEND": "memory"}):
-            from selfhealing.api.django.views.system_control import get_system_control
-            from selfhealing.core.state_backend import reset_state_backend
-            reset_state_backend()
-            
-            manager = get_system_control()
-            
-            assert manager.is_enabled() is True
-            assert manager.is_dry_run() is False
+        from selfhealing.api.django.views.system_control import (
+            SystemControlManager,
+            get_system_control,
+        )
+        from selfhealing.api.django.views import system_control
+        
+        # Ensure fresh singleton
+        SystemControlManager._instance = None
+        system_control._system_control = None
+        
+        manager = get_system_control()
+        
+        assert manager.is_enabled() is True
+        assert manager.is_dry_run() is False
     
     def test_disable_enable(self):
         """Should toggle enabled state."""
-        with patch.dict("os.environ", {"SELFHEALING_STATE_BACKEND": "memory"}):
-            from selfhealing.api.django.views.system_control import (
-                SystemControlManager,
-                is_selfhealing_enabled,
-            )
-            from selfhealing.core.state_backend import reset_state_backend
-            reset_state_backend()
-            
-            # Reset singleton
-            SystemControlManager._instance = None
-            manager = SystemControlManager()
-            
-            # Disable
-            manager.disable(actor="test", reason="testing")
-            assert manager.is_enabled() is False
-            
-            # Enable
-            manager.enable(actor="test")
-            assert manager.is_enabled() is True
+        from selfhealing.api.django.views.system_control import (
+            SystemControlManager,
+            is_selfhealing_enabled,
+        )
+        
+        # Reset singleton
+        SystemControlManager._instance = None
+        manager = SystemControlManager()
+        
+        # Disable
+        manager.disable(actor="test", reason="testing")
+        assert manager.is_enabled() is False
+        
+        # Enable
+        manager.enable(actor="test")
+        assert manager.is_enabled() is True
     
     def test_dry_run_mode(self):
         """Should toggle dry run mode."""
-        with patch.dict("os.environ", {"SELFHEALING_STATE_BACKEND": "memory"}):
-            from selfhealing.api.django.views.system_control import (
-                SystemControlManager,
-                should_execute_action,
-            )
-            from selfhealing.core.state_backend import reset_state_backend
-            reset_state_backend()
-            
-            # Reset singleton
-            SystemControlManager._instance = None
-            manager = SystemControlManager()
-            
-            # Default: not dry run
-            assert manager.is_dry_run() is False
-            
-            # Enable dry run
-            state = manager.enable_dry_run(actor="test")
-            assert state.dry_run is True
-            assert manager.is_dry_run() is True
-            
-            # Disable dry run
-            state = manager.disable_dry_run(actor="test")
-            assert state.dry_run is False
-            assert manager.is_dry_run() is False
+        from selfhealing.api.django.views.system_control import (
+            SystemControlManager,
+            should_execute_action,
+        )
+        
+        # Reset singleton
+        SystemControlManager._instance = None
+        manager = SystemControlManager()
+        
+        # Default: not dry run
+        assert manager.is_dry_run() is False
+        
+        # Enable dry run
+        state = manager.enable_dry_run(actor="test")
+        assert state.dry_run is True
+        assert manager.is_dry_run() is True
+        
+        # Disable dry run
+        state = manager.disable_dry_run(actor="test")
+        assert state.dry_run is False
+        assert manager.is_dry_run() is False
     
     def test_should_execute_action(self):
         """should_execute_action should check both enabled and dry_run."""
-        with patch.dict("os.environ", {"SELFHEALING_STATE_BACKEND": "memory"}):
-            from selfhealing.api.django.views.system_control import (
-                SystemControlManager,
-                should_execute_action,
-                get_system_control,
-            )
-            from selfhealing.core.state_backend import reset_state_backend
-            from selfhealing.api.django.views import system_control
-            reset_state_backend()
-            
-            # Reset singletons
-            SystemControlManager._instance = None
-            system_control._system_control = None
-            
-            manager = get_system_control()
-            
-            # Enabled + not dry run = execute
-            assert should_execute_action() is True
-            
-            # Enabled + dry run = don't execute
-            manager.enable_dry_run()
-            assert should_execute_action() is False
-            
-            # Disabled = don't execute regardless of dry run
-            manager.disable(reason="test")
-            assert should_execute_action() is False
+        from selfhealing.api.django.views.system_control import (
+            SystemControlManager,
+            should_execute_action,
+            get_system_control,
+        )
+        from selfhealing.api.django.views import system_control
+        
+        # Reset singletons
+        SystemControlManager._instance = None
+        system_control._system_control = None
+        
+        manager = get_system_control()
+        
+        # Enabled + not dry run = execute
+        assert should_execute_action() is True
+        
+        # Enabled + dry run = don't execute
+        manager.enable_dry_run()
+        assert should_execute_action() is False
+        
+        # Disabled = don't execute regardless of dry run
+        manager.disable(reason="test")
+        assert should_execute_action() is False
     
     def test_state_persistence(self):
         """State should persist across manager instances."""

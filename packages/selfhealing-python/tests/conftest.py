@@ -2,8 +2,32 @@
 Pytest configuration and fixtures for selfhealing tests.
 """
 
+import os
 import pytest
 from datetime import datetime
+
+
+# =============================================================================
+# DB 연결 필요 테스트 자동 Skip 설정
+# =============================================================================
+
+def pytest_collection_modifyitems(config, items):
+    """
+    DB 연결이 필요한 테스트들을 자동으로 skip 처리합니다.
+    packages/selfhealing-python/tests 내에서 django_db 마커가 있는 테스트는
+    DB가 없는 환경에서는 skip됩니다.
+    """
+    # DB 연결 가능 여부 확인
+    db_available = os.environ.get("SELFHEALING_TEST_DB_AVAILABLE", "false").lower() == "true"
+    
+    if db_available:
+        return  # DB가 있으면 skip하지 않음
+    
+    skip_db = pytest.mark.skip(reason="Database not available (set SELFHEALING_TEST_DB_AVAILABLE=true to run)")
+    
+    for item in items:
+        if "django_db" in [marker.name for marker in item.iter_markers()]:
+            item.add_marker(skip_db)
 
 
 # =============================================================================
