@@ -76,20 +76,20 @@ class TestRuntimeConfigManagerDriftThreshold:
 
     def test_drift_threshold_in_storage_keys(self):
         """Test drift_threshold is registered in STORAGE_KEYS."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "drift_threshold" in RuntimeConfigManager.STORAGE_KEYS
-        assert RuntimeConfigManager.STORAGE_KEYS["drift_threshold"] == "runtime_config:drift_threshold"
+        assert "drift_threshold" in STORAGE_KEYS
+        assert STORAGE_KEYS["drift_threshold"] == "runtime_config:drift_threshold"
 
     def test_drift_threshold_in_config_classes(self):
         """Test drift_threshold is registered in CONFIG_CLASSES."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import DriftThresholdConfig
 
-        assert "drift_threshold" in RuntimeConfigManager.CONFIG_CLASSES
-        assert RuntimeConfigManager.CONFIG_CLASSES["drift_threshold"] == DriftThresholdConfig
+        assert "drift_threshold" in CONFIG_CLASSES
+        assert CONFIG_CLASSES["drift_threshold"] == DriftThresholdConfig
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_get_drift_threshold_config(self, mock_backend):
         """Test getting drift threshold config returns defaults."""
         mock_backend_instance = MagicMock()
@@ -105,7 +105,7 @@ class TestRuntimeConfigManagerDriftThreshold:
         assert config["critical_threshold"] == 0.20
         assert config["incident_threshold"] == 0.50
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_update_drift_threshold_config(self, mock_backend):
         """Test updating drift threshold config."""
         mock_backend_instance = MagicMock()
@@ -126,7 +126,7 @@ class TestRuntimeConfigManagerDriftThreshold:
         assert new_config["warning_threshold"] == 0.10
         assert new_config["critical_threshold"] == 0.25
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_update_drift_threshold_validation_fails(self, mock_backend):
         """Test validation fails for invalid threshold order."""
         mock_backend_instance = MagicMock()
@@ -146,7 +146,7 @@ class TestRuntimeConfigManagerDriftThreshold:
         
         assert "Thresholds must be" in str(exc_info.value)
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_reset_drift_threshold_config(self, mock_backend):
         """Test resetting drift threshold config to defaults."""
         mock_backend_instance = MagicMock()
@@ -324,7 +324,7 @@ class TestURLRegistration:
 class TestPhase2Integration:
     """Integration tests for Phase 2 features."""
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     @patch("selfhealing.core.state_backend.get_state_backend")
     def test_full_governance_workflow(self, mock_core_backend, mock_config_backend):
         """Test full governance workflow: config update -> status check."""
@@ -361,7 +361,7 @@ class TestPhase2Integration:
         assert status["is_active"] is True
         assert status["mode"] == "STRICT"
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_drift_threshold_and_governance_separate(self, mock_backend):
         """Test drift_threshold and governance configs are separate."""
         mock_backend_instance = MagicMock()

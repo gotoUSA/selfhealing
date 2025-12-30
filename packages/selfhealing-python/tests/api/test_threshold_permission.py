@@ -289,24 +289,32 @@ class TestThresholdEdgeCases:
 class TestThresholdEnvironmentOverride:
     """Tests for environment variable threshold override."""
 
-    def test_default_thresholds(self):
+    @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
+    def test_default_thresholds(self, mock_manager):
         """Default thresholds should be 0.15 and 0.30."""
+        # RuntimeConfigManager가 예외를 발생시켜 환경변수/기본값 fallback 사용
+        mock_manager.side_effect = Exception("Not configured")
         permission = ThresholdBasedPermission()
         assert permission.thresholds["operator_approve"] == 0.15
         assert permission.thresholds["admin_approve"] == 0.30
 
+    @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
     @patch.dict(os.environ, {"SELFHEALING_THRESHOLD_OPERATOR": "0.10"})
-    def test_operator_threshold_override(self):
+    def test_operator_threshold_override(self, mock_manager):
         """Operator threshold should be overridable via env var."""
+        mock_manager.side_effect = Exception("Not configured")
         permission = ThresholdBasedPermission()
         assert permission.thresholds["operator_approve"] == 0.10
 
+    @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
     @patch.dict(os.environ, {"SELFHEALING_THRESHOLD_ADMIN": "0.50"})
-    def test_admin_threshold_override(self):
+    def test_admin_threshold_override(self, mock_manager):
         """Admin threshold should be overridable via env var."""
+        mock_manager.side_effect = Exception("Not configured")
         permission = ThresholdBasedPermission()
         assert permission.thresholds["admin_approve"] == 0.50
 
+    @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
     @patch.dict(
         os.environ,
         {
@@ -314,8 +322,9 @@ class TestThresholdEnvironmentOverride:
             "SELFHEALING_THRESHOLD_ADMIN": "0.20",
         },
     )
-    def test_both_thresholds_override(self):
+    def test_both_thresholds_override(self, mock_manager):
         """Both thresholds should be overridable."""
+        mock_manager.side_effect = Exception("Not configured")
         permission = ThresholdBasedPermission()
         assert permission.thresholds["operator_approve"] == 0.05
         assert permission.thresholds["admin_approve"] == 0.20

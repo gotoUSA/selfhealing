@@ -84,20 +84,20 @@ class TestRuntimeConfigManagerGovernance:
 
     def test_governance_in_storage_keys(self):
         """Test governance is registered in STORAGE_KEYS."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "governance" in RuntimeConfigManager.STORAGE_KEYS
-        assert RuntimeConfigManager.STORAGE_KEYS["governance"] == "runtime_config:governance"
+        assert "governance" in STORAGE_KEYS
+        assert STORAGE_KEYS["governance"] == "runtime_config:governance"
 
     def test_governance_in_config_classes(self):
         """Test governance is registered in CONFIG_CLASSES."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import GovernanceConfig
 
-        assert "governance" in RuntimeConfigManager.CONFIG_CLASSES
-        assert RuntimeConfigManager.CONFIG_CLASSES["governance"] == GovernanceConfig
+        assert "governance" in CONFIG_CLASSES
+        assert CONFIG_CLASSES["governance"] == GovernanceConfig
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_get_governance_config(self, mock_backend):
         """Test getting governance config."""
         mock_backend_instance = MagicMock()
@@ -115,7 +115,7 @@ class TestRuntimeConfigManagerGovernance:
         assert config["threshold_operator"] == 0.15
         assert config["threshold_admin"] == 0.30
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_update_governance_config(self, mock_backend):
         """Test updating governance config."""
         mock_backend_instance = MagicMock()
@@ -133,7 +133,7 @@ class TestRuntimeConfigManagerGovernance:
         assert result["threshold_operator"] == 0.20
         assert result["threshold_admin"] == 0.40
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_update_governance_config_validation(self, mock_backend):
         """Test governance config validation."""
         mock_backend_instance = MagicMock()
@@ -162,6 +162,10 @@ class TestRuntimeConfigManagerGovernance:
 # =============================================================================
 
 
+@pytest.mark.skipif(
+    not os.environ.get("DJANGO_SETTINGS_MODULE"),
+    reason="Requires Django settings to be configured"
+)
 class TestThresholdBasedPermissionRuntimeConfig:
     """Tests for ThresholdBasedPermission runtime config integration."""
 
@@ -537,7 +541,7 @@ class TestGovernanceTask:
 class TestGovernanceIntegration:
     """Integration tests for governance Phase 1."""
 
-    @patch("selfhealing.services.runtime_config.get_state_backend")
+    @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_full_governance_workflow(self, mock_backend):
         """Test complete governance workflow."""
         mock_backend_instance = MagicMock()

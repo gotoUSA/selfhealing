@@ -438,7 +438,8 @@ class TestErrorBudgetGateEventEmission:
 class TestRetryHandlerErrorBudgetGate:
     """RetryHandler ErrorBudgetGate 체크 테스트."""
     
-    def test_retry_blocked_when_error_budget_low(self):
+    @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
+    def test_retry_blocked_when_error_budget_low(self, mock_system_enabled):
         """에러 예산 부족 시 재시도 차단."""
         from selfhealing.services.retry_handler import RetryHandler, RetryConfig
         
@@ -463,7 +464,8 @@ class TestRetryHandlerErrorBudgetGate:
             assert result.attempt == 0  # 시도조차 안 함
             assert "Error budget critically low" in str(result.error)
     
-    def test_retry_allowed_when_error_budget_healthy(self):
+    @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
+    def test_retry_allowed_when_error_budget_healthy(self, mock_system_enabled):
         """에러 예산 충분 시 재시도 허용."""
         from selfhealing.services.retry_handler import RetryHandler, RetryConfig, RetryAction
         
@@ -488,7 +490,8 @@ class TestRetryHandlerErrorBudgetGate:
             assert result.success is True
             assert result.action == RetryAction.SUCCESS
     
-    def test_retry_continues_when_gate_unavailable(self):
+    @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
+    def test_retry_continues_when_gate_unavailable(self, mock_system_enabled):
         """Gate 사용 불가 시에도 재시도 진행."""
         from selfhealing.services.retry_handler import RetryHandler, RetryConfig, RetryAction
         

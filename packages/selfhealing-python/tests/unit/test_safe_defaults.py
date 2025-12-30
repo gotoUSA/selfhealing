@@ -869,8 +869,8 @@ class TestPhaseCSafeDefaults:
         # 필수 키 확인
         assert gov_defaults["four_eyes_enabled"] is True
         assert gov_defaults["approval_timeout_hours"] == 24
-        assert gov_defaults["threshold_operator"] == 2
-        assert gov_defaults["threshold_admin"] == 3
+        assert gov_defaults["threshold_operator"] == 0.15  # 15% (백분율)
+        assert gov_defaults["threshold_admin"] == 0.30  # 30% (백분율)
         assert gov_defaults["emergency_expiry_hours"] == 4
         assert gov_defaults["require_reason_for_changes"] is True
 

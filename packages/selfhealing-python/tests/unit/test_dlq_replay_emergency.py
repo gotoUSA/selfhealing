@@ -183,17 +183,26 @@ class TestKillSwitchPhilosophy:
 class TestServiceFunctionsExist:
     """서비스 레이어 함수 존재 테스트."""
 
-    def test_helper_functions_importable(self):
-        """헬퍼 함수들이 import 가능한지 테스트."""
+    def test_governance_check_importable(self):
+        """거버넌스 체크 함수들이 import 가능한지 테스트."""
         try:
-            from selfhealing.services.replay_service import (
-                _is_system_enabled,
-                _is_emergency_blocking,
-                _is_error_budget_blocking,
+            from selfhealing.services.governance_checks import (
+                check_all_governance,
+                GovernanceCheckResult,
             )
             imported = True
         except ImportError:
             imported = False
         
-        assert imported is True, "ReplayService 헬퍼 함수들을 import할 수 있어야 함"
+        assert imported is True, "거버넌스 체크 함수들을 import할 수 있어야 함"
+    
+    def test_replay_service_uses_governance_checks(self):
+        """ReplayService가 governance_checks를 사용하는지 테스트."""
+        from selfhealing.services.replay_service import ReplayService
+        
+        # ReplayService가 check_all_governance를 import하는지 확인
+        import selfhealing.services.replay_service as rs_module
+        
+        assert hasattr(rs_module, 'check_all_governance'), \
+            "ReplayService 모듈이 check_all_governance를 사용해야 함"
 
