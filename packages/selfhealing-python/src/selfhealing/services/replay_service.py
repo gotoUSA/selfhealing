@@ -30,6 +30,7 @@ from selfhealing.services.governance_checks import (
     check_all_governance,
     GovernanceCheckResult,
 )
+from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
@@ -393,6 +394,14 @@ class ReplayService:
             logger.info(f"[ReplayService] DLQ entry {dlq_id} replayed successfully")
         else:
             logger.warning(f"[ReplayService] DLQ entry {dlq_id} replay failed: {result.error}")
+
+        # Audit 로깅: DLQ 리플레이 결과 기록
+        log_dlq_replay_audit(
+            dlq_id=dlq_id,
+            domain=failed_op_data.domain if failed_op_data else "unknown",
+            success=result.success,
+            error_message=result.error,
+        )
 
         return result
 

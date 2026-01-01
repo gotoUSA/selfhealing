@@ -23,6 +23,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from selfhealing.core.timezone import now
 
+# Audit logging support
+from typing import Callable
+
 # Import models from separate module
 from selfhealing.services.dlq_models import (
     DLQConfig,
@@ -126,6 +129,53 @@ class DLQService:
         """Check if DLQ is enabled."""
         return self.config.enabled
 
+    def _log_dlq_audit(
+        self,
+        action: str,
+        dlq_id: int,
+        domain: str,
+        failure_type: str = "",
+        error_message: str = "",
+        success: bool = True,
+        actor_id: Optional[str] = None,
+    ) -> None:
+        """
+        DLQ 작업을 Audit 로그에 기록.
+        
+        Args:
+            action: 작업 유형 (store, replay, resolve 등)
+            dlq_id: DLQ 엔트리 ID
+            domain: 비즈니스 도메인
+            failure_type: 실패 유형 (store 시)
+            error_message: 에러 메시지
+            success: 작업 성공 여부
+            actor_id: 작업 실행자
+        """
+        try:
+            from selfhealing.services.audit_helpers import (
+                log_dlq_store_audit,
+                log_dlq_replay_audit,
+            )
+            
+            if action == "store":
+                log_dlq_store_audit(
+                    dlq_id=dlq_id,
+                    domain=domain,
+                    failure_type=failure_type,
+                    error_message=error_message,
+                )
+            elif action == "replay":
+                log_dlq_replay_audit(
+                    dlq_id=dlq_id,
+                    domain=domain,
+                    success=success,
+                    actor_id=actor_id,
+                    error_message=error_message if not success else None,
+                )
+        except Exception as e:
+            # Audit logging should never break the main flow
+            logger.debug(f"[DLQService] Audit logging skipped: {e}")
+
     # =========================================================================
     # Store Operations
     # =========================================================================
@@ -196,6 +246,16 @@ class DLQService:
                 DLQMetricEventHandler.on_item_created(domain, failure_type)
             except ImportError:
                 pass  # Metrics not available
+
+            # Audit 로깅: DLQ 저장 기록
+            self._log_dlq_audit(
+                action="store",
+                dlq_id=failed_op.id,
+                domain=domain,
+                failure_type=failure_type,
+                error_message=error_message,
+                success=True,
+            )
 
             return DLQEntryResult.created(failed_op.id)
 

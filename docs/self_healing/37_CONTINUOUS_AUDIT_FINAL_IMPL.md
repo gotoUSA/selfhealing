@@ -51,6 +51,7 @@
 | **ContinuousAuditRecorder ↔ CircuitBreaker** | ✅ 연결됨 | IntegratedAuditRecorder에서 CB 상태 변경 감지 및 전파 | ✅ 완료 |
 | **ContinuousAuditRecorder ↔ SyslogFallback** | ✅ 연결됨 | ResilientContinuousAuditRecorder에서 자동 연결 | ✅ 완료 |
 | **AsyncLogger ↔ ContinuousAudit** | ✅ 연결됨 | AsyncLoggerAdapter + Observer 패턴으로 통합 | ✅ 완료 |
+| **DLQ ↔ AuditLogAdapter** | ✅ 연결됨 | audit_helpers.py 모듈로 DLQ 저장/리플레이 Audit 로깅 (v6.2.2) | ✅ 완료 |
 
 ---
 

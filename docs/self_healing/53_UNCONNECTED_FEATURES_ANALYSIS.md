@@ -1,9 +1,13 @@
 # 53. 미연결 기능 분석 및 통합 가이드
 
-> **문서 버전**: 1.1.0
+> **문서 버전**: 1.2.0
 > **생성일**: 2025-12-31
-> **최종 수정**: 2025-12-31
+> **최종 수정**: 2025-01-01
 > **목적**: 정의되었지만 연결되지 않은 기능들의 분석 및 통합 가이드
+
+**v1.2.0 변경 내역**:
+- DLQ Audit 로깅 연결 완료 (audit_helpers.py 모듈 추가)
+- 6.2.0 섹션 추가: DLQ 저장/리플레이 Audit 로깅 통합
 
 ---
 
@@ -709,6 +713,7 @@ Audit 시스템은 **컴플라이언스 및 법적 증거 보존**을 위한 고
 │  ─────────────────────────                                                 │
 │  ✅ ContinuousAuditRecorder        → AuditEntry API 연결                  │
 │  ✅ AuditLogAdapter                → 다양한 백엔드 지원                   │
+│  ✅ DLQ Audit 로깅                 → v6.2.2 연결 완료 (audit_helpers.py)  │
 │                                                                            │
 │  🔧 고급 Audit (CLI/인프라용)                                             │
 │  ─────────────────────────────                                             │
@@ -730,6 +735,47 @@ Audit 시스템은 **컴플라이언스 및 법적 증거 보존**을 위한 고
 ```
 
 ### 6.2 개별 Audit 컴포넌트 분석
+
+---
+
+#### 6.2.0 DLQ Audit 로깅 (v6.2.2 연결 완료) ✅
+
+| 항목 | 내용 |
+|------|------|
+| **파일** | `selfhealing/services/audit_helpers.py` |
+| **분류** | ✅ **연결 완료** (v6.2.2) |
+| **목적** | DLQ 저장/리플레이 시 Audit 로그 기록 |
+| **도메인 종속성** | ❌ 없음 |
+
+**구현 내역**:
+```python
+# audit_helpers.py - DLQ Audit 로깅 헬퍼 함수
+from selfhealing.services.audit_helpers import log_dlq_store_audit, log_dlq_replay_audit
+
+# DLQ 저장 시 (dlq_service.py에서 자동 호출)
+log_dlq_store_audit(
+    dlq_id=123,
+    domain="payment",
+    failure_type="PG_TIMEOUT",
+    error_message="Connection refused"
+)
+
+# DLQ 리플레이 시 (replay_service.py에서 자동 호출)
+log_dlq_replay_audit(
+    dlq_id=123,
+    domain="payment",
+    success=True,
+    actor_id="admin"
+)
+```
+
+**통합 위치**:
+- `dlq_service.py` → `store_failure()` 후 자동 호출
+- `replay_service.py` → `replay_single()` 완료 후 자동 호출
+
+**Fallback 전략**:
+- AuditLogAdapter가 설정되지 않은 경우 표준 로거로 fallback
+- Audit 로깅 실패 시 메인 흐름에 영향 없음 (try-except 보호)
 
 ---
 
