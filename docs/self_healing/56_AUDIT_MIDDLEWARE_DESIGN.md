@@ -1,11 +1,11 @@
 # 56. AuditMiddleware 설계 문서
 
-> **문서 버전**: 1.1.0
+> **문서 버전**: 1.2.0
 > **생성일**: 2026-01-01
 > **최종 수정일**: 2026-01-01
 > **전제조건**: 55_AUDIT_SYSTEM_FIXES.md의 수정 완료
 > **목적**: 중앙화된 AuditMiddleware 설계 및 구현 가이드
-> **상태**: ✅ Phase 1 구현 완료
+> **상태**: ✅ Phase 1 구현 완료, ✅ Phase 2 구현 완료
 
 ---
 
@@ -17,6 +17,8 @@
 | AuditMiddleware | `selfhealing/api/django/audit_middleware.py` | ✅ 완료 |
 | audit_helpers 하이브리드 | `selfhealing/services/audit_helpers.py` | ✅ 완료 |
 | __init__.py export | `selfhealing/audit/__init__.py` | ✅ 완료 |
+| DLQService request 지원 | `selfhealing/services/dlq_service.py` | ✅ Phase 2 완료 |
+| Phase 2 테스트 | `tests/audit/test_phase2_migration.py` | ✅ 10/10 통과 |
 
 ---
 
@@ -445,19 +447,47 @@ def log_dlq_store_audit(
 
 ## 🔧 마이그레이션 가이드
 
-### Phase 1: 버퍼 시스템 도입
+### Phase 1: 버퍼 시스템 도입 ✅ 완료
 
-1. `event_buffer.py` 생성
-2. `AuditMiddleware` 생성
-3. `settings.py`에 미들웨어 추가 (마지막 위치)
+1. `event_buffer.py` 생성 ✅
+2. `AuditMiddleware` 생성 ✅
+3. `settings.py`에 미들웨어 추가 (마지막 위치) ✅
 
-### Phase 2: 점진적 전환
+### Phase 2: 점진적 전환 ✅ 완료 (2026-01-01)
 
-1. `audit_helpers.py`에 request 파라미터 추가 (선택적)
-2. 기존 직접 호출 유지 (하위 호환)
-3. 새 코드에서 버퍼 패턴 사용
+1. `audit_helpers.py`에 request 파라미터 추가 (선택적) ✅
+2. 기존 직접 호출 유지 (하위 호환) ✅
+3. 새 코드에서 버퍼 패턴 사용 ✅
+4. `DLQService` 메서드에 request 파라미터 추가 ✅
+   - `store_failure(request=request)` 
+   - `store_with_forensic_context(request=request)`
+   - `replay(request=request)`
 
-### Phase 3: 전면 전환
+**업데이트된 파일 목록**:
+- `selfhealing/services/dlq_service.py` - `_log_dlq_audit`, `store_failure`, `store_with_forensic_context`, `replay` 메서드에 request 파라미터 추가
+- `tests/audit/test_phase2_migration.py` - Phase 2 마이그레이션 테스트 (10개 테스트 통과)
+
+**사용 예시**:
+```python
+# HTTP 요청 컨텍스트에서 DLQService 사용 (Phase 2 패턴)
+def my_view(request):
+    service = DLQService()
+    result = service.store_failure(
+        domain="payment",
+        failure_type="PG_TIMEOUT",
+        error_message="Connection failed",
+        request=request,  # 버퍼에 적재 → AuditMiddleware에서 일괄 기록
+    )
+    return JsonResponse({"dlq_id": result.dlq_id})
+
+# Celery 등 비동기 컨텍스트 (기존 방식 유지)
+@shared_task
+def process_dlq_task(dlq_id: int):
+    service = DLQService()
+    service.replay(domain="payment")  # request 없음 → 직접 로깅
+```
+
+### Phase 3: 전면 전환 (예정)
 
 1. 모든 Audit 호출을 버퍼 패턴으로 전환
 2. 직접 호출 코드 제거

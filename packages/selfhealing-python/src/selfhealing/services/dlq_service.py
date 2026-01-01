@@ -138,9 +138,14 @@ class DLQService:
         error_message: str = "",
         success: bool = True,
         actor_id: Optional[str] = None,
+        request: Any = None,
     ) -> None:
         """
         DLQ 작업을 Audit 로그에 기록.
+        
+        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
+        - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
         
         Args:
             action: 작업 유형 (store, replay, resolve 등)
@@ -150,6 +155,7 @@ class DLQService:
             error_message: 에러 메시지
             success: 작업 성공 여부
             actor_id: 작업 실행자
+            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
         """
         try:
             from selfhealing.services.audit_helpers import (
@@ -163,6 +169,7 @@ class DLQService:
                     domain=domain,
                     failure_type=failure_type,
                     error_message=error_message,
+                    request=request,  # Phase 2: 버퍼 패턴 지원
                 )
             elif action == "replay":
                 log_dlq_replay_audit(
@@ -171,6 +178,7 @@ class DLQService:
                     success=success,
                     actor_id=actor_id,
                     error_message=error_message if not success else None,
+                    request=request,  # Phase 2: 버퍼 패턴 지원
                 )
         except Exception as e:
             # Audit logging should never break the main flow
@@ -195,9 +203,14 @@ class DLQService:
         metadata: dict[str, Any] | None = None,
         next_action_hint: str = "",
         recommended_action: str = "",
+        request: Any = None,
     ) -> DLQEntryResult:
         """
         Store a failed operation in the DLQ.
+
+        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
+        - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
 
         Args:
             domain: Business domain (payment, point, inventory, webhook, notification)
@@ -213,6 +226,7 @@ class DLQService:
             metadata: Additional debug context
             next_action_hint: Guidance for operators
             recommended_action: Suggested action (replay, manual_check, etc.)
+            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
 
         Returns:
             DLQEntryResult with creation status
@@ -247,7 +261,7 @@ class DLQService:
             except ImportError:
                 pass  # Metrics not available
 
-            # Audit 로깅: DLQ 저장 기록
+            # Audit 로깅: DLQ 저장 기록 (Phase 2: 버퍼 패턴 지원)
             self._log_dlq_audit(
                 action="store",
                 dlq_id=failed_op.id,
@@ -255,6 +269,7 @@ class DLQService:
                 failure_type=failure_type,
                 error_message=error_message,
                 success=True,
+                request=request,
             )
 
             return DLQEntryResult.created(failed_op.id)
@@ -275,6 +290,7 @@ class DLQService:
         error_message: str = "",
         next_action_hint: str = "",
         recommended_action: str = "",
+        request: Any = None,
     ) -> DLQEntryResult:
         """
         Store a failed operation with full forensic context.
@@ -292,6 +308,7 @@ class DLQService:
             error_message: Human-readable error message
             next_action_hint: Guidance for operators
             recommended_action: Suggested action
+            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
 
         Returns:
             DLQEntryResult with creation status
@@ -325,6 +342,7 @@ class DLQService:
             metadata=forensic_context.to_metadata(),
             next_action_hint=next_action_hint,
             recommended_action=recommended_action,
+            request=request,
         )
 
     # =========================================================================
@@ -478,13 +496,19 @@ class DLQService:
         self,
         domain: Optional[str] = None,
         batch_size: int = 50,
+        request: Any = None,
     ) -> ReplayResult:
         """
         Execute batch replay of pending DLQ entries.
 
+        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
+        - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
+
         Args:
             domain: Filter by domain (optional)
             batch_size: Maximum number of entries to process (default 50)
+            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
 
         Returns:
             ReplayResult with operation statistics
@@ -507,14 +531,40 @@ class DLQService:
                             f"[DLQService] Successfully replayed entry {entry.id}: "
                             f"{entry.domain}/{entry.failure_type}"
                         )
+                        # Audit 로깅: Replay 성공 (Phase 2: 버퍼 패턴 지원)
+                        self._log_dlq_audit(
+                            action="replay",
+                            dlq_id=entry.id,
+                            domain=entry.domain,
+                            success=True,
+                            request=request,
+                        )
                     else:
                         result.failed += 1
                         result.errors.append(f"Entry {entry.id}: Replay handler returned failure")
+                        # Audit 로깅: Replay 실패 (Phase 2: 버퍼 패턴 지원)
+                        self._log_dlq_audit(
+                            action="replay",
+                            dlq_id=entry.id,
+                            domain=entry.domain,
+                            success=False,
+                            error_message="Replay handler returned failure",
+                            request=request,
+                        )
                 except Exception as e:
                     result.failed += 1
                     result.errors.append(f"Entry {entry.id}: {str(e)}")
                     logger.warning(
                         f"[DLQService] Replay failed for entry {entry.id}: {e}"
+                    )
+                    # Audit 로깅: Replay 예외 (Phase 2: 버퍼 패턴 지원)
+                    self._log_dlq_audit(
+                        action="replay",
+                        dlq_id=entry.id,
+                        domain=entry.domain,
+                        success=False,
+                        error_message=str(e),
+                        request=request,
                     )
 
             logger.info(
