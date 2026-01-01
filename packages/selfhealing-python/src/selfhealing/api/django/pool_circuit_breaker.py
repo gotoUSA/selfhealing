@@ -5,14 +5,27 @@ Pool이 고갈되면 즉시 503을 반환하여 시스템 멈춤을 방지합니
 Pool 대기(block) 대신 Fail Fast 전략 사용.
 
 핵심 원리:
-1. 요청 도착 시 Pool 상태 체크 (non-blocking)
+1. 요청 도착 시 Pool 상태 체크 (non-blocking, 캐시 기반)
 2. Pool 고갈 시 즉시 503 반환 (Pool 대기하지 않음!)
 3. Circuit Breaker 상태로 관리하여 자동 복구
+
+v6.2.0 (2026-01-01): 블로킹 이슈 해결
+- 매 요청마다 check_pool_status() 호출 → 캐시 기반 조회로 변경
+- 백그라운드 스레드에서 주기적으로 Pool 상태 갱신 (기본: 100ms)
+- Lock 경합 최소화를 위한 atomic read 패턴 적용
+
+v6.2.1 (2026-01-02): 엔터프라이즈급 안정성 강화
+- TTL(캐시 갱신 주기) 범위 검증: 50ms ~ 1000ms 자동 클램핑
+- Stale 데이터 처리: 10배 Threshold 경고, 5초 이상 Safe Fallback
+- 백그라운드 스레드 자동 재시작 감지 (is_alive 체크)
+- Audit 통합: 거부 결정에 decision_source: "cached_pool_status" 기록
+- 새로운 통계 카운터: stale_cache_fallbacks, stale_cache_warnings, background_thread_restarts
 """
 
 import time
 import threading
 import logging
+import os
 from typing import Optional
 from django.http import JsonResponse
 from django.db import connections
@@ -57,12 +70,38 @@ class PoolCircuitBreaker:
         self._state_lock = threading.Lock()
 
         # 설정값 (환경 변수로 오버라이드 가능)
-        import os
-
         self._failure_threshold = int(os.getenv("POOL_CB_FAILURE_THRESHOLD", "3"))  # 3회 실패 시 OPEN
         self._success_threshold = int(os.getenv("POOL_CB_SUCCESS_THRESHOLD", "2"))  # 2회 성공 시 CLOSED
         self._recovery_timeout = int(os.getenv("POOL_CB_RECOVERY_TIMEOUT", "10"))  # 10초 후 HALF_OPEN
         self._half_open_max_requests = int(os.getenv("POOL_CB_HALF_OPEN_MAX", "3"))
+
+        # v6.2.0: 캐시 기반 Pool 상태 조회 설정
+        # v6.2.1: TTL 범위 검증 및 Stale 처리 개선
+        raw_cache_interval = int(os.getenv("POOL_CB_CACHE_INTERVAL_MS", "100"))
+        # TTL 범위 검증: 50ms ~ 1000ms (너무 짧으면 경합, 너무 길면 감지 지연)
+        self._cache_interval_ms = max(50, min(1000, raw_cache_interval))
+        if raw_cache_interval != self._cache_interval_ms:
+            logger.warning(
+                f"[PoolCircuitBreaker] Cache interval clamped: {raw_cache_interval}ms → {self._cache_interval_ms}ms "
+                f"(valid range: 50-1000ms)"
+            )
+
+        # v6.2.1: Stale 캐시 임계값 설정
+        self._stale_threshold_multiplier = int(os.getenv("POOL_CB_STALE_MULTIPLIER", "10"))  # 10배 = 1초 (100ms 기준)
+        self._critical_stale_ms = int(os.getenv("POOL_CB_CRITICAL_STALE_MS", "5000"))  # 5초 이상이면 완전 stale
+
+        self._cached_pool_status = {
+            "available": False,
+            "reason": "Not initialized yet",
+            "is_exhausted": False,
+            "is_near_exhaustion": False,
+            "_cache_time": 0,
+            "_is_stale": True,  # v6.2.1: 초기에는 stale
+        }
+        self._cache_lock = threading.Lock()  # 캐시 갱신용 락 (요청 처리와 분리)
+        self._background_thread = None
+        self._stop_background = threading.Event()
+        self._last_successful_refresh = 0  # v6.2.1: 마지막 성공적 갱신 시간
 
         # 상태 추적
         self._failure_count = 0
@@ -78,9 +117,17 @@ class PoolCircuitBreaker:
             "pool_exhaustion_count": 0,
             "recovery_count": 0,
             "state_changes": [],
+            "cache_hits": 0,
+            "cache_refreshes": 0,
+            "stale_cache_fallbacks": 0,  # v6.2.1: Stale로 인한 안전 폴백 횟수
+            "stale_cache_warnings": 0,   # v6.2.1: Stale 경고 횟수
+            "background_thread_restarts": 0,  # v6.2.1: 스레드 재시작 횟수
         }
 
-        logger.info("[PoolCircuitBreaker] Initialized - Fail Fast enabled!")
+        # v6.2.0: 백그라운드 Pool 상태 갱신 스레드 시작
+        self._start_background_refresh()
+
+        logger.info(f"[PoolCircuitBreaker] Initialized - Fail Fast enabled! " f"(cache_interval={self._cache_interval_ms}ms)")
 
     @property
     def state(self) -> str:
@@ -112,15 +159,149 @@ class PoolCircuitBreaker:
                 elif new_state == self.CLOSED and old_state != self.CLOSED:
                     self._stats["recovery_count"] += 1
 
+    # =========================================================================
+    # v6.2.0: 캐시 기반 Pool 상태 조회 (Non-Blocking)
+    # =========================================================================
+
+    def _start_background_refresh(self):
+        """백그라운드 Pool 상태 갱신 스레드 시작"""
+        if self._background_thread and self._background_thread.is_alive():
+            return  # 이미 실행 중
+
+        self._stop_background.clear()
+        self._background_thread = threading.Thread(
+            target=self._background_refresh_loop,
+            name="PoolCB-Refresh",
+            daemon=True,  # 메인 스레드 종료 시 자동 종료
+        )
+        self._background_thread.start()
+        logger.debug("[PoolCircuitBreaker] Background refresh thread started")
+
+    def _stop_background_refresh(self):
+        """백그라운드 갱신 스레드 중지"""
+        self._stop_background.set()
+        if self._background_thread:
+            self._background_thread.join(timeout=1.0)
+            logger.debug("[PoolCircuitBreaker] Background refresh thread stopped")
+
+    def _background_refresh_loop(self):
+        """백그라운드에서 주기적으로 Pool 상태 갱신"""
+        interval_sec = self._cache_interval_ms / 1000.0
+        consecutive_failures = 0
+
+        while not self._stop_background.is_set():
+            try:
+                # Pool 상태 조회 (이 부분만 잠재적 블로킹)
+                new_status = self._fetch_pool_status_internal()
+                current_time = time.time()
+                new_status["_cache_time"] = current_time
+                new_status["_is_stale"] = False  # v6.2.1: 신선한 데이터
+
+                # 캐시 업데이트 (atomic swap에 가깝게)
+                with self._cache_lock:
+                    self._cached_pool_status = new_status
+                    self._stats["cache_refreshes"] += 1
+                    self._last_successful_refresh = current_time
+
+                # 성공 시 연속 실패 카운터 리셋
+                consecutive_failures = 0
+
+            except Exception as e:
+                # v6.2.1: 연속 실패 추적
+                consecutive_failures += 1
+                logger.debug(
+                    f"[PoolCircuitBreaker] Background refresh failed ({consecutive_failures}x): {e}"
+                )
+
+                # 5회 연속 실패 시 경고 (5 * 100ms = 500ms 이상 갱신 안됨)
+                if consecutive_failures >= 5:
+                    logger.warning(
+                        f"[PoolCircuitBreaker] Background refresh failing consecutively: {consecutive_failures}x. "
+                        f"Cache may become stale!"
+                    )
+
+            # 다음 갱신까지 대기
+            self._stop_background.wait(timeout=interval_sec)
+
+    def get_cached_pool_status(self) -> dict:
+        """
+        캐시된 Pool 상태 반환 (Non-Blocking).
+
+        v6.2.0: 매 요청에서 이 메서드를 호출하여 블로킹 방지.
+        v6.2.1: Stale 캐시 감지 및 안전 폴백 처리 추가.
+
+        Stale 처리 정책:
+        - 경고 (stale_threshold_multiplier 초과): 로그 경고, 캐시 데이터 사용
+        - 폴백 (critical_stale_ms 초과): 안전하게 CLOSED로 폴백 (요청 허용)
+        """
+        # 캐시에서 읽기 (매우 빠름)
+        with self._cache_lock:
+            status = self._cached_pool_status.copy()
+            self._stats["cache_hits"] += 1
+
+        # v6.2.1: 백그라운드 스레드 상태 확인 및 자동 재시작
+        if not self._background_thread or not self._background_thread.is_alive():
+            logger.error("[PoolCircuitBreaker] Background thread died! Restarting...")
+            self._stats["background_thread_restarts"] += 1
+            self._start_background_refresh()
+
+        # v6.2.1: 캐시 유효성 검사 (단계별 처리)
+        cache_age_ms = (time.time() - status.get("_cache_time", 0)) * 1000
+        stale_warning_threshold = self._cache_interval_ms * self._stale_threshold_multiplier
+
+        if cache_age_ms > self._critical_stale_ms:
+            # 🔴 Critical Stale: 완전히 오래된 캐시 → 안전하게 CLOSED로 폴백
+            logger.error(
+                f"[PoolCircuitBreaker] CRITICAL stale cache: {cache_age_ms:.0f}ms old "
+                f"(threshold: {self._critical_stale_ms}ms). Falling back to SAFE mode (allow requests)."
+            )
+            self._stats["stale_cache_fallbacks"] += 1
+            # 안전 폴백: Pool 정상으로 가정 (요청 허용)
+            return {
+                "available": True,
+                "is_exhausted": False,
+                "is_near_exhaustion": False,
+                "_cache_time": status.get("_cache_time", 0),
+                "_is_stale": True,
+                "_stale_fallback": True,  # Audit용: 폴백으로 인한 결정임을 표시
+                "_cache_age_ms": cache_age_ms,
+            }
+
+        elif cache_age_ms > stale_warning_threshold:
+            # 🟡 Warning Stale: 경고만 남기고 캐시 데이터 사용
+            logger.warning(
+                f"[PoolCircuitBreaker] Stale cache: {cache_age_ms:.0f}ms old "
+                f"(warning threshold: {stale_warning_threshold:.0f}ms)"
+            )
+            self._stats["stale_cache_warnings"] += 1
+            status["_is_stale"] = True
+            status["_cache_age_ms"] = cache_age_ms
+
+        return status
+
     def check_pool_status(self) -> dict:
-        """Pool 상태 조회 (non-blocking)"""
+        """
+        Pool 상태 조회 (캐시 우선).
+
+        v6.2.0: 기본적으로 캐시된 값 반환 (Non-Blocking).
+        실시간 조회가 필요하면 _fetch_pool_status_internal() 사용.
+        """
+        return self.get_cached_pool_status()
+
+    def _fetch_pool_status_internal(self) -> dict:
+        """
+        실제 Pool 상태 조회 (내부용, 잠재적 블로킹).
+
+        백그라운드 스레드에서만 호출됨.
+        """
         try:
             # django-db-connection-pool의 pool_container를 통해 접근
             try:
                 from dj_db_conn_pool.core.mixins.core import pool_container
 
                 has_pool = pool_container.has("default")
-                logger.info(f"[PoolCircuitBreaker] pool_container.has('default') = {has_pool}")
+                # v6.2.0: 디버그 레벨로 변경 (매번 로깅하지 않음)
+                logger.debug(f"[PoolCircuitBreaker] pool_container.has('default') = {has_pool}")
 
                 if has_pool:
                     pool = pool_container.get("default")
@@ -131,7 +312,10 @@ class PoolCircuitBreaker:
                     max_overflow = getattr(pool, "_max_overflow", 2)
                     total_capacity = pool_size + max_overflow
 
-                    logger.info(f"[PoolCircuitBreaker] Pool: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}")
+                    # v6.2.0: 디버그 레벨로 변경
+                    logger.debug(
+                        f"[PoolCircuitBreaker] Pool: checkedout={checkedout}/{total_capacity}, " f"checkedin={checkedin}"
+                    )
 
                     # Pool 고갈 판단:
                     # Pool 크기 3, max_overflow 0일 때:
@@ -189,8 +373,10 @@ class PoolCircuitBreaker:
                             is_exhausted = checkedin == 0 and checkedout >= pool_size
                             is_near_exhaustion = checkedout >= total_capacity * 0.66
 
-                            logger.info(
-                                f"[PoolCircuitBreaker] Direct access: checkedout={checkedout}/{total_capacity}, checkedin={checkedin}"
+                            # v6.2.0: 디버그 레벨로 변경
+                            logger.debug(
+                                f"[PoolCircuitBreaker] Direct access: "
+                                f"checkedout={checkedout}/{total_capacity}, checkedin={checkedin}"
                             )
 
                             if is_exhausted:
@@ -248,7 +434,9 @@ class PoolCircuitBreaker:
 
     def should_allow_request(self) -> tuple[bool, Optional[str]]:
         """
-        요청 허용 여부 판단.
+        요청 허용 여부 판단 (Non-Blocking).
+
+        v6.2.0: 캐시된 Pool 상태를 사용하여 블로킹 방지.
 
         Returns:
             (allow: bool, reason: Optional[str])
@@ -259,8 +447,8 @@ class PoolCircuitBreaker:
             current_state = self._state
 
             if current_state == self.CLOSED:
-                # 정상 상태 - Pool 상태 체크
-                pool_status = self.check_pool_status()
+                # 정상 상태 - 캐시된 Pool 상태 체크 (Non-Blocking!)
+                pool_status = self.get_cached_pool_status()
 
                 if pool_status.get("is_exhausted"):
                     # Pool 고갈 감지! 즉시 OPEN으로 전환
@@ -367,13 +555,14 @@ class PoolCircuitBreaker:
                     self._set_state(self.OPEN)
 
     def get_stats(self) -> dict:
-        """통계 반환"""
+        """통계 반환 (캐시 통계 포함)"""
         return {
             "state": self._state,
             "failure_count": self._failure_count,
             "success_count": self._success_count,
             "stats": self._stats.copy(),
-            "pool_status": self.check_pool_status(),
+            "pool_status": self.get_cached_pool_status(),  # v6.2.0: 캐시 사용
+            "cache_interval_ms": self._cache_interval_ms,  # v6.2.0: 캐시 설정 정보
         }
 
     def reset(self):
@@ -384,6 +573,9 @@ class PoolCircuitBreaker:
             self._success_count = 0
             self._open_time = None
             self._half_open_requests = 0
+            # v6.2.0: 캐시 통계도 리셋
+            self._stats["cache_hits"] = 0
+            self._stats["cache_refreshes"] = 0
             logger.info("[PoolCircuitBreaker] Reset to CLOSED")
 
 
@@ -416,8 +608,77 @@ class PoolCircuitBreakerMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         self._request_count = 0
-        self._log_interval = 50  # 50 요청마다 Pool 상태 로깅
-        logger.info("[PoolCircuitBreakerMiddleware] Initialized - Fail Fast enabled!")
+        self._log_interval = 100  # v6.2.0: 100 요청마다 Pool 상태 로깅 (50 → 100)
+        self._audit_enabled = self._check_audit_available()
+        logger.info(
+            f"[PoolCircuitBreakerMiddleware] Initialized - Fail Fast enabled (v6.2.1 cached+audit)! "
+            f"Audit: {'enabled' if self._audit_enabled else 'disabled'}"
+        )
+
+    def _check_audit_available(self) -> bool:
+        """Audit 시스템 사용 가능 여부 확인"""
+        try:
+            from selfhealing.audit import ContinuousAuditRecorder
+            return True
+        except ImportError:
+            return False
+
+    def _record_rejection_audit(
+        self,
+        request,
+        reason: str,
+        circuit_state: str,
+        pool_status: dict,
+    ):
+        """
+        v6.2.1: 503 거부 시 Audit 로그 기록.
+
+        캐시 기반 결정임을 명확히 기록하여 분석 시 혼선 방지.
+        """
+        if not self._audit_enabled:
+            return
+
+        try:
+            from selfhealing.audit import ContinuousAuditRecorder, AuditActionType
+
+            recorder = ContinuousAuditRecorder.get_instance()
+
+            # 캐시 메타데이터 추출
+            cache_age_ms = pool_status.get("_cache_age_ms", 0)
+            is_stale = pool_status.get("_is_stale", False)
+            is_stale_fallback = pool_status.get("_stale_fallback", False)
+
+            # Audit Entry 생성
+            recorder.record(
+                action=AuditActionType.CIRCUIT_BREAKER_TRIGGERED,
+                entity_type="pool_circuit_breaker",
+                entity_id="pool_cb_rejection",
+                description=(
+                    f"Pool Circuit Breaker rejected request: {reason}. "
+                    f"[CACHE-BASED DECISION] cache_age={cache_age_ms:.0f}ms, "
+                    f"stale={is_stale}, stale_fallback={is_stale_fallback}"
+                ),
+                metadata={
+                    "request_path": request.path,
+                    "request_method": request.method,
+                    "circuit_state": circuit_state,
+                    "rejection_reason": reason,
+                    # v6.2.1: 캐시 기반 결정 메타데이터 (핵심!)
+                    "decision_source": "cached_pool_status",
+                    "cache_age_ms": cache_age_ms,
+                    "is_stale": is_stale,
+                    "is_stale_fallback": is_stale_fallback,
+                    # Pool 상태 스냅샷
+                    "pool_checkedout": pool_status.get("checkedout"),
+                    "pool_total_capacity": pool_status.get("total_capacity"),
+                    "pool_usage_percent": pool_status.get("usage_percent"),
+                    "pool_is_exhausted": pool_status.get("is_exhausted"),
+                },
+                severity="warning" if not is_stale else "info",
+            )
+        except Exception as e:
+            # Audit 실패가 요청 처리를 막지 않음 (Fail-Open)
+            logger.debug(f"[PoolCircuitBreakerMiddleware] Audit recording failed: {e}")
 
     def __call__(self, request):
         # 제외 경로 체크
@@ -426,15 +687,18 @@ class PoolCircuitBreakerMiddleware:
             if path.startswith(excluded):
                 return self.get_response(request)
 
-        # 주기적 Pool 상태 로깅
+        # 주기적 Pool 상태 로깅 (캐시된 값 사용)
         self._request_count += 1
         if self._request_count % self._log_interval == 0:
-            pool_status = pool_circuit_breaker.check_pool_status()
+            # v6.2.0: 캐시된 Pool 상태 사용 (Non-Blocking)
+            pool_status = pool_circuit_breaker.get_cached_pool_status()
+            cache_stats = pool_circuit_breaker._stats
             logger.info(
                 f"[PoolCircuitBreakerMiddleware] Pool status (every {self._log_interval} reqs): "
                 f"checkedout={pool_status.get('checkedout', '?')}/{pool_status.get('total_capacity', '?')} "
                 f"({pool_status.get('usage_percent', 0):.1f}%) "
-                f"exhausted={pool_status.get('is_exhausted', False)}"
+                f"exhausted={pool_status.get('is_exhausted', False)} "
+                f"cache_hits={cache_stats.get('cache_hits', 0)}"
             )
 
         # Circuit Breaker 체크
@@ -444,12 +708,26 @@ class PoolCircuitBreakerMiddleware:
         if not allow:
             # 즉시 거부! (Fail Fast)
             logger.warning(f"[PoolCircuitBreakerMiddleware] Rejected: {path} - {reason}")
+
+            # v6.2.1: Audit 연동 - 캐시 기반 결정임을 명시
+            pool_status = cb.get_cached_pool_status()
+            self._record_rejection_audit(
+                request=request,
+                reason=reason,
+                circuit_state=cb.state,
+                pool_status=pool_status,
+            )
+
             return JsonResponse(
                 {
                     "error": "Service temporarily unavailable",
                     "reason": reason,
                     "circuit_state": cb.state,
                     "retry_after": cb._recovery_timeout,
+                    # v6.2.1: 캐시 메타데이터 (디버깅/분석용)
+                    "_cache_based_decision": True,
+                    "_cache_age_ms": pool_status.get("_cache_age_ms", 0),
+                    "_is_stale": pool_status.get("_is_stale", False),
                 },
                 status=503,
                 headers={"Retry-After": str(cb._recovery_timeout)},
@@ -463,10 +741,10 @@ class PoolCircuitBreakerMiddleware:
             if response.status_code < 500:
                 cb.record_success()
             else:
-                # 500 에러 - Pool 고갈 여부 확인
+                # 500 에러 - Pool 고갈 여부 확인 (캐시된 값 사용)
                 try:
-                    # 현재 Pool 상태 확인
-                    pool_status = cb.check_pool_status()
+                    # v6.2.0: 캐시된 Pool 상태 확인 (Non-Blocking)
+                    pool_status = cb.get_cached_pool_status()
                     if pool_status.get("is_exhausted", False):
                         # Pool 고갈 상태! 즉시 OPEN
                         logger.error(
@@ -505,8 +783,8 @@ class PoolCircuitBreakerMiddleware:
                 cb._failure_count = cb._failure_threshold  # 즉시 threshold 도달
                 cb.record_failure()
 
-                # Pool 상태 로깅
-                pool_status = cb.check_pool_status()
+                # v6.2.0: 캐시된 Pool 상태 로깅 (Non-Blocking)
+                pool_status = cb.get_cached_pool_status()
                 logger.error(
                     f"[PoolCircuitBreakerMiddleware] Pool status at exhaustion: "
                     f"checkedout={pool_status.get('checkedout', '?')}/{pool_status.get('total_capacity', '?')} "
@@ -534,25 +812,26 @@ class PoolCircuitBreakerMiddleware:
 # Circuit Breaker 상태 조회 API
 def circuit_breaker_status(request):
     """Circuit Breaker 상태 조회 API
-    
+
     v6.1.0: SelfHealingMiddleware의 CircuitBreakerService 상태도 포함
     """
     cb = pool_circuit_breaker
     stats = cb.get_stats()
-    
+
     # v6.1.0: CircuitBreakerService 상태도 조회 (SelfHealingMiddleware에서 사용)
     cb_service_state = "unknown"
     cb_service_failure_count = 0
     try:
         from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+
         cb_service = get_circuit_breaker_service()
         if cb_service and cb_service.is_enabled:
             state_data = cb_service.get_or_create_state("database")
-            cb_service_state = state_data.state if hasattr(state_data, 'state') else str(state_data)
-            cb_service_failure_count = getattr(state_data, 'failure_count', 0)
+            cb_service_state = state_data.state if hasattr(state_data, "state") else str(state_data)
+            cb_service_failure_count = getattr(state_data, "failure_count", 0)
     except Exception as e:
         logger.debug(f"[circuit_breaker_status] CB service state lookup failed: {e}")
-    
+
     # 두 CB 중 하나라도 OPEN이면 OPEN으로 표시
     combined_state = stats["state"]
     if cb_service_state in ("open", "OPEN", "half_open", "HALF_OPEN"):

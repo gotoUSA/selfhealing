@@ -112,7 +112,7 @@ Self-Healing 시스템은 **도메인 프리(Domain-Free)** 아키텍처로 설�
 │ ❌ TieringMiddleware               → 미연결                               │
 │ ❌ SensitiveAccessLoggingMiddleware → 미연결                              │
 │ ❌ ActorContextMiddleware          → 미연결                               │
-│ ⚠️ PoolCircuitBreakerMiddleware    → 조건부 (local.py에서 제외)           │
+│ ✅ PoolCircuitBreakerMiddleware    → v6.2.0 해결 (조건부 연결 가능)       │
 │ ⚠️ PoolTimeoutMiddleware           → 조건부 (local.py에서만 활성화)       │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -252,22 +252,106 @@ MIDDLEWARE = [
 | 항목 | 내용 |
 |------|------|
 | **파일** | `selfhealing/api/django/pool_circuit_breaker.py:394` |
-| **분류** | ⚪ **조건부 비활성화** |
+| **분류** | 🟢 **v6.2.1에서 해결됨 - 연결 가능** |
 | **목적** | DB Connection Pool 고갈 시 즉시 503 반환 (Fail Fast) |
 | **도메인 종속성** | ❌ 없음 |
+
+**v6.2.0 (2026-01-01) 블로킹 이슈 해결**:
+
+기존 문제:
+- `check_pool_status()` 호출 시 `pool_container.has()`, `pool_container.get()` 등에서 락 경합 발생
+- 고부하 시 추가 블로킹으로 인한 성능 저하
+
+해결 방법:
+```python
+# AS-IS (v6.1.x): 매 요청마다 직접 Pool 조회 → 블로킹!
+def should_allow_request(self):
+    pool_status = self.check_pool_status()  # 블로킹 가능!
+    ...
+
+# TO-BE (v6.2.0): 캐시된 Pool 상태 사용 → Non-Blocking!
+def should_allow_request(self):
+    pool_status = self.get_cached_pool_status()  # 항상 즉시 반환
+    ...
+
+# 백그라운드 스레드에서 주기적으로 Pool 상태 갱신 (기본 100ms)
+def _background_refresh_loop(self):
+    while not self._stop_background.is_set():
+        new_status = self._fetch_pool_status_internal()  # 여기서만 블로킹
+        with self._cache_lock:
+            self._cached_pool_status = new_status
+        self._stop_background.wait(timeout=0.1)  # 100ms
+```
+
+**v6.2.1 추가 개선사항**:
+
+| 개선 항목 | 설명 |
+|-----------|------|
+| **TTL 범위 검증** | 50ms ~ 1000ms로 제한, 범위 밖 값은 자동 보정 |
+| **Stale 데이터 단계별 처리** | 경고(1초) → 안전 폴백(5초) 단계적 처리 |
+| **백그라운드 스레드 자동 재시작** | 스레드 죽음 감지 시 자동 재시작 |
+| **Audit 연동** | 503 거부 시 `decision_source: "cached_pool_status"` 명시 |
+
+```python
+# v6.2.1 Stale 처리 정책
+┌──────────────────┬──────────────────────────────────────────────┐
+│ 캐시 나이        │ 처리 방법                                    │
+├──────────────────┼──────────────────────────────────────────────┤
+│ < 1초            │ ✅ 정상 - 캐시 데이터 사용                   │
+│ 1초 ~ 5초        │ 🟡 경고 - 로그 남기고 캐시 데이터 사용       │
+│ > 5초            │ 🔴 안전 폴백 - is_exhausted=False 강제 설정  │
+└──────────────────┴──────────────────────────────────────────────┘
+```
 
 **현재 상태**:
 ```python
 # myproject/settings/local.py:
-# PoolCircuitBreakerMiddleware는 check_pool_status()에서 블로킹 발생하므로 제거
+USE_POOL_CIRCUIT_BREAKER = os.getenv("USE_POOL_CIRCUIT_BREAKER", "FALSE") == "TRUE"
+
+if USE_POOL_CIRCUIT_BREAKER:
+    # v6.2.1: PoolCircuitBreakerMiddleware 블로킹 이슈 해결 + Stale 처리 + Audit
+    MIDDLEWARE.insert(2, "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware")
+    MIDDLEWARE.insert(3, "myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware")
 ```
 
-**미연결 이유**:
-- `check_pool_status()` 호출 시 블로킹 이슈 발견
-- 이미 `SelfHealingMiddleware`에서 DB 오류 감지 → Circuit Breaker 기록
-- 중복 기능으로 인한 오버헤드
+**통합 가이드**:
+```bash
+# 환경 변수로 활성화
+USE_POOL_CIRCUIT_BREAKER=TRUE
 
-**권장 조치**: ⛔ 연결하지 않음 (블로킹 이슈 해결 후 재검토)
+# 캐시 갱신 주기 조정 (기본 100ms, 범위: 50-1000ms)
+POOL_CB_CACHE_INTERVAL_MS=100
+
+# v6.2.1: Stale 처리 설정
+POOL_CB_STALE_MULTIPLIER=10      # 경고 임계값 = interval * 10 (기본: 1초)
+POOL_CB_CRITICAL_STALE_MS=5000   # 안전 폴백 임계값 (기본: 5초)
+
+# Circuit Breaker 설정
+POOL_CB_FAILURE_THRESHOLD=3   # 3회 실패 시 OPEN
+POOL_CB_SUCCESS_THRESHOLD=2   # 2회 성공 시 CLOSED
+POOL_CB_RECOVERY_TIMEOUT=10   # 10초 후 HALF_OPEN
+```
+
+**미들웨어 배치 순서 권장**:
+```
+1. HealthBridgeMiddleware        (DB 무관하게 /health 응답)
+2. SelfHealingMiddleware         (에러 감지 및 DLQ)
+3. PoolCircuitBreakerMiddleware  (Pool 고갈 감지 및 Fail Fast) ← v6.2.1
+4. PoolTimeoutMiddleware         (예외 폴백)
+5. Django Core Middlewares...
+```
+
+**테스트**:
+```bash
+# 단위 테스트 (v6.2.0 + v6.2.1)
+pytest tests/unit/selfhealing/test_pool_circuit_breaker_v620.py -v
+
+# 통합 테스트 (Connection Pool 환경 필요)
+USE_CONNECTION_POOL=TRUE USE_POOL_CIRCUIT_BREAKER=TRUE \
+    python tests/self_healing/e2e/test_pool_recovery.py
+```
+
+**권장 조치**: ✅ v6.2.1에서 연결 가능 (USE_POOL_CIRCUIT_BREAKER=TRUE)
 
 ---
 
@@ -1083,7 +1167,7 @@ __all__ = [
 | TieringMiddleware | 🟢 라이브러리 | 미연결 | 📝 문서화만 |
 | SensitiveAccessLoggingMiddleware | 🟡 선택적 | 미연결 | 📝 문서화만 |
 | ActorContextMiddleware | 🟡 선택적 | 미연결 | 📝 문서화만 |
-| PoolCircuitBreakerMiddleware | ⚪ 비활성화 | 제외됨 | ⛔ 블로킹 이슈 해결 필요 |
+| PoolCircuitBreakerMiddleware | 🟢 **v6.2.0 해결** | **연결 가능** | ✅ `USE_POOL_CIRCUIT_BREAKER=TRUE` |
 | PoolTimeoutMiddleware | 🟡 환경별 | local.py만 | ✅ 현재 유지 |
 | **서비스** ||||
 | IdempotencyService | ⚪ 테스트 전용 | 테스트만 | 📝 라이브러리 문서화 |
