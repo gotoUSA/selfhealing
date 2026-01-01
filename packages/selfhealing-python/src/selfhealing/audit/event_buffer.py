@@ -75,6 +75,11 @@ class AuditEventType(Enum):
     CONFIG_CHANGE = "config_change"
     MANUAL_OVERRIDE = "manual_override"
     
+    # 복구 관련 (Phase 3 추가)
+    RECOVERY_EVENT = "recovery_event"
+    RECOVERY_CHAIN_STARTED = "recovery_chain_started"
+    RECOVERY_CHAIN_COMPLETED = "recovery_chain_completed"
+    
     # 일반
     GENERIC = "generic"
 

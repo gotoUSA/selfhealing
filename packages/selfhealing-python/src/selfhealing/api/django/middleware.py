@@ -764,19 +764,19 @@ class SelfHealingMiddleware:
                 "preemptive": True,  # 선제적 DLQ 적재 표시
             }
             
-            dlq_id = self._store_to_dlq(request_data, error_context)
+            dlq_id = self._store_to_dlq(request_data, error_context, request=request)
             
             logger.info(
                 f"[SelfHealingMiddleware] 🔒 Preemptive DLQ: CB is OPEN, "
                 f"request queued (dlq_id={dlq_id}, path={request.path})"
             )
             
-            # Audit 로그 기록
+            # Audit 로그 기록 (Phase 3: 버퍼 패턴)
             self._log_audit_event("preemptive_dlq_stored", {
                 "dlq_id": dlq_id,
                 "reason": "circuit_breaker_open",
                 "path": request.path,
-            })
+            }, request=request)
             
             return JsonResponse(
                 {
@@ -809,12 +809,12 @@ class SelfHealingMiddleware:
                     "method": request.method,
                 }
                 
-                # CircuitBreaker에 실패 기록
-                self._record_cb_failure(db_error_context)
+                # CircuitBreaker에 실패 기록 (Phase 3: request 전달)
+                self._record_cb_failure(db_error_context, request=request)
                 
-                # DLQ에 적재 (복구 가능한 요청인 경우)
+                # DLQ에 적재 (복구 가능한 요청인 경우, Phase 3: request 전달)
                 if self._is_dlq_eligible(request):
-                    self._store_to_dlq(request_data, db_error_context)
+                    self._store_to_dlq(request_data, db_error_context, request=request)
                 
                 # 503 응답 반환
                 return JsonResponse(
@@ -845,7 +845,8 @@ class SelfHealingMiddleware:
             
             # CircuitBreaker에 실패 기록
             # v6.1.0: 인프라 장애 경로에서는 반드시 CB 실패로 기록
-            self._record_cb_failure(error_context)
+            # Phase 3: request 전달
+            self._record_cb_failure(error_context, request=request)
             
             if is_infra_failure_path:
                 logger.warning(
@@ -853,9 +854,9 @@ class SelfHealingMiddleware:
                     f"path={request.path}, status={response.status_code}"
                 )
             
-            # DLQ에 적재 (복구 가능한 요청인 경우)
+            # DLQ에 적재 (복구 가능한 요청인 경우, Phase 3: request 전달)
             if self._is_dlq_eligible(request):
-                self._store_to_dlq(request_data, error_context)
+                self._store_to_dlq(request_data, error_context, request=request)
         
         else:
             # 성공 응답일 경우 CircuitBreaker에 성공 기록
@@ -971,11 +972,17 @@ class SelfHealingMiddleware:
             logger.warning(f"[SelfHealingMiddleware] CB state check failed: {e}")
             return False
     
-    def _record_cb_failure(self, error_context: Dict[str, Any]) -> None:
+    def _record_cb_failure(
+        self,
+        error_context: Dict[str, Any],
+        request: Optional["HttpRequest"] = None,
+    ) -> None:
         """Record failure to CircuitBreaker.
         
         v6.1.0: PoolCircuitBreaker도 함께 업데이트하여 
         테스트에서 /circuit-breaker/pool/status/ API로 상태 확인 가능
+        
+        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
         try:
             if self._cb_service and self._cb_service.is_enabled:
@@ -989,11 +996,11 @@ class SelfHealingMiddleware:
                     f"error_type={error_context.get('error_type')}"
                 )
                 
-                # Audit 로그 기록
+                # Audit 로그 기록 (Phase 3: 버퍼 패턴)
                 self._log_audit_event("cb_failure_recorded", {
                     "service": self.CB_SERVICE_NAME,
                     "error_context": error_context,
-                })
+                }, request=request)
         except Exception as e:
             logger.error(f"[SelfHealingMiddleware] CB failure recording failed: {e}")
         
@@ -1020,9 +1027,13 @@ class SelfHealingMiddleware:
     def _store_to_dlq(
         self, 
         request_data: Dict[str, Any], 
-        error_context: Dict[str, Any]
+        error_context: Dict[str, Any],
+        request: Optional["HttpRequest"] = None,
     ) -> Optional[int]:
-        """Store failed request to DLQ."""
+        """Store failed request to DLQ.
+        
+        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        """
         try:
             from selfhealing.services.dlq_service import store_to_dlq
             
@@ -1056,13 +1067,13 @@ class SelfHealingMiddleware:
                     f"path={request_data.get('path')}"
                 )
                 
-                # Audit 로그 기록
+                # Audit 로그 기록 (Phase 3: 버퍼 패턴)
                 self._log_audit_event("dlq_auto_stored", {
                     "dlq_id": result.dlq_id,
                     "domain": domain,
                     "path": request_data.get("path"),
                     "error_type": error_context.get("error_type"),
-                })
+                }, request=request)
                 
                 return result.dlq_id
             else:
@@ -1087,8 +1098,52 @@ class SelfHealingMiddleware:
         
         return "http"
     
-    def _log_audit_event(self, event_type: str, data: Dict[str, Any]) -> None:
-        """Log event to audit system with hash chain."""
+    def _log_audit_event(
+        self,
+        event_type: str,
+        data: Dict[str, Any],
+        request: Optional["HttpRequest"] = None,
+    ) -> None:
+        """
+        Log event to audit system.
+        
+        Phase 3 변경:
+        - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
+        - request가 없으면 → 기존 방식 유지 (직접 로깅)
+        
+        Args:
+            event_type: 이벤트 유형 (dlq_auto_stored, cb_failure_recorded 등)
+            data: 이벤트 데이터
+            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        """
+        # === Phase 3: 버퍼 패턴 우선 ===
+        if request is not None:
+            try:
+                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+                
+                # 이벤트 타입 매핑
+                event_type_map = {
+                    "preemptive_dlq_stored": AuditEventType.DLQ_STORE,
+                    "dlq_auto_stored": AuditEventType.DLQ_STORE,
+                    "cb_failure_recorded": AuditEventType.CB_STATE_CHANGE,
+                }
+                audit_event_type = event_type_map.get(event_type, AuditEventType.ERROR_DETECTED)
+                
+                buffer = RequestAuditBuffer.get_or_create(request)
+                buffer.add(
+                    event_type=audit_event_type,
+                    source="SelfHealingMiddleware",
+                    details={
+                        "event_type": event_type,
+                        **data,
+                    },
+                    success=True,
+                )
+                return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+            except ImportError:
+                pass  # event_buffer 사용 불가 - fallback
+        
+        # === Fallback: 기존 방식 ===
         try:
             if self._audit_logger:
                 self._audit_logger.log({
@@ -1190,8 +1245,14 @@ class SelfHealingRecoveryLogger:
         chain_id: str,
         event_type: str,
         data: Dict[str, Any],
+        request: Optional["HttpRequest"] = None,
     ) -> bool:
-        """Log an event to the recovery chain."""
+        """
+        Log an event to the recovery chain.
+        
+        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        (복구 체인은 대부분 비동기 컨텍스트에서 실행되므로 request가 없는 경우가 많음)
+        """
         self._lazy_init()
         
         with self._lock:
@@ -1209,7 +1270,28 @@ class SelfHealingRecoveryLogger:
             
             chain["events"].append(event)
         
-        # Audit 로그에도 기록
+        # === Phase 3: 버퍼 패턴 우선 ===
+        if request is not None:
+            try:
+                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+                
+                buffer = RequestAuditBuffer.get_or_create(request)
+                buffer.add(
+                    event_type=AuditEventType.RECOVERY_EVENT,
+                    source="SelfHealingRecoveryLogger",
+                    details={
+                        "recovery_chain_id": chain_id,
+                        "event_type": f"recovery_{event_type}",
+                        "sequence": event["sequence"],
+                        **data,
+                    },
+                    success=True,
+                )
+                return True  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+            except ImportError:
+                pass  # event_buffer 사용 불가 - fallback
+        
+        # === Fallback: 기존 방식 ===
         try:
             if self._audit_logger:
                 self._audit_logger.log({

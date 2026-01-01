@@ -82,6 +82,7 @@ def _log_governance_blocked(
     details: Optional[dict] = None,
     service_name: Optional[str] = None,
     domain: Optional[str] = None,
+    request: Any = None,
 ) -> None:
     """
     거버넌스 차단을 Audit Log에 기록.
@@ -89,13 +90,42 @@ def _log_governance_blocked(
     이 함수는 차단이 발생할 때마다 호출되어
     "왜 이때 작업이 안 됐지?"라는 질문에 대한 기록을 남깁니다.
     
+    Phase 3 변경:
+    - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
+    - request가 없으면 → 기존 방식 유지 (직접 로깅)
+    
     Args:
         block_reason: 차단 사유 (kill_switch, emergency_mode, error_budget)
         operation_name: 차단된 작업 이름
         details: 추가 상세 정보
         service_name: 관련 서비스 이름
         domain: 도메인
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
     """
+    # === Phase 3: 버퍼 패턴 우선 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+            
+            buffer = RequestAuditBuffer.get_or_create(request)
+            buffer.add(
+                event_type=AuditEventType.GOVERNANCE_BLOCKED,
+                source="GovernanceGuard",
+                details={
+                    "block_reason": block_reason,
+                    "operation_name": operation_name,
+                    "service_name": service_name,
+                    **(details or {}),
+                },
+                success=False,
+                error_message=block_reason,
+                domain=domain,
+            )
+            return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+        except ImportError:
+            pass  # event_buffer 사용 불가 - fallback
+    
+    # === Fallback: 기존 방식 ===
     adapter = _get_audit_adapter()
     if adapter is None:
         # Audit adapter not configured - just log to standard logger

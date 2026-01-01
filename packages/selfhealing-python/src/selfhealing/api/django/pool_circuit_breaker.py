@@ -634,10 +634,49 @@ class PoolCircuitBreakerMiddleware:
         v6.2.1: 503 거부 시 Audit 로그 기록.
 
         캐시 기반 결정임을 명확히 기록하여 분석 시 혼선 방지.
+        
+        Phase 3 변경:
+        - RequestAuditBuffer 패턴 우선 사용 (AuditMiddleware에서 일괄 기록)
+        - 버퍼 사용 불가 시 기존 ContinuousAuditRecorder 직접 호출로 fallback
         """
         if not self._audit_enabled:
             return
 
+        # === Phase 3: 버퍼 패턴 우선 ===
+        try:
+            from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+            
+            # 캐시 메타데이터 추출
+            cache_age_ms = pool_status.get("_cache_age_ms", 0)
+            is_stale = pool_status.get("_is_stale", False)
+            is_stale_fallback = pool_status.get("_stale_fallback", False)
+            
+            buffer = RequestAuditBuffer.get_or_create(request)
+            buffer.add(
+                event_type=AuditEventType.POOL_CB_REJECTION,
+                source="PoolCircuitBreakerMiddleware",
+                details={
+                    "request_path": request.path,
+                    "request_method": request.method,
+                    "circuit_state": circuit_state,
+                    "rejection_reason": reason,
+                    "decision_source": "cached_pool_status",
+                    "cache_age_ms": cache_age_ms,
+                    "is_stale": is_stale,
+                    "is_stale_fallback": is_stale_fallback,
+                    "pool_checkedout": pool_status.get("checkedout"),
+                    "pool_total_capacity": pool_status.get("total_capacity"),
+                    "pool_usage_percent": pool_status.get("usage_percent"),
+                    "pool_is_exhausted": pool_status.get("is_exhausted"),
+                },
+                success=False,
+                error_message=reason,
+            )
+            return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+        except ImportError:
+            pass  # event_buffer 사용 불가 - fallback
+
+        # === Fallback: 기존 방식 (ContinuousAuditRecorder 직접 호출) ===
         try:
             from selfhealing.audit import ContinuousAuditRecorder, AuditActionType
 

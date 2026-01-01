@@ -176,8 +176,42 @@ class ConfigChangeTracker:
 
             raise
 
-    def _log_change(self, change: ConfigChange, success: bool) -> None:
-        """Log configuration change to audit adapter."""
+    def _log_change(
+        self,
+        change: ConfigChange,
+        success: bool,
+        request: Any = None,
+    ) -> None:
+        """
+        Log configuration change to audit adapter.
+        
+        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        """
+        # === Phase 3: 버퍼 패턴 우선 ===
+        if request is not None:
+            try:
+                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+                
+                buffer = RequestAuditBuffer.get_or_create(request)
+                buffer.add(
+                    event_type=AuditEventType.CONFIG_CHANGE,
+                    source="ConfigChangeTracker",
+                    details={
+                        "config_key": change.config_key,
+                        "old_value": str(change.old_value),
+                        "new_value": str(change.new_value),
+                        "cache_invalidated": change.cache_invalidated,
+                        "reason": change.reason,
+                    },
+                    success=success,
+                    error_message=change.error_message,
+                    target_id=change.config_key,
+                )
+                return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+            except ImportError:
+                pass  # event_buffer 사용 불가 - fallback
+        
+        # === Fallback: 기존 방식 ===
         entry = AuditEntry(
             action=AuditAction.CONFIG_CHANGE,
             target_type="config",
@@ -200,12 +234,42 @@ class ConfigChangeTracker:
         new_value: Any,
         reason: str,
         override_type: str = "config",
+        request: Any = None,
     ) -> None:
         """
         Log a manual override action.
 
         Use this for one-off overrides that bypass normal config flow.
+        
+        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
+        # === Phase 3: 버퍼 패턴 우선 ===
+        if request is not None:
+            try:
+                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+                
+                buffer = RequestAuditBuffer.get_or_create(request)
+                buffer.add(
+                    event_type=AuditEventType.MANUAL_OVERRIDE,
+                    source="ConfigChangeTracker",
+                    details={
+                        "config_key": config_key,
+                        "new_value": str(new_value),
+                        "override_type": override_type,
+                        "reason": reason,
+                    },
+                    success=True,
+                    target_id=config_key,
+                )
+                logger.warning(
+                    f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} "
+                    f"value={new_value} reason={reason}"
+                )
+                return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
+            except ImportError:
+                pass  # event_buffer 사용 불가 - fallback
+        
+        # === Fallback: 기존 방식 ===
         entry = AuditEntry(
             action=AuditAction.MANUAL_OVERRIDE,
             target_type=override_type,
