@@ -11,6 +11,13 @@ Usage:
     urlpatterns = [
         path('api/self-healing/', include(selfhealing_urls)),
     ]
+    
+    # In your Django project's settings.py (AuditMiddleware는 맨 마지막!):
+    MIDDLEWARE = [
+        "selfhealing.api.django.middleware.HealthBridgeMiddleware",  # 최상단
+        # ... 다른 미들웨어들 ...
+        "selfhealing.api.django.audit_middleware.AuditMiddleware",  # 맨 마지막!
+    ]
 """
 
 from selfhealing.api.django.views import (
@@ -40,6 +47,11 @@ from selfhealing.api.django.serializers import (
     ControlAPIEnvironments,
 )
 
+from selfhealing.api.django.audit_middleware import (
+    AuditMiddleware,
+    is_audit_middleware_enabled,
+)
+
 __all__ = [
     # Views
     "ControlActionView",
@@ -66,4 +78,7 @@ __all__ = [
     # Constants
     "ControlAPIActions",
     "ControlAPIEnvironments",
+    # Middleware (AuditMiddleware - Gateway Pipeline)
+    "AuditMiddleware",
+    "is_audit_middleware_enabled",
 ]

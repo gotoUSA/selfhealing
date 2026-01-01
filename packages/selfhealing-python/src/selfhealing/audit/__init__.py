@@ -175,6 +175,12 @@ from selfhealing.audit.signed_manifest import (
     SignedManifest,
     ManifestEntry,
 )
+from selfhealing.audit.event_buffer import (
+    AuditEvent,
+    AuditEventType as BufferEventType,
+    RequestAuditBuffer,
+    add_audit_event,
+)
 
 __all__ = [
     # Main API
@@ -309,4 +315,9 @@ __all__ = [
     "RFC3161Client",
     "SignedManifest",
     "ManifestEntry",
+    # Event Buffer (RequestAuditBuffer for Gateway Pipeline)
+    "AuditEvent",
+    "BufferEventType",
+    "RequestAuditBuffer",
+    "add_audit_event",
 ]

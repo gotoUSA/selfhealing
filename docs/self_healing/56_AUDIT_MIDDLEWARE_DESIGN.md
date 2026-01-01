@@ -1,9 +1,22 @@
 # 56. AuditMiddleware 설계 문서
 
-> **문서 버전**: 1.0.0
+> **문서 버전**: 1.1.0
 > **생성일**: 2026-01-01
+> **최종 수정일**: 2026-01-01
 > **전제조건**: 55_AUDIT_SYSTEM_FIXES.md의 수정 완료
 > **목적**: 중앙화된 AuditMiddleware 설계 및 구현 가이드
+> **상태**: ✅ Phase 1 구현 완료
+
+---
+
+## 🎯 구현 완료 요약
+
+| 구성 요소 | 파일 | 상태 |
+|-----------|------|------|
+| RequestAuditBuffer | `selfhealing/audit/event_buffer.py` | ✅ 완료 |
+| AuditMiddleware | `selfhealing/api/django/audit_middleware.py` | ✅ 완료 |
+| audit_helpers 하이브리드 | `selfhealing/services/audit_helpers.py` | ✅ 완료 |
+| __init__.py export | `selfhealing/audit/__init__.py` | ✅ 완료 |
 
 ---
 
@@ -461,6 +474,85 @@ def log_dlq_store_audit(
 | WAL 보호 | 없음 | 선택적 활성화 |
 | 코드 중복 | 높음 | 낮음 |
 | 테스트 용이성 | 분산 | 집중 |
+
+---
+
+## ⚙️ Django settings.py 가이드
+
+### 미들웨어 설정 (CRITICAL)
+
+```python
+# myproject/settings.py 또는 myproject/local.py
+
+MIDDLEWARE = [
+    # ═══════════════════════════════════════════════════════════════
+    # [1] ENTRANCE (진입) - 최상단에 위치
+    # ═══════════════════════════════════════════════════════════════
+    "selfhealing.api.django.middleware.HealthBridgeMiddleware",  # DB-independent health
+    
+    # ═══════════════════════════════════════════════════════════════
+    # [2] Django Core Middlewares
+    # ═══════════════════════════════════════════════════════════════
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    
+    # ═══════════════════════════════════════════════════════════════
+    # [3] Self-Healing Middlewares (선택적 활성화)
+    # ═══════════════════════════════════════════════════════════════
+    # "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
+    # "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware",
+    # "selfhealing.api.django.middleware.SelfHealingMiddleware",
+    
+    # ═══════════════════════════════════════════════════════════════
+    # [4] CAPTURE (캡처) - 맨 마지막에 위치!
+    # ═══════════════════════════════════════════════════════════════
+    "selfhealing.api.django.audit_middleware.AuditMiddleware",  # 맨 마지막!
+]
+```
+
+### 왜 맨 마지막이어야 하는가?
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Django 미들웨어 실행 순서                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Request →  [1] HealthBridge  → [2] SecurityMiddleware → ...            │
+│             │                  │                                         │
+│             │ 이벤트 적재      │ 이벤트 적재                              │
+│             ▼                  ▼                                         │
+│         request.META["X-AUDIT-EVENTS"]                                   │
+│                                                                          │
+│                          ... View 처리 ...                               │
+│                                                                          │
+│  Response ← [n] AuditMiddleware (맨 마지막 = 가장 먼저 응답 처리)        │
+│             │                                                            │
+│             │ 모든 이벤트 '낚아채서' 기록!                               │
+│             ▼                                                            │
+│    ContinuousAuditRecorder (단일 해시 체인)                              │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**핵심**: Django 미들웨어는 요청 시 순서대로, 응답 시 역순으로 처리됩니다.
+따라서 AuditMiddleware가 `MIDDLEWARE` 리스트의 **맨 마지막**에 있으면,
+**응답 시 가장 먼저** 처리되어 앞선 모든 미들웨어의 이벤트를 수집할 수 있습니다.
+
+### 환경 변수 설정
+
+```python
+# .env 또는 환경 변수
+AUDIT_MIDDLEWARE_ENABLED=TRUE    # 미들웨어 활성화 (기본: TRUE)
+AUDIT_LOG_PATH=logs/audit.jsonl  # Audit 로그 경로
+AUDIT_WAL_ENABLED=FALSE          # WAL 활성화 (기본: FALSE)
+AUDIT_FAIL_OPEN=TRUE             # Fail-Open 정책 (기본: TRUE)
+```
 
 ---
 
