@@ -385,29 +385,29 @@ service = get_control_api_service()
 ```python
 class ControlAPIService:
     """Self-Healing Control API 비즈니스 로직"""
-    
+
     def execute_control(self, request: ControlRequest) -> ControlResponse:
         """통합 제어 명령 실행"""
         ...
-    
+
     def get_status(self) -> dict:
         """전체 시스템 상태 조회"""
         ...
-    
+
     def get_service_status(self, service_name: str) -> dict:
         """서비스별 상태 조회"""
         ...
-    
+
     def block_service(
-        self, 
-        service_name: str, 
-        reason: str, 
+        self,
+        service_name: str,
+        reason: str,
         ttl_minutes: int = None,
         controlled_by: User = None,
     ) -> ControlResponse:
         """서비스 차단"""
         ...
-    
+
     def allow_service(
         self,
         service_name: str,
@@ -417,7 +417,7 @@ class ControlAPIService:
     ) -> ControlResponse:
         """서비스 허용"""
         ...
-    
+
     def reset_service(
         self,
         service_name: str,
@@ -532,14 +532,14 @@ class RiskLevels(str, Enum):
 ```python
 def assess_and_apply_governance(request: ControlRequest) -> ControlResponse:
     risk_level = assess_risk_level(request.action, request.environment)
-    
+
     if risk_level == RiskLevels.FORBIDDEN:
         return ControlResponse(
             status="error",
             error_code="FORBIDDEN_ACTION",
             error_message=f"Action '{request.action}' is forbidden in {request.environment}",
         )
-    
+
     if risk_level == RiskLevels.CRITICAL:
         # 추가 확인 필요
         if not request.metadata.get("confirmed"):
@@ -548,7 +548,7 @@ def assess_and_apply_governance(request: ControlRequest) -> ControlResponse:
                 error_code="CONFIRMATION_REQUIRED",
                 error_message="Critical action requires explicit confirmation",
             )
-    
+
     # 위험도에 따른 로깅
     if risk_level in [RiskLevels.HIGH, RiskLevels.CRITICAL]:
         logger.warning(
@@ -557,7 +557,7 @@ def assess_and_apply_governance(request: ControlRequest) -> ControlResponse:
         )
         # Slack 알림 발송
         send_ops_alert(request, risk_level)
-    
+
     return execute_action(request)
 ```
 
@@ -574,11 +574,11 @@ from rest_framework.permissions import IsAdminUser
 class SelfHealingControlView(APIView):
     """
     Self-Healing Control API.
-    
+
     관리자만 접근 가능.
     """
     permission_classes = [IsAdminUser]
-    
+
     def post(self, request, *args, **kwargs):
         ...
 ```
@@ -607,7 +607,7 @@ def log_control_action(request: ControlRequest, response: ControlResponse):
         f"status={response.status}, "
         f"correlation_id={response.correlation_id}"
     )
-    
+
     # DB에도 기록
     ControlActionLog.objects.create(
         action=request.action,
@@ -664,21 +664,21 @@ class SelfHealingClient:
             "Authorization": f"Token {token}",
             "Content-Type": "application/json",
         }
-    
+
     def block_service(self, service_name: str, reason: str, ttl_minutes: int = None):
         return requests.post(
             f"{self.base_url}/api/self-healing/block/{service_name}/",
             headers=self.headers,
             json={"reason": reason, "ttl_minutes": ttl_minutes},
         ).json()
-    
+
     def allow_service(self, service_name: str, reason: str, trigger_replay: bool = False):
         return requests.post(
             f"{self.base_url}/api/self-healing/allow/{service_name}/",
             headers=self.headers,
             json={"reason": reason, "trigger_replay": trigger_replay},
         ).json()
-    
+
     def get_status(self):
         return requests.get(
             f"{self.base_url}/api/self-healing/status/",
@@ -993,19 +993,19 @@ from selfhealing.api.django.reauthentication import ReauthenticationProvider
 
 class MyOAuthReauthProvider(ReauthenticationProvider):
     """기업별 OAuth 시스템 연동 예시"""
-    
+
     def check_reauthentication_required(self, request, config):
         # 기업의 OAuth 토큰 검증 로직
         token = self._get_oauth_token(request)
         issued_at = self._decode_token_time(token)
-        
+
         # 세션 시간 확인
         session_age = (datetime.now() - issued_at).total_seconds() / 60
         if session_age > config.max_session_minutes:
             return True
-        
+
         return False
-    
+
     def get_reauthentication_response(self, request, config):
         return JsonResponse({
             'error': 'reauthentication_required',
@@ -1027,11 +1027,266 @@ SELFHEALING_REAUTH_ENABLED = True
 
 ---
 
+## 10. 상세 API 엔드포인트 테이블
+
+### 10.1 Runtime Config API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/config/` | GET/PATCH | 전체 설정 조회/수정 |
+| `/config/reset/` | POST | 설정 초기화 |
+| `/config/pending/` | GET | 대기 중 변경 목록 |
+| `/config/pending/<id>/cancel/` | DELETE | 대기 변경 취소 |
+| `/config/circuit-breaker/` | GET/PATCH | CB 설정 |
+| `/config/dlq/` | GET/PATCH | DLQ 설정 |
+| `/config/retry/` | GET/PATCH | 재시도 설정 |
+| `/config/sla/` | GET/PATCH | SLA 설정 |
+| `/config/slo/` | GET/PATCH | SLO 설정 |
+| `/config/rate-limit/` | GET/PATCH | Rate Limit 설정 |
+| `/config/security/` | GET/PATCH | 보안 설정 |
+| `/config/idempotency/` | GET/PATCH | 멱등성 설정 |
+| `/config/notification/` | GET/PATCH | 알림 설정 |
+| `/config/forensic/` | GET/PATCH | 포렌식 설정 |
+| `/config/logging/` | GET/PATCH | 로깅 설정 |
+| `/config/metrics/` | GET/PATCH | 메트릭 설정 |
+| `/config/error-budget/` | GET/PATCH | Error Budget 설정 |
+| `/config/gate/` | GET/PATCH | Gate 설정 |
+| `/config/governance/` | GET/PATCH | 거버넌스 설정 |
+| `/config/drift-thresholds/` | GET/PATCH | 드리프트 임계치 |
+| `/config/l2-storage/` | GET/PATCH | L2 저장소 설정 |
+
+### 10.2 Config History & Rollback API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/config/<type>/history/` | GET | 설정 변경 이력 |
+| `/config/<type>/history/<ver>/` | GET | 특정 버전 상세 |
+| `/config/<type>/rollback/` | POST | 설정 롤백 |
+| `/config/<type>/compare/` | GET | 버전 비교 |
+
+### 10.3 Emergency Mode API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/emergency/status/` | GET | 비상 모드 상태 |
+| `/emergency/trigger/` | POST | 비상 모드 활성화 |
+| `/emergency/release/` | POST | 비상 모드 해제 |
+| `/emergency/gradual-recovery/` | POST | 점진적 복구 시작 |
+| `/emergency/stop-recovery/` | POST | 복구 중단 |
+| `/emergency/history/` | GET | 비상 모드 이력 |
+| `/emergency/config/` | GET/PATCH | 비상 모드 설정 |
+| `/emergency/levels/` | GET | 비상 레벨 정의 |
+
+### 10.4 Auto-Tuning API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/auto-tuning/status/` | GET | Auto-Tuning 상태 |
+| `/auto-tuning/enable/` | POST | 활성화 |
+| `/auto-tuning/disable/` | POST | 비활성화 |
+| `/auto-tuning/<module>/enable/` | POST | 모듈 활성화 |
+| `/auto-tuning/<module>/disable/` | POST | 모듈 비활성화 |
+| `/auto-tuning/bounds/` | GET/PATCH | 조정 범위 |
+| `/auto-tuning/history/` | GET | 조정 이력 |
+| `/auto-tuning/override/` | POST/DELETE | 수동 오버라이드 |
+| `/auto-tuning/metrics/` | GET | 조정 메트릭 |
+
+### 10.5 Error Budget API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/error-budget/status/` | GET | Error Budget 상태 |
+| `/error-budget/history/` | GET | 사용 이력 |
+| `/error-budget/record/` | POST | 에러 기록 (테스트) |
+| `/error-budget/exhaust/` | POST | 예산 소진 (테스트) |
+| `/error-budget/reset-simulation/` | POST | 시뮬레이션 초기화 |
+| `/gate/reset/` | POST | Gate 초기화 |
+
+### 10.6 Deployment Policy API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/deployment-policy/verdict/` | GET | 배포 허용 여부 |
+| `/deployment-policy/acknowledge/` | POST | 동결 확인 |
+| `/deployment-policy/override/` | POST | 동결 오버라이드 |
+| `/deployment-policy/lift/` | POST | 동결 해제 |
+| `/deployment-policy/active-override/` | GET | 활성 오버라이드 |
+
+### 10.7 Reconciliation API (Shadow Budget)
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/reconciliation/status/` | GET | 조정 상태 |
+| `/reconciliation/failsafe-periods/` | GET | Failsafe 기간 |
+| `/reconciliation/shadow-budgets/` | GET | Shadow Budget 목록 |
+| `/reconciliation/shadow-budgets/<id>/` | GET | Shadow Budget 상세 |
+| `/reconciliation/shadow-budgets/<id>/approve/` | POST | 승인 |
+| `/reconciliation/shadow-budgets/<id>/reject/` | POST | 거부 |
+| `/reconciliation/excluded-periods/` | GET/POST | 제외 기간 |
+| `/reconciliation/excluded-periods/<id>/` | DELETE | 제외 기간 삭제 |
+| `/reconciliation/config/` | GET/PATCH | 조정 설정 |
+
+### 10.8 Governance API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/governance/reconcile/` | POST | 정합성 조정 |
+| `/governance/mode/` | GET/POST | 모드 전환 |
+| `/governance/status/` | GET | RBAC 상태 |
+| `/governance/approval-requests/` | GET | 승인 요청 목록 |
+| `/governance/approval-requests/<id>/approve/` | POST | 승인 |
+| `/governance/approval-requests/<id>/reject/` | POST | 거부 |
+
+### 10.9 L2 Storage API
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/l2-storage/config/` | GET/PATCH | L2 저장소 설정 |
+| `/l2-storage/status/` | GET | 상태 조회 |
+| `/l2-storage/health/` | GET | 헬스 체크 |
+| `/l2-storage/shadow-log/` | GET | Shadow Log 목록 |
+| `/l2-storage/shadow-log/stats/` | GET | Shadow Log 통계 |
+| `/l2-storage/shadow-log/clear/` | POST | Shadow Log 삭제 |
+| `/l2-storage/sync/from-l2/` | POST | L2 → L1 동기화 |
+| `/l2-storage/sync/to-l2/` | POST | L1 → L2 동기화 |
+| `/l2-storage/drift/stats/` | GET | 드리프트 통계 |
+| `/l2-storage/drift/reconcile/` | POST | 드리프트 조정 |
+
+### 10.10 DNA API (Enterprise Features)
+
+#### FinOps DNA
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/dna/finops/budget/` | GET | 예산 목록 |
+| `/dna/finops/budget/<stage>/` | GET/PATCH | Stage 예산 |
+| `/dna/finops/cost/` | GET | 비용 조회 |
+| `/dna/finops/report/` | GET | 비용 리포트 |
+| `/dna/finops/alerts/` | GET | 비용 알림 |
+
+#### Learning DNA
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/dna/learning/session/<action>/` | POST | 학습 세션 제어 |
+| `/dna/learning/patterns/` | GET | 패턴 조회 |
+| `/dna/learning/suggestions/` | GET | 제안 목록 |
+| `/dna/learning/suggestions/<id>/apply/` | POST | 제안 적용 |
+| `/dna/learning/metrics/` | GET | 학습 메트릭 |
+
+#### Rollback DNA
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/dna/rollback/policy/<stage>/` | GET/PATCH | 롤백 정책 |
+| `/dna/rollback/request/` | POST | 롤백 요청 |
+| `/dna/rollback/request/<id>/` | GET | 요청 상세 |
+| `/dna/rollback/request/<id>/execute/` | POST | 롤백 실행 |
+| `/dna/rollback/history/` | GET | 롤백 이력 |
+
+#### Blast Radius DNA
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/dna/blast-radius/policy/<stage>/` | GET/PATCH | 정책 |
+| `/dna/blast-radius/dependency/` | POST | 종속성 추가 |
+| `/dna/blast-radius/assessment/` | POST | 영향 평가 |
+| `/dna/blast-radius/isolation/` | GET/POST | 격리 목록/실행 |
+| `/dna/blast-radius/graph/` | GET | 종속성 그래프 |
+
+#### Compliance DNA
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/dna/compliance/standards/` | GET | 표준 목록 |
+| `/dna/compliance/check/<stage>/` | POST | 준수 검사 |
+| `/dna/compliance/violations/` | GET | 위반 목록 |
+| `/dna/compliance/violations/<id>/resolve/` | POST | 위반 해결 |
+| `/dna/compliance/reports/` | GET | 준수 리포트 |
+
+### 10.11 X-Test Mode API
+
+> Chaos 테스트용 API (X-Test-Mode 헤더 필수)
+
+| 엔드포인트 | 메서드 | 용도 |
+|-----------|--------|------|
+| `/xtest/inject-cb-failure/` | POST | CB 실패 주입 |
+| `/xtest/reset-cb/` | POST | CB 리셋 |
+| `/xtest/cb-status/` | GET | CB 상세 상태 |
+| `/xtest/inject-error-budget/` | POST | Error Budget 주입 |
+| `/xtest/snapshot/` | GET | 시스템 스냅샷 |
+| `/xtest/healing-timeline/` | GET | 치유 타임라인 |
+| `/xtest/blast-radius-test/` | POST | 폭발 반경 테스트 |
+| `/xtest/generate-postmortem/` | POST | 포스트모템 생성 |
+
+---
+
+## 11. Serializers (API 직렬화기)
+
+> REST API 요청/응답 직렬화 및 검증
+
+### 11.1 Core Serializers
+
+**경로**: `selfhealing.api.django.serializers_legacy`
+
+| Serializer | 용도 |
+|-----------|------|
+| `ControlRequestSerializer` | 서비스 제어 요청 |
+| `DLQReplayRequestSerializer` | DLQ 리플레이 요청 |
+| `EvidenceSerializer` | Forensic 증거 데이터 |
+| `ControlResponseSerializer` | 제어 API 응답 |
+| `ControlErrorResponseSerializer` | 제어 API 에러 응답 |
+| `ServiceStateSerializer` | 서비스 상태 |
+| `ControlStatusResponseSerializer` | 상태 조회 응답 |
+| `AuditLogSerializer` | Audit 로그 항목 |
+| `AuditLogListResponseSerializer` | Audit 로그 목록 |
+| `ServiceMetricsSerializer` | 서비스 메트릭 |
+| `MetricsResponseSerializer` | 메트릭 응답 |
+| `HealthCheckResponseSerializer` | 헬스체크 응답 |
+| `DLQReplayResponseSerializer` | DLQ 리플레이 응답 |
+
+### 11.2 Config Serializers
+
+**경로**: `selfhealing.api.django.serializers.config`
+
+| Serializer | 용도 |
+|-----------|------|
+| `ApplyStrategyMixin` | 적용 전략 공통 Mixin |
+| `CircuitBreakerConfigSerializer` | CB 설정 |
+| `DLQConfigSerializer` | DLQ 설정 |
+| `RetryConfigSerializer` | 재시도 설정 |
+| `SLAConfigSerializer` | SLA 설정 |
+| `SLOConfigSerializer` | SLO 설정 |
+| `RateLimitConfigSerializer` | Rate Limit 설정 |
+| `SecurityConfigSerializer` | 보안 설정 |
+| `NotificationConfigSerializer` | 알림 설정 |
+| `ForensicConfigSerializer` | 포렌식 설정 |
+| `MetricsConfigSerializer` | 메트릭 설정 |
+| `ErrorBudgetConfigSerializer` | Error Budget 설정 |
+| `LoggingConfigSerializer` | 로깅 설정 |
+| `L2StorageConfigSerializer` | L2 저장소 설정 |
+
+### 11.3 Chaos Serializers
+
+**경로**: `selfhealing.api.django.serializers.chaos`
+
+| 카테고리 | Serializer | 용도 |
+|---------|-----------|------|
+| 설정 | `SafetyGuardConfigSerializer` | 안전 장치 설정 |
+| 설정 | `BlastRadiusPolicySerializer` | 폭발 반경 정책 |
+| 설정 | `SchedulerConfigSerializer` | 스케줄러 설정 |
+| 설정 | `TTLConfigSerializer` | TTL 자동만료 설정 |
+| 실험 | `ExperimentConfigSerializer` | 실험 설정 |
+| 실험 | `ScheduledExperimentSerializer` | 스케줄 실험 요청 |
+| 승인 | `ApprovalRequestSerializer` | 승인 요청 |
+| 승인 | `ApprovalActionSerializer` | 승인/거부 액션 |
+| Kill Switch | `KillSwitchSerializer` | Kill Switch 액션 |
+| 안전검사 | `SafetyCheckResultSerializer` | 안전 검사 결과 |
+| 안전검사 | `BlastRadiusCheckResultSerializer` | 폭발 반경 검사 결과 |
+
+---
+
 ## 버전 정보
 
-- **현재 버전**: 1.4.0
-- **마지막 업데이트**: 2025-12-21
+- **현재 버전**: 1.5.0
+- **마지막 업데이트**: 2026-01-01
 - **변경 내역**:
+  - v1.5.0: 상세 API 엔드포인트 테이블 추가, Serializers 섹션 추가
   - v1.4.0: 재인증 훅 시스템 추가, Fallback 로깅, 마스킹 에러 문자열 개선
   - v1.3.0: Fail-Safe/Fail-Secure 정책 섹션 추가
   - v1.2.0: 보안 및 데이터 보호 섹션 추가 (권한, 마스킹, 액세스 로깅, 캐싱)
