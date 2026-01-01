@@ -82,6 +82,11 @@ class WALConfig:
     max_files: int = 10  # 최대 보관 파일 수
     file_prefix: str = "audit_wal"
     
+    # Group Commit 설정 (I/O 최적화)
+    group_commit_enabled: bool = False  # Group Commit 활성화
+    group_commit_max_entries: int = 100  # 최대 버퍼 엔트리 수
+    group_commit_max_wait_ms: int = 10  # 최대 대기 시간 (ms)
+    
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
@@ -99,6 +104,9 @@ class WALStats:
     last_write_time: Optional[float]
     corrupted_entries: int
     recovered_entries: int
+    # Group Commit 통계
+    group_commit_flushes: int = 0
+    group_commit_buffered: int = 0
 
 
 class WALError(Exception):
@@ -162,6 +170,11 @@ class WriteAheadLog:
         self._corrupted_entries = 0
         self._recovered_entries = 0
         self._last_write_time: Optional[float] = None
+        
+        # Group Commit 버퍼
+        self._group_buffer: List[Dict[str, Any]] = []
+        self._last_flush_time: float = time.time()
+        self._group_commit_flushes: int = 0
         
         # 초기화
         self._init_or_recover()
@@ -264,6 +277,12 @@ class WriteAheadLog:
         Returns:
             시퀀스 번호
         """
+        if self._config.group_commit_enabled:
+            return self._buffered_write(data)
+        return self._direct_write(data)
+    
+    def _direct_write(self, data: Dict[str, Any]) -> int:
+        """직접 기록 (기존 로직)."""
         with self._lock:
             if self._state == WALState.CLOSED:
                 raise WALError("WAL is closed")
@@ -304,6 +323,84 @@ class WriteAheadLog:
                     self._rotate_file()
             
             return current_seq
+    
+    def _buffered_write(self, data: Dict[str, Any]) -> int:
+        """
+        버퍼링된 기록 (Group Commit).
+        
+        여러 엔트리를 모아서 한 번에 fsync 수행.
+        I/O 부하를 99% 절감할 수 있음.
+        """
+        with self._lock:
+            if self._state == WALState.CLOSED:
+                raise WALError("WAL is closed")
+            
+            self._sequence += 1
+            current_seq = self._sequence
+            
+            # 버퍼에 추가
+            buffered_entry = {
+                "seq": current_seq,
+                "ts": time.time(),
+                "data": data,
+            }
+            self._group_buffer.append(buffered_entry)
+            
+            # 플러시 조건 체크
+            should_flush = (
+                len(self._group_buffer) >= self._config.group_commit_max_entries
+                or self._time_since_last_flush_ms() >= self._config.group_commit_max_wait_ms
+            )
+            
+            if should_flush:
+                self._flush_buffer()
+            
+            return current_seq
+    
+    def _time_since_last_flush_ms(self) -> float:
+        """마지막 플러시 이후 경과 시간 (ms)."""
+        return (time.time() - self._last_flush_time) * 1000
+    
+    def _flush_buffer(self) -> None:
+        """버퍼의 모든 엔트리를 한 번에 기록."""
+        if not self._group_buffer:
+            return
+        
+        self._ensure_file_open()
+        
+        if self._current_handle:
+            for entry in self._group_buffer:
+                entry_bytes = json.dumps(entry, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                checksum = self._compute_checksum(entry_bytes)
+                
+                record = (
+                    struct.pack(">I", len(entry_bytes)) +
+                    checksum.encode("ascii") +
+                    entry_bytes
+                )
+                self._current_handle.write(record)
+                self._total_entries += 1
+            
+            # 한 번의 fsync로 모든 엔트리 영속화
+            if self._config.sync_on_write:
+                self._current_handle.flush()
+                os.fsync(self._current_handle.fileno())
+            
+            self._group_commit_flushes += 1
+            self._last_write_time = time.time()
+            
+            # 파일 크기 확인 및 로테이션
+            if self._current_handle.tell() > self._config.max_file_size_bytes:
+                self._rotate_file()
+        
+        self._group_buffer.clear()
+        self._last_flush_time = time.time()
+    
+    def flush(self) -> None:
+        """버퍼 강제 플러시 (Group Commit 모드에서 사용)."""
+        with self._lock:
+            if self._config.group_commit_enabled:
+                self._flush_buffer()
     
     def _read_wal_file(self, filepath: Path) -> Iterator[WALEntry]:
         """

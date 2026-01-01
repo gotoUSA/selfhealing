@@ -10,11 +10,11 @@
   "failsafe_alert_enabled": true,
   "failsafe_cooldown_seconds": 300,
   "heartbeat_enabled": true,
-  "heartbeat_interval_seconds": 30,
-  "heartbeat_timeout_seconds": 90,
-  "recovery_alert_enabled": false,
+  "heartbeat_interval_seconds": 60,
+  "heartbeat_timeout_seconds": 120,
+  "recovery_alert_enabled": true,
   "recovery_alert_include_downtime": true,
   "escalation_enabled": true,
-  "escalation_channel": "#ops-escalation",
-  "escalation_mention": "@oncall"
+  "escalation_channel": "#governance",
+  "escalation_mention": "@cto @security"
 }

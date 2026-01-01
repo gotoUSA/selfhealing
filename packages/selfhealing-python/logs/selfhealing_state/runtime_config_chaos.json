@@ -1,16 +1,13 @@
 {
-  "scheduler_config": {
-    "enabled": false,
-    "dry_run_mode": true,
-    "dry_run_reason": "Initial deployment - simulation mode",
-    "default_schedule_hour_start": 2,
-    "default_schedule_hour_end": 6,
-    "auto_approve_instance_level": true,
-    "auto_approve_service_level": false,
-    "max_concurrent_experiments": 5,
-    "max_experiments_per_day": 10,
-    "min_interval_between_experiments_minutes": 30
-  },
+  "max_blast_radius": 0.1,
+  "max_failure_rate": 0.2,
+  "auto_rollback_enabled": true,
+  "rollback_threshold": 0.05,
+  "dry_run_default": true,
+  "require_approval": false,
+  "experiment_timeout_seconds": 300,
+  "stop_on_error_rate": 0.1,
+  "stop_on_latency_increase_pct": 50.0,
   "safety_guard_config": {
     "error_budget_min_percent": 30.0,
     "error_budget_warning_percent": 50.0,
@@ -37,5 +34,16 @@
     "excluded_services": [],
     "excluded_domains": []
   },
-  "report_config": {}
+  "scheduler_config": {
+    "enabled": false,
+    "dry_run_mode": true,
+    "dry_run_reason": "Initial deployment - simulation mode",
+    "default_schedule_hour_start": 2,
+    "default_schedule_hour_end": 6,
+    "auto_approve_instance_level": true,
+    "auto_approve_service_level": false,
+    "max_concurrent_experiments": 5,
+    "max_experiments_per_day": 10,
+    "min_interval_between_experiments_minutes": 30
+  }
 }

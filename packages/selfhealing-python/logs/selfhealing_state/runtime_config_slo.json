@@ -1,8 +1,8 @@
 {
-  "default_window_days": 14,
-  "default_target": 0.995,
-  "default_fast_burn_rate": 10.0,
-  "default_slow_burn_rate": 2.0,
+  "default_window_days": 30,
+  "default_target": 0.999,
+  "default_fast_burn_rate": 14.4,
+  "default_slow_burn_rate": 3.0,
   "slos": [
     {
       "name": "availability",
@@ -42,71 +42,6 @@
       "critical_threshold": null,
       "fast_burn_rate": 14.4,
       "slow_burn_rate": 3.0
-    },
-    {
-      "name": "checkout_latency",
-      "sli_type": "latency_p99",
-      "target": 0.3,
-      "window_days": 7,
-      "description": "",
-      "service_name": "",
-      "domain": "",
-      "warning_threshold": null,
-      "critical_threshold": null,
-      "fast_burn_rate": 14.4,
-      "slow_burn_rate": 3.0
-    },
-    {
-      "name": "test_slo",
-      "sli_type": "availability",
-      "target": 0.999,
-      "window_days": 14,
-      "description": "",
-      "service_name": "",
-      "domain": "",
-      "warning_threshold": null,
-      "critical_threshold": null,
-      "fast_burn_rate": 14.4,
-      "slow_burn_rate": 3.0
-    },
-    {
-      "name": "slo_one",
-      "sli_type": "availability",
-      "target": 0.99,
-      "window_days": 14,
-      "description": "",
-      "service_name": "",
-      "domain": "",
-      "warning_threshold": null,
-      "critical_threshold": null,
-      "fast_burn_rate": 14.4,
-      "slow_burn_rate": 3.0
-    },
-    {
-      "name": "slo_two",
-      "sli_type": "availability",
-      "target": 0.995,
-      "window_days": 14,
-      "description": "",
-      "service_name": "",
-      "domain": "",
-      "warning_threshold": null,
-      "critical_threshold": null,
-      "fast_burn_rate": 14.4,
-      "slow_burn_rate": 3.0
-    },
-    {
-      "name": "new_minimal_slo",
-      "sli_type": "availability",
-      "target": 0.995,
-      "window_days": 14,
-      "description": "",
-      "service_name": "",
-      "domain": "",
-      "warning_threshold": null,
-      "critical_threshold": null,
-      "fast_burn_rate": 10.0,
-      "slow_burn_rate": 2.0
     }
   ]
 }

@@ -50,11 +50,13 @@ class ProviderRegistry:
     _failed_op_repos: dict[str, Type] = {}
     _circuit_breaker_repos: dict[str, Type] = {}
     _security_repos: dict[str, Type] = {}
+    _audit_adapters: dict[str, Type] = {}  # Audit adapters
 
     # Default provider names
     _default_cache: str = "memory"
     _default_queue: str = "sync"
     _default_repo: str = "django"
+    _default_audit: str = "file"  # Default audit adapter
 
     # Singleton instances (for reuse)
     _instances: dict[str, object] = {}
@@ -92,6 +94,12 @@ class ProviderRegistry:
         """Register a security incident repository."""
         cls._security_repos[name] = repo_class
         logger.debug(f"[Registry] Registered security repo: {name}")
+
+    @classmethod
+    def register_audit_adapter(cls, name: str, adapter_class: Type) -> None:
+        """Register an audit log adapter."""
+        cls._audit_adapters[name] = adapter_class
+        logger.debug(f"[Registry] Registered audit adapter: {name}")
 
     # =========================================================================
     # Provider Getters
@@ -235,6 +243,74 @@ class ProviderRegistry:
 
         return instance
 
+    @classmethod
+    def get_audit_adapter(
+        cls,
+        name: Optional[str] = None,
+        singleton: bool = True,
+    ) -> "AuditLogAdapter":
+        """
+        Get audit adapter instance.
+
+        Args:
+            name: Adapter name (e.g., 'file', 'stdout', 'null')
+            singleton: If True, return cached instance
+
+        Returns:
+            AuditLogAdapter instance
+
+        Raises:
+            ValueError: If no adapter registered with the given name
+        """
+        from selfhealing.interfaces.audit_adapter import AuditLogAdapter
+
+        name = name or cls._default_audit
+
+        if singleton:
+            key = f"audit:{name}"
+            if key in cls._instances:
+                return cls._instances[key]
+
+        if name not in cls._audit_adapters:
+            # Auto-register defaults if not registered
+            cls._auto_register_audit_adapters()
+
+        if name not in cls._audit_adapters:
+            raise ValueError(f"Unknown audit adapter: {name}. " f"Available: {list(cls._audit_adapters.keys())}")
+
+        adapter_class = cls._audit_adapters[name]
+
+        # Create instance with default settings
+        import os
+        if name == "file":
+            log_path = os.getenv("AUDIT_LOG_PATH", "logs/audit.jsonl")
+            instance = adapter_class(log_path)
+        else:
+            instance = adapter_class()
+
+        if singleton:
+            cls._instances[key] = instance
+
+        return instance
+
+    @classmethod
+    def _auto_register_audit_adapters(cls) -> None:
+        """Auto-register default audit adapters."""
+        try:
+            from selfhealing.adapters.audit import (
+                FileAuditLogAdapter,
+                StdoutAuditLogAdapter,
+                NullAuditLogAdapter,
+            )
+            if "file" not in cls._audit_adapters:
+                cls.register_audit_adapter("file", FileAuditLogAdapter)
+            if "stdout" not in cls._audit_adapters:
+                cls.register_audit_adapter("stdout", StdoutAuditLogAdapter)
+            if "null" not in cls._audit_adapters:
+                cls.register_audit_adapter("null", NullAuditLogAdapter)
+        except ImportError:
+            pass
+
     # =========================================================================
     # Configuration Methods
     # =========================================================================
@@ -285,6 +361,7 @@ class ProviderRegistry:
             "failed_operation_repo": list(cls._failed_op_repos.keys()),
             "circuit_breaker_repo": list(cls._circuit_breaker_repos.keys()),
             "security_repo": list(cls._security_repos.keys()),
+            "audit_adapter": list(cls._audit_adapters.keys()),
         }
 
     @classmethod
@@ -302,9 +379,11 @@ class ProviderRegistry:
         cls._failed_op_repos.clear()
         cls._circuit_breaker_repos.clear()
         cls._security_repos.clear()
+        cls._audit_adapters.clear()
         cls._default_cache = "memory"
         cls._default_queue = "sync"
         cls._default_repo = "django"
+        cls._default_audit = "file"
         logger.debug("[Registry] Reset to initial state")
 
     # =========================================================================
@@ -429,6 +508,20 @@ def _auto_register_adapters() -> None:
         ProviderRegistry.register_failed_operation_repo("memory", InMemoryFailedOperationRepository)
         ProviderRegistry.register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)
         ProviderRegistry.register_security_repo("memory", InMemorySecurityIncidentRepository)
+    except ImportError:
+        pass
+
+    # Audit adapters
+    try:
+        from selfhealing.adapters.audit import (
+            FileAuditLogAdapter,
+            StdoutAuditLogAdapter,
+            NullAuditLogAdapter,
+        )
+
+        ProviderRegistry.register_audit_adapter("file", FileAuditLogAdapter)
+        ProviderRegistry.register_audit_adapter("stdout", StdoutAuditLogAdapter)
+        ProviderRegistry.register_audit_adapter("null", NullAuditLogAdapter)
     except ImportError:
         pass
 

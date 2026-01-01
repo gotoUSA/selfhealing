@@ -1,8 +1,9 @@
 # 55. Audit 시스템 수정 가이드
 
-> **문서 버전**: 1.0.0
+> **문서 버전**: 1.1.0
 > **생성일**: 2026-01-01
-> **목적**: Audit 시스템의 6가지 발견된 문제 수정 가이드
+> **최종 수정일**: 2026-01-01
+> **목적**: Audit 시스템의 6가지 발견된 문제 수정 + 3가지 확장 가이드
 
 ---
 
@@ -10,12 +11,20 @@
 
 | # | 문제 | 심각도 | 상태 |
 |---|------|-------|------|
-| 1 | `get_audit_adapter()` 함수 미존재 | 🔴 Critical | 수정 필요 |
-| 2 | Celery Task에서 actor_id 누락 | 🟡 Medium | 수정 필요 |
-| 3 | ProviderRegistry에 audit_adapter 미등록 | 🟡 Medium | 수정 필요 |
-| 4 | RateLimit 위치 변경 시 HealthBridge 간섭 | 🟡 Medium | 가이드 제공 |
-| 5 | WAL이 ContinuousAuditRecorder에 미연결 | 🟡 Medium | 설계 가이드 |
+| 1 | `get_audit_adapter()` 함수 미존재 | 🔴 Critical | ✅ 구현 완료 |
+| 2 | Celery Task에서 actor_id 누락 | 🟡 Medium | ✅ 구현 완료 |
+| 3 | ProviderRegistry에 audit_adapter 미등록 | 🟡 Medium | ✅ 구현 완료 |
+| 4 | RateLimit 위치 변경 시 HealthBridge 간섭 | 🟡 Medium | 📖 가이드 제공 |
+| 5 | WAL이 ContinuousAuditRecorder에 미연결 | 🟡 Medium | ✅ 구현 완료 |
 | 6 | Exception Handling | 🟢 OK | 이미 적절함 |
+
+### 📋 확장 기능
+
+| # | 확장 | 심각도 | 상태 |
+|---|------|-------|------|
+| E1 | `ContextType` 스키마 표준화 | 🟡 Medium | ✅ 구현 완료 |
+| E2 | WAL Group Commit 전략 | 🟡 Medium | ✅ 구현 완료 |
+| E3 | Fail-Open 정책 명시 | 🔴 Critical | ✅ 구현 완료 |
 
 ---
 
@@ -453,14 +462,287 @@ AUDIT_WAL_DIR = os.getenv("AUDIT_WAL_DIR", "/var/log/audit/wal")
 
 ---
 
+## � 확장 1: Audit 데이터 스키마 표준화 (수정 2 확장)
+
+### 문제 상황
+
+Celery Task와 미들웨어가 각기 다른 형식으로 Audit 데이터를 생성하면, 나중에 분석 시 일관성이 깨집니다.
+
+```python
+# 현재: actor_type만으로는 출처 구분 불가
+entry = AuditEntry(
+    action=AuditAction.DLQ_REPLAY_SUCCESS,
+    actor_type="scheduler",  # ← 이게 미들웨어인지 Celery인지 알 수 없음
+)
+```
+
+### 해결책: `ContextType` Enum 추가
+
+**파일**: `packages/selfhealing-python/src/selfhealing/interfaces/audit_adapter.py`
+
+```python
+from enum import Enum
+
+class ContextType(str, Enum):
+    """Audit 이벤트 발생 컨텍스트 유형."""
+    REQUEST = "request"      # HTTP 요청 처리 중 (미들웨어)
+    TASK = "task"           # 백그라운드 태스크 (Celery, RQ)
+    SYSTEM = "system"       # 시스템 자동화 (스케줄러, 자동 복구)
+    WEBHOOK = "webhook"     # 외부 웹훅 처리
+    CLI = "cli"             # CLI 명령 실행
+    UNKNOWN = "unknown"     # 알 수 없음 (폴백)
+
+
+@dataclass
+class AuditEntry:
+    action: AuditAction | str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Actor information
+    actor_id: Optional[str] = field(default=None)
+    actor_type: str = field(default="system")
+    
+    # 🆕 Context type - 발생 환경 구분
+    context_type: ContextType = field(default=ContextType.UNKNOWN)
+    
+    # ... (기존 필드 유지) ...
+```
+
+### 업계 사례
+
+| 시스템 | 구현 방식 |
+|--------|----------|
+| **AWS CloudTrail** | `eventSource` + `eventType`으로 API/Console/Lambda 구분 |
+| **Datadog APM** | `trace.origin` 필드로 HTTP/Queue/Cron 구분 |
+| **OpenTelemetry** | `SpanKind` (SERVER, CONSUMER, PRODUCER, INTERNAL) |
+
+### 분석 시 이점
+
+```sql
+-- Elasticsearch/Splunk 쿼리 예시
+SELECT COUNT(*) FROM audit_logs 
+WHERE context_type = 'TASK' 
+GROUP BY action, hour(timestamp)
+```
+
+---
+
+## 🔵 확장 2: WAL 배치 커밋 전략 (수정 5 보완)
+
+### 문제 상황
+
+현재 WAL은 매 write마다 fsync를 수행하여 I/O 부하가 큽니다.
+
+```python
+# 현재: 매번 fsync
+def write(self, data: Dict[str, Any]) -> int:
+    ...
+    if self._config.sync_on_write:
+        self._current_handle.flush()
+        os.fsync(self._current_handle.fileno())  # ← 비용 높음
+```
+
+### 해결책: Group Commit 옵션
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/wal.py`
+
+```python
+@dataclass
+class WALConfig:
+    """WAL 설정."""
+    wal_dir: str = "/var/log/audit/wal"
+    max_file_size_mb: int = 100
+    sync_on_write: bool = True
+    max_files: int = 10
+    file_prefix: str = "audit_wal"
+    
+    # 🆕 Group Commit 설정
+    group_commit_enabled: bool = False
+    group_commit_max_entries: int = 100   # 최대 버퍼 엔트리 수
+    group_commit_max_wait_ms: int = 10    # 최대 대기 시간 (ms)
+    
+    @property
+    def max_file_size_bytes(self) -> int:
+        return self.max_file_size_mb * 1024 * 1024
+```
+
+### 구현 전략
+
+```python
+class WriteAheadLog:
+    def __init__(self, ...):
+        # Group Commit 버퍼
+        self._group_buffer: List[Dict] = []
+        self._last_flush_time: float = time.time()
+        self._flush_lock = threading.Lock()
+    
+    def write(self, data: Dict[str, Any]) -> int:
+        if self._config.group_commit_enabled:
+            return self._buffered_write(data)
+        return self._direct_write(data)
+    
+    def _buffered_write(self, data: Dict[str, Any]) -> int:
+        with self._flush_lock:
+            self._group_buffer.append(data)
+            seq = self._sequence + len(self._group_buffer)
+            
+            # 플러시 조건 체크
+            should_flush = (
+                len(self._group_buffer) >= self._config.group_commit_max_entries
+                or self._time_since_last_flush_ms() >= self._config.group_commit_max_wait_ms
+            )
+            
+            if should_flush:
+                self._flush_buffer()
+            
+            return seq
+    
+    def _flush_buffer(self) -> None:
+        """버퍼의 모든 엔트리를 한 번에 기록."""
+        if not self._group_buffer:
+            return
+        
+        self._ensure_file_open()
+        
+        for entry in self._group_buffer:
+            self._write_single_entry(entry)
+        
+        # 한 번의 fsync로 모든 엔트리 영속화
+        if self._config.sync_on_write and self._current_handle:
+            self._current_handle.flush()
+            os.fsync(self._current_handle.fileno())
+        
+        self._group_buffer.clear()
+        self._last_flush_time = time.time()
+```
+
+### 업계 사례
+
+| 데이터베이스 | Group Commit 전략 |
+|--------------|-------------------|
+| **PostgreSQL** | `commit_delay` + `commit_siblings` 설정 |
+| **MySQL InnoDB** | `innodb_flush_log_at_trx_commit=2` |
+| **Kafka** | `linger.ms` + `batch.size`로 배치 전송 |
+| **etcd WAL** | 16KB 버퍼 후 flush |
+
+### 성능 향상 기대치
+
+```
+100 엔트리 × 개별 fsync = 100회 I/O
+100 엔트리 × Group Commit = 1회 I/O
+→ 99% I/O 감소
+```
+
+---
+
+## 🔵 확장 3: Fail-Open 정책 명시 (Critical)
+
+### 문제 상황
+
+`ContinuousAuditRecorder._record_with_integrity()`에는 예외 처리가 없습니다!
+
+```python
+# 현재 코드 (위험!)
+def _record_with_integrity(self, entry: AuditEntry) -> str:
+    with self._lock:
+        entry_dict = entry.to_dict()
+        entry_dict = self._hash_manager.add_integrity(entry_dict)
+        self.audit_adapter.log(entry)  # ← 실패하면 예외 전파!
+        ...
+```
+
+이로 인해 Audit 저장소 장애 시 **비즈니스 로직까지 중단**될 수 있습니다.
+
+### 해결책: 중앙화된 Fail-Open 패턴
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/continuous_audit.py`
+
+```python
+class ContinuousAuditRecorder:
+    """
+    FAIL-OPEN Design Policy:
+    
+    감사 로그 기록 실패가 비즈니스 처리를 방해하지 않습니다.
+    - 기본: Audit 실패 → 경고 로그 + fallback stdout
+    - 선택: fail_open=False로 Fail-Secure 모드 가능 (PCI-DSS)
+    """
+    
+    def __init__(
+        self,
+        audit_adapter: AuditLogAdapter,
+        config: Optional[AuditConfig] = None,
+        fail_open: bool = True,           # 🆕 Fail-Open 정책
+        fallback_to_stdout: bool = True,  # 🆕 실패 시 stdout 출력
+        ...
+    ):
+        self._fail_open = fail_open
+        self._fallback_to_stdout = fallback_to_stdout
+        self._failed_write_count = 0  # 🆕 실패 통계
+    
+    def _record_with_integrity(self, entry: AuditEntry) -> str:
+        with self._lock:
+            entry_dict = entry.to_dict()
+            entry_dict = self._hash_manager.add_integrity(entry_dict)
+            entry.details["integrity"] = entry_dict.get("integrity", {})
+            
+            # Fail-Open 패턴 적용
+            try:
+                self.audit_adapter.log(entry)
+            except Exception as e:
+                self._failed_write_count += 1
+                
+                if self._fallback_to_stdout:
+                    # Fallback: stdout에 최소한의 기록
+                    import sys
+                    print(
+                        f"[FALLBACK_AUDIT_LOG] {entry.action}: {entry.to_json()}",
+                        file=sys.stderr,
+                    )
+                
+                if not self._fail_open:
+                    # Fail-Secure 모드: 예외 전파
+                    raise
+                
+                logger.warning(
+                    f"[ContinuousAudit] Write failed (fail-open): {e}. "
+                    f"Total failures: {self._failed_write_count}"
+                )
+            
+            # ID 생성
+            integrity = entry_dict.get("integrity", {})
+            audit_id = f"audit-{entry.timestamp.strftime('%Y%m%d%H%M%S')}-{integrity.get('sequence', 0):06d}"
+            
+            return audit_id
+```
+
+### 업계 정책 비교
+
+| 표준/시스템 | Fail 정책 | 근거 |
+|------------|----------|------|
+| **Netflix Zuul** | Fail-Open | 가용성 우선, 메트릭으로 모니터링 |
+| **Stripe** | Fail-Open + 재시도 | 메모리 버퍼 후 비동기 flush |
+| **PCI-DSS** | Fail-Secure **권장** | 단, 가용성 예외 허용 조항 있음 |
+| **SOC2** | Fail-Open **허용** | 실패 기록만 있으면 됨 |
+
+### 환경 변수 설정
+
+```python
+# settings.py
+AUDIT_FAIL_OPEN = os.getenv("AUDIT_FAIL_OPEN", "TRUE") == "TRUE"
+AUDIT_FALLBACK_STDOUT = os.getenv("AUDIT_FALLBACK_STDOUT", "TRUE") == "TRUE"
+```
+
+---
+
 ## 📊 수정 우선순위
 
 ```
 1. get_audit_adapter() 함수 추가 (Critical - 런타임 에러)
 2. ProviderRegistry 등록 (의존성)
-3. Celery actor_id 래핑 (데이터 품질)
+3. Celery actor_id + context_type 래핑 (데이터 품질)
 4. RateLimit 제외 경로 (안정성)
-5. WAL 연동 (장기 과제)
+5. WAL 연동 + Group Commit (장기 과제)
+6. Fail-Open 정책 적용 (Critical - 안정성)
 ```
 
 ---
@@ -475,5 +757,5 @@ AUDIT_WAL_DIR = os.getenv("AUDIT_WAL_DIR", "/var/log/audit/wal")
 
 ## 다음 단계: AuditMiddleware 구현
 
-6가지 수정이 완료되면 중앙화된 `AuditMiddleware`를 구현할 수 있습니다.
+6가지 수정과 3가지 확장이 완료되면 중앙화된 `AuditMiddleware`를 구현할 수 있습니다.
 자세한 설계는 **56_AUDIT_MIDDLEWARE_DESIGN.md**에서 다룹니다.

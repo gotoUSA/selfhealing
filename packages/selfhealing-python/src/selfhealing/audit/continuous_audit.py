@@ -18,7 +18,7 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Iterator, Callable
+from typing import Any, Dict, List, Optional, Iterator, Callable, TYPE_CHECKING
 
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,
@@ -27,6 +27,9 @@ from selfhealing.interfaces.audit_adapter import (
 )
 from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
 from selfhealing.audit.config import AuditConfig
+
+if TYPE_CHECKING:
+    from selfhealing.audit.wal import WriteAheadLog, WALConfig
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +45,24 @@ class ContinuousAuditRecorder:
     - Raw data 조회/필터/익스포트 제공
     - 보고서 포맷팅 미제공 (사용자가 직접 가공)
     
+    FAIL-OPEN Design Policy:
+    --------------------------
+    감사 로그 기록 실패가 비즈니스 처리를 방해하지 않습니다.
+    - 기본: Audit 실패 → 경고 로그 + fallback stdout
+    - 선택: fail_open=False로 Fail-Secure 모드 가능 (PCI-DSS)
+    
+    업계 정책:
+    - Netflix Zuul: Fail-Open (가용성 우선)
+    - Stripe: Fail-Open + 재시도
+    - PCI-DSS: Fail-Secure 권장 (단, 가용성 예외 허용)
+    - SOC2: Fail-Open 허용 (실패 기록만 있으면 됨)
+    
     Usage:
         config = AuditConfig.get_default()
         recorder = ContinuousAuditRecorder(
             audit_adapter=FileAuditLogAdapter("logs/audit.jsonl"),
             config=config,
+            fail_open=True,  # 기본: Fail-Open
         )
         
         recorder.record_auto_tuning(
@@ -66,6 +82,12 @@ class ContinuousAuditRecorder:
         config: Optional[AuditConfig] = None,
         alert_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         state_file: Optional[Path] = None,
+        # Fail-Open 정책
+        fail_open: bool = True,
+        fallback_to_stdout: bool = True,
+        # WAL 연동
+        wal_enabled: bool = False,
+        wal_config: Optional["WALConfig"] = None,
     ):
         """
         Initialize ContinuousAuditRecorder.
@@ -75,14 +97,36 @@ class ContinuousAuditRecorder:
             config: 감사 설정 (None이면 환경변수에서 로드)
             alert_callback: 알림 콜백 (channel, data) -> None
             state_file: 해시 체인 상태 파일 경로
+            fail_open: Fail-Open 정책 (기본: True)
+            fallback_to_stdout: 실패 시 stdout 출력 (기본: True)
+            wal_enabled: WAL 활성화 (기본: False)
+            wal_config: WAL 설정
         """
         self.audit_adapter = audit_adapter
         self.config = config or AuditConfig.get_default()
         self.alert_callback = alert_callback
         
+        # Fail-Open 정책
+        self._fail_open = fail_open
+        self._fallback_to_stdout = fallback_to_stdout
+        self._failed_write_count = 0
+        
         # 해시 체인 관리자
         self._hash_manager = HashChainManager(state_file=state_file)
         self._lock = threading.RLock()
+        
+        # WAL 초기화 (선택적)
+        self._wal_enabled = wal_enabled
+        self._wal: Optional["WriteAheadLog"] = None
+        
+        if wal_enabled:
+            try:
+                from selfhealing.audit.wal import WriteAheadLog, WALConfig as WALConfigClass
+                self._wal = WriteAheadLog(config=wal_config or WALConfigClass())
+                logger.info("[ContinuousAudit] WAL enabled")
+            except Exception as e:
+                logger.warning(f"[ContinuousAudit] WAL initialization failed: {e}")
+                self._wal_enabled = False
         
         # 환경 정보
         self._environment = os.environ.get("ENVIRONMENT", "development")
@@ -639,6 +683,11 @@ class ContinuousAuditRecorder:
         """
         해시 체인과 함께 기록.
         
+        FAIL-OPEN 정책:
+        - 기록 실패 시에도 비즈니스 로직을 차단하지 않음
+        - fallback_to_stdout 활성화 시 stdout에 최소한의 기록
+        - fail_open=False로 Fail-Secure 모드 가능
+        
         Args:
             entry: 감사 엔트리
             
@@ -655,8 +704,44 @@ class ContinuousAuditRecorder:
             # 무결성 정보를 details에 포함
             entry.details["integrity"] = entry_dict.get("integrity", {})
             
-            # 기록
-            self.audit_adapter.log(entry)
+            # WAL 기록 (활성화된 경우)
+            wal_seq = None
+            if self._wal_enabled and self._wal:
+                try:
+                    wal_seq = self._wal.write(entry_dict)
+                except Exception as e:
+                    logger.warning(f"[ContinuousAudit] WAL write failed: {e}")
+            
+            # Fail-Open 패턴으로 기록
+            try:
+                self.audit_adapter.log(entry)
+                
+                # WAL 커밋 (성공 시)
+                if wal_seq is not None and self._wal:
+                    try:
+                        self._wal.mark_processed(wal_seq)
+                    except Exception as e:
+                        logger.warning(f"[ContinuousAudit] WAL commit failed: {e}")
+                        
+            except Exception as e:
+                self._failed_write_count += 1
+                
+                if self._fallback_to_stdout:
+                    # Fallback: stdout에 최소한의 기록
+                    import sys
+                    print(
+                        f"[FALLBACK_AUDIT_LOG] {entry.action}: {entry.to_json()}",
+                        file=sys.stderr,
+                    )
+                
+                if not self._fail_open:
+                    # Fail-Secure 모드: 예외 전파
+                    raise
+                
+                logger.warning(
+                    f"[ContinuousAudit] Write failed (fail-open): {e}. "
+                    f"Total failures: {self._failed_write_count}"
+                )
             
             # ID 생성 (timestamp + sequence)
             integrity = entry_dict.get("integrity", {})
@@ -665,6 +750,16 @@ class ContinuousAuditRecorder:
             logger.debug(f"[ContinuousAudit] Recorded: {entry.action} (id={audit_id})")
             
             return audit_id
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """감사 기록기 통계 반환."""
+        return {
+            "failed_write_count": self._failed_write_count,
+            "fail_open": self._fail_open,
+            "fallback_to_stdout": self._fallback_to_stdout,
+            "wal_enabled": self._wal_enabled,
+            "chain_state": self._hash_manager.get_state(),
+        }
     
     def _send_alert(self, channel: str, data: Dict[str, Any]) -> None:
         """알림 발송."""
