@@ -64,7 +64,7 @@ HTTP Request
 
 ### 2.1 HealthBridgeMiddleware
 
-**경로**: `myproject.middleware.HealthBridgeMiddleware`
+**경로**: `selfhealing.api.django.middleware.HealthBridgeMiddleware`
 
 **역할**: Django 헬스 체크 엔드포인트 연결
 
@@ -84,7 +84,7 @@ class HealthBridgeMiddleware:
 
 ### 2.2 SelfHealingMiddleware
 
-**경로**: `myproject.middleware.SelfHealingMiddleware`
+**경로**: `selfhealing.api.django.middleware.SelfHealingMiddleware`
 
 **역할**: 복원력 로직 통합 (Circuit Breaker, DLQ 연동)
 
@@ -101,7 +101,7 @@ class HealthBridgeMiddleware:
 
 ### 2.3 HybridRateLimitMiddleware
 
-**경로**: `myproject.middleware.HybridRateLimitMiddleware`
+**경로**: `selfhealing.api.django.rate_limit.HybridRateLimitMiddleware`
 
 **역할**: 하이브리드 레이트 리밋 (Token Bucket + Sliding Window)
 
@@ -125,7 +125,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 2.4 ChaosMiddleware
 
-**경로**: `myproject.middleware.ChaosMiddleware`
+**경로**: `myproject.middleware.chaos_middleware.ChaosMiddleware`
 
 **역할**: Chaos Engineering 실험 주입
 
@@ -144,7 +144,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 2.5 ConnectionPoolLimiterMiddleware
 
-**경로**: `myproject.middleware.ConnectionPoolLimiterMiddleware`
+**경로**: `myproject.middleware.chaos_middleware.ConnectionPoolLimiterMiddleware`
 
 **역할**: DB 커넥션 풀 보호
 
@@ -154,11 +154,9 @@ RATE_LIMIT_CONFIG = {
 | 조기 거부 | 풀 고갈 전 요청 거부 |
 | Backpressure | 클라이언트에 재시도 신호 |
 
-### 2.6 RateLimitingMiddleware (미사용)
+### 2.6 RateLimitingMiddleware (Deprecated)
 
-**경로**: `myproject.middleware.RateLimitingMiddleware`
-
-**상태**: Deprecated - HybridRateLimitMiddleware로 대체
+**상태**: ❌ **존재하지 않음** - `HybridRateLimitMiddleware`로 대체됨
 
 ### 2.7 PrometheusBeforeMiddleware / PrometheusAfterMiddleware
 
@@ -179,7 +177,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.1 PoolCircuitBreakerMiddleware
 
-**경로**: `myproject.middleware.pool_circuit_breaker`
+**경로**: `selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware`
 
 **역할**: Connection Pool 전용 Circuit Breaker
 
@@ -191,7 +189,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.2 AuditMiddleware
 
-**경로**: `myproject.middleware.audit`
+**경로**: `selfhealing.api.django.audit_middleware.AuditMiddleware`
 
 **역할**: 감사 로그 자동 수집
 
@@ -205,7 +203,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.3 SensitiveAccessLoggingMiddleware
 
-**경로**: `myproject.middleware.sensitive_access_logging`
+**경로**: `selfhealing.api.django.middleware.SensitiveAccessLoggingMiddleware`
 
 **역할**: 민감 데이터 접근 감사
 
@@ -223,7 +221,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.5 ActorContextMiddleware
 
-**경로**: `myproject.middleware.actor_context`
+**경로**: `myproject.middleware.actor_middleware.ActorContextMiddleware`
 
 **역할**: Actor 컨텍스트 설정
 
@@ -235,7 +233,7 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.6 PoolTimeoutMiddleware
 
-**경로**: `myproject.middleware.pool_timeout`
+**경로**: `myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware`
 
 **역할**: 커넥션 획득 타임아웃 설정
 
@@ -246,39 +244,50 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.7 trace_id Middleware
 
-**경로**: `myproject.middleware.trace_id`
+**경로**: `selfhealing.audit.trace.trace_id_middleware`
 
 **역할**: 분산 추적 ID 전파
 
 | 구성요소 | 설명 |
 |----------|------|
 | 헤더 추출 | X-Request-ID, X-Trace-ID |
-| 자동 생성 | 헤더 없을 시 UUID 생성 |
+| 자동 생성 | 헤더 없을 시 UUID 생성 (`req-{uuid4_short}` 형식) |
 | 로깅 연동 | 모든 로그에 trace_id 포함 |
+| 관련 함수 | `generate_trace_id()`, `get_trace_id()`, `set_trace_id()`, `clear_trace_id()` |
 
-### 3.8 ExitProofMiddleware
+### 3.8 GracefulShutdownCoordinator (미들웨어 아님)
 
-**경로**: `myproject.middleware.exit_proof`
+**경로**: `selfhealing.core.shutdown_coordinator.GracefulShutdownCoordinator`
 
-**역할**: 정상 종료 증명
+**역할**: Graceful Shutdown 코디네이터 (미들웨어가 아닌 코어 컴포넌트)
 
 | 구성요소 | 설명 |
 |----------|------|
-| Shutdown 감지 | SIGTERM 수신 감지 |
-| 진행 중 요청 | 완료 대기 후 종료 |
+| Shutdown 감지 | SIGTERM/SIGINT 신호 처리 |
+| 진행 중 요청 추적 | `RequestTracker`로 In-flight 요청 관리 |
+| Drain Phase | 신규 요청 거부, 기존 요청 완료 대기 |
 | 타임아웃 | 최대 대기 시간 설정 |
 
-### 3.9 DDoSProtectionMiddleware
+> **Note**: FastAPI에서는 `ShutdownMiddleware`로 통합 사용 (섹션 4.2 참조)
 
-**경로**: `myproject.middleware.ddos_protection`
+### 3.9 Self-DDoS Protection (미들웨어 아님)
 
-**역할**: DDoS 공격 방어
+**경로**: `selfhealing.services.circuit_breaker.protection.CircuitBreakerProtection`
+
+**역할**: Self-DDoS 공격 방어 (재시도 증폭 방지)
+
+> **Note**: 독립 미들웨어가 아닌 `CircuitBreakerService`의 내장 기능입니다.
 
 | 구성요소 | 설명 |
 |----------|------|
-| 패턴 탐지 | 비정상 트래픽 패턴 감지 |
-| IP 차단 | 공격 IP 자동 차단 |
-| 레이트 리밋 | 동적 레이트 리밋 적용 |
+| 요청률 추적 | 서비스별 요청 횟수 모니터링 |
+| 임계값 기반 감지 | `self_ddos_request_threshold` 초과 시 감지 |
+| Backoff 제안 | 차단하지 않고 재시도 지연 권장 |
+| 설정 항목 | `self_ddos_protection_enabled`, `self_ddos_window_seconds`, `self_ddos_backoff_multiplier` |
+
+**관련 메서드**:
+- `should_allow_with_ddos_protection(service_name)` → `(bool, float)`
+- `is_self_ddos_detected(service_name)` → `bool`
 
 ---
 
@@ -446,9 +455,9 @@ SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False
 | `IsSelfHealingAuthenticated` | 인증 체크 (테스트 바이패스 지원) |
 | `IsViewer` | 읽기 전용 권한 (`selfhealing_viewer` 그룹) |
 | `IsOperator` | 운영자 권한 (`selfhealing_operator` 그룹) |
-| `IsAdmin` | 관리자 권한 (`selfhealing_admin` 그룹) |
-| `EmergencyEscalation` | Break Glass 비상 권한 |
-| `ThresholdBased` | 위험 기반 접근 제어 |
+| `IsSelfHealingAdmin` | 관리자 권한 (`selfhealing_admin` 그룹) |
+| `EmergencyEscalationPermission` | Break Glass 비상 권한 |
+| `ThresholdBasedPermission` | 위험 기반 접근 제어 |
 
 **권한 계층**:
 ```
