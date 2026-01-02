@@ -31,14 +31,10 @@ class FailedOperation(models.Model):
     Every failure that exhausts retry attempts lands here for human review.
     """
 
-    class Domain(models.TextChoices):
-        """Domain classification for failed operations"""
-
-        PAYMENT = "payment", "Payment"
-        POINT = "point", "Point"
-        INVENTORY = "inventory", "Inventory"
-        WEBHOOK = "webhook", "Webhook"
-        NOTIFICATION = "notification", "Notification"
+    # Domain-free 설계:
+    # domain 필드는 CharField로 자유롭게 사용 가능
+    # 프로젝트별로 원하는 도메인 이름을 사용하세요
+    # 예: "payment", "order", "game_match", "user_auth" 등
 
     class Status(models.TextChoices):
         """State machine for DLQ item lifecycle"""
@@ -70,13 +66,12 @@ class FailedOperation(models.Model):
         ESCALATE = "escalate", "Escalate to Senior"
         ARCHIVE = "archive", "Archive (No Action)"
 
-    # Domain & Classification
+    # Domain & Classification (Domain-Free: 프로젝트별 자유 사용)
     domain = models.CharField(
         max_length=50,
-        choices=Domain.choices,
         db_index=True,
         verbose_name="Domain",
-        help_text="Business domain where the failure occurred",
+        help_text="Business domain where the failure occurred (e.g., 'payment', 'order', 'game')",
     )
 
     failure_type = models.CharField(

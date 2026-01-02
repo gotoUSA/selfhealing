@@ -88,13 +88,13 @@ class MetricReconciler:
         Args:
             adapter: 메트릭 소스 어댑터 (None이면 팩토리에서 가져옴)
             domains: 도메인 목록 (None이면 등록된 도메인 사용)
-            services: 서비스 목록 (Circuit Breaker용)
+            services: 서비스 목록 (Circuit Breaker용, None이면 설정에서 로드)
             drift_config: Drift 임계값 설정
             incident_service: 인시던트 서비스 (선택)
         """
         self.adapter = adapter or get_metric_adapter()
         self._domains = domains
-        self._services = services or ["toss_payment", "external_api", "notification"]
+        self._services = services  # Domain-free: 설정에서 로드하거나 명시적으로 전달
         self._drift_config = drift_config
         self.incident_service = incident_service
         self._last_sync: Optional[datetime] = None
@@ -110,6 +110,23 @@ class MetricReconciler:
             return get_domains()
         except ImportError:
             return ["external_service", "internal_process", "async_task"]
+
+    def _get_services(self) -> List[str]:
+        """
+        서비스 목록 반환 (Circuit Breaker용).
+        
+        Domain-Free 설계:
+        - 명시적으로 전달된 services가 있으면 사용
+        - 없으면 설정에서 로드 시도
+        - 설정도 없으면 빈 리스트 (동적 발견 가능)
+        """
+        if self._services:
+            return self._services
+        try:
+            from django.conf import settings
+            return getattr(settings, "SELFHEALING_CIRCUIT_BREAKER_SERVICES", [])
+        except ImportError:
+            return []
 
     def _get_metrics(self):
         """메트릭 인스턴스 반환."""
@@ -145,7 +162,7 @@ class MetricReconciler:
 
         # Circuit Breaker 상태 동기화
         state_values = {"closed": 0, "open": 1, "half_open": 2}
-        for service in self._services:
+        for service in self._get_services():
             try:
                 state = self.adapter.get_circuit_breaker_state(service)
                 result.circuit_breaker_states[service] = state
