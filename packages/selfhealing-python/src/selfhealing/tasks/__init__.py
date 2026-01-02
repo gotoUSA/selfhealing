@@ -46,6 +46,16 @@ from .daily_report import (
     get_daily_report_beat_schedule,
 )
 
+from .cleanup_tasks import (
+    ArchiveOldDLQEntriesTask,
+    CleanupExpiredConfigTask,
+    ExpireApprovalRequestsTask,
+    PurgeArchivedDLQEntriesTask,
+    CLEANUP_TASKS,
+    register_cleanup_tasks_with_celery,
+    get_cleanup_beat_schedule,
+)
+
 __all__ = [
     # Base Notifying Task
     "BaseNotifyingTask",
@@ -65,4 +75,12 @@ __all__ = [
     "get_daily_report_collector",
     "generate_daily_autonomous_report",
     "get_daily_report_beat_schedule",
+    # Cleanup Tasks (청소부 레인)
+    "ArchiveOldDLQEntriesTask",
+    "CleanupExpiredConfigTask",
+    "ExpireApprovalRequestsTask",
+    "PurgeArchivedDLQEntriesTask",
+    "CLEANUP_TASKS",
+    "register_cleanup_tasks_with_celery",
+    "get_cleanup_beat_schedule",
 ]
