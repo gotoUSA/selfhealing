@@ -56,6 +56,26 @@ from .cleanup_tasks import (
     get_cleanup_beat_schedule,
 )
 
+from .intelligence_tasks import (
+    CheckSLADriftTask,
+    AnalyzeForensicPendingTask,
+    AnalyzeCrossStageInsightsTask,
+    CheckRecoveryTransitionsTask,
+    INTELLIGENCE_TASKS,
+    register_intelligence_tasks_with_celery,
+    get_intelligence_beat_schedule,
+)
+
+from .compliance_tasks import (
+    RunComplianceCheckTask,
+    GenerateFinOpsReportTask,
+    CollectSelfHealingMetricsTask,
+    GenerateDailyAutonomousReportTask,
+    COMPLIANCE_TASKS,
+    register_compliance_tasks_with_celery,
+    get_compliance_beat_schedule,
+)
+
 __all__ = [
     # Base Notifying Task
     "BaseNotifyingTask",
@@ -83,4 +103,20 @@ __all__ = [
     "CLEANUP_TASKS",
     "register_cleanup_tasks_with_celery",
     "get_cleanup_beat_schedule",
+    # Intelligence Tasks (지능 레인)
+    "CheckSLADriftTask",
+    "AnalyzeForensicPendingTask",
+    "AnalyzeCrossStageInsightsTask",
+    "CheckRecoveryTransitionsTask",
+    "INTELLIGENCE_TASKS",
+    "register_intelligence_tasks_with_celery",
+    "get_intelligence_beat_schedule",
+    # Compliance Tasks (증명 레인)
+    "RunComplianceCheckTask",
+    "GenerateFinOpsReportTask",
+    "CollectSelfHealingMetricsTask",
+    "GenerateDailyAutonomousReportTask",
+    "COMPLIANCE_TASKS",
+    "register_compliance_tasks_with_celery",
+    "get_compliance_beat_schedule",
 ]
