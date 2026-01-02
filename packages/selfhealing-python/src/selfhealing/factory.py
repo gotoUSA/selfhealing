@@ -511,6 +511,25 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
+    # Redis-based repositories (using ResilientStorageBackend)
+    try:
+        from selfhealing.adapters.redis import (
+            RedisCircuitBreakerStateRepository,
+            RedisDLQRepository,
+        )
+        from selfhealing.adapters.resilient.backend import get_storage_backend
+
+        def _create_redis_cb_repo():
+            return RedisCircuitBreakerStateRepository(get_storage_backend())
+
+        def _create_redis_dlq_repo():
+            return RedisDLQRepository(get_storage_backend())
+
+        ProviderRegistry.register_circuit_breaker_repo("redis", _create_redis_cb_repo)
+        ProviderRegistry.register_failed_operation_repo("redis", _create_redis_dlq_repo)
+    except ImportError:
+        pass
+
     # Audit adapters
     try:
         from selfhealing.adapters.audit import (
@@ -528,3 +547,53 @@ def _auto_register_adapters() -> None:
 
 # Run auto-registration on module import
 _auto_register_adapters()
+
+
+# =============================================================================
+# Resilient Storage Convenience Functions
+# =============================================================================
+
+
+def get_storage_backend():
+    """
+    Get ResilientStorageBackend instance.
+    
+    Provides unified storage with:
+    - Redis-First architecture
+    - Graceful degradation to Memory + WAL
+    - Zero data loss guarantee
+    
+    Returns:
+        ResilientStorageBackend singleton instance
+    """
+    from selfhealing.adapters.resilient.backend import get_storage_backend as _get_backend
+    return _get_backend()
+
+
+def get_circuit_breaker_repo():
+    """
+    Get Redis-based Circuit Breaker Repository.
+    
+    Uses ResilientStorageBackend for zero data loss.
+    Falls back to memory on Redis failure.
+    
+    Returns:
+        RedisCircuitBreakerStateRepository instance
+    """
+    from selfhealing.adapters.redis.circuit_breaker import get_redis_circuit_breaker_repo
+    return get_redis_circuit_breaker_repo()
+
+
+def get_dlq_repo():
+    """
+    Get Redis-based DLQ Repository.
+    
+    Uses ResilientStorageBackend for zero data loss.
+    Falls back to memory on Redis failure.
+    
+    Returns:
+        RedisDLQRepository instance
+    """
+    from selfhealing.adapters.redis.dlq import get_redis_dlq_repo
+    return get_redis_dlq_repo()
+
