@@ -353,10 +353,11 @@ git checkout HEAD~1 -- packages/selfhealing-python/src/selfhealing/adapters/sqla
 
 | 문서 | 설명 |
 |------|------|
+| [07_HYBRID_STORAGE_ARCHITECTURE.md](07_HYBRID_STORAGE_ARCHITECTURE.md) | 하이브리드 스토리지 아키텍처 **(후속 문서)** |
 | [05_RESILIENT_STORAGE_BACKEND.md](05_RESILIENT_STORAGE_BACKEND.md) | Redis 저장소 상세 구현 |
 | [03_INFRA_ADAPTER.md](03_INFRA_ADAPTER.md) | 어댑터 아키텍처 |
 | [00_INDEX.md](00_INDEX.md) | 문서 인덱스 |
 
 ---
 
-**결론**: Redis 기본값 전환 및 Django/SQLAlchemy 어댑터 삭제가 완료되었습니다. ResilientStorageBackend 내에 완전한 fallback 로직이 있으므로 별도의 Django fallback이 필요 없습니다.
+**결론**: Redis 기본값 전환 및 Django/SQLAlchemy 어댑터 삭제가 완료되었습니다. 단, 복잡한 통계/집계 기능은 [07_HYBRID_STORAGE_ARCHITECTURE.md](07_HYBRID_STORAGE_ARCHITECTURE.md)에서 정의한 하이브리드 아키텍처를 통해 ORM 어댑터로 지원됩니다.
