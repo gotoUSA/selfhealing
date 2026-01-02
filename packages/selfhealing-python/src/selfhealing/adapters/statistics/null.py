@@ -28,6 +28,8 @@ from selfhealing.interfaces.statistics import (
     PaginatedResult,
     CircuitBreakerSummary,
     CircuitBreakerInfo,
+    AuditTrailEntry,
+    EntityAuditTrail,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,19 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
         return None
     
     # =========================================================================
+    # SLA Monitoring
+    # =========================================================================
+    
+    def get_sla_breaches(
+        self,
+        sla_threshold_hours: int = 4,
+        statuses: Optional[List[str]] = None,
+    ) -> Dict[str, int]:
+        """Return empty SLA breaches (no-op)."""
+        logger.debug("[NullStatisticsRepository] get_sla_breaches called (no-op)")
+        return {}
+    
+    # =========================================================================
     # Cleanup Operations
     # =========================================================================
     
@@ -164,3 +179,34 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
         """No-op sync (returns 0)."""
         logger.debug("[NullStatisticsRepository] sync_from_runtime called (no-op)")
         return 0
+    
+    # =========================================================================
+    # Audit Trail Integration (no-op)
+    # =========================================================================
+    
+    def get_audit_trail_by_entity(
+        self,
+        entity_id: str,
+        entity_type: str = "dlq_entry",
+    ) -> EntityAuditTrail:
+        """Return empty audit trail."""
+        return EntityAuditTrail(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            domain="unknown",
+            entries=[],
+        )
+    
+    def link_audit_entry(
+        self,
+        entity_id: str,
+        entity_type: str,
+        action: str,
+        actor_id: Optional[str] = None,
+        status: Optional[str] = None,
+        details: Optional[str] = None,
+        audit_record_hash: Optional[str] = None,
+    ) -> bool:
+        """No-op link (returns False)."""
+        logger.debug("[NullStatisticsRepository] link_audit_entry called (no-op)")
+        return False

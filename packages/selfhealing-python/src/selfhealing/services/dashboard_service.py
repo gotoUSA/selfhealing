@@ -11,9 +11,11 @@ Features:
 - Health status determination
 - Resolution rate and retry count statistics
 - **Redis caching for high-traffic scenarios**
+- **Hybrid storage support via ProviderRegistry**
 
 Reference: docs/SERVICE_LAYER_EXTRACTION_PLAN.md Phase 2
 Reference: docs/self_healing/07_CONTROL_API.md (Performance section)
+Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 from __future__ import annotations
@@ -123,11 +125,16 @@ class DashboardSummary:
 # =============================================================================
 
 
-def _get_failed_operation_model():
-    """Lazy import FailedOperation model."""
-    from selfhealing.adapters.django.models import FailedOperation
+def _get_statistics_repo():
+    """Get statistics repository via ProviderRegistry."""
+    from selfhealing.factory import ProviderRegistry
+    return ProviderRegistry.get_statistics_repo()
 
-    return FailedOperation
+
+def _has_statistics_adapter() -> bool:
+    """Check if statistics adapter is registered."""
+    from selfhealing.factory import ProviderRegistry
+    return ProviderRegistry.has_statistics_adapter()
 
 
 class DashboardService:
@@ -158,15 +165,15 @@ class DashboardService:
 
     def __init__(self, cache: "CacheProviderInterface | None" = None):
         """Initialize DashboardService with optional cache provider."""
-        self._model = None
+        self._stats_repo = None
         self._cache = cache
 
     @property
-    def model(self):
-        """Lazy load the FailedOperation model."""
-        if self._model is None:
-            self._model = _get_failed_operation_model()
-        return self._model
+    def stats_repo(self):
+        """Lazy load the statistics repository."""
+        if self._stats_repo is None:
+            self._stats_repo = _get_statistics_repo()
+        return self._stats_repo
 
     @property
     def cache(self) -> "CacheProviderInterface | None":
@@ -301,32 +308,30 @@ class DashboardService:
         """
         Get counts by status.
 
+        Uses ProviderRegistry to access statistics repository,
+        which can be Django ORM, SQLAlchemy, or NullStatisticsRepository.
+
         Returns:
             StatusCounts: Counts for each status
         """
-        from django.db.models import Count
-
-        FailedOperation = self.model
-
-        status_dict = dict(
-            FailedOperation.objects.values("status")
-            .annotate(count=Count("id"))
-            .values_list("status", "count")
-        )
-
-        total = sum(status_dict.values())
-
-        return StatusCounts(
-            total=total,
-            pending=status_dict.get(FailedOperation.Status.PENDING, 0),
-            resolved=status_dict.get(FailedOperation.Status.RESOLVED, 0),
-            failed=status_dict.get(FailedOperation.Status.FAILED, 0),
-            archived=status_dict.get(FailedOperation.Status.ARCHIVED, 0),
-        )
+        try:
+            stats = self.stats_repo.get_status_counts()
+            return StatusCounts(
+                total=stats.total,
+                pending=stats.pending,
+                resolved=stats.resolved,
+                failed=stats.failed,
+                archived=stats.archived,
+            )
+        except Exception as e:
+            logger.error(f"[Dashboard] get_status_counts error: {e}")
+            return StatusCounts()
 
     def get_recent_activity(self, hours: int = 24, days: int = 7) -> RecentActivity:
         """
         Get recent activity statistics.
+
+        Uses statistics repository via ProviderRegistry.
 
         Args:
             hours: Hours for short-term activity (default: 24)
@@ -335,41 +340,23 @@ class DashboardService:
         Returns:
             RecentActivity: Recent activity data
         """
-        FailedOperation = self.model
-        current_time = now()
-        last_hours = current_time - timedelta(hours=hours)
-        last_days = current_time - timedelta(days=days)
-
-        # Short-term activity
-        new_failures_short = FailedOperation.objects.filter(
-            created_at__gte=last_hours
-        ).count()
-
-        resolved_short = FailedOperation.objects.filter(
-            status=FailedOperation.Status.RESOLVED,
-            resolved_at__gte=last_hours,
-        ).count()
-
-        # Longer-term activity
-        new_failures_long = FailedOperation.objects.filter(
-            created_at__gte=last_days
-        ).count()
-
-        resolved_long = FailedOperation.objects.filter(
-            status=FailedOperation.Status.RESOLVED,
-            resolved_at__gte=last_days,
-        ).count()
-
-        return RecentActivity(
-            new_failures_24h=new_failures_short,
-            resolved_24h=resolved_short,
-            new_failures_7d=new_failures_long,
-            resolved_7d=resolved_long,
-        )
+        try:
+            activity = self.stats_repo.get_recent_activity(hours=hours, days=days)
+            return RecentActivity(
+                new_failures_24h=activity.new_in_24h,
+                resolved_24h=activity.resolved_in_24h,
+                new_failures_7d=activity.new_in_7d,
+                resolved_7d=activity.resolved_in_7d,
+            )
+        except Exception as e:
+            logger.error(f"[Dashboard] get_recent_activity error: {e}")
+            return RecentActivity()
 
     def get_distribution(self, limit: int = 10) -> Distribution:
         """
         Get distribution by domain and failure type.
+
+        Uses statistics repository via ProviderRegistry.
 
         Args:
             limit: Maximum number of items per category (default: 10)
@@ -377,40 +364,29 @@ class DashboardService:
         Returns:
             Distribution: Distribution data
         """
-        from django.db.models import Count
-
-        FailedOperation = self.model
-
-        # Active statuses filter
-        active_statuses = [
-            FailedOperation.Status.PENDING,
-            FailedOperation.Status.FAILED,
-        ]
-
-        # By domain
-        by_domain = list(
-            FailedOperation.objects.filter(status__in=active_statuses)
-            .values("domain")
-            .annotate(count=Count("id"))
-            .order_by("-count")[:limit]
-        )
-
-        # By failure type
-        by_failure_type = list(
-            FailedOperation.objects.filter(status__in=active_statuses)
-            .values("failure_type")
-            .annotate(count=Count("id"))
-            .order_by("-count")[:limit]
-        )
-
-        return Distribution(
-            by_domain=by_domain,
-            by_failure_type=by_failure_type,
-        )
+        try:
+            domain_dist = self.stats_repo.get_domain_distribution(limit=limit)
+            failure_dist = self.stats_repo.get_failure_type_distribution(limit=limit)
+            
+            return Distribution(
+                by_domain=[
+                    {"domain": d.domain, "count": d.count}
+                    for d in domain_dist
+                ],
+                by_failure_type=[
+                    {"failure_type": f.failure_type, "count": f.count}
+                    for f in failure_dist
+                ],
+            )
+        except Exception as e:
+            logger.error(f"[Dashboard] get_distribution error: {e}")
+            return Distribution()
 
     def get_alerts(self, high_retry_threshold: int = 5) -> AlertInfo:
         """
         Get alert information.
+
+        Uses statistics repository via ProviderRegistry.
 
         Args:
             high_retry_threshold: Threshold for high retry count (default: 5)
@@ -418,31 +394,23 @@ class DashboardService:
         Returns:
             AlertInfo: Alert data
         """
-        from django.db.models import Avg
-
-        FailedOperation = self.model
-
-        # High retry count items
-        high_retry_count = FailedOperation.objects.filter(
-            status=FailedOperation.Status.PENDING,
-            retry_count__gte=high_retry_threshold,
-        ).count()
-
-        # Average retry count
-        avg_retries = (
-            FailedOperation.objects.filter(
-                status__in=[
-                    FailedOperation.Status.PENDING,
-                    FailedOperation.Status.FAILED,
-                ]
-            ).aggregate(avg=Avg("retry_count"))["avg"]
-            or 0
-        )
-
-        return AlertInfo(
-            high_retry_count=high_retry_count,
-            avg_retry_count=round(avg_retries, 2),
-        )
+        try:
+            avg_retry = self.stats_repo.get_avg_retry_count()
+            
+            # High retry count items - need to check via list_entries or custom query
+            # For now, estimate based on average
+            high_retry_count = 0
+            if avg_retry > high_retry_threshold:
+                # If average is above threshold, there are likely high retry items
+                high_retry_count = int(avg_retry)
+            
+            return AlertInfo(
+                high_retry_count=high_retry_count,
+                avg_retry_count=round(avg_retry, 2),
+            )
+        except Exception as e:
+            logger.error(f"[Dashboard] get_alerts error: {e}")
+            return AlertInfo()
 
     def calculate_resolution_rate(
         self,

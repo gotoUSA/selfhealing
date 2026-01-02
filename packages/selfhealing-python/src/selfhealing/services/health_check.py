@@ -98,6 +98,8 @@ class HealthCheckService:
     - 전체 시스템 헬스 체크
     - Kubernetes Liveness/Readiness 프로브
     
+    Uses ProviderRegistry for statistics to maintain framework independence.
+    
     Usage:
         service = HealthCheckService()
         
@@ -108,10 +110,29 @@ class HealthCheckService:
         db_check = service.check_database("default")
     """
 
-    def _get_circuit_breaker_model(self):
-        """Lazy import CircuitBreakerState model."""
-        from selfhealing.adapters.django.models import CircuitBreakerState
-        return CircuitBreakerState
+    def _get_circuit_breaker_count(self) -> int:
+        """
+        Get circuit breaker count using ProviderRegistry.
+        
+        Falls back to Redis repository if ORM not available.
+        """
+        try:
+            from selfhealing.factory import ProviderRegistry
+            
+            stats_repo = ProviderRegistry.get_statistics_repo()
+            summary = stats_repo.get_circuit_breaker_summary()
+            return summary.total
+        except Exception as e:
+            logger.debug(f"[HealthCheck] CB count via stats failed, trying Redis: {e}")
+            try:
+                from selfhealing.factory import ProviderRegistry
+                
+                cb_repo = ProviderRegistry.get_circuit_breaker_repo()
+                states = cb_repo.get_all_states()
+                return len(states)
+            except Exception as e2:
+                logger.debug(f"[HealthCheck] CB count via Redis failed: {e2}")
+                return 0
 
     def check_database(self, alias: str = "default") -> DatabaseCheck:
         """
@@ -248,6 +269,8 @@ class HealthCheckService:
         """
         전체 시스템 헬스 체크.
         
+        Uses ProviderRegistry for statistics to maintain framework independence.
+        
         Returns:
             HealthStatus: 전체 헬스 상태
         """
@@ -257,8 +280,7 @@ class HealthCheckService:
             db_check = self.check_database("default")
             
             if db_check.is_connected:
-                CircuitBreakerState = self._get_circuit_breaker_model()
-                services_count = CircuitBreakerState.objects.count()
+                services_count = self._get_circuit_breaker_count()
                 health_status = "healthy"
                 db_status = "healthy"
             else:

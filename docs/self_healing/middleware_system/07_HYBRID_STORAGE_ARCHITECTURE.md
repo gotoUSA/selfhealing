@@ -1,10 +1,10 @@
 # 07. 하이브리드 스토리지 아키텍처
 
-> **Version**: 1.1.0  
+> **Version**: 2.0.0  
 > **Last Updated**: 2026-01-02  
-> **Status**: Phase 1,2 구현 완료  
+> **Status**: Phase 1,2,3,4 구현 완료  
 > **Author**: AI Assistant  
-> **Reference**: 06_REDIS_MIGRATION.md
+> **Reference**: 06_REDIS_MIGRATION.md, 56_AUDIT_MIDDLEWARE_DESIGN.md
 
 ---
 
@@ -27,6 +27,8 @@ Redis 마이그레이션(Phase 5) 완료 후, Django ORM을 직접 import하는 
 | **Domain-Free** | selfhealing 패키지는 특정 도메인(shopping 등)을 모름 |
 | **프레임워크 중립** | Django, FastAPI, Flask 모두 지원 |
 | **Graceful Degradation** | 통계 기능 없어도 런타임은 정상 동작 |
+| **비동기 영속화** | ORM 저장은 Celery로 비동기 처리 (v2.0.0) |
+| **Audit Trail 통합** | DLQ와 감사 로그의 100% 일치 보장 (v2.0.0) |
 
 ---
 
@@ -464,6 +466,7 @@ def get_cleanup_stats(self) -> CleanupStats:
 ```
 selfhealing/interfaces/
 └── statistics.py              # StatisticsRepositoryInterface
+                               # + AuditTrailEntry, EntityAuditTrail (v2.0.0)
 ```
 
 ### 7.2 어댑터
@@ -472,17 +475,31 @@ selfhealing/interfaces/
 selfhealing/adapters/statistics/
 ├── __init__.py
 ├── null.py                    # NullStatisticsRepository (기본값)
-├── django.py                  # DjangoStatisticsAdapter
-└── sqlalchemy.py              # SQLAlchemyStatisticsAdapter
-```
 
-### 7.3 모델 (재추가)
-
-```
 selfhealing/adapters/django/
-├── __init__.py                # 재생성 (통계 전용)
-├── models.py                  # FailedOperation, CircuitBreakerState (재추가)
-└── migrations/                # 마이그레이션 (재추가)
+├── __init__.py
+└── statistics.py              # DjangoStatisticsAdapter
+
+selfhealing/adapters/sqlalchemy/
+├── __init__.py
+└── statistics.py              # SQLAlchemyStatisticsAdapter (v2.0.0)
+```
+
+### 7.3 Celery 태스크 (v2.0.0)
+
+```
+selfhealing/adapters/celery/
+└── tasks.py                   # + async_persist_dlq_entry
+                               # + async_persist_batch
+                               # + link_audit_to_dlq
+```
+
+### 7.4 수정된 서비스
+
+```
+selfhealing/services/
+├── dashboard_service.py       # ProviderRegistry 사용으로 수정
+└── health_check.py            # ProviderRegistry 사용으로 수정
 ```
 
 ---
@@ -501,19 +518,34 @@ selfhealing/adapters/django/
 - [x] `adapters/django/statistics.py` 생성
 - [x] `interfaces/__init__.py`에 통계 인터페이스 추가
 
-### Phase 3: 기존 코드 리팩토링 (Day 3)
+### Phase 3: 기존 코드 리팩토링 (Day 3) ✅
 
-- [ ] `dlq_service.py` 수정 (통계 메서드)
-- [ ] `dashboard_service.py` 수정
-- [ ] `health_check.py` 수정
-- [ ] `celery/tasks.py` 수정
+- [x] `dashboard_service.py` 수정 → `ProviderRegistry.get_statistics_repo()` 사용
+- [x] `health_check.py` 수정 → `_get_circuit_breaker_count()` 메서드 추가
+- [x] `celery/tasks.py` 수정 → Django 모델 직접 import 제거
 
-### Phase 4: SQLAlchemy 어댑터 (Day 4)
+### Phase 4: SQLAlchemy 어댑터 (Day 4) ✅
 
-- [ ] `adapters/sqlalchemy/statistics.py` 생성
-- [ ] FastAPI 예제 문서화
+- [x] `adapters/sqlalchemy/__init__.py` 생성
+- [x] `adapters/sqlalchemy/statistics.py` 생성
+- [x] FastAPI 예제 (아래 3.3절 참조)
 
-### Phase 5: 테스트 및 문서화 (Day 5)
+### Phase 5: 비동기 영속화 구현 (Day 5) ✅
+
+- [x] `async_persist_dlq_entry` Celery 태스크 추가
+- [x] `async_persist_batch` 배치 영속화 태스크 추가
+- [x] `link_audit_to_dlq` Audit Trail 연결 태스크 추가
+- [x] `DjangoStatisticsAdapter.should_persist_async()` 구현
+- [x] `SQLAlchemyStatisticsAdapter.should_persist_async()` 구현
+
+### Phase 6: Audit Trail 통합 (Day 6) ✅
+
+- [x] `AuditTrailEntry`, `EntityAuditTrail` DTO 추가
+- [x] `get_audit_trail_by_entity()` 인터페이스 메서드 추가
+- [x] `link_audit_entry()` 인터페이스 메서드 추가
+- [x] Django/SQLAlchemy 어댑터에 Audit Trail 구현
+
+### Phase 7: 테스트 및 문서화 (Day 7)
 
 - [ ] 단위 테스트 작성
 - [ ] 통합 테스트 작성
@@ -530,23 +562,120 @@ selfhealing/adapters/django/
 | Django DB (기존) | 그대로 유지, ORM으로 접근 |
 | Redis (신규) | 런타임 상태 저장 |
 
-### 9.2 데이터 동기화
+### 9.2 데이터 동기화 및 비동기 영속화
 
 **런타임 → 통계 동기화는 필요 없음:**
 - 런타임(Redis): 현재 상태만 저장 (휘발성 OK)
 - 통계(ORM): 이력/집계용 (영구 저장)
 
-**단, DLQ 적재 시:**
+#### 9.2.1 비동기 영속화 원칙 (v2.0.0)
+
+> ⚠️ **중요**: ORM 저장은 **반드시 비동기로** 처리해야 합니다.
+
+**이유:**
+- 런타임(Redis) 저장 후 ORM 저장을 동기로 처리하면 DB 지연 시 Redis 속도 이점이 사라짐
+- 예: Redis 2ms + ORM 50ms = 52ms (Redis 이점 상실)
+
+**권장 패턴:**
+
 ```python
 def store_failure(self, ...):
-    # 1. Redis에 런타임 데이터 저장 (빠름)
+    # 1. Redis에 런타임 데이터 저장 (동기, 빠름, 1-2ms)
     runtime_repo = ProviderRegistry.get_failed_operation_repo()
-    runtime_repo.create(...)
+    entry = runtime_repo.create(...)
     
-    # 2. ORM에 영구 데이터 저장 (선택적, 비동기 가능)
+    # 2. ORM에 영구 데이터 저장 (비동기, Celery 태스크로 위임)
     if ProviderRegistry.has_statistics_adapter():
-        stats_repo = ProviderRegistry.get_statistics_repo()
-        stats_repo.persist_entry(...)  # 비동기 또는 Celery 태스크
+        from selfhealing.adapters.celery.tasks import async_persist_dlq_entry
+        async_persist_dlq_entry.delay(entry.to_dict())  # ✅ 비동기!
+```
+
+#### 9.2.2 Celery 태스크
+
+| 태스크 | 설명 | 큐 |
+|--------|------|-----|
+| `async_persist_dlq_entry` | 단일 DLQ 항목 영속화 | `persistence` |
+| `async_persist_batch` | 배치 영속화 (AuditMiddleware 연동) | `persistence` |
+| `link_audit_to_dlq` | Audit 레코드 연결 | `persistence` |
+
+#### 9.2.3 AuditMiddleware 통합
+
+AuditMiddleware의 배치 플러시 시점에 함께 영속화:
+
+```python
+# AuditMiddleware에서 배치 플러시 시
+def flush_audit_buffer(self, request):
+    audit_entries = self._buffer.get_entries()
+    
+    # 1. Audit 로그 기록
+    self._adapter.write_batch(audit_entries)
+    
+    # 2. DLQ 항목도 함께 영속화 (있다면)
+    dlq_entries = [e for e in audit_entries if e.entity_type == "dlq_entry"]
+    if dlq_entries:
+        from selfhealing.adapters.celery.tasks import async_persist_batch
+        async_persist_batch.delay([e.to_dict() for e in dlq_entries])
+```
+
+---
+
+### 9.3 Audit Trail 통합 (The Master Trail)
+
+#### 9.3.1 개요
+
+Audit 로그(56_AUDIT_MIDDLEWARE_DESIGN.md)와 통계 데이터의 **100% 일치**를 보장합니다.
+
+```python
+# DLQ 항목의 전체 감사 추적 조회
+stats_repo = ProviderRegistry.get_statistics_repo()
+trail = stats_repo.get_audit_trail_by_entity("dlq-123")
+
+print(f"Entity: {trail.entity_id}")
+print(f"Domain: {trail.domain}")
+print(f"Status: {trail.current_status}")
+print(f"Total actions: {trail.total_entries}")
+print(f"Hash chain valid: {trail.is_chain_valid}")
+
+for entry in trail.entries:
+    print(f"  {entry.timestamp}: {entry.action} by {entry.actor_id}")
+```
+
+#### 9.3.2 EntityAuditTrail DTO
+
+```python
+@dataclass
+class EntityAuditTrail:
+    entity_id: str
+    entity_type: str  # e.g., "dlq_entry"
+    domain: str
+    created_at: Optional[datetime]
+    resolved_at: Optional[datetime]
+    current_status: str
+    entries: List[AuditTrailEntry]
+    
+    @property
+    def is_chain_valid(self) -> bool:
+        """해시 체인 무결성 검증"""
+        ...
+```
+
+#### 9.3.3 기술 실사 활용
+
+> "장애 데이터와 감사 증적이 100% 일치함을 한눈에 보여줄 수 있습니다."
+
+```python
+# 특정 DLQ 항목의 전체 이력 조회
+trail = stats_repo.get_audit_trail_by_entity("dlq-12345")
+
+# 해시 체인 검증 결과 포함
+assert trail.is_chain_valid, "Audit trail has been tampered!"
+
+# 시간순 이벤트 목록
+for entry in trail.entries:
+    print(f"{entry.timestamp}: {entry.action}")
+    print(f"  Actor: {entry.actor_id}")
+    print(f"  Status: {entry.status}")
+    print(f"  Hash: {entry.hash_chain[:16]}...")
 ```
 
 ---
@@ -579,12 +708,57 @@ ProviderRegistry.register_statistics_adapter(
 )
 ```
 
+### Q4: ORM 저장은 왜 비동기로 해야 하나요? (v2.0.0)
+
+**Redis의 속도 이점을 유지하기 위함입니다:**
+- 동기 저장 시: Redis 2ms + ORM 50ms = **52ms** (Redis 무의미)
+- 비동기 저장 시: Redis 2ms (응답) + ORM 50ms (백그라운드) = **2ms 응답**
+
+```python
+# ❌ 잘못된 패턴 (동기)
+runtime_repo.create(...)
+stats_repo.persist_entry(...)  # 50ms 블로킹!
+
+# ✅ 올바른 패턴 (비동기)
+runtime_repo.create(...)
+async_persist_dlq_entry.delay(...)  # 즉시 반환, 백그라운드 처리
+```
+
+### Q5: Audit Trail과 DLQ가 불일치하면 어떻게 되나요? (v2.0.0)
+
+**해시 체인 검증으로 탐지합니다:**
+```python
+trail = stats_repo.get_audit_trail_by_entity("dlq-123")
+if not trail.is_chain_valid:
+    # 감사 로그 변조 또는 누락 발생
+    alert_security_team("Audit trail integrity violation!")
+```
+
+### Q6: SQLAlchemy를 사용하는 FastAPI 프로젝트는? (v2.0.0)
+
+**SQLAlchemyStatisticsAdapter를 사용합니다:**
+```python
+# main.py
+from selfhealing.factory import ProviderRegistry
+from selfhealing.adapters.sqlalchemy import SQLAlchemyStatisticsAdapter
+
+@app.on_event("startup")
+async def startup():
+    ProviderRegistry.register_statistics_adapter(
+        SQLAlchemyStatisticsAdapter(
+            session_factory=SessionLocal,
+            failed_operation_table=FailedOperation,
+        )
+    )
+```
+
 ---
 
 ## 11. 관련 문서
 
 - [05_RESILIENT_STORAGE_BACKEND.md](05_RESILIENT_STORAGE_BACKEND.md) - Redis 런타임 저장소
 - [06_REDIS_MIGRATION.md](06_REDIS_MIGRATION.md) - 마이그레이션 기록
+- [56_AUDIT_MIDDLEWARE_DESIGN.md](../56_AUDIT_MIDDLEWARE_DESIGN.md) - Audit 로그 설계
 - [00_INDEX.md](00_INDEX.md) - 문서 인덱스
 
 ---

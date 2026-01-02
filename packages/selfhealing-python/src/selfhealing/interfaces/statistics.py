@@ -121,6 +121,64 @@ class CircuitBreakerInfo:
     success_count: int = 0
     last_failure_time: Optional[datetime] = None
     last_state_change: Optional[datetime] = None
+
+
+@dataclass
+class AuditTrailEntry:
+    """Single audit trail entry for an entity."""
+    
+    timestamp: datetime
+    action: str  # store, replay, resolve, reject, archive
+    actor_id: Optional[str] = None
+    status: Optional[str] = None
+    details: Optional[str] = None
+    hash_chain: Optional[str] = None  # For tamper-evidence
+    previous_hash: Optional[str] = None
+
+
+@dataclass
+class EntityAuditTrail:
+    """
+    Complete audit trail for a DLQ entity.
+    
+    Provides end-to-end traceability from creation to resolution.
+    """
+    
+    entity_id: str
+    entity_type: str  # e.g., "dlq_entry"
+    domain: str
+    created_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    current_status: str = "unknown"
+    entries: List[AuditTrailEntry] = field(default_factory=list)
+    
+    @property
+    def total_entries(self) -> int:
+        """Total number of audit entries."""
+        return len(self.entries)
+    
+    @property
+    def is_chain_valid(self) -> bool:
+        """
+        Verify hash chain integrity.
+        
+        Returns True if all entries have valid hash chain.
+        """
+        if not self.entries:
+            return True
+        
+        for i, entry in enumerate(self.entries):
+            if i == 0:
+                # First entry should have no previous hash
+                if entry.previous_hash is not None:
+                    return False
+            else:
+                # Subsequent entries should reference previous hash
+                prev_entry = self.entries[i - 1]
+                if entry.previous_hash != prev_entry.hash_chain:
+                    return False
+        
+        return True
     
 
 # =============================================================================
@@ -269,6 +327,30 @@ class StatisticsRepositoryInterface(ABC):
         pass
     
     # =========================================================================
+    # SLA Monitoring
+    # =========================================================================
+    
+    @abstractmethod
+    def get_sla_breaches(
+        self,
+        sla_threshold_hours: int = 4,
+        statuses: Optional[List[str]] = None,
+    ) -> Dict[str, int]:
+        """
+        Get count of SLA breaches by domain.
+        
+        Finds DLQ entries that have exceeded the SLA threshold for resolution.
+        
+        Args:
+            sla_threshold_hours: SLA threshold in hours (default: 4)
+            statuses: List of statuses to check (default: pending, reviewing, requires_review)
+            
+        Returns:
+            Dictionary mapping domain to breach count
+        """
+        pass
+    
+    # =========================================================================
     # Cleanup Operations
     # =========================================================================
     
@@ -371,3 +453,91 @@ class StatisticsRepositoryInterface(ABC):
             Number of entries synced
         """
         pass
+    
+    # =========================================================================
+    # Audit Trail Integration (The Master Trail)
+    # =========================================================================
+    
+    @abstractmethod
+    def get_audit_trail_by_entity(
+        self,
+        entity_id: str,
+        entity_type: str = "dlq_entry",
+    ) -> EntityAuditTrail:
+        """
+        Get complete audit trail for a specific entity.
+        
+        This method provides end-to-end traceability showing all actions
+        from creation to resolution with hash chain verification.
+        
+        Args:
+            entity_id: Unique identifier of the entity (e.g., DLQ ID)
+            entity_type: Type of entity (default: "dlq_entry")
+            
+        Returns:
+            EntityAuditTrail with all audit entries and chain verification
+            
+        Example:
+            trail = stats_repo.get_audit_trail_by_entity("dlq-123")
+            print(f"Total actions: {trail.total_entries}")
+            print(f"Chain valid: {trail.is_chain_valid}")
+            for entry in trail.entries:
+                print(f"{entry.timestamp}: {entry.action} by {entry.actor_id}")
+        """
+        pass
+    
+    @abstractmethod
+    def link_audit_entry(
+        self,
+        entity_id: str,
+        entity_type: str,
+        action: str,
+        actor_id: Optional[str] = None,
+        status: Optional[str] = None,
+        details: Optional[str] = None,
+        audit_record_hash: Optional[str] = None,
+    ) -> bool:
+        """
+        Link an audit record to an entity.
+        
+        Called when audit events are recorded to maintain the relationship
+        between DLQ entries and their audit trail.
+        
+        Args:
+            entity_id: Entity identifier
+            entity_type: Entity type
+            action: Action performed (store, replay, resolve, etc.)
+            actor_id: Who performed the action
+            status: New status after the action
+            details: Additional details
+            audit_record_hash: Hash from the audit system
+            
+        Returns:
+            True if linked successfully
+        """
+        pass
+    
+    # =========================================================================
+    # Async Persistence Support
+    # =========================================================================
+    
+    def should_persist_async(self) -> bool:
+        """
+        Determine if persistence should be done asynchronously.
+        
+        Override in implementations to enable async persistence.
+        Default returns False for synchronous persistence.
+        
+        Returns:
+            True if async persistence is preferred
+        """
+        return False
+    
+    def get_async_persist_task_name(self) -> Optional[str]:
+        """
+        Get the Celery task name for async persistence.
+        
+        Returns:
+            Task name string or None if sync persistence
+        """
+        return None

@@ -169,6 +169,9 @@ from selfhealing.interfaces.statistics import (
     PaginatedResult,
     CircuitBreakerSummary,
     CircuitBreakerInfo,
+    # Audit Trail DTOs (The Master Trail - v2.4.0)
+    AuditTrailEntry,
+    EntityAuditTrail,
     # Interface
     StatisticsRepositoryInterface,
 )
@@ -289,6 +292,9 @@ __all__ = [
     "PaginatedResult",
     "CircuitBreakerSummary",
     "CircuitBreakerInfo",
+    # Audit Trail DTOs (The Master Trail - v2.4.0)
+    "AuditTrailEntry",
+    "EntityAuditTrail",
     # Interface
     "StatisticsRepositoryInterface",
 ]

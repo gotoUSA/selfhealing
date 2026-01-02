@@ -39,6 +39,8 @@ from selfhealing.interfaces.statistics import (
     PaginatedResult,
     CircuitBreakerSummary,
     CircuitBreakerInfo,
+    AuditTrailEntry,
+    EntityAuditTrail,
 )
 
 if TYPE_CHECKING:
@@ -345,6 +347,50 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             return None
     
     # =========================================================================
+    # SLA Monitoring
+    # =========================================================================
+    
+    def get_sla_breaches(
+        self,
+        sla_threshold_hours: int = 4,
+        statuses: Optional[List[str]] = None,
+    ) -> Dict[str, int]:
+        """
+        Get count of SLA breaches by domain.
+        
+        Finds DLQ entries that have exceeded the SLA threshold for resolution.
+        """
+        if not self._check_model():
+            return {}
+        
+        try:
+            from django.db.models import Count
+            from django.utils import timezone
+            
+            model = self._get_model()
+            
+            if statuses is None:
+                statuses = ["pending", "reviewing", "requires_review"]
+            
+            cutoff = timezone.now() - timedelta(hours=sla_threshold_hours)
+            
+            # Find entries that have exceeded SLA
+            breaches = dict(
+                model.objects.filter(
+                    status__in=statuses,
+                    created_at__lt=cutoff,
+                )
+                .values("domain")
+                .annotate(count=Count("id"))
+                .values_list("domain", "count")
+            )
+            
+            return breaches
+        except Exception as e:
+            logger.error(f"[DjangoStatisticsAdapter] get_sla_breaches error: {e}")
+            return {}
+    
+    # =========================================================================
     # Cleanup Operations
     # =========================================================================
     
@@ -586,3 +632,139 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         
         logger.info(f"[DjangoStatisticsAdapter] Synced {synced}/{len(entries)} entries")
         return synced
+    
+    # =========================================================================
+    # Audit Trail Integration (The Master Trail)
+    # =========================================================================
+    
+    def get_audit_trail_by_entity(
+        self,
+        entity_id: str,
+        entity_type: str = "dlq_entry",
+    ) -> EntityAuditTrail:
+        """
+        Get complete audit trail for a specific entity.
+        
+        Retrieves all audit log entries related to a DLQ entry and 
+        verifies the hash chain integrity.
+        """
+        # Start with basic entity info from DLQ
+        trail = EntityAuditTrail(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            domain="unknown",
+            entries=[],
+        )
+        
+        # Get DLQ entry details if available
+        if self._check_model() and entity_type == "dlq_entry":
+            try:
+                model = self._get_model()
+                entry = model.objects.filter(pk=entity_id).first()
+                if entry:
+                    trail.domain = getattr(entry, "domain", "unknown")
+                    trail.created_at = getattr(entry, "created_at", None)
+                    trail.resolved_at = getattr(entry, "resolved_at", None)
+                    trail.current_status = getattr(entry, "status", "unknown")
+            except Exception as e:
+                logger.warning(f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}")
+        
+        # Get audit log entries from the audit adapter
+        try:
+            from selfhealing.factory import ProviderRegistry
+            
+            audit_adapter = ProviderRegistry.get_audit_adapter()
+            
+            # Try to get audit entries by entity reference
+            # This depends on how the audit adapter stores entity references
+            if hasattr(audit_adapter, "get_entries_by_entity"):
+                audit_entries = audit_adapter.get_entries_by_entity(
+                    entity_id=entity_id,
+                    entity_type=entity_type,
+                )
+                
+                for audit_entry in audit_entries:
+                    trail.entries.append(
+                        AuditTrailEntry(
+                            timestamp=audit_entry.timestamp,
+                            action=audit_entry.action.value if hasattr(audit_entry.action, 'value') else str(audit_entry.action),
+                            actor_id=audit_entry.actor_id,
+                            status=audit_entry.new_value if hasattr(audit_entry, 'new_value') else None,
+                            details=audit_entry.details if hasattr(audit_entry, 'details') else None,
+                            hash_chain=audit_entry.hash if hasattr(audit_entry, 'hash') else None,
+                            previous_hash=audit_entry.previous_hash if hasattr(audit_entry, 'previous_hash') else None,
+                        )
+                    )
+        except Exception as e:
+            logger.debug(f"[DjangoStatisticsAdapter] Audit trail lookup skipped: {e}")
+        
+        return trail
+    
+    def link_audit_entry(
+        self,
+        entity_id: str,
+        entity_type: str,
+        action: str,
+        actor_id: Optional[str] = None,
+        status: Optional[str] = None,
+        details: Optional[str] = None,
+        audit_record_hash: Optional[str] = None,
+    ) -> bool:
+        """
+        Link an audit record to an entity.
+        
+        Creates a mapping between DLQ entries and their audit records
+        for efficient trail retrieval.
+        """
+        # This could be stored in a separate mapping table or
+        # added as metadata to the DLQ entry itself
+        if not self._check_model():
+            return False
+        
+        try:
+            model = self._get_model()
+            entry = model.objects.filter(pk=entity_id).first()
+            if not entry:
+                return False
+            
+            # If the model has a metadata field, we can store audit references
+            if hasattr(entry, "metadata"):
+                metadata = entry.metadata or {}
+                audit_refs = metadata.get("audit_references", [])
+                audit_refs.append({
+                    "action": action,
+                    "actor_id": actor_id,
+                    "status": status,
+                    "hash": audit_record_hash,
+                })
+                metadata["audit_references"] = audit_refs
+                entry.metadata = metadata
+                entry.save(update_fields=["metadata", "updated_at"])
+            
+            return True
+        except Exception as e:
+            logger.error(f"[DjangoStatisticsAdapter] link_audit_entry error: {e}")
+            return False
+    
+    # =========================================================================
+    # Async Persistence Configuration
+    # =========================================================================
+    
+    def should_persist_async(self) -> bool:
+        """
+        Check if async persistence is configured.
+        
+        Reads from Django settings:
+        SELFHEALING_ASYNC_PERSISTENCE = True
+        """
+        try:
+            from django.conf import settings
+            return getattr(settings, "SELFHEALING_ASYNC_PERSISTENCE", False)
+        except Exception:
+            return False
+    
+    def get_async_persist_task_name(self) -> Optional[str]:
+        """Get the Celery task name for async persistence."""
+        if self.should_persist_async():
+            return "selfhealing.adapters.celery.tasks.async_persist_dlq_entry"
+        return None
