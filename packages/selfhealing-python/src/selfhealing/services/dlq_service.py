@@ -110,18 +110,10 @@ class DLQService:
 
     @property
     def repository(self) -> "FailedOperationRepository":
-        """Get the repository, creating Django adapter if needed."""
+        """Get the repository using ProviderRegistry (Redis by default)."""
         if self._repository is None:
-            # Try to use ProviderRegistry from selfhealing package first
-            try:
-                from selfhealing.factory import ProviderRegistry
-
-                self._repository = ProviderRegistry.get_failed_operation_repo()
-            except (ImportError, ValueError):
-                # Fallback to local Django adapter
-                from .adapters.django_repositories import DjangoFailedOperationRepository
-
-                self._repository = DjangoFailedOperationRepository()
+            from selfhealing.factory import ProviderRegistry
+            self._repository = ProviderRegistry.get_failed_operation_repo()
         return self._repository
 
     @property

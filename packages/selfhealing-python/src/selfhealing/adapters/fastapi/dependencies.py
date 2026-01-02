@@ -168,20 +168,9 @@ def get_circuit_breaker_service():
             return cb.get_all_states()
     """
     from selfhealing.services.circuit_breaker_service import CircuitBreakerService
-    from selfhealing.adapters.memory import InMemoryCircuitBreakerStateRepository
 
-    # Use in-memory repository by default for FastAPI (framework-independent)
-    # For Django integration, use the Django-specific dependency
-    global _circuit_breaker_repo
-    if "_circuit_breaker_repo" not in globals() or _circuit_breaker_repo is None:
-        _circuit_breaker_repo = InMemoryCircuitBreakerStateRepository()
-
-    return CircuitBreakerService(repository=_circuit_breaker_repo)
-
-
-# Global repository instances for singleton pattern
-_circuit_breaker_repo = None
-_failed_operation_repo = None
+    # Use ProviderRegistry (Redis by default, with ResilientStorageBackend fallback)
+    return CircuitBreakerService(repository=ProviderRegistry.get_circuit_breaker_repo())
 
 
 def get_dlq_service():
@@ -197,13 +186,9 @@ def get_dlq_service():
             return dlq.retry(operation_id)
     """
     from selfhealing.services.dlq_service import DLQService
-    from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
-    global _failed_operation_repo
-    if _failed_operation_repo is None:
-        _failed_operation_repo = InMemoryFailedOperationRepository()
-
-    return DLQService(repository=_failed_operation_repo)
+    # Use ProviderRegistry (Redis by default, with ResilientStorageBackend fallback)
+    return DLQService(repository=ProviderRegistry.get_failed_operation_repo())
 
 
 def get_replay_service():
@@ -216,13 +201,9 @@ def get_replay_service():
             return dlq.replay_pending()
     """
     from selfhealing.services.replay_service import ReplayService
-    from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
-    global _failed_operation_repo
-    if _failed_operation_repo is None:
-        _failed_operation_repo = InMemoryFailedOperationRepository()
-
-    return ReplayService(repository=_failed_operation_repo)
+    # Use ProviderRegistry (Redis by default, with ResilientStorageBackend fallback)
+    return ReplayService(repository=ProviderRegistry.get_failed_operation_repo())
 
 
 # ============================================================================

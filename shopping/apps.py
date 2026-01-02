@@ -21,23 +21,12 @@ class ShoppingConfig(AppConfig):
 
     def _configure_selfhealing(self):
         """
-        Configure selfhealing package to use Django adapters.
+        Configure selfhealing package.
 
-        The selfhealing package provides all Django adapters internally.
-        Shopping app only needs to set 'django' as the default adapter type.
+        Redis is now the default adapter (with ResilientStorageBackend fallback).
+        No explicit configuration needed - ProviderRegistry handles everything.
         """
-        try:
-            from selfhealing.factory import ProviderRegistry
-
-            # Simply set Django as the default adapter type
-            # The selfhealing package already has complete Django adapters
-            ProviderRegistry._default_repo = "django"
-
-        except ImportError as e:
-            # selfhealing package not installed - that's OK for standalone shopping
-            pass
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to configure selfhealing: {e}")
+        # Redis가 기본값이므로 별도 설정 불필요
+        # ProviderRegistry는 자동으로 "redis"를 사용하며,
+        # ResilientStorageBackend가 Redis 장애 시 Memory+WAL fallback 제공
+        pass

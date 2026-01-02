@@ -99,16 +99,9 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
             # Gate not available, continue
             pass
 
-        # Use ProviderRegistry to get repository
+        # Use ProviderRegistry to get repository (Redis by default)
         from selfhealing.factory import ProviderRegistry
-
-        try:
-            repo = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError):
-            # Fallback to direct import
-            from selfhealing.adapters.django.repositories import DjangoFailedOperationRepository
-
-            repo = DjangoFailedOperationRepository()
+        repo = ProviderRegistry.get_failed_operation_repo()
 
         from selfhealing.core.types import OperationStatus
 

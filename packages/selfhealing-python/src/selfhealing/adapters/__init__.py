@@ -7,9 +7,10 @@ services, and libraries.
 
 Available Adapters:
     Repository Adapters:
-        - DjangoFailedOperationRepository
-        - DjangoCircuitBreakerStateRepository
-        - DjangoSecurityIncidentRepository
+        - RedisCircuitBreakerStateRepository (Production default)
+        - RedisDLQRepository (Production default)
+        - InMemoryFailedOperationRepository (Testing)
+        - InMemoryCircuitBreakerStateRepository (Testing)
 
     Cache Adapters:
         - RedisCacheAdapter (Redis)
@@ -21,10 +22,12 @@ Available Adapters:
 
 Usage:
     from selfhealing.adapters import (
-        # Repositories
-        DjangoFailedOperationRepository,
-        DjangoCircuitBreakerStateRepository,
-        DjangoSecurityIncidentRepository,
+        # Repositories (Production - Redis)
+        RedisCircuitBreakerStateRepository,
+        RedisDLQRepository,
+        # Repositories (Testing - InMemory)
+        InMemoryFailedOperationRepository,
+        InMemoryCircuitBreakerStateRepository,
         # Cache
         RedisCacheAdapter,
         InMemoryCacheAdapter,
@@ -34,15 +37,31 @@ Usage:
     )
 
 Reference: docs/PLUGGABLE_ARCHITECTURE.md
+
+NOTE: Django and SQLAlchemy adapters have been removed in v2.0.0.
+      Use Redis adapters (with ResilientStorageBackend fallback) instead.
+      See docs/self_healing/middleware_system/06_REDIS_MIGRATION.md
 """
 
 # =============================================================================
-# Repository Adapters (Phase 0)
+# Repository Adapters - Redis (Production)
 # =============================================================================
-from selfhealing.adapters.django_repositories import (
-    DjangoFailedOperationRepository,
-    DjangoCircuitBreakerStateRepository,
-    DjangoSecurityIncidentRepository,
+try:
+    from selfhealing.adapters.redis import (
+        RedisCircuitBreakerStateRepository,
+        RedisDLQRepository,
+    )
+except ImportError:
+    RedisCircuitBreakerStateRepository = None
+    RedisDLQRepository = None
+
+# =============================================================================
+# Repository Adapters - InMemory (Testing)
+# =============================================================================
+from selfhealing.adapters.memory import (
+    InMemoryFailedOperationRepository,
+    InMemoryCircuitBreakerStateRepository,
+    InMemorySecurityIncidentRepository,
 )
 
 # =============================================================================
@@ -99,11 +118,16 @@ from selfhealing.adapters.health_checker import (
 
 __all__ = [
     # =========================================================================
-    # Repository Adapters
+    # Repository Adapters - Redis (Production)
     # =========================================================================
-    "DjangoFailedOperationRepository",
-    "DjangoCircuitBreakerStateRepository",
-    "DjangoSecurityIncidentRepository",
+    "RedisCircuitBreakerStateRepository",
+    "RedisDLQRepository",
+    # =========================================================================
+    # Repository Adapters - InMemory (Testing)
+    # =========================================================================
+    "InMemoryFailedOperationRepository",
+    "InMemoryCircuitBreakerStateRepository",
+    "InMemorySecurityIncidentRepository",
     # =========================================================================
     # Cache Adapters
     # =========================================================================

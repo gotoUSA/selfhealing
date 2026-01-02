@@ -55,7 +55,7 @@ class ProviderRegistry:
     # Default provider names
     _default_cache: str = "memory"
     _default_queue: str = "sync"
-    _default_repo: str = "django"
+    _default_repo: str = "redis"
     _default_audit: str = "file"  # Default audit adapter
 
     # Singleton instances (for reuse)
@@ -469,33 +469,9 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
-    # Django repositories
-    try:
-        from selfhealing.adapters.django.repositories import (
-            DjangoFailedOperationRepository,
-            DjangoCircuitBreakerStateRepository,
-            DjangoSecurityIncidentRepository,
-        )
-
-        ProviderRegistry.register_failed_operation_repo("django", DjangoFailedOperationRepository)
-        ProviderRegistry.register_circuit_breaker_repo("django", DjangoCircuitBreakerStateRepository)
-        ProviderRegistry.register_security_repo("django", DjangoSecurityIncidentRepository)
-    except ImportError:
-        pass
-
-    # SQLAlchemy repositories (for FastAPI, Flask, standalone)
-    try:
-        from selfhealing.adapters.sqlalchemy.repositories import (
-            SQLAlchemyFailedOperationRepository,
-            SQLAlchemyCircuitBreakerStateRepository,
-            SQLAlchemySecurityIncidentRepository,
-        )
-
-        ProviderRegistry.register_failed_operation_repo("sqlalchemy", SQLAlchemyFailedOperationRepository)
-        ProviderRegistry.register_circuit_breaker_repo("sqlalchemy", SQLAlchemyCircuitBreakerStateRepository)
-        ProviderRegistry.register_security_repo("sqlalchemy", SQLAlchemySecurityIncidentRepository)
-    except ImportError:
-        pass
+    # NOTE: Django and SQLAlchemy adapters have been removed in v2.0.0.
+    # Use Redis adapters (with ResilientStorageBackend fallback) instead.
+    # See docs/self_healing/middleware_system/06_REDIS_MIGRATION.md
 
     # In-memory repositories (for testing, standalone)
     try:

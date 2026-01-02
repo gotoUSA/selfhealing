@@ -37,7 +37,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Distributed Computing",
 ]
-dependencies = []
+dependencies = [
+    "redis>=4.0",
+]
 
 [project.optional-dependencies]
 django = [

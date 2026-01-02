@@ -90,20 +90,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
     @property
     def repository(self) -> "CircuitBreakerStateRepository":
-        """Get the repository, creating default adapter if needed."""
+        """Get the repository using ProviderRegistry (Redis by default)."""
         if self._repository is None:
-            # Try to use ProviderRegistry from selfhealing package first
-            try:
-                from selfhealing.factory import ProviderRegistry
-
-                self._repository = ProviderRegistry.get_circuit_breaker_repo()
-            except (ImportError, ValueError):
-                # Fallback to local Django adapter
-                from .adapters.django_repositories import (
-                    DjangoCircuitBreakerStateRepository,
-                )
-
-                self._repository = DjangoCircuitBreakerStateRepository()
+            from selfhealing.factory import ProviderRegistry
+            self._repository = ProviderRegistry.get_circuit_breaker_repo()
         return self._repository
 
     @property

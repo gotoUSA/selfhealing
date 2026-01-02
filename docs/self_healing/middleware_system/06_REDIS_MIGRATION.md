@@ -1,8 +1,8 @@
 # 06. Redis 기본 저장소 마이그레이션 가이드
 
-> **버전**: v1.0.0  
+> **버전**: v2.0.0  
 > **최종 수정**: 2026-01-02  
-> **상태**: ✅ 권장 마이그레이션
+> **상태**: ✅ 마이그레이션 완료
 
 ## 1. 개요
 
@@ -10,12 +10,14 @@
 
 Django/SQLAlchemy 기반 저장소에서 **Redis 기반 저장소**로 전환합니다.
 
-| 항목 | 변경 전 | 변경 후 |
-|------|---------|---------|
-| 기본 저장소 | `django` | `redis` |
-| Fallback | Django 하드코딩 | ResilientStorageBackend 내장 |
-| 분산 환경 | ❌ 지원 불가 | ✅ 완전 지원 |
-| 의존성 | Django + PostgreSQL | Redis만 |
+| 항목 | 변경 전 | 변경 후 | 상태 |
+|------|---------|---------|:----:|
+| 기본 저장소 | `django` | `redis` | ✅ 완료 |
+| Fallback | Django 하드코딩 | ResilientStorageBackend 내장 | ✅ 완료 |
+| 분산 환경 | ❌ 지원 불가 | ✅ 완전 지원 | ✅ 완료 |
+| 의존성 | Django + PostgreSQL | Redis만 | ✅ 완료 |
+| Django 어댑터 | 존재 | **삭제됨** | ✅ 완료 |
+| SQLAlchemy 어댑터 | 존재 | **삭제됨** | ✅ 완료 |
 
 ### 1.2 왜 Redis인가?
 
@@ -166,33 +168,34 @@ self._repository = ProviderRegistry.get_failed_operation_repo()
 # ResilientStorageBackend가 내부적으로 fallback 처리
 ```
 
-### 4.4 Phase 4: Django 어댑터 Deprecation
+### 4.4 Phase 4: Django 어댑터 Deprecation ✅ 완료
 
 ```python
-# adapters/django/__init__.py
-import warnings
-
-def __getattr__(name):
-    if name in ("DjangoFailedOperationRepository", "DjangoCircuitBreakerStateRepository"):
-        warnings.warn(
-            f"{name} is deprecated. Use Redis adapter instead. "
-            "Will be removed in v2.0.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-    return globals()[name]
+# adapters/django/__init__.py (삭제됨)
+# Deprecation 경고가 추가된 후 v2.0.0에서 삭제됨
 ```
 
-### 4.5 Phase 5: 어댑터 삭제 (v2.0.0)
+### 4.5 Phase 5: 어댑터 삭제 ✅ 완료 (v2.0.0)
 
 ```
 adapters/
-├── django/              # 삭제
-├── sqlalchemy/          # 삭제
+├── django/              # ✅ 삭제됨
+├── sqlalchemy/          # ✅ 삭제됨
+├── django_repositories.py  # ✅ 삭제됨
 ├── memory/              # 유지 (테스트용)
 ├── redis/               # 유지 (프로덕션)
 └── resilient/           # 유지 (fallback)
 ```
+
+**삭제된 파일:**
+- `adapters/django/` 전체 디렉토리 (models.py, repositories.py, admin.py, migrations/ 등)
+- `adapters/sqlalchemy/` 전체 디렉토리
+- `adapters/django_repositories.py`
+
+**수정된 파일:**
+- `factory.py`: Django/SQLAlchemy 어댑터 등록 코드 제거
+- `adapters/__init__.py`: Django 참조 제거, Redis/InMemory 어댑터로 대체
+- `myproject/settings/base.py`: `selfhealing.adapters.django` INSTALLED_APPS에서 제거
 
 ---
 
@@ -253,126 +256,79 @@ def dlq_repository():
 
 ---
 
-## 7. 체크리스트
+## 7. 체크리스트 ✅ 완료
 
 ### 마이그레이션 전
 
-- [ ] Redis 인스턴스 준비 (docker-compose.yml 또는 클라우드)
-- [ ] `REDIS_URL` 환경변수 설정
-- [ ] WAL 디렉토리 권한 확인
+- [x] Redis 인스턴스 준비 (docker-compose.yml 또는 클라우드)
+- [x] `REDIS_URL` 환경변수 설정
+- [x] WAL 디렉토리 권한 확인
 
 ### 마이그레이션 중
 
-- [ ] factory.py `_default_repo = "redis"` 변경
-- [ ] pyproject.toml `redis>=4.0` 필수 의존성 추가
-- [ ] Django fallback 코드 제거
-- [ ] FastAPI dependencies 수정
-- [ ] 테스트 실행 확인
+- [x] factory.py `_default_repo = "redis"` 변경
+- [x] pyproject.toml `redis>=4.0` 필수 의존성 추가
+- [x] Django fallback 코드 제거
+- [x] FastAPI dependencies 수정
+- [x] 테스트 실행 확인
 
 ### 마이그레이션 후
 
-- [ ] Django 어댑터 deprecation 경고 추가
-- [ ] 문서 업데이트
-- [ ] v2.0.0에서 Django/SQLAlchemy 어댑터 삭제
+- [x] Django 어댑터 deprecation 경고 추가 → 삭제 완료
+- [x] 문서 업데이트
+- [x] v2.0.0에서 Django/SQLAlchemy 어댑터 삭제 ✅
 
 ---
 
-## 8. 다음 단계 (구현 예정)
+## 8. 구현 완료 ✅
 
-문서 승인 후 아래 코드 변경을 진행합니다:
+모든 마이그레이션이 완료되었습니다:
 
-### 8.1 변경 대상 파일
+### 8.1 변경된 파일
 
-| # | 파일 | 변경 내용 |
-|---|------|----------|
-| 1 | `packages/selfhealing-python/src/selfhealing/factory.py` | `_default_repo = "redis"` |
-| 2 | `packages/selfhealing-python/pyproject.toml` | `dependencies = ["redis>=4.0"]` |
-| 3 | `packages/selfhealing-python/src/selfhealing/services/dlq_service.py` | Django fallback 제거 |
-| 4 | `packages/selfhealing-python/src/selfhealing/services/replay_service.py` | Django fallback 제거 |
-| 5 | `packages/selfhealing-python/src/selfhealing/services/circuit_breaker/service.py` | Django fallback 제거 |
-| 6 | `packages/selfhealing-python/src/selfhealing/adapters/celery/tasks.py` | Django fallback 제거 |
-| 7 | `packages/selfhealing-python/src/selfhealing/adapters/fastapi/dependencies.py` | InMemory → ProviderRegistry |
-| 8 | `shopping/apps.py` | Django 강제 설정 제거 |
+| # | 파일 | 변경 내용 | 상태 |
+|---|------|----------|:----:|
+| 1 | `packages/selfhealing-python/src/selfhealing/factory.py` | `_default_repo = "redis"` | ✅ |
+| 2 | `packages/selfhealing-python/pyproject.toml` | `dependencies = ["redis>=4.0"]` | ✅ |
+| 3 | `packages/selfhealing-python/src/selfhealing/services/dlq_service.py` | Django fallback 제거 | ✅ |
+| 4 | `packages/selfhealing-python/src/selfhealing/services/circuit_breaker/service.py` | Django fallback 제거 | ✅ |
+| 5 | `packages/selfhealing-python/src/selfhealing/adapters/celery/tasks.py` | Django fallback 제거 | ✅ |
+| 6 | `packages/selfhealing-python/src/selfhealing/adapters/fastapi/dependencies.py` | InMemory → ProviderRegistry | ✅ |
+| 7 | `shopping/apps.py` | Django 강제 설정 제거 | ✅ |
+| 8 | `packages/selfhealing-python/src/selfhealing/adapters/__init__.py` | Django → Redis/InMemory | ✅ |
+| 9 | `myproject/settings/base.py` | INSTALLED_APPS에서 제거 | ✅ |
 
-### 8.2 변경 상세
+### 8.2 삭제된 파일/디렉토리
 
-#### (1) factory.py - 기본값 변경
-```python
-# Before
-_default_repo: str = "django"
+| 삭제 대상 | 내용 |
+|----------|------|
+| `adapters/django/` | 전체 디렉토리 (models.py, repositories.py, admin.py, apps.py, config_provider.py, migrations/) |
+| `adapters/sqlalchemy/` | 전체 디렉토리 (base.py, models.py, repositories.py 등) |
+| `adapters/django_repositories.py` | Django 레포지토리 re-export 파일 |
 
-# After
-_default_repo: str = "redis"
+### 8.3 현재 어댑터 구조
+
+```
+adapters/
+├── airgap/          # Air-gap 모드 지원
+├── alert/           # 알림 어댑터
+├── audit/           # 감사 로그 어댑터
+├── cache/           # 캐시 어댑터 (Redis, InMemory)
+├── celery/          # Celery 태스크
+├── fastapi/         # FastAPI 의존성 주입
+├── frameworks/      # 프레임워크 통합
+├── health_checker.py
+├── memory/          # InMemory 레포지토리 (테스트용) ✅ 유지
+├── metrics/         # 메트릭 어댑터
+├── observability/   # 관측성 어댑터
+├── queues/          # 태스크 큐 어댑터
+├── rate_limit/      # 레이트 리밋 어댑터
+├── redis/           # Redis 레포지토리 (프로덕션) ✅ 유지
+├── resilient/       # ResilientStorageBackend ✅ 유지
+└── __init__.py
 ```
 
-#### (2) pyproject.toml - Redis 필수 의존성
-```toml
-# Before
-dependencies = []
-
-# After
-dependencies = [
-    "redis>=4.0",
-]
-```
-
-#### (3-6) 서비스 fallback 제거
-```python
-# Before
-@property
-def repository(self) -> "FailedOperationRepository":
-    if self._repository is None:
-        try:
-            from selfhealing.factory import ProviderRegistry
-            self._repository = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError):
-            from .adapters.django_repositories import DjangoFailedOperationRepository
-            self._repository = DjangoFailedOperationRepository()
-    return self._repository
-
-# After
-@property
-def repository(self) -> "FailedOperationRepository":
-    if self._repository is None:
-        from selfhealing.factory import ProviderRegistry
-        self._repository = ProviderRegistry.get_failed_operation_repo()
-    return self._repository
-```
-
-#### (7) FastAPI dependencies - ProviderRegistry 사용
-```python
-# Before
-def get_dlq_service():
-    from selfhealing.adapters.memory import InMemoryFailedOperationRepository
-    global _failed_operation_repo
-    if _failed_operation_repo is None:
-        _failed_operation_repo = InMemoryFailedOperationRepository()
-    return DLQService(repository=_failed_operation_repo)
-
-# After
-def get_dlq_service():
-    from selfhealing.factory import ProviderRegistry
-    return DLQService(repository=ProviderRegistry.get_failed_operation_repo())
-```
-
-#### (8) shopping/apps.py - Django 강제 설정 제거
-```python
-# Before
-def _configure_selfhealing(self):
-    try:
-        from selfhealing.factory import ProviderRegistry
-        ProviderRegistry._default_repo = "django"
-    except ImportError:
-        pass
-
-# After
-def _configure_selfhealing(self):
-    # Redis가 기본값이므로 별도 설정 불필요
-    # ProviderRegistry는 자동으로 "redis"를 사용
-    pass
-```
-
-### 8.3 영향 범위
+### 8.4 영향 범위
 
 | 영역 | 영향 |
 |------|------|
@@ -381,12 +337,14 @@ def _configure_selfhealing(self):
 | **단위 테스트** | 변경 없음 (InMemory DI 사용) |
 | **통합 테스트** | Redis 필요 (docker-compose.test.yml) |
 
-### 8.4 롤백 계획
+### 8.5 롤백 불가
 
-문제 발생 시:
-```python
-# factory.py
-_default_repo: str = "django"  # 롤백
+Django/SQLAlchemy 어댑터가 삭제되었으므로 롤백이 필요한 경우 Git에서 복원해야 합니다:
+
+```bash
+# 롤백이 필요한 경우
+git checkout HEAD~1 -- packages/selfhealing-python/src/selfhealing/adapters/django/
+git checkout HEAD~1 -- packages/selfhealing-python/src/selfhealing/adapters/sqlalchemy/
 ```
 
 ---
@@ -401,4 +359,4 @@ _default_repo: str = "django"  # 롤백
 
 ---
 
-**결론**: Redis를 기본값으로 전환하고, Django/SQLAlchemy 어댑터를 deprecate → 삭제하는 것이 권장됩니다. ResilientStorageBackend 내에 완전한 fallback 로직이 있으므로 별도의 Django fallback이 필요 없습니다.
+**결론**: Redis 기본값 전환 및 Django/SQLAlchemy 어댑터 삭제가 완료되었습니다. ResilientStorageBackend 내에 완전한 fallback 로직이 있으므로 별도의 Django fallback이 필요 없습니다.
