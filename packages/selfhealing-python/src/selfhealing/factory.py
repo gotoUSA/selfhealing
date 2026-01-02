@@ -22,7 +22,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional, Type
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     )
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.task_queue import TaskQueueInterface
+    from selfhealing.interfaces.statistics import StatisticsRepositoryInterface
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ class ProviderRegistry:
     _circuit_breaker_repos: dict[str, Type] = {}
     _security_repos: dict[str, Type] = {}
     _audit_adapters: dict[str, Type] = {}  # Audit adapters
+
+    # Statistics adapter (singleton, registered by app)
+    _statistics_adapter: Optional["StatisticsRepositoryInterface"] = None
 
     # Default provider names
     _default_cache: str = "memory"
@@ -100,6 +104,34 @@ class ProviderRegistry:
         """Register an audit log adapter."""
         cls._audit_adapters[name] = adapter_class
         logger.debug(f"[Registry] Registered audit adapter: {name}")
+
+    @classmethod
+    def register_statistics_adapter(
+        cls,
+        adapter: "StatisticsRepositoryInterface",
+    ) -> None:
+        """
+        Register a statistics adapter.
+        
+        Should be called during app initialization (e.g., Django's AppConfig.ready()).
+        Only one statistics adapter can be registered at a time.
+        
+        Args:
+            adapter: StatisticsRepositoryInterface implementation
+            
+        Example (Django):
+            # shopping/apps.py
+            from selfhealing.factory import ProviderRegistry
+            from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
+            
+            class ShoppingConfig(AppConfig):
+                def ready(self):
+                    ProviderRegistry.register_statistics_adapter(
+                        DjangoStatisticsAdapter()
+                    )
+        """
+        cls._statistics_adapter = adapter
+        logger.info(f"[Registry] Statistics adapter registered: {type(adapter).__name__}")
 
     # =========================================================================
     # Provider Getters
@@ -243,6 +275,45 @@ class ProviderRegistry:
 
         return instance
 
+    # =========================================================================
+    # Statistics Repository (Hybrid Storage)
+    # =========================================================================
+
+    @classmethod
+    def get_statistics_repo(cls) -> "StatisticsRepositoryInterface":
+        """
+        Get statistics repository instance.
+        
+        Returns the registered statistics adapter, or NullStatisticsRepository
+        if no adapter is registered.
+        
+        Unlike runtime repositories, statistics repository is a singleton
+        registered by the application, not selected by name.
+        
+        Returns:
+            StatisticsRepositoryInterface instance
+            
+        Example:
+            stats_repo = ProviderRegistry.get_statistics_repo()
+            counts = stats_repo.get_status_counts()
+        """
+        if cls._statistics_adapter is None:
+            from selfhealing.adapters.statistics.null import NullStatisticsRepository
+            return NullStatisticsRepository()
+        return cls._statistics_adapter
+
+    @classmethod
+    def has_statistics_adapter(cls) -> bool:
+        """
+        Check if a statistics adapter is registered.
+        
+        Useful for conditionally showing dashboard features.
+        
+        Returns:
+            True if a statistics adapter is registered
+        """
+        return cls._statistics_adapter is not None
+
     @classmethod
     def get_audit_adapter(
         cls,
@@ -353,7 +424,7 @@ class ProviderRegistry:
         }
 
     @classmethod
-    def list_providers(cls) -> dict[str, list[str]]:
+    def list_providers(cls) -> dict[str, Any]:
         """List all registered providers."""
         return {
             "cache": list(cls._cache_providers.keys()),
@@ -362,6 +433,7 @@ class ProviderRegistry:
             "circuit_breaker_repo": list(cls._circuit_breaker_repos.keys()),
             "security_repo": list(cls._security_repos.keys()),
             "audit_adapter": list(cls._audit_adapters.keys()),
+            "statistics_adapter": type(cls._statistics_adapter).__name__ if cls._statistics_adapter else None,
         }
 
     @classmethod
@@ -380,9 +452,10 @@ class ProviderRegistry:
         cls._circuit_breaker_repos.clear()
         cls._security_repos.clear()
         cls._audit_adapters.clear()
+        cls._statistics_adapter = None  # Reset statistics adapter
         cls._default_cache = "memory"
         cls._default_queue = "sync"
-        cls._default_repo = "django"
+        cls._default_repo = "redis"  # Changed from "django" to "redis"
         cls._default_audit = "file"
         logger.debug("[Registry] Reset to initial state")
 

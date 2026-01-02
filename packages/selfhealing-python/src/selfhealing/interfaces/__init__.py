@@ -156,6 +156,23 @@ from selfhealing.interfaces.alert_adapter import (
     AlertAdapter,
 )
 
+# =============================================================================
+# Statistics Repository Interface (Hybrid Storage - v2.3.0)
+# =============================================================================
+from selfhealing.interfaces.statistics import (
+    # Data Classes
+    StatusCounts,
+    DomainDistribution,
+    FailureTypeDistribution,
+    RecentActivity,
+    CleanupStats,
+    PaginatedResult,
+    CircuitBreakerSummary,
+    CircuitBreakerInfo,
+    # Interface
+    StatisticsRepositoryInterface,
+)
+
 
 __all__ = [
     # =========================================================================
@@ -260,4 +277,18 @@ __all__ = [
     "Alert",
     # Interface
     "AlertAdapter",
+    # =========================================================================
+    # Statistics Repository Interface (Hybrid Storage - v2.3.0)
+    # =========================================================================
+    # Data Classes
+    "StatusCounts",
+    "DomainDistribution",
+    "FailureTypeDistribution",
+    "RecentActivity",
+    "CleanupStats",
+    "PaginatedResult",
+    "CircuitBreakerSummary",
+    "CircuitBreakerInfo",
+    # Interface
+    "StatisticsRepositoryInterface",
 ]
