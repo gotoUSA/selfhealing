@@ -217,9 +217,9 @@ RATE_LIMIT_CONFIG = {
 
 ### 3.4 TieringMiddleware
 
-**경로**: `myproject.middleware.tiering`
+**경로**: `selfhealing.api.django.tiering.middleware.TieringMiddleware`
 
-**역할**: 계층별 요청 라우팅 ([섹션 5](#5-tiering-시스템) 참조)
+**역할**: Emergency Mode 트래픽 제어 ([섹션 5](#5-tiering-시스템) 참조)
 
 ### 3.5 ActorContextMiddleware
 
@@ -327,45 +327,107 @@ app.add_middleware(ShutdownMiddleware, shutdown_timeout=30)
 
 ## 5. Tiering 시스템
 
-> 계층별 요청 라우팅 및 우선순위 관리
+> Emergency Mode Load Shedding을 위한 API 계층 관리
 
-### 5.1 Tier 정의
+**경로**: `selfhealing.api.django.tiering/`
 
-| Tier | 설명 | 우선순위 |
-|------|------|----------|
-| `platinum` | 프리미엄 고객 | 최우선 |
-| `gold` | 일반 유료 고객 | 높음 |
-| `silver` | 무료 사용자 | 보통 |
-| `bronze` | 익명 사용자 | 낮음 |
+### 5.1 개요
 
-### 5.2 TieringMiddleware
+Tiering 시스템은 **비상 모드(Emergency Mode)에서 API 경로 기반으로 트래픽을 제어**합니다.
+고객 등급이 아닌 API의 중요도에 따라 Tier를 분류하고, 시스템 과부하 시 비필수 API를 우선 차단합니다.
 
-**경로**: `myproject.middleware.tiering`
+```
+Emergency Mode 발생
+    │
+    ▼
+┌─────────────────────────────────────────────────┐
+│ TieringMiddleware                                │
+│ ┌─────────────────────────────────────────────┐ │
+│ │ 1. EmergencyManager에서 현재 레벨 확인      │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ 2. 요청 경로 → Tier 매핑                    │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ 3. Tier multiplier로 확률적 허용/차단       │ │
+│ └─────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+    │
+    ▼
+  허용 → View  /  차단 → 503 Load Shedding
+```
 
-**기능**:
-- 요청 헤더에서 Tier 추출
-- 사용자 정보에서 Tier 조회
-- 기본 Tier 적용
+### 5.2 Tier 정의
 
-**헤더**: `X-Customer-Tier`
+| Tier ID | 이름 | Multiplier | 용도 |
+|---------|------|------------|------|
+| `critical` | Mission Critical | 0.5 (50%) | 장애 시에도 반드시 동작해야 하는 핵심 API |
+| `standard` | Operational | 0.1 (10%) | 일반 운영 API |
+| `non_essential` | Non-Essential | 0.0 (0%) | 비필수 API (Load Shedding 우선 대상) |
 
-### 5.3 Tier 기반 Rate Limit
+> **Multiplier**: Emergency Mode에서 허용되는 요청 비율 (0.0 = 전체 차단, 1.0 = 전체 허용)
 
-| Tier | 분당 요청 | 일간 요청 |
-|------|-----------|-----------|
-| `platinum` | 1000 | 100,000 |
-| `gold` | 500 | 50,000 |
-| `silver` | 100 | 10,000 |
-| `bronze` | 20 | 2,000 |
+### 5.3 Emergency Level별 동작
 
-### 5.4 Tier 기반 Circuit Breaker
+| Level | 설명 | critical | standard | non_essential |
+|-------|------|----------|----------|---------------|
+| `NORMAL (0)` | 정상 운영 | 100% | 100% | 100% |
+| `LEVEL_1 (1)` | 경계 | 100% | 100% | 0% |
+| `LEVEL_2 (2)` | 주의 | 100% | 10% | 0% |
+| `LEVEL_3 (3)` | 위험 | 50% | 0% | 0% |
 
-| Tier | 실패 임계값 | 복구 시간 |
-|------|-------------|-----------|
-| `platinum` | 10 | 10초 |
-| `gold` | 5 | 30초 |
-| `silver` | 3 | 60초 |
-| `bronze` | 2 | 120초 |
+### 5.4 Tier 매핑 (기본값)
+
+| API 경로 패턴 | Tier | 패턴 타입 |
+|---------------|------|----------|
+| `/api/self-healing/control/` | `critical` | EXACT |
+| `/api/self-healing/allow/*` | `critical` | WILDCARD |
+| `/api/self-healing/block/*` | `critical` | WILDCARD |
+| `/api/self-healing/system/*` | `critical` | WILDCARD |
+| `/api/self-healing/config/*` | `standard` | WILDCARD |
+| `/api/self-healing/dlq/*` | `standard` | WILDCARD |
+| `/api/self-healing/status/*` | `standard` | WILDCARD |
+| `/api/self-healing/dashboard/*` | `non_essential` | WILDCARD |
+| `/api/self-healing/metrics/` | `non_essential` | EXACT |
+
+### 5.5 Override 기능
+
+특정 클라이언트에 대해 Tier를 재정의할 수 있습니다:
+
+| 식별자 타입 | 예시 | 설명 |
+|-------------|------|------|
+| IP | `10.0.0.0/8` | CIDR 지원, 내부 네트워크 우선 처리 |
+| User ID | `admin_user_123` | 특정 사용자 우선 처리 |
+| API Key | `sk_live_xxx` | 특정 API 키 우선 처리 |
+
+**기본 Override (내부 네트워크 → critical)**:
+- `10.0.0.0/8` - 내부 모니터링 시스템
+- `172.16.0.0/12` - 내부 네트워크
+- `192.168.0.0/16` - 내부 네트워크
+
+### 5.6 Static Critical Paths (Defense-in-Depth)
+
+코드에 하드코딩된 최후 방어선 (설정 변경 불가):
+
+```python
+STATIC_CRITICAL_PATHS = frozenset([
+    "/api/self-healing/control/",
+    "/api/self-healing/emergency/",
+    "/api/auth/token/",
+])
+```
+
+### 5.7 설정
+
+```python
+# settings.py
+MIDDLEWARE = [
+    ...
+    'selfhealing.api.django.tiering.TieringMiddleware',
+    ...
+]
+
+# 미들웨어 비활성화 (선택)
+SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False
+```
 
 ---
 
