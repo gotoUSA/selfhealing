@@ -1,9 +1,9 @@
 # Self-Healing 통합 알림 아키텍처
 
-> **Version**: 2.0.0
+> **Version**: 2.1.0
 > **Created**: 2026-01-02
 > **Updated**: 2026-01-02
-> **Status**: Phase 1, 2 구현 완료
+> **Status**: Phase 1-5 구현 완료 ✅
 > **Category**: 자율 운영 알림 시스템
 
 ---
@@ -864,23 +864,102 @@ class ArchiveTask(BaseNotifyingTask):
         return {"archived_count": count}
 ```
 
-### 8.3 Phase 3: 기존 태스크 마이그레이션 (예정)
+### 8.3 Phase 3: 일일 리포트 구현 ✅ 완료
 
-1. 고위험 태스크 마이그레이션 (`purge_archived`, `apply_config`)
-2. 저위험 태스크 마이그레이션 (`archive`, `cleanup`, `expire`)
-3. 상태 변화 태스크 마이그레이션 (`check_recovery`, `check_drift`)
+**구현 파일**: `selfhealing/tasks/daily_report.py`
 
-### 8.4 Phase 4: 일일 리포트 구현 (1시간)
+**구현 완료 항목**:
+1. ✅ `DailyReportData` 데이터클래스 (집계 리포트)
+2. ✅ `TaskResultEntry` 데이터클래스 (개별 태스크 결과)
+3. ✅ `DailyReportCollector` 클래스 (결과 수집/저장)
+4. ✅ `generate_daily_autonomous_report` 태스크
+5. ✅ `get_daily_report_beat_schedule()` Beat 스케줄 헬퍼
 
-1. `DailyAutonomousReport` 데이터클래스
-2. `generate_daily_autonomous_report` 태스크
-3. Beat Schedule 등록
+**사용 예시**:
+```python
+from selfhealing.tasks.daily_report import (
+    get_daily_report_collector,
+    generate_daily_autonomous_report,
+)
 
-### 8.5 Phase 5: 테스트 및 문서화 (2시간)
+# 태스크 결과 추가
+collector = get_daily_report_collector()
+collector.add_result(
+    task_name="archive_old_entries",
+    result={"archived_count": 50},
+    severity="info",
+)
 
-1. 단위 테스트: NotificationPolicy, BaseNotifyingTask
-2. 통합 테스트: 알림 발송 검증
-3. 04_AUTONOMOUS_OPS.md 업데이트
+# 일일 리포트 생성 (Celery Beat에서 매일 09:00 호출)
+generate_daily_autonomous_report()
+```
+
+### 8.4 Phase 4: 중앙 집중식 알림 매니저 ✅ 완료
+
+**구현 파일**: `selfhealing/services/unified_notification.py`
+
+**문제 해결**:
+- Before: 4개 분산된 알림 소스 (AlertAdapter, SecurityNotificationService, GateAlertManager, GovernanceService)
+- After: 단일 `UnifiedNotificationManager`에서 모든 알림 라우팅
+
+**구현 완료 항목**:
+1. ✅ `NotificationPriority` Enum (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+2. ✅ `NotificationCategory` Enum (SECURITY/OPERATIONS/SLA 등)
+3. ✅ `NotificationPayload` 데이터클래스 (통합 알림 페이로드)
+4. ✅ `RoutingPolicy` 데이터클래스 (우선순위/카테고리별 채널 라우팅)
+5. ✅ `UnifiedNotificationManager` 클래스
+   - 중앙 집중식 알림 라우팅
+   - 쿨다운 기반 알림 억제
+   - Emergency Level 연동 (자동 에스컬레이션)
+   - Audit Trail 연동
+   - 일일 리포트 자동 추가
+6. ✅ 편의 함수: `notify()`, `notify_sla()`, `notify_security()`, `notify_error()`
+
+**사용 예시**:
+```python
+from selfhealing.services import (
+    notify,
+    notify_sla,
+    notify_error,
+)
+
+# 일반 알림
+notify(
+    title="작업 완료",
+    message="아카이브 50건 처리됨",
+    priority="medium",
+    category="operations",
+    source="archive_task",
+)
+
+# SLA 알림 (도메인별 쿨다운)
+notify_sla(
+    title="SLA 위반 경고",
+    message="결제 도메인 임계값 초과",
+    domain="payment",
+    priority="high",
+)
+
+# 에러 알림
+notify_error(
+    title="태스크 실패",
+    message="재시도 한도 초과",
+    error=exception,
+    source="retry_handler",
+)
+```
+
+### 8.5 Phase 5: 테스트 및 문서화 ✅ 완료
+
+**테스트 파일**: `tests/self_healing/unit/test_notification_architecture.py`
+
+**테스트 항목**:
+1. ✅ DailyReportData 집계 테스트
+2. ✅ DailyReportCollector 저장/조회 테스트
+3. ✅ UnifiedNotificationManager 라우팅 테스트
+4. ✅ 쿨다운 억제 테스트
+5. ✅ Emergency Level 에스컬레이션 테스트
+6. ✅ 편의 함수 테스트
 
 ---
 
@@ -905,6 +984,7 @@ class ArchiveTask(BaseNotifyingTask):
 - [x] Audit Trail 연동 (알림 발송 기록)
 - [x] 기존 알림 인프라 통합 방안
 - [x] 구현 계획 및 Phase 정의
+- [x] **중앙 집중식 알림 매니저** (UnifiedNotificationManager)
 
 ### 구현 완료 현황
 
@@ -912,16 +992,19 @@ class ArchiveTask(BaseNotifyingTask):
 |-------|------|------|------|
 | Phase 1 | SLA 드리프트 알림 연결 | ✅ 완료 | `tasks/drift_detection.py` |
 | Phase 2 | BaseNotifyingTask 구현 | ✅ 완료 | `tasks/base_notifying_task.py` |
-| Phase 3 | 기존 태스크 마이그레이션 | ⏳ 예정 | - |
-| Phase 4 | 일일 리포트 구현 | ⏳ 예정 | - |
-| Phase 5 | 테스트 및 문서화 | ⏳ 예정 | - |
+| Phase 3 | 일일 리포트 구현 | ✅ 완료 | `tasks/daily_report.py` |
+| Phase 4 | 중앙 집중식 알림 매니저 | ✅ 완료 | `services/unified_notification.py` |
+| Phase 5 | 테스트 및 문서화 | ✅ 완료 | `tests/.../test_notification_architecture.py` |
 
 ### 신규 파일
 
 | 파일 경로 | 설명 |
 |-----------|------|
 | `selfhealing/tasks/base_notifying_task.py` | BaseNotifyingTask, NotificationPolicy, DailyAutonomousReport |
+| `selfhealing/tasks/daily_report.py` | DailyReportData, DailyReportCollector, 일일 리포트 태스크 |
+| `selfhealing/services/unified_notification.py` | UnifiedNotificationManager, 편의 함수 |
 | `selfhealing/tasks/__init__.py` | tasks 패키지 초기화 및 export |
+| `tests/.../test_notification_architecture.py` | 알림 아키텍처 단위 테스트 |
 
 ### 수정된 파일
 
@@ -929,4 +1012,4 @@ class ArchiveTask(BaseNotifyingTask):
 |-----------|-----------|
 | `selfhealing/tasks/drift_detection.py` | `_send_drift_notifications()` - 알림 발송 연동 |
 | `selfhealing/services/security_notification_service.py` | `send_alert()` 메서드 추가 |
-| `selfhealing/services/__init__.py` | `send_alert` export 추가 |
+| `selfhealing/services/__init__.py` | UnifiedNotificationManager 및 편의 함수 export 추가 |

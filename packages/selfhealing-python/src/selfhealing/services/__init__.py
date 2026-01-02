@@ -211,6 +211,18 @@ from .security_notification_service import (
     notify_security_incident,  # Legacy API for incident objects
     send_alert,  # General-purpose alert function
 )
+from .unified_notification import (
+    UnifiedNotificationManager,
+    NotificationPayload,
+    NotificationPriority,
+    NotificationCategory,
+    RoutingPolicy,
+    get_unified_notification_manager,
+    notify,
+    notify_security,
+    notify_sla,
+    notify_error,
+)
 from .runtime_config import (
     RuntimeConfigManager,
     get_runtime_config_manager,
@@ -426,6 +438,17 @@ __all__ = [
     "get_security_notification_service",
     "notify_security_incident",
     "send_alert",  # General-purpose alert function
+    # Unified Notification Manager (Centralized Notifications)
+    "UnifiedNotificationManager",
+    "NotificationPayload",
+    "NotificationPriority",
+    "NotificationCategory",
+    "RoutingPolicy",
+    "get_unified_notification_manager",
+    "notify",
+    "notify_security",
+    "notify_sla",
+    "notify_error",
     # Runtime Config (Runtime Configuration API)
     "RuntimeConfigManager",
     "get_runtime_config_manager",

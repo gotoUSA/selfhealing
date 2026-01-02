@@ -37,6 +37,15 @@ from .drift_detection import (
     ForensicAnalyzer,
 )
 
+from .daily_report import (
+    DailyReportData,
+    DailyReportCollector,
+    TaskResultEntry,
+    get_daily_report_collector,
+    generate_daily_autonomous_report,
+    get_daily_report_beat_schedule,
+)
+
 __all__ = [
     # Base Notifying Task
     "BaseNotifyingTask",
@@ -49,4 +58,11 @@ __all__ = [
     # Drift Detection
     "SLADriftDetector",
     "ForensicAnalyzer",
+    # Daily Report
+    "DailyReportData",
+    "DailyReportCollector",
+    "TaskResultEntry",
+    "get_daily_report_collector",
+    "generate_daily_autonomous_report",
+    "get_daily_report_beat_schedule",
 ]
