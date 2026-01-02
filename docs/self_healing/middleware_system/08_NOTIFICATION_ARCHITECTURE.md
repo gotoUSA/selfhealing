@@ -1,8 +1,9 @@
 # Self-Healing 통합 알림 아키텍처
 
-> **Version**: 1.0.0
+> **Version**: 2.0.0
 > **Created**: 2026-01-02
-> **Status**: 설계 완료, 구현 예정
+> **Updated**: 2026-01-02
+> **Status**: Phase 1, 2 구현 완료
 > **Category**: 자율 운영 알림 시스템
 
 ---
@@ -789,9 +790,13 @@ class SecurityNotificationService:
 
 ## 8. 구현 계획
 
-### 8.1 Phase 1: 즉시 수정 (1시간)
+### 8.1 Phase 1: SLA 드리프트 알림 연결 ✅ 완료
 
-**#12 SLA 드리프트 알림 연결**:
+**구현 파일**: `selfhealing/tasks/drift_detection.py`
+
+**변경 사항**:
+- `_send_drift_notifications()` 메서드에서 `SecurityNotificationService.send_alert()` 호출
+- 로그 + 알림 동시 발송
 
 ```python
 # tasks/drift_detection.py
@@ -805,26 +810,61 @@ def _send_drift_notifications(self, warnings: list[dict]) -> None:
         domain = warning.get("domain", "unknown")
         severity = warning.get("severity", "warning")
 
-        # 기존 로그
+        # 로그 + 알림 발송
         logger.warning(f"[SLADriftWarning] {warning.get('message')}")
 
-        # 신규: 알림 발송
         service.send_alert(
             title=f"[SLA Drift] {domain}",
             message=warning.get("message"),
             severity=severity,
-            metadata=warning.get("metrics"),
+            channels=["slack"],
+            metadata={
+                "type": warning.get("type"),
+                "domain": domain,
+                "recommendation": warning.get("recommendation"),
+                **warning.get("metrics", {}),
+            },
         )
 ```
 
-### 8.2 Phase 2: BaseNotifyingTask 구현 (3시간)
+### 8.2 Phase 2: BaseNotifyingTask 구현 ✅ 완료
 
-1. `NotificationPolicy` 데이터클래스 생성
-2. `BaseNotifyingTask` 베이스 클래스 구현
-3. 쿨다운, 임계값, Emergency 연동 로직
-4. Audit Trail 연동
+**구현 파일**: `selfhealing/tasks/base_notifying_task.py`
 
-### 8.3 Phase 3: 기존 태스크 마이그레이션 (2시간)
+**구현 완료 항목**:
+1. ✅ `NotificationTiming` Enum (BEFORE/AFTER/REALTIME/AGGREGATED)
+2. ✅ `NotificationThreshold` 데이터클래스 (임계값 기반 심각도 결정)
+3. ✅ `NotificationPolicy` 데이터클래스 (태스크별 알림 정책)
+4. ✅ `DailyAutonomousReport` 데이터클래스 (일일 요약 리포트)
+5. ✅ `BaseNotifyingTask` 베이스 클래스
+   - Pre/Post execution hooks
+   - Cooldown 기반 알림 억제
+   - Threshold 기반 알림 필터링
+   - Emergency Level 연동 (escalate_on_emergency)
+   - Audit Trail 연동
+6. ✅ `SecurityNotificationService.send_alert()` 메서드 추가
+
+**사용 예시**:
+```python
+from selfhealing.tasks import (
+    BaseNotifyingTask,
+    NotificationPolicy,
+    NotificationTiming,
+)
+
+class ArchiveTask(BaseNotifyingTask):
+    notification_policy = NotificationPolicy(
+        timing=NotificationTiming.AGGREGATED,
+        aggregate=True,
+        default_severity="info",
+    )
+
+    def run(self, days=30):
+        count = archive_old_entries(days)
+        return {"archived_count": count}
+```
+
+### 8.3 Phase 3: 기존 태스크 마이그레이션 (예정)
 
 1. 고위험 태스크 마이그레이션 (`purge_archived`, `apply_config`)
 2. 저위험 태스크 마이그레이션 (`archive`, `cleanup`, `expire`)
@@ -865,3 +905,28 @@ def _send_drift_notifications(self, warnings: list[dict]) -> None:
 - [x] Audit Trail 연동 (알림 발송 기록)
 - [x] 기존 알림 인프라 통합 방안
 - [x] 구현 계획 및 Phase 정의
+
+### 구현 완료 현황
+
+| Phase | 설명 | 상태 | 파일 |
+|-------|------|------|------|
+| Phase 1 | SLA 드리프트 알림 연결 | ✅ 완료 | `tasks/drift_detection.py` |
+| Phase 2 | BaseNotifyingTask 구현 | ✅ 완료 | `tasks/base_notifying_task.py` |
+| Phase 3 | 기존 태스크 마이그레이션 | ⏳ 예정 | - |
+| Phase 4 | 일일 리포트 구현 | ⏳ 예정 | - |
+| Phase 5 | 테스트 및 문서화 | ⏳ 예정 | - |
+
+### 신규 파일
+
+| 파일 경로 | 설명 |
+|-----------|------|
+| `selfhealing/tasks/base_notifying_task.py` | BaseNotifyingTask, NotificationPolicy, DailyAutonomousReport |
+| `selfhealing/tasks/__init__.py` | tasks 패키지 초기화 및 export |
+
+### 수정된 파일
+
+| 파일 경로 | 변경 사항 |
+|-----------|-----------|
+| `selfhealing/tasks/drift_detection.py` | `_send_drift_notifications()` - 알림 발송 연동 |
+| `selfhealing/services/security_notification_service.py` | `send_alert()` 메서드 추가 |
+| `selfhealing/services/__init__.py` | `send_alert` export 추가 |

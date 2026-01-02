@@ -285,20 +285,44 @@ class SLADriftDetector:
 
     def _send_drift_notifications(self, warnings: list[dict]) -> None:
         """Send notifications for SLA drift warnings."""
+        from selfhealing.services import get_security_notification_service
+
+        service = get_security_notification_service()
+
         for warning in warnings:
             domain = warning.get("domain", "unknown")
             severity = warning.get("severity", "warning")
+            warning_type = warning.get("type", "SLA_DRIFT")
 
-            if self.record_sla_breach and warning.get("type") == "SLA_BREACH_RATE_HIGH":
+            # Record SLA breach metric if applicable
+            if self.record_sla_breach and warning_type == "SLA_BREACH_RATE_HIGH":
                 self.record_sla_breach(domain)
 
+            # Log warning
             logger.warning(
                 f"[SLADriftWarning] domain={domain} "
-                f"type={warning.get('type')} "
+                f"type={warning_type} "
                 f"severity={severity} "
                 f"message={warning.get('message')} "
                 f"recommendation={warning.get('recommendation')}"
             )
+
+            # Send notification via SecurityNotificationService
+            try:
+                service.send_alert(
+                    title=f"[SLA Drift] {domain}",
+                    message=warning.get("message", ""),
+                    severity=severity,
+                    channels=["slack"],
+                    metadata={
+                        "type": warning_type,
+                        "domain": domain,
+                        "recommendation": warning.get("recommendation", ""),
+                        **warning.get("metrics", {}),
+                    },
+                )
+            except Exception as e:
+                logger.error(f"[SLADriftWarning] Failed to send notification: {e}")
 
 
 # =============================================================================

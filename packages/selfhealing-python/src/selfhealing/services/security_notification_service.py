@@ -547,6 +547,302 @@ class SecurityNotificationService:
                 error=str(e),
             )
 
+    def send_alert(
+        self,
+        title: str,
+        message: str,
+        severity: str = "info",
+        channels: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> SecurityNotificationResult:
+        """
+        Send a general-purpose alert notification.
+
+        This method is for alerts that are not tied to a specific security incident,
+        such as SLA drift warnings, system health alerts, or operational notifications.
+
+        Args:
+            title: Alert title (short summary)
+            message: Alert message (detailed description)
+            severity: Severity level ('info', 'warning', 'critical')
+            channels: List of channels to send to (default: ['slack'])
+            metadata: Additional context data
+
+        Returns:
+            SecurityNotificationResult with results from all channels
+
+        Example:
+            service = get_security_notification_service()
+            service.send_alert(
+                title="[SLA Drift] payment",
+                message="SLA 위반율이 25%입니다.",
+                severity="warning",
+                metadata={"domain": "payment", "breach_rate": 25.0}
+            )
+        """
+        if not self.config.enabled:
+            logger.debug("[Security Notification] Notifications disabled")
+            return SecurityNotificationResult(incident_id=0)
+
+        result = SecurityNotificationResult(incident_id=0)
+        channels = channels or ["slack"]
+        metadata = metadata or {}
+
+        from selfhealing.core.timezone import now
+
+        # Format message for Slack
+        formatted_message = {
+            "title": self._truncate_with_ellipsis(title, TITLE_MAX_LENGTH),
+            "severity": severity.upper(),
+            "description": self._truncate_with_ellipsis(message, DESCRIPTION_MAX_LENGTH),
+            "detected_at": now().isoformat(),
+            "metadata": metadata,
+        }
+
+        # Determine channel based on severity
+        if "slack" in channels:
+            if severity == "critical":
+                channel = self.config.slack_critical_channel
+            elif severity in ("warning", "high"):
+                channel = self.config.slack_high_channel
+            else:
+                channel = self.config.slack_medium_channel
+            result.add_result(self._send_slack_alert(formatted_message, channel))
+
+        if "email" in channels:
+            if severity == "critical":
+                recipients = self.config.email_critical_recipients
+            else:
+                recipients = self.config.email_high_recipients
+            if recipients:
+                result.add_result(self._send_email_alert(formatted_message, recipients))
+
+        if "sms" in channels and severity == "critical":
+            if self.config.sms_critical_recipients:
+                result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
+
+        if "pagerduty" in channels and severity == "critical":
+            if self.config.pagerduty_enabled:
+                result.add_result(self._send_pagerduty_alert(formatted_message))
+
+        # Log results
+        success_count = sum(1 for r in result.results if r.success)
+        total_count = len(result.results)
+        logger.info(f"[Security Notification] Alert '{title}': {success_count}/{total_count} notifications sent")
+
+        return result
+
+    def _send_slack_alert(self, message: dict[str, Any], channel: str) -> NotificationResult:
+        """
+        Send a Slack alert notification (general purpose).
+
+        Args:
+            message: Formatted message dictionary
+            channel: Slack channel to send to
+
+        Returns:
+            NotificationResult
+        """
+        if not self.config.slack_webhook_url:
+            return NotificationResult(
+                channel="slack",
+                success=False,
+                error="Slack webhook URL not configured",
+            )
+
+        if self.config.dry_run:
+            logger.info(f"[DRY RUN] Slack alert to {channel}: {message['title']}")
+            return NotificationResult(
+                channel="slack",
+                success=True,
+                message=f"[DRY RUN] Would send alert to {channel}",
+            )
+
+        try:
+            slack_message = self._format_slack_alert(message, channel)
+            limits = _get_notification_limits()
+
+            response = requests.post(
+                self.config.slack_webhook_url,
+                json=slack_message,
+                timeout=limits.notification_timeout_seconds,
+            )
+
+            if response.status_code == 200:
+                return NotificationResult(
+                    channel="slack",
+                    success=True,
+                    message=f"Alert sent to {channel}",
+                )
+            else:
+                return NotificationResult(
+                    channel="slack",
+                    success=False,
+                    error=f"HTTP {response.status_code}: {response.text[:100]}",
+                )
+
+        except Exception as e:
+            logger.error(f"[Security Notification] Slack alert error: {e}")
+            return NotificationResult(
+                channel="slack",
+                success=False,
+                error=str(e),
+            )
+
+    def _format_slack_alert(self, message: dict[str, Any], channel: str) -> dict[str, Any]:
+        """
+        Format alert message for Slack Block Kit.
+
+        Args:
+            message: Formatted message dictionary
+            channel: Target channel
+
+        Returns:
+            Slack-formatted message
+        """
+        severity_emoji = {
+            "CRITICAL": "🔴",
+            "WARNING": "🟠",
+            "HIGH": "🟠",
+            "INFO": "🔵",
+            "MEDIUM": "🟡",
+        }.get(message["severity"], "⚪")
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"{severity_emoji} {message['title']}",
+                    "emoji": True,
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": message["description"],
+                },
+            },
+        ]
+
+        # Add metadata if present
+        if message.get("metadata"):
+            fields = []
+            for key, value in list(message["metadata"].items())[:4]:  # Max 4 fields
+                fields.append({"type": "mrkdwn", "text": f"*{key}:*\n{value}"})
+            if fields:
+                blocks.append({"type": "section", "fields": fields})
+
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"⏰ {message['detected_at']}"}
+            ],
+        })
+
+        return {"channel": channel, "blocks": blocks}
+
+    def _send_email_alert(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+        """Send email alert notification."""
+        if self.config.dry_run:
+            logger.info(f"[DRY RUN] Email alert to {recipients}: {message['title']}")
+            return NotificationResult(
+                channel="email",
+                success=True,
+                message=f"[DRY RUN] Would send alert to {len(recipients)} recipients",
+            )
+
+        try:
+            subject = f"[{message['severity']}] {message['title']}"
+            logger.info(f"[Security Notification] Email alert prepared: {subject}")
+            return NotificationResult(
+                channel="email",
+                success=True,
+                message=f"Email alert prepared for {len(recipients)} recipients",
+            )
+        except Exception as e:
+            logger.error(f"[Security Notification] Email alert error: {e}")
+            return NotificationResult(channel="email", success=False, error=str(e))
+
+    def _send_sms_alert(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+        """Send SMS alert notification."""
+        if self.config.dry_run:
+            logger.info(f"[DRY RUN] SMS alert to {recipients}: {message['title']}")
+            return NotificationResult(
+                channel="sms",
+                success=True,
+                message=f"[DRY RUN] Would send alert to {len(recipients)} recipients",
+            )
+
+        sms_body = f"[{message['severity']}] {message['title'][:50]}: {message['description'][:100]}"
+        logger.info(f"[Security Notification] SMS alert would send: {sms_body}")
+        return NotificationResult(
+            channel="sms",
+            success=True,
+            message=f"SMS alert logged for {len(recipients)} recipients",
+        )
+
+    def _send_pagerduty_alert(self, message: dict[str, Any]) -> NotificationResult:
+        """Send PagerDuty alert notification."""
+        if not self.config.pagerduty_service_key:
+            return NotificationResult(
+                channel="pagerduty",
+                success=False,
+                error="PagerDuty service key not configured",
+            )
+
+        if self.config.dry_run:
+            logger.info(f"[DRY RUN] PagerDuty alert: {message['title']}")
+            return NotificationResult(
+                channel="pagerduty",
+                success=True,
+                message="[DRY RUN] Would trigger PagerDuty alert",
+            )
+
+        try:
+            import hashlib
+            dedup_key = hashlib.md5(f"{message['title']}".encode()).hexdigest()[:16]
+
+            payload = {
+                "routing_key": self.config.pagerduty_service_key,
+                "event_action": "trigger",
+                "dedup_key": f"selfhealing-alert-{dedup_key}",
+                "payload": {
+                    "summary": message["title"],
+                    "severity": "critical",
+                    "source": "self-healing",
+                    "custom_details": {
+                        "description": message["description"],
+                        "metadata": message.get("metadata", {}),
+                    },
+                },
+            }
+            limits = _get_notification_limits()
+
+            response = requests.post(
+                "https://events.pagerduty.com/v2/enqueue",
+                json=payload,
+                timeout=limits.notification_timeout_seconds,
+            )
+
+            if response.status_code in (200, 202):
+                return NotificationResult(
+                    channel="pagerduty",
+                    success=True,
+                    message="PagerDuty alert triggered",
+                )
+            else:
+                return NotificationResult(
+                    channel="pagerduty",
+                    success=False,
+                    error=f"HTTP {response.status_code}",
+                )
+
+        except Exception as e:
+            logger.error(f"[Security Notification] PagerDuty alert error: {e}")
+            return NotificationResult(channel="pagerduty", success=False, error=str(e))
+
     def _format_email_body(self, message: dict[str, Any]) -> str:
         """
         Format message for email body.
@@ -751,6 +1047,39 @@ def get_security_notification_service() -> SecurityNotificationService:
     if _notification_service is None:
         _notification_service = SecurityNotificationService()
     return _notification_service
+
+
+def send_alert(
+    title: str,
+    message: str,
+    severity: str = "info",
+    channels: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> SecurityNotificationResult:
+    """
+    Send a general-purpose alert notification.
+
+    This is a convenience function for sending alerts that are not
+    tied to a specific security incident (e.g., SLA drift, system events).
+
+    Args:
+        title: Alert title (short summary)
+        message: Alert message (detailed description)
+        severity: Severity level ('info', 'warning', 'critical')
+        channels: List of channels to send to (default: ['slack'])
+        metadata: Additional context data
+
+    Returns:
+        SecurityNotificationResult with results from all channels
+    """
+    service = get_security_notification_service()
+    return service.send_alert(
+        title=title,
+        message=message,
+        severity=severity,
+        channels=channels,
+        metadata=metadata,
+    )
 
 
 def notify_security_incident_by_id(

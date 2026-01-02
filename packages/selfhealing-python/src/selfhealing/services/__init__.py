@@ -209,6 +209,7 @@ from .security_notification_service import (
     get_security_notification_service,
     notify_security_incident_by_id,
     notify_security_incident,  # Legacy API for incident objects
+    send_alert,  # General-purpose alert function
 )
 from .runtime_config import (
     RuntimeConfigManager,
@@ -424,6 +425,7 @@ __all__ = [
     "NotificationChannel",
     "get_security_notification_service",
     "notify_security_incident",
+    "send_alert",  # General-purpose alert function
     # Runtime Config (Runtime Configuration API)
     "RuntimeConfigManager",
     "get_runtime_config_manager",
