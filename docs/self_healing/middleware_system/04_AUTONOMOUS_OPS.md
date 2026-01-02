@@ -191,7 +191,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     서킷 브레이커가 CLOSED로 전환될 때 DLQ 항목을 리플레이합니다.
     """
     from selfhealing.services.execution_services import get_replay_service
-    
+
     service = get_replay_service()
     return service.conditional_replay(service_name, max_items)
 ```
@@ -226,7 +226,7 @@ SELFHEALING_FORENSICS_ENABLED=true # Forensic 캡처
 
 ### 3.3 Beat Schedule
 
-> ⚠️ **참고**: `selfhealing.adapters.celery.beat` 파일은 존재하지 않습니다.  
+> ⚠️ **참고**: `selfhealing.adapters.celery.beat` 파일은 존재하지 않습니다.
 > Beat 스케줄은 프로젝트의 `celery.py` 또는 `settings.py`에서 직접 설정합니다.
 
 **권장 Beat Schedule** (실제 태스크 경로):

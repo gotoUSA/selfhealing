@@ -1,6 +1,6 @@
 # Self-Healing 미들웨어 시스템 문서 인덱스
 
-> **Version**: 2.3.0
+> **Version**: 2.4.0
 > **Updated**: 2026-01-02
 > **Based on**: MIDDLEWARE_REFERENCE.md v2.2.0
 
@@ -8,7 +8,7 @@
 
 ## 📚 문서 구조
 
-Self-Healing 시스템의 복잡성으로 인해 단일 문서를 7개의 주제별 문서로 분리하였습니다.
+Self-Healing 시스템의 복잡성으로 인해 단일 문서를 **9개**의 주제별 문서로 분리하였습니다.
 
 ```
 middleware_system/
@@ -19,7 +19,9 @@ middleware_system/
 ├── 04_AUTONOMOUS_OPS.md               ← 자율 운영 시스템
 ├── 05_RESILIENT_STORAGE_BACKEND.md    ← Redis 통합 저장소
 ├── 06_REDIS_MIGRATION.md              ← Redis 기본값 마이그레이션 가이드
-└── 07_HYBRID_STORAGE_ARCHITECTURE.md  ← 하이브리드 스토리지 아키텍처 (신규)
+├── 07_HYBRID_STORAGE_ARCHITECTURE.md  ← 하이브리드 스토리지 아키텍처
+├── 08_NOTIFICATION_ARCHITECTURE.md    ← 통합 알림 아키텍처 (신규)
+└── 09_AUTONOMOUS_TASK_EXPANSION.md    ← 자율 태스크 확장 (신규)
 ```
 
 ---
@@ -186,6 +188,47 @@ middleware_system/
 
 ---
 
+### [08_NOTIFICATION_ARCHITECTURE.md](08_NOTIFICATION_ARCHITECTURE.md) 🆕
+
+**목적**: 통합 알림 아키텍처 - 리스크 기반 알림 시점 결정 및 피로도 방지
+
+| 섹션 | 내용 |
+|------|------|
+| 알림 시점 결정 | Before (고위험), After (저위험), Real-time (상태 변화) |
+| 피로도 해결 3대 기술 | Aggregation/Batching, Threshold-based, Smart Cooldown |
+| BaseNotifyingTask | NotificationPolicy, should_notify(), _record_audit_trail() |
+| Emergency Level 연동 | 가변형 알림 정책 (LEVEL_3에서 모든 알림 즉시 발송) |
+| Audit Trail 연동 | 알림 발송 기록 해시 체인 기록 |
+| 기존 인프라 통합 | AlertAdapter, SecurityNotificationService, GateAlertManager |
+
+**주요 패키지**:
+- `selfhealing.tasks.base` (신규)
+- `selfhealing.tasks.notification_policy` (신규)
+- `selfhealing.services.security_notification_service`
+- `selfhealing.services.error_budget_gate.alert_manager`
+
+---
+
+### [09_AUTONOMOUS_TASK_EXPANSION.md](09_AUTONOMOUS_TASK_EXPANSION.md) 🆕
+
+**목적**: 고아 모듈 발굴 및 8개 신규 Celery 태스크 확장
+
+| 섹션 | 내용 |
+|------|------|
+| 고아 모듈 분석 | CODE_DEPENDENCY_ANALYSIS.md 기반 서비스 발굴 |
+| 신규 태스크 8개 | archive, purge, cleanup, expire, finops, compliance, learning, forensic |
+| 3개 자율 주행 레인 | 🧹 청소부, 🧠 지능, 📋 증명 |
+| Beat Schedule | 레인별 큐 구성 및 스케줄 설계 |
+| 구현 계획 | Phase 1-6 단계별 구현 |
+
+**주요 패키지**:
+- `selfhealing.tasks.cleanup_tasks` (신규)
+- `selfhealing.tasks.intelligence_tasks` (신규)
+- `selfhealing.tasks.compliance_tasks` (신규)
+- `selfhealing.adapters.celery.beat_schedule` (확장)
+
+---
+
 ## 🔗 크로스 레퍼런스
 
 ### 인터페이스 → 구현체 매핑
@@ -302,6 +345,8 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 2.4.0 | 2026-01-02 | 08_NOTIFICATION_ARCHITECTURE.md, 09_AUTONOMOUS_TASK_EXPANSION.md 추가 |
+| 2.3.0 | 2026-01-02 | 07_HYBRID_STORAGE_ARCHITECTURE.md 추가 |
 | 2.2.0 | 2026-01-02 | MIDDLEWARE_REFERENCE.md → 4개 문서 분리 |
 | 2.1.0 | 2026-01-01 | 초기 통합 문서 작성 |
 

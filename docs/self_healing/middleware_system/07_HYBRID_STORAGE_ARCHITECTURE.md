@@ -1,9 +1,9 @@
 # 07. 하이브리드 스토리지 아키텍처
 
-> **Version**: 2.0.0  
-> **Last Updated**: 2026-01-02  
-> **Status**: Phase 1-7 구현 완료  
-> **Author**: AI Assistant  
+> **Version**: 2.0.0
+> **Last Updated**: 2026-01-02
+> **Status**: Phase 1-7 구현 완료
+> **Author**: AI Assistant
 > **Reference**: 06_REDIS_MIGRATION.md, 56_AUDIT_MIDDLEWARE_DESIGN.md
 
 ---
@@ -82,8 +82,8 @@ Redis 마이그레이션(Phase 5) 완료 후, Django ORM을 직접 import하는 
 
 ### 3.2 어댑터 등록 방법
 
-**Django 사용자**: `AppConfig.ready()`에서 `DjangoStatisticsAdapter` 등록  
-**FastAPI 사용자**: `@app.on_event("startup")`에서 `SQLAlchemyStatisticsAdapter` 등록  
+**Django 사용자**: `AppConfig.ready()`에서 `DjangoStatisticsAdapter` 등록
+**FastAPI 사용자**: `@app.on_event("startup")`에서 `SQLAlchemyStatisticsAdapter` 등록
 **경량 사용자**: 어댑터 미등록 시 `NullStatisticsRepository` 자동 사용
 
 > 💡 구체적인 코드 예시는 [selfhealing/adapters/django/statistics.py](../../../packages/selfhealing-python/src/selfhealing/adapters/django/statistics.py) 참조
