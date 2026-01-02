@@ -19,11 +19,12 @@ from selfhealing.tasks.compliance_tasks import (
     RunComplianceCheckTask,
     GenerateFinOpsReportTask,
     CollectSelfHealingMetricsTask,
-    GenerateDailyAutonomousReportTask,
     COMPLIANCE_TASKS,
     get_compliance_beat_schedule,
 )
-from selfhealing.tasks.base_notifying_task import (
+# GenerateDailyAutonomousReportTask는 문서 §6.2 Phase 5에 따라 daily_report.py에 위치
+from selfhealing.tasks.daily_report import GenerateDailyAutonomousReportTask
+from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
 )
@@ -327,7 +328,7 @@ class TestGenerateDailyAutonomousReportTask:
         
         # ImportError 발생 시 기본 리포트 반환
         with patch(
-            "selfhealing.tasks.compliance_tasks.GenerateDailyAutonomousReportTask.run"
+            "selfhealing.tasks.daily_report.GenerateDailyAutonomousReportTask.run"
         ) as mock_run:
             mock_run.return_value = {
                 "success": True,
@@ -408,28 +409,29 @@ class TestComplianceBeatSchedule:
         """스케줄에 모든 태스크 포함 확인."""
         schedule = get_compliance_beat_schedule()
         
+        # compliance_tasks.py에는 3개 태스크만 포함
+        # GenerateDailyAutonomousReportTask는 daily_report.py에 있음 (문서 §6.2 Phase 5)
         assert "run-compliance-check" in schedule
         assert "generate-finops-report" in schedule
         assert "collect-self-healing-metrics" in schedule
-        assert "generate-daily-autonomous-report" in schedule
 
     def test_schedule_queue_assignments(self):
         """큐 할당 확인."""
         schedule = get_compliance_beat_schedule()
         
+        # compliance_tasks.py에는 3개 태스크만 포함
         assert schedule["run-compliance-check"]["options"]["queue"] == "compliance"
         assert schedule["generate-finops-report"]["options"]["queue"] == "reports"
         assert schedule["collect-self-healing-metrics"]["options"]["queue"] == "metrics"
-        assert schedule["generate-daily-autonomous-report"]["options"]["queue"] == "reports"
 
     def test_schedule_task_names(self):
         """태스크 이름 확인."""
         schedule = get_compliance_beat_schedule()
         
+        # compliance_tasks.py에는 3개 태스크만 포함
         assert schedule["run-compliance-check"]["task"] == "selfhealing.run_compliance_check"
         assert schedule["generate-finops-report"]["task"] == "selfhealing.generate_finops_report"
         assert schedule["collect-self-healing-metrics"]["task"] == "selfhealing.collect_self_healing_metrics"
-        assert schedule["generate-daily-autonomous-report"]["task"] == "selfhealing.generate_daily_autonomous_report"
 
     def test_finops_report_weekly_schedule(self):
         """FinOps 리포트 주간 스케줄."""
@@ -450,14 +452,15 @@ class TestComplianceTaskRegistry:
 
     def test_all_tasks_in_registry(self):
         """모든 태스크가 레지스트리에 있는지 확인."""
-        assert len(COMPLIANCE_TASKS) == 4
+        # compliance_tasks.py에는 3개 태스크만 포함
+        # GenerateDailyAutonomousReportTask는 daily_report.py에 있음 (문서 §6.2 Phase 5)
+        assert len(COMPLIANCE_TASKS) == 3
         
         task_classes = [t.__name__ for t in COMPLIANCE_TASKS]
         
         assert "RunComplianceCheckTask" in task_classes
         assert "GenerateFinOpsReportTask" in task_classes
         assert "CollectSelfHealingMetricsTask" in task_classes
-        assert "GenerateDailyAutonomousReportTask" in task_classes
 
     def test_all_tasks_have_names(self):
         """모든 태스크가 이름을 가지고 있는지 확인."""

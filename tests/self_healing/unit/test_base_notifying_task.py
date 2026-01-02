@@ -19,15 +19,17 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
-from selfhealing.tasks.base_notifying_task import (
+from selfhealing.tasks.base import (
     BaseNotifyingTask,
-    NotificationPolicy,
-    NotificationTiming,
-    NotificationThreshold,
-    DailyAutonomousReport,
     reset_cooldowns,
     get_cooldown_status,
 )
+from selfhealing.tasks.notification_policy import (
+    NotificationPolicy,
+    NotificationTiming,
+    NotificationThreshold,
+)
+from selfhealing.tasks.daily_report import DailyAutonomousReport
 
 
 # =============================================================================

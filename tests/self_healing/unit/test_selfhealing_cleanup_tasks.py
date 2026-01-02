@@ -26,10 +26,10 @@ from selfhealing.tasks.cleanup_tasks import (
     CLEANUP_TASKS,
     get_cleanup_beat_schedule,
 )
-from selfhealing.tasks.base_notifying_task import (
+from selfhealing.tasks.base import reset_cooldowns
+from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
-    reset_cooldowns,
 )
 
 

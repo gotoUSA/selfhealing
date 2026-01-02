@@ -45,9 +45,13 @@ class TaskResultEntry:
 
 
 @dataclass
-class DailyReportData:
+class DailyAutonomousReport:
     """
-    Aggregated daily report data.
+    Daily autonomous operations summary report.
+    
+    Aggregates counts and statistics from all self-healing tasks
+    executed during the day. This is the main class specified in
+    09_AUTONOMOUS_TASK_EXPANSION.md §6.1 for daily report aggregation.
     
     Contains counts and statistics from all self-healing tasks
     executed during the day.
@@ -113,7 +117,7 @@ class DailyReportData:
         if entry.severity == "critical":
             self.critical_alerts += 1
 
-    def merge(self, other: "DailyReportData") -> None:
+    def merge(self, other: "DailyAutonomousReport") -> None:
         """Merge another report's data into this one."""
         self.archived_count += other.archived_count
         self.expired_count += other.expired_count
@@ -241,6 +245,15 @@ class DailyReportData:
 
 
 # =============================================================================
+# Backward Compatibility Alias
+# =============================================================================
+
+# DailyReportData was the original implementation name.
+# DailyAutonomousReport is the canonical name per 09_AUTONOMOUS_TASK_EXPANSION.md §6.1
+DailyReportData = DailyAutonomousReport
+
+
+# =============================================================================
 # Daily Report Collector
 # =============================================================================
 
@@ -298,7 +311,7 @@ class DailyReportCollector:
                 self._memory_storage[date_key] = []
             self._memory_storage[date_key].append(entry)
 
-    def get_report(self, date: Optional[datetime] = None) -> DailyReportData:
+    def get_report(self, date: Optional[datetime] = None) -> "DailyAutonomousReport":
         """Get aggregated report for a specific date (default: yesterday)."""
         from selfhealing.core.timezone import now
         
@@ -307,7 +320,7 @@ class DailyReportCollector:
             date = now() - timedelta(days=1)
         
         date_key = date.strftime("%Y-%m-%d")
-        report = DailyReportData(date=date)
+        report = DailyAutonomousReport(date=date)
         
         # Try Django cache first
         try:
@@ -374,7 +387,114 @@ def get_daily_report_collector() -> DailyReportCollector:
 
 
 # =============================================================================
-# Celery Task
+# GenerateDailyAutonomousReportTask (Phase 5 - 문서 §6.2)
+# =============================================================================
+
+
+class GenerateDailyAutonomousReportTask:
+    """
+    일일 자율 운영 리포트 생성 태스크.
+    
+    하루 동안의 자율 운영 결과를 요약하여 리포트를 생성합니다.
+    BaseNotifyingTask를 상속하여 알림 정책을 적용합니다.
+    
+    스케줄: 매일 09:00
+    큐: reports
+    알림: 매일 발송 (Slack)
+    
+    Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.2 Phase 5
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "date": str,
+            "total_tasks": int,
+            "summary": dict,
+        }
+    """
+
+    name = "selfhealing.generate_daily_autonomous_report"
+
+    def __init__(self):
+        """Initialize with lazy import to avoid circular dependency."""
+        # Lazy import NotificationPolicy and NotificationTiming
+        pass
+
+    @property
+    def notification_policy(self):
+        """Return notification policy with lazy import."""
+        from selfhealing.tasks.notification_policy import (
+            NotificationPolicy,
+            NotificationTiming,
+        )
+        return NotificationPolicy(
+            timing=NotificationTiming.AFTER,
+            aggregate=False,
+            default_severity="info",
+            channels=["slack"],
+        )
+
+    def run(self) -> Dict[str, Any]:
+        """일일 리포트 생성 태스크 실행."""
+        logger.info("[GenerateDailyAutonomousReportTask] Generating daily report")
+        
+        try:
+            collector = get_daily_report_collector()
+            report_data = collector.get_report()
+            
+            # 요약 생성
+            summary = {
+                "archived_count": report_data.archived_count,
+                "expired_count": report_data.expired_count,
+                "purged_count": report_data.purged_count,
+                "recovered_count": report_data.recovered_count,
+                "circuit_transitions": report_data.circuit_transitions,
+                "task_failures": report_data.task_failures,
+                "critical_alerts": report_data.critical_alerts,
+            }
+            
+            logger.info(
+                f"[GenerateDailyAutonomousReportTask] Report generated - "
+                f"{len(report_data.entries)} entries"
+            )
+            
+            return {
+                "success": True,
+                "date": report_data.date.strftime("%Y-%m-%d"),
+                "total_tasks": len(report_data.entries),
+                "summary": summary,
+            }
+            
+        except Exception as e:
+            logger.error(
+                f"[GenerateDailyAutonomousReportTask] Failed: {e}", exc_info=True
+            )
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
+    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+        """알림 메시지 생성."""
+        if result.get("error"):
+            return f"❌ 일일 리포트 생성 실패: {result['error']}"
+        
+        summary = result.get("summary", {})
+        
+        return (
+            f"📊 *자율 운영 일일 리포트* ({result.get('date', 'N/A')})\n"
+            f"• 아카이브: {summary.get('archived_count', 0)}건\n"
+            f"• 만료 처리: {summary.get('expired_count', 0)}건\n"
+            f"• 영구 삭제: {summary.get('purged_count', 0)}건\n"
+            f"• 복구 완료: {summary.get('recovered_count', 0)}건\n"
+            f"• CB 전환: {summary.get('circuit_transitions', 0)}건\n"
+            f"• 태스크 실패: {summary.get('task_failures', 0)}건\n"
+            f"• 위험 알림: {summary.get('critical_alerts', 0)}건"
+        )
+
+
+# =============================================================================
+# Celery Task Function
 # =============================================================================
 
 

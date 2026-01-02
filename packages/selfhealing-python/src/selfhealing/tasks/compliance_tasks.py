@@ -18,8 +18,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from selfhealing.tasks.base_notifying_task import (
-    BaseNotifyingTask,
+from selfhealing.tasks.base import BaseNotifyingTask
+from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
 )
@@ -391,113 +391,9 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
 
 
 # =============================================================================
-# Task 4: Generate Daily Autonomous Report
+# NOTE: GenerateDailyAutonomousReportTask는 문서 §6.2 Phase 5에 따라
+# daily_report.py에 위치합니다. (09_AUTONOMOUS_TASK_EXPANSION.md 참조)
 # =============================================================================
-
-
-class GenerateDailyAutonomousReportTask(BaseNotifyingTask):
-    """
-    일일 자율 운영 리포트 생성.
-    
-    하루 동안의 자율 운영 결과를 요약하여 리포트를 생성합니다.
-    
-    스케줄: 매일 09:00
-    큐: reports
-    알림: 매일 발송 (Slack)
-    
-    Returns:
-        dict: {
-            "success": bool,
-            "date": str,
-            "total_tasks": int,
-            "summary": dict,
-        }
-    """
-
-    name = "selfhealing.generate_daily_autonomous_report"
-    
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.AFTER,
-        aggregate=False,
-        default_severity="info",
-        channels=["slack"],
-    )
-
-    def run(self) -> Dict[str, Any]:
-        """일일 리포트 생성 태스크 실행."""
-        logger.info("[GenerateDailyAutonomousReport] Generating daily report")
-        
-        try:
-            from selfhealing.tasks.daily_report import (
-                DailyReportCollector,
-                get_daily_report_collector,
-            )
-            
-            collector = get_daily_report_collector()
-            report_data = collector.finalize_report()
-            
-            # 요약 생성
-            summary = {
-                "archived_count": report_data.archived_count,
-                "expired_count": report_data.expired_count,
-                "purged_count": report_data.purged_count,
-                "recovered_count": report_data.recovered_count,
-                "circuit_transitions": report_data.circuit_transitions,
-                "task_failures": report_data.task_failures,
-                "critical_alerts": report_data.critical_alerts,
-            }
-            
-            logger.info(
-                f"[GenerateDailyAutonomousReport] Report generated - "
-                f"{len(report_data.entries)} entries"
-            )
-            
-            return {
-                "success": True,
-                "date": report_data.date.strftime("%Y-%m-%d"),
-                "total_tasks": len(report_data.entries),
-                "summary": summary,
-            }
-            
-        except ImportError:
-            # daily_report 모듈이 없는 경우 기본 리포트
-            logger.warning(
-                "[GenerateDailyAutonomousReport] DailyReportCollector not available"
-            )
-            
-            return {
-                "success": True,
-                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                "total_tasks": 0,
-                "summary": {},
-            }
-            
-        except Exception as e:
-            logger.error(
-                f"[GenerateDailyAutonomousReport] Failed: {e}", exc_info=True
-            )
-            return {
-                "success": False,
-                "error": str(e),
-            }
-
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
-        """알림 메시지 생성."""
-        if result.get("error"):
-            return f"❌ 일일 리포트 생성 실패: {result['error']}"
-        
-        summary = result.get("summary", {})
-        
-        return (
-            f"📊 *자율 운영 일일 리포트* ({result.get('date', 'N/A')})\n"
-            f"• 아카이브: {summary.get('archived_count', 0)}건\n"
-            f"• 만료 처리: {summary.get('expired_count', 0)}건\n"
-            f"• 영구 삭제: {summary.get('purged_count', 0)}건\n"
-            f"• 복구 완료: {summary.get('recovered_count', 0)}건\n"
-            f"• CB 전환: {summary.get('circuit_transitions', 0)}건\n"
-            f"• 태스크 실패: {summary.get('task_failures', 0)}건\n"
-            f"• 위험 알림: {summary.get('critical_alerts', 0)}건"
-        )
 
 
 # =============================================================================
@@ -506,11 +402,11 @@ class GenerateDailyAutonomousReportTask(BaseNotifyingTask):
 
 
 # 태스크 클래스 목록 (Celery 등록 시 사용)
+# NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에 위치
 COMPLIANCE_TASKS = [
     RunComplianceCheckTask,
     GenerateFinOpsReportTask,
     CollectSelfHealingMetricsTask,
-    GenerateDailyAutonomousReportTask,
 ]
 
 
@@ -580,21 +476,17 @@ def get_compliance_beat_schedule() -> Dict[str, Any]:
             "schedule": crontab(minute="*/30"),
             "options": {"queue": "metrics"},
         },
-        # 매일 09:00 - 일일 자율 운영 리포트
-        "generate-daily-autonomous-report": {
-            "task": "selfhealing.generate_daily_autonomous_report",
-            "schedule": crontab(hour=9, minute=0),
-            "options": {"queue": "reports"},
-        },
+        # NOTE: generate-daily-autonomous-report는 daily_report.py의
+        # get_daily_report_beat_schedule()에서 정의 (문서 §6.2 Phase 5)
     }
 
 
 __all__ = [
-    # Task Classes
+    # Task Classes (증명 레인 - 문서 §4.2)
+    # NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에서 export
     "RunComplianceCheckTask",
     "GenerateFinOpsReportTask",
     "CollectSelfHealingMetricsTask",
-    "GenerateDailyAutonomousReportTask",
     # Registry
     "COMPLIANCE_TASKS",
     "register_compliance_tasks_with_celery",

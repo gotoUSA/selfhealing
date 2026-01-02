@@ -22,7 +22,7 @@ from selfhealing.tasks.intelligence_tasks import (
     INTELLIGENCE_TASKS,
     get_intelligence_beat_schedule,
 )
-from selfhealing.tasks.base_notifying_task import (
+from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
 )

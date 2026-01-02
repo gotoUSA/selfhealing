@@ -16,8 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from selfhealing.tasks.base_notifying_task import (
-    BaseNotifyingTask,
+from selfhealing.tasks.base import BaseNotifyingTask
+from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
 )

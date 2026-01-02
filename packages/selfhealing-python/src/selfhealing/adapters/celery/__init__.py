@@ -38,6 +38,14 @@ from selfhealing.adapters.celery.signal_hooks import (
     SignalHooksConfig,
 )
 
+from selfhealing.adapters.celery.beat_schedule import (
+    get_selfhealing_beat_schedule,
+    get_schedule_summary,
+    validate_schedule,
+    register_all_tasks_with_celery,
+    SELFHEALING_QUEUE_CONFIG,
+)
+
 __all__ = [
     # Circuit Breaker Tasks
     "conditional_replay_on_circuit_close",
@@ -60,6 +68,12 @@ __all__ = [
     "get_signal_hooks_config",
     "selfhealing_task",
     "SignalHooksConfig",
+    # Beat Schedule (Phase 5)
+    "get_selfhealing_beat_schedule",
+    "get_schedule_summary",
+    "validate_schedule",
+    "register_all_tasks_with_celery",
+    "SELFHEALING_QUEUE_CONFIG",
 ]
 
 

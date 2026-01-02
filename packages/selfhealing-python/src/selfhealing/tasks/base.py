@@ -12,8 +12,8 @@ Key Features:
 - Audit Trail integration (notification event logging)
 
 Usage:
-    from selfhealing.tasks.base_notifying_task import (
-        BaseNotifyingTask,
+    from selfhealing.tasks.base import BaseNotifyingTask
+    from selfhealing.tasks.notification_policy import (
         NotificationPolicy,
         NotificationTiming,
     )
@@ -30,145 +30,22 @@ Usage:
             return {"count": 42}
 
 Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
+Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.1
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Dict
+
+from selfhealing.tasks.notification_policy import (
+    NotificationPolicy,
+    NotificationThreshold,
+    NotificationTiming,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Enums and Data Classes
-# =============================================================================
-
-
-class NotificationTiming(str, Enum):
-    """Notification timing strategy based on task risk level."""
-
-    BEFORE = "before"  # Pre-execution notification/approval (high-risk)
-    AFTER = "after"  # Post-execution result notification
-    REALTIME = "realtime"  # Immediate notification (state changes)
-    AGGREGATED = "aggregated"  # Include in daily summary report
-
-
-@dataclass
-class NotificationThreshold:
-    """
-    Alert threshold configuration.
-
-    Controls when alerts are sent based on metric values:
-    - Below log_only: Only log, no notification
-    - Between log_only and warning: INFO notification
-    - Between warning and critical: WARNING notification
-    - Above critical: CRITICAL notification
-    """
-
-    log_only: float = 5.0  # Below this: log only
-    warning: float = 20.0  # Above this: WARNING
-    critical: float = 50.0  # Above this: CRITICAL
-
-    def get_severity(self, value: float) -> str | None:
-        """
-        Determine severity based on value.
-
-        Args:
-            value: The metric value to evaluate
-
-        Returns:
-            Severity level or None if no notification needed
-        """
-        if value >= self.critical:
-            return "critical"
-        elif value >= self.warning:
-            return "warning"
-        elif value < self.log_only:
-            return None  # No notification
-        return "info"
-
-
-@dataclass
-class NotificationPolicy:
-    """
-    Task-specific notification policy configuration.
-
-    Attributes:
-        timing: When to send notifications (BEFORE/AFTER/REALTIME/AGGREGATED)
-        aggregate: If True, include in daily summary instead of immediate notification
-        threshold: Numeric threshold - only notify if exceeded
-        threshold_field: Result field name to check against threshold
-        cooldown_seconds: Minimum seconds between identical alerts
-        default_severity: Default severity level for notifications
-        channels: Notification channels (default: ["slack"])
-        requires_approval: If True, task requires approval before execution (high-risk)
-        escalate_on_emergency: If True, escalate timing on Emergency Level >= 3
-    """
-
-    timing: NotificationTiming = NotificationTiming.AFTER
-    aggregate: bool = False
-    threshold: Optional[float] = None
-    threshold_field: str = ""
-    cooldown_seconds: int = 300  # 5 minutes
-    default_severity: Literal["info", "warning", "critical"] = "info"
-    channels: List[str] = field(default_factory=lambda: ["slack"])
-    requires_approval: bool = False
-    escalate_on_emergency: bool = True
-
-
-@dataclass
-class DailyAutonomousReport:
-    """
-    Daily autonomous operations summary report.
-
-    Aggregates counts from routine tasks for a single daily notification.
-    """
-
-    date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    archived_count: int = 0
-    expired_count: int = 0
-    purged_count: int = 0
-    approval_expired_count: int = 0
-    recovered_count: int = 0
-    drift_warnings_count: int = 0
-    custom_counts: Dict[str, int] = field(default_factory=dict)
-
-    def to_slack_message(self) -> str:
-        """Format report as Slack message."""
-        lines = [
-            f"📊 *자율 운영 일일 리포트* ({self.date:%Y-%m-%d})",
-            f"• 아카이브: {self.archived_count}건",
-            f"• 만료 처리: {self.expired_count}건",
-            f"• 영구 삭제: {self.purged_count}건",
-            f"• 승인 만료: {self.approval_expired_count}건",
-            f"• 복구 완료: {self.recovered_count}건",
-            f"• 드리프트 경고: {self.drift_warnings_count}건",
-        ]
-        for key, value in self.custom_counts.items():
-            lines.append(f"• {key}: {value}건")
-        return "\n".join(lines)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "date": self.date.isoformat(),
-            "archived_count": self.archived_count,
-            "expired_count": self.expired_count,
-            "purged_count": self.purged_count,
-            "approval_expired_count": self.approval_expired_count,
-            "recovered_count": self.recovered_count,
-            "drift_warnings_count": self.drift_warnings_count,
-            "custom_counts": self.custom_counts,
-        }
-
-
-# =============================================================================
-# BaseNotifyingTask
-# =============================================================================
 
 
 class BaseNotifyingTask:
