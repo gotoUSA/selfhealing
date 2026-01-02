@@ -26,9 +26,10 @@
 
 ### 1.1 범위
 
-- 핵심 서비스 (CircuitBreaker, DLQ, Replay 등)
+- 핵심 서비스 (CircuitBreaker, DLQ, Replay, RetryHandler 등)
+- 자동화 제어 (ErrorBudgetGate, RateLimitCoordinator)
 - 인터페이스 정의 (Repository, Cache, TaskQueue)
-- Resilience 패턴 (Fallback, Retry, Bulkhead)
+- Resilience 패턴 (Fallback, Retry, Bulkhead, Backoff)
 - Core 컴포넌트 (TLS, Certificate, Pool 관리)
 - SLO/SLI 및 Error Budget
 - Provider Registry (플러그인 팩토리)
@@ -40,12 +41,22 @@
 │                       02_LOGIC_ENGINE 범위                               │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
-│  │ CircuitBreaker   │  │ DLQService       │  │ ReplayService    │      │
-│  │ Service          │──│ (Dead Letter Q)  │──│ (재처리)          │      │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘      │
-│           │                     │                     │                 │
-│           ▼                     ▼                     ▼                 │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
+│  │CircuitBreaker│ │ DLQService   │ │ReplayService │ │ RetryHandler │   │
+│  │   Service    │─│(Dead Letter Q)│─│  (재처리)    │─│(지수 백오프)  │   │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘   │
+│         │                │                │                │            │
+│         └────────────────┼────────────────┼────────────────┘            │
+│                          ▼                ▼                              │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │                   자동화 제어 Layer                              │    │
+│  │  ┌─────────────────────┐  ┌─────────────────────────────────┐ │    │
+│  │  │  ErrorBudgetGate    │  │  RateLimitCoordinator           │ │    │
+│  │  │  (에러예산 기반 차단) │  │  (Self-DDoS 방지)               │ │    │
+│  │  └─────────────────────┘  └─────────────────────────────────┘ │    │
+│  └────────────────────────────────────────────────────────────────┘    │
+│                          │                                               │
+│                          ▼                                               │
 │  ┌────────────────────────────────────────────────────────────────┐    │
 │  │                    Interfaces Layer                              │    │
 │  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐ │    │
@@ -176,6 +187,81 @@ else:
 | `stop_experiment` | 실험 중지 |
 | `get_results` | 결과 조회 |
 
+### 2.6 RetryHandler
+
+**경로**: `selfhealing.services.retry_handler`
+
+**역할**: 지수 백오프 기반 재시도 + Self-DDoS 방지 + DLQ 연동
+
+| 컴포넌트 | 설명 |
+|----------|------|
+| `RetryHandler` | 재시도 로직 실행기 (Exponential Backoff, Jitter, Rate Limit Awareness) |
+| `RetryConfig` | max_attempts, backoff_base/max, jitter_percent, 도메인별 설정 |
+| `RetryResult` | 재시도 결과 DTO (success, action, attempt, dlq_id) |
+| `RetryAction` | 재시도 액션 Enum (RETRY, DLQ, ABORT, SUCCESS) |
+| `MaxRetriesExceededError` | 최대 재시도 초과 예외 |
+| `@with_retry` | 재시도 로직 데코레이터 |
+
+**핵심 기능**:
+- Kill Switch 연동: 시스템 비활성화 시 즉시 실패 반환
+- ErrorBudgetGate 연동: 에러 예산 임계치 이하 시 재시도 차단
+- Rate Limit Awareness: 429 에러 감지 시 글로벌 쿨다운 설정
+- DLQ 자동 이동: max_retries 초과 시 자동으로 DLQ 저장
+
+### 2.7 BackoffCalculator
+
+**경로**: `selfhealing.services.backoff_calculator`
+
+**역할**: 지수 백오프 지연 시간 계산
+
+| 컴포넌트 | 설명 |
+|----------|------|
+| `BackoffCalculator` | 지수 백오프 계산기 (base^attempt, max cap, jitter) |
+| `BackoffConfig` | base, max_delay, jitter_percent, min_delay 설정 |
+| `calculate_backoff` | 단일 시도에 대한 지연 시간 계산 함수 |
+| `get_calculator_for_domain` | 도메인별 계산기 인스턴스 캐싱 |
+
+**지연 시간 예시** (base=4, max=180s, jitter=25%):
+- Attempt 1: ~4s
+- Attempt 2: ~16s
+- Attempt 3: ~64s
+- Attempt 4+: 180s (cap)
+
+### 2.8 RateLimitCoordinator
+
+**경로**: `selfhealing.services.rate_limit_coordinator`
+
+**역할**: 분산 환경 Self-DDoS 방지 코디네이터
+
+| 컴포넌트 | 설명 |
+|----------|------|
+| `RateLimitCoordinator` | 분산 레이트 리밋 조율기 |
+| `RateLimitCoordinatorConfig` | base_delay, max_delay, jitter_percent, backoff_multiplier |
+| `RateLimitResult` | 대기 결과 DTO (waited, wait_time, consecutive_429s) |
+
+**핵심 기능**:
+- 글로벌 쿨다운: 429 응답 시 모든 워커가 대기
+- 분산 상태 공유: Redis/DB/InMemory 자동 선택
+- 100% 호환: Redis 없어도 DB 폴백으로 동작
+
+### 2.9 ErrorBudgetGate
+
+**경로**: `selfhealing.services.error_budget_gate`
+
+**역할**: 에러 예산 기반 자동화 제어 게이트 ("위기 상황일수록 인간의 개입을 강제")
+
+| 컴포넌트 | 설명 |
+|----------|------|
+| `ErrorBudgetGate` | 메인 게이트 - 에러 예산 미달 시 자동화 차단 |
+| `GateCheckResult` | 게이트 체크 결과 (allowed, error_budget_percent, threshold_percent) |
+| `GateStatus` | 게이트 상태 Enum |
+| `AutomationBlockedError` | 자동화 차단 예외 |
+| `check_automation_allowed` | 자동화 허용 여부 조건 체크 |
+| `require_automation_allowed` | 자동화 허용 여부 체크 (불허 시 예외 발생) |
+| `@automation_gate` | 자동화 게이트 데코레이터 |
+
+**설계 철학**: "보고는 자동, 결정은 수동" - 시스템이 대신 하는 것이 아니라 위험할 때 멈추는 설계
+
 ---
 
 ## 3. 유틸리티
@@ -220,12 +306,22 @@ def process_payment(order_id: int):
 
 **경로**: `selfhealing.core.backoff`
 
-| 전략 | 설명 |
-|------|------|
-| `fixed_backoff` | 고정 간격 |
-| `exponential_backoff` | 지수 증가 |
-| `decorrelated_jitter` | AWS 권장 지터 |
-| `full_jitter` | 전체 지터 |
+| 컴포넌트 | 설명 |
+|----------|------|
+| `ExponentialBackoff` | 지수 백오프 (base_delay × multiplier^attempt, 선택적 jitter) |
+| `LinearBackoff` | 선형 백오프 (base_delay + increment × attempt) |
+| `ConstantBackoff` | 고정 간격 백오프 |
+| `DecorrelatedJitterBackoff` | AWS 스타일 비상관 지터 백오프 (이전 지연의 1~3배 랜덤) |
+| `get_backoff_calculator` | 전략별 백오프 계산기 팩토리 함수 |
+
+**추가 경로**: `selfhealing.services.backoff_calculator`
+
+| 컴포넌트 | 설명 |
+|----------|------|
+| `BackoffCalculator` | 도메인별 설정 지원 백오프 계산기 |
+| `BackoffConfig` | base, max_delay, jitter_percent, min_delay 설정 |
+| `calculate_backoff` | 단일 시도에 대한 지연 시간 계산 함수 |
+| `get_calculator_for_domain` | 도메인별 계산기 인스턴스 캐싱 |
 
 ---
 

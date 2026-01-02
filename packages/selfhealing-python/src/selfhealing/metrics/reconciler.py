@@ -114,7 +114,7 @@ class MetricReconciler:
     def _get_services(self) -> List[str]:
         """
         서비스 목록 반환 (Circuit Breaker용).
-        
+
         Domain-Free 설계:
         - 명시적으로 전달된 services가 있으면 사용
         - 없으면 설정에서 로드 시도
@@ -124,6 +124,7 @@ class MetricReconciler:
             return self._services
         try:
             from django.conf import settings
+
             return getattr(settings, "SELFHEALING_CIRCUIT_BREAKER_SERVICES", [])
         except ImportError:
             return []

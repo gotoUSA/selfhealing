@@ -12,11 +12,12 @@ Self-Healing 시스템의 복잡성으로 인해 단일 문서를 4개의 주제
 
 ```
 middleware_system/
-├── 00_INDEX.md              ← 현재 문서 (개요 및 네비게이션)
-├── 01_MIDDLEWARE_GATEWAY.md   ← 미들웨어/게이트웨이 파이프라인
-├── 02_LOGIC_ENGINE.md         ← 비즈니스 로직 엔진
-├── 03_INFRA_ADAPTER.md        ← 인프라/저장소 어댑터
-└── 04_AUTONOMOUS_OPS.md       ← 자율 운영 시스템
+├── 00_INDEX.md                        ← 현재 문서 (개요 및 네비게이션)
+├── 01_MIDDLEWARE_GATEWAY.md           ← 미들웨어/게이트웨이 파이프라인
+├── 02_LOGIC_ENGINE.md                 ← 비즈니스 로직 엔진
+├── 03_INFRA_ADAPTER.md                ← 인프라/저장소 어댑터
+├── 04_AUTONOMOUS_OPS.md               ← 자율 운영 시스템
+└── 05_RESILIENT_STORAGE_BACKEND.md    ← Redis 통합 저장소 (신규)
 ```
 
 ---
@@ -97,8 +98,8 @@ middleware_system/
 
 | 섹션 | 내용 |
 |------|------|
-| 연결 서비스 | CircuitBreaker, DLQService, ReplayService 등 |
-| 유틸리티 | Decorators, Context Managers |
+| 연결 서비스 | CircuitBreaker, DLQService, ReplayService, RetryHandler, RateLimitCoordinator, ErrorBudgetGate 등 |
+| 유틸리티 | Decorators, Context Managers, BackoffCalculator |
 | 서비스 컴포넌트 | EmergencyService, ErrorBudget, HealthCheck 등 |
 | Resilience 패턴 | Fallback, Retry, Bulkhead, Timeout |
 | Core 컴포넌트 | TLS, Certificate, Pool 관리 |
@@ -161,6 +162,28 @@ middleware_system/
 
 ---
 
+### [05_RESILIENT_STORAGE_BACKEND.md](05_RESILIENT_STORAGE_BACKEND.md) 🆕
+
+**목적**: Redis 기반 통합 저장소 + 데이터 유실 0 보장
+
+| 섹션 | 내용 |
+|------|------|
+| 설계 원칙 | Redis-First, Fail-Safe, Zero Data Loss |
+| 아키텍처 | Redis + Graceful Degradation + WAL |
+| 재사용 컴포넌트 | WAL, ShadowLogger, DriftReconciler, RedisHealthChecker 등 |
+| 신규 컴포넌트 | ResilientStorageBackend, RedisCircuitBreakerStateRepository, RedisDLQRepository |
+| 테스트 계획 | 단위/통합/Chaos 테스트 |
+| 마이그레이션 | InMemory/Django/Layered → Resilient 전환 가이드 |
+
+**주요 패키지**:
+- `selfhealing.adapters.resilient.*` (신규)
+- `selfhealing.adapters.redis.*` (신규)
+- `selfhealing.audit.wal`
+- `selfhealing.adapters.memory.shadow_logger`
+- `selfhealing.adapters.memory.drift_reconciliation`
+
+---
+
 ## 🔗 크로스 레퍼런스
 
 ### 인터페이스 → 구현체 매핑
@@ -172,6 +195,7 @@ middleware_system/
 | `TaskQueueInterface` | `CeleryTaskQueue`, `SyncTaskQueue` |
 | `AuditInterface` | `PostgresAuditBackend`, `CloudWatchAuditBackend`, `FileAuditBackend` |
 | `NotificationAdapter` | `SlackAdapter`, `TeamsAdapter`, `PagerDutyAdapter` |
+| `CircuitBreakerStateRepository` | `InMemoryCircuitBreakerStateRepository`, `DjangoCircuitBreakerStateRepository`, **`RedisCircuitBreakerStateRepository`** (신규) |
 
 ### 미들웨어 → 서비스 의존성
 
@@ -249,7 +273,11 @@ selfhealing/
 ├── services/                     ← 02_LOGIC_ENGINE & 04_AUTONOMOUS_OPS
 │   ├── circuit_breaker.py        ← 02
 │   ├── dlq_service.py            ← 02
-│   ├── replay.py                 ← 02
+│   ├── replay_service.py         ← 02
+│   ├── retry_handler.py          ← 02 (지수 백오프 + Self-DDoS 방지)
+│   ├── backoff_calculator.py     ← 02 (지연 시간 계산)
+│   ├── rate_limit_coordinator.py ← 02 (분산 레이트 리밋 조율)
+│   ├── error_budget_gate/        ← 02 (에러 예산 기반 자동화 게이트)
 │   ├── emergency.py              ← 02
 │   ├── error_budget.py           ← 02
 │   ├── finops.py                 ← 04
