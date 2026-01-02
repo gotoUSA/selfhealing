@@ -1,6 +1,6 @@
 # Self-Healing 미들웨어 게이트웨이 파이프라인
 
-> **Version**: 2.2.0
+> **Version**: 2.3.0
 > **Updated**: 2026-01-02
 > **Category**: 요청/응답 파이프라인
 
@@ -10,12 +10,13 @@
 
 1. [개요](#1-개요)
 2. [Django 등록 미들웨어](#2-django-등록-미들웨어)
-3. [Django 미등록 미들웨어](#3-django-미등록-미들웨어)
+3. [미들웨어 활성화/비활성화 설정](#3-미들웨어-활성화비활성화-설정)
 4. [FastAPI 미들웨어](#4-fastapi-미들웨어)
 5. [Tiering 시스템](#5-tiering-시스템)
 6. [DRF 컴포넌트](#6-drf-컴포넌트)
 7. [Frameworks 어댑터](#7-frameworks-어댑터)
 8. [Throttle 서비스](#8-throttle-서비스)
+9. [부하 테스트 커버리지](#9-부하-테스트-커버리지)
 
 ---
 
@@ -25,7 +26,7 @@
 
 ### 1.1 범위
 
-- Django 미들웨어 (등록/미등록)
+- Django 미들웨어 (모두 등록됨)
 - FastAPI 미들웨어
 - Tiering 시스템
 - Rate Limiting & Throttling
@@ -38,17 +39,29 @@ HTTP Request
     │
     ▼
 ┌─────────────────────────────────────────────────┐
-│ Django/FastAPI Middleware Stack                  │
+│ Django Middleware Stack (11단계)                 │
 │ ┌─────────────────────────────────────────────┐ │
-│ │ HealthBridgeMiddleware (헬스체크 바이패스)   │ │
+│ │ [1] trace_id_middleware (분산 추적 ID)       │ │
 │ ├─────────────────────────────────────────────┤ │
-│ │ SelfHealingMiddleware (복원력)              │ │
+│ │ [2] HealthBridgeMiddleware (헬스체크)        │ │
 │ ├─────────────────────────────────────────────┤ │
-│ │ HybridRateLimitMiddleware (레이트 리밋)     │ │
+│ │ [3] TieringMiddleware (Emergency Load Shed) │ │
 │ ├─────────────────────────────────────────────┤ │
-│ │ ChaosMiddleware (카오스 엔지니어링)         │ │
+│ │ [4] SelfHealingMiddleware (CB + DLQ)        │ │
 │ ├─────────────────────────────────────────────┤ │
-│ │ ConnectionPoolLimiterMiddleware (커넥션)    │ │
+│ │ [5] ActorContextMiddleware (사용자 추적)     │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [6] Django Core Middlewares                 │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [7] HybridRateLimitMiddleware (레이트 리밋) │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [8] PoolCircuitBreakerMiddleware (Pool CB)  │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [9] PoolTimeoutMiddleware (Pool Timeout)    │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [10] ChaosMiddleware (Chaos Engineering)    │ │
+│ ├─────────────────────────────────────────────┤ │
+│ │ [11] AuditMiddleware (감사 로그)             │ │
 │ └─────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
     │
@@ -60,9 +73,24 @@ HTTP Request
 
 ## 2. Django 등록 미들웨어
 
-> `settings.py`의 `MIDDLEWARE` 배열에 등록된 미들웨어
+> `settings.py`의 `MIDDLEWARE` 배열에 등록된 미들웨어 (11개)
 
-### 2.1 HealthBridgeMiddleware
+### 2.1 trace_id_middleware
+
+**경로**: `selfhealing.audit.trace.trace_id_middleware`
+
+**역할**: 분산 추적 ID 전파 (최상단 필수!)
+
+| 구성요소 | 설명 |
+|----------|------|
+| 헤더 추출 | X-Request-ID, X-Trace-ID, traceparent 등 |
+| 자동 생성 | 헤더 없을 시 UUID 생성 (`req-{uuid4_short}` 형식) |
+| 로깅 연동 | 모든 로그에 trace_id 포함 |
+| 응답 헤더 | X-Request-ID 헤더로 반환 |
+
+**부하 테스트**: `load_tests/scenarios/integration/stage08_observability.py` ✅
+
+### 2.2 HealthBridgeMiddleware
 
 **경로**: `selfhealing.api.django.middleware.HealthBridgeMiddleware`
 
@@ -74,6 +102,8 @@ HTTP Request
 | 바이패스 | 헬스 경로는 이후 미들웨어 스킵 |
 | 연동 | Kubernetes Liveness/Readiness Probe |
 
+**부하 테스트**: `load_tests/scenarios/chaos/stage9_worker_crash_selfhealing.py` ✅
+
 ```python
 class HealthBridgeMiddleware:
     def __call__(self, request):
@@ -82,7 +112,21 @@ class HealthBridgeMiddleware:
         return self.get_response(request)
 ```
 
-### 2.2 SelfHealingMiddleware
+### 2.3 TieringMiddleware
+
+**경로**: `selfhealing.api.django.tiering.TieringMiddleware`
+
+**역할**: Emergency Mode 트래픽 제어 ([섹션 5](#5-tiering-시스템) 참조)
+
+| 구성요소 | 설명 |
+|----------|------|
+| Tier 분류 | critical / standard / non_essential |
+| Load Shedding | 비상 시 비필수 API 우선 차단 |
+| 확률적 허용 | Tier별 multiplier에 따른 확률적 처리 |
+
+**비활성화**: `SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False`
+
+### 2.4 SelfHealingMiddleware
 
 **경로**: `selfhealing.api.django.middleware.SelfHealingMiddleware`
 
@@ -99,7 +143,23 @@ class HealthBridgeMiddleware:
 - `DLQService`
 - `ForensicContextService`
 
-### 2.3 HybridRateLimitMiddleware
+**부하 테스트**: `load_tests/scenarios/chaos/stage16_healing_proof_v6.py` ✅
+
+### 2.5 ActorContextMiddleware
+
+**경로**: `myproject.middleware.actor_middleware.ActorContextMiddleware`
+
+**역할**: Actor 컨텍스트 설정
+
+| 구성요소 | 설명 |
+|----------|------|
+| User 추출 | 인증된 사용자 정보 |
+| Service 추출 | 서비스 간 호출 정보 |
+| 컨텍스트 저장 | ContextVar에 저장 |
+
+**비활성화**: `SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = False`
+
+### 2.6 HybridRateLimitMiddleware
 
 **경로**: `selfhealing.api.django.rate_limit.HybridRateLimitMiddleware`
 
@@ -123,7 +183,42 @@ RATE_LIMIT_CONFIG = {
 }
 ```
 
-### 2.4 ChaosMiddleware
+### 2.7 PoolCircuitBreakerMiddleware
+
+**경로**: `selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware`
+
+**역할**: Connection Pool 전용 Circuit Breaker
+
+| 구성요소 | 설명 |
+|----------|------|
+| 풀 상태 감시 | DB 커넥션 풀 헬스 체크 (캐시 기반) |
+| 자동 차단 | 풀 고갈 시 CB Open |
+| Fail Fast | Pool 대기 없이 즉시 503 반환 |
+| Graceful 복구 | Half-Open → Closed 자동 전환 |
+
+**비활성화**: `SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False`
+
+**부하 테스트**: 
+- `load_tests/scenarios/integration/stage16_healing_proof.py` ✅
+- `load_tests/scenarios/chaos/stage26_connection_pool.py` ✅
+- `load_tests/scenarios/chaos/stage26_extreme_pool_test.py` ✅
+- `load_tests/scenarios/chaos/stage34_db_deadlock.py` ✅
+
+### 2.8 PoolTimeoutMiddleware
+
+**경로**: `myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware`
+
+**역할**: 커넥션 획득 타임아웃 설정
+
+| 구성요소 | 설명 |
+|----------|------|
+| SQLAlchemy 연동 | Pool Timeout 예외 감지 |
+| 즉시 503 | 타임아웃 시 서비스 불가 응답 |
+| Retry-After | 10초 후 재시도 권장 |
+
+**비활성화**: `SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = False`
+
+### 2.9 ChaosMiddleware
 
 **경로**: `myproject.middleware.chaos_middleware.ChaosMiddleware`
 
@@ -142,7 +237,11 @@ RATE_LIMIT_CONFIG = {
 - `abort`: HTTP 에러 응답
 - `blackhole`: 응답 없음
 
-### 2.5 ConnectionPoolLimiterMiddleware
+**비활성화**: `CHAOS_MIDDLEWARE_ENABLED = False` (프로덕션에서 비활성화 권장)
+
+**부하 테스트**: `load_tests/scenarios/chaos/stage16_db_lock_recovery_locust.py` ✅
+
+### 2.10 ConnectionPoolLimiterMiddleware
 
 **경로**: `myproject.middleware.chaos_middleware.ConnectionPoolLimiterMiddleware`
 
@@ -154,11 +253,78 @@ RATE_LIMIT_CONFIG = {
 | 조기 거부 | 풀 고갈 전 요청 거부 |
 | Backpressure | 클라이언트에 재시도 신호 |
 
-### 2.6 RateLimitingMiddleware (Deprecated)
+### 2.11 AuditMiddleware
+
+**경로**: `selfhealing.api.django.audit_middleware.AuditMiddleware`
+
+**역할**: 감사 로그 자동 수집 (반드시 마지막!)
+
+| 구성요소 | 설명 |
+|----------|------|
+| 이벤트 수집 | 모든 미들웨어 이벤트 버퍼 수집 |
+| 해시 체인 | ContinuousAuditRecorder로 무결성 보장 |
+| Fail-Open | 감사 실패가 비즈니스 로직을 중단시키지 않음 |
+
+**비활성화**: `SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = False`
+
+**CRITICAL**: 반드시 MIDDLEWARE 리스트 **가장 마지막**에 위치해야 함!
+
+---
+
+## 3. 미들웨어 활성화/비활성화 설정
+
+> `settings.py` 또는 환경변수로 미들웨어 토글
+
+### 3.1 설정 목록
+
+| 미들웨어 | 설정명 | 기본값 |
+|----------|--------|--------|
+| TieringMiddleware | `SELFHEALING_TIERING_MIDDLEWARE_ENABLED` | `True` |
+| ActorContextMiddleware | `SELFHEALING_ACTOR_MIDDLEWARE_ENABLED` | `True` |
+| PoolCircuitBreakerMiddleware | `SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED` | `True` |
+| PoolTimeoutMiddleware | `SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED` | `True` |
+| ChaosMiddleware | `CHAOS_MIDDLEWARE_ENABLED` | `False` |
+| AuditMiddleware | `SELFHEALING_AUDIT_MIDDLEWARE_ENABLED` | `True` |
+
+### 3.2 환경변수 예시
+
+```bash
+# 프로덕션: Chaos 비활성화, 나머지 활성화
+export CHAOS_MIDDLEWARE_ENABLED=false
+export SELFHEALING_TIERING_MIDDLEWARE_ENABLED=true
+export SELFHEALING_AUDIT_MIDDLEWARE_ENABLED=true
+
+# 개발/테스트: 일부 비활성화
+export SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED=false
+```
+
+### 3.3 settings.py 예시
+
+```python
+# Tiering Middleware (Emergency Mode Load Shedding)
+SELFHEALING_TIERING_MIDDLEWARE_ENABLED = True
+
+# Actor Context Middleware (사용자 추적)
+SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = True
+
+# Pool Circuit Breaker Middleware
+SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = True
+
+# Pool Timeout Middleware
+SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = True
+
+# Chaos Middleware (테스트 환경에서만 True 권장)
+CHAOS_MIDDLEWARE_ENABLED = False
+
+# Audit Middleware
+SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = True
+```
+
+### 2.12 RateLimitingMiddleware (Deprecated)
 
 **상태**: ❌ **존재하지 않음** - `HybridRateLimitMiddleware`로 대체됨
 
-### 2.7 PrometheusBeforeMiddleware / PrometheusAfterMiddleware
+### 2.13 PrometheusBeforeMiddleware / PrometheusAfterMiddleware
 
 **경로**: `django_prometheus.middleware`
 
@@ -168,126 +334,6 @@ RATE_LIMIT_CONFIG = {
 |----------|------|
 | Before | 요청 시작 시간 기록 |
 | After | 응답 메트릭 수집 |
-
----
-
-## 3. Django 미등록 미들웨어
-
-> `settings.py`에 등록되지 않았으나 코드베이스에 존재하는 미들웨어
-
-### 3.1 PoolCircuitBreakerMiddleware
-
-**경로**: `selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware`
-
-**역할**: Connection Pool 전용 Circuit Breaker
-
-| 구성요소 | 설명 |
-|----------|------|
-| 풀 상태 감시 | DB 커넥션 풀 헬스 체크 |
-| 자동 차단 | 풀 고갈 시 CB Open |
-| Graceful 복구 | Half-Open → Closed 전환 |
-
-### 3.2 AuditMiddleware
-
-**경로**: `selfhealing.api.django.audit_middleware.AuditMiddleware`
-
-**역할**: 감사 로그 자동 수집
-
-| 구성요소 | 설명 |
-|----------|------|
-| Request 로깅 | 요청 정보 기록 |
-| Response 로깅 | 응답 정보 기록 |
-| Actor 추적 | 사용자/시스템 식별 |
-
-**연동**: [03_INFRA_ADAPTER.md](03_INFRA_ADAPTER.md) - Audit Backends
-
-### 3.3 SensitiveAccessLoggingMiddleware
-
-**경로**: `selfhealing.api.django.middleware.SensitiveAccessLoggingMiddleware`
-
-**역할**: 민감 데이터 접근 감사
-
-| 구성요소 | 설명 |
-|----------|------|
-| PII 탐지 | 개인정보 접근 감지 |
-| 경로 매칭 | 민감 경로 패턴 매칭 |
-| 알림 연동 | 보안팀 자동 알림 |
-
-### 3.4 TieringMiddleware
-
-**경로**: `selfhealing.api.django.tiering.middleware.TieringMiddleware`
-
-**역할**: Emergency Mode 트래픽 제어 ([섹션 5](#5-tiering-시스템) 참조)
-
-### 3.5 ActorContextMiddleware
-
-**경로**: `myproject.middleware.actor_middleware.ActorContextMiddleware`
-
-**역할**: Actor 컨텍스트 설정
-
-| 구성요소 | 설명 |
-|----------|------|
-| User 추출 | 인증된 사용자 정보 |
-| Service 추출 | 서비스 간 호출 정보 |
-| 컨텍스트 저장 | ContextVar에 저장 |
-
-### 3.6 PoolTimeoutMiddleware
-
-**경로**: `myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware`
-
-**역할**: 커넥션 획득 타임아웃 설정
-
-| 구성요소 | 설명 |
-|----------|------|
-| 동적 타임아웃 | 부하에 따른 타임아웃 조정 |
-| Backpressure | 타임아웃 시 503 응답 |
-
-### 3.7 trace_id Middleware
-
-**경로**: `selfhealing.audit.trace.trace_id_middleware`
-
-**역할**: 분산 추적 ID 전파
-
-| 구성요소 | 설명 |
-|----------|------|
-| 헤더 추출 | X-Request-ID, X-Trace-ID |
-| 자동 생성 | 헤더 없을 시 UUID 생성 (`req-{uuid4_short}` 형식) |
-| 로깅 연동 | 모든 로그에 trace_id 포함 |
-| 관련 함수 | `generate_trace_id()`, `get_trace_id()`, `set_trace_id()`, `clear_trace_id()` |
-
-### 3.8 GracefulShutdownCoordinator (미들웨어 아님)
-
-**경로**: `selfhealing.core.shutdown_coordinator.GracefulShutdownCoordinator`
-
-**역할**: Graceful Shutdown 코디네이터 (미들웨어가 아닌 코어 컴포넌트)
-
-| 구성요소 | 설명 |
-|----------|------|
-| Shutdown 감지 | SIGTERM/SIGINT 신호 처리 |
-| 진행 중 요청 추적 | `RequestTracker`로 In-flight 요청 관리 |
-| Drain Phase | 신규 요청 거부, 기존 요청 완료 대기 |
-| 타임아웃 | 최대 대기 시간 설정 |
-
-> **Note**: FastAPI에서는 `ShutdownMiddleware`로 통합 사용 (섹션 4.2 참조)
-
-### 3.9 Self-DDoS Protection (미들웨어 아님)
-
-**경로**: `selfhealing.services.circuit_breaker.protection.CircuitBreakerProtection`
-
-**역할**: Self-DDoS 공격 방어 (재시도 증폭 방지)
-
-> **Note**: 독립 미들웨어가 아닌 `CircuitBreakerService`의 내장 기능입니다.
-
-| 구성요소 | 설명 |
-|----------|------|
-| 요청률 추적 | 서비스별 요청 횟수 모니터링 |
-| 임계값 기반 감지 | `self_ddos_request_threshold` 초과 시 감지 |
-| Backoff 제안 | 차단하지 않고 재시도 지연 권장 |
-| 설정 항목 | `self_ddos_protection_enabled`, `self_ddos_window_seconds`, `self_ddos_backoff_multiplier` |
-
-**관련 메서드**:
-- `should_allow_with_ddos_protection(service_name)` → `(bool, float)`
-- `is_self_ddos_detected(service_name)` → `bool`
 
 ---
 
@@ -643,6 +689,47 @@ if throttle.acquire():
 else:
     # 쓰로틀링됨
     return HttpResponse(status=429)
+```
+
+---
+
+## 9. 부하 테스트 커버리지
+
+> `load_tests/scenarios/` 디렉토리에서 미들웨어 관련 테스트 현황
+
+### 9.1 미들웨어별 테스트 상태
+
+| 미들웨어 | 테스트 파일 | 상태 |
+|----------|-------------|------|
+| trace_id_middleware | `integration/stage08_observability.py` | ✅ 테스트됨 |
+| HealthBridgeMiddleware | `chaos/stage9_worker_crash_selfhealing.py` | ✅ 테스트됨 |
+| TieringMiddleware | `utils/selfhealing/tiering.py` (클라이언트) | ⚠️ 클라이언트만 |
+| SelfHealingMiddleware | `chaos/stage16_healing_proof_v6.py` | ✅ 테스트됨 |
+| ActorContextMiddleware | - | ❌ 미테스트 |
+| HybridRateLimitMiddleware | - | ❌ 미테스트 |
+| PoolCircuitBreakerMiddleware | `integration/stage16_healing_proof.py`, `chaos/stage26_*.py` | ✅ 테스트됨 |
+| PoolTimeoutMiddleware | `chaos/stage26_connection_pool.py` | ✅ 테스트됨 |
+| ChaosMiddleware | `chaos/stage16_db_lock_recovery_locust.py` | ✅ 테스트됨 |
+| AuditMiddleware | `integration/stage46_audit_observability.py` | ✅ 테스트됨 |
+
+### 9.2 주요 테스트 시나리오
+
+| 시나리오 | 테스트 파일 | 검증 항목 |
+|----------|-------------|----------|
+| Pool 고갈 복구 | `chaos/stage26_connection_pool.py` | Pool CB 동작, 503 반환 |
+| DB Lock 복구 | `chaos/stage16_db_lock_recovery_locust.py` | Chaos 주입, DLQ 적재 |
+| 분산 추적 | `integration/stage08_observability.py` | trace_id 전파, 헤더 확인 |
+| Compound Failure | `chaos/stage42_compound_failure_chaos.py` | 복합 장애 복구 |
+
+### 9.3 테스트 실행 방법
+
+```bash
+# 개별 시나리오 실행
+cd load_tests
+python -m scenarios.chaos.stage26_connection_pool
+
+# Locust 기반 부하 테스트
+locust -f scenarios/chaos/stage16_db_lock_recovery_locust.py --headless -u 10 -r 1
 ```
 
 ---

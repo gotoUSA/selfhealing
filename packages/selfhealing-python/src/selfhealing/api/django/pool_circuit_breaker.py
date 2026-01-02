@@ -593,6 +593,11 @@ class PoolCircuitBreakerMiddleware:
         'selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware',
         ...
     ]
+    
+    비활성화:
+    SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False (settings.py)
+    또는
+    SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED=false (환경변수)
     """
 
     # Circuit Breaker 적용 제외 경로
@@ -610,10 +615,22 @@ class PoolCircuitBreakerMiddleware:
         self._request_count = 0
         self._log_interval = 100  # v6.2.0: 100 요청마다 Pool 상태 로깅 (50 → 100)
         self._audit_enabled = self._check_audit_available()
+        self._enabled = self._check_enabled()
+        
+        status = "enabled" if self._enabled else "DISABLED"
         logger.info(
-            f"[PoolCircuitBreakerMiddleware] Initialized - Fail Fast enabled (v6.2.1 cached+audit)! "
+            f"[PoolCircuitBreakerMiddleware] Initialized - {status} (v6.2.1 cached+audit)! "
             f"Audit: {'enabled' if self._audit_enabled else 'disabled'}"
         )
+
+    def _check_enabled(self) -> bool:
+        """미들웨어 활성화 여부 확인"""
+        try:
+            from django.conf import settings
+            return getattr(settings, 'SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED', True)
+        except Exception:
+            # settings 접근 불가 시 환경변수 확인
+            return os.getenv("SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
 
     def _check_audit_available(self) -> bool:
         """Audit 시스템 사용 가능 여부 확인"""
@@ -720,6 +737,10 @@ class PoolCircuitBreakerMiddleware:
             logger.debug(f"[PoolCircuitBreakerMiddleware] Audit recording failed: {e}")
 
     def __call__(self, request):
+        # 미들웨어 비활성화 시 바이패스
+        if not self._enabled:
+            return self.get_response(request)
+        
         # 제외 경로 체크
         path = request.path
         for excluded in self.EXCLUDED_PATHS:

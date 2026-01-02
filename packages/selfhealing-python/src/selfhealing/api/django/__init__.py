@@ -12,11 +12,16 @@ Usage:
         path('api/self-healing/', include(selfhealing_urls)),
     ]
     
-    # In your Django project's settings.py (AuditMiddleware는 맨 마지막!):
+    # In your Django project's settings.py:
     MIDDLEWARE = [
-        "selfhealing.api.django.middleware.HealthBridgeMiddleware",  # 최상단
-        # ... 다른 미들웨어들 ...
-        "selfhealing.api.django.audit_middleware.AuditMiddleware",  # 맨 마지막!
+        "selfhealing.audit.trace.trace_id_middleware",                  # [1] Trace ID
+        "selfhealing.api.django.middleware.HealthBridgeMiddleware",     # [2] Health Bridge
+        "selfhealing.api.django.tiering.TieringMiddleware",             # [3] Tiering
+        "selfhealing.api.django.middleware.SelfHealingMiddleware",      # [4] Self-Healing
+        # ... Django Core Middlewares ...
+        "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware",  # [8] Pool CB
+        # ... other middlewares ...
+        "selfhealing.api.django.audit_middleware.AuditMiddleware",      # [11] Audit (맨 마지막!)
     ]
 """
 
@@ -52,6 +57,25 @@ from selfhealing.api.django.audit_middleware import (
     is_audit_middleware_enabled,
 )
 
+from selfhealing.api.django.middleware import (
+    HealthBridgeMiddleware,
+    SelfHealingMiddleware,
+)
+
+from selfhealing.api.django.pool_circuit_breaker import (
+    PoolCircuitBreakerMiddleware,
+    PoolCircuitBreaker,
+    pool_circuit_breaker,
+    circuit_breaker_status,
+    circuit_breaker_reset,
+)
+
+from selfhealing.api.django.tiering import (
+    TieringMiddleware,
+    TierRegistry,
+    get_tier_registry,
+)
+
 __all__ = [
     # Views
     "ControlActionView",
@@ -78,7 +102,17 @@ __all__ = [
     # Constants
     "ControlAPIActions",
     "ControlAPIEnvironments",
-    # Middleware (AuditMiddleware - Gateway Pipeline)
+    # Middleware - Gateway Pipeline
+    "HealthBridgeMiddleware",
+    "SelfHealingMiddleware",
     "AuditMiddleware",
     "is_audit_middleware_enabled",
+    "PoolCircuitBreakerMiddleware",
+    "PoolCircuitBreaker",
+    "pool_circuit_breaker",
+    "circuit_breaker_status",
+    "circuit_breaker_reset",
+    "TieringMiddleware",
+    "TierRegistry",
+    "get_tier_registry",
 ]

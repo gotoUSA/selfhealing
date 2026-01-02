@@ -1,6 +1,6 @@
 # Self-Healing 코드 분석 보고서
 
-> **Generated**: 2026-01-02 (Updated)
+> **Generated**: 2026-01-02 (Updated after middleware registration)
 > **Tools Used**: vulture, pipdeptree, custom AST analyzer
 
 ---
@@ -10,8 +10,10 @@
 | 항목 | 값 |
 |------|-----|
 | 전체 모듈 수 | 365개 |
-| 의존성이 있는 모듈 | 254개 |
-| 독립(고아) 모듈 | 108개 |
+| 의존성이 있는 모듈 | 260개 (+6) |
+| 독립(고아) 모듈 | 102개 (-6) |
+
+> **Note**: 2026-01-02 미들웨어 통합으로 고아 모듈 6개 감소
 
 ---
 
@@ -92,18 +94,28 @@
 
 ---
 
-## ⚠️ 독립(고아) 모듈 (108개)
+## ⚠️ 독립(고아) 모듈 (102개)
 
 다른 모듈에서 import되지 않는 모듈들입니다.
 **이유**: 엔트리포인트, 설정 파일, 또는 실제 미사용 코드
+
+### ✅ 2026-01-02 해결된 고아 모듈 (6개 → 등록 완료)
+
+| 모듈 | 해결 방법 |
+|------|----------|
+| `api.django.tiering.middleware` | settings.py MIDDLEWARE에 등록 |
+| `api.django.pool_circuit_breaker` | settings.py MIDDLEWARE에 등록 |
+| `api.django.audit_middleware` | settings.py MIDDLEWARE에 등록 |
+| `audit.trace.trace_id_middleware` | settings.py MIDDLEWARE에 등록 |
+| `myproject.middleware.actor_middleware` | settings.py MIDDLEWARE에 등록 |
+| `myproject.middleware.pool_timeout_middleware` | settings.py MIDDLEWARE에 등록 |
 
 ### 정상적인 고아 모듈 (엔트리포인트/설정)
 
 | 모듈 | 이유 |
 |------|------|
 | `api.django.urls` | URL 라우팅 (settings.py에서 include) |
-| `api.django.middleware` | 미들웨어 (settings.py에서 등록) |
-| `api.django.tiering.middleware` | Tiering 미들웨어 |
+| `api.django.middleware` | 미들웨어 (settings.py에서 등록) ✅ |
 | `adapters.django.admin` | Django Admin (자동 로드) |
 | `adapters.django.apps` | Django AppConfig |
 | `adapters.django.migrations.*` | 마이그레이션 파일 (3개) |
@@ -111,7 +123,7 @@
 | `adapters.fastapi.routes` | FastAPI 라우트 (app에서 등록) |
 | `tasks.*` | Celery 태스크 (Beat에서 실행) - 4개 |
 
-### 검토 필요한 고아 모듈 (94개)
+### 검토 필요한 고아 모듈 (88개)
 
 #### 어댑터 관련
 | 모듈 | 상태 |
@@ -129,9 +141,9 @@
 #### API 관련
 | 모듈 | 상태 |
 |------|------|
-| `api.django.tiering.*` | Tiering 시스템 (미등록 미들웨어) - 6개 |
-| `api.django.reauthentication` | 재인증 (미등록) |
-| `api.django.throttle_adapter` | 쓰로틀 어댑터 (미등록) |
+| `api.django.tiering.*` | Tiering 시스템 - 5개 (middleware 제외, `__init__.py`에서 re-export) |
+| `api.django.reauthentication` | 재인증 (View 데코레이터로 사용) |
+| `api.django.throttle_adapter` | 쓰로틀 어댑터 (DRF throttle_classes에 등록) |
 | `api.django.views.error_budget.*` | Error Budget 뷰 - 3개 |
 | `api.django.views.xtest.*` | 테스트 전용 뷰 - 6개 |
 
@@ -291,14 +303,17 @@ utils
 | `services.runtime_config` | ✅ 런타임 설정 (25회 참조) |
 | `models` | ✅ 도메인 모델 (23회 참조) |
 | `adapters.django.models` | ✅ Django 모델 (9회 참조) |
+| `api.django.tiering` | ✅ 미들웨어 등록 완료 (2026-01-02) |
+| `api.django.pool_circuit_breaker` | ✅ 미들웨어 등록 완료 (2026-01-02) |
+| `api.django.audit_middleware` | ✅ 미들웨어 등록 완료 (2026-01-02) |
+| `audit.trace` | ✅ 미들웨어 등록 완료 (2026-01-02) |
 
 ### ⚠️ 연결 검토 필요
 
 | 컴포넌트 | 상태 |
 |---------|------|
-| `api.django.tiering.*` | 미들웨어 미등록 (6개 모듈) |
-| `api.django.throttle_adapter` | DRF에 미등록 |
-| `api.django.reauthentication` | 사용처 없음 |
+| `api.django.throttle_adapter` | DRF throttle_classes에 선택적 등록 |
+| `api.django.reauthentication` | View 데코레이터로 사용 (필요 시) |
 | `adapters.metrics.auto_tuning_adapter` | factory 미등록 |
 | `adapters.resilient` | 새로 추가됨 - 연결 필요 |
 | `services.factory.*` | 새 팩토리 패턴 - 통합 필요 |
@@ -310,31 +325,30 @@ utils
 
 ## 📊 변경 추이 (이전 vs 현재)
 
-| 항목 | 이전 | 현재 | 변화 |
-|------|------|------|------|
-| 전체 모듈 수 | 363개 | 365개 | +2 |
-| 의존성 있는 모듈 | 230개 | 254개 | +24 |
-| 고아 모듈 | 92개 | 108개 | +16 |
-| interfaces.repositories 참조 | 22회 | 24회 | +2 |
-| factory 의존성 | 14개 | 18개 | +4 |
+| 항목 | 이전 (v2.2) | 현재 (v2.3) | 변화 |
+|------|-------------|-------------|------|
+| 전체 모듈 수 | 365개 | 365개 | 0 |
+| 의존성 있는 모듈 | 254개 | 260개 | +6 |
+| 고아 모듈 | 108개 | 102개 | -6 |
+| 등록된 미들웨어 | 6개 | 11개 | +5 |
 
 **분석**:
-- 새로운 모듈 추가 (+2): `adapters.resilient`, `services.factory.*` 등
-- 의존성 연결 강화 (+24): 더 많은 모듈이 적절히 연결됨
-- 고아 모듈 증가 (+16): 하위 모듈 패턴 사용으로 인한 자연스러운 증가
+- 미들웨어 통합 완료 (+5): TieringMiddleware, PoolCircuitBreakerMiddleware, AuditMiddleware 등
+- 고아 모듈 감소 (-6): 미등록 미들웨어들이 settings.py에 등록됨
+- 활성화/비활성화 토글 추가: 환경변수 또는 settings.py로 제어 가능
 
 ---
 
-## 📋 권장 조치
+## 📋 권장 조치 (업데이트됨)
 
-### 1. 고아 모듈 정리
-- 미사용 어댑터 → `__init__.py`에 export 추가 또는 삭제
-- 테스트용 어댑터 → `tests/` 폴더로 이동
-- 하위 모듈 패턴 → 부모 `__init__.py`에서 re-export
+### 1. ✅ 완료된 조치
+- ~~미등록 미들웨어 등록~~ → 2026-01-02 완료
+- ~~하위 모듈 __init__.py 정리~~ → api.django, myproject.middleware 완료
 
-### 2. 미등록 미들웨어 활성화 검토
-- `tiering.middleware` → 필요시 settings.py에 등록
-- `throttle_adapter` → DRF throttle_classes에 등록
+### 2. 남은 조치
+- `api.django.throttle_adapter` → 필요 시 View별 throttle_classes 등록
+- `adapters.resilient` → factory에 등록 검토
+- `services.*` 하위 모듈 → 부모 `__init__.py`에서 re-export
 
 ### 3. 새로운 패키지 통합
 - `adapters.resilient` → factory에 등록

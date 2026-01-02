@@ -6,6 +6,7 @@ SQLAlchemy Pool Timeout 발생 시 즉시 503 반환.
 """
 
 import logging
+import os
 from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
@@ -26,14 +27,35 @@ class PoolTimeoutMiddleware:
 
     SQLAlchemy Pool에서 연결을 가져오지 못하면 (timeout),
     즉시 503 Service Unavailable 반환.
+    
+    비활성화:
+    SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = False (settings.py)
+    또는
+    SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED=false (환경변수)
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
         self._timeout_count = 0
-        logger.info("[PoolTimeoutMiddleware] Initialized - will catch Pool timeouts!")
+        self._enabled = self._check_enabled()
+        
+        status = "enabled" if self._enabled else "DISABLED"
+        logger.info(f"[PoolTimeoutMiddleware] Initialized - {status}")
+
+    def _check_enabled(self) -> bool:
+        """미들웨어 활성화 여부 확인"""
+        try:
+            from django.conf import settings
+            return getattr(settings, 'SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED', True)
+        except Exception:
+            # settings 접근 불가 시 환경변수 확인
+            return os.getenv("SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
 
     def __call__(self, request):
+        # 미들웨어 비활성화 시 바이패스
+        if not self._enabled:
+            return self.get_response(request)
+        
         try:
             response = self.get_response(request)
             return response

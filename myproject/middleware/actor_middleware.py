@@ -16,6 +16,11 @@ Usage in settings.py:
         ...
     ]
 
+비활성화:
+    SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = False (settings.py)
+    또는
+    SELFHEALING_ACTOR_MIDDLEWARE_ENABLED=false (환경변수)
+
 설정 후 어디서든:
     from selfhealing.context import ActorContext
 
@@ -25,6 +30,7 @@ Usage in settings.py:
 """
 
 import logging
+import os
 from typing import Callable
 
 from django.http import HttpRequest, HttpResponse
@@ -42,8 +48,25 @@ class ActorContextMiddleware:
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
         self.get_response = get_response
+        self._enabled = self._check_enabled()
+        
+        status = "enabled" if self._enabled else "DISABLED"
+        logger.info(f"[ActorContextMiddleware] Initialized - {status}")
+
+    def _check_enabled(self) -> bool:
+        """미들웨어 활성화 여부 확인"""
+        try:
+            from django.conf import settings
+            return getattr(settings, 'SELFHEALING_ACTOR_MIDDLEWARE_ENABLED', True)
+        except Exception:
+            # settings 접근 불가 시 환경변수 확인
+            return os.getenv("SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
+        # 미들웨어 비활성화 시 바이패스
+        if not self._enabled:
+            return self.get_response(request)
+        
         # Import here to avoid circular imports
         try:
             from selfhealing.context.actor_context import ActorContext
