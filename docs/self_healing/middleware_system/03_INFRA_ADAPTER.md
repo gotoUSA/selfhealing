@@ -1,8 +1,10 @@
 # Self-Healing 인프라 어댑터
 
-> **Version**: 2.2.0
+> **Version**: 2.3.0
 > **Updated**: 2026-01-02
 > **Category**: 인프라/저장소/외부 시스템 연동
+> 
+> ⚠️ **v2.3.0 업데이트**: Audit Backends, Queue Adapters 섹션 실제 코드 기반으로 수정
 
 ---
 
@@ -105,24 +107,28 @@ REDIS_CACHE_CONFIG = {
 }
 ```
 
-#### 2.1.2 MemoryCacheAdapter
+#### 2.1.2 InMemoryCacheAdapter
 
-**경로**: `selfhealing.adapters.cache.memory_cache`
+**경로**: `selfhealing.adapters.cache.memory_adapter`
 
 | 특징 | 설명 |
 |------|------|
-| 용도 | 테스트/개발 환경 |
+| 용도 | **테스트 전용** (프로덕션 사용 불가) |
 | 저장소 | Python dict |
 | TTL | time 기반 만료 |
 | 스레드 안전 | threading.Lock 사용 |
+| 분산 락 | **단일 프로세스만 지원** |
+
+> ⚠️ **주의**: 단위 테스트에서 Redis 없이 기본 로직을 검증할 때만 사용합니다.  
+> 분산 락, 네트워크 지연, 동시성 레이스 컬디션은 **반드시 Redis 통합 테스트 필요**.
 
 ### 2.2 Queue Adapters
 
-**경로**: `selfhealing.adapters.queue/`
+**경로**: `selfhealing.adapters.queues/`
 
-#### 2.2.1 CeleryTaskQueue
+#### 2.2.1 CeleryTaskAdapter
 
-**경로**: `selfhealing.adapters.queue.celery_queue`
+**경로**: `selfhealing.adapters.queues.celery_adapter`
 
 | 메서드 | 설명 |
 |--------|------|
@@ -132,22 +138,36 @@ REDIS_CACHE_CONFIG = {
 | `cancel(task_id)` | 태스크 취소 |
 | `retry(task_id)` | 재시도 |
 
-**상태 값**:
+**상태 값** (`TaskStatus`):
 - `PENDING`: 대기 중
 - `STARTED`: 실행 중
 - `SUCCESS`: 성공
 - `FAILURE`: 실패
 - `REVOKED`: 취소됨
 
-#### 2.2.2 SyncTaskQueue
+**요구사항**: `celery>=5.0.0`, Redis (broker/backend)
 
-**경로**: `selfhealing.adapters.queue.sync_queue`
+#### 2.2.2 SyncTaskAdapter
+
+**경로**: `selfhealing.adapters.queues.sync_adapter`
 
 | 특징 | 설명 |
 |------|------|
-| 용도 | 테스트/동기 실행 필요 시 |
+| 용도 | **테스트 전용** |
 | 실행 | 즉시 동기 실행 |
 | 스케줄 | time.sleep 기반 |
+| 외부 의존성 | 없음 |
+
+> ⚠️ **주의**: Celery 없이도 TaskQueueInterface 로직을 테스트할 수 있도록 하는 Mock 구현체입니다.
+
+#### 2.2.3 RQ Adapter (추가)
+
+**경로**: `selfhealing.adapters.queues.rq_adapter`
+
+| 특징 | 설명 |
+|------|------|
+| 용도 | Redis Queue (RQ) 기반 태스크 큐 |
+| 요구사항 | `rq`, Redis |
 
 ### 2.3 Config Adapters
 
@@ -190,33 +210,45 @@ config.get("dlq.max_retries")          # → 5
 
 **경로**: `selfhealing.audit.backends/`
 
-### 3.1 PostgresAuditBackend
+> ⚠️ **비침투 설계 원칙**: 고객사 DB에 직접 접근하지 않습니다.  
+> 기본값은 로컬 파일 저장이며, DB 저장이 필요하면 사용자가 직접 구현해야 합니다.
 
-**경로**: `selfhealing.audit.backends.postgres`
+### 3.1 구현 상태 요약
+
+| 백엔드 | 클래스 | 상태 | 설명 |
+|--------|--------|------|------|
+| 로컬 파일 | `LocalFileBackend` | ✅ Active | 기본값, 해시 체인 무결성 |
+| CloudWatch | `CloudWatchBackend` | 🔧 Interface | AWS CloudWatch Logs |
+| Datadog | `DatadogBackend` | 🔧 Interface | Datadog logging |
+| S3 WORM | `S3WORMBackend` | 🔧 Interface | S3 Object Lock |
+| 원격 서버 | `RemoteAuditBackend` | 🔧 Interface | 별도 감사 서버 (mTLS) |
+
+### 3.2 LocalFileBackend (기본값)
+
+**경로**: `selfhealing.audit.backends.local`
 
 | 특징 | 설명 |
 |------|------|
-| 저장소 | PostgreSQL 테이블 |
-| 인덱스 | timestamp, actor, action |
-| 파티션 | 월별 자동 파티션 |
+| 저장소 | 로컬 파일 시스템 |
+| 형식 | JSON Lines |
+| 로테이션 | 일별 자동 로테이션 |
+| 무결성 | 해시 체인 (Hash Chain) |
+| 기본 경로 | `logs/audit/audit_{date}.jsonl` |
 
-**테이블 스키마**:
-```sql
-CREATE TABLE audit_log (
-    id UUID PRIMARY KEY,
-    timestamp TIMESTAMPTZ NOT NULL,
-    actor VARCHAR(255),
-    action VARCHAR(100),
-    resource_type VARCHAR(100),
-    resource_id VARCHAR(255),
-    details JSONB,
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+```python
+class LocalFileBackend(AuditBackend):
+    DEFAULT_LOG_DIR = "logs/audit"
+    DEFAULT_FILENAME_PATTERN = "audit_{date}.jsonl"
+
+    def __init__(
+        self,
+        log_dir: Optional[str] = None,
+        enable_hash_chain: bool = True,  # 무결성 검증용
+        rotate_daily: bool = True,
+    ): ...
 ```
 
-### 3.2 CloudWatchAuditBackend
+### 3.3 CloudWatchBackend (Interface Only)
 
 **경로**: `selfhealing.audit.backends.cloudwatch`
 
@@ -224,32 +256,31 @@ CREATE TABLE audit_log (
 |------|------|
 | 서비스 | AWS CloudWatch Logs |
 | 로그 그룹 | `/selfhealing/audit` |
-| 로그 스트림 | 날짜별 자동 생성 |
+| 상태 | **Interface만 정의됨** (boto3 필요) |
 
-**설정**:
 ```python
-CLOUDWATCH_AUDIT_CONFIG = {
-    'log_group': '/selfhealing/audit',
-    'region': 'ap-northeast-2',
-    'retention_days': 90,
-}
+# 활성화 조건:
+# 1. pip install boto3
+# 2. AWS credentials 설정
+# 3. 환경변수 또는 config 설정
+
+CloudWatchBackend(
+    log_group="/selfhealing/audit",
+    region="ap-northeast-2",
+)
 ```
 
-### 3.3 FileAuditBackend
+### 3.4 기타 Backend (Interface Only)
 
-**경로**: `selfhealing.audit.backends.file`
+| 백엔드 | 경로 | 활성화 조건 |
+|--------|------|-------------|
+| `DatadogBackend` | `selfhealing.audit.backends.datadog` | Datadog API Key |
+| `S3WORMBackend` | `selfhealing.audit.backends.s3_worm` | S3 + Object Lock |
+| `RemoteAuditBackend` | `selfhealing.audit.backends.remote` | 별도 감사 서버 + mTLS |
 
-| 특징 | 설명 |
-|------|------|
-| 저장소 | 로컬 파일 시스템 |
-| 형식 | JSON Lines |
-| 로테이션 | 일별 로테이션 |
+### 3.5 CompositeBackend
 
-**파일 경로**: `logs/audit/audit-{date}.jsonl`
-
-### 3.4 Composite Backend
-
-**경로**: `selfhealing.audit.backends.composite`
+**경로**: `selfhealing.audit.backends.base`
 
 | 특징 | 설명 |
 |------|------|
@@ -258,9 +289,21 @@ CLOUDWATCH_AUDIT_CONFIG = {
 | 실패 처리 | 개별 실패 시 계속 진행 |
 
 ```python
-composite = CompositeAuditBackend([
-    PostgresAuditBackend(),
-    CloudWatchAuditBackend(),
+from selfhealing.audit.backends import create_composite_backend
+
+# 편의 함수 사용
+composite = create_composite_backend(
+    local=True,       # 항상 로컬 저장
+    cloudwatch=True,  # CloudWatch도 전송
+    s3_worm=False,
+)
+
+# 또는 직접 생성
+from selfhealing.audit.backends import CompositeBackend, LocalFileBackend, CloudWatchBackend
+
+composite = CompositeBackend([
+    LocalFileBackend(),
+    CloudWatchBackend(log_group="/myapp/audit"),
 ])
 ```
 

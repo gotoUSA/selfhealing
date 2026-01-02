@@ -17,7 +17,8 @@ middleware_system/
 ├── 02_LOGIC_ENGINE.md                 ← 비즈니스 로직 엔진
 ├── 03_INFRA_ADAPTER.md                ← 인프라/저장소 어댑터
 ├── 04_AUTONOMOUS_OPS.md               ← 자율 운영 시스템
-└── 05_RESILIENT_STORAGE_BACKEND.md    ← Redis 통합 저장소 (신규)
+├── 05_RESILIENT_STORAGE_BACKEND.md    ← Redis 통합 저장소
+└── 06_REDIS_MIGRATION.md              ← Redis 기본값 마이그레이션 가이드 (신규)
 ```
 
 ---
@@ -191,9 +192,9 @@ middleware_system/
 | 인터페이스 (02_LOGIC_ENGINE) | 구현체 (03_INFRA_ADAPTER) |
 |------------------------------|---------------------------|
 | `RepositoryInterface` | `DjangoFailedOperationRepository`, `SQLAlchemyFailedOperationRepository` |
-| `CacheInterface` | `RedisCacheAdapter`, `MemoryCacheAdapter` |
-| `TaskQueueInterface` | `CeleryTaskQueue`, `SyncTaskQueue` |
-| `AuditInterface` | `PostgresAuditBackend`, `CloudWatchAuditBackend`, `FileAuditBackend` |
+| `CacheProviderInterface` | `RedisCacheAdapter` ✅, `InMemoryCacheAdapter` (테스트용) |
+| `TaskQueueInterface` | `CeleryTaskAdapter` ✅, `SyncTaskAdapter` (테스트용), `RQAdapter` |
+| `AuditBackend` | `LocalFileBackend` ✅, `CloudWatchBackend`, `DatadogBackend`, `S3WORMBackend`, `RemoteAuditBackend` |
 | `NotificationAdapter` | `SlackAdapter`, `TeamsAdapter`, `PagerDutyAdapter` |
 | `CircuitBreakerStateRepository` | `InMemoryCircuitBreakerStateRepository`, `DjangoCircuitBreakerStateRepository`, **`RedisCircuitBreakerStateRepository`** (신규) |
 

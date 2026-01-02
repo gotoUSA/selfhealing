@@ -1,8 +1,10 @@
 # Self-Healing 자율 운영 시스템
 
-> **Version**: 2.2.0
+> **Version**: 2.3.0
 > **Updated**: 2026-01-02
 > **Category**: 자율 운영 및 백그라운드 자동화
+>
+> ⚠️ **v2.3.0 업데이트**: 실제 코드 기반으로 자동화 서비스 섹션 수정
 
 ---
 
@@ -75,104 +77,82 @@
 
 > 자율적으로 동작하는 학습 및 최적화 서비스
 
-### 2.1 FinOpsService
+### 2.1 구현 상태 요약
+
+| 서비스 | 코드 존재 | 경로 | 설명 |
+|---------|----------|------|------|
+| `FinOpsService` | ✅ 존재 | `selfhealing.services.finops` | 비용 추적 및 예산 관리 |
+| `LearningService` | ✅ 존재 | `selfhealing.services.learning` | 패턴 학습 및 최적화 제안 |
+| `AnomalyDetectorService` | ❌ 미구현 | - | 문서에만 존재 |
+| `PatternRecognizerService` | ❌ 미구현 | - | 문서에만 존재 |
+| `TrendAnalyzerService` | ❌ 미구현 | - | 문서에만 존재 |
+| `CapacityPlannerService` | ❌ 미구현 | - | 문서에만 존재 |
+
+> ⚠️ **참고**: `L3AnomalyDetector`는 `corruption_shield` 모듈 내에 별도로 존재합니다.
+
+### 2.2 FinOpsService
 
 **경로**: `selfhealing.services.finops`
 
-**역할**: 비용 최적화 및 리소스 관리
+**역할**: 복구 비용 추적 및 예산 관리
 
 | 메서드 | 설명 |
 |--------|------|
-| `analyze_costs` | 비용 분석 |
-| `recommend_scaling` | 스케일링 권장 |
-| `track_budget` | 예산 추적 |
-| `generate_report` | 리포트 생성 |
+| `set_budget(stage_name, max_budget, ...)` | Stage별 예산 설정 |
+| `get_budget(stage_name)` | Stage 예산 조회 |
+| `record_cost(operation, stage_name, ...)` | 비용 기록 |
+| `generate_report(stage_name, period, ...)` | 리포트 생성 |
+| `get_alerts(...)` | 알림 목록 조회 |
+| `reset_budget(stage_name)` | 예산 리셋 |
 
-**분석 항목**:
-- 클라우드 리소스 사용량
-- 유휴 리소스 탐지
-- 예약 인스턴스 권장
-- 비용 이상 탐지
+**기본 작업별 비용** (USD):
+```python
+DEFAULT_OPERATION_COSTS = {
+    "retry": Decimal("0.001"),
+    "circuit_breaker_check": Decimal("0.0001"),
+    "dlq_enqueue": Decimal("0.005"),
+    "dlq_replay": Decimal("0.01"),
+    "health_check": Decimal("0.0001"),
+    "rollback": Decimal("0.05"),
+    "emergency_mode": Decimal("0.10"),
+    "chaos_test": Decimal("0.02"),
+}
+```
 
-### 2.2 AdaptiveLearningService
+### 2.3 LearningService
 
 **경로**: `selfhealing.services.learning`
 
-**역할**: 시스템 동작 학습 및 적응
+**역할**: Self-Learning DNA - 패턴 학습 및 최적화 제안
 
 | 메서드 | 설명 |
 |--------|------|
-| `train_model` | 모델 학습 |
-| `predict` | 예측 수행 |
-| `update_weights` | 가중치 업데이트 |
-| `get_recommendations` | 권장 조치 조회 |
+| `start_session(stage_name)` | 학습 세션 시작 |
+| `end_session(session_id)` | 학습 세션 종료 |
+| `learn_pattern(...)` | 패턴 학습 |
+| `record_metric(...)` | 성능 메트릭 기록 |
+| `get_suggestions(...)` | 최적화 제안 조회 |
+| `apply_suggestion(suggestion_id)` | 제안 적용 |
+| `get_patterns(...)` | 학습된 패턴 조회 |
+| `get_cross_stage_insights()` | 크로스 스테이지 인사이트 |
 
 **학습 대상**:
-- 트래픽 패턴
-- 에러 발생 패턴
-- 복구 시간 최적화
-- Circuit Breaker 임계값
+- 실패 패턴 (failure)
+- 성능 패턴 (performance)
+- 이상 탐지 (anomaly)
 
-### 2.3 AnomalyDetectorService
+### 2.4 미구현 서비스 (문서에만 존재)
 
-**경로**: `selfhealing.services.anomaly`
+> ⚠️ **주의**: 아래 서비스들은 원본 아키텍처 문서에 언급되었으나 **실제 코드로 구현되지 않았습니다**.
+> 별도의 구현 로드맵이나 계획도 현재 존재하지 않습니다.
+> 향후 필요시 별도로 구현 여부를 검토해야 합니다.
 
-**역할**: 이상 징후 탐지
-
-| 메서드 | 설명 |
-|--------|------|
-| `detect` | 이상 탐지 |
-| `train_baseline` | 베이스라인 학습 |
-| `get_anomalies` | 이상 목록 조회 |
-| `set_sensitivity` | 민감도 설정 |
-
-**탐지 알고리즘**:
-- Z-Score 기반
-- IQR (Interquartile Range)
-- 이동 평균 편차
-- Isolation Forest (ML 기반)
-
-### 2.4 PatternRecognizerService
-
-**경로**: `selfhealing.services.pattern`
-
-**역할**: 반복 패턴 인식
-
-| 메서드 | 설명 |
-|--------|------|
-| `find_patterns` | 패턴 탐색 |
-| `classify_incident` | 인시던트 분류 |
-| `suggest_resolution` | 해결책 제안 |
-
-**인식 패턴**:
-- 배포 후 에러 급증
-- 피크 시간대 장애
-- 연쇄 실패 (Cascade)
-- 메모리 누수 징후
-
-### 2.5 TrendAnalyzerService
-
-**경로**: `selfhealing.services.trend`
-
-**역할**: 트렌드 분석
-
-| 메서드 | 설명 |
-|--------|------|
-| `analyze_trend` | 트렌드 분석 |
-| `forecast` | 예측 |
-| `detect_seasonality` | 계절성 탐지 |
-
-### 2.6 CapacityPlannerService
-
-**경로**: `selfhealing.services.capacity`
-
-**역할**: 용량 계획
-
-| 메서드 | 설명 |
-|--------|------|
-| `estimate_capacity` | 용량 추정 |
-| `plan_scaling` | 스케일링 계획 |
-| `alert_threshold` | 임계값 알림 |
+| 서비스 | 원본 문서 상 역할 |
+|---------|-------------------|
+| `AnomalyDetectorService` | 이상 징후 탐지 (Z-Score, IQR 등) |
+| `PatternRecognizerService` | 반복 패턴 인식 |
+| `TrendAnalyzerService` | 트렌드 분석 및 예측 |
+| `CapacityPlannerService` | 용량 계획 및 스케일링 |
 
 ---
 
@@ -187,98 +167,94 @@
 | 태스크 | 설명 |
 |--------|------|
 | `process_dlq_item` | DLQ 항목 처리 |
-| `run_circuit_breaker_check` | CB 상태 체크 |
-| `send_alert` | 알림 전송 |
-| `collect_metrics` | 메트릭 수집 |
-| `run_health_check` | 헬스 체크 실행 |
+| `conditional_replay_on_circuit_close` | 서킷 복구 시 DLQ 리플레이 |
+| `check_circuit_breaker_recovery` | CB 상태 체크 |
+| `expire_manual_overrides` | 수동 오버라이드 만료 |
+| `collect_self_healing_metrics` | 메트릭 수집 |
+| `check_and_report_sla_breaches` | SLA 위반 체크 |
+| `cleanup_resolved_dlq_entries` | DLQ 정리 |
 
-**태스크 정의 예시**:
+**태스크 정의 예시** (실제 코드):
 ```python
-from celery import shared_task
-
 @shared_task(
     bind=True,
-    max_retries=3,
-    default_retry_delay=60,
-    autoretry_for=(Exception,),
+    name="selfhealing.adapters.celery.tasks.conditional_replay_on_circuit_close",
+    queue="dlq_processing",
+    max_retries=0,
+    time_limit=300,
+    soft_time_limit=290,
     acks_late=True,
 )
-def process_dlq_item(self, item_id: str):
-    """DLQ 항목 처리 태스크"""
-    from selfhealing.services import get_dlq_service
-
-    service = get_dlq_service()
-    item = service.get_by_id(item_id)
-
-    try:
-        result = service.process(item)
-        return {'status': 'success', 'result': result}
-    except Exception as e:
-        service.mark_failed(item, str(e))
-        raise self.retry(exc=e)
+def conditional_replay_on_circuit_close(self, service_name: str, max_items: int = 50):
+    """
+    Trigger conditional replay when a circuit breaker closes.
+    서킷 브레이커가 CLOSED로 전환될 때 DLQ 항목을 리플레이합니다.
+    """
+    from selfhealing.services.execution_services import get_replay_service
+    
+    service = get_replay_service()
+    return service.conditional_replay(service_name, max_items)
 ```
 
 ### 3.2 Signal Hooks
 
-**경로**: `selfhealing.adapters.celery.signals`
+**경로**: `selfhealing.adapters.celery.signal_hooks`
+
+자동 설정 방법:
+```python
+# celery.py 또는 __init__.py에서
+from selfhealing.adapters.celery.signal_hooks import setup_selfhealing_signals
+setup_selfhealing_signals()
+```
+
+환경변수로 제어:
+```bash
+SELFHEALING_ENABLED=true           # 전체 활성화
+SELFHEALING_CB_ENABLED=true        # Circuit Breaker 기록
+SELFHEALING_DLQ_ENABLED=true       # DLQ 저장
+SELFHEALING_METRICS_ENABLED=true   # 메트릭 기록
+SELFHEALING_FORENSICS_ENABLED=true # Forensic 캡처
+```
 
 | 시그널 | 설명 |
 |--------|------|
 | `task_prerun` | 태스크 시작 전 |
 | `task_postrun` | 태스크 완료 후 |
-| `task_failure` | 태스크 실패 시 |
+| `task_failure` | 태스크 실패 시 → CB 기록, DLQ 저장 |
 | `task_retry` | 태스크 재시도 시 |
-| `worker_ready` | 워커 준비 완료 |
-| `worker_shutdown` | 워커 종료 시 |
-
-**시그널 핸들러 예시**:
-```python
-from celery.signals import task_failure
-from selfhealing.metrics import get_metrics
-
-@task_failure.connect
-def on_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo, **kw):
-    """태스크 실패 시 메트릭 기록 및 알림"""
-    metrics = get_metrics()
-    metrics.task_failures.labels(task_name=sender.name).inc()
-
-    if is_critical_task(sender.name):
-        send_alert(
-            title=f"Critical Task Failed: {sender.name}",
-            message=str(exception),
-            severity="high",
-        )
-```
+| `task_success` | 태스크 성공 시 |
 
 ### 3.3 Beat Schedule
 
-**경로**: `selfhealing.adapters.celery.beat`
+> ⚠️ **참고**: `selfhealing.adapters.celery.beat` 파일은 존재하지 않습니다.  
+> Beat 스케줄은 프로젝트의 `celery.py` 또는 `settings.py`에서 직접 설정합니다.
 
+**권장 Beat Schedule** (실제 태스크 경로):
 ```python
 CELERYBEAT_SCHEDULE = {
-    'process-pending-dlq': {
-        'task': 'selfhealing.tasks.process_pending_dlq',
-        'schedule': crontab(minute='*/5'),  # 5분마다
+    'check-circuit-breaker-recovery': {
+        'task': 'selfhealing.adapters.celery.tasks.check_circuit_breaker_recovery',
+        'schedule': 60.0,  # 1분마다
     },
-    'check-circuit-breakers': {
-        'task': 'selfhealing.tasks.check_circuit_breakers',
-        'schedule': crontab(minute='*/1'),  # 1분마다
+    'expire-manual-overrides': {
+        'task': 'selfhealing.adapters.celery.tasks.expire_manual_overrides',
+        'schedule': 300.0,  # 5분마다
     },
-    'run-chaos-experiments': {
-        'task': 'selfhealing.tasks.chaos_scheduler.run_scheduled_experiments',
-        'schedule': crontab(minute=0, hour='*/2'),  # 2시간마다
+    'collect-self-healing-metrics': {
+        'task': 'selfhealing.adapters.celery.tasks.collect_self_healing_metrics',
+        'schedule': 60.0,  # 1분마다
     },
-    'check-emergency-mode': {
+    'check-sla-breaches': {
+        'task': 'selfhealing.adapters.celery.tasks.check_and_report_sla_breaches',
+        'schedule': 300.0,  # 5분마다
+    },
+    'cleanup-dlq-entries': {
+        'task': 'selfhealing.adapters.celery.tasks.cleanup_resolved_dlq_entries',
+        'schedule': 86400.0,  # 매일
+    },
+    'check-emergency-mode-expiry': {
         'task': 'selfhealing.tasks.governance.check_emergency_mode_expiry',
-        'schedule': crontab(minute='*/30'),  # 30분마다
-    },
-    'drift-detection': {
-        'task': 'selfhealing.tasks.drift_detection.run_drift_detection',
-        'schedule': crontab(minute=0, hour='*/1'),  # 1시간마다
-    },
-    'daily-resilience-report': {
-        'task': 'selfhealing.tasks.chaos_scheduler.generate_daily_resilience_report',
-        'schedule': crontab(minute=0, hour=9),  # 매일 9시
+        'schedule': 900.0,  # 15분마다
     },
 }
 ```
