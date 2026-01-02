@@ -2,7 +2,7 @@
 
 > **Version**: 2.0.0  
 > **Last Updated**: 2026-01-02  
-> **Status**: Phase 1,2,3,4 구현 완료  
+> **Status**: Phase 1-7 구현 완료  
 > **Author**: AI Assistant  
 > **Reference**: 06_REDIS_MIGRATION.md, 56_AUDIT_MIDDLEWARE_DESIGN.md
 
@@ -40,29 +40,20 @@ Redis 마이그레이션(Phase 5) 완료 후, Django ORM을 직접 import하는 
 ┌─────────────────────────────────────────────────────────────────┐
 │                         selfhealing                              │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │              런타임 계층 (Runtime Layer)                  │    │
-│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │    │
 │  │  • Circuit Breaker 상태 체크/변경                        │    │
 │  │  • DLQ 적재/조회/replay                                  │    │
-│  │  • 1-2ms 응답 필수                                       │    │
-│  │  • DB 장애 시에도 동작 필수                              │    │
-│  │                                                          │    │
+│  │  • 1-2ms 응답 필수, DB 장애 시에도 동작 필수             │    │
 │  │  [구현] Redis + ResilientStorageBackend (WAL fallback)   │    │
 │  └─────────────────────────────────────────────────────────┘    │
-│                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │              운영 계층 (Operations Layer)                 │    │
-│  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │    │
 │  │  • 대시보드 통계 (도메인별 집계, 추이 분석)              │    │
 │  │  • DLQ 목록 조회 (페이지네이션, 필터링)                  │    │
-│  │  • 정리 작업 (archive, purge)                            │    │
-│  │  • 10-100ms 응답 허용                                    │    │
-│  │                                                          │    │
+│  │  • 정리 작업 (archive, purge), 10-100ms 응답 허용        │    │
 │  │  [구현] SQL/ORM (Django ORM 또는 SQLAlchemy)             │    │
 │  └─────────────────────────────────────────────────────────┘    │
-│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -74,7 +65,6 @@ Redis 마이그레이션(Phase 5) 완료 후, Django ORM을 직접 import하는 
 | DLQ 적재 (`store_failure`) | ✅ 1-2ms | ❌ 5-10ms | **Redis** |
 | 도메인별 pending 개수 집계 | ❌ O(n) 스캔 | ✅ GROUP BY | **ORM** |
 | 월간 복구율 계산 | ❌ 메모리 집계 | ✅ AVG, COUNT | **ORM** |
-| 대량 목록 페이지네이션 | ❌ ZRANGE | ✅ LIMIT/OFFSET | **ORM** |
 | 분산 환경 동기화 | ✅ 클러스터 | ❌ 단일 DB | **Redis** |
 | DB 장애 격리 | ✅ 독립 | ❌ 같이 죽음 | **Redis** |
 
@@ -90,507 +80,114 @@ Redis 마이그레이션(Phase 5) 완료 후, Django ORM을 직접 import하는 
 | **FastAPI 프로젝트** | Redis | SQLAlchemy | ✅ 풀 기능 |
 | **경량/독립 사용** | Redis | (없음) | Prometheus/Grafana |
 
-### 3.2 Django 사용자
+### 3.2 어댑터 등록 방법
 
-```python
-# shopping/apps.py
-from django.apps import AppConfig
+**Django 사용자**: `AppConfig.ready()`에서 `DjangoStatisticsAdapter` 등록  
+**FastAPI 사용자**: `@app.on_event("startup")`에서 `SQLAlchemyStatisticsAdapter` 등록  
+**경량 사용자**: 어댑터 미등록 시 `NullStatisticsRepository` 자동 사용
 
-class ShoppingConfig(AppConfig):
-    def ready(self):
-        from selfhealing.factory import ProviderRegistry
-        from selfhealing.adapters.django import DjangoStatisticsAdapter
-        
-        # Django 모델 등록 (Domain-Free 유지)
-        from shopping.models import FailedOperation, CircuitBreakerState
-        
-        ProviderRegistry.register_statistics_adapter(
-            DjangoStatisticsAdapter(
-                failed_operation_model=FailedOperation,
-                circuit_breaker_model=CircuitBreakerState,
-            )
-        )
-```
-
-### 3.3 FastAPI 사용자
-
-```python
-# main.py
-from fastapi import FastAPI
-from selfhealing.factory import ProviderRegistry
-from selfhealing.adapters.sqlalchemy import SQLAlchemyStatisticsAdapter
-
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup():
-    from database import SessionLocal, engine
-    
-    ProviderRegistry.register_statistics_adapter(
-        SQLAlchemyStatisticsAdapter(session_factory=SessionLocal)
-    )
-```
-
-### 3.4 경량 사용자 (통계 없음)
-
-```python
-# 런타임 기능만 사용
-from selfhealing.factory import ProviderRegistry
-
-# Redis 런타임만 활성화 (기본값)
-cb_repo = ProviderRegistry.get_circuit_breaker_repo()  # Redis
-dlq_repo = ProviderRegistry.get_failed_operation_repo()  # Redis
-
-# 통계는 Prometheus + Grafana로 대체
-# selfhealing_dlq_pending_total{domain="payment"} 
-# selfhealing_circuit_breaker_state{service="external_api"}
-```
+> 💡 구체적인 코드 예시는 [selfhealing/adapters/django/statistics.py](../../../packages/selfhealing-python/src/selfhealing/adapters/django/statistics.py) 참조
 
 ---
 
 ## 4. 인터페이스 설계
 
-### 4.1 StatisticsRepository 인터페이스
+### 4.1 StatisticsRepositoryInterface
 
-```python
-# selfhealing/interfaces/statistics.py
+통계/대시보드용 Repository 인터페이스로, 런타임 Repository와 분리됩니다.
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+**주요 메서드:**
 
+| 카테고리 | 메서드 | 설명 |
+|----------|--------|------|
+| DLQ 통계 | `get_status_counts()` | 상태별 DLQ 개수 집계 |
+| | `get_domain_distribution()` | 도메인별 분포 (상위 N개) |
+| | `get_resolution_rate()` | 복구 성공률 (최근 N일) |
+| DLQ 목록 | `list_entries()` | 페이지네이션 조회 |
+| | `get_entry_detail()` | 항목 상세 조회 |
+| 정리 작업 | `archive_old_entries()` | 오래된 resolved 아카이브 |
+| | `purge_archived()` | 아카이브 영구 삭제 |
+| CB 통계 | `get_circuit_breaker_summary()` | open/closed/half-open 개수 |
+| Audit Trail | `get_audit_trail_by_entity()` | 엔티티별 감사 추적 조회 |
+| | `link_audit_entry()` | 감사 항목 연결 |
 
-@dataclass
-class StatusCounts:
-    """상태별 개수"""
-    total: int = 0
-    pending: int = 0
-    resolved: int = 0
-    failed: int = 0
-    archived: int = 0
+> 💡 전체 인터페이스 정의는 [selfhealing/interfaces/statistics.py](../../../packages/selfhealing-python/src/selfhealing/interfaces/statistics.py) 참조
 
+### 4.2 Null Object 패턴
 
-@dataclass
-class DomainDistribution:
-    """도메인별 분포"""
-    domain: str
-    count: int
-    percentage: float
-
-
-@dataclass
-class CleanupStats:
-    """정리 작업 통계"""
-    total: int = 0
-    by_status: Dict[str, int] = None
-    resolved_older_than_30_days: int = 0
-    archived_older_than_90_days: int = 0
-
-
-@dataclass
-class PaginatedResult:
-    """페이지네이션 결과"""
-    items: List[Any]
-    total: int
-    page: int
-    page_size: int
-    has_next: bool
-    has_prev: bool
-
-
-class StatisticsRepositoryInterface(ABC):
-    """
-    통계/대시보드용 Repository 인터페이스.
-    
-    런타임 Repository와 분리된 읽기 전용 인터페이스.
-    복잡한 집계 쿼리를 지원합니다.
-    """
-    
-    # =========================================================================
-    # DLQ 통계
-    # =========================================================================
-    
-    @abstractmethod
-    def get_status_counts(self) -> StatusCounts:
-        """상태별 DLQ 개수 집계"""
-        pass
-    
-    @abstractmethod
-    def get_domain_distribution(self, limit: int = 10) -> List[DomainDistribution]:
-        """도메인별 분포 (상위 N개)"""
-        pass
-    
-    @abstractmethod
-    def get_failure_type_distribution(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """실패 유형별 분포"""
-        pass
-    
-    @abstractmethod
-    def get_recent_activity(
-        self, 
-        hours: int = 24,
-        days: int = 7,
-    ) -> Dict[str, int]:
-        """최근 활동 통계 (신규/해결 건수)"""
-        pass
-    
-    @abstractmethod
-    def get_resolution_rate(
-        self,
-        days: int = 30,
-    ) -> float:
-        """복구 성공률 (최근 N일)"""
-        pass
-    
-    @abstractmethod
-    def get_avg_retry_count(self) -> float:
-        """평균 재시도 횟수"""
-        pass
-    
-    # =========================================================================
-    # DLQ 목록 조회 (페이지네이션)
-    # =========================================================================
-    
-    @abstractmethod
-    def list_entries(
-        self,
-        page: int = 1,
-        page_size: int = 20,
-        status: Optional[str] = None,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
-        order_by: str = "-created_at",
-    ) -> PaginatedResult:
-        """DLQ 항목 목록 조회"""
-        pass
-    
-    @abstractmethod
-    def get_entry_detail(self, entry_id: int) -> Optional[Dict[str, Any]]:
-        """DLQ 항목 상세 조회"""
-        pass
-    
-    # =========================================================================
-    # 정리 작업
-    # =========================================================================
-    
-    @abstractmethod
-    def get_cleanup_stats(self) -> CleanupStats:
-        """정리 작업 통계"""
-        pass
-    
-    @abstractmethod
-    def archive_old_entries(self, older_than_days: int = 30) -> int:
-        """오래된 resolved 항목 아카이브"""
-        pass
-    
-    @abstractmethod
-    def purge_archived(
-        self,
-        ids: Optional[List[int]] = None,
-        older_than_days: Optional[int] = None,
-    ) -> int:
-        """아카이브된 항목 영구 삭제"""
-        pass
-    
-    # =========================================================================
-    # Circuit Breaker 통계
-    # =========================================================================
-    
-    @abstractmethod
-    def get_circuit_breaker_summary(self) -> Dict[str, Any]:
-        """Circuit Breaker 요약 (open/closed/half-open 개수)"""
-        pass
-    
-    @abstractmethod
-    def list_circuit_breakers(self) -> List[Dict[str, Any]]:
-        """모든 Circuit Breaker 목록"""
-        pass
-```
-
-### 4.2 Null Object 패턴 (통계 미등록 시)
-
-```python
-# selfhealing/adapters/statistics/null.py
-
-class NullStatisticsRepository(StatisticsRepositoryInterface):
-    """
-    통계 어댑터 미등록 시 사용되는 Null Object.
-    
-    에러 없이 빈 결과를 반환합니다.
-    런타임 기능은 정상 동작, 통계만 미지원.
-    """
-    
-    def get_status_counts(self) -> StatusCounts:
-        return StatusCounts()
-    
-    def get_domain_distribution(self, limit: int = 10) -> List[DomainDistribution]:
-        return []
-    
-    def get_cleanup_stats(self) -> CleanupStats:
-        return CleanupStats()
-    
-    def list_entries(self, **kwargs) -> PaginatedResult:
-        return PaginatedResult(
-            items=[],
-            total=0,
-            page=1,
-            page_size=20,
-            has_next=False,
-            has_prev=False,
-        )
-    
-    # ... 모든 메서드가 빈 결과 반환
-```
+통계 어댑터 미등록 시 `NullStatisticsRepository`가 자동으로 사용됩니다:
+- 에러 없이 빈 결과 반환
+- 런타임 기능 정상 동작
+- 대시보드에서 "통계 미지원" 메시지 표시
 
 ---
 
 ## 5. ProviderRegistry 확장
 
-### 5.1 현재 구조
+### 5.1 주요 메서드
 
-```python
-class ProviderRegistry:
-    # 런타임 저장소 (Redis)
-    _default_repo = "redis"
-    
-    def get_circuit_breaker_repo() -> CircuitBreakerStateRepository
-    def get_failed_operation_repo() -> FailedOperationRepository
+| 메서드 | 용도 |
+|--------|------|
+| `get_circuit_breaker_repo()` | 런타임용 CB Repository (Redis) |
+| `get_failed_operation_repo()` | 런타임용 DLQ Repository (Redis) |
+| `register_statistics_adapter()` | 통계 어댑터 등록 (앱 시작 시) |
+| `get_statistics_repo()` | 통계용 Repository 반환 |
+| `has_statistics_adapter()` | 통계 어댑터 등록 여부 확인 |
+
+> 💡 구현 상세는 [selfhealing/factory.py](../../../packages/selfhealing-python/src/selfhealing/factory.py) 참조
+
+---
+
+## 6. 파일 구조
+
 ```
-
-### 5.2 확장된 구조
-
-```python
-class ProviderRegistry:
-    # 런타임 저장소 (Redis) - 기존 유지
-    _default_repo = "redis"
-    
-    # 통계 저장소 (ORM) - 신규
-    _statistics_adapter: Optional[StatisticsRepositoryInterface] = None
-    
-    # =========================================================================
-    # 런타임 Repository (기존)
-    # =========================================================================
-    
-    @classmethod
-    def get_circuit_breaker_repo(cls) -> CircuitBreakerStateRepository:
-        """런타임용 CB Repository (Redis)"""
-        return cls._get_repo("circuit_breaker")
-    
-    @classmethod
-    def get_failed_operation_repo(cls) -> FailedOperationRepository:
-        """런타임용 DLQ Repository (Redis)"""
-        return cls._get_repo("failed_operation")
-    
-    # =========================================================================
-    # 통계 Repository (신규)
-    # =========================================================================
-    
-    @classmethod
-    def register_statistics_adapter(
-        cls,
-        adapter: StatisticsRepositoryInterface,
-    ) -> None:
-        """
-        통계 어댑터 등록.
-        
-        Django/FastAPI 앱 시작 시 호출.
-        미등록 시 NullStatisticsRepository 사용.
-        """
-        cls._statistics_adapter = adapter
-        logger.info(f"[ProviderRegistry] Statistics adapter registered: {type(adapter).__name__}")
-    
-    @classmethod
-    def get_statistics_repo(cls) -> StatisticsRepositoryInterface:
-        """
-        통계용 Repository 반환.
-        
-        미등록 시 NullStatisticsRepository 반환 (에러 없음).
-        """
-        if cls._statistics_adapter is None:
-            from selfhealing.adapters.statistics.null import NullStatisticsRepository
-            return NullStatisticsRepository()
-        return cls._statistics_adapter
-    
-    @classmethod
-    def has_statistics_adapter(cls) -> bool:
-        """통계 어댑터 등록 여부"""
-        return cls._statistics_adapter is not None
+selfhealing/
+├── interfaces/
+│   └── statistics.py          # StatisticsRepositoryInterface + DTOs
+├── adapters/
+│   ├── statistics/
+│   │   ├── __init__.py
+│   │   └── null.py            # NullStatisticsRepository (기본값)
+│   ├── django/
+│   │   ├── __init__.py
+│   │   └── statistics.py      # DjangoStatisticsAdapter
+│   ├── sqlalchemy/
+│   │   ├── __init__.py
+│   │   └── statistics.py      # SQLAlchemyStatisticsAdapter
+│   └── celery/
+│       └── tasks.py           # 비동기 영속화 태스크
+└── services/
+    ├── dashboard_service.py   # ProviderRegistry 사용
+    └── health_check.py        # ProviderRegistry 사용
 ```
 
 ---
 
-## 6. 수정 대상 파일
+## 7. 구현 상태
 
-### 6.1 ImportError 발생 파일 (카테고리 1)
-
-| 파일 | 현재 문제 | 수정 방향 |
-|------|----------|----------|
-| `services/dlq_service.py` | `from selfhealing.adapters.django.models import FailedOperation` | → `ProviderRegistry.get_statistics_repo()` |
-| `services/dashboard_service.py` | Django 모델 직접 사용 | → `ProviderRegistry.get_statistics_repo()` |
-| `services/health_check.py` | `CircuitBreakerState.objects.count()` | → `ProviderRegistry.get_statistics_repo()` |
-| `adapters/celery/tasks.py` | Django 모델 직접 import | → `ProviderRegistry` 사용 |
-
-### 6.2 수정 예시
-
-**Before (dlq_service.py):**
-```python
-def get_cleanup_stats(self) -> CleanupStats:
-    try:
-        from selfhealing.adapters.django.models import FailedOperation  # ❌ ImportError
-        from django.db.models import Count
-        
-        status_counts = dict(
-            FailedOperation.objects.values("status")
-            .annotate(count=Count("id"))
-            .values_list("status", "count")
-        )
-        ...
-```
-
-**After:**
-```python
-def get_cleanup_stats(self) -> CleanupStats:
-    from selfhealing.factory import ProviderRegistry
-    
-    stats_repo = ProviderRegistry.get_statistics_repo()
-    return stats_repo.get_cleanup_stats()  # ✅ 어댑터가 처리
-```
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| 1 | 인터페이스 및 Null 어댑터 | ✅ 완료 |
+| 2 | Django 어댑터 복원 | ✅ 완료 |
+| 3 | 기존 코드 리팩토링 | ✅ 완료 |
+| 4 | SQLAlchemy 어댑터 | ✅ 완료 |
+| 5 | 비동기 영속화 구현 | ✅ 완료 |
+| 6 | Audit Trail 통합 | ✅ 완료 |
+| 7 | 테스트 및 문서화 | ✅ 완료 |
 
 ---
 
-## 7. 신규 파일 목록
+## 8. 비동기 영속화 (v2.0.0)
 
-### 7.1 인터페이스
+### 8.1 원칙
 
-```
-selfhealing/interfaces/
-└── statistics.py              # StatisticsRepositoryInterface
-                               # + AuditTrailEntry, EntityAuditTrail (v2.0.0)
-```
-
-### 7.2 어댑터
-
-```
-selfhealing/adapters/statistics/
-├── __init__.py
-├── null.py                    # NullStatisticsRepository (기본값)
-
-selfhealing/adapters/django/
-├── __init__.py
-└── statistics.py              # DjangoStatisticsAdapter
-
-selfhealing/adapters/sqlalchemy/
-├── __init__.py
-└── statistics.py              # SQLAlchemyStatisticsAdapter (v2.0.0)
-```
-
-### 7.3 Celery 태스크 (v2.0.0)
-
-```
-selfhealing/adapters/celery/
-└── tasks.py                   # + async_persist_dlq_entry
-                               # + async_persist_batch
-                               # + link_audit_to_dlq
-```
-
-### 7.4 수정된 서비스
-
-```
-selfhealing/services/
-├── dashboard_service.py       # ProviderRegistry 사용으로 수정
-└── health_check.py            # ProviderRegistry 사용으로 수정
-```
-
----
-
-## 8. 구현 계획
-
-### Phase 1: 인터페이스 및 Null 어댑터 (Day 1) ✅
-
-- [x] `interfaces/statistics.py` 생성
-- [x] `adapters/statistics/null.py` 생성
-- [x] `ProviderRegistry` 확장
-
-### Phase 2: Django 어댑터 복원 (Day 2) ✅
-
-- [x] `adapters/django/__init__.py` 생성 (models는 앱에서 제공, domain-free)
-- [x] `adapters/django/statistics.py` 생성
-- [x] `interfaces/__init__.py`에 통계 인터페이스 추가
-
-### Phase 3: 기존 코드 리팩토링 (Day 3) ✅
-
-- [x] `dashboard_service.py` 수정 → `ProviderRegistry.get_statistics_repo()` 사용
-- [x] `health_check.py` 수정 → `_get_circuit_breaker_count()` 메서드 추가
-- [x] `celery/tasks.py` 수정 → Django 모델 직접 import 제거
-
-### Phase 4: SQLAlchemy 어댑터 (Day 4) ✅
-
-- [x] `adapters/sqlalchemy/__init__.py` 생성
-- [x] `adapters/sqlalchemy/statistics.py` 생성
-- [x] FastAPI 예제 (아래 3.3절 참조)
-
-### Phase 5: 비동기 영속화 구현 (Day 5) ✅
-
-- [x] `async_persist_dlq_entry` Celery 태스크 추가
-- [x] `async_persist_batch` 배치 영속화 태스크 추가
-- [x] `link_audit_to_dlq` Audit Trail 연결 태스크 추가
-- [x] `DjangoStatisticsAdapter.should_persist_async()` 구현
-- [x] `SQLAlchemyStatisticsAdapter.should_persist_async()` 구현
-
-### Phase 6: Audit Trail 통합 (Day 6) ✅
-
-- [x] `AuditTrailEntry`, `EntityAuditTrail` DTO 추가
-- [x] `get_audit_trail_by_entity()` 인터페이스 메서드 추가
-- [x] `link_audit_entry()` 인터페이스 메서드 추가
-- [x] Django/SQLAlchemy 어댑터에 Audit Trail 구현
-
-### Phase 7: 테스트 및 문서화 (Day 7)
-
-- [ ] 단위 테스트 작성
-- [ ] 통합 테스트 작성
-- [ ] 사용 가이드 문서화
-
----
-
-## 9. 마이그레이션 전략
-
-### 9.1 기존 데이터
-
-| 데이터 위치 | 처리 방식 |
-|------------|----------|
-| Django DB (기존) | 그대로 유지, ORM으로 접근 |
-| Redis (신규) | 런타임 상태 저장 |
-
-### 9.2 데이터 동기화 및 비동기 영속화
-
-**런타임 → 통계 동기화는 필요 없음:**
-- 런타임(Redis): 현재 상태만 저장 (휘발성 OK)
-- 통계(ORM): 이력/집계용 (영구 저장)
-
-#### 9.2.1 비동기 영속화 원칙 (v2.0.0)
-
-> ⚠️ **중요**: ORM 저장은 **반드시 비동기로** 처리해야 합니다.
+> ⚠️ ORM 저장은 **반드시 비동기로** 처리해야 합니다.
 
 **이유:**
-- 런타임(Redis) 저장 후 ORM 저장을 동기로 처리하면 DB 지연 시 Redis 속도 이점이 사라짐
-- 예: Redis 2ms + ORM 50ms = 52ms (Redis 이점 상실)
+- 동기 저장: Redis 2ms + ORM 50ms = **52ms** (Redis 이점 상실)
+- 비동기 저장: Redis 2ms (응답) + ORM 50ms (백그라운드) = **2ms 응답**
 
-**권장 패턴:**
-
-```python
-def store_failure(self, ...):
-    # 1. Redis에 런타임 데이터 저장 (동기, 빠름, 1-2ms)
-    runtime_repo = ProviderRegistry.get_failed_operation_repo()
-    entry = runtime_repo.create(...)
-    
-    # 2. ORM에 영구 데이터 저장 (비동기, Celery 태스크로 위임)
-    if ProviderRegistry.has_statistics_adapter():
-        from selfhealing.adapters.celery.tasks import async_persist_dlq_entry
-        async_persist_dlq_entry.delay(entry.to_dict())  # ✅ 비동기!
-```
-
-#### 9.2.2 Celery 태스크
+### 8.2 Celery 태스크
 
 | 태스크 | 설명 | 큐 |
 |--------|------|-----|
@@ -598,192 +195,75 @@ def store_failure(self, ...):
 | `async_persist_batch` | 배치 영속화 (AuditMiddleware 연동) | `persistence` |
 | `link_audit_to_dlq` | Audit 레코드 연결 | `persistence` |
 
-#### 9.2.3 AuditMiddleware 통합
-
-AuditMiddleware의 배치 플러시 시점에 함께 영속화:
-
-```python
-# AuditMiddleware에서 배치 플러시 시
-def flush_audit_buffer(self, request):
-    audit_entries = self._buffer.get_entries()
-    
-    # 1. Audit 로그 기록
-    self._adapter.write_batch(audit_entries)
-    
-    # 2. DLQ 항목도 함께 영속화 (있다면)
-    dlq_entries = [e for e in audit_entries if e.entity_type == "dlq_entry"]
-    if dlq_entries:
-        from selfhealing.adapters.celery.tasks import async_persist_batch
-        async_persist_batch.delay([e.to_dict() for e in dlq_entries])
-```
-
 ---
 
-### 9.3 Audit Trail 통합 (The Master Trail)
+## 9. Audit Trail 통합
 
-#### 9.3.1 개요
+### 9.1 EntityAuditTrail
 
-Audit 로그(56_AUDIT_MIDDLEWARE_DESIGN.md)와 통계 데이터의 **100% 일치**를 보장합니다.
+DLQ 항목의 전체 감사 추적을 제공합니다:
+- `entity_id`: DLQ 항목 ID
+- `entries`: 시간순 이벤트 목록
+- `is_chain_valid`: 해시 체인 무결성 검증
 
-```python
-# DLQ 항목의 전체 감사 추적 조회
-stats_repo = ProviderRegistry.get_statistics_repo()
-trail = stats_repo.get_audit_trail_by_entity("dlq-123")
+### 9.2 활용
 
-print(f"Entity: {trail.entity_id}")
-print(f"Domain: {trail.domain}")
-print(f"Status: {trail.current_status}")
-print(f"Total actions: {trail.total_entries}")
-print(f"Hash chain valid: {trail.is_chain_valid}")
-
-for entry in trail.entries:
-    print(f"  {entry.timestamp}: {entry.action} by {entry.actor_id}")
-```
-
-#### 9.3.2 EntityAuditTrail DTO
-
-```python
-@dataclass
-class EntityAuditTrail:
-    entity_id: str
-    entity_type: str  # e.g., "dlq_entry"
-    domain: str
-    created_at: Optional[datetime]
-    resolved_at: Optional[datetime]
-    current_status: str
-    entries: List[AuditTrailEntry]
-    
-    @property
-    def is_chain_valid(self) -> bool:
-        """해시 체인 무결성 검증"""
-        ...
-```
-
-#### 9.3.3 기술 실사 활용
-
-> "장애 데이터와 감사 증적이 100% 일치함을 한눈에 보여줄 수 있습니다."
-
-```python
-# 특정 DLQ 항목의 전체 이력 조회
-trail = stats_repo.get_audit_trail_by_entity("dlq-12345")
-
-# 해시 체인 검증 결과 포함
-assert trail.is_chain_valid, "Audit trail has been tampered!"
-
-# 시간순 이벤트 목록
-for entry in trail.entries:
-    print(f"{entry.timestamp}: {entry.action}")
-    print(f"  Actor: {entry.actor_id}")
-    print(f"  Status: {entry.status}")
-    print(f"  Hash: {entry.hash_chain[:16]}...")
-```
+기술 실사 시 "장애 데이터와 감사 증적의 100% 일치"를 입증할 수 있습니다.
 
 ---
 
 ## 10. FAQ
 
-### Q1: Redis와 ORM에 같은 데이터가 중복 저장되나요?
+| 질문 | 답변 |
+|------|------|
+| Redis와 ORM에 데이터 중복? | 아니요. Redis는 런타임 상태, ORM은 이력/분석용 |
+| 통계 어댑터 없으면? | 런타임 정상 동작, `NullStatisticsRepository` 사용 |
+| 기존 Django 프로젝트 변경? | `apps.py`에 어댑터 등록 한 줄 추가만 필요 |
+| ORM 저장 왜 비동기? | Redis 속도 이점 유지 (2ms vs 52ms) |
+| Audit 불일치 탐지? | `is_chain_valid` 속성으로 해시 체인 검증 |
 
-**아니요.** 역할이 다릅니다:
-- Redis: 런타임 상태 (CB 상태, 현재 pending DLQ)
-- ORM: 이력/분석용 (전체 DLQ 기록, 집계 데이터)
+---
 
-### Q2: 통계 어댑터 없으면 어떻게 되나요?
+## 11. 성능 비교
 
-**런타임은 정상 동작합니다.**
-- `get_statistics_repo()` → `NullStatisticsRepository` 반환
-- 대시보드 접근 시 "통계 미지원" 메시지
-- Prometheus 메트릭으로 기본 모니터링 가능
+| 작업 | Redis | Django ORM |
+|------|-------|------------|
+| 단순 조회 (CB 상태) | **1.2ms** | 5.8ms |
+| 복잡한 집계 (10만 건) | 850ms | **45ms** |
 
-### Q3: 기존 Django 프로젝트는 변경이 필요한가요?
+**결론:**
+- **런타임 상태 관리** → Redis (속도, 분산, 장애 격리)
+- **통계/분석** → ORM (SQL 최적화, 인덱스 활용)
 
-**최소한의 변경:**
-```python
-# shopping/apps.py - 추가
-from selfhealing.factory import ProviderRegistry
-from selfhealing.adapters.django import DjangoStatisticsAdapter
+---
 
-ProviderRegistry.register_statistics_adapter(
-    DjangoStatisticsAdapter()  # 자동으로 모델 탐색
-)
+## 12. 테스트
+
+### 12.1 단위 테스트
+
+```bash
+# selfhealing 패키지 내부 테스트 (40개)
+cd packages/selfhealing-python
+pytest tests/unit/adapters/test_statistics_repository.py -v
 ```
 
-### Q4: ORM 저장은 왜 비동기로 해야 하나요? (v2.0.0)
+### 12.2 통합 테스트
 
-**Redis의 속도 이점을 유지하기 위함입니다:**
-- 동기 저장 시: Redis 2ms + ORM 50ms = **52ms** (Redis 무의미)
-- 비동기 저장 시: Redis 2ms (응답) + ORM 50ms (백그라운드) = **2ms 응답**
+```bash
+# Docker Compose로 Redis + Django 환경 테스트
+docker-compose -f docker-compose.test.yml run --rm test-hybrid-storage
 
-```python
-# ❌ 잘못된 패턴 (동기)
-runtime_repo.create(...)
-stats_repo.persist_entry(...)  # 50ms 블로킹!
-
-# ✅ 올바른 패턴 (비동기)
-runtime_repo.create(...)
-async_persist_dlq_entry.delay(...)  # 즉시 반환, 백그라운드 처리
-```
-
-### Q5: Audit Trail과 DLQ가 불일치하면 어떻게 되나요? (v2.0.0)
-
-**해시 체인 검증으로 탐지합니다:**
-```python
-trail = stats_repo.get_audit_trail_by_entity("dlq-123")
-if not trail.is_chain_valid:
-    # 감사 로그 변조 또는 누락 발생
-    alert_security_team("Audit trail integrity violation!")
-```
-
-### Q6: SQLAlchemy를 사용하는 FastAPI 프로젝트는? (v2.0.0)
-
-**SQLAlchemyStatisticsAdapter를 사용합니다:**
-```python
-# main.py
-from selfhealing.factory import ProviderRegistry
-from selfhealing.adapters.sqlalchemy import SQLAlchemyStatisticsAdapter
-
-@app.on_event("startup")
-async def startup():
-    ProviderRegistry.register_statistics_adapter(
-        SQLAlchemyStatisticsAdapter(
-            session_factory=SessionLocal,
-            failed_operation_table=FailedOperation,
-        )
-    )
+# 또는 개별 실행
+docker-compose -f docker-compose.test.yml up -d db redis
+pytest tests/integration/test_hybrid_storage_integration.py -v --no-cov -p no:xdist
+docker-compose -f docker-compose.test.yml down
 ```
 
 ---
 
-## 11. 관련 문서
+## 13. 관련 문서
 
 - [05_RESILIENT_STORAGE_BACKEND.md](05_RESILIENT_STORAGE_BACKEND.md) - Redis 런타임 저장소
 - [06_REDIS_MIGRATION.md](06_REDIS_MIGRATION.md) - 마이그레이션 기록
 - [56_AUDIT_MIDDLEWARE_DESIGN.md](../56_AUDIT_MIDDLEWARE_DESIGN.md) - Audit 로그 설계
 - [00_INDEX.md](00_INDEX.md) - 문서 인덱스
-
----
-
-## Appendix A: Redis vs ORM 성능 비교
-
-### A.1 단순 조회 (CB 상태 체크)
-
-```
-Redis GET:           1.2ms  ✅
-Django ORM SELECT:   5.8ms
-SQLAlchemy SELECT:   4.2ms
-```
-
-### A.2 복잡한 집계 (도메인별 pending 개수)
-
-```
-Redis SCAN + 집계:   850ms (10만 건)
-Django ORM GROUP BY: 45ms  ✅
-SQLAlchemy GROUP BY: 52ms  ✅
-```
-
-### A.3 결론
-
-| 작업 | 최적 기술 |
-|------|----------|
-| 런타임 상태 관리 | **Redis** (속도, 분산, 장애 격리) |
-| 통계/분석 | **ORM** (SQL 최적화, 인덱스 활용) |
