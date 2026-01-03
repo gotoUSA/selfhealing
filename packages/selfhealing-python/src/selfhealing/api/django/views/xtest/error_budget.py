@@ -56,7 +56,7 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
             )
         
         try:
-            from selfhealing.services import get_error_budget_service
+            from selfhealing.services.error_budget_service import get_error_budget_service
             
             eb_service = get_error_budget_service()
             

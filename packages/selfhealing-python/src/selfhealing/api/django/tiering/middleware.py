@@ -91,8 +91,8 @@ class TieringMiddleware:
             return self.get_response(request)
         
         try:
-            from selfhealing.services.emergency_mode import (
-                get_emergency_manager,
+            from selfhealing.services.emergency_mode import get_emergency_manager
+            from selfhealing.services.emergency_mode.enums import (
                 EmergencyLevel,
                 EMERGENCY_LEVEL_RULES,
             )

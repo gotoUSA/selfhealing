@@ -128,7 +128,9 @@ class HealthBridgeMiddleware:
         """
         try:
             # Import here to avoid circular imports and keep DB-independence
-            from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker.convenience import (
+                get_circuit_breaker_service,
+            )
             
             cb_service = get_circuit_breaker_service()
             if cb_service is None:
@@ -671,7 +673,9 @@ class SelfHealingMiddleware:
         self._load_path_patterns()
         
         try:
-            from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker.convenience import (
+                get_circuit_breaker_service,
+            )
             self._cb_service = get_circuit_breaker_service()
         except Exception as e:
             logger.warning(f"[SelfHealingMiddleware] CB service init failed: {e}")

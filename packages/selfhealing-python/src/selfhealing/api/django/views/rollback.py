@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_rollback_service():
     """Rollback 서비스 인스턴스 가져오기"""
     try:
-        from selfhealing.services.rollback import RollbackService
+        from selfhealing.services.rollback.service import RollbackService
         return RollbackService()
     except ImportError:
         return None

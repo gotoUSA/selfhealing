@@ -539,7 +539,9 @@ def generate_daily_autonomous_report(
     
     # Send notification
     try:
-        from selfhealing.services import get_security_notification_service
+        from selfhealing.services.security_notification_service import (
+            get_security_notification_service,
+        )
         
         service = get_security_notification_service()
         

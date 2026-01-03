@@ -245,10 +245,8 @@ class GovernanceService(GovernanceCheckMixin):
             결과 딕셔너리
         """
         try:
-            from selfhealing.services.emergency_mode import (
-                get_emergency_manager,
-                EmergencyLevel,
-            )
+            from selfhealing.services.emergency_mode import get_emergency_manager
+            from selfhealing.services.emergency_mode.enums import EmergencyLevel
             
             manager = get_emergency_manager()
             level_enum = EmergencyLevel(level)

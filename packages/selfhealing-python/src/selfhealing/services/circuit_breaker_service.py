@@ -28,17 +28,24 @@ Usage (unchanged):
     )
 """
 
-from selfhealing.services.circuit_breaker import (
-    # Config and types
+# Config and types
+from selfhealing.services.circuit_breaker.config import (
     CircuitBreakerConfig,
     CircuitBreakerResult,
     CircuitState,
-    # Rate limit tracking
+)
+
+# Rate limit tracking
+from selfhealing.services.circuit_breaker.rate_limit_tracker import (
     RateLimitTracker,
     get_rate_limit_tracker,
-    # Main service
-    CircuitBreakerService,
-    # Convenience functions
+)
+
+# Main service
+from selfhealing.services.circuit_breaker.service import CircuitBreakerService
+
+# Convenience functions
+from selfhealing.services.circuit_breaker.convenience import (
     get_circuit_breaker_service,
     should_allow_request,
     force_open_circuit,

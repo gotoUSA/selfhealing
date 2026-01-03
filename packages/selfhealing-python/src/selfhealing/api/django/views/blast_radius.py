@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_blast_radius_service():
     """Blast Radius 서비스 인스턴스 가져오기"""
     try:
-        from selfhealing.services.blast_radius import BlastRadiusService
+        from selfhealing.services.blast_radius.service import BlastRadiusService
         return BlastRadiusService()
     except ImportError:
         return None

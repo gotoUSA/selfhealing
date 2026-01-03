@@ -364,7 +364,9 @@ def on_task_retry(
 def _record_circuit_breaker_failure(service_name: str, task_name: str, exception: Exception):
     """Record failure in circuit breaker."""
     try:
-        from selfhealing.services import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker.convenience import (
+            get_circuit_breaker_service,
+        )
 
         cb_service = get_circuit_breaker_service()
 
@@ -382,7 +384,9 @@ def _record_circuit_breaker_failure(service_name: str, task_name: str, exception
 def _record_circuit_breaker_success(service_name: str, task_name: str):
     """Record success in circuit breaker."""
     try:
-        from selfhealing.services import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker.convenience import (
+            get_circuit_breaker_service,
+        )
 
         cb_service = get_circuit_breaker_service()
 
@@ -426,7 +430,7 @@ def _store_to_dlq(
 ):
     """Store failed operation to DLQ."""
     try:
-        from selfhealing.services import store_to_dlq
+        from selfhealing.services.dlq_service import store_to_dlq
 
         # Determine failure type from exception
         failure_type = _classify_failure_type(exception)
@@ -483,7 +487,7 @@ def _store_to_dlq(
 
         # Record DLQ metric
         try:
-            from selfhealing.services import record_dlq_item_created
+            from selfhealing.services.metrics.recorders import record_dlq_item_created
 
             record_dlq_item_created(domain=domain, failure_type=failure_type)
         except Exception:
@@ -601,7 +605,7 @@ def _get_recommended_action(failure_type: str) -> str:
 def _record_failure_metrics(domain: str, task_name: str, exception: Exception):
     """Record failure metrics."""
     try:
-        from selfhealing.services import record_retry_attempt
+        from selfhealing.services.metrics.recorders import record_retry_attempt
 
         # API: record_retry_attempt(domain: str, attempt_count: int, outcome: str)
         record_retry_attempt(
@@ -618,7 +622,7 @@ def _record_failure_metrics(domain: str, task_name: str, exception: Exception):
 def _record_success_metrics(service_name: str, task_name: str):
     """Record success metrics."""
     try:
-        from selfhealing.services import record_retry_attempt
+        from selfhealing.services.metrics.recorders import record_retry_attempt
 
         domain = _extract_domain_from_task_name(task_name)
         record_retry_attempt(
@@ -635,7 +639,7 @@ def _record_success_metrics(service_name: str, task_name: str):
 def _record_retry_metrics(domain: str, task_name: str):
     """Record retry attempt metrics."""
     try:
-        from selfhealing.services import record_retry_attempt
+        from selfhealing.services.metrics.recorders import record_retry_attempt
 
         record_retry_attempt(
             domain=domain,
@@ -663,7 +667,7 @@ def _capture_forensic_context(
 ):
     """Capture forensic context for failed task."""
     try:
-        from selfhealing.services import capture_forensic_context
+        from selfhealing.services.forensic_context import capture_forensic_context
 
         # API: capture_forensic_context(task_id, task_name, order, payment, user, request)
         context = capture_forensic_context(

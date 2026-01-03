@@ -342,7 +342,9 @@ class UnifiedNotificationManager:
         result = NotificationResult(success=True)
         
         try:
-            from selfhealing.services import get_security_notification_service
+            from selfhealing.services.security_notification_service import (
+                get_security_notification_service,
+            )
             
             service = get_security_notification_service()
             

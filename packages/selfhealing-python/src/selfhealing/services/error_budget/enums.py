@@ -176,7 +176,7 @@ def _send_failsafe_alert(component: str, error_message: str, fallback_action: st
 
     # 3. Prometheus 메트릭 증가 (가능한 경우)
     try:
-        from selfhealing.services.metrics import record_failsafe_triggered
+        from selfhealing.services.metrics.recorders import record_failsafe_triggered
 
         record_failsafe_triggered(component=component)
     except ImportError:

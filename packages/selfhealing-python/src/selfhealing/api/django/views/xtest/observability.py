@@ -78,7 +78,7 @@ class HealingTimelineView(XTestModeMixin, APIView):
                 ]
             
             # CB 상태 정보 추가
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             cb_service = get_circuit_breaker_service()
             
             cb_states = {}
@@ -141,7 +141,7 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         }
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -252,7 +252,7 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         matrix = {}
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             cb_service = get_circuit_breaker_service()
             
             for affected_service in test_services:
@@ -340,7 +340,7 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
         try:
             # 최근 이벤트 수집
             from selfhealing.services.event_bus import get_event_bus
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             bus = get_event_bus()
             history = bus.get_history(limit=100)

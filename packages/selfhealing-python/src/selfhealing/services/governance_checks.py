@@ -51,7 +51,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, TypeVar
 
 if TYPE_CHECKING:
-    from selfhealing.services.emergency_mode import EmergencyLevel
+    from selfhealing.services.emergency_mode.enums import EmergencyLevel
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
 
 logger = logging.getLogger(__name__)
@@ -355,10 +355,8 @@ def is_emergency_blocking(min_level: int = 2) -> Tuple[bool, str]:
         return cached
     
     try:
-        from selfhealing.services.emergency_mode import (
-            get_emergency_manager,
-            EmergencyLevel,
-        )
+        from selfhealing.services.emergency_mode import get_emergency_manager
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
         
         manager = get_emergency_manager()
         level = manager.get_current_level()

@@ -701,8 +701,8 @@ class ControlAPIService:
         start_time = time.time()
 
         from selfhealing.core.timezone import now as get_now
-        from selfhealing.services.metrics import (
-            get_registered_domains,
+        from selfhealing.services.metrics.registry import get_registered_domains
+        from selfhealing.services.metrics.updaters import (
             update_dlq_pending_gauges,
             update_retry_success_rates,
         )

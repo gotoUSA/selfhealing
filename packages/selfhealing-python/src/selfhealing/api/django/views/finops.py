@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def get_finops_service():
     """FinOps 서비스 인스턴스 가져오기"""
     try:
-        from selfhealing.services.finops import FinOpsService
+        from selfhealing.services.finops.service import FinOpsService
         return FinOpsService()
     except ImportError:
         return None

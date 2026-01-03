@@ -212,7 +212,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._l2_was_unhealthy = True
         
         try:
-            from selfhealing.services.metrics import record_l2_timeout
+            from selfhealing.services.metrics.recorders import record_l2_timeout
             record_l2_timeout(self._adapter_type, operation)
         except ImportError:
             pass
@@ -243,7 +243,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             )
         
         try:
-            from selfhealing.services.metrics import record_l2_sync_failure
+            from selfhealing.services.metrics.recorders import record_l2_sync_failure
             record_l2_sync_failure(self._adapter_type, operation)
         except ImportError:
             pass
@@ -268,7 +268,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._schedule_drift_reconciliation()
         
         try:
-            from selfhealing.services.metrics import record_l2_latency
+            from selfhealing.services.metrics.recorders import record_l2_latency
             record_l2_latency(self._adapter_type, elapsed_ms / 1000.0)
         except ImportError:
             pass

@@ -73,7 +73,10 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             )
         
         try:
-            from selfhealing.services import get_circuit_breaker_service, force_open_circuit
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+                force_open_circuit,
+            )
             
             cb_service = get_circuit_breaker_service()
             
@@ -163,7 +166,7 @@ class ResetCBView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -223,7 +226,7 @@ class CBStatusDetailView(XTestModeMixin, APIView):
         service_name = request.query_params.get("service")
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -302,7 +305,7 @@ class FastFailTestView(XTestModeMixin, APIView):
         service_name = request.query_params.get("service", "database")
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -366,7 +369,7 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
         force_close = request.data.get("force", False)
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -457,7 +460,7 @@ class TryRecoveryTransitionView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             
@@ -543,7 +546,7 @@ class SwitchToAutoModeView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
         
         try:
-            from selfhealing.services import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
             
             cb_service = get_circuit_breaker_service()
             

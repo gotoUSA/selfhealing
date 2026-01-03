@@ -882,7 +882,9 @@ def circuit_breaker_status(request):
     cb_service_state = "unknown"
     cb_service_failure_count = 0
     try:
-        from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker.convenience import (
+            get_circuit_breaker_service,
+        )
 
         cb_service = get_circuit_breaker_service()
         if cb_service and cb_service.is_enabled:

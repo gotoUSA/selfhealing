@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_learning_service():
     """Learning 서비스 인스턴스 가져오기"""
     try:
-        from selfhealing.services.learning import LearningService
+        from selfhealing.services.learning.service import LearningService
         return LearningService()
     except ImportError:
         return None

@@ -368,11 +368,9 @@ class ProviderRegistry:
     def _auto_register_audit_adapters(cls) -> None:
         """Auto-register default audit adapters."""
         try:
-            from selfhealing.adapters.audit import (
-                FileAuditLogAdapter,
-                StdoutAuditLogAdapter,
-                NullAuditLogAdapter,
-            )
+            from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
+            from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
+            from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter
             if "file" not in cls._audit_adapters:
                 cls.register_audit_adapter("file", FileAuditLogAdapter)
             if "stdout" not in cls._audit_adapters:
@@ -581,11 +579,9 @@ def _auto_register_adapters() -> None:
 
     # Audit adapters
     try:
-        from selfhealing.adapters.audit import (
-            FileAuditLogAdapter,
-            StdoutAuditLogAdapter,
-            NullAuditLogAdapter,
-        )
+        from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
+        from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
+        from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter
 
         ProviderRegistry.register_audit_adapter("file", FileAuditLogAdapter)
         ProviderRegistry.register_audit_adapter("stdout", StdoutAuditLogAdapter)

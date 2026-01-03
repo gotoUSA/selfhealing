@@ -29,18 +29,22 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
-from selfhealing.api.django.tiering import (
+from selfhealing.api.django.tiering.defaults import (
     DEFAULT_TIER_DEFINITIONS,
     DEFAULT_TIER_MAPPINGS,
     DEFAULT_TIER_OVERRIDES,
+)
+from selfhealing.api.django.tiering.enums import (
     OverrideIdentifierType,
     PatternType,
-    TierConfigValidator,
+)
+from selfhealing.api.django.tiering.validator import TierConfigValidator
+from selfhealing.api.django.tiering.models import (
     TierDefinition,
     TierMapping,
     TierOverride,
-    get_tier_registry,
 )
+from selfhealing.api.django.tiering.registry import get_tier_registry
 
 logger = logging.getLogger(__name__)
 

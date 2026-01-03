@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_compliance_service():
     """Compliance 서비스 인스턴스 가져오기"""
     try:
-        from selfhealing.services.compliance import ComplianceService
+        from selfhealing.services.compliance.service import ComplianceService
         return ComplianceService()
     except ImportError:
         return None

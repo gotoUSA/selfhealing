@@ -28,12 +28,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin, IsOperator
-from selfhealing.services.emergency_mode import (
-    get_emergency_manager,
+from selfhealing.services.emergency_mode import get_emergency_manager
+from selfhealing.services.emergency_mode.enums import (
     EmergencyLevel,
-    RecoveryGateConfig,
     EMERGENCY_LEVEL_RULES,
 )
+from selfhealing.services.emergency_mode.models import RecoveryGateConfig
 
 logger = logging.getLogger(__name__)
 

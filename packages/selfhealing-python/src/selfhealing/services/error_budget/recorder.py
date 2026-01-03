@@ -181,7 +181,7 @@ class FreezeDecisionRecorder:
             escalation_mention = config.get("escalation_mention", "@cto @security")
 
             # 메트릭 기록
-            from selfhealing.services.metrics import record_override_escalation
+            from selfhealing.services.metrics.recorders import record_override_escalation
 
             record_override_escalation(override_type.value)
 

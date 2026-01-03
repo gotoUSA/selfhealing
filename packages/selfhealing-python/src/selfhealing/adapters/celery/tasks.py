@@ -1020,7 +1020,7 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
             }
 
         # Emit heartbeat metric
-        from selfhealing.services.metrics import emit_heartbeat
+        from selfhealing.services.metrics.recorders import emit_heartbeat
 
         emit_heartbeat(component=component)
 
@@ -1040,7 +1040,7 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         logger.error(f"[Heartbeat] Failed to emit heartbeat: {e}", exc_info=True)
         # Even on failure, we try to emit a heartbeat to indicate partial functionality
         try:
-            from selfhealing.services.metrics import emit_heartbeat
+            from selfhealing.services.metrics.recorders import emit_heartbeat
 
             emit_heartbeat(component=f"{component}_degraded")
         except Exception:
@@ -1098,7 +1098,10 @@ def notify_failsafe_recovery(
             }
 
         # Record metric
-        from selfhealing.services.metrics import record_recovery_alert, record_failsafe_recovered
+        from selfhealing.services.metrics.recorders import (
+            record_recovery_alert,
+            record_failsafe_recovered,
+        )
 
         record_recovery_alert(component=component)
         record_failsafe_recovered(component=component)

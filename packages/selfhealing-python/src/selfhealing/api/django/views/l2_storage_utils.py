@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def get_layered_repository():
     """Get LayeredCircuitBreakerStateRepository if available."""
     try:
-        from selfhealing.services.factory import get_service_factory
+        from selfhealing.services.factory.base import get_service_factory
         factory = get_service_factory()
         repo = factory.get_circuit_breaker_state_repository()
         
