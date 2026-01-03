@@ -4,6 +4,7 @@ Self-Healing 코드 의존성 분석 스크립트
 - 모듈 간 import 관계 분석
 - 고아 모듈 식별
 - 가장 많이 참조되는 모듈/의존성이 많은 모듈 계산
+- re-export 패턴 탐지 및 직접 import 권장
 """
 
 import ast
@@ -47,6 +48,134 @@ def extract_imports(filepath: Path) -> list:
                 imports.append(node.module)
 
     return imports
+
+
+def extract_imports_detailed(filepath: Path) -> list:
+    """AST를 사용하여 상세 import 정보 추출 (re-export 분석용)"""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+            tree = ast.parse(content)
+    except:
+        return []
+
+    imports = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.module:
+                for alias in node.names:
+                    imports.append({
+                        "module": node.module,
+                        "name": alias.name,
+                        "alias": alias.asname,
+                        "level": node.level,  # 0=absolute, 1=relative (.), 2=(..) etc
+                        "line": node.lineno,
+                    })
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.append({
+                    "module": alias.name,
+                    "name": None,
+                    "alias": alias.asname,
+                    "level": 0,
+                    "line": node.lineno,
+                })
+    return imports
+
+
+def find_reexports(modules: dict) -> dict:
+    """
+    __init__.py에서 re-export하는 패턴 찾기
+    
+    Returns:
+        dict: {package_name: [(exported_name, original_module), ...]}
+    """
+    reexports = defaultdict(list)
+    
+    for mod_name, filepath in modules.items():
+        # __init__.py 파일만 분석
+        if not str(filepath).endswith("__init__.py"):
+            continue
+            
+        imports = extract_imports_detailed(filepath)
+        
+        for imp in imports:
+            # 상대 import (from .xxx import YYY)
+            if imp["level"] > 0 and imp["name"] and imp["name"] != "*":
+                # 패키지 경로 계산
+                if mod_name == "__init__":
+                    package = ""
+                else:
+                    package = mod_name
+                    
+                # 원본 모듈 경로
+                if imp["module"]:
+                    original_module = f"{package}.{imp['module']}" if package else imp["module"]
+                else:
+                    original_module = package
+                    
+                reexports[package].append({
+                    "name": imp["name"],
+                    "original_module": original_module,
+                    "line": imp["line"],
+                })
+    
+    return reexports
+
+
+def find_reexport_usages(modules: dict, reexports: dict) -> list:
+    """
+    re-export를 통해 import하는 곳 찾기
+    
+    Returns:
+        list: [(file, line, current_import, suggested_import), ...]
+    """
+    usages = []
+    
+    # re-export 맵 생성: {(package, name): original_module}
+    reexport_map = {}
+    for package, exports in reexports.items():
+        for exp in exports:
+            key = (package, exp["name"])
+            reexport_map[key] = exp["original_module"]
+    
+    for mod_name, filepath in modules.items():
+        # __init__.py는 제외 (re-export 정의하는 곳이니까)
+        if str(filepath).endswith("__init__.py"):
+            continue
+            
+        imports = extract_imports_detailed(filepath)
+        
+        for imp in imports:
+            if imp["level"] > 0:
+                continue  # 상대 import는 스킵
+                
+            module = imp["module"]
+            name = imp["name"]
+            
+            if not name or name == "*":
+                continue
+                
+            # selfhealing. 접두사 제거
+            if module and module.startswith("selfhealing."):
+                module = module[12:]
+            
+            # re-export 사용 여부 확인
+            key = (module, name)
+            if key in reexport_map:
+                original = reexport_map[key]
+                usages.append({
+                    "file": str(filepath.relative_to(PACKAGE_ROOT)),
+                    "module": mod_name,
+                    "line": imp["line"],
+                    "current": f"from selfhealing.{module} import {name}",
+                    "suggested": f"from selfhealing.{original} import {name}",
+                    "package": module,
+                    "name": name,
+                    "original_module": original,
+                })
+    
+    return usages
 
 
 def normalize_import(imp: str) -> str:
@@ -208,6 +337,82 @@ def main():
         json.dump(result, f, indent=2, ensure_ascii=False)
 
     print(f"\n✅ 결과 저장: {output_path}")
+
+    # === re-export 분석 ===
+    print("\n" + "=" * 60)
+    print("🔄 RE-EXPORT 패턴 분석")
+    print("=" * 60)
+    
+    reexports = find_reexports(modules)
+    total_reexports = sum(len(v) for v in reexports.values())
+    print(f"\n📦 re-export 정의: {total_reexports}개 ({len(reexports)}개 패키지)")
+    
+    # re-export가 많은 패키지 Top 10
+    reexport_counts = [(pkg, len(exports)) for pkg, exports in reexports.items()]
+    reexport_counts.sort(key=lambda x: -x[1])
+    
+    print("\n🏆 re-export가 많은 패키지 (Top 10):")
+    print("-" * 50)
+    for pkg, count in reexport_counts[:10]:
+        pkg_display = pkg if pkg else "(root __init__)"
+        print(f"    {pkg_display:<40} {count}개")
+    
+    # re-export 사용처 분석
+    reexport_usages = find_reexport_usages(modules, reexports)
+    print(f"\n⚠️  re-export를 통한 import: {len(reexport_usages)}개")
+    
+    if reexport_usages:
+        # 패키지별 그룹화
+        usage_by_package = defaultdict(list)
+        for usage in reexport_usages:
+            usage_by_package[usage["package"]].append(usage)
+        
+        print("\n📋 re-export 사용 현황 (직접 import 권장):")
+        print("-" * 70)
+        
+        for pkg in sorted(usage_by_package.keys()):
+            usages = usage_by_package[pkg]
+            print(f"\n  📦 {pkg} ({len(usages)}개)")
+            for u in usages[:5]:  # 패키지당 최대 5개만 표시
+                print(f"      {u['file']}:{u['line']}")
+                print(f"        현재: {u['current']}")
+                print(f"        권장: {u['suggested']}")
+            if len(usages) > 5:
+                print(f"      ... 외 {len(usages) - 5}개")
+    
+    # JSON에 re-export 정보 추가
+    result["reexports"] = {
+        "total_definitions": total_reexports,
+        "packages": {pkg: len(exports) for pkg, exports in reexports.items()},
+        "usage_count": len(reexport_usages),
+        "usages": reexport_usages,
+    }
+    
+    # JSON 다시 저장
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+    
+    print(f"\n✅ re-export 분석 결과 추가 저장: {output_path}")
+    
+    # 정리 작업 요약
+    if reexport_usages:
+        print("\n" + "=" * 60)
+        print("📝 권장 조치")
+        print("=" * 60)
+        print(f"""
+1. re-export 사용 import {len(reexport_usages)}개를 직접 import로 변경
+   - 유지보수성 향상
+   - IDE 지원 개선 (정의로 이동)
+   - 순환 import 위험 감소
+
+2. __init__.py의 re-export 제거 검토
+   - re-export 정의: {total_reexports}개
+   - 사용되지 않는 re-export 정리 가능
+
+3. 직접 import 예시:
+   ❌ from selfhealing.services import CircuitBreakerService
+   ✅ from selfhealing.services.circuit_breaker.service import CircuitBreakerService
+""")
 
 
 if __name__ == "__main__":

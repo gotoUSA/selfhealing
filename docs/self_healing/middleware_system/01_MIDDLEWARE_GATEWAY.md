@@ -48,6 +48,7 @@ HTTP Request
 │ │ [3] TieringMiddleware (Emergency Load Shed) │ │
 │ ├─────────────────────────────────────────────┤ │
 │ │ [4] SelfHealingMiddleware (CB + DLQ)        │ │
+│ │     ⚠️ Retry 없음 - 감지/적재만 수행         │ │
 │ ├─────────────────────────────────────────────┤ │
 │ │ [5] ActorContextMiddleware (사용자 추적)     │ │
 │ ├─────────────────────────────────────────────┤ │
@@ -67,6 +68,47 @@ HTTP Request
     │
     ▼
   View / Handler
+    │
+    └─ 실패 시 ──▶ DLQ 적재 ──▶ 비동기 Replay (Celery)
+```
+
+### 1.3 Retry/Replay 아키텍처
+
+> **중요**: SelfHealingMiddleware는 즉시 Retry를 수행하지 않습니다.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Self-Healing 복원력 계층 구조                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ Layer 1: 미들웨어 (동기, 빠른 응답)                          │   │
+│  │ ──────────────────────────────────────────────────────────  │   │
+│  │ • SelfHealingMiddleware: 감지 + CB 기록 + DLQ 적재          │   │
+│  │ • PoolCircuitBreakerMiddleware: Pool 고갈 감지               │   │
+│  │ • ❌ 즉시 Retry 없음 (응답 지연 방지)                         │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                      │
+│                              ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ Layer 2: View/Service (동기 Retry 가능)                      │   │
+│  │ ──────────────────────────────────────────────────────────  │   │
+│  │ • @with_retry 데코레이터                                     │   │
+│  │ • RetryHandler.execute()                                    │   │
+│  │ • 최대 2-3회 즉시 재시도 (Exponential Backoff)               │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                      │
+│                              ▼ (실패 시)                            │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ Layer 3: 비동기 Replay (Celery, 배치)                        │   │
+│  │ ──────────────────────────────────────────────────────────  │   │
+│  │ • DLQService.replay() - 배치 Replay                         │   │
+│  │ • replay_failed_operations (5분 주기)                        │   │
+│  │ • ReplayHandler - 도메인별 비즈니스 로직                      │   │
+│  │ • CB 복구 시 자동 트리거                                      │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -134,14 +176,49 @@ class HealthBridgeMiddleware:
 
 | 구성요소 | 설명 |
 |----------|------|
-| Circuit Breaker 체크 | 요청 전 CB 상태 확인 |
-| 예외 캡처 | 실패 시 DLQ 전송 |
+| Circuit Breaker 체크 | 요청 전 CB 상태 확인, OPEN 시 선제적 DLQ 적재 |
+| 예외 캡처 | DB 오류/5xx 감지 시 자동 CB 실패 기록 |
+| DLQ 자동 적재 | 실패한 요청을 DLQ에 저장 (recommended_action="replay") |
 | 컨텍스트 전파 | Request ID, Actor 정보 전파 |
 
+**⚠️ Retry/Replay 아키텍처 주의사항**:
+
+| 기능 | 미들웨어 레벨 | 설명 |
+|------|-------------|------|
+| **즉시 Retry** | ❌ 없음 | 미들웨어는 즉시 재시도하지 않음 (응답 지연 방지) |
+| **DLQ 적재** | ✅ 있음 | 실패 시 `_store_to_dlq()`로 자동 저장 |
+| **비동기 Replay** | ⚠️ 간접 | DLQ 저장 후 별도 서비스에서 처리 |
+
+**설계 의도**: 미들웨어는 빠른 실패 감지 및 적재에 집중하고, 재시도/Replay는 비동기 레이어에서 처리하여 시스템 안정성 확보
+
+**Retry/Replay 처리 흐름**:
+```
+SelfHealingMiddleware (동기)
+    │
+    ├─ 실패 감지 → CB 기록 + DLQ 적재
+    │
+    └─ 503 응답 (retry_after=30)
+           │
+           ▼
+┌─────────────────────────────────────┐
+│ 비동기 Replay 레이어                 │
+│ ─────────────────────────────────── │
+│ • DLQService.replay()               │
+│ • Celery: replay_failed_operations  │
+│ • 5분 주기 배치 실행                 │
+│ • RetryHandler + BackoffCalculator  │
+└─────────────────────────────────────┘
+```
+
+**미들웨어 레벨 Retry가 필요한 경우** ([02_LOGIC_ENGINE.md](02_LOGIC_ENGINE.md) §2.6 참조):
+- `@with_retry` 데코레이터를 View/Service 레벨에서 사용
+- `RetryHandler`를 직접 호출하여 동기 재시도 구현
+
 **연동 서비스** ([02_LOGIC_ENGINE.md](02_LOGIC_ENGINE.md) 참조):
-- `CircuitBreakerService`
-- `DLQService`
-- `ForensicContextService`
+- `CircuitBreakerService` - 상태 관리
+- `DLQService` - 적재 및 Replay
+- `RetryHandler` - 재시도 로직 (View/Service 레벨)
+- `ReplayHandler` - 도메인별 Replay 핸들러
 
 **부하 테스트**: `load_tests/scenarios/chaos/stage16_healing_proof_v6.py` ✅
 
@@ -198,7 +275,7 @@ RATE_LIMIT_CONFIG = {
 
 **비활성화**: `SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False`
 
-**부하 테스트**: 
+**부하 테스트**:
 - `load_tests/scenarios/integration/stage16_healing_proof.py` ✅
 - `load_tests/scenarios/chaos/stage26_connection_pool.py` ✅
 - `load_tests/scenarios/chaos/stage26_extreme_pool_test.py` ✅

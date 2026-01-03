@@ -1,19 +1,27 @@
 # Self-Healing 코드 분석 보고서
 
-> **Generated**: 2026-01-02 (Updated after middleware registration)
-> **Tools Used**: vulture, pipdeptree, custom AST analyzer
+> **Generated**: 2026-01-03 (AST 분석기 재실행)
+> **Tools Used**: vulture, pipdeptree, custom AST analyzer (`scripts/analyze_dependencies.py`)
 
 ---
 
 ## 📊 분석 요약
 
-| 항목 | 값 |
-|------|-----|
-| 전체 모듈 수 | 365개 |
-| 의존성이 있는 모듈 | 260개 (+6) |
-| 독립(고아) 모듈 | 102개 (-6) |
+| 항목 | 수치 |
+|------|------|
+| 전체 모듈 수 | 362개 |
+| 의존성이 있는 모듈 | 253개 |
+| 독립(고아) 모듈 | **102개** |
 
-> **Note**: 2026-01-02 미들웨어 통합으로 고아 모듈 6개 감소
+### 고아 모듈 분류
+
+| 분류 | 수량 | 설명 |
+|------|------|------|
+| 엔트리포인트/미들웨어 | 8개 | 정상 (외부에서 직접 호출) |
+| 검토 필요 | **94개** | 연결 작업 또는 삭제 검토 필요 |
+
+> **Note**: `__init__.py`에서 re-export 하더라도 **실제 import되지 않으면** 고아로 분류됨.
+> AST 분석기는 `from package import module` 형태의 실제 import만 추적함.
 
 ---
 
@@ -38,32 +46,32 @@
 
 | 순위 | 모듈 | 참조 횟수 |
 |------|------|----------|
-| 1 | `core.timezone` | 34회 |
-| 2 | `services.runtime_config` | 25회 |
-| 3 | `interfaces.repositories` | 24회 |
-| 4 | `models` | 23회 |
-| 5 | `core.config` | 17회 |
-| 6 | `interfaces.audit_adapter` | 16회 |
-| 7 | `api.django.permissions` | 16회 |
-| 8 | `factory` | 14회 |
-| 9 | `config` | 13회 |
-| 10 | `audit` | 12회 |
-| 11 | `adapters.django.models` | 9회 |
-| 12 | `core.state_backend` | 8회 |
-| 13 | `interfaces.cache_provider` | 8회 |
-| 14 | `adapters.django_repositories` | 7회 |
+| 1 | `core.timezone` | 36회 |
+| 2 | `services.runtime_config` | 26회 |
+| 3 | `models` | 23회 |
+| 4 | `factory` | 17회 |
+| 5 | `interfaces.repositories` | 17회 |
+| 6 | `core.config` | 16회 |
+| 7 | `interfaces.audit_adapter` | 16회 |
+| 8 | `api.django.permissions` | 16회 |
+| 9 | `audit` | 14회 |
+| 10 | `config` | 13회 |
+| 11 | `services` | 12회 |
+| 12 | `services.dlq_service` | 9회 |
+| 13 | `core.state_backend` | 8회 |
+| 14 | `interfaces.cache_provider` | 8회 |
 | 15 | `audit.event_buffer` | 7회 |
-| 16 | `services.dlq_service` | 7회 |
-| 17 | `services.error_budget_service` | 7회 |
-| 18 | `services` | 7회 |
-| 19 | `audit.backends.base` | 7회 |
-| 20 | `services.metrics` | 7회 |
+| 16 | `services.error_budget_service` | 7회 |
+| 17 | `audit.backends.base` | 7회 |
+| 18 | `services.metrics` | 7회 |
+| 19 | `adapters` | 6회 |
+| 20 | `interfaces.rate_limit_storage` | 6회 |
 
 **해석**:
-- `core.timezone`이 가장 핵심적인 유틸리티 (34회 참조)
+- `core.timezone`이 가장 핵심적인 유틸리티 (36회 참조)
 - `interfaces.*`가 많이 참조됨 → 인터페이스 기반 설계 잘 됨
 - `models` 모듈이 23회로 상위권 → 도메인 모델 중심 설계
-- `factory`가 14회 참조 → DI 패턴 적용 확인
+- `factory`가 17회 참조 → DI 패턴 적용 확인
 
 ---
 
@@ -76,290 +84,216 @@
 | 3 | `core` | 19개 |
 | 4 | `factory` | 18개 |
 | 5 | `api.django.views` | 13개 |
-| 6 | `services.circuit_breaker.service` | 11개 |
-| 7 | `services.error_budget_gate.gate` | 11개 |
-| 8 | `services.dlq_service` | 10개 |
-| 9 | `services.execution_services` | 9개 |
-| 10 | `services.factory.base` | 9개 |
-| 11 | `interfaces` | 8개 |
+| 6 | `services.error_budget_gate.gate` | 11개 |
+| 7 | `services.circuit_breaker.service` | 10개 |
+| 8 | `interfaces` | 9개 |
+| 9 | `services.dlq_service` | 9개 |
+| 10 | `services.execution_services` | 9개 |
+| 11 | `services.factory.base` | 9개 |
 | 12 | `metrics.reconciler` | 8개 |
-| 13 | `adapters.celery.tasks` | 8개 |
-| 14 | `adapters.django.apps` | 8개 |
-| 15 | `services.factory.registry` | 8개 |
+| 13 | `services.factory.registry` | 8개 |
+| 14 | `metrics` | 7개 |
+| 15 | `services.replay_service` | 7개 |
 
 **해석**:
 - `urls`, `__init__` 파일들이 많은 의존성 → 정상 (라우팅/재export)
 - `factory`가 18개 의존성 → DI 컨테이너로서 적절
-- `services.factory.*` 패키지가 추가됨 → 팩토리 패턴 확장
+- `services.factory.*` 패키지가 상위권 → 팩토리 패턴 확장
 
 ---
 
-## ⚠️ 독립(고아) 모듈 (102개)
+## 🏝️ 고아 모듈 전체 목록 (102개)
 
 다른 모듈에서 import되지 않는 모듈들입니다.
-**이유**: 엔트리포인트, 설정 파일, 또는 실제 미사용 코드
 
-### ✅ 2026-01-02 해결된 고아 모듈 (6개 → 등록 완료)
+### 🟢 엔트리포인트/미들웨어 (정상) - 8개
 
-| 모듈 | 해결 방법 |
-|------|----------|
-| `api.django.tiering.middleware` | settings.py MIDDLEWARE에 등록 |
-| `api.django.pool_circuit_breaker` | settings.py MIDDLEWARE에 등록 |
-| `api.django.audit_middleware` | settings.py MIDDLEWARE에 등록 |
-| `audit.trace.trace_id_middleware` | settings.py MIDDLEWARE에 등록 |
-| `myproject.middleware.actor_middleware` | settings.py MIDDLEWARE에 등록 |
-| `myproject.middleware.pool_timeout_middleware` | settings.py MIDDLEWARE에 등록 |
-
-### 정상적인 고아 모듈 (엔트리포인트/설정)
+외부에서 직접 호출되므로 고아가 정상입니다.
 
 | 모듈 | 이유 |
 |------|------|
-| `api.django.urls` | URL 라우팅 (settings.py에서 include) |
-| `api.django.middleware` | 미들웨어 (settings.py에서 등록) ✅ |
-| `adapters.django.admin` | Django Admin (자동 로드) |
-| `adapters.django.apps` | Django AppConfig |
-| `adapters.django.migrations.*` | 마이그레이션 파일 (3개) |
 | `adapters.fastapi.middleware` | FastAPI 미들웨어 (app에서 등록) |
 | `adapters.fastapi.routes` | FastAPI 라우트 (app에서 등록) |
-| `tasks.*` | Celery 태스크 (Beat에서 실행) - 4개 |
+| `api.django.tiering.middleware` | 미들웨어 (settings.py에서 등록) |
+| `api.django.urls` | URL 라우팅 (settings.py에서 include) |
+| `tasks` | Celery 태스크 패키지 |
+| `tasks.chaos_scheduler` | Celery Beat 태스크 |
+| `tasks.config_apply` | Celery Beat 태스크 |
+| `tasks.governance` | Celery Beat 태스크 |
 
-### 검토 필요한 고아 모듈 (88개)
+---
 
-#### 어댑터 관련
-| 모듈 | 상태 |
-|------|------|
-| `adapters.alert.file_adapter` | 등록되었으나 미사용 가능성 |
-| `adapters.alert.null_adapter` | 테스트용 |
-| `adapters.alert.stdout_adapter` | 개발용 |
-| `adapters.audit.null_adapter` | 테스트용 |
-| `adapters.audit.stdout_adapter` | 개발용 |
-| `adapters.audit.worm_adapters` | WORM 규정 준수용 |
-| `adapters.metrics.auto_tuning_adapter` | 미연결 가능성 ⚠️ |
-| `adapters.observability.opentelemetry.*` | OTel 통합 (선택적 사용) - 4개 |
-| `adapters.resilient` | ResilientStorageBackend 패키지 |
+### 🔴 검토 필요 - 94개
 
-#### API 관련
-| 모듈 | 상태 |
-|------|------|
-| `api.django.tiering.*` | Tiering 시스템 - 5개 (middleware 제외, `__init__.py`에서 re-export) |
-| `api.django.reauthentication` | 재인증 (View 데코레이터로 사용) |
-| `api.django.throttle_adapter` | 쓰로틀 어댑터 (DRF throttle_classes에 등록) |
-| `api.django.views.error_budget.*` | Error Budget 뷰 - 3개 |
-| `api.django.views.xtest.*` | 테스트 전용 뷰 - 6개 |
+다음 모듈들은 **실제로 import되지 않음**. 연결 작업 또는 삭제 검토 필요.
 
-#### 서비스 관련
-| 모듈 | 상태 |
-|------|------|
-| `services.circuit_breaker.*` | Circuit Breaker 하위 모듈 - 6개 |
-| `services.emergency_mode.*` | Emergency Mode 하위 모듈 - 4개 |
-| `services.error_budget.reconciliation.*` | Reconciliation 하위 모듈 - 5개 |
-| `services.factory.*` | Factory 패턴 하위 모듈 - 5개 |
-| `services.finops.*` | FinOps 하위 모듈 - 2개 |
-| `services.metrics.*` | Metrics 하위 모듈 - 5개 |
-| `services.runtime_config.*` | Runtime Config 하위 모듈 - 7개 |
-| `services.blast_radius.service` | Blast Radius 서비스 |
-| `services.chaos.*` | Chaos Engineering 하위 모듈 - 3개 |
-| `services.compliance.service` | Compliance 서비스 |
-| `services.learning.service` | Learning 서비스 |
-| `services.rollback.service` | Rollback 서비스 |
-| `services.throttle` | Throttle 패키지 |
+#### adapters 패키지 (19개)
 
-#### 기타
-| 모듈 | 상태 |
-|------|------|
-| `audit.api` | Audit API |
-| `audit.continuous_audit_api` | Continuous Audit API |
-| `config_tracker` | Config Tracker |
-| `context` | Context 패키지 |
-| `interfaces.notification` | Notification 인터페이스 |
-| `utils` | Utils 패키지 |
+| 모듈 | 권장 조치 |
+|------|----------|
+| `adapters.airgap` | 환경변수 기반 활성화 확인 |
+| `adapters.alert.file_adapter` | `adapters.alert/__init__.py` re-export |
+| `adapters.alert.null_adapter` | `adapters.alert/__init__.py` re-export |
+| `adapters.alert.stdout_adapter` | `adapters.alert/__init__.py` re-export |
+| `adapters.audit.null_adapter` | `adapters.audit/__init__.py` re-export |
+| `adapters.audit.stdout_adapter` | `adapters.audit/__init__.py` re-export |
+| `adapters.audit.worm_adapters` | `adapters.audit/__init__.py` re-export |
+| `adapters.celery` | 용도 확인 |
+| `adapters.fastapi` | 패키지 `__init__.py` 확인 |
+| `adapters.fastapi.dependencies` | FastAPI 의존성 (app에서 등록) |
+| `adapters.frameworks` | 용도 불명 - 삭제 검토 |
+| `adapters.metrics` | 패키지 `__init__.py` 확인 |
+| `adapters.metrics.auto_tuning_adapter` | factory 등록 또는 삭제 |
+| `adapters.observability.opentelemetry.config` | OTel 활성화 시 사용 |
+| `adapters.observability.opentelemetry.events` | OTel 활성화 시 사용 |
+| `adapters.observability.opentelemetry.noop` | OTel 비활성화 시 기본값 |
+| `adapters.observability.opentelemetry.spans` | OTel 활성화 시 사용 |
+| `adapters.resilient` | factory 등록 필요 |
+| `adapters.statistics` | 용도 확인 |
 
-### 전체 고아 모듈 목록 (108개)
+#### api 패키지 (18개)
 
-```
-__init__
-adapters.airgap
-adapters.alert.file_adapter
-adapters.alert.null_adapter
-adapters.alert.stdout_adapter
-adapters.audit.null_adapter
-adapters.audit.stdout_adapter
-adapters.audit.worm_adapters
-adapters.celery
-adapters.django.admin
-adapters.django.apps
-adapters.django.migrations
-adapters.django.migrations.0001_initial
-adapters.django.migrations.0002_add_entity_fields
-adapters.fastapi
-adapters.fastapi.dependencies
-adapters.fastapi.middleware
-adapters.fastapi.routes
-adapters.frameworks
-adapters.metrics
-adapters.metrics.auto_tuning_adapter
-adapters.observability.opentelemetry.config
-adapters.observability.opentelemetry.events
-adapters.observability.opentelemetry.noop
-adapters.observability.opentelemetry.spans
-adapters.resilient
-api
-api.django
-api.django.middleware
-api.django.reauthentication
-api.django.throttle_adapter
-api.django.tiering.circuit_breaker
-api.django.tiering.defaults
-api.django.tiering.enums
-api.django.tiering.middleware
-api.django.tiering.models
-api.django.tiering.registry
-api.django.tiering.validator
-api.django.urls
-api.django.views.error_budget.deployment
-api.django.views.error_budget.reconciliation
-api.django.views.error_budget.status
-api.django.views.xtest
-api.django.views.xtest.base
-api.django.views.xtest.circuit_breaker
-api.django.views.xtest.error_budget
-api.django.views.xtest.observability
-api.django.views.xtest.snapshot
-audit.api
-audit.continuous_audit_api
-config_tracker
-context
-core
-interfaces.notification
-services.backoff_calculator
-services.blast_radius.service
-services.chaos
-services.chaos.experiments
-services.chaos.scheduler_models
-services.chaos_context
-services.circuit_breaker.config
-services.circuit_breaker.convenience
-services.circuit_breaker.manual_control
-services.circuit_breaker.protection
-services.circuit_breaker.rate_limit_tracker
-services.circuit_breaker.service
-services.compliance.service
-services.corruption_shield
-services.emergency_mode.enums
-services.emergency_mode.manager
-services.emergency_mode.models
-services.emergency_mode.recovery_gate
-services.error_budget.reconciliation.enums
-services.error_budget.reconciliation.models
-services.error_budget.reconciliation.period_tracker
-services.error_budget.reconciliation.service
-services.error_budget.reconciliation.shadow_calculator
-services.factory.base
-services.factory.registry
-services.factory.repository
-services.factory.service
-services.factory.singleton
-services.finops.models
-services.finops.service
-services.forensic_context
-services.idempotency_service
-services.learning.service
-services.metrics.alerting_rules
-services.metrics.definitions
-services.metrics.recorders
-services.metrics.registry
-services.metrics.updaters
-services.rate_limit_coordinator
-services.retry_handler
-services.rollback.service
-services.runtime_config.advanced_configs
-services.runtime_config.approval
-services.runtime_config.base
-services.runtime_config.chaos_storage
-services.runtime_config.constants
-services.runtime_config.core_configs
-services.runtime_config.strategy
-services.throttle
-tasks.chaos_scheduler
-tasks.config_apply
-tasks.drift_detection
-tasks.governance
-utils
-```
+| 모듈 | 권장 조치 |
+|------|----------|
+| `api` | 패키지 `__init__.py` |
+| `api.django` | 패키지 `__init__.py` |
+| `api.django.reauthentication` | View 데코레이터 (필요 시 사용) |
+| `api.django.throttle_adapter` | View throttle_classes 등록 |
+| `api.django.tiering.circuit_breaker` | tiering `__init__.py` re-export |
+| `api.django.tiering.defaults` | tiering `__init__.py` re-export |
+| `api.django.tiering.enums` | tiering `__init__.py` re-export |
+| `api.django.tiering.models` | tiering `__init__.py` re-export |
+| `api.django.tiering.registry` | tiering `__init__.py` re-export |
+| `api.django.tiering.validator` | tiering `__init__.py` re-export |
+| `api.django.views.error_budget.deployment` | views `__init__.py` re-export |
+| `api.django.views.error_budget.reconciliation` | views `__init__.py` re-export |
+| `api.django.views.error_budget.status` | views `__init__.py` re-export |
+| `api.django.views.xtest` | 테스트 전용 (DEBUG 시) |
+| `api.django.views.xtest.base` | 테스트 전용 |
+| `api.django.views.xtest.circuit_breaker` | 테스트 전용 |
+| `api.django.views.xtest.error_budget` | 테스트 전용 |
+| `api.django.views.xtest.observability` | 테스트 전용 |
+| `api.django.views.xtest.snapshot` | 테스트 전용 |
+
+#### audit 패키지 (2개)
+
+| 모듈 | 권장 조치 |
+|------|----------|
+| `audit.api` | urls.py 연결 확인 |
+| `audit.continuous_audit_api` | urls.py 연결 확인 |
+
+#### services 패키지 (45개)
+
+| 모듈 | 권장 조치 |
+|------|----------|
+| `services.backoff_calculator` | `services/__init__.py` re-export |
+| `services.blast_radius.service` | `services.blast_radius/__init__.py` re-export |
+| `services.chaos` | 패키지 `__init__.py` |
+| `services.chaos.experiments` | `services.chaos/__init__.py` re-export |
+| `services.chaos.scheduler_models` | `services.chaos/__init__.py` re-export |
+| `services.chaos_context` | `services/__init__.py` re-export |
+| `services.circuit_breaker.config` | `services.circuit_breaker/__init__.py` re-export |
+| `services.circuit_breaker.convenience` | `services.circuit_breaker/__init__.py` re-export |
+| `services.circuit_breaker.manual_control` | `services.circuit_breaker/__init__.py` re-export |
+| `services.circuit_breaker.protection` | `services.circuit_breaker/__init__.py` re-export |
+| `services.circuit_breaker.rate_limit_tracker` | `services.circuit_breaker/__init__.py` re-export |
+| `services.circuit_breaker.service` | `services.circuit_breaker/__init__.py` re-export |
+| `services.corruption_shield` | `services/__init__.py` re-export |
+| `services.emergency_mode.enums` | `services.emergency_mode/__init__.py` re-export |
+| `services.emergency_mode.manager` | `services.emergency_mode/__init__.py` re-export |
+| `services.emergency_mode.models` | `services.emergency_mode/__init__.py` re-export |
+| `services.emergency_mode.recovery_gate` | `services.emergency_mode/__init__.py` re-export |
+| `services.error_budget.reconciliation.enums` | reconciliation `__init__.py` re-export |
+| `services.error_budget.reconciliation.models` | reconciliation `__init__.py` re-export |
+| `services.error_budget.reconciliation.period_tracker` | reconciliation `__init__.py` re-export |
+| `services.error_budget.reconciliation.service` | reconciliation `__init__.py` re-export |
+| `services.error_budget.reconciliation.shadow_calculator` | reconciliation `__init__.py` re-export |
+| `services.factory.base` | `services.factory/__init__.py` re-export |
+| `services.factory.registry` | `services.factory/__init__.py` re-export |
+| `services.factory.repository` | `services.factory/__init__.py` re-export |
+| `services.factory.service` | `services.factory/__init__.py` re-export |
+| `services.factory.singleton` | `services.factory/__init__.py` re-export |
+| `services.finops.models` | `services.finops/__init__.py` re-export |
+| `services.finops.service` | `services.finops/__init__.py` re-export |
+| `services.forensic_context` | `services/__init__.py` re-export |
+| `services.idempotency_service` | `services/__init__.py` re-export |
+| `services.learning.service` | `services.learning/__init__.py` re-export |
+| `services.metrics.alerting_rules` | `services.metrics/__init__.py` re-export |
+| `services.metrics.definitions` | `services.metrics/__init__.py` re-export |
+| `services.metrics.recorders` | `services.metrics/__init__.py` re-export |
+| `services.metrics.registry` | `services.metrics/__init__.py` re-export |
+| `services.metrics.updaters` | `services.metrics/__init__.py` re-export |
+| `services.rate_limit_coordinator` | `services/__init__.py` re-export |
+| `services.retry_handler` | `services/__init__.py` re-export |
+| `services.rollback.service` | `services.rollback/__init__.py` re-export |
+| `services.runtime_config.advanced_configs` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.approval` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.base` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.chaos_storage` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.constants` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.core_configs` | runtime_config `__init__.py` re-export |
+| `services.runtime_config.strategy` | runtime_config `__init__.py` re-export |
+| `services.throttle` | `services/__init__.py` re-export |
+| `services.unified_notification` | `services/__init__.py` re-export |
+
+#### 기타 (5개)
+
+| 모듈 | 권장 조치 |
+|------|----------|
+| `__init__` | 루트 패키지 |
+| `config_tracker` | `selfhealing/__init__.py` re-export |
+| `context` | 용도 확인 후 처리 |
+| `interfaces.notification` | `interfaces/__init__.py` re-export |
+| `utils` | 필요 시 re-export |
 
 ---
 
 ## 🔗 연결 상태 요약
 
-### ✅ 잘 연결된 컴포넌트
+### ✅ 핵심 연결 상태
 
-| 컴포넌트 | 연결 상태 |
-|---------|----------|
-| `factory` → `interfaces.*` | ✅ DI 패턴 (18개 의존성) |
-| `services.*` → `interfaces.repositories` | ✅ 저장소 추상화 (24회 참조) |
-| `api.django.*` → `services.*` | ✅ View-Service 분리 |
-| `audit.*` → `interfaces.audit_adapter` | ✅ 감사 추상화 (16회 참조) |
-| `core.timezone` | ✅ 핵심 유틸리티 (34회 참조) |
-| `services.runtime_config` | ✅ 런타임 설정 (25회 참조) |
-| `models` | ✅ 도메인 모델 (23회 참조) |
-| `adapters.django.models` | ✅ Django 모델 (9회 참조) |
-| `api.django.tiering` | ✅ 미들웨어 등록 완료 (2026-01-02) |
-| `api.django.pool_circuit_breaker` | ✅ 미들웨어 등록 완료 (2026-01-02) |
-| `api.django.audit_middleware` | ✅ 미들웨어 등록 완료 (2026-01-02) |
-| `audit.trace` | ✅ 미들웨어 등록 완료 (2026-01-02) |
+| 컴포넌트 | 연결 상태 | 비고 |
+|---------|----------|------|
+| `factory` → `interfaces.*` | ✅ DI 패턴 | 17회 참조 |
+| `services.*` → `interfaces.repositories` | ✅ 저장소 추상화 | 17회 참조 |
+| `api.django.*` → `services.*` | ✅ View-Service 분리 | |
+| `audit.*` → `interfaces.audit_adapter` | ✅ 감사 추상화 | 16회 참조 |
+| `core.timezone` | ✅ 핵심 유틸리티 | 36회 참조 (1위) |
+| `services.runtime_config` | ✅ 런타임 설정 | 26회 참조 (2위) |
 
-### ⚠️ 연결 검토 필요
+### ⚠️ 연결 작업 필요
 
-| 컴포넌트 | 상태 |
-|---------|------|
-| `api.django.throttle_adapter` | DRF throttle_classes에 선택적 등록 |
-| `api.django.reauthentication` | View 데코레이터로 사용 (필요 시) |
-| `adapters.metrics.auto_tuning_adapter` | factory 미등록 |
-| `adapters.resilient` | 새로 추가됨 - 연결 필요 |
-| `services.factory.*` | 새 팩토리 패턴 - 통합 필요 |
-| `services.circuit_breaker.*` | 하위 모듈 미노출 (6개) |
-| `services.emergency_mode.*` | 하위 모듈 미노출 (4개) |
-| `services.error_budget.reconciliation.*` | 하위 모듈 미노출 (5개) |
+| 카테고리 | 작업 대상 | 모듈 수 |
+|---------|----------|--------|
+| **services 하위 패키지** | 각 `__init__.py`에 re-export 추가 | 45개 |
+| **api 하위 패키지** | 각 `__init__.py`에 re-export 추가 | 18개 |
+| **adapters 하위 패키지** | 각 `__init__.py`에 re-export 추가 | 19개 |
+| **기타** | 루트/인터페이스 정리 | 5개 |
 
 ---
 
-## 📊 변경 추이 (이전 vs 현재)
+## 📋 권장 조치
 
-| 항목 | 이전 (v2.2) | 현재 (v2.3) | 변화 |
-|------|-------------|-------------|------|
-| 전체 모듈 수 | 365개 | 365개 | 0 |
-| 의존성 있는 모듈 | 254개 | 260개 | +6 |
-| 고아 모듈 | 108개 | 102개 | -6 |
-| 등록된 미들웨어 | 6개 | 11개 | +5 |
+### 1. 🔴 필수 조치 (94개 모듈)
 
-**분석**:
-- 미들웨어 통합 완료 (+5): TieringMiddleware, PoolCircuitBreakerMiddleware, AuditMiddleware 등
-- 고아 모듈 감소 (-6): 미등록 미들웨어들이 settings.py에 등록됨
-- 활성화/비활성화 토글 추가: 환경변수 또는 settings.py로 제어 가능
+상세 작업 계획: [MODULE_INTEGRATION_WORKPLAN.md](MODULE_INTEGRATION_WORKPLAN.md) 참조
 
----
+| 우선순위 | 작업 | 대상 |
+|---------|------|------|
+| P1 | `services.*` 하위 패키지 re-export | 45개 모듈 |
+| P2 | `api.*` 하위 패키지 re-export | 18개 모듈 |
+| P3 | `adapters.*` 하위 패키지 re-export | 19개 모듈 |
+| P4 | 기타 (루트, interfaces) 정리 | 5개 모듈 |
 
-## 📋 권장 조치 (업데이트됨)
+### 2. 🟢 정상 (조치 불필요) - 8개
 
-### 1. ✅ 완료된 조치
-- ~~미등록 미들웨어 등록~~ → 2026-01-02 완료
-- ~~하위 모듈 __init__.py 정리~~ → api.django, myproject.middleware 완료
+- 엔트리포인트/미들웨어: 외부에서 직접 호출되므로 고아가 정상
 
-### 2. 남은 조치
-- `api.django.throttle_adapter` → 필요 시 View별 throttle_classes 등록
-- `adapters.resilient` → factory에 등록 검토
-- `services.*` 하위 모듈 → 부모 `__init__.py`에서 re-export
+### 3. 🟡 선택적 조치 (필요 시)
 
-### 3. 새로운 패키지 통합
-- `adapters.resilient` → factory에 등록
-- `services.factory.*` → 기존 factory와 통합 검토
-
-### 4. 순환 의존성 검사
-- `import-linter` 설정 추가하여 레이어 규칙 강제
-
-### 5. 문서 업데이트
-- 고아 모듈 중 의도적인 것들 문서화
-- 미등록 미들웨어 활성화 가이드 작성
+- `adapters.observability.opentelemetry.*` - OTel 통합 시
+- `api.django.views.xtest.*` - 테스트 환경에서만
+- `adapters.resilient` - ResilientStorageBackend 사용 시
 
 ---
 

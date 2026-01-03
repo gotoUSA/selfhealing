@@ -1,27 +1,31 @@
 {
-  "total_modules": 365,
-  "has_dependencies": 254,
-  "orphan_count": 108,
+  "total_modules": 362,
+  "has_dependencies": 253,
+  "orphan_count": 102,
   "top_referenced": [
     [
       "core.timezone",
-      34
+      36
     ],
     [
       "services.runtime_config",
-      25
-    ],
-    [
-      "interfaces.repositories",
-      24
+      26
     ],
     [
       "models",
       23
     ],
     [
-      "core.config",
+      "factory",
       17
+    ],
+    [
+      "interfaces.repositories",
+      17
+    ],
+    [
+      "core.config",
+      16
     ],
     [
       "interfaces.audit_adapter",
@@ -32,7 +36,7 @@
       16
     ],
     [
-      "factory",
+      "audit",
       14
     ],
     [
@@ -40,11 +44,11 @@
       13
     ],
     [
-      "audit",
+      "services",
       12
     ],
     [
-      "adapters.django.models",
+      "services.dlq_service",
       9
     ],
     [
@@ -56,23 +60,11 @@
       8
     ],
     [
-      "adapters.django_repositories",
-      7
-    ],
-    [
       "audit.event_buffer",
       7
     ],
     [
-      "services.dlq_service",
-      7
-    ],
-    [
       "services.error_budget_service",
-      7
-    ],
-    [
-      "services",
       7
     ],
     [
@@ -82,6 +74,14 @@
     [
       "services.metrics",
       7
+    ],
+    [
+      "adapters",
+      6
+    ],
+    [
+      "interfaces.rate_limit_storage",
+      6
     ]
   ],
   "top_dependencies": [
@@ -106,16 +106,20 @@
       13
     ],
     [
-      "services.circuit_breaker.service",
-      11
-    ],
-    [
       "services.error_budget_gate.gate",
       11
     ],
     [
-      "services.dlq_service",
+      "services.circuit_breaker.service",
       10
+    ],
+    [
+      "interfaces",
+      9
+    ],
+    [
+      "services.dlq_service",
+      9
     ],
     [
       "services.execution_services",
@@ -126,24 +130,20 @@
       9
     ],
     [
-      "interfaces",
-      8
-    ],
-    [
       "metrics.reconciler",
-      8
-    ],
-    [
-      "adapters.celery.tasks",
-      8
-    ],
-    [
-      "adapters.django.apps",
       8
     ],
     [
       "services.factory.registry",
       8
+    ],
+    [
+      "metrics",
+      7
+    ],
+    [
+      "services.replay_service",
+      7
     ]
   ],
   "orphans": [
@@ -156,11 +156,6 @@
     "adapters.audit.stdout_adapter",
     "adapters.audit.worm_adapters",
     "adapters.celery",
-    "adapters.django.admin",
-    "adapters.django.apps",
-    "adapters.django.migrations",
-    "adapters.django.migrations.0001_initial",
-    "adapters.django.migrations.0002_add_entity_fields",
     "adapters.fastapi",
     "adapters.fastapi.dependencies",
     "adapters.fastapi.middleware",
@@ -173,9 +168,9 @@
     "adapters.observability.opentelemetry.noop",
     "adapters.observability.opentelemetry.spans",
     "adapters.resilient",
+    "adapters.statistics",
     "api",
     "api.django",
-    "api.django.middleware",
     "api.django.reauthentication",
     "api.django.throttle_adapter",
     "api.django.tiering.circuit_breaker",
@@ -199,7 +194,6 @@
     "audit.continuous_audit_api",
     "config_tracker",
     "context",
-    "core",
     "interfaces.notification",
     "services.backoff_calculator",
     "services.blast_radius.service",
@@ -213,7 +207,6 @@
     "services.circuit_breaker.protection",
     "services.circuit_breaker.rate_limit_tracker",
     "services.circuit_breaker.service",
-    "services.compliance.service",
     "services.corruption_shield",
     "services.emergency_mode.enums",
     "services.emergency_mode.manager",
@@ -250,9 +243,10 @@
     "services.runtime_config.core_configs",
     "services.runtime_config.strategy",
     "services.throttle",
+    "services.unified_notification",
+    "tasks",
     "tasks.chaos_scheduler",
     "tasks.config_apply",
-    "tasks.drift_detection",
     "tasks.governance",
     "utils"
   ],
@@ -260,23 +254,15 @@
     "entry_points": [
       "adapters.fastapi.middleware",
       "adapters.fastapi.routes",
-      "api.django.middleware",
       "api.django.tiering.middleware",
       "api.django.urls",
+      "tasks",
       "tasks.chaos_scheduler",
       "tasks.config_apply",
-      "tasks.drift_detection",
       "tasks.governance"
     ],
-    "migrations": [
-      "adapters.django.migrations",
-      "adapters.django.migrations.0001_initial",
-      "adapters.django.migrations.0002_add_entity_fields"
-    ],
-    "admin_apps": [
-      "adapters.django.admin",
-      "adapters.django.apps"
-    ],
+    "migrations": [],
+    "admin_apps": [],
     "check_needed": [
       "__init__",
       "adapters.airgap",
@@ -297,6 +283,7 @@
       "adapters.observability.opentelemetry.noop",
       "adapters.observability.opentelemetry.spans",
       "adapters.resilient",
+      "adapters.statistics",
       "api",
       "api.django",
       "api.django.reauthentication",
@@ -320,7 +307,6 @@
       "audit.continuous_audit_api",
       "config_tracker",
       "context",
-      "core",
       "interfaces.notification",
       "services.backoff_calculator",
       "services.blast_radius.service",
@@ -334,7 +320,6 @@
       "services.circuit_breaker.protection",
       "services.circuit_breaker.rate_limit_tracker",
       "services.circuit_breaker.service",
-      "services.compliance.service",
       "services.corruption_shield",
       "services.emergency_mode.enums",
       "services.emergency_mode.manager",
@@ -371,7 +356,1077 @@
       "services.runtime_config.core_configs",
       "services.runtime_config.strategy",
       "services.throttle",
+      "services.unified_notification",
       "utils"
+    ]
+  },
+  "reexports": {
+    "total_definitions": 495,
+    "packages": {
+      "services.factory": 19,
+      "services": 180,
+      "tasks": 36,
+      "adapters.alert": 3,
+      "adapters.audit": 12,
+      "adapters.fastapi": 10,
+      "adapters.observability.opentelemetry": 8,
+      "api.django.tiering": 19,
+      "api.django.views.error_budget": 19,
+      "api.django.views.xtest": 23,
+      "services.blast_radius": 5,
+      "services.chaos": 31,
+      "services.circuit_breaker": 16,
+      "services.compliance": 5,
+      "services.emergency_mode": 6,
+      "services.finops": 6,
+      "services.learning": 5,
+      "services.metrics": 68,
+      "services.rollback": 6,
+      "services.runtime_config": 9,
+      "services.error_budget.reconciliation": 9
+    },
+    "usage_count": 104,
+    "usages": [
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 584,
+        "current": "from selfhealing.adapters.audit import FileAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "FileAuditLogAdapter",
+        "original_module": "adapters.audit.file_adapter"
+      },
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 584,
+        "current": "from selfhealing.adapters.audit import StdoutAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "StdoutAuditLogAdapter",
+        "original_module": "adapters.audit.stdout_adapter"
+      },
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 584,
+        "current": "from selfhealing.adapters.audit import NullAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "NullAuditLogAdapter",
+        "original_module": "adapters.audit.null_adapter"
+      },
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 371,
+        "current": "from selfhealing.adapters.audit import FileAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "FileAuditLogAdapter",
+        "original_module": "adapters.audit.file_adapter"
+      },
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 371,
+        "current": "from selfhealing.adapters.audit import StdoutAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "StdoutAuditLogAdapter",
+        "original_module": "adapters.audit.stdout_adapter"
+      },
+      {
+        "file": "factory.py",
+        "module": "factory",
+        "line": 371,
+        "current": "from selfhealing.adapters.audit import NullAuditLogAdapter",
+        "suggested": "from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter",
+        "package": "adapters.audit",
+        "name": "NullAuditLogAdapter",
+        "original_module": "adapters.audit.null_adapter"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import CircuitBreakerConfig",
+        "suggested": "from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig",
+        "package": "services.circuit_breaker",
+        "name": "CircuitBreakerConfig",
+        "original_module": "services.circuit_breaker.config"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import CircuitBreakerResult",
+        "suggested": "from selfhealing.services.circuit_breaker.config import CircuitBreakerResult",
+        "package": "services.circuit_breaker",
+        "name": "CircuitBreakerResult",
+        "original_module": "services.circuit_breaker.config"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import CircuitState",
+        "suggested": "from selfhealing.services.circuit_breaker.config import CircuitState",
+        "package": "services.circuit_breaker",
+        "name": "CircuitState",
+        "original_module": "services.circuit_breaker.config"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import RateLimitTracker",
+        "suggested": "from selfhealing.services.circuit_breaker.rate_limit_tracker import RateLimitTracker",
+        "package": "services.circuit_breaker",
+        "name": "RateLimitTracker",
+        "original_module": "services.circuit_breaker.rate_limit_tracker"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import get_rate_limit_tracker",
+        "suggested": "from selfhealing.services.circuit_breaker.rate_limit_tracker import get_rate_limit_tracker",
+        "package": "services.circuit_breaker",
+        "name": "get_rate_limit_tracker",
+        "original_module": "services.circuit_breaker.rate_limit_tracker"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import CircuitBreakerService",
+        "suggested": "from selfhealing.services.circuit_breaker.service import CircuitBreakerService",
+        "package": "services.circuit_breaker",
+        "name": "CircuitBreakerService",
+        "original_module": "services.circuit_breaker.service"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import get_circuit_breaker_service",
+        "package": "services.circuit_breaker",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import should_allow_request",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import should_allow_request",
+        "package": "services.circuit_breaker",
+        "name": "should_allow_request",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import force_open_circuit",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import force_open_circuit",
+        "package": "services.circuit_breaker",
+        "name": "force_open_circuit",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import force_close_circuit",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import force_close_circuit",
+        "package": "services.circuit_breaker",
+        "name": "force_close_circuit",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import record_rate_limit",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import record_rate_limit",
+        "package": "services.circuit_breaker",
+        "name": "record_rate_limit",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import should_allow_with_protection",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import should_allow_with_protection",
+        "package": "services.circuit_breaker",
+        "name": "should_allow_with_protection",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\circuit_breaker_service.py",
+        "module": "services.circuit_breaker_service",
+        "line": 31,
+        "current": "from selfhealing.services.circuit_breaker import get_protection_status",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import get_protection_status",
+        "package": "services.circuit_breaker",
+        "name": "get_protection_status",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "services\\control_api_service.py",
+        "module": "services.control_api_service",
+        "line": 704,
+        "current": "from selfhealing.services.metrics import get_registered_domains",
+        "suggested": "from selfhealing.services.metrics.registry import get_registered_domains",
+        "package": "services.metrics",
+        "name": "get_registered_domains",
+        "original_module": "services.metrics.registry"
+      },
+      {
+        "file": "services\\control_api_service.py",
+        "module": "services.control_api_service",
+        "line": 704,
+        "current": "from selfhealing.services.metrics import update_dlq_pending_gauges",
+        "suggested": "from selfhealing.services.metrics.updaters import update_dlq_pending_gauges",
+        "package": "services.metrics",
+        "name": "update_dlq_pending_gauges",
+        "original_module": "services.metrics.updaters"
+      },
+      {
+        "file": "services\\control_api_service.py",
+        "module": "services.control_api_service",
+        "line": 704,
+        "current": "from selfhealing.services.metrics import update_retry_success_rates",
+        "suggested": "from selfhealing.services.metrics.updaters import update_retry_success_rates",
+        "package": "services.metrics",
+        "name": "update_retry_success_rates",
+        "original_module": "services.metrics.updaters"
+      },
+      {
+        "file": "services\\governance_checks.py",
+        "module": "services.governance_checks",
+        "line": 54,
+        "current": "from selfhealing.services.emergency_mode import EmergencyLevel",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EmergencyLevel",
+        "package": "services.emergency_mode",
+        "name": "EmergencyLevel",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "services\\governance_checks.py",
+        "module": "services.governance_checks",
+        "line": 358,
+        "current": "from selfhealing.services.emergency_mode import EmergencyLevel",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EmergencyLevel",
+        "package": "services.emergency_mode",
+        "name": "EmergencyLevel",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "services\\governance_service.py",
+        "module": "services.governance_service",
+        "line": 248,
+        "current": "from selfhealing.services.emergency_mode import EmergencyLevel",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EmergencyLevel",
+        "package": "services.emergency_mode",
+        "name": "EmergencyLevel",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "services\\unified_notification.py",
+        "module": "services.unified_notification",
+        "line": 345,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "tasks\\base.py",
+        "module": "tasks.base",
+        "line": 273,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "tasks\\base.py",
+        "module": "tasks.base",
+        "line": 306,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "tasks\\base.py",
+        "module": "tasks.base",
+        "line": 339,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "tasks\\daily_report.py",
+        "module": "tasks.daily_report",
+        "line": 542,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "tasks\\drift_detection.py",
+        "module": "tasks.drift_detection",
+        "line": 288,
+        "current": "from selfhealing.services import get_security_notification_service",
+        "suggested": "from selfhealing.services.security_notification_service import get_security_notification_service",
+        "package": "services",
+        "name": "get_security_notification_service",
+        "original_module": "services.security_notification_service"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 367,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 385,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 429,
+        "current": "from selfhealing.services import store_to_dlq",
+        "suggested": "from selfhealing.services.dlq_service import store_to_dlq",
+        "package": "services",
+        "name": "store_to_dlq",
+        "original_module": "services.dlq_service"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 604,
+        "current": "from selfhealing.services import record_retry_attempt",
+        "suggested": "from selfhealing.services.metrics import record_retry_attempt",
+        "package": "services",
+        "name": "record_retry_attempt",
+        "original_module": "services.metrics"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 621,
+        "current": "from selfhealing.services import record_retry_attempt",
+        "suggested": "from selfhealing.services.metrics import record_retry_attempt",
+        "package": "services",
+        "name": "record_retry_attempt",
+        "original_module": "services.metrics"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 638,
+        "current": "from selfhealing.services import record_retry_attempt",
+        "suggested": "from selfhealing.services.metrics import record_retry_attempt",
+        "package": "services",
+        "name": "record_retry_attempt",
+        "original_module": "services.metrics"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 666,
+        "current": "from selfhealing.services import capture_forensic_context",
+        "suggested": "from selfhealing.services.forensic_context import capture_forensic_context",
+        "package": "services",
+        "name": "capture_forensic_context",
+        "original_module": "services.forensic_context"
+      },
+      {
+        "file": "adapters\\celery\\signal_hooks.py",
+        "module": "adapters.celery.signal_hooks",
+        "line": 486,
+        "current": "from selfhealing.services import record_dlq_item_created",
+        "suggested": "from selfhealing.services.metrics import record_dlq_item_created",
+        "package": "services",
+        "name": "record_dlq_item_created",
+        "original_module": "services.metrics"
+      },
+      {
+        "file": "adapters\\celery\\tasks.py",
+        "module": "adapters.celery.tasks",
+        "line": 1023,
+        "current": "from selfhealing.services.metrics import emit_heartbeat",
+        "suggested": "from selfhealing.services.metrics.recorders import emit_heartbeat",
+        "package": "services.metrics",
+        "name": "emit_heartbeat",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\celery\\tasks.py",
+        "module": "adapters.celery.tasks",
+        "line": 1101,
+        "current": "from selfhealing.services.metrics import record_recovery_alert",
+        "suggested": "from selfhealing.services.metrics.recorders import record_recovery_alert",
+        "package": "services.metrics",
+        "name": "record_recovery_alert",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\celery\\tasks.py",
+        "module": "adapters.celery.tasks",
+        "line": 1101,
+        "current": "from selfhealing.services.metrics import record_failsafe_recovered",
+        "suggested": "from selfhealing.services.metrics.recorders import record_failsafe_recovered",
+        "package": "services.metrics",
+        "name": "record_failsafe_recovered",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\celery\\tasks.py",
+        "module": "adapters.celery.tasks",
+        "line": 1043,
+        "current": "from selfhealing.services.metrics import emit_heartbeat",
+        "suggested": "from selfhealing.services.metrics.recorders import emit_heartbeat",
+        "package": "services.metrics",
+        "name": "emit_heartbeat",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\memory\\layered_repository.py",
+        "module": "adapters.memory.layered_repository",
+        "line": 215,
+        "current": "from selfhealing.services.metrics import record_l2_timeout",
+        "suggested": "from selfhealing.services.metrics.recorders import record_l2_timeout",
+        "package": "services.metrics",
+        "name": "record_l2_timeout",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\memory\\layered_repository.py",
+        "module": "adapters.memory.layered_repository",
+        "line": 246,
+        "current": "from selfhealing.services.metrics import record_l2_sync_failure",
+        "suggested": "from selfhealing.services.metrics.recorders import record_l2_sync_failure",
+        "package": "services.metrics",
+        "name": "record_l2_sync_failure",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "adapters\\memory\\layered_repository.py",
+        "module": "adapters.memory.layered_repository",
+        "line": 271,
+        "current": "from selfhealing.services.metrics import record_l2_latency",
+        "suggested": "from selfhealing.services.metrics.recorders import record_l2_latency",
+        "package": "services.metrics",
+        "name": "record_l2_latency",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "api\\django\\middleware.py",
+        "module": "api.django.middleware",
+        "line": 131,
+        "current": "from selfhealing.services.circuit_breaker import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import get_circuit_breaker_service",
+        "package": "services.circuit_breaker",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "api\\django\\middleware.py",
+        "module": "api.django.middleware",
+        "line": 674,
+        "current": "from selfhealing.services.circuit_breaker import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import get_circuit_breaker_service",
+        "package": "services.circuit_breaker",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "api\\django\\pool_circuit_breaker.py",
+        "module": "api.django.pool_circuit_breaker",
+        "line": 885,
+        "current": "from selfhealing.services.circuit_breaker import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker.convenience import get_circuit_breaker_service",
+        "package": "services.circuit_breaker",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker.convenience"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ErrorBudgetStatusView",
+        "suggested": "from selfhealing.api.django.views.error_budget.status import ErrorBudgetStatusView",
+        "package": "api.django.views.error_budget",
+        "name": "ErrorBudgetStatusView",
+        "original_module": "api.django.views.error_budget.status"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ErrorBudgetHistoryView",
+        "suggested": "from selfhealing.api.django.views.error_budget.status import ErrorBudgetHistoryView",
+        "package": "api.django.views.error_budget",
+        "name": "ErrorBudgetHistoryView",
+        "original_module": "api.django.views.error_budget.status"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ErrorBudgetRecordView",
+        "suggested": "from selfhealing.api.django.views.error_budget.status import ErrorBudgetRecordView",
+        "package": "api.django.views.error_budget",
+        "name": "ErrorBudgetRecordView",
+        "original_module": "api.django.views.error_budget.status"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ErrorBudgetExhaustView",
+        "suggested": "from selfhealing.api.django.views.error_budget.status import ErrorBudgetExhaustView",
+        "package": "api.django.views.error_budget",
+        "name": "ErrorBudgetExhaustView",
+        "original_module": "api.django.views.error_budget.status"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ErrorBudgetResetSimulationView",
+        "suggested": "from selfhealing.api.django.views.error_budget.status import ErrorBudgetResetSimulationView",
+        "package": "api.django.views.error_budget",
+        "name": "ErrorBudgetResetSimulationView",
+        "original_module": "api.django.views.error_budget.status"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import DeploymentVerdictView",
+        "suggested": "from selfhealing.api.django.views.error_budget.deployment import DeploymentVerdictView",
+        "package": "api.django.views.error_budget",
+        "name": "DeploymentVerdictView",
+        "original_module": "api.django.views.error_budget.deployment"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import DeploymentFreezeAcknowledgeView",
+        "suggested": "from selfhealing.api.django.views.error_budget.deployment import DeploymentFreezeAcknowledgeView",
+        "package": "api.django.views.error_budget",
+        "name": "DeploymentFreezeAcknowledgeView",
+        "original_module": "api.django.views.error_budget.deployment"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import DeploymentOverrideView",
+        "suggested": "from selfhealing.api.django.views.error_budget.deployment import DeploymentOverrideView",
+        "package": "api.django.views.error_budget",
+        "name": "DeploymentOverrideView",
+        "original_module": "api.django.views.error_budget.deployment"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import DeploymentFreezeLiftView",
+        "suggested": "from selfhealing.api.django.views.error_budget.deployment import DeploymentFreezeLiftView",
+        "package": "api.django.views.error_budget",
+        "name": "DeploymentFreezeLiftView",
+        "original_module": "api.django.views.error_budget.deployment"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ActiveOverrideView",
+        "suggested": "from selfhealing.api.django.views.error_budget.deployment import ActiveOverrideView",
+        "package": "api.django.views.error_budget",
+        "name": "ActiveOverrideView",
+        "original_module": "api.django.views.error_budget.deployment"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ReconciliationStatusView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ReconciliationStatusView",
+        "package": "api.django.views.error_budget",
+        "name": "ReconciliationStatusView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import FailSafePeriodsView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import FailSafePeriodsView",
+        "package": "api.django.views.error_budget",
+        "name": "FailSafePeriodsView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ShadowBudgetsView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ShadowBudgetsView",
+        "package": "api.django.views.error_budget",
+        "name": "ShadowBudgetsView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ShadowBudgetDetailView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ShadowBudgetDetailView",
+        "package": "api.django.views.error_budget",
+        "name": "ShadowBudgetDetailView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ShadowBudgetApproveView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ShadowBudgetApproveView",
+        "package": "api.django.views.error_budget",
+        "name": "ShadowBudgetApproveView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ShadowBudgetRejectView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ShadowBudgetRejectView",
+        "package": "api.django.views.error_budget",
+        "name": "ShadowBudgetRejectView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ExcludedPeriodsView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ExcludedPeriodsView",
+        "package": "api.django.views.error_budget",
+        "name": "ExcludedPeriodsView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ExcludedPeriodDetailView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ExcludedPeriodDetailView",
+        "package": "api.django.views.error_budget",
+        "name": "ExcludedPeriodDetailView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\urls.py",
+        "module": "api.django.urls",
+        "line": 137,
+        "current": "from selfhealing.api.django.views.error_budget import ReconciliationConfigView",
+        "suggested": "from selfhealing.api.django.views.error_budget.reconciliation import ReconciliationConfigView",
+        "package": "api.django.views.error_budget",
+        "name": "ReconciliationConfigView",
+        "original_module": "api.django.views.error_budget.reconciliation"
+      },
+      {
+        "file": "api\\django\\tiering\\middleware.py",
+        "module": "api.django.tiering.middleware",
+        "line": 94,
+        "current": "from selfhealing.services.emergency_mode import EmergencyLevel",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EmergencyLevel",
+        "package": "services.emergency_mode",
+        "name": "EmergencyLevel",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "api\\django\\tiering\\middleware.py",
+        "module": "api.django.tiering.middleware",
+        "line": 94,
+        "current": "from selfhealing.services.emergency_mode import EMERGENCY_LEVEL_RULES",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EMERGENCY_LEVEL_RULES",
+        "package": "services.emergency_mode",
+        "name": "EMERGENCY_LEVEL_RULES",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "api\\django\\views\\blast_radius.py",
+        "module": "api.django.views.blast_radius",
+        "line": 20,
+        "current": "from selfhealing.services.blast_radius import BlastRadiusService",
+        "suggested": "from selfhealing.services.blast_radius.service import BlastRadiusService",
+        "package": "services.blast_radius",
+        "name": "BlastRadiusService",
+        "original_module": "services.blast_radius.service"
+      },
+      {
+        "file": "api\\django\\views\\compliance_dna.py",
+        "module": "api.django.views.compliance_dna",
+        "line": 20,
+        "current": "from selfhealing.services.compliance import ComplianceService",
+        "suggested": "from selfhealing.services.compliance.service import ComplianceService",
+        "package": "services.compliance",
+        "name": "ComplianceService",
+        "original_module": "services.compliance.service"
+      },
+      {
+        "file": "api\\django\\views\\emergency.py",
+        "module": "api.django.views.emergency",
+        "line": 31,
+        "current": "from selfhealing.services.emergency_mode import EmergencyLevel",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EmergencyLevel",
+        "package": "services.emergency_mode",
+        "name": "EmergencyLevel",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "api\\django\\views\\emergency.py",
+        "module": "api.django.views.emergency",
+        "line": 31,
+        "current": "from selfhealing.services.emergency_mode import RecoveryGateConfig",
+        "suggested": "from selfhealing.services.emergency_mode.models import RecoveryGateConfig",
+        "package": "services.emergency_mode",
+        "name": "RecoveryGateConfig",
+        "original_module": "services.emergency_mode.models"
+      },
+      {
+        "file": "api\\django\\views\\emergency.py",
+        "module": "api.django.views.emergency",
+        "line": 31,
+        "current": "from selfhealing.services.emergency_mode import EMERGENCY_LEVEL_RULES",
+        "suggested": "from selfhealing.services.emergency_mode.enums import EMERGENCY_LEVEL_RULES",
+        "package": "services.emergency_mode",
+        "name": "EMERGENCY_LEVEL_RULES",
+        "original_module": "services.emergency_mode.enums"
+      },
+      {
+        "file": "api\\django\\views\\finops.py",
+        "module": "api.django.views.finops",
+        "line": 21,
+        "current": "from selfhealing.services.finops import FinOpsService",
+        "suggested": "from selfhealing.services.finops.service import FinOpsService",
+        "package": "services.finops",
+        "name": "FinOpsService",
+        "original_module": "services.finops.service"
+      },
+      {
+        "file": "api\\django\\views\\l2_storage_utils.py",
+        "module": "api.django.views.l2_storage_utils",
+        "line": 16,
+        "current": "from selfhealing.services.factory import get_service_factory",
+        "suggested": "from selfhealing.services.factory.base import get_service_factory",
+        "package": "services.factory",
+        "name": "get_service_factory",
+        "original_module": "services.factory.base"
+      },
+      {
+        "file": "api\\django\\views\\learning.py",
+        "module": "api.django.views.learning",
+        "line": 20,
+        "current": "from selfhealing.services.learning import LearningService",
+        "suggested": "from selfhealing.services.learning.service import LearningService",
+        "package": "services.learning",
+        "name": "LearningService",
+        "original_module": "services.learning.service"
+      },
+      {
+        "file": "api\\django\\views\\rollback.py",
+        "module": "api.django.views.rollback",
+        "line": 20,
+        "current": "from selfhealing.services.rollback import RollbackService",
+        "suggested": "from selfhealing.services.rollback.service import RollbackService",
+        "package": "services.rollback",
+        "name": "RollbackService",
+        "original_module": "services.rollback.service"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import DEFAULT_TIER_DEFINITIONS",
+        "suggested": "from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_DEFINITIONS",
+        "package": "api.django.tiering",
+        "name": "DEFAULT_TIER_DEFINITIONS",
+        "original_module": "api.django.tiering.defaults"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import DEFAULT_TIER_MAPPINGS",
+        "suggested": "from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_MAPPINGS",
+        "package": "api.django.tiering",
+        "name": "DEFAULT_TIER_MAPPINGS",
+        "original_module": "api.django.tiering.defaults"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import DEFAULT_TIER_OVERRIDES",
+        "suggested": "from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_OVERRIDES",
+        "package": "api.django.tiering",
+        "name": "DEFAULT_TIER_OVERRIDES",
+        "original_module": "api.django.tiering.defaults"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import OverrideIdentifierType",
+        "suggested": "from selfhealing.api.django.tiering.enums import OverrideIdentifierType",
+        "package": "api.django.tiering",
+        "name": "OverrideIdentifierType",
+        "original_module": "api.django.tiering.enums"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import PatternType",
+        "suggested": "from selfhealing.api.django.tiering.enums import PatternType",
+        "package": "api.django.tiering",
+        "name": "PatternType",
+        "original_module": "api.django.tiering.enums"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import TierConfigValidator",
+        "suggested": "from selfhealing.api.django.tiering.validator import TierConfigValidator",
+        "package": "api.django.tiering",
+        "name": "TierConfigValidator",
+        "original_module": "api.django.tiering.validator"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import TierDefinition",
+        "suggested": "from selfhealing.api.django.tiering.models import TierDefinition",
+        "package": "api.django.tiering",
+        "name": "TierDefinition",
+        "original_module": "api.django.tiering.models"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import TierMapping",
+        "suggested": "from selfhealing.api.django.tiering.models import TierMapping",
+        "package": "api.django.tiering",
+        "name": "TierMapping",
+        "original_module": "api.django.tiering.models"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import TierOverride",
+        "suggested": "from selfhealing.api.django.tiering.models import TierOverride",
+        "package": "api.django.tiering",
+        "name": "TierOverride",
+        "original_module": "api.django.tiering.models"
+      },
+      {
+        "file": "api\\django\\views\\tiering.py",
+        "module": "api.django.views.tiering",
+        "line": 32,
+        "current": "from selfhealing.api.django.tiering import get_tier_registry",
+        "suggested": "from selfhealing.api.django.tiering.registry import get_tier_registry",
+        "package": "api.django.tiering",
+        "name": "get_tier_registry",
+        "original_module": "api.django.tiering.registry"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 76,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 76,
+        "current": "from selfhealing.services import force_open_circuit",
+        "suggested": "from selfhealing.services.circuit_breaker_service import force_open_circuit",
+        "package": "services",
+        "name": "force_open_circuit",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 166,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 226,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 305,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 369,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 460,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\circuit_breaker.py",
+        "module": "api.django.views.xtest.circuit_breaker",
+        "line": 546,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\observability.py",
+        "module": "api.django.views.xtest.observability",
+        "line": 81,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\observability.py",
+        "module": "api.django.views.xtest.observability",
+        "line": 144,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\observability.py",
+        "module": "api.django.views.xtest.observability",
+        "line": 255,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\observability.py",
+        "module": "api.django.views.xtest.observability",
+        "line": 343,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "api\\django\\views\\xtest\\snapshot.py",
+        "module": "api.django.views.xtest.snapshot",
+        "line": 39,
+        "current": "from selfhealing.services import get_circuit_breaker_service",
+        "suggested": "from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service",
+        "package": "services",
+        "name": "get_circuit_breaker_service",
+        "original_module": "services.circuit_breaker_service"
+      },
+      {
+        "file": "services\\error_budget\\enums.py",
+        "module": "services.error_budget.enums",
+        "line": 179,
+        "current": "from selfhealing.services.metrics import record_failsafe_triggered",
+        "suggested": "from selfhealing.services.metrics.recorders import record_failsafe_triggered",
+        "package": "services.metrics",
+        "name": "record_failsafe_triggered",
+        "original_module": "services.metrics.recorders"
+      },
+      {
+        "file": "services\\error_budget\\recorder.py",
+        "module": "services.error_budget.recorder",
+        "line": 184,
+        "current": "from selfhealing.services.metrics import record_override_escalation",
+        "suggested": "from selfhealing.services.metrics.recorders import record_override_escalation",
+        "package": "services.metrics",
+        "name": "record_override_escalation",
+        "original_module": "services.metrics.recorders"
+      }
     ]
   }
 }
