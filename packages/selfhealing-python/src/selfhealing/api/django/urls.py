@@ -309,14 +309,12 @@ urlpatterns = [
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
-    
     # =========================================================================
     # Drift Threshold Configuration (Metric Collection Strategy)
     # Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
     # =========================================================================
     path("config/drift-thresholds/", DriftThresholdConfigView.as_view(), name="config-drift-thresholds"),
     path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
-    
     # =========================================================================
     # Metric Sync API (Phase 1: Poll 제거 + Manual API) - DEPRECATED
     # 새로운 API: /metrics/status/, /governance/reconcile/, /governance/mode/
@@ -325,7 +323,6 @@ urlpatterns = [
     # Deprecated endpoints (with Warning headers + redirect to new endpoints)
     path("metrics/sync/", DeprecatedMetricSyncView.as_view(), name="metrics-sync"),
     path("metrics/drift-report/", DeprecatedDriftReportView.as_view(), name="metrics-drift-report"),
-    
     # =========================================================================
     # Governance API (New Unified Hub)
     # 관찰(Observability): GET /metrics/status/
@@ -334,32 +331,35 @@ urlpatterns = [
     # =========================================================================
     # Observability - 통합 상태 조회
     path("metrics/status/", MetricStatusView.as_view(), name="metrics-status"),
-    
     # Control - 정합성 조정 및 모드 전환
     path("governance/reconcile/", GovernanceReconcileView.as_view(), name="governance-reconcile"),
     path("governance/mode/", GovernanceModeView.as_view(), name="governance-mode"),
-    
     # =========================================================================
     # Governance RBAC Status & Config API (Phase 2)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
     # =========================================================================
     path("governance/status/", GovernanceRBACStatusView.as_view(), name="governance-status"),
     path("config/governance/", GovernanceConfigView.as_view(), name="config-governance"),
-    
     # =========================================================================
     # 4-Eyes Approval Workflow API (Phase 3)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
     # =========================================================================
     path("governance/approval-requests/", ApprovalRequestListView.as_view(), name="approval-requests-list"),
-    path("governance/approval-requests/<str:request_id>/approve/", ApprovalRequestApproveView.as_view(), name="approval-request-approve"),
-    path("governance/approval-requests/<str:request_id>/reject/", ApprovalRequestRejectView.as_view(), name="approval-request-reject"),
-    
+    path(
+        "governance/approval-requests/<str:request_id>/approve/",
+        ApprovalRequestApproveView.as_view(),
+        name="approval-request-approve",
+    ),
+    path(
+        "governance/approval-requests/<str:request_id>/reject/",
+        ApprovalRequestRejectView.as_view(),
+        name="approval-request-reject",
+    ),
     # =========================================================================
     # L2 Storage Config API (Phase 3 - RuntimeConfigManager Integration)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
     # =========================================================================
     path("config/l2-storage/", L2StorageConfigManagedView.as_view(), name="config-l2-storage"),
-    
     # =========================================================================
     # Config Versioning & Rollback (Phase 4 - Governance Part 2)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
@@ -368,7 +368,6 @@ urlpatterns = [
     path("config/<str:config_type>/history/<int:version>/", ConfigVersionDetailView.as_view(), name="config-version-detail"),
     path("config/<str:config_type>/rollback/", ConfigRollbackView.as_view(), name="config-rollback"),
     path("config/<str:config_type>/compare/", ConfigCompareView.as_view(), name="config-compare"),
-    
     # =========================================================================
     # API Tiering Configuration (Phase 4)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
@@ -381,7 +380,6 @@ urlpatterns = [
     path("config/tiers/resolve/", TierResolveLookupView.as_view(), name="config-tiers-resolve"),
     path("config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"),
     path("config/tier-overrides/", TierOverridesView.as_view(), name="config-tier-overrides"),
-    
     # =========================================================================
     # Emergency Mode API (Phase 4 - Advanced)
     # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md
@@ -394,7 +392,6 @@ urlpatterns = [
     path("emergency/history/", EmergencyHistoryView.as_view(), name="emergency-history"),
     path("emergency/config/", EmergencyConfigView.as_view(), name="emergency-config"),
     path("emergency/levels/", EmergencyLevelsView.as_view(), name="emergency-levels"),
-    
     # =========================================================================
     # Auto Tuning API - 자율 조정 제어
     # Reference: docs/self_healing/38_AUTO_TUNING_API.md
@@ -417,7 +414,6 @@ urlpatterns = [
     path("auto-tuning/override/<str:parameter>/", AutoTuningOverrideView.as_view(), name="auto-tuning-override-clear"),
     # Metrics
     path("auto-tuning/metrics/", AutoTuningMetricsView.as_view(), name="auto-tuning-metrics"),
-    
     # Error Budget Gate Reset
     path("gate/reset/", ErrorBudgetGateResetView.as_view(), name="gate-reset"),
     # Error Budget API
@@ -433,7 +429,6 @@ urlpatterns = [
     path("deployment-policy/override/", DeploymentOverrideView.as_view(), name="deployment-override"),
     path("deployment-policy/lift/", DeploymentFreezeLiftView.as_view(), name="deployment-lift"),
     path("deployment-policy/active-override/", ActiveOverrideView.as_view(), name="deployment-active-override"),
-    
     # =========================================================================
     # Reconciliation API (Shadow Budget)
     # Reference: docs/self_healing/12_ERROR_BUDGET.md (Section 13)
@@ -442,13 +437,28 @@ urlpatterns = [
     path("reconciliation/status/", ReconciliationStatusView.as_view(), name="reconciliation-status"),
     path("reconciliation/failsafe-periods/", FailSafePeriodsView.as_view(), name="reconciliation-failsafe-periods"),
     path("reconciliation/shadow-budgets/", ShadowBudgetsView.as_view(), name="reconciliation-shadow-budgets"),
-    path("reconciliation/shadow-budgets/<str:calculation_id>/", ShadowBudgetDetailView.as_view(), name="reconciliation-shadow-budget-detail"),
-    path("reconciliation/shadow-budgets/<str:calculation_id>/approve/", ShadowBudgetApproveView.as_view(), name="reconciliation-shadow-budget-approve"),
-    path("reconciliation/shadow-budgets/<str:calculation_id>/reject/", ShadowBudgetRejectView.as_view(), name="reconciliation-shadow-budget-reject"),
+    path(
+        "reconciliation/shadow-budgets/<str:calculation_id>/",
+        ShadowBudgetDetailView.as_view(),
+        name="reconciliation-shadow-budget-detail",
+    ),
+    path(
+        "reconciliation/shadow-budgets/<str:calculation_id>/approve/",
+        ShadowBudgetApproveView.as_view(),
+        name="reconciliation-shadow-budget-approve",
+    ),
+    path(
+        "reconciliation/shadow-budgets/<str:calculation_id>/reject/",
+        ShadowBudgetRejectView.as_view(),
+        name="reconciliation-shadow-budget-reject",
+    ),
     path("reconciliation/excluded-periods/", ExcludedPeriodsView.as_view(), name="reconciliation-excluded-periods"),
-    path("reconciliation/excluded-periods/<str:exclusion_id>/", ExcludedPeriodDetailView.as_view(), name="reconciliation-excluded-period-detail"),
+    path(
+        "reconciliation/excluded-periods/<str:exclusion_id>/",
+        ExcludedPeriodDetailView.as_view(),
+        name="reconciliation-excluded-period-detail",
+    ),
     path("reconciliation/config/", ReconciliationConfigView.as_view(), name="reconciliation-config"),
-    
     # =========================================================================
     # Chaos Engineering API
     # =========================================================================
@@ -480,7 +490,6 @@ urlpatterns = [
     path("chaos/reports/grades/", GradeHistoryView.as_view(), name="chaos-grade-history"),
     # Pending Approvals
     path("chaos/pending-approvals/", PendingApprovalsView.as_view(), name="chaos-pending-approvals"),
-    
     # =========================================================================
     # L2 Storage Resilience API
     # Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
@@ -498,7 +507,11 @@ urlpatterns = [
     path("l2-storage/shadow-log/clear/", ShadowLogClearView.as_view(), name="l2-storage-shadow-log-clear"),
     path("l2-storage/shadow-log/analyze/", ShadowLogAnalyzeView.as_view(), name="l2-storage-shadow-log-analyze"),
     path("l2-storage/shadow-log/replay/", ShadowLogReplayView.as_view(), name="l2-storage-shadow-log-replay"),
-    path("l2-storage/shadow-log/service/<str:service_name>/", ShadowLogByServiceView.as_view(), name="l2-storage-shadow-log-by-service"),
+    path(
+        "l2-storage/shadow-log/service/<str:service_name>/",
+        ShadowLogByServiceView.as_view(),
+        name="l2-storage-shadow-log-by-service",
+    ),
     # Sync Operations
     path("l2-storage/sync/from-l2/", L2StorageSyncFromL2View.as_view(), name="l2-storage-sync-from-l2"),
     path("l2-storage/sync/to-l2/", L2StorageSyncToL2View.as_view(), name="l2-storage-sync-to-l2"),
@@ -506,7 +519,11 @@ urlpatterns = [
     path("l2-storage/drift/stats/", DriftReconciliationStatsView.as_view(), name="l2-storage-drift-stats"),
     path("l2-storage/drift/history/", DriftReconciliationHistoryView.as_view(), name="l2-storage-drift-history"),
     path("l2-storage/drift/reconcile/", DriftReconciliationTriggerView.as_view(), name="l2-storage-drift-reconcile"),
-    path("l2-storage/drift/reconcile/<str:service_name>/", DriftReconciliationServiceView.as_view(), name="l2-storage-drift-reconcile-service"),
+    path(
+        "l2-storage/drift/reconcile/<str:service_name>/",
+        DriftReconciliationServiceView.as_view(),
+        name="l2-storage-drift-reconcile-service",
+    ),
     # Metrics
     path("l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"),
 ]
@@ -549,7 +566,7 @@ try:
         ComplianceViolationView,
         ComplianceReportView,
     )
-    
+
     urlpatterns += [
         # =====================================================================
         # FinOps DNA API - 비용 관리
@@ -560,17 +577,19 @@ try:
         path("dna/finops/report/", FinOpsReportView.as_view(), name="dna-finops-report"),
         path("dna/finops/alerts/", FinOpsAlertsView.as_view(), name="dna-finops-alerts"),
         path("dna/finops/alerts/<int:alert_index>/acknowledge/", FinOpsAlertsView.as_view(), name="dna-finops-alert-ack"),
-        
         # =====================================================================
         # Self-Learning DNA API - 패턴 학습 및 제안
         # =====================================================================
         path("dna/learning/session/<str:action>/", LearningSessionView.as_view(), name="dna-learning-session"),
         path("dna/learning/patterns/", LearningPatternView.as_view(), name="dna-learning-patterns"),
         path("dna/learning/suggestions/", LearningSuggestionView.as_view(), name="dna-learning-suggestions"),
-        path("dna/learning/suggestions/<str:suggestion_id>/apply/", LearningSuggestionView.as_view(), name="dna-learning-suggestion-apply"),
+        path(
+            "dna/learning/suggestions/<str:suggestion_id>/apply/",
+            LearningSuggestionView.as_view(),
+            name="dna-learning-suggestion-apply",
+        ),
         path("dna/learning/metrics/", LearningMetricView.as_view(), name="dna-learning-metrics"),
         path("dna/learning/insights/", LearningInsightsView.as_view(), name="dna-learning-insights"),
-        
         # =====================================================================
         # Rollback DNA API - 안전한 롤백
         # =====================================================================
@@ -580,26 +599,40 @@ try:
         path("dna/rollback/request/<str:request_id>/execute/", RollbackExecuteView.as_view(), name="dna-rollback-execute"),
         path("dna/rollback/request/<str:request_id>/cancel/", RollbackCancelView.as_view(), name="dna-rollback-cancel"),
         path("dna/rollback/history/", RollbackHistoryView.as_view(), name="dna-rollback-history"),
-        
         # =====================================================================
         # Blast Radius DNA API - 장애 영향 범위
         # =====================================================================
         path("dna/blast-radius/policy/<str:stage_name>/", DNABlastRadiusPolicyView.as_view(), name="dna-blast-radius-policy"),
         path("dna/blast-radius/dependency/", BlastRadiusDependencyView.as_view(), name="dna-blast-radius-dependency-add"),
-        path("dna/blast-radius/dependency/<str:service_name>/", BlastRadiusDependencyView.as_view(), name="dna-blast-radius-dependency"),
+        path(
+            "dna/blast-radius/dependency/<str:service_name>/",
+            BlastRadiusDependencyView.as_view(),
+            name="dna-blast-radius-dependency",
+        ),
         path("dna/blast-radius/assessment/", BlastRadiusAssessmentView.as_view(), name="dna-blast-radius-assessment"),
         path("dna/blast-radius/isolation/", BlastRadiusIsolationView.as_view(), name="dna-blast-radius-isolation-list"),
-        path("dna/blast-radius/isolation/<str:service_name>/", BlastRadiusIsolationView.as_view(), name="dna-blast-radius-isolation"),
+        path(
+            "dna/blast-radius/isolation/<str:service_name>/",
+            BlastRadiusIsolationView.as_view(),
+            name="dna-blast-radius-isolation",
+        ),
         path("dna/blast-radius/graph/", BlastRadiusGraphView.as_view(), name="dna-blast-radius-graph"),
-        
         # =====================================================================
         # Compliance DNA API - 규정 준수
         # =====================================================================
         path("dna/compliance/standards/", ComplianceStandardsView.as_view(), name="dna-compliance-standards"),
-        path("dna/compliance/standards/<str:stage_name>/", ComplianceStandardsView.as_view(), name="dna-compliance-stage-standards"),
+        path(
+            "dna/compliance/standards/<str:stage_name>/",
+            ComplianceStandardsView.as_view(),
+            name="dna-compliance-stage-standards",
+        ),
         path("dna/compliance/check/<str:stage_name>/", ComplianceCheckView.as_view(), name="dna-compliance-check"),
         path("dna/compliance/violations/", ComplianceViolationView.as_view(), name="dna-compliance-violations"),
-        path("dna/compliance/violations/<str:violation_id>/resolve/", ComplianceViolationView.as_view(), name="dna-compliance-violation-resolve"),
+        path(
+            "dna/compliance/violations/<str:violation_id>/resolve/",
+            ComplianceViolationView.as_view(),
+            name="dna-compliance-violation-resolve",
+        ),
         path("dna/compliance/reports/", ComplianceReportView.as_view(), name="dna-compliance-reports"),
     ]
 except ImportError:
@@ -636,7 +669,9 @@ urlpatterns += [
     path("xtest/reset-cb/", ResetCBView.as_view(), name="xtest-reset-cb"),
     path("xtest/cb-status/", CBStatusDetailView.as_view(), name="xtest-cb-status"),
     path("xtest/switch-to-auto/", SwitchToAutoModeView.as_view(), name="xtest-switch-to-auto"),  # New!
-    path("xtest/try-recovery-transition/", TryRecoveryTransitionView.as_view(), name="xtest-try-recovery-transition"),  # Domain-free
+    path(
+        "xtest/try-recovery-transition/", TryRecoveryTransitionView.as_view(), name="xtest-try-recovery-transition"
+    ),  # Domain-free
     path("xtest/inject-error-budget/", InjectErrorBudgetView.as_view(), name="xtest-inject-error-budget"),
     path("xtest/snapshot/", SystemSnapshotView.as_view(), name="xtest-snapshot"),
     path("xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"),

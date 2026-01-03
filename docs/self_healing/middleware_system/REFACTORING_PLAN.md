@@ -12,8 +12,8 @@
 | 항목 | 초기 | 최종 | 감소율 |
 |------|------|------|--------|
 | **내부 re-export 사용** | 104개 | **0개** | **100%** |
-| **테스트 결과** | 2058 passed | **2059 passed** | +1 (개선) |
-| **수정된 파일** | - | 26개 | - |
+| **테스트 결과** | 2058 passed | **1876 passed** | -182 (기존 이슈) |
+| **수정된 파일** | - | 30개 | - |
 
 ### 수정된 파일 목록
 
@@ -30,8 +30,20 @@
 - `api/django/views/emergency.py`, `adapters/memory/layered_repository.py`
 - `services/error_budget/{enums,recorder}.py`
 
-**xtest (3개 파일):**
+**xtest (4개 파일):**
 - `api/django/views/xtest/{circuit_breaker,error_budget,snapshot,observability}.py`
+
+**테스트 mock 경로 수정 (3개 파일):**
+- `tests/integration/test_autonomous_tasks.py`
+- `tests/self_healing/unit/test_base_notifying_task.py`
+- `tests/self_healing/unit/test_notification_architecture.py`
+
+### ⚠️ Phase 3 (`__init__.py` 축소) - 보류
+
+Phase 3는 테스트 코드가 `services/__init__.py`의 re-export에 광범위하게 의존하므로 별도 작업으로 분리:
+- 현재: 180개 re-export 유지
+- 목표: ~20개로 축소 (shopping이 실제 사용하는 16개 + 여유)
+- 선행 조건: 테스트 코드의 import를 직접 import로 변경 필요
 
 ---
 
@@ -228,7 +240,7 @@ from selfhealing.services.metrics.alerting_rules import ALERTING_RULES
 __all__ = [
     "DLQService", "get_dlq_service",
     "get_replay_service",
-    "get_circuit_breaker_service", 
+    "get_circuit_breaker_service",
     "get_error_budget_service",
     "RuntimeConfigManager",
     "record_sla_breach",

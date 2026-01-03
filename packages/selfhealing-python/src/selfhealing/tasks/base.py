@@ -155,9 +155,7 @@ class BaseNotifyingTask:
         self._send_pre_notification(*args, **kwargs)
         return True
 
-    def _on_post_execute(
-        self, result: Dict[str, Any], *args: Any, **kwargs: Any
-    ) -> None:
+    def _on_post_execute(self, result: Dict[str, Any], *args: Any, **kwargs: Any) -> None:
         """Post-execution hook for result notifications."""
         policy = self.notification_policy
 
@@ -189,9 +187,7 @@ class BaseNotifyingTask:
         # 1. Cooldown check
         alert_key = f"{self.name}:{self._get_alert_key(result)}"
         if not self._can_send_alert(alert_key):
-            logger.debug(
-                f"[BaseNotifyingTask] Alert suppressed by cooldown: {alert_key}"
-            )
+            logger.debug(f"[BaseNotifyingTask] Alert suppressed by cooldown: {alert_key}")
             return False
 
         # 2. Threshold check
@@ -295,9 +291,7 @@ class BaseNotifyingTask:
             alert_key = f"{self.name}:{self._get_alert_key(result)}"
             self._record_alert_sent(alert_key)
 
-            logger.info(
-                f"[BaseNotifyingTask] Notification sent for {self.name}: {severity}"
-            )
+            logger.info(f"[BaseNotifyingTask] Notification sent for {self.name}: {severity}")
 
         except Exception as e:
             logger.error(f"[BaseNotifyingTask] Failed to send notification: {e}")
@@ -334,8 +328,7 @@ class BaseNotifyingTask:
         Returns False to block execution until approved.
         """
         logger.warning(
-            f"[BaseNotifyingTask] Task {self.name} requires approval - "
-            f"execution blocked. Implement approval workflow."
+            f"[BaseNotifyingTask] Task {self.name} requires approval - " f"execution blocked. Implement approval workflow."
         )
 
         # Send approval request notification
@@ -348,11 +341,7 @@ class BaseNotifyingTask:
 
             service.send_alert(
                 title=f"[Self-Healing] 승인 필요: {self.name}",
-                message=(
-                    f"고위험 작업 실행 승인이 필요합니다.\n"
-                    f"작업: {self.name}\n"
-                    f"인자: {args}, {kwargs}"
-                ),
+                message=(f"고위험 작업 실행 승인이 필요합니다.\n" f"작업: {self.name}\n" f"인자: {args}, {kwargs}"),
                 severity="critical",
                 channels=self.notification_policy.channels + ["email"],
                 metadata={
@@ -378,10 +367,7 @@ class BaseNotifyingTask:
         try:
             # Store in cache/Redis for later aggregation
             # For now, just log
-            logger.info(
-                f"[BaseNotifyingTask] Adding to daily report: "
-                f"{self.name} -> {result}"
-            )
+            logger.info(f"[BaseNotifyingTask] Adding to daily report: " f"{self.name} -> {result}")
 
             # TODO: Implement actual storage (Redis or Django cache)
             # Example:
@@ -537,7 +523,4 @@ def reset_cooldowns() -> None:
 
 def get_cooldown_status() -> Dict[str, str]:
     """Get current cooldown status (for debugging)."""
-    return {
-        key: value.isoformat()
-        for key, value in BaseNotifyingTask._last_alert_times.items()
-    }
+    return {key: value.isoformat() for key, value in BaseNotifyingTask._last_alert_times.items()}

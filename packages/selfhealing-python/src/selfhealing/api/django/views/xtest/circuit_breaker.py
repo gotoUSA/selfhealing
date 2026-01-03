@@ -27,15 +27,15 @@ logger = logging.getLogger(__name__)
 class InjectCBFailureView(XTestModeMixin, APIView):
     """
     Circuit Breaker 장애 주입 API.
-    
+
     POST /api/self-healing/xtest/inject-cb-failure/
-    
+
     Request:
         {
             "service": "database",
             "count": 5  // failure_threshold (default)
         }
-    
+
     Response:
         {
             "service": "database",
@@ -46,18 +46,18 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.data.get("service", "database")
         failure_count = int(request.data.get("count", 5))
-        
+
         # 최대 주입 횟수 제한 (안전 장치)
         max_injection = 20
         if failure_count > max_injection:
@@ -67,22 +67,22 @@ class InjectCBFailureView(XTestModeMixin, APIView):
                     "error": "injection_limit_exceeded",
                     "message": f"Maximum injection count is {max_injection}",
                     "requested": failure_count,
-                    "max_allowed": max_injection
+                    "max_allowed": max_injection,
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import (
                 get_circuit_breaker_service,
                 force_open_circuit,
             )
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 이전 상태 기록
             previous_state = cb_service.get_state(service_name)
-            
+
             # L1 우회하여 직접 실패 기록
             for i in range(failure_count):
                 cb_service.record_failure(
@@ -91,293 +91,283 @@ class InjectCBFailureView(XTestModeMixin, APIView):
                         "source": "x-test-mode",
                         "injection_number": i + 1,
                         "total_injections": failure_count,
-                        "user": str(request.user)
-                    }
+                        "user": str(request.user),
+                    },
                 )
-            
+
             # 현재 상태 확인 (실패 주입 후)
             current_state = cb_service.get_state(service_name)
-            
+
             # minimum_calls 조건 때문에 OPEN이 안 된 경우, 강제로 OPEN
             force_opened = False
             if current_state != "open" and request.data.get("force_open", True):
                 result = force_open_circuit(
                     service_name,
                     reason=f"X-Test-Mode injection: {failure_count} failures",
-                    controlled_by=f"xtest:{request.user}"
+                    controlled_by=f"xtest:{request.user}",
                 )
                 if result.success:
                     current_state = "open"
                     force_opened = True
-            
+
             # 스냅샷 수집
             snapshot = collect_system_snapshot()
-            
+
             logger.info(
                 f"[X-Test-Mode] CB failure injection: service={service_name}, "
                 f"count={failure_count}, state={previous_state}→{current_state}, "
                 f"user={request.user}"
             )
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "injected_failures": failure_count,
-                "previous_state": previous_state,
-                "cb_state": current_state,
-                "state_changed": previous_state != current_state,
-                "force_opened": force_opened,
-                "timestamp": timezone.now().isoformat(),
-                "snapshot": snapshot
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "injected_failures": failure_count,
+                    "previous_state": previous_state,
+                    "cb_state": current_state,
+                    "state_changed": previous_state != current_state,
+                    "force_opened": force_opened,
+                    "timestamp": timezone.now().isoformat(),
+                    "snapshot": snapshot,
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] CB failure injection failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "injection_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "injection_failed", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
 class ResetCBView(XTestModeMixin, APIView):
     """
     Circuit Breaker 상태 초기화 API.
-    
+
     POST /api/self-healing/xtest/reset-cb/
-    
+
     Request:
         {
             "service": "database"
         }
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.data.get("service", "database")
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 이전 상태 기록
             previous_state = cb_service.get_state(service_name)
-            
+
             # 강제 닫기
             result = cb_service.force_close(
-                service_name=service_name,
-                reason=f"X-Test-Mode reset by {request.user}",
-                controlled_by=str(request.user)
+                service_name=service_name, reason=f"X-Test-Mode reset by {request.user}", controlled_by=str(request.user)
             )
-            
+
             current_state = cb_service.get_state(service_name)
-            
+
             logger.info(
                 f"[X-Test-Mode] CB reset: service={service_name}, "
                 f"state={previous_state}→{current_state}, user={request.user}"
             )
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "previous_state": previous_state,
-                "cb_state": current_state,
-                "reset_result": result.success if hasattr(result, 'success') else True,
-                "timestamp": timezone.now().isoformat()
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "previous_state": previous_state,
+                    "cb_state": current_state,
+                    "reset_result": result.success if hasattr(result, "success") else True,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] CB reset failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "reset_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "reset_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
 class CBStatusDetailView(XTestModeMixin, APIView):
     """
     Circuit Breaker 상세 상태 조회 API.
-    
+
     GET /api/self-healing/xtest/cb-status/?service=database
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.query_params.get("service")
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             if service_name:
                 # 특정 서비스 상태
                 state_data = cb_service.get_or_create_state(service_name)
-                
-                return Response({
-                    "status": "success",
-                    "service": service_name,
-                    "cb_state": state_data.state,
-                    "failure_count": state_data.failure_count,
-                    "success_count": getattr(state_data, 'success_count', 0),
-                    "last_failure_time": getattr(state_data, 'last_failure_time', None),
-                    "opened_at": getattr(state_data, 'opened_at', None),
-                    "manually_controlled": getattr(state_data, 'manually_controlled', False),
-                    "config": {
-                        "failure_threshold": cb_service.config.failure_threshold,
-                        "recovery_timeout": cb_service.config.recovery_timeout,
-                        "success_threshold": cb_service.config.success_threshold,
-                        "minimum_calls": cb_service.config.minimum_calls,
-                    },
-                    "timestamp": timezone.now().isoformat()
-                })
+
+                return Response(
+                    {
+                        "status": "success",
+                        "service": service_name,
+                        "cb_state": state_data.state,
+                        "failure_count": state_data.failure_count,
+                        "success_count": getattr(state_data, "success_count", 0),
+                        "last_failure_time": getattr(state_data, "last_failure_time", None),
+                        "opened_at": getattr(state_data, "opened_at", None),
+                        "manually_controlled": getattr(state_data, "manually_controlled", False),
+                        "config": {
+                            "failure_threshold": cb_service.config.failure_threshold,
+                            "recovery_timeout": cb_service.config.recovery_timeout,
+                            "success_threshold": cb_service.config.success_threshold,
+                            "minimum_calls": cb_service.config.minimum_calls,
+                        },
+                        "timestamp": timezone.now().isoformat(),
+                    }
+                )
             else:
                 # 전체 서비스 상태 (repository에서 조회)
                 all_states = cb_service.repository.get_all_states()
-                
+
                 services = {}
                 for state_data in all_states:
                     services[state_data.service_name] = {
                         "state": state_data.state,
                         "failure_count": state_data.failure_count,
-                        "success_count": getattr(state_data, 'success_count', 0),
-                        "opened_at": getattr(state_data, 'opened_at', None),
+                        "success_count": getattr(state_data, "success_count", 0),
+                        "opened_at": getattr(state_data, "opened_at", None),
                     }
-                
-                return Response({
-                    "status": "success",
-                    "services": services,
-                    "total_count": len(services),
-                    "config": {
-                        "failure_threshold": cb_service.config.failure_threshold,
-                        "recovery_timeout": cb_service.config.recovery_timeout,
-                    },
-                    "timestamp": timezone.now().isoformat()
-                })
-                
+
+                return Response(
+                    {
+                        "status": "success",
+                        "services": services,
+                        "total_count": len(services),
+                        "config": {
+                            "failure_threshold": cb_service.config.failure_threshold,
+                            "recovery_timeout": cb_service.config.recovery_timeout,
+                        },
+                        "timestamp": timezone.now().isoformat(),
+                    }
+                )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] CB status query failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "status_query_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "status_query_failed", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
 class FastFailTestView(XTestModeMixin, APIView):
     """
     Fast Fail 검증 API - CB OPEN 상태에서 응답 시간 측정.
-    
+
     GET /api/self-healing/xtest/fast-fail-test/?service=database
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.query_params.get("service", "database")
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 상태 확인
             current_state = cb_service.get_state(service_name)
-            
+
             # should_allow 체크 시간 측정
             start_time = time.time()
             allowed = cb_service.should_allow(service_name)
             elapsed_ms = (time.time() - start_time) * 1000
-            
+
             is_fast_fail = elapsed_ms < 100  # 100ms 미만
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "cb_state": current_state,
-                "request_allowed": allowed,
-                "response_time_ms": round(elapsed_ms, 2),
-                "is_fast_fail": is_fast_fail,
-                "fast_fail_threshold_ms": 100,
-                "timestamp": timezone.now().isoformat()
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "cb_state": current_state,
+                    "request_allowed": allowed,
+                    "response_time_ms": round(elapsed_ms, 2),
+                    "is_fast_fail": is_fast_fail,
+                    "fast_fail_threshold_ms": 100,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] Fast fail test failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "test_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "test_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
 class TriggerCBRecoveryView(XTestModeMixin, APIView):
     """
     CB Recovery 트리거 API - HALF_OPEN 상태에서 성공 기록하여 CLOSED로 복구.
-    
+
     POST /api/self-healing/xtest/trigger-cb-recovery/
     Body: {"service": "database", "success_count": 3, "force": false}
-    
+
     HALF_OPEN 상태에서 record_success를 호출하여 CB를 CLOSED 상태로 복구시킵니다.
     - force=true: 직접 CLOSED로 전환 (테스트용)
     - force=false: record_success 호출 (정상 흐름)
-    
+
     Note: DB 모델의 half_open_max_calls 기본값은 3입니다.
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.data.get("service", "database")
         success_count = request.data.get("success_count", 3)
         force_close = request.data.get("force", False)
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 현재 상태 확인
             state_before = cb_service.get_state(service_name)
-            
+
             successes_recorded = 0
-            
+
             if force_close and state_before in ("half_open", "open"):
                 # 강제 CLOSED 전환 (테스트 전용)
                 cb_service.repository.update_state(
@@ -399,195 +389,190 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
                         break
                     else:
                         break
-            
+
             # 최종 상태 확인
             state_after = cb_service.get_state(service_name)
-            
+
             recovery_success = state_after == "closed"
-            
+
             logger.info(
                 f"[X-Test-Mode] CB recovery triggered for '{service_name}': "
                 f"{state_before} → {state_after} (successes: {successes_recorded}, force: {force_close})"
             )
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "state_before": state_before,
-                "state_after": state_after,
-                "successes_recorded": successes_recorded,
-                "force_closed": force_close,
-                "recovery_success": recovery_success,
-                "timestamp": timezone.now().isoformat()
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "state_before": state_before,
+                    "state_after": state_after,
+                    "successes_recorded": successes_recorded,
+                    "force_closed": force_close,
+                    "recovery_success": recovery_success,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] CB recovery failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "recovery_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "recovery_failed", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
 class TryRecoveryTransitionView(XTestModeMixin, APIView):
     """
     CB OPEN → HALF_OPEN 전환 시도 API (도메인 프리).
-    
+
     POST /api/self-healing/xtest/try-recovery-transition/
     Body: {"service": "stage15_platinum"}
-    
+
     **사람이 개입하는 명시적 전환 API**:
     - recovery_timeout이 지났으면 OPEN → HALF_OPEN으로 전환
     - recovery_timeout이 안 지났으면 대기 시간 반환
     - 도메인 프리: payment/order 등 특정 도메인에 종속되지 않음
-    
+
     이 API는 should_allow()를 명시적으로 호출하여
     CB의 자동 전환 로직을 트리거합니다.
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.data.get("service", "database")
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 현재 상태 확인
             state_before = cb_service.get_or_create_state(service_name)
             state_str_before = state_before.state
             opened_at = state_before.opened_at
-            
+
             # recovery_timeout 계산
             remaining_seconds = None
             recovery_timeout = cb_service.config.recovery_timeout
-            
+
             if state_str_before == "open" and opened_at:
                 elapsed = (timezone.now() - opened_at).total_seconds()
                 remaining_seconds = max(0, recovery_timeout - elapsed)
-            
+
             # should_allow 호출 - 이것이 OPEN → HALF_OPEN 전환을 트리거함
             allowed = cb_service.should_allow(service_name)
-            
+
             # 전환 후 상태 확인
             state_after = cb_service.get_or_create_state(service_name)
             state_str_after = state_after.state
-            
+
             transition_occurred = state_str_before != state_str_after
-            
+
             logger.info(
                 f"[X-Test-Mode] Try recovery transition for '{service_name}': "
                 f"state={state_str_before}→{state_str_after}, "
                 f"allowed={allowed}, transition={transition_occurred}"
             )
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "state_before": state_str_before,
-                "state_after": state_str_after,
-                "transition_occurred": transition_occurred,
-                "allowed": allowed,
-                "remaining_seconds": remaining_seconds,
-                "recovery_timeout": recovery_timeout,
-                "opened_at": opened_at.isoformat() if opened_at else None,
-                "message": (
-                    f"Transition {state_str_before}→{state_str_after}" 
-                    if transition_occurred 
-                    else f"No transition yet, remaining: {remaining_seconds:.1f}s" 
-                    if remaining_seconds and remaining_seconds > 0
-                    else f"State is {state_str_after}"
-                ),
-                "timestamp": timezone.now().isoformat()
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "state_before": state_str_before,
+                    "state_after": state_str_after,
+                    "transition_occurred": transition_occurred,
+                    "allowed": allowed,
+                    "remaining_seconds": remaining_seconds,
+                    "recovery_timeout": recovery_timeout,
+                    "opened_at": opened_at.isoformat() if opened_at else None,
+                    "message": (
+                        f"Transition {state_str_before}→{state_str_after}"
+                        if transition_occurred
+                        else (
+                            f"No transition yet, remaining: {remaining_seconds:.1f}s"
+                            if remaining_seconds and remaining_seconds > 0
+                            else f"State is {state_str_after}"
+                        )
+                    ),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] Try recovery transition failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "try_recovery_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "try_recovery_failed", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
 class SwitchToAutoModeView(XTestModeMixin, APIView):
     """
     CB를 자동 모드로 전환하는 API (manually_controlled=False 설정).
-    
+
     POST /api/self-healing/xtest/switch-to-auto/
     Body: {"service": "database"}
-    
+
     force_open 후 manually_controlled=True 상태를 해제하여
     recovery_timeout 후 자동으로 HALF_OPEN으로 전환되도록 함.
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         service_name = request.data.get("service", "database")
-        
+
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-            
+
             cb_service = get_circuit_breaker_service()
-            
+
             # 현재 상태 확인
             state_before = cb_service.get_or_create_state(service_name)
             was_manually_controlled = state_before.manually_controlled
-            
+
             # manually_controlled=False로 설정 (auto mode 전환)
             # clear_manual_control 메서드 사용 (preserve_reason=True로 상태 보존)
             cb_service.repository.clear_manual_control(
                 service_name=service_name,
                 preserve_reason=True,  # 이유는 보존하되 수동 제어만 해제
             )
-            
+
             # 최종 상태 확인
             state_after = cb_service.get_or_create_state(service_name)
-            
+
             logger.info(
                 f"[X-Test-Mode] CB switched to auto mode for '{service_name}': "
                 f"manually_controlled={was_manually_controlled} → False"
             )
-            
-            return Response({
-                "status": "success",
-                "service": service_name,
-                "cb_state": state_after.state,
-                "was_manually_controlled": was_manually_controlled,
-                "is_manually_controlled": state_after.manually_controlled,
-                "message": f"Circuit breaker for '{service_name}' switched to auto mode",
-                "timestamp": timezone.now().isoformat()
-            })
-            
+
+            return Response(
+                {
+                    "status": "success",
+                    "service": service_name,
+                    "cb_state": state_after.state,
+                    "was_manually_controlled": was_manually_controlled,
+                    "is_manually_controlled": state_after.manually_controlled,
+                    "message": f"Circuit breaker for '{service_name}' switched to auto mode",
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+
         except Exception as e:
             logger.error(f"[X-Test-Mode] Switch to auto mode failed: {e}")
             return Response(
-                {
-                    "status": "error",
-                    "error": "switch_failed",
-                    "message": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"status": "error", "error": "switch_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

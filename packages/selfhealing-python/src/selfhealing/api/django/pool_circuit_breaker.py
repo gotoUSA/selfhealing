@@ -120,7 +120,7 @@ class PoolCircuitBreaker:
             "cache_hits": 0,
             "cache_refreshes": 0,
             "stale_cache_fallbacks": 0,  # v6.2.1: Stale로 인한 안전 폴백 횟수
-            "stale_cache_warnings": 0,   # v6.2.1: Stale 경고 횟수
+            "stale_cache_warnings": 0,  # v6.2.1: Stale 경고 횟수
             "background_thread_restarts": 0,  # v6.2.1: 스레드 재시작 횟수
         }
 
@@ -209,9 +209,7 @@ class PoolCircuitBreaker:
             except Exception as e:
                 # v6.2.1: 연속 실패 추적
                 consecutive_failures += 1
-                logger.debug(
-                    f"[PoolCircuitBreaker] Background refresh failed ({consecutive_failures}x): {e}"
-                )
+                logger.debug(f"[PoolCircuitBreaker] Background refresh failed ({consecutive_failures}x): {e}")
 
                 # 5회 연속 실패 시 경고 (5 * 100ms = 500ms 이상 갱신 안됨)
                 if consecutive_failures >= 5:
@@ -593,7 +591,7 @@ class PoolCircuitBreakerMiddleware:
         'selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware',
         ...
     ]
-    
+
     비활성화:
     SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False (settings.py)
     또는
@@ -616,7 +614,7 @@ class PoolCircuitBreakerMiddleware:
         self._log_interval = 100  # v6.2.0: 100 요청마다 Pool 상태 로깅 (50 → 100)
         self._audit_enabled = self._check_audit_available()
         self._enabled = self._check_enabled()
-        
+
         status = "enabled" if self._enabled else "DISABLED"
         logger.info(
             f"[PoolCircuitBreakerMiddleware] Initialized - {status} (v6.2.1 cached+audit)! "
@@ -627,7 +625,8 @@ class PoolCircuitBreakerMiddleware:
         """미들웨어 활성화 여부 확인"""
         try:
             from django.conf import settings
-            return getattr(settings, 'SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED', True)
+
+            return getattr(settings, "SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", True)
         except Exception:
             # settings 접근 불가 시 환경변수 확인
             return os.getenv("SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -636,6 +635,7 @@ class PoolCircuitBreakerMiddleware:
         """Audit 시스템 사용 가능 여부 확인"""
         try:
             from selfhealing.audit import ContinuousAuditRecorder
+
             return True
         except ImportError:
             return False
@@ -651,7 +651,7 @@ class PoolCircuitBreakerMiddleware:
         v6.2.1: 503 거부 시 Audit 로그 기록.
 
         캐시 기반 결정임을 명확히 기록하여 분석 시 혼선 방지.
-        
+
         Phase 3 변경:
         - RequestAuditBuffer 패턴 우선 사용 (AuditMiddleware에서 일괄 기록)
         - 버퍼 사용 불가 시 기존 ContinuousAuditRecorder 직접 호출로 fallback
@@ -662,12 +662,12 @@ class PoolCircuitBreakerMiddleware:
         # === Phase 3: 버퍼 패턴 우선 ===
         try:
             from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
-            
+
             # 캐시 메타데이터 추출
             cache_age_ms = pool_status.get("_cache_age_ms", 0)
             is_stale = pool_status.get("_is_stale", False)
             is_stale_fallback = pool_status.get("_stale_fallback", False)
-            
+
             buffer = RequestAuditBuffer.get_or_create(request)
             buffer.add(
                 event_type=AuditEventType.POOL_CB_REJECTION,
@@ -740,7 +740,7 @@ class PoolCircuitBreakerMiddleware:
         # 미들웨어 비활성화 시 바이패스
         if not self._enabled:
             return self.get_response(request)
-        
+
         # 제외 경로 체크
         path = request.path
         for excluded in self.EXCLUDED_PATHS:

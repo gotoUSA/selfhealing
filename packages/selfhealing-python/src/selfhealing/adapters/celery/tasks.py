@@ -61,25 +61,25 @@ logger = get_task_logger(__name__)
 def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
     """
     Asynchronously persist a DLQ entry to the statistics store.
-    
+
     This task is triggered when DLQ entries are created in Redis,
     ensuring ORM persistence doesn't block the critical path.
-    
+
     Design Principle (07_HYBRID_STORAGE_ARCHITECTURE.md):
     - Runtime (Redis): Fast, synchronous, 1-2ms
     - Statistics (ORM): Async, can tolerate 10-100ms
-    
+
     Args:
         entry_data: DLQ entry data from Redis
-        
+
     Returns:
         Dictionary with persistence result
     """
     logger.debug(f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}")
-    
+
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         if not ProviderRegistry.has_statistics_adapter():
             logger.debug("[AsyncPersist] No statistics adapter registered, skipping")
             return {
@@ -87,10 +87,10 @@ def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
                 "skipped": True,
                 "reason": "no_statistics_adapter",
             }
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
         entry_id = stats_repo.persist_entry(entry_data)
-        
+
         if entry_id:
             logger.info(f"[AsyncPersist] Successfully persisted DLQ entry: {entry_id}")
             return {
@@ -103,7 +103,7 @@ def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
                 "success": False,
                 "error": "persist_returned_none",
             }
-            
+
     except Exception as e:
         logger.error(f"[AsyncPersist] Failed to persist DLQ entry: {e}", exc_info=True)
         raise  # Re-raise for Celery retry
@@ -120,21 +120,21 @@ def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
 def async_persist_batch(self, entries: List[Dict[str, Any]]) -> dict:
     """
     Batch persist DLQ entries to the statistics store.
-    
+
     Used for bulk sync from Redis to ORM, typically called from
     AuditMiddleware's batch flush or periodic sync tasks.
-    
+
     Args:
         entries: List of DLQ entry data
-        
+
     Returns:
         Dictionary with batch persistence result
     """
     logger.info(f"[AsyncPersist] Batch persisting {len(entries)} entries")
-    
+
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         if not ProviderRegistry.has_statistics_adapter():
             return {
                 "success": True,
@@ -142,17 +142,17 @@ def async_persist_batch(self, entries: List[Dict[str, Any]]) -> dict:
                 "count": 0,
                 "reason": "no_statistics_adapter",
             }
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
         synced = stats_repo.sync_from_runtime(entries)
-        
+
         logger.info(f"[AsyncPersist] Batch persisted {synced}/{len(entries)} entries")
         return {
             "success": True,
             "synced": synced,
             "total": len(entries),
         }
-        
+
     except Exception as e:
         logger.error(f"[AsyncPersist] Batch persist failed: {e}", exc_info=True)
         return {
@@ -181,12 +181,12 @@ def link_audit_to_dlq(
 ) -> dict:
     """
     Link an audit record to a DLQ entity.
-    
+
     Creates the relationship between DLQ entries and their audit trail,
     enabling the "Master Trail" feature for technical due diligence.
-    
+
     Reference: 07_HYBRID_STORAGE_ARCHITECTURE.md - Audit/Statistics Integration
-    
+
     Args:
         entity_id: DLQ entry ID
         entity_type: Entity type (usually "dlq_entry")
@@ -195,18 +195,18 @@ def link_audit_to_dlq(
         status: New status after action
         details: Additional details
         audit_record_hash: Hash from audit system for chain verification
-        
+
     Returns:
         Dictionary with link result
     """
     logger.debug(f"[AuditLink] Linking audit to {entity_type}:{entity_id}")
-    
+
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         if not ProviderRegistry.has_statistics_adapter():
             return {"success": True, "skipped": True}
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
         success = stats_repo.link_audit_entry(
             entity_id=entity_id,
@@ -217,9 +217,9 @@ def link_audit_to_dlq(
             details=details,
             audit_record_hash=audit_record_hash,
         )
-        
+
         return {"success": success}
-        
+
     except Exception as e:
         logger.error(f"[AuditLink] Failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
@@ -259,7 +259,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         # Error Budget Gate 체크: 에러 예산 부족 시 Replay 차단
         try:
             from selfhealing.services.error_budget_gate import check_automation_allowed
-            
+
             gate_result = check_automation_allowed()
             if not gate_result.allowed:
                 logger.warning(
@@ -285,6 +285,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
 
         # Use ProviderRegistry to get repository (Redis by default)
         from selfhealing.factory import ProviderRegistry
+
         repo = ProviderRegistry.get_failed_operation_repo()
 
         from selfhealing.core.types import OperationStatus
@@ -359,27 +360,27 @@ def check_circuit_breaker_recovery(self) -> dict:
         from selfhealing.factory import ProviderRegistry
         from selfhealing.core.types import CircuitState
         from selfhealing.core.timezone import now
-        
+
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
         current_time = now()
         transitioned = []
 
         # Get all circuit breaker states from Redis
         all_states = cb_repo.get_all_states()
-        
+
         for service_name, state in all_states.items():
             # Skip if not OPEN or manually controlled
             if state.state != CircuitState.OPEN:
                 continue
-            if getattr(state, 'manually_controlled', False):
+            if getattr(state, "manually_controlled", False):
                 continue
             if not state.opened_at:
                 continue
-            
+
             # Check if recovery timeout has passed
             elapsed = (current_time - state.opened_at).total_seconds()
-            recovery_timeout = getattr(state, 'recovery_timeout', 60)
-            
+            recovery_timeout = getattr(state, "recovery_timeout", 60)
+
             if elapsed >= recovery_timeout:
                 # Transition to HALF_OPEN
                 success = cb_repo.update_state(
@@ -389,12 +390,11 @@ def check_circuit_breaker_recovery(self) -> dict:
                     success_count=0,
                     half_open_request_count=0,
                 )
-                
+
                 if success:
                     transitioned.append(service_name)
                     logger.info(
-                        f"[Circuit Check] Transitioned '{service_name}' "
-                        f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                        f"[Circuit Check] Transitioned '{service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
                     )
 
         return {
@@ -444,20 +444,20 @@ def force_open_circuit_breaker(
         from selfhealing.factory import ProviderRegistry
         from selfhealing.core.types import CircuitState
         from selfhealing.core.timezone import now
-        
+
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
-        
+
         # Get current state (or create new)
         current_state = cb_repo.get_state(service_name)
         previous_state = current_state.state.value if current_state else "closed"
-        
+
         # Force open using atomic operation
         success = cb_repo.atomic_force_open(
             service_name=service_name,
             reason=reason,
             controlled_by=str(user_id) if user_id else None,
         )
-        
+
         if success:
             logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
             return {
@@ -517,9 +517,9 @@ def force_close_circuit_breaker(
     try:
         from selfhealing.factory import ProviderRegistry
         from selfhealing.core.types import CircuitState
-        
+
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
-        
+
         # Get current state
         current_state = cb_repo.get_state(service_name)
         if not current_state:
@@ -528,24 +528,24 @@ def force_close_circuit_breaker(
                 "service_name": service_name,
                 "error": f"Circuit breaker '{service_name}' not found",
             }
-        
-        previous_state = current_state.state.value if hasattr(current_state.state, 'value') else str(current_state.state)
-        
+
+        previous_state = current_state.state.value if hasattr(current_state.state, "value") else str(current_state.state)
+
         # Force close using atomic operation
         success = cb_repo.atomic_force_close(
             service_name=service_name,
             reason=reason,
             controlled_by=str(user_id) if user_id else None,
         )
-        
+
         if success:
             logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
-            
+
             # Trigger replay if requested
             if trigger_replay:
                 conditional_replay_on_circuit_close.delay(service_name)
                 logger.info(f"[Circuit Breaker] Triggered replay for '{service_name}'")
-            
+
             return {
                 "success": True,
                 "service_name": service_name,
@@ -596,26 +596,26 @@ def expire_manual_overrides(self) -> dict:
         from selfhealing.factory import ProviderRegistry
         from selfhealing.core.types import CircuitState
         from selfhealing.core.timezone import now
-        
+
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
         current_time = now()
         expired = []
 
         # Get all circuit breaker states
         all_states = cb_repo.get_all_states()
-        
+
         for service_name, state in all_states.items():
             # Skip if not manually controlled or no expiry
-            if not getattr(state, 'manually_controlled', False):
+            if not getattr(state, "manually_controlled", False):
                 continue
-            
-            expires_at = getattr(state, 'manual_override_expires_at', None)
+
+            expires_at = getattr(state, "manual_override_expires_at", None)
             if not expires_at or expires_at >= current_time:
                 continue
-            
-            previous_state = state.state.value if hasattr(state.state, 'value') else str(state.state)
+
+            previous_state = state.state.value if hasattr(state.state, "value") else str(state.state)
             new_state = previous_state
-            
+
             # Transition OPEN to HALF_OPEN for gradual recovery
             if state.state == CircuitState.OPEN:
                 new_state = "half_open"
@@ -639,16 +639,17 @@ def expire_manual_overrides(self) -> dict:
                     control_reason="",
                     manual_override_expires_at=None,
                 )
-            
-            expired.append({
-                "service_name": service_name,
-                "previous_state": previous_state,
-                "new_state": new_state,
-            })
-            
+
+            expired.append(
+                {
+                    "service_name": service_name,
+                    "previous_state": previous_state,
+                    "new_state": new_state,
+                }
+            )
+
             logger.warning(
-                f"[Circuit Breaker] Expired manual override for '{service_name}': "
-                f"{previous_state} -> {new_state}"
+                f"[Circuit Breaker] Expired manual override for '{service_name}': " f"{previous_state} -> {new_state}"
             )
 
         return {
@@ -805,7 +806,7 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
 
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         if not ProviderRegistry.has_statistics_adapter():
             logger.info("[DLQ Cleanup] No statistics adapter, skipping cleanup")
             return {
@@ -813,9 +814,9 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
                 "skipped": True,
                 "reason": "no_statistics_adapter",
             }
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
-        
+
         # Archive old resolved entries
         archived_count = stats_repo.archive_old_entries(older_than_days=days_old)
 
@@ -866,14 +867,14 @@ def collect_self_healing_metrics(self) -> dict:
 
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
-        
+
         # DLQ stats
         status_counts = stats_repo.get_status_counts()
         domain_dist = stats_repo.get_domain_distribution(limit=20)
-        
+
         dlq_by_domain = {d.domain: d.count for d in domain_dist}
         dlq_by_status = {
             "pending": status_counts.pending,
@@ -931,9 +932,9 @@ def check_and_report_sla_breaches(self) -> dict:
 
     try:
         from selfhealing.factory import ProviderRegistry
-        
+
         stats_repo = ProviderRegistry.get_statistics_repo()
-        
+
         # Default SLA: 4 hours for resolution
         sla_threshold = timedelta(hours=4)
         cutoff = datetime.now(tz.utc) - sla_threshold

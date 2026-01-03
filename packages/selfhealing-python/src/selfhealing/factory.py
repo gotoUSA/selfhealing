@@ -112,18 +112,18 @@ class ProviderRegistry:
     ) -> None:
         """
         Register a statistics adapter.
-        
+
         Should be called during app initialization (e.g., Django's AppConfig.ready()).
         Only one statistics adapter can be registered at a time.
-        
+
         Args:
             adapter: StatisticsRepositoryInterface implementation
-            
+
         Example (Django):
             # shopping/apps.py
             from selfhealing.factory import ProviderRegistry
             from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
-            
+
             class ShoppingConfig(AppConfig):
                 def ready(self):
                     ProviderRegistry.register_statistics_adapter(
@@ -283,22 +283,23 @@ class ProviderRegistry:
     def get_statistics_repo(cls) -> "StatisticsRepositoryInterface":
         """
         Get statistics repository instance.
-        
+
         Returns the registered statistics adapter, or NullStatisticsRepository
         if no adapter is registered.
-        
+
         Unlike runtime repositories, statistics repository is a singleton
         registered by the application, not selected by name.
-        
+
         Returns:
             StatisticsRepositoryInterface instance
-            
+
         Example:
             stats_repo = ProviderRegistry.get_statistics_repo()
             counts = stats_repo.get_status_counts()
         """
         if cls._statistics_adapter is None:
             from selfhealing.adapters.statistics.null import NullStatisticsRepository
+
             return NullStatisticsRepository()
         return cls._statistics_adapter
 
@@ -306,9 +307,9 @@ class ProviderRegistry:
     def has_statistics_adapter(cls) -> bool:
         """
         Check if a statistics adapter is registered.
-        
+
         Useful for conditionally showing dashboard features.
-        
+
         Returns:
             True if a statistics adapter is registered
         """
@@ -353,6 +354,7 @@ class ProviderRegistry:
 
         # Create instance with default settings
         import os
+
         if name == "file":
             log_path = os.getenv("AUDIT_LOG_PATH", "logs/audit.jsonl")
             instance = adapter_class(log_path)
@@ -371,6 +373,7 @@ class ProviderRegistry:
             from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
             from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
             from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter
+
             if "file" not in cls._audit_adapters:
                 cls.register_audit_adapter("file", FileAuditLogAdapter)
             if "stdout" not in cls._audit_adapters:
@@ -602,43 +605,45 @@ _auto_register_adapters()
 def get_storage_backend():
     """
     Get ResilientStorageBackend instance.
-    
+
     Provides unified storage with:
     - Redis-First architecture
     - Graceful degradation to Memory + WAL
     - Zero data loss guarantee
-    
+
     Returns:
         ResilientStorageBackend singleton instance
     """
     from selfhealing.adapters.resilient.backend import get_storage_backend as _get_backend
+
     return _get_backend()
 
 
 def get_circuit_breaker_repo():
     """
     Get Redis-based Circuit Breaker Repository.
-    
+
     Uses ResilientStorageBackend for zero data loss.
     Falls back to memory on Redis failure.
-    
+
     Returns:
         RedisCircuitBreakerStateRepository instance
     """
     from selfhealing.adapters.redis.circuit_breaker import get_redis_circuit_breaker_repo
+
     return get_redis_circuit_breaker_repo()
 
 
 def get_dlq_repo():
     """
     Get Redis-based DLQ Repository.
-    
+
     Uses ResilientStorageBackend for zero data loss.
     Falls back to memory on Redis failure.
-    
+
     Returns:
         RedisDLQRepository instance
     """
     from selfhealing.adapters.redis.dlq import get_redis_dlq_repo
-    return get_redis_dlq_repo()
 
+    return get_redis_dlq_repo()

@@ -4,7 +4,7 @@ Governance Checks - 공통 거버넌스 체크 로직
 서비스 레이어에서 재사용할 수 있는 공통 안전 체크 유틸리티 및 믹스인.
 
 Check on Use 패턴:
-    모든 체크는 TTL 캐시 기반으로 동작하며, 서비스 메서드 실행 시점에 
+    모든 체크는 TTL 캐시 기반으로 동작하며, 서비스 메서드 실행 시점에
     상태를 조회합니다. 이벤트 버스를 통한 즉시 캐시 무효화도 지원합니다.
 
 Audit Logging 연동:
@@ -32,7 +32,7 @@ Audit Logging 연동:
         is_emergency_blocking,
         is_error_budget_blocking,
     )
-    
+
     if not is_system_enabled():
         return {"error": "Kill Switch active"}
 
@@ -65,11 +65,12 @@ logger = logging.getLogger(__name__)
 def _get_audit_adapter() -> Optional["AuditLogAdapter"]:
     """
     AuditLogAdapter 인스턴스를 가져옵니다.
-    
+
     사용자가 AuditLogAdapter를 등록하지 않았으면 None 반환.
     """
     try:
         from selfhealing.factory import ProviderRegistry
+
         return ProviderRegistry.get_audit_adapter()
     except (ImportError, ValueError, AttributeError):
         # Adapter not registered - audit logging is optional
@@ -86,14 +87,14 @@ def _log_governance_blocked(
 ) -> None:
     """
     거버넌스 차단을 Audit Log에 기록.
-    
+
     이 함수는 차단이 발생할 때마다 호출되어
     "왜 이때 작업이 안 됐지?"라는 질문에 대한 기록을 남깁니다.
-    
+
     Phase 3 변경:
     - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
     - request가 없으면 → 기존 방식 유지 (직접 로깅)
-    
+
     Args:
         block_reason: 차단 사유 (kill_switch, emergency_mode, error_budget)
         operation_name: 차단된 작업 이름
@@ -106,7 +107,7 @@ def _log_governance_blocked(
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
-            
+
             buffer = RequestAuditBuffer.get_or_create(request)
             buffer.add(
                 event_type=AuditEventType.GOVERNANCE_BLOCKED,
@@ -124,17 +125,14 @@ def _log_governance_blocked(
             return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
         except ImportError:
             pass  # event_buffer 사용 불가 - fallback
-    
+
     # === Fallback: 기존 방식 ===
     adapter = _get_audit_adapter()
     if adapter is None:
         # Audit adapter not configured - just log to standard logger
-        logger.info(
-            f"[GovernanceAudit] BLOCKED | reason={block_reason} | "
-            f"operation={operation_name} | details={details}"
-        )
+        logger.info(f"[GovernanceAudit] BLOCKED | reason={block_reason} | " f"operation={operation_name} | details={details}")
         return
-    
+
     try:
         adapter.log_governance_blocked(
             block_reason=block_reason,
@@ -155,19 +153,19 @@ def _log_governance_blocked(
 
 class BlockReason(str, Enum):
     """자동화가 차단된 이유."""
-    
+
     KILL_SWITCH = "kill_switch"
     """Kill Switch 활성화됨."""
-    
+
     EMERGENCY_MODE = "emergency_mode"
     """비상 모드 활성화 (LEVEL_2+)."""
-    
+
     ERROR_BUDGET = "error_budget"
     """에러 예산 고갈."""
-    
+
     RATE_LIMITED = "rate_limited"
     """Rate Limit 초과."""
-    
+
     MANUALLY_BLOCKED = "manually_blocked"
     """관리자에 의해 수동 차단됨."""
 
@@ -175,26 +173,26 @@ class BlockReason(str, Enum):
 @dataclass
 class GovernanceCheckResult:
     """거버넌스 체크 결과."""
-    
+
     allowed: bool
     """실행이 허용되는지 여부."""
-    
+
     block_reason: Optional[BlockReason] = None
     """차단된 경우 사유."""
-    
+
     block_message: str = ""
     """사람이 읽을 수 있는 메시지."""
-    
+
     # 상세 정보 (디버깅/로깅용)
     emergency_level: str = "UNKNOWN"
     error_budget_percent: float = 100.0
     threshold_percent: float = 0.0
-    
+
     @classmethod
     def allowed_result(cls) -> "GovernanceCheckResult":
         """허용된 결과 팩토리."""
         return cls(allowed=True)
-    
+
     @classmethod
     def blocked_by_kill_switch(cls) -> "GovernanceCheckResult":
         """Kill Switch에 의해 차단된 결과."""
@@ -203,10 +201,10 @@ class GovernanceCheckResult:
             block_reason=BlockReason.KILL_SWITCH,
             block_message="Kill Switch is active: self-healing system is disabled",
         )
-    
+
     @classmethod
     def blocked_by_emergency(
-        cls, 
+        cls,
         level_name: str,
         message: str = "",
     ) -> "GovernanceCheckResult":
@@ -217,7 +215,7 @@ class GovernanceCheckResult:
             block_message=message or f"Emergency mode {level_name} is active",
             emergency_level=level_name,
         )
-    
+
     @classmethod
     def blocked_by_error_budget(
         cls,
@@ -232,7 +230,7 @@ class GovernanceCheckResult:
             error_budget_percent=budget_percent,
             threshold_percent=threshold_percent,
         )
-    
+
     def to_dict(self) -> dict:
         """딕셔너리로 변환."""
         return {
@@ -253,11 +251,11 @@ class GovernanceCheckResult:
 class TTLCache:
     """
     Thread-safe TTL 기반 캐시.
-    
+
     Check on Use 패턴 구현을 위한 경량 캐시.
     이벤트 버스를 통해 invalidate()를 호출하면 즉시 무효화됩니다.
     """
-    
+
     def __init__(self, default_ttl: float = 30.0):
         """
         Args:
@@ -266,7 +264,7 @@ class TTLCache:
         self._cache: dict[str, Tuple[Any, float]] = {}
         self._lock = threading.Lock()
         self._default_ttl = default_ttl
-    
+
     def get(self, key: str) -> Optional[Any]:
         """캐시에서 값 조회. 만료된 경우 None 반환."""
         with self._lock:
@@ -277,18 +275,18 @@ class TTLCache:
                 else:
                     del self._cache[key]
             return None
-    
+
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
         """캐시에 값 저장."""
         with self._lock:
             expires_at = time.time() + (ttl or self._default_ttl)
             self._cache[key] = (value, expires_at)
-    
+
     def invalidate(self, key: str) -> None:
         """특정 키 무효화."""
         with self._lock:
             self._cache.pop(key, None)
-    
+
     def invalidate_all(self) -> None:
         """모든 캐시 무효화."""
         with self._lock:
@@ -302,7 +300,7 @@ _governance_cache = TTLCache(default_ttl=30.0)
 def invalidate_governance_cache() -> None:
     """
     거버넌스 캐시 무효화.
-    
+
     이벤트 버스에서 상태 변경 시 호출하세요:
         event_bus.subscribe("EmergencyLevelChanged", invalidate_governance_cache)
         event_bus.subscribe("SystemControlChanged", invalidate_governance_cache)
@@ -319,16 +317,17 @@ def invalidate_governance_cache() -> None:
 def is_system_enabled() -> bool:
     """
     Self-healing 시스템이 활성화되어 있는지 확인 (Kill Switch 체크).
-    
+
     Returns:
         True if enabled, False if Kill Switch is active
     """
     cached = _governance_cache.get("system_enabled")
     if cached is not None:
         return cached
-    
+
     try:
         from selfhealing.services.system_control import SystemControlManager
+
         manager = SystemControlManager()
         result = manager.is_enabled()
         _governance_cache.set("system_enabled", result)
@@ -342,10 +341,10 @@ def is_system_enabled() -> bool:
 def is_emergency_blocking(min_level: int = 2) -> Tuple[bool, str]:
     """
     비상 모드로 인해 작업이 차단되어야 하는지 확인.
-    
+
     Args:
         min_level: 차단을 트리거하는 최소 비상 레벨 (기본: 2)
-    
+
     Returns:
         (is_blocked, level_name) 튜플
     """
@@ -353,14 +352,14 @@ def is_emergency_blocking(min_level: int = 2) -> Tuple[bool, str]:
     cached = _governance_cache.get(cache_key)
     if cached is not None:
         return cached
-    
+
     try:
         from selfhealing.services.emergency_mode import get_emergency_manager
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
-        
+
         manager = get_emergency_manager()
         level = manager.get_current_level()
-        
+
         is_blocked = level.value >= min_level
         result = (is_blocked, level.name)
         _governance_cache.set(cache_key, result)
@@ -374,17 +373,17 @@ def is_emergency_blocking(min_level: int = 2) -> Tuple[bool, str]:
 def is_error_budget_blocking() -> Tuple[bool, float, float]:
     """
     에러 예산 부족으로 자동화가 차단되어야 하는지 확인.
-    
+
     Returns:
         (is_blocked, current_budget_percent, threshold_percent) 튜플
     """
     cached = _governance_cache.get("error_budget_blocking")
     if cached is not None:
         return cached
-    
+
     try:
         from selfhealing.services.error_budget_gate import check_automation_allowed
-        
+
         gate_result = check_automation_allowed()
         result = (
             not gate_result.allowed,
@@ -411,15 +410,15 @@ def check_all_governance(
 ) -> GovernanceCheckResult:
     """
     모든 거버넌스 체크를 순차적으로 수행.
-    
+
     체크 순서:
     1. Kill Switch (enabled일 때)
     2. Emergency Level (enabled일 때)
     3. Error Budget (enabled일 때)
-    
+
     첫 번째 실패에서 조기 반환합니다.
     차단 발생 시 AuditLog에 자동 기록됩니다 (audit_on_block=True).
-    
+
     Args:
         check_kill_switch: Kill Switch 체크 여부
         check_emergency: 비상 모드 체크 여부
@@ -429,14 +428,14 @@ def check_all_governance(
         service_name: 서비스 이름 (Audit 로깅용)
         domain: 도메인 (Audit 로깅용)
         audit_on_block: 차단 시 Audit Log 기록 여부
-    
+
     Returns:
         GovernanceCheckResult
     """
     # 1. Kill Switch
     if check_kill_switch and not is_system_enabled():
         logger.warning("[GovernanceChecks] Blocked by Kill Switch")
-        
+
         if audit_on_block:
             _log_governance_blocked(
                 block_reason="kill_switch",
@@ -445,15 +444,15 @@ def check_all_governance(
                 service_name=service_name,
                 domain=domain,
             )
-        
+
         return GovernanceCheckResult.blocked_by_kill_switch()
-    
+
     # 2. Emergency Mode
     if check_emergency:
         is_blocked, level_name = is_emergency_blocking(min_level=emergency_min_level)
         if is_blocked:
             logger.warning(f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}")
-            
+
             if audit_on_block:
                 _log_governance_blocked(
                     block_reason="emergency_mode",
@@ -465,18 +464,18 @@ def check_all_governance(
                     service_name=service_name,
                     domain=domain,
                 )
-            
+
             return GovernanceCheckResult.blocked_by_emergency(
                 level_name=level_name,
                 message=f"Emergency mode {level_name} is active: operations blocked",
             )
-    
+
     # 3. Error Budget
     if check_error_budget:
         is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
         if is_blocked:
             logger.warning(f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%")
-            
+
             if audit_on_block:
                 _log_governance_blocked(
                     block_reason="error_budget",
@@ -488,12 +487,12 @@ def check_all_governance(
                     service_name=service_name,
                     domain=domain,
                 )
-            
+
             return GovernanceCheckResult.blocked_by_error_budget(
                 budget_percent=budget_pct,
                 threshold_percent=threshold_pct,
             )
-    
+
     return GovernanceCheckResult.allowed_result()
 
 
@@ -508,21 +507,20 @@ F = TypeVar("F", bound=Callable[..., Any])
 def require_system_enabled(func: F) -> F:
     """
     Kill Switch 체크 데코레이터.
-    
+
     시스템이 비활성화되어 있으면 GovernanceCheckResult.blocked 반환.
     차단 시 AuditLog에 기록됩니다.
-    
+
     Usage:
         @require_system_enabled
         def my_automation(self):
             ...
     """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not is_system_enabled():
-            logger.warning(
-                f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active"
-            )
+            logger.warning(f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active")
             result = GovernanceCheckResult.blocked_by_kill_switch()
             _log_governance_blocked(
                 block_reason=result.block_reason,
@@ -531,33 +529,32 @@ def require_system_enabled(func: F) -> F:
             )
             return result
         return func(*args, **kwargs)
+
     return wrapper  # type: ignore
 
 
 def require_not_emergency(min_level: int = 2) -> Callable[[F], F]:
     """
     비상 모드 체크 데코레이터 팩토리.
-    
+
     지정된 레벨 이상의 비상 모드에서는 차단.
     차단 시 AuditLog에 기록됩니다.
-    
+
     Args:
         min_level: 차단을 트리거하는 최소 비상 레벨 (기본: 2)
-    
+
     Usage:
         @require_not_emergency(min_level=2)
         def my_automation(self):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             is_blocked, level_name = is_emergency_blocking(min_level=min_level)
             if is_blocked:
-                logger.warning(
-                    f"[GovernanceChecks] {func.__name__} blocked: "
-                    f"Emergency mode {level_name}"
-                )
+                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Emergency mode {level_name}")
                 result = GovernanceCheckResult.blocked_by_emergency(
                     level_name=level_name,
                     message=f"Emergency mode {level_name} blocks this operation",
@@ -573,31 +570,31 @@ def require_not_emergency(min_level: int = 2) -> Callable[[F], F]:
                 )
                 return result
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
 def require_error_budget() -> Callable[[F], F]:
     """
     에러 예산 체크 데코레이터.
-    
+
     에러 예산이 임계값 이하면 차단.
     차단 시 AuditLog에 기록됩니다.
-    
+
     Usage:
         @require_error_budget()
         def my_automation(self):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
             if is_blocked:
-                logger.warning(
-                    f"[GovernanceChecks] {func.__name__} blocked: "
-                    f"Error budget {budget_pct:.1f}%"
-                )
+                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Error budget {budget_pct:.1f}%")
                 result = GovernanceCheckResult.blocked_by_error_budget(
                     budget_percent=budget_pct,
                     threshold_percent=threshold_pct,
@@ -613,7 +610,9 @@ def require_error_budget() -> Callable[[F], F]:
                 )
                 return result
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -627,10 +626,10 @@ def require_governance(
 ) -> Callable[[F], F]:
     """
     통합 거버넌스 체크 데코레이터 팩토리.
-    
+
     여러 거버넌스 체크를 한 번에 적용.
     차단 시 AuditLog에 기록됩니다.
-    
+
     Args:
         check_kill_switch: Kill Switch 체크 여부
         check_emergency: 비상 모드 체크 여부
@@ -638,12 +637,13 @@ def require_governance(
         check_error_budget: 에러 예산 체크 여부
         operation_name: 작업 이름 (생략 시 함수 이름 사용)
         audit_on_block: 차단 시 Audit Log 기록 여부
-    
+
     Usage:
         @require_governance(check_error_budget=True)
         def my_automation(self):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -663,7 +663,9 @@ def require_governance(
                 )
                 return result
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -675,25 +677,25 @@ def require_governance(
 class GovernanceCheckMixin:
     """
     거버넌스 체크 메서드를 제공하는 믹스인.
-    
+
     서비스 클래스에서 상속받아 사용하세요:
-    
+
         class MyService(GovernanceCheckMixin):
             def do_something(self):
                 check = self.check_governance(operation_name="do_something")
                 if not check.allowed:
                     return {"error": check.block_message}
                 ...
-    
+
     Audit Logging:
         차단 발생 시 자동으로 AuditLog에 기록됩니다.
         operation_name을 명시하면 더 의미있는 기록이 남습니다.
     """
-    
+
     # 서브클래스에서 오버라이드 가능
     _governance_service_name: Optional[str] = None
     _governance_domain: Optional[str] = None
-    
+
     def is_automation_allowed(
         self,
         check_emergency: bool = True,
@@ -703,7 +705,7 @@ class GovernanceCheckMixin:
     ) -> bool:
         """
         자동화가 허용되는지 빠르게 체크.
-        
+
         Returns:
             True if allowed, False otherwise
         """
@@ -714,7 +716,7 @@ class GovernanceCheckMixin:
             operation_name=operation_name,
         )
         return result.allowed
-    
+
     def check_governance(
         self,
         check_kill_switch: bool = True,
@@ -726,15 +728,15 @@ class GovernanceCheckMixin:
     ) -> GovernanceCheckResult:
         """
         거버넌스 체크 수행.
-        
+
         Args:
             check_kill_switch: Kill Switch 체크 여부
-            check_emergency: 비상 모드 체크 여부  
+            check_emergency: 비상 모드 체크 여부
             emergency_min_level: 비상 모드 차단 최소 레벨
             check_error_budget: 에러 예산 체크 여부
             operation_name: 작업 이름 (Audit 로깅용)
             audit_on_block: 차단 시 Audit Log 기록 여부
-        
+
         Returns:
             GovernanceCheckResult with detailed information
         """
@@ -748,7 +750,7 @@ class GovernanceCheckMixin:
             domain=self._governance_domain,
             audit_on_block=audit_on_block,
         )
-    
+
     def require_automation_allowed(
         self,
         check_emergency: bool = True,
@@ -758,9 +760,9 @@ class GovernanceCheckMixin:
     ) -> Optional[GovernanceCheckResult]:
         """
         자동화가 허용되지 않으면 차단 결과 반환.
-        
+
         허용되면 None, 차단되면 GovernanceCheckResult 반환.
-        
+
         Usage:
             blocked = self.require_automation_allowed(operation_name="replay_dlq")
             if blocked:

@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 class EmergencyStatusView(APIView):
     """
     GET /api/self-healing/emergency/status/
-    
+
     현재 비상 모드 상태 조회.
-    
+
     Response:
         {
             "is_active": true,
@@ -62,59 +62,61 @@ class EmergencyStatusView(APIView):
             }
         }
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request) -> Response:
         manager = get_emergency_manager()
         state = manager.get_state()
-        
+
         # 현재 레벨의 티어 배율
         tier_multipliers = EMERGENCY_LEVEL_RULES.get(
             state.level,
             EMERGENCY_LEVEL_RULES[EmergencyLevel.NORMAL],
         )
-        
-        return Response({
-            "is_active": state.is_active,
-            "level": state.level.name,
-            "level_value": state.level.value,
-            "activated_at": state.activated_at,
-            "activated_by": state.activated_by,
-            "activation_reason": state.activation_reason,
-            "expires_at": state.expires_at,
-            "is_auto_triggered": state.is_auto_triggered,
-            "is_recovering": state.is_recovering,
-            "recovery_started_at": state.recovery_started_at,
-            "target_level": state.target_level.name if state.target_level else None,
-            "deactivated_at": state.deactivated_at,
-            "deactivated_by": state.deactivated_by,
-            "tier_multipliers": tier_multipliers,
-            "available_levels": [
-                {
-                    "name": level.name,
-                    "value": level.value,
-                    "multipliers": EMERGENCY_LEVEL_RULES[level],
-                }
-                for level in EmergencyLevel
-            ],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "is_active": state.is_active,
+                "level": state.level.name,
+                "level_value": state.level.value,
+                "activated_at": state.activated_at,
+                "activated_by": state.activated_by,
+                "activation_reason": state.activation_reason,
+                "expires_at": state.expires_at,
+                "is_auto_triggered": state.is_auto_triggered,
+                "is_recovering": state.is_recovering,
+                "recovery_started_at": state.recovery_started_at,
+                "target_level": state.target_level.name if state.target_level else None,
+                "deactivated_at": state.deactivated_at,
+                "deactivated_by": state.deactivated_by,
+                "tier_multipliers": tier_multipliers,
+                "available_levels": [
+                    {
+                        "name": level.name,
+                        "value": level.value,
+                        "multipliers": EMERGENCY_LEVEL_RULES[level],
+                    }
+                    for level in EmergencyLevel
+                ],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class EmergencyTriggerView(APIView):
     """
     POST /api/self-healing/emergency/trigger/
-    
+
     수동 비상 모드 활성화.
-    
+
     Request:
         {
             "level": "LEVEL_2",           // LEVEL_1, LEVEL_2, LEVEL_3
             "reason": "High error rate",  // 필수
             "duration_minutes": 30        // 선택 (미지정 시 수동 해제 필요)
         }
-    
+
     Response:
         {
             "success": true,
@@ -124,14 +126,14 @@ class EmergencyTriggerView(APIView):
             "expires_at": "2024-01-01T12:30:00Z"
         }
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def post(self, request: Request) -> Response:
         level_name = request.data.get("level", "LEVEL_1")
         reason = request.data.get("reason", "")
         duration_minutes = request.data.get("duration_minutes")
-        
+
         # Validation
         if not reason:
             return Response(
@@ -142,7 +144,7 @@ class EmergencyTriggerView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         try:
             level = EmergencyLevel[level_name]
         except KeyError:
@@ -150,25 +152,23 @@ class EmergencyTriggerView(APIView):
                 {
                     "success": False,
                     "error": "invalid_level",
-                    "message": f"유효하지 않은 레벨: {level_name}. "
-                              f"사용 가능: LEVEL_1, LEVEL_2, LEVEL_3",
+                    "message": f"유효하지 않은 레벨: {level_name}. " f"사용 가능: LEVEL_1, LEVEL_2, LEVEL_3",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         if level == EmergencyLevel.NORMAL:
             return Response(
                 {
                     "success": False,
                     "error": "invalid_level",
-                    "message": "NORMAL은 비상 모드가 아닙니다. "
-                              "비상 모드를 해제하려면 /release/ 엔드포인트를 사용하세요.",
+                    "message": "NORMAL은 비상 모드가 아닙니다. " "비상 모드를 해제하려면 /release/ 엔드포인트를 사용하세요.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         actor = getattr(request.user, "username", "api")
-        
+
         manager = get_emergency_manager()
         state = manager.activate_manual(
             level=level,
@@ -176,35 +176,34 @@ class EmergencyTriggerView(APIView):
             activated_by=actor,
             duration_minutes=int(duration_minutes) if duration_minutes else None,
         )
-        
-        logger.warning(
-            f"[EmergencyAPI] Emergency mode activated: level={level.name}, "
-            f"by={actor}, reason={reason}"
+
+        logger.warning(f"[EmergencyAPI] Emergency mode activated: level={level.name}, " f"by={actor}, reason={reason}")
+
+        return Response(
+            {
+                "success": True,
+                "status": "activated",
+                "level": state.level.name,
+                "activated_by": actor,
+                "expires_at": state.expires_at,
+                "tier_multipliers": EMERGENCY_LEVEL_RULES[state.level],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
         )
-        
-        return Response({
-            "success": True,
-            "status": "activated",
-            "level": state.level.name,
-            "activated_by": actor,
-            "expires_at": state.expires_at,
-            "tier_multipliers": EMERGENCY_LEVEL_RULES[state.level],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
 
 
 class EmergencyReleaseView(APIView):
     """
     POST /api/self-healing/emergency/release/
-    
+
     비상 모드 해제.
-    
+
     Request:
         {
             "reason": "System recovered",  // 선택
             "force": false                  // 선택 (복구 조건 무시)
         }
-    
+
     Response:
         {
             "success": true,
@@ -213,15 +212,15 @@ class EmergencyReleaseView(APIView):
             "deactivated_by": "admin"
         }
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def post(self, request: Request) -> Response:
         reason = request.data.get("reason", "")
         force = request.data.get("force", False)
-        
+
         manager = get_emergency_manager()
-        
+
         # 현재 상태 확인
         current_state = manager.get_state()
         if not current_state.is_active:
@@ -233,10 +232,10 @@ class EmergencyReleaseView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         actor = getattr(request.user, "username", "api")
         previous_level = current_state.level.name
-        
+
         try:
             state = manager.deactivate(
                 deactivated_by=actor,
@@ -253,36 +252,35 @@ class EmergencyReleaseView(APIView):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
-        
-        logger.info(
-            f"[EmergencyAPI] Emergency mode deactivated: "
-            f"previous_level={previous_level}, by={actor}"
+
+        logger.info(f"[EmergencyAPI] Emergency mode deactivated: " f"previous_level={previous_level}, by={actor}")
+
+        return Response(
+            {
+                "success": True,
+                "status": "deactivated",
+                "previous_level": previous_level,
+                "deactivated_by": actor,
+                "forced": force,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
         )
-        
-        return Response({
-            "success": True,
-            "status": "deactivated",
-            "previous_level": previous_level,
-            "deactivated_by": actor,
-            "forced": force,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
 
 
 class GradualRecoveryStartView(APIView):
     """
     POST /api/self-healing/emergency/gradual-recovery/
-    
+
     점진적 복구 시작.
-    
+
     현재 비상 모드 레벨에서 목표 레벨까지 단계적으로 완화.
     각 단계마다 시스템 메트릭을 확인하고 안정적이면 다음 단계로 진행.
-    
+
     Request:
         {
             "target_level": "NORMAL"  // 선택 (기본: NORMAL)
         }
-    
+
     Response:
         {
             "success": true,
@@ -291,12 +289,12 @@ class GradualRecoveryStartView(APIView):
             "target_level": "NORMAL"
         }
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def post(self, request: Request) -> Response:
         target_level_name = request.data.get("target_level", "NORMAL")
-        
+
         try:
             target_level = EmergencyLevel[target_level_name]
         except KeyError:
@@ -308,10 +306,10 @@ class GradualRecoveryStartView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         actor = getattr(request.user, "username", "api")
         manager = get_emergency_manager()
-        
+
         try:
             state = manager.start_gradual_recovery(
                 initiated_by=actor,
@@ -326,65 +324,69 @@ class GradualRecoveryStartView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        return Response({
-            "success": True,
-            "status": "recovery_started",
-            "current_level": state.level.name,
-            "target_level": target_level.name,
-            "initiated_by": actor,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                "status": "recovery_started",
+                "current_level": state.level.name,
+                "target_level": target_level.name,
+                "initiated_by": actor,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class GradualRecoveryStopView(APIView):
     """
     POST /api/self-healing/emergency/stop-recovery/
-    
+
     점진적 복구 중지.
-    
+
     Request:
         {
             "reason": "Manual intervention required"  // 선택
         }
-    
+
     Response:
         {
             "success": true,
             "status": "recovery_stopped"
         }
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def post(self, request: Request) -> Response:
         reason = request.data.get("reason", "")
         actor = getattr(request.user, "username", "api")
-        
+
         manager = get_emergency_manager()
         state = manager.stop_gradual_recovery(
             stopped_by=actor,
             reason=reason,
         )
-        
-        return Response({
-            "success": True,
-            "status": "recovery_stopped",
-            "current_level": state.level.name,
-            "stopped_by": actor,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                "status": "recovery_stopped",
+                "current_level": state.level.name,
+                "stopped_by": actor,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class EmergencyHistoryView(APIView):
     """
     GET /api/self-healing/emergency/history/
-    
+
     비상 모드 변경 이력 조회.
-    
+
     Query Parameters:
         - limit: 조회할 최대 개수 (기본: 50)
-    
+
     Response:
         {
             "history": [
@@ -400,28 +402,30 @@ class EmergencyHistoryView(APIView):
             ]
         }
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request) -> Response:
         limit = int(request.query_params.get("limit", 50))
-        
+
         manager = get_emergency_manager()
         history = manager.get_history(limit=limit)
-        
-        return Response({
-            "history": history,
-            "count": len(history),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "history": history,
+                "count": len(history),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class EmergencyConfigView(APIView):
     """
     GET/PUT /api/self-healing/emergency/config/
-    
+
     복구 게이트 설정 조회/변경.
-    
+
     GET Response:
         {
             "stabilization_period_seconds": 300,
@@ -433,28 +437,30 @@ class EmergencyConfigView(APIView):
             "health_check_interval_seconds": 30,
             "auto_rollback_on_failure": true
         }
-    
+
     PUT Request:
         {
             "stabilization_period_seconds": 300,
             ...
         }
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def get(self, request: Request) -> Response:
         manager = get_emergency_manager()
         config = manager.get_recovery_gate_config()
-        
-        return Response({
-            "config": config.to_dict(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-    
+
+        return Response(
+            {
+                "config": config.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
     def put(self, request: Request) -> Response:
         actor = getattr(request.user, "username", "api")
-        
+
         try:
             config = RecoveryGateConfig.from_dict(request.data)
         except Exception as e:
@@ -466,24 +472,26 @@ class EmergencyConfigView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         manager = get_emergency_manager()
         manager.set_recovery_gate_config(config, changed_by=actor)
-        
-        return Response({
-            "success": True,
-            "config": config.to_dict(),
-            "changed_by": actor,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                "config": config.to_dict(),
+                "changed_by": actor,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class EmergencyLevelsView(APIView):
     """
     GET /api/self-healing/emergency/levels/
-    
+
     비상 모드 레벨 정의 조회.
-    
+
     Response:
         {
             "levels": [
@@ -501,9 +509,9 @@ class EmergencyLevelsView(APIView):
             ]
         }
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request) -> Response:
         descriptions = {
             EmergencyLevel.NORMAL: "정상 운영 (모든 트래픽 허용)",
@@ -511,7 +519,7 @@ class EmergencyLevelsView(APIView):
             EmergencyLevel.LEVEL_2: "중간 장애 - Standard API 10%만 허용",
             EmergencyLevel.LEVEL_3: "심각한 장애 - Critical API만 50% 허용",
         }
-        
+
         levels = [
             {
                 "name": level.name,
@@ -521,8 +529,10 @@ class EmergencyLevelsView(APIView):
             }
             for level in EmergencyLevel
         ]
-        
-        return Response({
-            "levels": levels,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "levels": levels,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )

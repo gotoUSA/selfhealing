@@ -20,26 +20,27 @@ logger = logging.getLogger(__name__)
 class SystemSnapshotView(XTestModeMixin, APIView):
     """
     시스템 스냅샷 조회 API.
-    
+
     GET /api/self-healing/xtest/snapshot/
     """
-    
+
     authentication_classes = []
     permission_classes = [AllowAny]
-    
+
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
-        
+
         snapshot = collect_system_snapshot()
-        
+
         # CB 상태 추가
         try:
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+
             cb_service = get_circuit_breaker_service()
             all_states = cb_service.repository.get_all_states()
-            
+
             snapshot["circuit_breakers"] = {
                 state.service_name: {
                     "state": state.state,
@@ -49,23 +50,21 @@ class SystemSnapshotView(XTestModeMixin, APIView):
             }
         except Exception as e:
             snapshot["circuit_breakers"] = {"error": str(e)}
-        
+
         # Error Budget 상태 추가
         try:
             from selfhealing.services.error_budget_service import get_error_budget_service
+
             eb_service = get_error_budget_service()
-            
+
             snapshot["error_budget"] = {
                 "remaining_percent": eb_service.get_remaining_budget_percent(),
                 "status": eb_service.get_budget_status(),
             }
         except Exception as e:
             snapshot["error_budget"] = {"error": str(e)}
-        
-        return Response({
-            "status": "success",
-            "snapshot": snapshot
-        })
+
+        return Response({"status": "success", "snapshot": snapshot})
 
 
 __all__ = [

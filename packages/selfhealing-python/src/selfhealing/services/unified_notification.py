@@ -63,7 +63,7 @@ class NotificationCategory(str, Enum):
 class NotificationPayload:
     """
     Unified notification payload.
-    
+
     All notification sources should construct this payload
     for consistent handling.
     """
@@ -72,20 +72,20 @@ class NotificationPayload:
     message: str
     priority: NotificationPriority = NotificationPriority.MEDIUM
     category: NotificationCategory = NotificationCategory.OPERATIONS
-    
+
     # Source information
     source: str = "unknown"  # e.g., "drift_detection", "circuit_breaker"
     task_name: Optional[str] = None
     task_id: Optional[str] = None
-    
+
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # Routing hints (can be overridden by manager)
     channels: Optional[List[str]] = None
-    
+
     # Deduplication
     dedup_key: Optional[str] = None  # If set, used for cooldown dedup
 
@@ -139,7 +139,7 @@ class NotificationResult:
 class RoutingPolicy:
     """
     Notification routing policy.
-    
+
     Defines which channels to use based on priority and category.
     """
 
@@ -153,7 +153,7 @@ class RoutingPolicy:
             NotificationPriority.INFO: [],  # Log only
         }
     )
-    
+
     # Category-specific channel overrides
     category_channels: Dict[NotificationCategory, List[str]] = field(
         default_factory=lambda: {
@@ -162,7 +162,7 @@ class RoutingPolicy:
             NotificationCategory.REPORT: ["slack", "email"],
         }
     )
-    
+
     # Cooldown settings (seconds) by category
     cooldown_seconds: Dict[NotificationCategory, int] = field(
         default_factory=lambda: {
@@ -187,14 +187,14 @@ class RoutingPolicy:
         if category in self.category_channels:
             category_channels = self.category_channels[category]
             priority_channels = self.priority_channels.get(priority, [])
-            
+
             # Merge: category channels + additional from priority
             channels = list(category_channels)
             for ch in priority_channels:
                 if ch not in channels:
                     channels.append(ch)
             return channels
-        
+
         return self.priority_channels.get(priority, [])
 
     def get_cooldown(self, category: NotificationCategory) -> int:
@@ -210,16 +210,16 @@ class RoutingPolicy:
 class UnifiedNotificationManager:
     """
     Central manager for all self-healing notifications.
-    
+
     Provides a single point of control for:
     - Channel routing based on priority/category
     - Rate limiting and cooldown
     - Emergency level escalation
     - Audit trail integration
-    
+
     Usage:
         manager = get_unified_notification_manager()
-        
+
         result = manager.notify(NotificationPayload(
             title="SLA Drift Warning",
             message="Payment domain exceeded threshold",
@@ -237,7 +237,7 @@ class UnifiedNotificationManager:
     def notify(self, payload: NotificationPayload) -> NotificationResult:
         """
         Send a notification through the unified manager.
-        
+
         Handles routing, cooldown, escalation, and audit.
         """
         # 1. Check cooldown
@@ -247,33 +247,28 @@ class UnifiedNotificationManager:
                 suppressed=True,
                 suppression_reason="cooldown",
             )
-        
+
         # 2. Check emergency level escalation
         effective_priority = self._get_effective_priority(payload)
-        
+
         # 3. Determine channels
-        channels = payload.channels or self._policy.get_channels(
-            effective_priority, payload.category
-        )
-        
+        channels = payload.channels or self._policy.get_channels(effective_priority, payload.category)
+
         if not channels:
             # Log only
-            logger.info(
-                f"[UnifiedNotification] {payload.category.value}: "
-                f"{payload.title} - {payload.message}"
-            )
+            logger.info(f"[UnifiedNotification] {payload.category.value}: " f"{payload.title} - {payload.message}")
             return NotificationResult(success=True, suppressed=True, suppression_reason="log_only")
-        
+
         # 4. Send to each channel
         result = self._send_to_channels(payload, channels, effective_priority)
-        
+
         # 5. Record cooldown
         if result.success:
             self._record_cooldown(payload)
-        
+
         # 6. Record to audit trail
         self._record_audit(payload, result)
-        
+
         # 7. Add to daily report if applicable
         if payload.category in (
             NotificationCategory.OPERATIONS,
@@ -281,23 +276,23 @@ class UnifiedNotificationManager:
             NotificationCategory.CIRCUIT_BREAKER,
         ):
             self._add_to_daily_report(payload)
-        
+
         return result
 
     def _is_suppressed_by_cooldown(self, payload: NotificationPayload) -> bool:
         """Check if notification should be suppressed by cooldown."""
         cooldown_seconds = self._policy.get_cooldown(payload.category)
-        
+
         if cooldown_seconds <= 0:
             return False
-        
+
         # Generate dedup key
         dedup_key = payload.dedup_key or f"{payload.source}:{payload.category.value}"
-        
+
         last_sent = self._cooldown_cache.get(dedup_key)
         if last_sent is None:
             return False
-        
+
         elapsed = (datetime.now(timezone.utc) - last_sent).total_seconds()
         return elapsed < cooldown_seconds
 
@@ -306,16 +301,14 @@ class UnifiedNotificationManager:
         dedup_key = payload.dedup_key or f"{payload.source}:{payload.category.value}"
         self._cooldown_cache[dedup_key] = datetime.now(timezone.utc)
 
-    def _get_effective_priority(
-        self, payload: NotificationPayload
-    ) -> NotificationPriority:
+    def _get_effective_priority(self, payload: NotificationPayload) -> NotificationPriority:
         """Get effective priority considering emergency level."""
         try:
             from selfhealing.core.emergency_mode import get_emergency_mode_manager
-            
+
             manager = get_emergency_mode_manager()
             level = manager.get_current_level()
-            
+
             # Emergency Level 3+: Escalate all to HIGH minimum
             if level >= 3:
                 if payload.priority in (
@@ -324,12 +317,12 @@ class UnifiedNotificationManager:
                     NotificationPriority.MEDIUM,
                 ):
                     return NotificationPriority.HIGH
-            
+
         except ImportError:
             pass
         except Exception as e:
             logger.debug(f"[UnifiedNotification] Emergency level check failed: {e}")
-        
+
         return payload.priority
 
     def _send_to_channels(
@@ -340,14 +333,14 @@ class UnifiedNotificationManager:
     ) -> NotificationResult:
         """Send notification to specified channels."""
         result = NotificationResult(success=True)
-        
+
         try:
             from selfhealing.services.security_notification_service import (
                 get_security_notification_service,
             )
-            
+
             service = get_security_notification_service()
-            
+
             # Use SecurityNotificationService.send_alert for actual sending
             send_result = service.send_alert(
                 title=payload.title,
@@ -361,30 +354,28 @@ class UnifiedNotificationManager:
                     "tags": payload.tags,
                 },
             )
-            
+
             # Process results
             for channel_result in send_result.results:
                 if channel_result.success:
                     result.channels_sent.append(channel_result.channel)
                 else:
                     result.channels_failed.append(channel_result.channel)
-            
+
             result.success = len(result.channels_sent) > 0
-            
+
         except Exception as e:
             logger.error(f"[UnifiedNotification] Send failed: {e}")
             result.success = False
             result.error = str(e)
-        
+
         return result
 
-    def _record_audit(
-        self, payload: NotificationPayload, result: NotificationResult
-    ) -> None:
+    def _record_audit(self, payload: NotificationPayload, result: NotificationResult) -> None:
         """Record notification in audit trail."""
         try:
             from selfhealing.audit import get_audit_logger
-            
+
             audit_logger = get_audit_logger()
             audit_logger.log_event(
                 event_type="notification_sent",
@@ -400,7 +391,7 @@ class UnifiedNotificationManager:
                     "suppressed": result.suppressed,
                 },
             )
-            
+
         except ImportError:
             pass
         except Exception as e:
@@ -410,14 +401,14 @@ class UnifiedNotificationManager:
         """Add notification to daily aggregated report."""
         try:
             from selfhealing.tasks.daily_report import get_daily_report_collector
-            
+
             collector = get_daily_report_collector()
             collector.add_result(
                 task_name=payload.source,
                 result=payload.metadata,
                 severity=payload.priority.value,
             )
-            
+
         except ImportError:
             pass
         except Exception as e:
@@ -471,7 +462,7 @@ def notify(
 ) -> NotificationResult:
     """
     Convenience function for sending notifications.
-    
+
     Args:
         title: Notification title
         message: Notification message
@@ -479,13 +470,13 @@ def notify(
         category: Category (security, operations, sla, etc.)
         source: Source identifier
         **kwargs: Additional payload fields
-    
+
     Returns:
         NotificationResult
-    
+
     Usage:
         from selfhealing.services.unified_notification import notify
-        
+
         notify(
             title="SLA Drift Warning",
             message="Payment domain exceeded 20% threshold",
@@ -499,12 +490,12 @@ def notify(
         priority_enum = NotificationPriority(priority.lower())
     except ValueError:
         priority_enum = NotificationPriority.MEDIUM
-    
+
     try:
         category_enum = NotificationCategory(category.lower())
     except ValueError:
         category_enum = NotificationCategory.OPERATIONS
-    
+
     payload = NotificationPayload(
         title=title,
         message=message,
@@ -516,7 +507,7 @@ def notify(
         channels=kwargs.get("channels"),
         dedup_key=kwargs.get("dedup_key"),
     )
-    
+
     manager = get_unified_notification_manager()
     return manager.notify(payload)
 
@@ -550,7 +541,7 @@ def notify_sla(
     """Convenience function for SLA-related notifications."""
     metadata = kwargs.get("metadata", {})
     metadata["domain"] = domain
-    
+
     return notify(
         title=title,
         message=message,
@@ -574,7 +565,7 @@ def notify_error(
     metadata = kwargs.get("metadata", {})
     metadata["error_type"] = type(error).__name__
     metadata["error_message"] = str(error)
-    
+
     return notify(
         title=title,
         message=message,

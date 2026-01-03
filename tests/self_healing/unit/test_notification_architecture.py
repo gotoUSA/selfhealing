@@ -518,7 +518,7 @@ class TestNotificationIntegration:
         """Test end-to-end notification flow."""
         # Patch at the module where the import happens (inside the function)
         with patch(
-            "selfhealing.services.get_security_notification_service"
+            "selfhealing.services.security_notification_service.get_security_notification_service"
         ) as mock_get_service:
             # Setup mock service
             mock_service = MagicMock()
@@ -554,7 +554,7 @@ class TestNotificationIntegration:
             'sys.modules', 
             {'selfhealing.core.emergency_mode': mock_emergency_mode}
         ), patch(
-            "selfhealing.services.get_security_notification_service"
+            "selfhealing.services.security_notification_service.get_security_notification_service"
         ) as mock_get_service:
             # Setup mock notification service
             mock_service = MagicMock()

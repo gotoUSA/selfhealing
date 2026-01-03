@@ -97,7 +97,7 @@ def mock_learning_service():
 @pytest.fixture
 def mock_notification_service():
     """Mock Security Notification Service."""
-    with patch("selfhealing.services.get_security_notification_service") as mock:
+    with patch("selfhealing.services.security_notification_service.get_security_notification_service") as mock:
         service = MagicMock()
         service.send_alert.return_value = {"sent": True}
         mock.return_value = service
