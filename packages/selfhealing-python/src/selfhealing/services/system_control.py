@@ -150,6 +150,33 @@ class SystemControlManager:
             self._cached_state = SystemState.from_dict(data)
         return self._cached_state
     
+    def _log_audit(
+        self,
+        action: str,
+        actor: str,
+        old_state: dict,
+        new_state: dict,
+        reason: str,
+    ) -> None:
+        """
+        시스템 제어 변경을 Audit 로그에 기록.
+        
+        Fail-Open 원칙: Audit 실패가 시스템 제어 로직을 중단시키지 않음.
+        """
+        try:
+            from selfhealing.services.audit_helpers import log_system_control_audit
+            
+            log_system_control_audit(
+                action=action,
+                actor=actor,
+                old_state=old_state,
+                new_state=new_state,
+                reason=reason,
+            )
+        except Exception as e:
+            # Fail-Open: Audit 실패가 시스템 제어를 중단시키지 않음
+            logger.debug(f"[SystemControl] Audit logging failed (ignored): {e}")
+    
     def is_enabled(self) -> bool:
         """
         Check if self-healing system is enabled.
@@ -177,6 +204,7 @@ class SystemControlManager:
         with self._state_lock:
             # Refresh first for multi-server consistency
             self._refresh_state()
+            old_state = self._cached_state.to_dict()
             was_enabled = self._cached_state.enabled
             
             self._cached_state.enabled = True
@@ -184,10 +212,14 @@ class SystemControlManager:
             self._cached_state.enabled_by = actor
             self._save_state()
             
+            new_state = self._cached_state.to_dict()
+            
             if not was_enabled:
                 logger.info(
                     f"[SystemControl] System ENABLED by {actor}. Reason: {reason or 'N/A'}"
                 )
+                # Audit 기록
+                self._log_audit("enable", actor, old_state, new_state, reason)
             
             return SystemState.from_dict(self._cached_state.to_dict())
     
@@ -201,6 +233,7 @@ class SystemControlManager:
         with self._state_lock:
             # Refresh first for multi-server consistency
             self._refresh_state()
+            old_state = self._cached_state.to_dict()
             was_enabled = self._cached_state.enabled
             
             self._cached_state.enabled = False
@@ -209,11 +242,15 @@ class SystemControlManager:
             self._cached_state.disabled_reason = reason
             self._save_state()
             
+            new_state = self._cached_state.to_dict()
+            
             if was_enabled:
                 logger.warning(
                     f"[SystemControl] System DISABLED (Kill Switch) by {actor}. "
                     f"Reason: {reason or 'N/A'}"
                 )
+                # Audit 기록
+                self._log_audit("disable", actor, old_state, new_state, reason)
             
             return SystemState.from_dict(self._cached_state.to_dict())
     
@@ -230,6 +267,7 @@ class SystemControlManager:
         """
         with self._state_lock:
             self._refresh_state()
+            old_state = self._cached_state.to_dict()
             was_dry_run = self._cached_state.dry_run
             
             self._cached_state.dry_run = True
@@ -237,11 +275,15 @@ class SystemControlManager:
             self._cached_state.dry_run_enabled_by = actor
             self._save_state()
             
+            new_state = self._cached_state.to_dict()
+            
             if not was_dry_run:
                 logger.info(
                     f"[SystemControl] DRY RUN mode ENABLED by {actor}. "
                     "Actions will be logged but not executed."
                 )
+                # Audit 기록
+                self._log_audit("enable_dry_run", actor, old_state, new_state, "dry_run_mode")
             
             return SystemState.from_dict(self._cached_state.to_dict())
     
@@ -253,16 +295,21 @@ class SystemControlManager:
         """
         with self._state_lock:
             self._refresh_state()
+            old_state = self._cached_state.to_dict()
             was_dry_run = self._cached_state.dry_run
             
             self._cached_state.dry_run = False
             self._save_state()
+            
+            new_state = self._cached_state.to_dict()
             
             if was_dry_run:
                 logger.warning(
                     f"[SystemControl] DRY RUN mode DISABLED by {actor}. "
                     "Self-healing is now LIVE."
                 )
+                # Audit 기록
+                self._log_audit("disable_dry_run", actor, old_state, new_state, "go_live")
             
             return SystemState.from_dict(self._cached_state.to_dict())
     
@@ -274,9 +321,13 @@ class SystemControlManager:
     def reset(self) -> None:
         """Reset to default state (enabled)."""
         with self._state_lock:
+            old_state = self._cached_state.to_dict()
             self._cached_state = SystemState()
             self._save_state()
+            new_state = self._cached_state.to_dict()
             logger.info("[SystemControl] System state reset to defaults")
+            # Audit 기록
+            self._log_audit("reset", "system", old_state, new_state, "reset_to_defaults")
     
     def get_backend_info(self) -> Dict[str, str]:
         """Get information about the current backend."""

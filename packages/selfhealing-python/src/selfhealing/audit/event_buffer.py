@@ -80,6 +80,16 @@ class AuditEventType(Enum):
     RECOVERY_CHAIN_STARTED = "recovery_chain_started"
     RECOVERY_CHAIN_COMPLETED = "recovery_chain_completed"
     
+    # 재시도 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    RETRY_ATTEMPTED = "retry_attempted"
+    RETRY_EXHAUSTED = "retry_exhausted"
+    
+    # 시스템 제어 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    SYSTEM_CONTROL_CHANGED = "system_control_changed"
+    
+    # 롤백 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    ROLLBACK_PERFORMED = "rollback_performed"
+    
     # 일반
     GENERIC = "generic"
 

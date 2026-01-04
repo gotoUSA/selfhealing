@@ -461,21 +461,30 @@ class AuditEventType(Enum):
 
 **목표**: Audit이 없는 Critical 서비스에 기록 추가
 
-| 작업 | 파일 | 예상 시간 |
-|------|------|:--------:|
-| 1-1. AuditEventType 확장 | `event_buffer.py` | 0.5h |
-| 1-2. `log_retry_audit()` 추가 | `audit_helpers.py` | 1h |
-| 1-3. `log_system_control_audit()` 추가 | `audit_helpers.py` | 1h |
-| 1-4. `log_rollback_audit()` 추가 | `audit_helpers.py` | 1h |
-| 1-5. RetryHandler에 audit 호출 추가 | `retry_handler.py` | 1h |
-| 1-6. SystemControl에 audit 호출 추가 | `system_control.py` | 1h |
-| 1-7. RollbackService에 audit 호출 추가 | `rollback/service.py` | 1h |
-| 1-8. 단위 테스트 | `tests/` | 2h |
+| 작업 | 파일 | 예상 시간 | 상태 |
+|------|------|:--------:|:----:|
+| 1-1. AuditEventType 확장 | `event_buffer.py` | 0.5h | ✅ 완료 |
+| 1-2. `log_retry_audit()` 추가 | `audit_helpers.py` | 1h | ✅ 완료 |
+| 1-3. `log_system_control_audit()` 추가 | `audit_helpers.py` | 1h | ✅ 완료 |
+| 1-4. `log_rollback_audit()` 추가 | `audit_helpers.py` | 1h | ✅ 완료 |
+| 1-5. RetryHandler에 audit 호출 추가 | `retry_handler.py` | 1h | ✅ 완료 |
+| 1-6. SystemControl에 audit 호출 추가 | `system_control.py` | 1h | ✅ 완료 |
+| 1-7. RollbackService에 audit 호출 추가 | `rollback/service.py` | 1h | ✅ 완료 |
+| 1-8. 단위 테스트 | `tests/` | 2h | ✅ 완료 (26개 통과) |
 
 **Phase 1 완료 기준**:
-- [ ] 3개 새 헬퍼 함수 구현
-- [ ] 3개 서비스에 audit 호출 추가
-- [ ] 단위 테스트 통과
+- [x] 4개 새 AuditEventType 추가 (RETRY_ATTEMPTED, RETRY_EXHAUSTED, SYSTEM_CONTROL_CHANGED, ROLLBACK_PERFORMED)
+- [x] 3개 새 헬퍼 함수 구현 (log_retry_audit, log_system_control_audit, log_rollback_audit)
+- [x] 3개 서비스에 audit 호출 추가 (RetryHandler, SystemControlManager, RollbackService)
+- [x] 단위 테스트 통과 (26개)
+
+**구현된 파일**:
+- `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py` - AuditEventType 확장
+- `packages/selfhealing-python/src/selfhealing/services/audit_helpers.py` - 3개 헬퍼 함수 추가
+- `packages/selfhealing-python/src/selfhealing/services/retry_handler.py` - _log_retry_audit 통합
+- `packages/selfhealing-python/src/selfhealing/services/system_control.py` - _log_audit 통합
+- `packages/selfhealing-python/src/selfhealing/services/rollback/service.py` - _log_audit 통합
+- `packages/selfhealing-python/tests/unit/test_audit_helpers_phase1.py` - 26개 테스트
 
 ---
 
@@ -647,16 +656,16 @@ class TestAuditUnification:
 
 ## 📅 일정 요약
 
-| Phase | 기간 | 산출물 |
-|:-----:|:----:|--------|
-| **Phase 0** | 1.5일 | WAL 기반 누락 0 보장 |
-| **Phase 1** | 2일 | 3개 신규 서비스 Audit |
-| **Phase 2** | 3일 | 3개 자체 구현 통합 |
-| **Phase 3** | 2일 | 추가 서비스 + 조회 기록 |
-| **Phase 4** | 1일 | Celery Tasks Audit |
-| **총계** | **9.5일** | |
+| Phase | 기간 | 산출물 | 상태 |
+|:-----:|:----:|--------|:----:|
+| **Phase 0** | 1.5일 | WAL 기반 누락 0 보장 | ✅ 완료 |
+| **Phase 1** | 2일 | 3개 신규 서비스 Audit | ✅ 완료 |
+| **Phase 2** | 3일 | 3개 자체 구현 통합 | |
+| **Phase 3** | 2일 | 추가 서비스 + 조회 기록 | |
+| **Phase 4** | 1일 | Celery Tasks Audit | |
+| **총계** | **9.5일** | | |
 
 ---
 
 *작성: Self-Healing Team*
-*최종 수정: 2026-01-04*
+*최종 수정: 2026-01-05*

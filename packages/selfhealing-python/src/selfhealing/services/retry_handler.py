@@ -214,6 +214,39 @@ class RetryHandler:
                 logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
         return self._rate_limit_coordinator
 
+    def _log_retry_audit(
+        self,
+        attempt: int,
+        success: bool,
+        error_type: Optional[str] = None,
+        error_message: Optional[str] = None,
+        wait_time: Optional[float] = None,
+        rate_limited: bool = False,
+        context: Optional[dict] = None,
+    ) -> None:
+        """
+        재시도 이벤트를 Audit 로그에 기록.
+        
+        Fail-Open 원칙: Audit 실패가 비즈니스 로직을 중단시키지 않음.
+        """
+        try:
+            from .audit_helpers import log_retry_audit
+            
+            log_retry_audit(
+                domain=self.config.domain,
+                attempt=attempt,
+                max_attempts=self.config.max_attempts,
+                success=success,
+                error_type=error_type,
+                error_message=error_message,
+                wait_time=wait_time,
+                rate_limited=rate_limited,
+                context=context,
+            )
+        except Exception as e:
+            # Fail-Open: Audit 실패가 재시도 로직을 중단시키지 않음
+            logger.debug(f"[RetryHandler] Audit logging failed (ignored): {e}")
+
     def _check_error_budget_gate(self) -> Optional[Any]:
         """
         Check ErrorBudgetGate before retrying.
@@ -407,6 +440,14 @@ class RetryHandler:
                     self.rate_limit_coordinator.on_success(self._rate_limit_key)
 
                 logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
+                
+                # Audit 기록: 재시도 성공
+                self._log_retry_audit(
+                    attempt=attempt,
+                    success=True,
+                    context=context,
+                )
+                
                 return RetryResult(
                     success=True,
                     action=RetryAction.SUCCESS,
@@ -428,10 +469,26 @@ class RetryHandler:
                 logger.warning(f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}")
 
                 # Self-DDoS prevention: Handle rate limit errors
+                rate_limited, _ = self.is_rate_limit_error(e)
                 self._handle_rate_limit_error(e)
+                
+                # Audit 기록: 재시도 시도 (실패)
+                next_delay = None
+                if self.should_retry(e, attempt):
+                    next_delay = self.get_next_delay(attempt)
+                
+                self._log_retry_audit(
+                    attempt=attempt,
+                    success=False,
+                    error_type=type(e).__name__,
+                    error_message=str(e)[:500],
+                    wait_time=next_delay,
+                    rate_limited=rate_limited,
+                    context=context,
+                )
 
                 if self.should_retry(e, attempt):
-                    delay = self.get_next_delay(attempt)
+                    delay = next_delay
                     logger.info(
                         f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{self.config.max_attempts})"
                     )

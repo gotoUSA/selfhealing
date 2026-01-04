@@ -104,6 +104,43 @@ class RollbackService:
         self._rollback_handlers[component] = handler
         logger.info(f"Rollback handler registered: {component}")
     
+    def _log_audit(
+        self,
+        request_id: str,
+        stage_name: str,
+        state: str,
+        triggered_by: str,
+        reason: Optional[str] = None,
+        source_version: Optional[str] = None,
+        target_version: Optional[str] = None,
+        affected_components: Optional[List[str]] = None,
+        errors: Optional[List[str]] = None,
+        duration_seconds: Optional[float] = None,
+    ) -> None:
+        """
+        롤백 이벤트를 Audit 로그에 기록.
+        
+        Fail-Open 원칙: Audit 실패가 롤백 로직을 중단시키지 않음.
+        """
+        try:
+            from selfhealing.services.audit_helpers import log_rollback_audit
+            
+            log_rollback_audit(
+                request_id=request_id,
+                stage_name=stage_name,
+                state=state,
+                triggered_by=triggered_by,
+                reason=reason,
+                source_version=source_version,
+                target_version=target_version,
+                affected_components=affected_components,
+                errors=errors,
+                duration_seconds=duration_seconds,
+            )
+        except Exception as e:
+            # Fail-Open: Audit 실패가 롤백을 중단시키지 않음
+            logger.debug(f"[RollbackService] Audit logging failed (ignored): {e}")
+    
     def request_rollback(
         self,
         stage_name: str,
@@ -146,6 +183,17 @@ class RollbackService:
         )
         
         logger.info(f"Rollback requested: {request_id} for {stage_name}")
+        
+        # Audit 기록: 롤백 요청
+        self._log_audit(
+            request_id=request_id,
+            stage_name=stage_name,
+            state="pending",
+            triggered_by=triggered_by,
+            reason=reason,
+            source_version=source_version,
+            target_version=target_version,
+        )
         
         # 자동 실행 체크
         policy = self._policies.get(stage_name)
@@ -231,6 +279,20 @@ class RollbackService:
         
         finally:
             result.completed_at = datetime.now()
+            
+            # Audit 기록: 롤백 완료/실패
+            self._log_audit(
+                request_id=request_id,
+                stage_name=request.stage_name,
+                state=result.state.value if hasattr(result.state, 'value') else str(result.state),
+                triggered_by=request.triggered_by,
+                reason=request.reason,
+                source_version=request.source_version,
+                target_version=request.target_version,
+                affected_components=result.affected_components,
+                errors=result.errors,
+                duration_seconds=result.duration_seconds,
+            )
         
         return result
     
