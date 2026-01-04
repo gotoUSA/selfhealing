@@ -92,6 +92,9 @@ class BatchReplayResult:
     results: list[ReplayResult] | None = None
     governance_blocked: bool = False
     governance_block_reason: str = ""
+    # Phase 4: Priority-based replay info
+    priority_used: bool = False
+    domains_processed: list[str] | None = None
 
 
 # =============================================================================
@@ -416,6 +419,7 @@ class ReplayService:
         failure_type: str | None = None,
         max_items: int = 100,
         use_adaptive: bool | None = None,
+        use_priority: bool | None = None,
     ) -> BatchReplayResult:
         """
         Replay multiple DLQ entries matching criteria.
@@ -431,14 +435,21 @@ class ReplayService:
         - 3 consecutive perfect batches increases batch size by 5
         - See: services/adaptive_replay.py
 
+        Priority Mode (Phase 4):
+        - When priority_enabled=True in RuntimeConfig, domains are processed by priority
+        - Critical domains are processed first, then normal, then low
+        - Respects domain-specific max_retries overrides
+        - See: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §7
+
         Audit Logging:
         - 차단 발생 시 자동으로 AuditLog에 기록됨
 
         Args:
-            domain: Filter by domain (optional)
+            domain: Filter by domain (optional, ignored in priority mode)
             failure_type: Filter by failure type (optional)
             max_items: Maximum number of items to replay (ignored in adaptive mode)
             use_adaptive: Override adaptive mode setting (None = use RuntimeConfig)
+            use_priority: Override priority mode setting (None = use RuntimeConfig)
 
         Returns:
             BatchReplayResult with summary and individual results
@@ -479,17 +490,36 @@ class ReplayService:
 
         max_replays = self.config["max_replay_attempts"]
 
+        # Check if priority mode is enabled (Phase 4)
+        priority_enabled = use_priority
+        if priority_enabled is None:
+            priority_enabled = self._is_priority_enabled()
+
         # Get eligible entries using repository
-        entries = self.repository.get_pending_entries(
-            domain=domain,
-            failure_type=failure_type,
-            max_retry_count=max_replays,
-            limit=effective_max_items,
-        )
+        if priority_enabled and domain is None:
+            # Priority mode: get entries sorted by domain priority
+            entries, domains_processed = self._get_entries_by_priority(
+                failure_type=failure_type,
+                max_replays=max_replays,
+                limit=effective_max_items,
+            )
+            priority_used = True
+        else:
+            # Normal mode: get entries by domain/failure_type filter
+            entries = self.repository.get_pending_entries(
+                domain=domain,
+                failure_type=failure_type,
+                max_retry_count=max_replays,
+                limit=effective_max_items,
+            )
+            domains_processed = None
+            priority_used = False
 
         batch_result = BatchReplayResult(
             total=len(entries),
             results=[],
+            priority_used=priority_used,
+            domains_processed=domains_processed,
         )
 
         for entry in entries:
@@ -520,6 +550,8 @@ class ReplayService:
             f"failed={batch_result.failed_count}"
             + (f", adaptive_max_items={adaptive_manager.get_current_max_items()}" 
                if adaptive_manager else "")
+            + (f", priority_mode=True, domains={domains_processed}"
+               if priority_used else "")
         )
 
         return batch_result
@@ -579,6 +611,137 @@ class ReplayService:
         except Exception as e:
             logger.warning(f"[ReplayService] Failed to read adaptive_enabled: {e}")
             return False
+
+    def _is_priority_enabled(self) -> bool:
+        """Check if priority mode is enabled in RuntimeConfig."""
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            config = manager.get_config("replay_automation")
+            return config.get("priority_enabled", False)
+        except Exception as e:
+            logger.warning(f"[ReplayService] Failed to read priority_enabled: {e}")
+            return False
+
+    def _get_domain_priorities(self) -> dict[str, str]:
+        """Load domain priorities from RuntimeConfig."""
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            config = manager.get_config("replay_automation")
+            return config.get("domain_priorities", {})
+        except Exception as e:
+            logger.warning(f"[ReplayService] Failed to load domain_priorities: {e}")
+            return {}
+
+    def _get_domain_max_retries(self, domain: str) -> int | None:
+        """Get domain-specific max_retries override from RuntimeConfig."""
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            config = manager.get_config("replay_automation")
+            domain_max_retries = config.get("domain_max_retries", {})
+            return domain_max_retries.get(domain)
+        except Exception as e:
+            logger.warning(f"[ReplayService] Failed to load domain_max_retries: {e}")
+            return None
+
+    def _get_entries_by_priority(
+        self,
+        failure_type: str | None,
+        max_replays: int,
+        limit: int,
+    ) -> tuple[list["FailedOperationData"], list[str]]:
+        """
+        Get DLQ entries sorted by domain priority.
+
+        Priority order: critical (1) > normal (2) > low (3) > unconfigured (4)
+
+        Args:
+            failure_type: Filter by failure type (optional)
+            max_replays: Maximum retry count for filtering
+            limit: Total maximum entries to return
+
+        Returns:
+            Tuple of (entries list, domains processed in order)
+        """
+        domain_priorities = self._get_domain_priorities()
+
+        # Group domains by priority level
+        priority_groups: dict[str, list[str]] = {
+            "critical": [],
+            "normal": [],
+            "low": [],
+        }
+
+        for domain, priority in domain_priorities.items():
+            if priority in priority_groups:
+                priority_groups[priority].append(domain)
+
+        all_entries: list["FailedOperationData"] = []
+        domains_processed: list[str] = []
+        remaining = limit
+
+        # Process in priority order: critical -> normal -> low
+        for priority in ["critical", "normal", "low"]:
+            if remaining <= 0:
+                break
+
+            for domain in priority_groups[priority]:
+                if remaining <= 0:
+                    break
+
+                # Get domain-specific max_retries if configured
+                domain_max = self._get_domain_max_retries(domain)
+                effective_max_retries = domain_max if domain_max is not None else max_replays
+
+                entries = self.repository.get_pending_entries(
+                    domain=domain,
+                    failure_type=failure_type,
+                    max_retry_count=effective_max_retries,
+                    limit=remaining,
+                )
+
+                if entries:
+                    all_entries.extend(entries)
+                    domains_processed.append(domain)
+                    remaining -= len(entries)
+
+                    logger.debug(
+                        f"[ReplayService] Priority fetch: domain={domain}, "
+                        f"priority={priority}, count={len(entries)}"
+                    )
+
+        # If still have capacity, get entries from unconfigured domains
+        if remaining > 0:
+            # Get all pending entries without domain filter
+            unconfigured_entries = self.repository.get_pending_entries(
+                domain=None,
+                failure_type=failure_type,
+                max_retry_count=max_replays,
+                limit=remaining + len(all_entries),  # Get extra to filter
+            )
+
+            # Filter out already fetched domains
+            configured_domains = set(domain_priorities.keys())
+            for entry in unconfigured_entries:
+                if remaining <= 0:
+                    break
+                if entry.domain not in configured_domains:
+                    all_entries.append(entry)
+                    if entry.domain not in domains_processed:
+                        domains_processed.append(entry.domain)
+                    remaining -= 1
+
+        logger.info(
+            f"[ReplayService] Priority-based fetch complete: "
+            f"total={len(all_entries)}, domains={domains_processed}"
+        )
+
+        return all_entries, domains_processed
 
     def _get_adaptive_config(self) -> "AdaptiveReplayConfig":
         """Load AdaptiveReplayConfig from RuntimeConfig."""

@@ -410,6 +410,7 @@ class ReplayAutomationConfig:
     Track 1: CB 복구 시 이벤트 기반 자동 Replay
     Track 2: Scheduled Batch (기존 5분 주기)
     Track 3: Traffic-Aware Replay (향후 구현)
+    Phase 4: 도메인별 차등 정책
 
     RuntimeConfigManager를 통해 중앙 관리됩니다.
     서버 재시작 없이 API로 변경 가능합니다.
@@ -443,6 +444,25 @@ class ReplayAutomationConfig:
     adaptive_min_items: int = 10         # 최소 batch size
     adaptive_max_items: int = 100        # 최대 batch size
     adaptive_failure_threshold: float = 0.2  # 실패율 임계값 (20%)
+
+    # =========================================================================
+    # Phase 4: Domain Priority Policy (도메인별 차등 정책)
+    # =========================================================================
+    # 우선순위 기반 배치 처리 활성화
+    priority_enabled: bool = False
+
+    # 도메인별 우선순위 설정
+    # 값: "critical" (1순위), "normal" (2순위), "low" (3순위)
+    # 예시: {"payment": "critical", "notification": "low"}
+    domain_priorities: Dict[str, str] = field(default_factory=dict)
+
+    # 도메인별 max_retries 오버라이드
+    # 예시: {"payment": 10, "notification": 3}
+    domain_max_retries: Dict[str, int] = field(default_factory=dict)
+
+    # 도메인별 on_circuit_close 설정 (Track 1 트리거 여부)
+    # 예시: {"payment": True, "analytics": False}
+    domain_on_circuit_close: Dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass

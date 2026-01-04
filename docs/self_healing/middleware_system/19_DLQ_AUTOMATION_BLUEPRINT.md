@@ -1002,12 +1002,27 @@ curl -X POST /api/self-healing/config/pending/{pending_id}/cancel/
 
 **테스트:** `tests/self_healing/unit/test_replay_automation_phase3.py` - 24개 테스트 통과
 
-### Phase 4: 도메인 정책 (1-2일)
+### Phase 4: 도메인 정책 ✅ 완료 (2026-01-04)
 
-| 작업 | 파일 | 변경 내용 |
-|-----|------|----------|
-| 1 | `services/replay_service.py` | 우선순위 기반 조회 |
-| 2 | `core/config.py` | 도메인 정책 스키마 확장 |
+| 작업 | 파일 | 변경 내용 | 상태 |
+|-----|------|----------|------|
+| 1 | `core/config.py` | ReplayAutomationConfig에 Phase 4 필드 추가 | ✅ |
+| 2 | `services/replay_service.py` | 우선순위 기반 조회 로직 (_get_entries_by_priority) | ✅ |
+| 3 | `api/django/serializers/config.py` | Serializer Phase 4 필드 추가 | ✅ |
+
+**구현 상세:**
+- `ReplayAutomationConfig` Phase 4 필드:
+  - `priority_enabled`: 우선순위 기반 배치 처리 활성화
+  - `domain_priorities`: 도메인별 우선순위 (critical/normal/low)
+  - `domain_max_retries`: 도메인별 max_retries 오버라이드
+  - `domain_on_circuit_close`: 도메인별 Track 1 트리거 설정
+- `_get_entries_by_priority()`: 우선순위 순서로 DLQ 항목 조회
+  - Critical → Normal → Low → 미설정 도메인 순서
+  - 도메인별 max_retries 오버라이드 적용
+- `replay_batch()`: `use_priority` 파라미터 추가, RuntimeConfig 연동
+- `BatchReplayResult`: `priority_used`, `domains_processed` 필드 추가
+
+**테스트:** `tests/self_healing/unit/test_replay_automation_phase4.py` - 25개 테스트 통과
 
 ---
 
@@ -1245,7 +1260,7 @@ if not self.config.slack_webhook_url:
 | RuntimeConfig API | 없음 | 있음 | ReplayAutomationConfig | ✅ Phase 1 완료 |
 | 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor | ✅ Phase 2 완료 |
 | max_items | 고정 | 동적 | AdaptiveReplayManager | ✅ Phase 3 완료 |
-| 도메인 정책 | 일괄 | 차등 | domain_configs 활용 | ⏳ Phase 4 |
+| 도메인 정책 | 일괄 | 차등 | domain_priorities 활용 | ✅ Phase 4 완료 |
 
 ### 12.2 안전성 보장
 
@@ -1272,5 +1287,10 @@ if not self.config.slack_webhook_url:
    - `replay_batch()` 메서드에 Adaptive 모드 통합
    - 동적 배치 크기 조정 (실패율 기반)
    - 24개 단위 테스트 통과
-5. ⏳ Phase 4: 도메인별 차등 정책 구현
+5. ✅ Phase 4 구현 완료 (도메인별 차등 정책)
+   - `ReplayAutomationConfig` Phase 4 필드 추가 (priority_enabled, domain_priorities 등)
+   - `_get_entries_by_priority()` 우선순위 기반 조회 로직
+   - `replay_batch()` 메서드에 Priority 모드 통합
+   - Serializer Phase 4 필드 검증 추가
+   - 25개 단위 테스트 통과
 6. ⏳ Grafana 대시보드 업데이트

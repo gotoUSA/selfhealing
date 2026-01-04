@@ -900,6 +900,7 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
     - Track 2: Scheduled batch replay
     - Track 3: Traffic-aware replay (future)
     - Adaptive mode for dynamic batch sizing
+    - Phase 4: Domain priority-based replay
     """
 
     _config_type = "replay_automation"
@@ -964,6 +965,27 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
         help_text="Failure rate threshold to trigger batch size reduction (0.05-0.5)",
     )
 
+    # Phase 4: Domain Priority Policy
+    priority_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Enable priority-based batch processing by domain",
+    )
+    domain_priorities = serializers.DictField(
+        required=False,
+        child=serializers.ChoiceField(choices=["critical", "normal", "low"]),
+        help_text='Domain priority mapping. Values: "critical", "normal", "low". Example: {"payment": "critical", "notification": "low"}',
+    )
+    domain_max_retries = serializers.DictField(
+        required=False,
+        child=serializers.IntegerField(min_value=1, max_value=20),
+        help_text="Domain-specific max_retries override. Example: {\"payment\": 10, \"notification\": 3}",
+    )
+    domain_on_circuit_close = serializers.DictField(
+        required=False,
+        child=serializers.BooleanField(),
+        help_text="Domain-specific Track 1 trigger setting. Example: {\"payment\": true, \"analytics\": false}",
+    )
+
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
         validated = super().validate(attrs)
@@ -976,6 +998,16 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
             if adaptive_min > adaptive_max:
                 raise serializers.ValidationError(
                     "adaptive_min_items must be less than or equal to adaptive_max_items"
+                )
+        
+        # domain_priorities 값 검증 (이미 ChoiceField로 검증되지만 추가 확인)
+        domain_priorities = validated.get("domain_priorities", {})
+        valid_priorities = {"critical", "normal", "low"}
+        for domain, priority in domain_priorities.items():
+            if priority not in valid_priorities:
+                raise serializers.ValidationError(
+                    f"Invalid priority '{priority}' for domain '{domain}'. "
+                    f"Must be one of: {valid_priorities}"
                 )
         
         return self.validate_with_safe_fallback(validated)
