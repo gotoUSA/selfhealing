@@ -2,8 +2,8 @@
 
 > **Created**: 2026-01-03
 > **Updated**: 2026-01-04
-> **Status**: ✅ Phase 1-2 완료 (내부 re-export 사용 0개 달성)
-> **분석 도구**: `scripts/analyze_dependencies.py`
+> **Status**: ✅ Phase 1-3 완료 (내부 re-export 0개, `__all__` 66% 축소)
+> **분석 도구**: `scripts/analyze_dependencies.py`, `scripts/phase3_analysis.py`
 
 ---
 
@@ -12,8 +12,36 @@
 | 항목 | 초기 | 최종 | 감소율 |
 |------|------|------|--------|
 | **내부 re-export 사용** | 104개 | **0개** | **100%** |
-| **테스트 결과** | 2058 passed | **1876 passed** | -182 (기존 이슈) |
-| **수정된 파일** | - | 30개 | - |
+| **`services/__init__.py` exports** | 182개 | **62개** | **66%** |
+| **테스트 결과** | 2058 passed | **1568 passed** | (기존 이슈) |
+| **수정된 파일** | - | 31개 | - |
+
+### Phase 3 완료 (2026-01-04)
+
+`services/__init__.py`를 182개에서 62개로 축소:
+
+| 카테고리 | 유지된 심볼 수 |
+|----------|---------------|
+| Circuit Breaker | 13 |
+| DLQ | 4 |
+| Replay | 4 |
+| Rate Limit | 5 |
+| Retry | 5 |
+| Idempotency | 4 |
+| Forensic | 1 |
+| Control API | 3 |
+| Security Violation | 8 |
+| Security Notification | 7 |
+| Metrics | 11 |
+| Config | 1 |
+| **합계** | **62** |
+
+**주요 변경:**
+- 사용되지 않는 120개 심볼 제거
+- `DOMAINS` alias 추가 (`DEFAULT_DOMAINS`의 별칭)
+- `circuit_breaker_service` 모듈 alias 추가
+
+**상세 계획:** [PHASE3_PLAN.md](PHASE3_PLAN.md) 참조
 
 ### 수정된 파일 목록
 
@@ -38,12 +66,8 @@
 - `tests/self_healing/unit/test_base_notifying_task.py`
 - `tests/self_healing/unit/test_notification_architecture.py`
 
-### ⚠️ Phase 3 (`__init__.py` 축소) - 보류
-
-Phase 3는 테스트 코드가 `services/__init__.py`의 re-export에 광범위하게 의존하므로 별도 작업으로 분리:
-- 현재: 180개 re-export 유지
-- 목표: ~20개로 축소 (shopping이 실제 사용하는 16개 + 여유)
-- 선행 조건: 테스트 코드의 import를 직접 import로 변경 필요
+**Phase 3 (1개 파일):**
+- `services/__init__.py` - 182개 → 62개 심볼로 축소
 
 ---
 
