@@ -32,66 +32,184 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def run_scheduled_experiments() -> Dict[str, Any]:
+def run_scheduled_experiments(task_id: str = None) -> Dict[str, Any]:
     """
     Run scheduled chaos experiments.
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
     All governance checks and safety validations are performed in the service layer.
     
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - CHAOS_EXPERIMENT_STARTED/COMPLETED 이벤트 기록
+    
     Called at regular intervals (default: every 5 minutes) via Celery Beat.
+    
+    Args:
+        task_id: Celery task ID (for audit tracking)
     
     Returns:
         Summary of execution results
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
     
-    service = get_chaos_execution_service()
-    result = service.run_scheduled_experiments()
-    
-    return result.to_dict()
+    try:
+        service = get_chaos_execution_service()
+        result = service.run_scheduled_experiments()
+        result_dict = result.to_dict()
+        
+        # === Audit 기록 (Phase 4) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            status = "completed" if result_dict.get("success", True) else "failed"
+            log_chaos_scheduler_audit(
+                action="scheduled",
+                status=status,
+                task_id=task_id,
+                details={
+                    "executed_count": result_dict.get("executed_count", 0),
+                    "skipped_count": result_dict.get("skipped_count", 0),
+                    "blocked_count": result_dict.get("blocked_count", 0),
+                },
+            )
+        except Exception as audit_error:
+            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+        
+        return result_dict
+        
+    except Exception as e:
+        # === Audit 기록 (실패) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            log_chaos_scheduler_audit(
+                action="scheduled",
+                status="failed",
+                error_message=str(e),
+                task_id=task_id,
+            )
+        except Exception:
+            pass
+        raise
 
 
-def generate_daily_resilience_report() -> Dict[str, Any]:
+def generate_daily_resilience_report(task_id: str = None) -> Dict[str, Any]:
     """
     Generate daily resilience report.
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
     Called once per day (default: 6 AM UTC).
     
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - 리포트 생성 결과 기록
+    
+    Args:
+        task_id: Celery task ID (for audit tracking)
+    
     Returns:
         Report summary
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
     
-    service = get_chaos_execution_service()
-    result = service.generate_daily_report()
-    
-    return result.to_dict()
+    try:
+        service = get_chaos_execution_service()
+        result = service.generate_daily_report()
+        result_dict = result.to_dict()
+        
+        # === Audit 기록 (Phase 4) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            log_chaos_scheduler_audit(
+                action="report_generated",
+                status="completed",
+                task_id=task_id,
+                details=result_dict,
+            )
+        except Exception as audit_error:
+            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+        
+        return result_dict
+        
+    except Exception as e:
+        # === Audit 기록 (실패) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            log_chaos_scheduler_audit(
+                action="report_generated",
+                status="failed",
+                error_message=str(e),
+                task_id=task_id,
+            )
+        except Exception:
+            pass
+        raise
 
 
-def cleanup_expired_approvals() -> Dict[str, Any]:
+def cleanup_expired_approvals(task_id: str = None) -> Dict[str, Any]:
     """
     Clean up expired approval requests.
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
+    
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - 만료된 승인 정리 결과 기록
+    
+    Args:
+        task_id: Celery task ID (for audit tracking)
     
     Returns:
         Cleanup summary
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
     
-    service = get_chaos_execution_service()
-    result = service.cleanup_expired_approvals()
-    
-    return result.to_dict()
+    try:
+        service = get_chaos_execution_service()
+        result = service.cleanup_expired_approvals()
+        result_dict = result.to_dict()
+        
+        # === Audit 기록 (Phase 4) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            log_chaos_scheduler_audit(
+                action="cleanup",
+                status="completed",
+                task_id=task_id,
+                details={
+                    "cleaned_count": result_dict.get("cleaned_count", 0),
+                },
+            )
+        except Exception as audit_error:
+            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+        
+        return result_dict
+        
+    except Exception as e:
+        # === Audit 기록 (실패) ===
+        try:
+            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            
+            log_chaos_scheduler_audit(
+                action="cleanup",
+                status="failed",
+                error_message=str(e),
+                task_id=task_id,
+            )
+        except Exception:
+            pass
+        raise
 
 
-def check_and_alert_pending_approvals() -> Dict[str, Any]:
+def check_and_alert_pending_approvals(task_id: str = None) -> Dict[str, Any]:
     """
     Check for pending approvals and send alerts.
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
+    
+    Args:
+        task_id: Celery task ID (for audit tracking)
     
     Returns:
         Alert summary
@@ -130,7 +248,7 @@ def register_celery_tasks(app):
     )
     def run_scheduled_experiments_task(self):
         """Celery task wrapper for run_scheduled_experiments."""
-        return run_scheduled_experiments()
+        return run_scheduled_experiments(task_id=self.request.id)
     
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.generate_daily_resilience_report_task",
@@ -141,7 +259,7 @@ def register_celery_tasks(app):
     def generate_daily_resilience_report_task(self):
         """Celery task wrapper for generate_daily_resilience_report."""
         try:
-            return generate_daily_resilience_report()
+            return generate_daily_resilience_report(task_id=self.request.id)
         except Exception as exc:
             logger.exception("[ChaosScheduler] Daily report generation failed")
             raise self.retry(exc=exc)
@@ -153,7 +271,7 @@ def register_celery_tasks(app):
     )
     def cleanup_expired_approvals_task(self):
         """Celery task wrapper for cleanup_expired_approvals."""
-        return cleanup_expired_approvals()
+        return cleanup_expired_approvals(task_id=self.request.id)
     
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.check_pending_approvals_task",
@@ -162,7 +280,7 @@ def register_celery_tasks(app):
     )
     def check_pending_approvals_task(self):
         """Celery task wrapper for check_and_alert_pending_approvals."""
-        return check_and_alert_pending_approvals()
+        return check_and_alert_pending_approvals(task_id=self.request.id)
     
     return {
         "run_scheduled_experiments": run_scheduled_experiments_task,

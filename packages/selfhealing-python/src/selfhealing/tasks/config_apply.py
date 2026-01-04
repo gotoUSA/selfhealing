@@ -36,6 +36,9 @@ def apply_pending_config_changes(self):
 
     This task is a thin wrapper that delegates to ConfigApplyService.
     All governance checks (Emergency Mode) are performed in the service layer.
+    
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - 설정 적용 성공/실패/차단 시 CONFIG_CHANGE 이벤트 기록
 
     Note:
         - Kill Switch는 체크하지 않음 (복구 퇴로 확보)
@@ -46,17 +49,50 @@ def apply_pending_config_changes(self):
     """
     from selfhealing.services.execution_services import get_config_apply_service
 
+    task_id = self.request.id
+    
     try:
         service = get_config_apply_service()
         result = service.apply_pending_changes()
 
-        if result.get("status") == "blocked":
+        status = result.get("status", "unknown")
+        if status == "blocked":
             logger.warning(f"[ConfigTask] Blocked: {result.get('reason')}")
+        
+        # === Audit 기록 (Phase 4) ===
+        try:
+            from selfhealing.services.audit_helpers import log_config_apply_audit
+            
+            log_config_apply_audit(
+                config_key="pending_changes",
+                status=status,
+                task_id=task_id,
+                details={
+                    "applied_count": result.get("applied_count", 0),
+                    "blocked_reason": result.get("reason"),
+                },
+            )
+        except Exception as audit_error:
+            logger.debug(f"[ConfigTask] Audit logging failed: {audit_error}")
 
         return result
 
     except Exception as e:
         logger.error(f"[ConfigTask] Error in apply_pending_config_changes: {e}", exc_info=True)
+        
+        # === Audit 기록 (실패) ===
+        try:
+            from selfhealing.services.audit_helpers import log_config_apply_audit
+            
+            log_config_apply_audit(
+                config_key="pending_changes",
+                status="failed",
+                error_message=str(e),
+                task_id=task_id,
+            )
+        except Exception:
+            pass
+        
         raise self.retry(exc=e)
 
 
@@ -72,6 +108,9 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
     This task is a thin wrapper that delegates to ConfigApplyService.
     Waits for in-progress operations to complete before applying.
+    
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - 설정 적용 성공/실패/차단 시 CONFIG_CHANGE 이벤트 기록
 
     Args:
         pending_id: ID of the pending configuration change
@@ -79,24 +118,57 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
     """
     from selfhealing.services.execution_services import get_config_apply_service
 
+    task_id = self.request.id
+    
     try:
         service = get_config_apply_service()
         result = service.apply_graceful_change(pending_id, max_wait_seconds)
 
-        if result.get("status") == "blocked":
+        status = result.get("status", "unknown")
+        
+        if status == "blocked":
             # 비상 모드에서는 재시도하여 비상 모드 해제 후 적용
             if self.request.retries < self.max_retries:
                 logger.info(f"[ConfigTask] Will retry after emergency mode ends")
                 raise self.retry(countdown=30)
+            
+            # === Audit 기록 (차단) ===
+            try:
+                from selfhealing.services.audit_helpers import log_config_apply_audit
+                
+                log_config_apply_audit(
+                    pending_id=pending_id,
+                    status="blocked",
+                    task_id=task_id,
+                    details={"reason": result.get("reason")},
+                )
+            except Exception:
+                pass
+            
             return result
 
-        if result.get("status") == "retry":
+        if status == "retry":
             # 진행 중인 작업이 있으면 재시도
             logger.info(
                 f"[ConfigTask] Waiting for in-progress ops for {pending_id}, "
                 f"retry {self.request.retries + 1}"
             )
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
+
+        # === Audit 기록 (성공) ===
+        try:
+            from selfhealing.services.audit_helpers import log_config_apply_audit
+            
+            log_config_apply_audit(
+                pending_id=pending_id,
+                config_key=result.get("config_key"),
+                old_value=result.get("old_value"),
+                new_value=result.get("new_value"),
+                status=status,
+                task_id=task_id,
+            )
+        except Exception as audit_error:
+            logger.debug(f"[ConfigTask] Audit logging failed: {audit_error}")
 
         return result
 
@@ -107,11 +179,40 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
             try:
                 from selfhealing.services.runtime_config import get_runtime_config_manager
                 config_manager = get_runtime_config_manager()
-                return config_manager.apply_pending_change(pending_id)
+                apply_result = config_manager.apply_pending_change(pending_id)
+                
+                # === Audit 기록 (강제 적용) ===
+                try:
+                    from selfhealing.services.audit_helpers import log_config_apply_audit
+                    
+                    log_config_apply_audit(
+                        pending_id=pending_id,
+                        status="force_applied",
+                        task_id=task_id,
+                        details={"reason": "max_retries_reached"},
+                    )
+                except Exception:
+                    pass
+                
+                return apply_result
             except Exception as apply_error:
                 from selfhealing.services.pending_config import get_pending_config_service
                 pending_service = get_pending_config_service()
                 pending_service.mark_failed(pending_id, str(apply_error))
+                
+                # === Audit 기록 (실패) ===
+                try:
+                    from selfhealing.services.audit_helpers import log_config_apply_audit
+                    
+                    log_config_apply_audit(
+                        pending_id=pending_id,
+                        status="failed",
+                        error_message=str(apply_error),
+                        task_id=task_id,
+                    )
+                except Exception:
+                    pass
+                
                 raise
 
         raise self.retry(exc=e)

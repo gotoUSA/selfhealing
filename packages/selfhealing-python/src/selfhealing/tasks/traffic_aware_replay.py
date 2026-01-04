@@ -156,6 +156,9 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
     트래픽이 정상일 때만 DLQ Replay를 수행합니다.
     RuntimeConfig의 track3_enabled 설정에 따라 활성화/비활성화됩니다.
+    
+    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    - DLQ_REPLAY 이벤트 기록 (실행 결과와 함께)
 
     스케줄: 1분마다
     큐: dlq
@@ -197,6 +200,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         1. RuntimeConfig에서 Track 3 설정 로드
         2. Traffic Health Check 수행
         3. 모든 체크 통과 시 Replay 실행
+        4. Audit 기록 (Phase 4)
 
         Args:
             domain: 특정 도메인만 replay
@@ -206,13 +210,15 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             dict with status, counts, and check results
         """
         logger.info(f"[TrafficAwareReplay] Starting check (domain={domain})")
+        
+        task_id = getattr(self.request, 'id', None) if hasattr(self, 'request') else None
 
         # 1. RuntimeConfig에서 Track 3 설정 로드
         config = self._get_replay_automation_config()
 
         if not config.get("track3_enabled", False):
             logger.debug("[TrafficAwareReplay] Track 3 is disabled")
-            return {
+            result = {
                 "status": "disabled",
                 "reason": "Track 3 is disabled in RuntimeConfig",
                 "total": 0,
@@ -220,6 +226,8 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": 0,
                 "checks": {},
             }
+            self._log_audit(result, domain, task_id)
+            return result
 
         effective_max_items = max_items or config.get("track3_max_items", 30)
 
@@ -231,7 +239,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 f"[TrafficAwareReplay] Skipping - traffic unhealthy: "
                 f"{health_status.reason}"
             )
-            return {
+            result = {
                 "status": "skipped",
                 "reason": health_status.reason,
                 "total": 0,
@@ -239,6 +247,8 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": 0,
                 "checks": health_status.checks,
             }
+            self._log_audit(result, domain, task_id)
+            return result
 
         # 3. Replay 실행
         logger.info(
@@ -255,7 +265,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 f"failed={result['failed']}"
             )
 
-            return {
+            final_result = {
                 "status": "completed",
                 "reason": "Replay executed successfully",
                 "total": result["total"],
@@ -263,10 +273,12 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": result["failed"],
                 "checks": health_status.checks,
             }
+            self._log_audit(final_result, domain, task_id)
+            return final_result
 
         except Exception as e:
             logger.error(f"[TrafficAwareReplay] Replay failed: {e}", exc_info=True)
-            return {
+            error_result = {
                 "status": "error",
                 "reason": str(e),
                 "total": 0,
@@ -274,6 +286,33 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": 0,
                 "checks": health_status.checks,
             }
+            self._log_audit(error_result, domain, task_id, error_message=str(e))
+            return error_result
+    
+    def _log_audit(
+        self,
+        result: Dict[str, Any],
+        domain: Optional[str],
+        task_id: Optional[str],
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Audit 로그 기록 (Phase 4)."""
+        try:
+            from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
+            
+            log_traffic_aware_replay_audit(
+                domain=domain,
+                status=result.get("status", "unknown"),
+                total=result.get("total", 0),
+                success_count=result.get("success", 0),
+                failed_count=result.get("failed", 0),
+                skipped_reason=result.get("reason") if result.get("status") == "skipped" else None,
+                health_checks=result.get("checks"),
+                error_message=error_message,
+                task_id=task_id,
+            )
+        except Exception as audit_error:
+            logger.debug(f"[TrafficAwareReplay] Audit logging failed: {audit_error}")
 
     def _get_replay_automation_config(self) -> Dict[str, Any]:
         """RuntimeConfig에서 replay_automation 설정을 로드합니다."""

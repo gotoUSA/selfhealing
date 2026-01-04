@@ -1616,3 +1616,442 @@ def log_data_access_audit(
         f"resource={resource_type}:{resource_id}"
     )
     return wal_seq
+
+
+# =============================================================================
+# Celery Task Audit Helpers (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_config_apply_audit(
+    pending_id: Optional[str] = None,
+    config_key: Optional[str] = None,
+    old_value: Optional[Any] = None,
+    new_value: Optional[Any] = None,
+    status: str = "applied",
+    error_message: Optional[str] = None,
+    task_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """
+    설정 적용(config_apply) Celery task 실행을 Audit 로그에 기록.
+    
+    Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
+    
+    Args:
+        pending_id: PendingConfig ID
+        config_key: 설정 키 (e.g., "error_budget", "dlq")
+        old_value: 변경 전 값
+        new_value: 변경 후 값
+        status: 적용 상태 (applied, blocked, failed)
+        error_message: 에러 메시지 (실패 시)
+        task_id: Celery task ID
+        details: 추가 상세 정보
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "pending_id": pending_id,
+        "config_key": config_key,
+        "old_value": old_value,
+        "new_value": new_value,
+        "status": status,
+        "task_id": task_id,
+    }
+    if details:
+        audit_details.update(details)
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    success = status in ("applied", "success")
+    
+    # === WAL에 직접 기록 (Celery 컨텍스트) ===
+    wal_seq = _write_to_wal(
+        event_type="CONFIG_CHANGE",
+        source="ConfigApplyTask",
+        details=audit_details,
+        success=success,
+        error_message=error_message,
+        target_id=pending_id or config_key,
+    )
+    
+    # === Adapter 통해 기록 시도 ===
+    adapter = _get_audit_adapter()
+    if adapter is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            adapter.record(
+                event_type=AuditEventType.CONFIG_CHANGE,
+                source="ConfigApplyTask",
+                details=audit_details,
+                success=success,
+                error_message=error_message,
+                target_id=pending_id or config_key,
+            )
+        except Exception as e:
+            logger.debug(f"[ConfigApplyAudit] Adapter record failed: {e}")
+    
+    log_func = logger.info if success else logger.warning
+    log_func(
+        f"[ConfigApplyAudit] {status.upper()} | key={config_key} | "
+        f"pending_id={pending_id} | task_id={task_id}"
+    )
+    return wal_seq
+
+
+def log_chaos_scheduler_audit(
+    experiment_id: Optional[str] = None,
+    experiment_name: Optional[str] = None,
+    action: str = "scheduled",
+    status: str = "started",
+    target_service: Optional[str] = None,
+    error_message: Optional[str] = None,
+    task_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """
+    Chaos 스케줄러(chaos_scheduler) Celery task 실행을 Audit 로그에 기록.
+    
+    Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
+    
+    Args:
+        experiment_id: 실험 ID
+        experiment_name: 실험 이름
+        action: 동작 유형 (scheduled, executed, cleanup)
+        status: 상태 (started, completed, failed, blocked)
+        target_service: 대상 서비스
+        error_message: 에러 메시지 (실패 시)
+        task_id: Celery task ID
+        details: 추가 상세 정보
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    # 이벤트 타입 결정
+    if action == "cleanup":
+        event_type_str = "CHAOS_ROLLBACK_TRIGGERED"
+    elif status in ("completed", "success"):
+        event_type_str = "CHAOS_EXPERIMENT_COMPLETED"
+    elif status == "started" or action == "scheduled":
+        event_type_str = "CHAOS_EXPERIMENT_STARTED"
+    else:
+        event_type_str = "CHAOS_INJECTION_APPLIED"
+    
+    audit_details = {
+        "experiment_id": experiment_id,
+        "experiment_name": experiment_name,
+        "action": action,
+        "status": status,
+        "target_service": target_service,
+        "task_id": task_id,
+    }
+    if details:
+        audit_details.update(details)
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    success = status not in ("failed", "blocked", "error")
+    
+    # === WAL에 직접 기록 (Celery 컨텍스트) ===
+    wal_seq = _write_to_wal(
+        event_type=event_type_str,
+        source="ChaosSchedulerTask",
+        details=audit_details,
+        success=success,
+        error_message=error_message,
+        domain="chaos",
+        target_id=experiment_id,
+    )
+    
+    # === Adapter 통해 기록 시도 ===
+    adapter = _get_audit_adapter()
+    if adapter is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            event_type_map = {
+                "CHAOS_EXPERIMENT_STARTED": AuditEventType.CHAOS_EXPERIMENT_STARTED,
+                "CHAOS_EXPERIMENT_COMPLETED": AuditEventType.CHAOS_EXPERIMENT_COMPLETED,
+                "CHAOS_INJECTION_APPLIED": AuditEventType.CHAOS_INJECTION_APPLIED,
+                "CHAOS_ROLLBACK_TRIGGERED": AuditEventType.CHAOS_ROLLBACK_TRIGGERED,
+            }
+            adapter.record(
+                event_type=event_type_map.get(event_type_str, AuditEventType.CHAOS_EXPERIMENT_STARTED),
+                source="ChaosSchedulerTask",
+                details=audit_details,
+                success=success,
+                error_message=error_message,
+                domain="chaos",
+                target_id=experiment_id,
+            )
+        except Exception as e:
+            logger.debug(f"[ChaosSchedulerAudit] Adapter record failed: {e}")
+    
+    log_func = logger.info if success else logger.warning
+    log_func(
+        f"[ChaosSchedulerAudit] {action.upper()} | status={status} | "
+        f"experiment={experiment_name or experiment_id} | task_id={task_id}"
+    )
+    return wal_seq
+
+
+def log_governance_task_audit(
+    action: str = "expiry_check",
+    emergency_level: Optional[int] = None,
+    previous_level: Optional[int] = None,
+    status: str = "completed",
+    notification_sent: bool = False,
+    auto_recovered: bool = False,
+    hours_elapsed: Optional[float] = None,
+    error_message: Optional[str] = None,
+    task_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """
+    Governance(emergency mode expiry) Celery task 실행을 Audit 로그에 기록.
+    
+    Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
+    
+    Args:
+        action: 동작 유형 (expiry_check, warning_sent, auto_recovered)
+        emergency_level: 현재 Emergency 레벨
+        previous_level: 이전 Emergency 레벨 (변경 시)
+        status: 상태 (completed, no_action, warning, auto_recovered)
+        notification_sent: 알림 발송 여부
+        auto_recovered: 자동 복구 여부
+        hours_elapsed: 경과 시간 (시간 단위)
+        error_message: 에러 메시지 (실패 시)
+        task_id: Celery task ID
+        details: 추가 상세 정보
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    # 이벤트 타입 결정
+    if auto_recovered:
+        event_type_str = "EMERGENCY_MODE_DEACTIVATED"
+    elif emergency_level is not None and emergency_level > 0:
+        event_type_str = "EMERGENCY_MODE_ACTIVATED"
+    else:
+        event_type_str = "EMERGENCY_MODE_DEACTIVATED"
+    
+    audit_details = {
+        "action": action,
+        "emergency_level": emergency_level,
+        "previous_level": previous_level,
+        "status": status,
+        "notification_sent": notification_sent,
+        "auto_recovered": auto_recovered,
+        "hours_elapsed": hours_elapsed,
+        "task_id": task_id,
+    }
+    if details:
+        audit_details.update(details)
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    success = status not in ("failed", "error")
+    
+    # === WAL에 직접 기록 (Celery 컨텍스트) ===
+    wal_seq = _write_to_wal(
+        event_type=event_type_str,
+        source="GovernanceTask",
+        details=audit_details,
+        success=success,
+        error_message=error_message,
+        domain="governance",
+    )
+    
+    # === Adapter 통해 기록 시도 ===
+    adapter = _get_audit_adapter()
+    if adapter is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            event_type_map = {
+                "EMERGENCY_MODE_ACTIVATED": AuditEventType.EMERGENCY_MODE_ACTIVATED,
+                "EMERGENCY_MODE_DEACTIVATED": AuditEventType.EMERGENCY_MODE_DEACTIVATED,
+            }
+            adapter.record(
+                event_type=event_type_map.get(event_type_str, AuditEventType.EMERGENCY_MODE_DEACTIVATED),
+                source="GovernanceTask",
+                details=audit_details,
+                success=success,
+                error_message=error_message,
+                domain="governance",
+            )
+        except Exception as e:
+            logger.debug(f"[GovernanceTaskAudit] Adapter record failed: {e}")
+    
+    log_func = logger.info if success else logger.warning
+    level_str = f"L{emergency_level}" if emergency_level is not None else "N/A"
+    log_func(
+        f"[GovernanceTaskAudit] {action.upper()} | level={level_str} | "
+        f"status={status} | auto_recovered={auto_recovered} | task_id={task_id}"
+    )
+    return wal_seq
+
+
+def log_traffic_aware_replay_audit(
+    domain: Optional[str] = None,
+    status: str = "completed",
+    total: int = 0,
+    success_count: int = 0,
+    failed_count: int = 0,
+    skipped_reason: Optional[str] = None,
+    health_checks: Optional[Dict[str, bool]] = None,
+    error_message: Optional[str] = None,
+    task_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """
+    Traffic-Aware Replay Celery task 실행을 Audit 로그에 기록.
+    
+    Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
+    
+    Args:
+        domain: 대상 도메인
+        status: 상태 (completed, skipped, disabled, error)
+        total: 전체 처리 건수
+        success_count: 성공 건수
+        failed_count: 실패 건수
+        skipped_reason: 스킵 사유
+        health_checks: 헬스 체크 결과 (circuit_breaker, error_budget, governance)
+        error_message: 에러 메시지 (실패 시)
+        task_id: Celery task ID
+        details: 추가 상세 정보
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "domain": domain,
+        "status": status,
+        "total": total,
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "skipped_reason": skipped_reason,
+        "health_checks": health_checks,
+        "task_id": task_id,
+    }
+    if details:
+        audit_details.update(details)
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    success = status in ("completed", "success") and failed_count == 0
+    
+    # === WAL에 직접 기록 (Celery 컨텍스트) ===
+    wal_seq = _write_to_wal(
+        event_type="DLQ_REPLAY",
+        source="TrafficAwareReplayTask",
+        details=audit_details,
+        success=success,
+        error_message=error_message or skipped_reason,
+        domain=domain or "dlq",
+    )
+    
+    # === Adapter 통해 기록 시도 ===
+    adapter = _get_audit_adapter()
+    if adapter is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            adapter.record(
+                event_type=AuditEventType.DLQ_REPLAY,
+                source="TrafficAwareReplayTask",
+                details=audit_details,
+                success=success,
+                error_message=error_message or skipped_reason,
+                domain=domain or "dlq",
+            )
+        except Exception as e:
+            logger.debug(f"[TrafficAwareReplayAudit] Adapter record failed: {e}")
+    
+    log_func = logger.info if status == "completed" else logger.warning
+    log_func(
+        f"[TrafficAwareReplayAudit] {status.upper()} | domain={domain} | "
+        f"total={total} | success={success_count} | failed={failed_count} | task_id={task_id}"
+    )
+    return wal_seq
+
+
+def log_drift_detection_audit(
+    check_type: str = "sla_drift",
+    status: str = "completed",
+    drift_detected: bool = False,
+    drift_details: Optional[Dict[str, Any]] = None,
+    operations_analyzed: int = 0,
+    error_message: Optional[str] = None,
+    task_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """
+    Drift Detection Celery task 실행을 Audit 로그에 기록.
+    
+    Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
+    
+    Args:
+        check_type: 체크 유형 (sla_drift, analyze_pending, chaos_cleanup)
+        status: 상태 (completed, warning, error)
+        drift_detected: 드리프트 감지 여부
+        drift_details: 드리프트 상세 정보
+        operations_analyzed: 분석된 작업 수
+        error_message: 에러 메시지 (실패 시)
+        task_id: Celery task ID
+        details: 추가 상세 정보
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "check_type": check_type,
+        "status": status,
+        "drift_detected": drift_detected,
+        "drift_details": drift_details,
+        "operations_analyzed": operations_analyzed,
+        "task_id": task_id,
+    }
+    if details:
+        audit_details.update(details)
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    success = status not in ("error", "failed")
+    
+    # === WAL에 직접 기록 (Celery 컨텍스트) ===
+    wal_seq = _write_to_wal(
+        event_type="CONFIG_CHANGE",  # drift detection은 설정 변경 감지
+        source="DriftDetectionTask",
+        details=audit_details,
+        success=success,
+        error_message=error_message,
+        domain="drift_detection",
+    )
+    
+    # === Adapter 통해 기록 시도 ===
+    adapter = _get_audit_adapter()
+    if adapter is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            adapter.record(
+                event_type=AuditEventType.CONFIG_CHANGE,
+                source="DriftDetectionTask",
+                details=audit_details,
+                success=success,
+                error_message=error_message,
+                domain="drift_detection",
+            )
+        except Exception as e:
+            logger.debug(f"[DriftDetectionAudit] Adapter record failed: {e}")
+    
+    log_func = logger.info if success else logger.warning
+    drift_str = "DRIFT_DETECTED" if drift_detected else "NO_DRIFT"
+    log_func(
+        f"[DriftDetectionAudit] {check_type.upper()} | {drift_str} | "
+        f"analyzed={operations_analyzed} | status={status} | task_id={task_id}"
+    )
+    return wal_seq

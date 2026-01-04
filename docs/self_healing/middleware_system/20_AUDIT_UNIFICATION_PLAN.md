@@ -603,13 +603,80 @@ SELFHEALING_AUDIT = {
 
 **목표**: 주요 Celery Tasks에 Audit 추가
 
-| Task | 기록할 이벤트 |
-|------|-------------|
-| `config_apply` | `CONFIG_CHANGE` |
-| `chaos_scheduler` | `CHAOS_EXPERIMENT_STARTED` |
-| `governance` | `EMERGENCY_MODE_*` |
-| `drift_detection` | `CONFIG_CHANGE` |
-| `traffic_aware_replay` | `DLQ_REPLAY` |
+| Task | 기록할 이벤트 | 예상 시간 | 상태 |
+|------|-------------|:--------:|:----:|
+| 4-1. audit_helpers.py에 Celery task 헬퍼 추가 | 5개 함수 | 2h | ✅ 완료 |
+| 4-2. config_apply task audit 통합 | `CONFIG_CHANGE` | 1h | ✅ 완료 |
+| 4-3. chaos_scheduler task audit 통합 | `CHAOS_EXPERIMENT_*` | 1h | ✅ 완료 |
+| 4-4. governance task audit 통합 | `EMERGENCY_MODE_*` | 1h | ✅ 완료 |
+| 4-5. traffic_aware_replay task audit 통합 | `DLQ_REPLAY` | 1h | ✅ 완료 |
+| 4-6. drift_detection task audit 통합 | `CONFIG_CHANGE` | 1h | ✅ 완료 |
+| 4-7. 단위 테스트 | `tests/` | 2h | ✅ 완료 (26개 통과) |
+
+**Phase 4 완료 기준**:
+- [x] 5개 새 헬퍼 함수 구현 (log_config_apply_audit, log_chaos_scheduler_audit, log_governance_task_audit, log_traffic_aware_replay_audit, log_drift_detection_audit)
+- [x] 5개 Celery task에 audit 호출 추가
+- [x] WAL 기반 누락 0 보장 (Celery 컨텍스트에서도 직접 WAL 기록)
+- [x] 단위 테스트 통과 (26개)
+
+**구현된 파일**:
+- `packages/selfhealing-python/src/selfhealing/services/audit_helpers.py` - 5개 헬퍼 함수 추가
+- `packages/selfhealing-python/src/selfhealing/tasks/config_apply.py` - audit 통합
+- `packages/selfhealing-python/src/selfhealing/tasks/chaos_scheduler.py` - audit 통합
+- `packages/selfhealing-python/src/selfhealing/tasks/governance.py` - audit 통합
+- `packages/selfhealing-python/src/selfhealing/tasks/traffic_aware_replay.py` - audit 통합
+- `shopping/tasks/drift_detection_tasks.py` - audit 통합
+- `packages/selfhealing-python/tests/unit/test_audit_helpers_phase4.py` - 26개 테스트
+
+**구현된 헬퍼 함수**:
+
+```python
+# 1. 설정 적용 audit
+log_config_apply_audit(
+    pending_id="pending-123",
+    config_key="error_budget",
+    old_value={"threshold": 5.0},
+    new_value={"threshold": 3.0},
+    status="applied",  # applied, blocked, failed
+    task_id="celery-task-id",
+)
+
+# 2. Chaos 스케줄러 audit
+log_chaos_scheduler_audit(
+    experiment_id="exp-123",
+    action="scheduled",  # scheduled, executed, cleanup
+    status="completed",  # started, completed, failed, blocked
+    task_id="celery-task-id",
+)
+
+# 3. Governance 만료 체크 audit
+log_governance_task_audit(
+    action="expiry_check",
+    emergency_level=2,
+    auto_recovered=True,
+    hours_elapsed=8.1,
+    task_id="celery-task-id",
+)
+
+# 4. Traffic-Aware Replay audit
+log_traffic_aware_replay_audit(
+    domain="payment",
+    status="completed",
+    total=10,
+    success_count=8,
+    failed_count=2,
+    health_checks={"circuit_breaker": True},
+    task_id="celery-task-id",
+)
+
+# 5. Drift Detection audit
+log_drift_detection_audit(
+    check_type="sla_drift",
+    drift_detected=True,
+    operations_analyzed=50,
+    task_id="celery-task-id",
+)
+```
 
 ---
 
@@ -713,10 +780,11 @@ class TestAuditUnification:
 | **Phase 1** | 2일 | 3개 신규 서비스 Audit | ✅ 완료 |
 | **Phase 2** | 3일 | 3개 자체 구현 통합 | ✅ 완료 |
 | **Phase 3** | 2일 | 추가 서비스 + 조회 기록 | ✅ 완료 |
-| **Phase 4** | 1일 | Celery Tasks Audit | |
-| **총계** | **9.5일** | | |
+| **Phase 4** | 1일 | Celery Tasks Audit | ✅ 완료 |
+| **총계** | **9.5일** | **모든 Phase 완료** | ✅ |
 
 ---
 
 *작성: Self-Healing Team*
 *최종 수정: 2026-01-05*
+
