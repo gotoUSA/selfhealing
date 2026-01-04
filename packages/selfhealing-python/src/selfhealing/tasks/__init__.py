@@ -83,6 +83,15 @@ from .compliance_tasks import (
     get_compliance_beat_schedule,
 )
 
+from .traffic_aware_replay import (
+    TrafficHealthStatus,
+    check_traffic_health,
+    TrafficAwareReplayTask,
+    TRAFFIC_AWARE_TASKS,
+    register_traffic_aware_tasks_with_celery,
+    get_traffic_aware_beat_schedule,
+)
+
 __all__ = [
     # Base Notifying Task
     "BaseNotifyingTask",
@@ -126,4 +135,11 @@ __all__ = [
     "COMPLIANCE_TASKS",
     "register_compliance_tasks_with_celery",
     "get_compliance_beat_schedule",
+    # Traffic-Aware Replay Tasks (Track 3)
+    "TrafficHealthStatus",
+    "check_traffic_health",
+    "TrafficAwareReplayTask",
+    "TRAFFIC_AWARE_TASKS",
+    "register_traffic_aware_tasks_with_celery",
+    "get_traffic_aware_beat_schedule",
 ]

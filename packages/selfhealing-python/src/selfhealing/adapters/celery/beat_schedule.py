@@ -83,6 +83,7 @@ def get_selfhealing_beat_schedule(
     include_cleanup: bool = True,
     include_intelligence: bool = True,
     include_compliance: bool = True,
+    include_traffic_aware: bool = True,
     include_legacy: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -92,6 +93,7 @@ def get_selfhealing_beat_schedule(
         include_cleanup: Include 🧹 청소부 레인 tasks
         include_intelligence: Include 🧠 지능 레인 tasks
         include_compliance: Include 📋 증명 레인 tasks
+        include_traffic_aware: Include 🚦 Traffic-Aware Replay tasks (Track 3)
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
     
     Returns:
@@ -130,6 +132,14 @@ def get_selfhealing_beat_schedule(
             logger.debug("[BeatSchedule] Added compliance lane schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load compliance tasks: {e}")
+    
+    if include_traffic_aware:
+        try:
+            from selfhealing.tasks.traffic_aware_replay import get_traffic_aware_beat_schedule
+            schedule.update(get_traffic_aware_beat_schedule())
+            logger.debug("[BeatSchedule] Added traffic-aware replay schedule (Track 3)")
+        except ImportError as e:
+            logger.warning(f"[BeatSchedule] Could not load traffic-aware tasks: {e}")
     
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())
@@ -268,12 +278,14 @@ def register_all_tasks_with_celery(app) -> None:
     from selfhealing.tasks.cleanup_tasks import register_cleanup_tasks_with_celery
     from selfhealing.tasks.intelligence_tasks import register_intelligence_tasks_with_celery
     from selfhealing.tasks.compliance_tasks import register_compliance_tasks_with_celery
+    from selfhealing.tasks.traffic_aware_replay import register_traffic_aware_tasks_with_celery
     
     register_cleanup_tasks_with_celery(app)
     register_intelligence_tasks_with_celery(app)
     register_compliance_tasks_with_celery(app)
+    register_traffic_aware_tasks_with_celery(app)
     
-    logger.info("[BeatSchedule] All self-healing tasks registered")
+    logger.info("[BeatSchedule] All self-healing tasks registered (including Track 3)")
 
 
 __all__ = [

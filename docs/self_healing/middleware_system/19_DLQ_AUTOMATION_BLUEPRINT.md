@@ -962,12 +962,26 @@ curl -X POST /api/self-healing/config/pending/{pending_id}/cancel/
 
 **테스트:** `tests/self_healing/unit/test_replay_automation_phase1.py` - 17개 테스트 통과
 
-### Phase 2: Track 3 구현 (2-3일)
+### Phase 2: Track 3 구현 ✅ 완료 (2026-01-04)
 
-| 작업 | 파일 | 변경 내용 |
-|-----|------|----------|
-| 1 | `tasks/traffic_aware_replay.py` | 신규 생성 |
-| 2 | `adapters/celery/beat_schedule.py` | 스케줄 추가 |
+| 작업 | 파일 | 변경 내용 | 상태 |
+|-----|------|----------|------|
+| 1 | `tasks/traffic_aware_replay.py` | 신규 생성 | ✅ |
+| 2 | `adapters/celery/beat_schedule.py` | 스케줄 추가 (include_traffic_aware 파라미터) | ✅ |
+| 3 | `tasks/__init__.py` | exports 추가 | ✅ |
+
+**구현 상세:**
+- `TrafficHealthStatus`: 트래픽 건강 상태 결과 dataclass
+- `check_traffic_health()`: CB 상태, Error Budget, Governance 체크 함수
+- `TrafficAwareReplayTask`: 매 1분마다 트래픽 정상 시 DLQ Replay 수행
+- Beat Schedule: `traffic-aware-replay` (매 1분, dlq 큐)
+
+**Health Checks:**
+1. Circuit Breaker State == CLOSED (도메인 지정 시)
+2. Error Budget > critical_threshold
+3. Governance 체크 통과 (Kill Switch, Emergency Mode)
+
+**테스트:** `tests/self_healing/unit/test_replay_automation_phase2.py` - 25개 테스트 통과
 
 ### Phase 3: Adaptive max_items (2-3일)
 
@@ -1217,8 +1231,8 @@ if not self.config.slack_webhook_url:
 |-----|------|------|------|------|
 | CB 복구 시 Replay | 수동 | 자동 | EventBus 핸들러 수정 | ✅ Phase 1 완료 |
 | RuntimeConfig API | 없음 | 있음 | ReplayAutomationConfig | ✅ Phase 1 완료 |
+| 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor | ✅ Phase 2 완료 |
 | max_items | 고정 | 동적 | AdaptiveReplayManager | ⏳ Phase 3 |
-| 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor | ⏳ Phase 2 |
 | 도메인 정책 | 일괄 | 차등 | domain_configs 활용 | ⏳ Phase 4 |
 
 ### 12.2 안전성 보장
@@ -1236,7 +1250,11 @@ if not self.config.slack_webhook_url:
    - `_on_circuit_breaker_closed` 핸들러 자동화
    - `/api/self-healing/config/replay-automation/` API
    - 17개 단위 테스트 통과
-3. ⏳ Phase 2: Track 3 Traffic-Aware Replay 구현
+3. ✅ Phase 2 구현 완료 (Track 3 Traffic-Aware Replay)
+   - `TrafficAwareReplayTask` 태스크 구현
+   - `check_traffic_health()` 건강 체크 함수
+   - Beat Schedule 통합 (매 1분마다)
+   - 25개 단위 테스트 통과
 4. ⏳ Phase 3: Adaptive max_items 구현
 5. ⏳ Phase 4: 도메인별 차등 정책 구현
 6. ⏳ Grafana 대시보드 업데이트
