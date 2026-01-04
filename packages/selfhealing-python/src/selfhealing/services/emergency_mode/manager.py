@@ -638,23 +638,25 @@ class GracefulDegradationManager:
             self._history = self._history[-100:]
     
     def _log_audit(self, action: str, user: str, reason: str):
-        """Shadow Audit 기록."""
+        """
+        Audit 기록.
+        
+        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        - 기존: selfhealing.audit.log_config_change 직접 호출
+        - 변경: log_emergency_mode_audit 헬퍼 사용 (WAL + 해시 체인 연결)
+        """
         try:
-            from selfhealing.audit import log_config_change
+            from selfhealing.services.audit_helpers import log_emergency_mode_audit
             
-            log_config_change(
-                config_type="emergency_mode",
-                config_key="state",
-                old_value=None,
-                new_value={
-                    "action": action,
-                    "level": self._state.level.name,
-                    "is_active": self._state.is_active,
-                    "reason": reason,
-                    "severity": "warning" if action == "deactivate" else "critical",
-                    "tag": f"EMERGENCY_{action.upper()}",
-                },
-                user=user,
+            log_emergency_mode_audit(
+                action=action,
+                level=self._state.level.name,
+                is_active=self._state.is_active,
+                activated_by=user if action in ("activate", "auto_activate") else None,
+                deactivated_by=user if action == "deactivate" else None,
+                reason=reason,
+                is_auto_triggered=self._state.is_auto_triggered,
+                expires_at=self._state.expires_at,
             )
         except Exception as e:
             logger.error(f"[EmergencyMode] Audit log failed: {e}")

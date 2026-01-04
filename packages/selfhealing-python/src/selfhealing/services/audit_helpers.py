@@ -914,3 +914,320 @@ def log_rollback_audit(
     )
     return wal_seq
 
+
+# =============================================================================
+# Chaos Experiment Audit Helpers (Phase 2: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_chaos_experiment_audit(
+    experiment_id: str,
+    event_type: str,
+    experiment_type: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+    result: Optional[Dict[str, Any]] = None,
+    dry_run: bool = False,
+    ttl_seconds: Optional[int] = None,
+    expires_at: Optional[str] = None,
+    violations: Optional[list] = None,
+    reason: Optional[str] = None,
+    request: Any = None,
+) -> str:
+    """
+    Chaos 실험 이벤트를 Audit 로그에 기록.
+    
+    실험 시작, 완료, 롤백 트리거 등을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        experiment_id: 실험 ID
+        event_type: 이벤트 유형 (experiment_started, experiment_completed, 
+                    chaos_injection_started, rollback_started, rollback_completed,
+                    kill_requested, auto_abort_ttl_expired, auto_abort_stop_condition 등)
+        experiment_type: 실험 유형 (latency_injection, error_5xx 등)
+        config: 실험 설정
+        result: 실험 결과
+        dry_run: Dry Run 모드 여부
+        ttl_seconds: TTL 설정값
+        expires_at: 만료 시간 (ISO format)
+        violations: Stop Condition 위반 목록
+        reason: 이벤트 사유
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        생성된 audit record ID
+    """
+    import uuid
+    
+    # record_id 생성 (기존 ChaosExperiment._audit과 호환)
+    record_id = f"audit-{uuid.uuid4().hex[:8]}"
+    
+    details = {
+        "experiment_id": experiment_id,
+        "experiment_type": experiment_type,
+        "event_type": event_type,
+        "config": config,
+        "result": result,
+        "dry_run": dry_run,
+        "ttl_seconds": ttl_seconds,
+        "expires_at": expires_at,
+        "violations": violations,
+        "reason": reason,
+        "record_id": record_id,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # AuditEventType 매핑
+    event_type_mapping = {
+        "experiment_started": "CHAOS_EXPERIMENT_STARTED",
+        "experiment_completed": "CHAOS_EXPERIMENT_COMPLETED",
+        "chaos_injection_started": "CHAOS_INJECTION_APPLIED",
+        "chaos_injection_simulated": "CHAOS_INJECTION_APPLIED",
+        "rollback_started": "CHAOS_ROLLBACK_TRIGGERED",
+        "rollback_completed": "CHAOS_ROLLBACK_TRIGGERED",
+        "kill_requested": "CHAOS_ROLLBACK_TRIGGERED",
+        "auto_abort_ttl_expired": "CHAOS_ROLLBACK_TRIGGERED",
+        "auto_abort_stop_condition": "CHAOS_ROLLBACK_TRIGGERED",
+        "auto_rollback_triggered": "CHAOS_ROLLBACK_TRIGGERED",
+        "steady_state_captured": "CHAOS_EXPERIMENT_STARTED",
+    }
+    wal_event_type = event_type_mapping.get(event_type, "CHAOS_EXPERIMENT_STARTED")
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    _write_to_wal(
+        event_type=wal_event_type,
+        source="ChaosExperiment",
+        details=details,
+        success=True,
+        target_id=experiment_id,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType as BufferEventType
+            
+            buffer_event_mapping = {
+                "CHAOS_EXPERIMENT_STARTED": BufferEventType.CHAOS_EXPERIMENT_STARTED,
+                "CHAOS_EXPERIMENT_COMPLETED": BufferEventType.CHAOS_EXPERIMENT_COMPLETED,
+                "CHAOS_INJECTION_APPLIED": BufferEventType.CHAOS_INJECTION_APPLIED,
+                "CHAOS_ROLLBACK_TRIGGERED": BufferEventType.CHAOS_ROLLBACK_TRIGGERED,
+            }
+            buffer_event_type = buffer_event_mapping.get(
+                wal_event_type, 
+                BufferEventType.CHAOS_EXPERIMENT_STARTED
+            )
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="ChaosExperiment",
+                details=details,
+                success=True,
+                target_id=experiment_id,
+            )
+            if added:
+                return record_id
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅 (기존 ChaosExperiment._audit과 동일한 형식)
+    logger.info(
+        f"[ChaosAudit] {experiment_id} | {event_type} | {record_id}",
+        extra={"audit_data": details}
+    )
+    return record_id
+
+
+# =============================================================================
+# Emergency Mode Audit Helpers (Phase 2: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_emergency_mode_audit(
+    action: str,
+    level: str,
+    is_active: bool,
+    activated_by: Optional[str] = None,
+    deactivated_by: Optional[str] = None,
+    reason: Optional[str] = None,
+    is_auto_triggered: bool = False,
+    expires_at: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Emergency Mode 상태 변경을 Audit 로그에 기록.
+    
+    비상 모드 활성화/비활성화/레벨 변경 등을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        action: 수행된 액션 (activate, auto_activate, deactivate, escalate, de_escalate)
+        level: Emergency 레벨 (NORMAL, LEVEL_1, LEVEL_2, LEVEL_3, LOCKDOWN)
+        is_active: 비상 모드 활성화 여부
+        activated_by: 활성화한 사용자 (활성화 시)
+        deactivated_by: 비활성화한 사용자 (비활성화 시)
+        reason: 변경 사유
+        is_auto_triggered: 자동 트리거 여부
+        expires_at: 만료 시간 (ISO format)
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    # 이벤트 타입 결정
+    if action in ("activate", "auto_activate", "escalate"):
+        event_type_str = "EMERGENCY_MODE_ACTIVATED"
+    else:
+        event_type_str = "EMERGENCY_MODE_DEACTIVATED"
+    
+    user = activated_by or deactivated_by or "system"
+    
+    details = {
+        "action": action,
+        "level": level,
+        "is_active": is_active,
+        "activated_by": activated_by,
+        "deactivated_by": deactivated_by,
+        "reason": reason,
+        "is_auto_triggered": is_auto_triggered,
+        "expires_at": expires_at,
+        "severity": "warning" if action == "deactivate" else "critical",
+        "tag": f"EMERGENCY_{action.upper()}",
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type=event_type_str,
+        source="EmergencyModeManager",
+        details=details,
+        success=True,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            buffer_event_type = (
+                AuditEventType.EMERGENCY_MODE_ACTIVATED 
+                if event_type_str == "EMERGENCY_MODE_ACTIVATED"
+                else AuditEventType.EMERGENCY_MODE_DEACTIVATED
+            )
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="EmergencyModeManager",
+                details=details,
+                success=True,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    logger.info(
+        f"[EmergencyModeAudit] {action.upper()} | level={level} | "
+        f"user={user} | reason={reason or 'N/A'}"
+    )
+    
+    # === 기존 log_config_change 호환 호출 ===
+    try:
+        from selfhealing.audit import log_config_change
+        
+        log_config_change(
+            config_type="emergency_mode",
+            config_key="state",
+            old_value=None,
+            new_value=details,
+            user=user,
+        )
+    except Exception as e:
+        logger.debug(f"[EmergencyModeAudit] Fallback log_config_change failed: {e}")
+    
+    return wal_seq
+
+
+# =============================================================================
+# Error Budget Gate Audit Helpers (Phase 2: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_error_budget_blocked_audit(
+    action: str,
+    gate_status: str,
+    error_budget_percent: Optional[float] = None,
+    threshold_percent: Optional[float] = None,
+    reason: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Error Budget Gate 차단을 Audit 로그에 기록.
+    
+    에러 예산 부족으로 인한 자동화 차단을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        action: 차단된 액션 이름 (chaos_experiment, auto_replay 등)
+        gate_status: 게이트 상태 (blocked, fail_open_rate_limited 등)
+        error_budget_percent: 현재 에러 예산 잔여율
+        threshold_percent: 차단 임계값
+        reason: 차단 사유
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "action": action,
+        "gate_status": gate_status,
+        "error_budget_percent": error_budget_percent,
+        "threshold_percent": threshold_percent,
+        "reason": reason,
+        "manual_mode_enforced": True,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="ERROR_BUDGET_BLOCKED",
+        source="ErrorBudgetGate",
+        details=details,
+        success=False,
+        error_message=reason,
+        target_id=action,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.ERROR_BUDGET_BLOCKED,
+                source="ErrorBudgetGate",
+                details=details,
+                success=False,
+                error_message=reason,
+                target_id=action,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    budget_str = f"{error_budget_percent:.1f}%" if error_budget_percent is not None else "N/A"
+    logger.warning(
+        f"[ErrorBudgetAudit] BLOCKED | action={action} | "
+        f"budget={budget_str} | status={gate_status}"
+    )
+    return wal_seq
+

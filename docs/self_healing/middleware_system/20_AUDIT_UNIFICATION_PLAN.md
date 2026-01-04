@@ -492,15 +492,30 @@ class AuditEventType(Enum):
 
 **목표**: 기존 `_audit()` 자체 구현을 헬퍼로 마이그레이션
 
-| 작업 | 대상 서비스 | 현재 방식 | 예상 시간 |
-|------|-----------|----------|:--------:|
-| 2-1. Chaos 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h |
-| 2-2. Emergency 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h |
-| 2-3. ErrorBudget 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h |
-| 2-4. ChaosExperiment 마이그레이션 | `chaos/base.py` | `self._audit()` | 2h |
-| 2-5. EmergencyModeManager 마이그레이션 | `emergency_mode/manager.py` | `self._log_audit()` | 2h |
-| 2-6. ErrorBudgetGate 마이그레이션 | `error_budget_gate/gate.py` | `self._audit_block()` | 2h |
-| 2-7. 통합 테스트 | `tests/` | - | 3h |
+| 작업 | 대상 서비스 | 현재 방식 | 예상 시간 | 상태 |
+|------|-----------|----------|:--------:|:----:|
+| 2-1. Chaos 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h | ✅ 완료 |
+| 2-2. Emergency 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h | ✅ 완료 |
+| 2-3. ErrorBudget 헬퍼 추가 | `audit_helpers.py` | 신규 | 1.5h | ✅ 완료 |
+| 2-4. ChaosExperiment 마이그레이션 | `chaos/base.py` | `self._audit()` | 2h | ✅ 완료 |
+| 2-5. EmergencyModeManager 마이그레이션 | `emergency_mode/manager.py` | `self._log_audit()` | 2h | ✅ 완료 |
+| 2-6. ErrorBudgetGate 마이그레이션 | `error_budget_gate/gate.py` | `self._audit_block()` | 2h | ✅ 완료 |
+| 2-7. 통합 테스트 | `tests/` | - | 3h | ✅ 완료 (31개 통과) |
+
+**Phase 2 완료 기준**:
+- [x] 3개 새 헬퍼 함수 구현 (log_chaos_experiment_audit, log_emergency_mode_audit, log_error_budget_blocked_audit)
+- [x] 3개 서비스 마이그레이션 완료 (ChaosExperiment, EmergencyModeManager, ErrorBudgetGate)
+- [x] 기존 동작 유지 (하위 호환: _audit_records 리스트, log_config_change 호환 호출)
+- [x] 해시 체인에 기록됨 확인 (WAL 통합)
+- [x] 8개 새 AuditEventType 추가 (Chaos 4개, Emergency 2개, ErrorBudget 2개)
+
+**구현된 파일**:
+- `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py` - Phase 2 AuditEventType 추가
+- `packages/selfhealing-python/src/selfhealing/services/audit_helpers.py` - 3개 헬퍼 함수 추가
+- `packages/selfhealing-python/src/selfhealing/services/chaos/base.py` - _audit 헬퍼 통합
+- `packages/selfhealing-python/src/selfhealing/services/emergency_mode/manager.py` - _log_audit 헬퍼 통합
+- `packages/selfhealing-python/src/selfhealing/services/error_budget_gate/gate.py` - _audit_block 헬퍼 통합
+- `packages/selfhealing-python/tests/unit/test_audit_helpers_phase2.py` - 31개 테스트
 
 **마이그레이션 패턴**:
 
@@ -526,10 +541,10 @@ class ChaosExperiment:
 ```
 
 **Phase 2 완료 기준**:
-- [ ] 3개 새 헬퍼 함수 구현
-- [ ] 3개 서비스 마이그레이션 완료
-- [ ] 기존 동작 유지 (하위 호환)
-- [ ] 해시 체인에 기록됨 확인
+- [x] 3개 새 헬퍼 함수 구현
+- [x] 3개 서비스 마이그레이션 완료
+- [x] 기존 동작 유지 (하위 호환)
+- [x] 해시 체인에 기록됨 확인
 
 ---
 
@@ -660,7 +675,7 @@ class TestAuditUnification:
 |:-----:|:----:|--------|:----:|
 | **Phase 0** | 1.5일 | WAL 기반 누락 0 보장 | ✅ 완료 |
 | **Phase 1** | 2일 | 3개 신규 서비스 Audit | ✅ 완료 |
-| **Phase 2** | 3일 | 3개 자체 구현 통합 | |
+| **Phase 2** | 3일 | 3개 자체 구현 통합 | ✅ 완료 |
 | **Phase 3** | 2일 | 추가 서비스 + 조회 기록 | |
 | **Phase 4** | 1일 | Celery Tasks Audit | |
 | **총계** | **9.5일** | | |

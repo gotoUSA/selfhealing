@@ -90,6 +90,20 @@ class AuditEventType(Enum):
     # 롤백 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
     ROLLBACK_PERFORMED = "rollback_performed"
     
+    # Chaos 실험 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    CHAOS_EXPERIMENT_STARTED = "chaos_experiment_started"
+    CHAOS_EXPERIMENT_COMPLETED = "chaos_experiment_completed"
+    CHAOS_INJECTION_APPLIED = "chaos_injection_applied"
+    CHAOS_ROLLBACK_TRIGGERED = "chaos_rollback_triggered"
+    
+    # Emergency Mode 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    EMERGENCY_MODE_ACTIVATED = "emergency_mode_activated"
+    EMERGENCY_MODE_DEACTIVATED = "emergency_mode_deactivated"
+    
+    # Error Budget 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    ERROR_BUDGET_DEPLETED = "error_budget_depleted"
+    ERROR_BUDGET_BLOCKED = "error_budget_blocked"
+    
     # 일반
     GENERIC = "generic"
 

@@ -695,14 +695,29 @@ class ChaosExperiment(abc.ABC):
             return None
     
     def _audit(self, event_type: str, data: Dict[str, Any]) -> None:
-        """Record audit event."""
-        record_id = f"audit-{uuid.uuid4().hex[:8]}"
-        self._audit_records.append(record_id)
+        """
+        Record audit event.
         
-        logger.info(
-            f"[ChaosAudit] {self.experiment_id} | {event_type} | {record_id}",
-            extra={"audit_data": data}
+        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        - 기존: 로컬 로깅만
+        - 변경: WAL + 해시 체인 연결
+        - 하위 호환: _audit_records 리스트 유지
+        """
+        from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+        
+        record_id = log_chaos_experiment_audit(
+            experiment_id=self.experiment_id,
+            event_type=event_type,
+            experiment_type=self.experiment_type,
+            config=data.get("config"),
+            result=data.get("result"),
+            dry_run=data.get("dry_run", self.config.dry_run if self.config else False),
+            ttl_seconds=data.get("ttl_seconds"),
+            expires_at=data.get("expires_at"),
+            violations=data.get("violations"),
+            reason=data.get("reason"),
         )
+        self._audit_records.append(record_id)
     
     def _config_to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""

@@ -466,26 +466,23 @@ class ErrorBudgetGate:
         return result
     
     def _audit_block(self, action: str, result: GateCheckResult) -> None:
-        """차단 이벤트 감사 로깅."""
+        """
+        차단 이벤트 감사 로깅.
+        
+        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        - 기존: AuditAdapter.log 직접 호출
+        - 변경: log_error_budget_blocked_audit 헬퍼 사용 (WAL + 해시 체인 연결)
+        """
         try:
-            from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction
-            from selfhealing.adapters.audit.singleton import get_audit_adapter
+            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
             
-            adapter = get_audit_adapter()
-            adapter.log(AuditEntry(
-                action=AuditAction.MANUAL_OVERRIDE,
-                target_type="automation",
-                target_id=action,
-                reason="Error budget gate blocked automation",
-                details={
-                    "gate_status": result.status.value,
-                    "error_budget_percent": result.error_budget_percent,
-                    "threshold_percent": result.threshold_percent,
-                    "manual_mode_enforced": True,
-                },
-                success=False,
-                error_message=result.reason,
-            ))
+            log_error_budget_blocked_audit(
+                action=action,
+                gate_status=result.status.value,
+                error_budget_percent=result.error_budget_percent,
+                threshold_percent=result.threshold_percent,
+                reason=result.reason,
+            )
         except Exception as e:
             logger.warning(f"[ErrorBudgetGate] Failed to audit block: {e}")
     
