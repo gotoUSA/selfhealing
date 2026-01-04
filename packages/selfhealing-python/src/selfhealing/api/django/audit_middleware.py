@@ -88,11 +88,21 @@ class AuditMiddleware:
         "/static/",
     ]
     
+    # ADR-002: 설정 기반 조회 기록 경로
+    # 이 경로에 대한 GET 요청은 DATA_ACCESS 이벤트로 기록
+    # Django settings의 SELFHEALING_AUDIT["read_paths"]로 오버라이드 가능
+    DEFAULT_READ_AUDIT_PATHS: List[str] = [
+        "/api/admin/",
+        "/api/payments/",
+        "/api/users/personal/",
+    ]
+    
     def __init__(self, get_response: Callable):
         """Initialize AuditMiddleware."""
         self.get_response = get_response
         self._recorder = None
         self._initialized = False
+        self._read_audit_paths: List[str] = []
         
         # 통계
         self._total_requests = 0
@@ -119,7 +129,23 @@ class AuditMiddleware:
             logger.warning(f"[AuditMiddleware] Recorder init failed: {e}")
             self._recorder = None
         
+        # ADR-002: 설정 기반 조회 기록 경로 로드
+        self._load_read_audit_config()
+        
         self._initialized = True
+    
+    def _load_read_audit_config(self) -> None:
+        """ADR-002: Django settings에서 조회 기록 설정 로드."""
+        try:
+            from django.conf import settings
+            
+            audit_config = getattr(settings, "SELFHEALING_AUDIT", {})
+            self._read_audit_paths = audit_config.get("read_paths", self.DEFAULT_READ_AUDIT_PATHS)
+            
+            logger.debug(f"[AuditMiddleware] Read audit paths: {self._read_audit_paths}")
+        except Exception as e:
+            logger.debug(f"[AuditMiddleware] Failed to load audit config: {e}")
+            self._read_audit_paths = self.DEFAULT_READ_AUDIT_PATHS
     
     def __call__(self, request: "HttpRequest") -> "HttpResponse":
         """Process request/response."""
@@ -133,6 +159,9 @@ class AuditMiddleware:
         # === Phase 1: 버퍼 초기화 ===
         buffer = self._init_buffer(request)
         
+        # === Phase 1.5: ADR-002 조회 기록 (설정된 경로의 GET 요청) ===
+        self._capture_read_access(request, buffer)
+        
         # === Phase 2: 요청 처리 ===
         response = self.get_response(request)
         
@@ -144,6 +173,49 @@ class AuditMiddleware:
             self._record_events(buffer, request, response)
         
         return response
+    
+    def _capture_read_access(
+        self, 
+        request: "HttpRequest", 
+        buffer: "RequestAuditBuffer"
+    ) -> None:
+        """
+        ADR-002: 설정된 경로에 대한 조회(GET) 요청을 DATA_ACCESS로 기록.
+        
+        SELFHEALING_AUDIT["read_paths"]에 설정된 경로 패턴에 매칭되는
+        GET 요청에 대해 DATA_ACCESS 이벤트를 버퍼에 추가합니다.
+        """
+        method = getattr(request, "method", "").upper()
+        if method != "GET":
+            return
+        
+        path = getattr(request, "path", "")
+        if not self._should_audit_read(path):
+            return
+        
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        buffer.add(
+            event_type=AuditEventType.DATA_ACCESS,
+            source="AuditMiddleware",
+            details={
+                "path": path,
+                "method": method,
+                "query_string": getattr(request, "META", {}).get("QUERY_STRING", ""),
+            },
+            success=True,
+            actor_id=self._get_user_id(request),
+        )
+    
+    def _should_audit_read(self, path: str) -> bool:
+        """조회 기록 대상 경로인지 확인."""
+        if not path or not self._read_audit_paths:
+            return False
+        
+        for audit_path in self._read_audit_paths:
+            if path.startswith(audit_path):
+                return True
+        return False
     
     def _should_skip(self, request: "HttpRequest") -> bool:
         """제외 경로 체크."""

@@ -131,6 +131,34 @@ class ComplianceService:
         
         logger.info("ComplianceService initialized")
     
+    def _log_compliance_audit(
+        self,
+        stage_name: str,
+        standard: str,
+        check_id: Optional[str] = None,
+        passed: bool = True,
+        violation_id: Optional[str] = None,
+        severity: Optional[str] = None,
+        message: Optional[str] = None,
+        compliance_score: Optional[float] = None,
+    ) -> None:
+        """Audit 헬퍼를 통해 compliance 이벤트 기록."""
+        try:
+            from selfhealing.services.audit_helpers import log_compliance_audit
+            
+            log_compliance_audit(
+                stage_name=stage_name,
+                standard=standard,
+                check_id=check_id,
+                passed=passed,
+                violation_id=violation_id,
+                severity=severity,
+                message=message,
+                compliance_score=compliance_score,
+            )
+        except Exception as e:
+            logger.debug(f"[ComplianceService] Audit logging failed: {e}")
+    
     def _load_default_checks(self) -> None:
         """기본 검사 항목 로드"""
         for standard, checks in DEFAULT_CHECKS.items():
@@ -242,7 +270,26 @@ class ComplianceService:
             )
             self._violations.append(violation)
             logger.warning(f"Compliance violation: {check_id} in {stage_name}")
+            
+            # Audit 로깅 (Phase 3)
+            self._log_compliance_audit(
+                stage_name=stage_name,
+                standard=check.standard.value,
+                check_id=check_id,
+                passed=False,
+                violation_id=violation.violation_id,
+                severity=violation.severity.value if hasattr(violation.severity, 'value') else str(violation.severity),
+                message=violation.message,
+            )
             return violation
+        
+        # 검사 통과 시에도 Audit 로깅 (Phase 3)
+        self._log_compliance_audit(
+            stage_name=stage_name,
+            standard=check.standard.value,
+            check_id=check_id,
+            passed=True,
+        )
         
         return None
     

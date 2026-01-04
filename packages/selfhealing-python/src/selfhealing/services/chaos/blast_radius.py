@@ -249,6 +249,38 @@ class BlastRadiusManager:
         self._pending_approvals: Dict[str, ApprovalRequest] = {}
         self._approved_experiments: Set[str] = set()
     
+    def _log_blast_radius_audit(
+        self,
+        experiment_id: str,
+        blast_radius: str,
+        target_service: str,
+        action: str,
+        allowed: bool = True,
+        violations: Optional[List[str]] = None,
+        approval_status: Optional[str] = None,
+        target_domain: Optional[str] = None,
+        traffic_percent: Optional[float] = None,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Audit 헬퍼를 통해 blast radius 이벤트 기록."""
+        try:
+            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            
+            log_blast_radius_audit(
+                experiment_id=experiment_id,
+                blast_radius=blast_radius,
+                target_service=target_service,
+                action=action,
+                allowed=allowed,
+                violations=violations,
+                approval_status=approval_status,
+                target_domain=target_domain,
+                traffic_percent=traffic_percent,
+                reason=reason,
+            )
+        except Exception as e:
+            logger.debug(f"[BlastRadiusManager] Audit logging failed: {e}")
+    
     # =========================================================================
     # Policy Management
     # =========================================================================
@@ -387,7 +419,7 @@ class BlastRadiusManager:
                         f"Current status: {approval_status}"
                     )
         
-        return BlastRadiusCheckResult(
+        result = BlastRadiusCheckResult(
             allowed=len(violations) == 0,
             blast_radius=blast_radius.value,
             requires_approval=requires_approval,
@@ -398,6 +430,21 @@ class BlastRadiusManager:
             current_concurrent=current_concurrent,
             within_allowed_window=within_window,
         )
+        
+        # Audit 로깅 (Phase 3)
+        self._log_blast_radius_audit(
+            experiment_id=experiment_id,
+            blast_radius=blast_radius.value,
+            target_service=target_service,
+            action="check",
+            allowed=result.allowed,
+            violations=violations if violations else None,
+            approval_status=approval_status,
+            target_domain=target_domain,
+            traffic_percent=traffic_percent,
+        )
+        
+        return result
     
     def _check_time_window(self) -> bool:
         """Check if current time is within allowed window."""

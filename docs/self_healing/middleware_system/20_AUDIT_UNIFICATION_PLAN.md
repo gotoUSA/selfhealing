@@ -552,14 +552,50 @@ class ChaosExperiment:
 
 **목표**: 나머지 서비스 및 민감 데이터 조회 기록
 
-| 작업 | 예상 시간 |
-|------|:--------:|
-| 3-1. `log_compliance_audit()` 추가 | 1h |
-| 3-2. `log_blast_radius_audit()` 추가 | 1h |
-| 3-3. `log_finops_audit()` 추가 | 1h |
-| 3-4. 조회 기록 설정 구현 (ADR-002) | 2h |
-| 3-5. AuditMiddleware 조회 기록 확장 | 2h |
-| 3-6. 테스트 | 2h |
+| 작업 | 예상 시간 | 상태 |
+|------|:--------:|:----:|
+| 3-1. `log_compliance_audit()` 추가 | 1h | ✅ 완료 |
+| 3-2. `log_blast_radius_audit()` 추가 | 1h | ✅ 완료 |
+| 3-3. `log_finops_audit()` 추가 | 1h | ✅ 완료 |
+| 3-4. `log_data_access_audit()` 추가 | 1h | ✅ 완료 |
+| 3-5. 조회 기록 설정 구현 (ADR-002) | 2h | ✅ 완료 |
+| 3-6. AuditMiddleware 조회 기록 확장 | 2h | ✅ 완료 |
+| 3-7. 서비스 통합 | 2h | ✅ 완료 |
+| 3-8. 테스트 | 2h | ✅ 완료 (26개 통과) |
+
+**Phase 3 완료 기준**:
+- [x] 4개 새 헬퍼 함수 구현 (log_compliance_audit, log_blast_radius_audit, log_finops_audit, log_data_access_audit)
+- [x] 7개 새 AuditEventType 추가 (COMPLIANCE_VIOLATION, COMPLIANCE_CHECK_PASSED, BLAST_RADIUS_ISOLATION, BLAST_RADIUS_VIOLATION, FINOPS_THRESHOLD_EXCEEDED, FINOPS_BUDGET_EXCEEDED, DATA_ACCESS)
+- [x] 3개 서비스에 audit 통합 (ComplianceService, BlastRadiusManager, FinOpsService)
+- [x] ADR-002 설정 기반 조회 기록 구현 (SELFHEALING_AUDIT["read_paths"])
+- [x] AuditMiddleware에 DATA_ACCESS 이벤트 캡처 추가
+- [x] 단위 테스트 통과 (26개)
+
+**구현된 파일**:
+- `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py` - Phase 3 AuditEventType 추가
+- `packages/selfhealing-python/src/selfhealing/services/audit_helpers.py` - 4개 헬퍼 함수 추가
+- `packages/selfhealing-python/src/selfhealing/services/compliance/service.py` - _log_compliance_audit 통합
+- `packages/selfhealing-python/src/selfhealing/services/chaos/blast_radius.py` - _log_blast_radius_audit 통합
+- `packages/selfhealing-python/src/selfhealing/services/finops/service.py` - _log_finops_audit 통합
+- `packages/selfhealing-python/src/selfhealing/api/django/audit_middleware.py` - DATA_ACCESS 캡처 추가
+- `packages/selfhealing-python/tests/unit/test_audit_helpers_phase3.py` - 26개 테스트
+
+**ADR-002 설정 예시**:
+
+```python
+# Django settings.py
+SELFHEALING_AUDIT = {
+    "read_paths": [
+        "/api/admin/",           # 모든 Admin 조회
+        "/api/payments/",        # 결제 관련 조회
+        "/api/users/personal/",  # 개인정보 조회
+    ],
+    "exclude_paths": [
+        "/health/",
+        "/metrics/",
+    ],
+}
+```
 
 ---
 
@@ -676,7 +712,7 @@ class TestAuditUnification:
 | **Phase 0** | 1.5일 | WAL 기반 누락 0 보장 | ✅ 완료 |
 | **Phase 1** | 2일 | 3개 신규 서비스 Audit | ✅ 완료 |
 | **Phase 2** | 3일 | 3개 자체 구현 통합 | ✅ 완료 |
-| **Phase 3** | 2일 | 추가 서비스 + 조회 기록 | |
+| **Phase 3** | 2일 | 추가 서비스 + 조회 기록 | ✅ 완료 |
 | **Phase 4** | 1일 | Celery Tasks Audit | |
 | **총계** | **9.5일** | | |
 

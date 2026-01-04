@@ -1231,3 +1231,388 @@ def log_error_budget_blocked_audit(
     )
     return wal_seq
 
+
+# =============================================================================
+# Compliance Audit Helpers (Phase 3: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_compliance_audit(
+    stage_name: str,
+    standard: str,
+    check_id: Optional[str] = None,
+    passed: bool = True,
+    violation_id: Optional[str] = None,
+    severity: Optional[str] = None,
+    message: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+    compliance_score: Optional[float] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Compliance 검사 결과를 Audit 로그에 기록.
+    
+    규정 준수 검사 결과 (통과 또는 위반)를 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        stage_name: Stage 이름
+        standard: 규정 표준 (DORA_2025, PCI_DSS, SOC2 등)
+        check_id: 검사 ID
+        passed: 검사 통과 여부
+        violation_id: 위반 ID (위반 시)
+        severity: 위반 심각도 (high, medium, low)
+        message: 위반 메시지
+        details: 추가 상세 정보
+        compliance_score: 전체 규정 준수 점수
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "stage_name": stage_name,
+        "standard": standard,
+        "check_id": check_id,
+        "passed": passed,
+        "violation_id": violation_id,
+        "severity": severity,
+        "message": message,
+        "compliance_score": compliance_score,
+    }
+    if details:
+        audit_details["extra_details"] = details
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    event_type = "COMPLIANCE_CHECK_PASSED" if passed else "COMPLIANCE_VIOLATION"
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type=event_type,
+        source="ComplianceService",
+        details=audit_details,
+        success=passed,
+        error_message=message if not passed else None,
+        target_id=check_id or violation_id,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            buffer_event_type = (
+                AuditEventType.COMPLIANCE_CHECK_PASSED if passed 
+                else AuditEventType.COMPLIANCE_VIOLATION
+            )
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="ComplianceService",
+                details=audit_details,
+                success=passed,
+                error_message=message if not passed else None,
+                target_id=check_id or violation_id,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    if passed:
+        logger.info(
+            f"[ComplianceAudit] PASSED | stage={stage_name} | "
+            f"standard={standard} | check={check_id}"
+        )
+    else:
+        logger.warning(
+            f"[ComplianceAudit] VIOLATION | stage={stage_name} | "
+            f"standard={standard} | check={check_id} | "
+            f"severity={severity} | msg={message}"
+        )
+    return wal_seq
+
+
+# =============================================================================
+# Blast Radius Audit Helpers (Phase 3: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_blast_radius_audit(
+    experiment_id: str,
+    blast_radius: str,
+    target_service: str,
+    action: str,
+    allowed: bool = True,
+    violations: Optional[list] = None,
+    approval_status: Optional[str] = None,
+    target_domain: Optional[str] = None,
+    traffic_percent: Optional[float] = None,
+    reason: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Blast Radius 관련 이벤트를 Audit 로그에 기록.
+    
+    Chaos 실험의 영향 범위 검증, 격리 결정, 위반 감지를 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        experiment_id: 실험 ID
+        blast_radius: 영향 범위 (instance, service, region)
+        target_service: 대상 서비스
+        action: 액션 (check, register, unregister, isolation, violation)
+        allowed: 허용 여부
+        violations: 위반 목록
+        approval_status: 승인 상태
+        target_domain: 대상 도메인
+        traffic_percent: 트래픽 비율
+        reason: 사유
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "experiment_id": experiment_id,
+        "blast_radius": blast_radius,
+        "target_service": target_service,
+        "action": action,
+        "allowed": allowed,
+        "violations": violations,
+        "approval_status": approval_status,
+        "target_domain": target_domain,
+        "traffic_percent": traffic_percent,
+        "reason": reason,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    event_type = "BLAST_RADIUS_ISOLATION" if allowed else "BLAST_RADIUS_VIOLATION"
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type=event_type,
+        source="BlastRadiusManager",
+        details=details,
+        success=allowed,
+        error_message="; ".join(violations) if violations else None,
+        target_id=experiment_id,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            buffer_event_type = (
+                AuditEventType.BLAST_RADIUS_ISOLATION if allowed 
+                else AuditEventType.BLAST_RADIUS_VIOLATION
+            )
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="BlastRadiusManager",
+                details=details,
+                success=allowed,
+                error_message="; ".join(violations) if violations else None,
+                target_id=experiment_id,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    if allowed:
+        logger.info(
+            f"[BlastRadiusAudit] {action.upper()} | exp={experiment_id} | "
+            f"radius={blast_radius} | service={target_service}"
+        )
+    else:
+        logger.warning(
+            f"[BlastRadiusAudit] VIOLATION | exp={experiment_id} | "
+            f"radius={blast_radius} | service={target_service} | "
+            f"violations={violations}"
+        )
+    return wal_seq
+
+
+# =============================================================================
+# FinOps Audit Helpers (Phase 3: 20_AUDIT_UNIFICATION_PLAN.md)
+# =============================================================================
+
+
+def log_finops_audit(
+    stage_name: str,
+    alert_type: str,
+    current_cost: Optional[float] = None,
+    budget_limit: Optional[float] = None,
+    usage_percent: Optional[float] = None,
+    operation: Optional[str] = None,
+    severity: str = "warning",
+    message: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    FinOps 비용 관련 이벤트를 Audit 로그에 기록.
+    
+    예산 임계값 초과, 예산 초과 차단 등을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        stage_name: Stage 이름
+        alert_type: 알림 유형 (threshold, over_budget, cost_spike 등)
+        current_cost: 현재 비용
+        budget_limit: 예산 한도
+        usage_percent: 사용률 (%)
+        operation: 관련 작업
+        severity: 심각도 (warning, critical)
+        message: 알림 메시지
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "stage_name": stage_name,
+        "alert_type": alert_type,
+        "current_cost": float(current_cost) if current_cost is not None else None,
+        "budget_limit": float(budget_limit) if budget_limit is not None else None,
+        "usage_percent": usage_percent,
+        "operation": operation,
+        "severity": severity,
+        "message": message,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    event_type = (
+        "FINOPS_BUDGET_EXCEEDED" if alert_type == "over_budget" 
+        else "FINOPS_THRESHOLD_EXCEEDED"
+    )
+    is_critical = alert_type == "over_budget"
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type=event_type,
+        source="FinOpsService",
+        details=details,
+        success=not is_critical,
+        error_message=message,
+        target_id=stage_name,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            buffer_event_type = (
+                AuditEventType.FINOPS_BUDGET_EXCEEDED if is_critical 
+                else AuditEventType.FINOPS_THRESHOLD_EXCEEDED
+            )
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="FinOpsService",
+                details=details,
+                success=not is_critical,
+                error_message=message,
+                target_id=stage_name,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    cost_str = f"${current_cost:.4f}" if current_cost is not None else "N/A"
+    limit_str = f"${budget_limit:.2f}" if budget_limit is not None else "N/A"
+    log_func = logger.critical if is_critical else logger.warning
+    log_func(
+        f"[FinOpsAudit] {alert_type.upper()} | stage={stage_name} | "
+        f"cost={cost_str} | limit={limit_str} | severity={severity}"
+    )
+    return wal_seq
+
+
+# =============================================================================
+# Data Access Audit Helpers (Phase 3: ADR-002 설정 기반 조회 기록)
+# =============================================================================
+
+
+def log_data_access_audit(
+    path: str,
+    method: str,
+    actor_id: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    민감 데이터 접근을 Audit 로그에 기록.
+    
+    ADR-002에 따라 설정된 경로 패턴에 매칭되는 조회(Read) 요청을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        path: 요청 경로
+        method: HTTP 메서드 (GET, POST 등)
+        actor_id: 접근자 ID
+        resource_type: 리소스 유형 (user, payment, order 등)
+        resource_id: 리소스 ID
+        details: 추가 상세 정보
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "path": path,
+        "method": method,
+        "actor_id": actor_id,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+    }
+    if details:
+        audit_details["extra_details"] = details
+    # None 값 제거
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="DATA_ACCESS",
+        source="DataAccessAudit",
+        details=audit_details,
+        success=True,
+        target_id=resource_id,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.DATA_ACCESS,
+                source="DataAccessAudit",
+                details=audit_details,
+                success=True,
+                target_id=resource_id,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    logger.info(
+        f"[DataAccessAudit] {method} {path} | actor={actor_id} | "
+        f"resource={resource_type}:{resource_id}"
+    )
+    return wal_seq

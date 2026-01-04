@@ -104,6 +104,21 @@ class AuditEventType(Enum):
     ERROR_BUDGET_DEPLETED = "error_budget_depleted"
     ERROR_BUDGET_BLOCKED = "error_budget_blocked"
     
+    # Compliance 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    COMPLIANCE_VIOLATION = "compliance_violation"
+    COMPLIANCE_CHECK_PASSED = "compliance_check_passed"
+    
+    # Blast Radius 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    BLAST_RADIUS_ISOLATION = "blast_radius_isolation"
+    BLAST_RADIUS_VIOLATION = "blast_radius_violation"
+    
+    # FinOps 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    FINOPS_THRESHOLD_EXCEEDED = "finops_threshold_exceeded"
+    FINOPS_BUDGET_EXCEEDED = "finops_budget_exceeded"
+    
+    # 데이터 접근 (ADR-002: 설정 기반)
+    DATA_ACCESS = "data_access"
+    
     # 일반
     GENERIC = "generic"
 

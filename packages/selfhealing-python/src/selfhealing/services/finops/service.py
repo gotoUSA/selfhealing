@@ -198,7 +198,47 @@ class FinOpsService:
         )
         self._alerts.append(alert)
         logger.warning(f"Cost alert: {message}")
+        
+        # Audit 로깅 (Phase 3)
+        self._log_finops_audit(
+            stage_name=stage_name,
+            alert_type=alert_type,
+            current_cost=float(current_cost),
+            budget_limit=float(budget_limit),
+            usage_percent=(float(current_cost) / float(budget_limit) * 100) if budget_limit > 0 else None,
+            severity=severity,
+            message=message,
+        )
+        
         return alert
+    
+    def _log_finops_audit(
+        self,
+        stage_name: str,
+        alert_type: str,
+        current_cost: Optional[float] = None,
+        budget_limit: Optional[float] = None,
+        usage_percent: Optional[float] = None,
+        operation: Optional[str] = None,
+        severity: str = "warning",
+        message: Optional[str] = None,
+    ) -> None:
+        """Audit 헬퍼를 통해 FinOps 이벤트 기록."""
+        try:
+            from selfhealing.services.audit_helpers import log_finops_audit
+            
+            log_finops_audit(
+                stage_name=stage_name,
+                alert_type=alert_type,
+                current_cost=current_cost,
+                budget_limit=budget_limit,
+                usage_percent=usage_percent,
+                operation=operation,
+                severity=severity,
+                message=message,
+            )
+        except Exception as e:
+            logger.debug(f"[FinOpsService] Audit logging failed: {e}")
     
     def get_cost_tier(self, cost: Decimal) -> CostTier:
         """비용 계층 반환"""
