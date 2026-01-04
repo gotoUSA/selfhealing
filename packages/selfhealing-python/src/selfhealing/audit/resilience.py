@@ -315,6 +315,13 @@ class AuditMetrics:
 
         # Histogram-like data (simplified)
         self._write_durations: Dict[str, List[float]] = {}  # {backend: [durations]}
+        
+        # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+        self._wal_writes_total: int = 0
+        self._wal_write_failures_total: int = 0
+        self._central_writes_total: int = 0
+        self._sync_lag_entries: int = 0
+        self._reconcile_missing_total: int = 0
 
     @classmethod
     def get_instance(cls) -> "AuditMetrics":
@@ -324,6 +331,44 @@ class AuditMetrics:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
+    
+    # =========================================================================
+    # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+    # =========================================================================
+    
+    def record_wal_write(self, success: bool = True) -> None:
+        """WAL 기록 메트릭."""
+        with self._metrics_lock:
+            if success:
+                self._wal_writes_total += 1
+            else:
+                self._wal_write_failures_total += 1
+    
+    def record_central_write(self, count: int = 1) -> None:
+        """중앙 저장소 기록 메트릭."""
+        with self._metrics_lock:
+            self._central_writes_total += count
+    
+    def set_sync_lag(self, entries: int) -> None:
+        """동기화 지연 엔트리 수 설정."""
+        with self._metrics_lock:
+            self._sync_lag_entries = entries
+    
+    def record_reconcile_missing(self, count: int) -> None:
+        """Reconciler가 발견한 누락 수 기록."""
+        with self._metrics_lock:
+            self._reconcile_missing_total += count
+    
+    def get_wal_metrics(self) -> Dict[str, Any]:
+        """WAL 관련 메트릭 조회."""
+        with self._metrics_lock:
+            return {
+                "audit_wal_writes_total": self._wal_writes_total,
+                "audit_wal_write_failures_total": self._wal_write_failures_total,
+                "audit_central_writes_total": self._central_writes_total,
+                "audit_sync_lag_entries": self._sync_lag_entries,
+                "audit_reconcile_missing_total": self._reconcile_missing_total,
+            }
 
     def record_write(self, backend: str, success: bool, duration_ms: float = 0) -> None:
         """Record a write attempt."""
@@ -389,6 +434,12 @@ class AuditMetrics:
                 "audit_degraded_since": (
                     self._degraded_since.isoformat() if self._degraded_since else None
                 ),
+                # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+                "audit_wal_writes_total": self._wal_writes_total,
+                "audit_wal_write_failures_total": self._wal_write_failures_total,
+                "audit_central_writes_total": self._central_writes_total,
+                "audit_sync_lag_entries": self._sync_lag_entries,
+                "audit_reconcile_missing_total": self._reconcile_missing_total,
             }
 
             # Add duration stats
@@ -440,6 +491,27 @@ class AuditMetrics:
         lines.append("# HELP audit_degraded_mode Whether audit is in degraded mode")
         lines.append("# TYPE audit_degraded_mode gauge")
         lines.append(f'audit_degraded_mode {metrics["audit_degraded_mode"]}')
+        
+        # WAL metrics (Phase 0: 누락 0 보장)
+        lines.append("# HELP audit_wal_writes_total Total WAL writes")
+        lines.append("# TYPE audit_wal_writes_total counter")
+        lines.append(f'audit_wal_writes_total {metrics["audit_wal_writes_total"]}')
+        
+        lines.append("# HELP audit_wal_write_failures_total Total WAL write failures (CRITICAL)")
+        lines.append("# TYPE audit_wal_write_failures_total counter")
+        lines.append(f'audit_wal_write_failures_total {metrics["audit_wal_write_failures_total"]}')
+        
+        lines.append("# HELP audit_central_writes_total Total central storage writes")
+        lines.append("# TYPE audit_central_writes_total counter")
+        lines.append(f'audit_central_writes_total {metrics["audit_central_writes_total"]}')
+        
+        lines.append("# HELP audit_sync_lag_entries Current WAL to central sync lag")
+        lines.append("# TYPE audit_sync_lag_entries gauge")
+        lines.append(f'audit_sync_lag_entries {metrics["audit_sync_lag_entries"]}')
+        
+        lines.append("# HELP audit_reconcile_missing_total Total missing entries found by reconciler")
+        lines.append("# TYPE audit_reconcile_missing_total counter")
+        lines.append(f'audit_reconcile_missing_total {metrics["audit_reconcile_missing_total"]}')
 
         return "\n".join(lines)
 
@@ -452,6 +524,12 @@ class AuditMetrics:
             self._write_durations.clear()
             self._degraded_mode = False
             self._degraded_since = None
+            # WAL 메트릭 초기화
+            self._wal_writes_total = 0
+            self._wal_write_failures_total = 0
+            self._central_writes_total = 0
+            self._sync_lag_entries = 0
+            self._reconcile_missing_total = 0
 
 
 # =============================================================================
