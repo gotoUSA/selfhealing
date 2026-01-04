@@ -339,12 +339,8 @@ class ErrorBudgetGate:
         
         # 메트릭 기록
         try:
-            from selfhealing.services.metrics import record_fail_safe_triggered
-            record_fail_safe_triggered(
-                component="error_budget_gate",
-                reason="error_budget_retrieval_failed",
-                fallback_action="fail_open_with_rate_limit",
-            )
+            from selfhealing.services.metrics.recorders import record_failsafe_triggered
+            record_failsafe_triggered(component="error_budget_gate")
         except Exception:
             pass
         
@@ -412,12 +408,8 @@ class ErrorBudgetGate:
             
             # Rate Limit 초과 메트릭
             try:
-                from selfhealing.services.metrics import record_fail_safe_triggered
-                record_fail_safe_triggered(
-                    component="error_budget_gate",
-                    reason="fail_open_rate_limit_exceeded",
-                    fallback_action="blocked",
-                )
+                from selfhealing.services.metrics.recorders import record_failsafe_triggered
+                record_failsafe_triggered(component="error_budget_gate_rate_limited")
             except Exception:
                 pass
             
@@ -477,7 +469,7 @@ class ErrorBudgetGate:
         """차단 이벤트 감사 로깅."""
         try:
             from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction
-            from selfhealing.adapters.audit import get_audit_adapter
+            from selfhealing.adapters.audit.singleton import get_audit_adapter
             
             adapter = get_audit_adapter()
             adapter.log(AuditEntry(

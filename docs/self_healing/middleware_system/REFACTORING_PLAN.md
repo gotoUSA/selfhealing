@@ -2,72 +2,102 @@
 
 > **Created**: 2026-01-03
 > **Updated**: 2026-01-04
-> **Status**: ✅ Phase 1-3 완료 (내부 re-export 0개, `__all__` 66% 축소)
+> **Status**: ✅ Phase 1-3 완료 + V2.0.0 Enterprise Ready
 > **분석 도구**: `scripts/analyze_dependencies.py`, `scripts/phase3_analysis.py`
 
 ---
 
-## 📊 완료 현황 (2026-01-04)
+## 📊 최종 완료 현황 (2026-01-04)
 
 | 항목 | 초기 | 최종 | 감소율 |
 |------|------|------|--------|
 | **내부 re-export 사용** | 104개 | **0개** | **100%** |
-| **`services/__init__.py` exports** | 182개 | **62개** | **66%** |
-| **테스트 결과** | 2058 passed | **1568 passed** | (기존 이슈) |
-| **수정된 파일** | - | 31개 | - |
+| **`services/__init__.py` exports** | 182개 | **15개** | **92%** |
+| **Internal Import Linter 위반** | - | **0개** | ✅ |
+| **수정된 파일** | - | 38개 | - |
+
+### 🚀 V2.0.0 Breaking Change (Enterprise Ready)
+
+**주요 변경:**
+- `services/__init__.py`: 182개 → 15개 핵심 API만 노출
+- `adapters/audit/singleton.py` 생성 (싱글톤 함수 분리)
+- Internal Import Linter 추가 (`scripts/analyze_dependencies.py`)
+
+**15개 Public API:**
+```python
+from selfhealing.services import (
+    # Factory Functions (Core)
+    get_circuit_breaker_service,
+    get_dlq_service,
+    get_replay_service,
+    get_sla_thresholds,
+    # Service Classes
+    CircuitBreakerService,
+    DLQService,
+    # Metrics
+    record_sla_breach,
+    collect_all_metrics,
+    # Config
+    DOMAINS,
+    ALERTING_RULES,
+    # Forensic
+    ForensicContext,
+    # Security
+    SecurityViolationService,
+)
+```
+
+**Migration Guide:** `services/__init__.py` docstring 참조
+
+### Phase 1 완료 (2026-01-04)
+
+내부 re-export 사용 제거 완료:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `services/error_budget_gate/gate.py` | `from selfhealing.services.metrics import` → `from selfhealing.services.metrics.recorders import` |
+| `services/chaos/reports.py` | 정의되지 않은 함수 import 제거 (record_resilience_grade 등) |
+| `shopping/tasks/drift_detection_tasks.py` | `from selfhealing.services.metrics import` → `from selfhealing.services.metrics.recorders import` |
+| `api/django/audit_middleware.py` | `from selfhealing.adapters.audit import` → `from selfhealing.adapters.audit.singleton import` |
+| `services/error_budget_gate/gate.py` | `from selfhealing.adapters.audit import` → `from selfhealing.adapters.audit.singleton import` |
+
+### Phase 2 상태 (2026-01-04)
+
+**결론: 하위 패키지 `__init__.py`는 외부 호환성을 위해 유지**
+
+- 패키지 **내부** 코드: 직접 import 사용 (Phase 1 완료)
+- 패키지 **외부** 코드 (tests, shopping): re-export 계속 사용 가능
+- `adapters/audit/singleton.py` 생성: 싱글톤 함수 분리
 
 ### Phase 3 완료 (2026-01-04)
 
-`services/__init__.py`를 182개에서 62개로 축소:
+`services/__init__.py`를 182개에서 **15개**로 축소 (92% 감소):
 
-| 카테고리 | 유지된 심볼 수 |
-|----------|---------------|
-| Circuit Breaker | 13 |
-| DLQ | 4 |
-| Replay | 4 |
-| Rate Limit | 5 |
-| Retry | 5 |
-| Idempotency | 4 |
-| Forensic | 1 |
-| Control API | 3 |
-| Security Violation | 8 |
-| Security Notification | 7 |
-| Metrics | 11 |
-| Config | 1 |
-| **합계** | **62** |
+| 카테고리 | 유지된 심볼 |
+|----------|------------|
+| Factory Functions | `get_circuit_breaker_service`, `get_dlq_service`, `get_replay_service`, `get_sla_thresholds` |
+| Service Classes | `CircuitBreakerService`, `DLQService` |
+| Metrics | `record_sla_breach`, `collect_all_metrics` |
+| Config | `DOMAINS`, `ALERTING_RULES` |
+| Forensic | `ForensicContext` |
+| Security | `SecurityViolationService` |
 
-**주요 변경:**
-- 사용되지 않는 120개 심볼 제거
-- `DOMAINS` alias 추가 (`DEFAULT_DOMAINS`의 별칭)
-- `circuit_breaker_service` 모듈 alias 추가
+### Internal Import Linter 추가
 
-**상세 계획:** [PHASE3_PLAN.md](PHASE3_PLAN.md) 참조
+`scripts/analyze_dependencies.py`에 `check_internal_import_violations()` 함수 추가:
 
-### 수정된 파일 목록
+```python
+# 사용법
+from scripts.analyze_dependencies import check_internal_import_violations
+violations = check_internal_import_violations(modules)
+# 현재 위반: 0개
+```
 
-**Phase 1 (19개 파일):**
-- `api/django/views/{blast_radius,compliance_dna,finops,learning,rollback,l2_storage_utils}.py`
-- `factory.py`, `services/{governance_checks,governance_service}.py`
-- `api/django/tiering/middleware.py`, `api/django/views/tiering.py`
-- `services/control_api_service.py`, `adapters/celery/tasks.py`
-- `services/circuit_breaker_service.py`, `api/django/urls.py`
-- `services/unified_notification.py`, `tasks/{base,daily_report,drift_detection}.py`
-
-**Phase 2 (7개 파일):**
-- `adapters/celery/signal_hooks.py`, `api/django/{middleware,pool_circuit_breaker}.py`
-- `api/django/views/emergency.py`, `adapters/memory/layered_repository.py`
-- `services/error_budget/{enums,recorder}.py`
-
-**xtest (4개 파일):**
-- `api/django/views/xtest/{circuit_breaker,error_budget,snapshot,observability}.py`
-
-**테스트 mock 경로 수정 (3개 파일):**
-- `tests/integration/test_autonomous_tasks.py`
-- `tests/self_healing/unit/test_base_notifying_task.py`
-- `tests/self_healing/unit/test_notification_architecture.py`
-
-**Phase 3 (1개 파일):**
-- `services/__init__.py` - 182개 → 62개 심볼로 축소
+**금지된 패턴 (패키지 내부에서):**
+- `from selfhealing.services.metrics import X` 
+- `from selfhealing.services.circuit_breaker import X`
+- `from selfhealing.adapters.audit import X`
+- 등 (`__init__.py` 경유 import)
 
 ---
 

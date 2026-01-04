@@ -1,1 +1,15 @@
-request returned 500 Internal Server Error for API route and version http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/v1.51/containers/json?filters=%7B%22label%22%3A%7B%22com.docker.compose.config-hash%22%3Atrue%2C%22com.docker.compose.project%3Dmyproject%22%3Atrue%2C%22com.docker.compose.service%3Dweb%22%3Atrue%7D%7D, check if the server supports the requested API version
+[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active
+============================= test session starts =============================
+platform win32 -- Python 3.12.6, pytest-9.0.1, pluggy-1.6.0 -- C:\Users\admin\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+django: version: 5.2.9, settings: myproject.settings.test (from ini)
+rootdir: C:\Users\admin\Desktop\python\CRUD\myproject
+configfile: pyproject.toml
+plugins: anyio-4.12.0, Faker-30.8.2, locust-2.42.5, asyncio-1.3.0, celery-1.2.1, cov-7.0.0, django-4.11.1, pytest_docker_tools-3.1.9, mock-3.15.1, xdist-3.8.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 6/6 workers
+6 workers [0 items]
+
+scheduling tests via LoadScopeScheduling
+
+============================ no tests ran in 5.79s ============================

@@ -106,7 +106,7 @@ class AuditMiddleware:
         
         try:
             from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
-            from selfhealing.adapters.audit import get_audit_adapter
+            from selfhealing.adapters.audit.singleton import get_audit_adapter
             
             adapter = get_audit_adapter()
             self._recorder = ContinuousAuditRecorder(

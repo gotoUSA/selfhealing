@@ -388,6 +388,29 @@ def main():
         "usages": reexport_usages,
     }
     
+    # ==========================================================================
+    # Internal Import Linter - 패키지 내부에서 Public API 사용 금지
+    # ==========================================================================
+    print("\n" + "=" * 60)
+    print("🔍 Internal Import Linter (패키지 내부 Public API 사용 검사)")
+    print("=" * 60)
+    
+    internal_violations = check_internal_import_violations(modules)
+    result["internal_import_violations"] = internal_violations
+    
+    if internal_violations:
+        print(f"\n⚠️  {len(internal_violations)}개의 위반 발견!")
+        print("   패키지 내부에서는 직접 import를 사용해야 합니다.\n")
+        for v in internal_violations[:10]:
+            print(f"   {v['file']}:{v['line']}")
+            print(f"      ❌ {v['import']}")
+            print(f"      ✅ {v['suggested']}")
+            print()
+        if len(internal_violations) > 10:
+            print(f"   ... 외 {len(internal_violations) - 10}개")
+    else:
+        print("\n✅ 모든 내부 코드가 직접 import를 사용합니다.")
+    
     # JSON 다시 저장
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
@@ -413,6 +436,66 @@ def main():
    ❌ from selfhealing.services import CircuitBreakerService
    ✅ from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 """)
+
+
+def check_internal_import_violations(modules: dict) -> list:
+    """
+    패키지 내부에서 Public API(__init__.py re-export) 사용을 검사.
+    
+    규칙: selfhealing 패키지 내부 코드는 다음 패턴을 사용하면 안 됨:
+    - from selfhealing.services import X (services/__init__.py 경유)
+    - from selfhealing.services.metrics import X (metrics/__init__.py 경유)
+    - from selfhealing.api.django.tiering import X (tiering/__init__.py 경유)
+    등
+    
+    Returns:
+        list: [{"file": str, "line": int, "import": str, "suggested": str}, ...]
+    """
+    violations = []
+    
+    # 금지된 패턴 (패키지 __init__.py 경유 import)
+    forbidden_patterns = [
+        # (pattern, suggested_base)
+        ("selfhealing.services.metrics", "selfhealing.services.metrics.recorders 또는 .definitions"),
+        ("selfhealing.services.circuit_breaker", "selfhealing.services.circuit_breaker.service 또는 .config"),
+        ("selfhealing.services.chaos", "selfhealing.services.chaos.experiments 등"),
+        ("selfhealing.api.django.tiering", "selfhealing.api.django.tiering.registry 등"),
+        ("selfhealing.api.django.views.error_budget", "selfhealing.api.django.views.error_budget.status 등"),
+        ("selfhealing.api.django.views.xtest", "selfhealing.api.django.views.xtest.circuit_breaker 등"),
+        ("selfhealing.tasks", "selfhealing.tasks.base 또는 개별 태스크 모듈"),
+        ("selfhealing.adapters.audit", "selfhealing.adapters.audit.file_adapter 등"),
+    ]
+    
+    # services/__init__.py 경유도 금지 (패키지 내부에서만)
+    # 단, factory.py는 호환성 레이어이므로 제외
+    
+    for mod_name, filepath in modules.items():
+        # __init__.py 파일은 검사 제외 (자기 자신)
+        if str(filepath).endswith("__init__.py"):
+            continue
+        # factory.py는 호환성 레이어이므로 제외
+        if str(filepath).endswith("factory.py"):
+            continue
+            
+        imports = extract_imports_detailed(filepath)
+        
+        for imp in imports:
+            module = imp.get("module", "")
+            if not module:
+                continue
+                
+            # 금지된 패턴 검사
+            for pattern, suggested in forbidden_patterns:
+                # 정확히 패키지 경로와 일치하는 경우만 (하위 모듈 직접 import는 OK)
+                if module == pattern:
+                    violations.append({
+                        "file": str(filepath.relative_to(PACKAGE_ROOT)),
+                        "line": imp.get("line", 0),
+                        "import": f"from {module} import {imp.get('name', '?')}",
+                        "suggested": f"from {suggested} import {imp.get('name', '?')}",
+                    })
+    
+    return violations
 
 
 if __name__ == "__main__":

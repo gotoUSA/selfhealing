@@ -718,29 +718,18 @@ class ResilienceReportGenerator:
     # =========================================================================
     
     def _record_metrics(self, report: DailyResilienceReport) -> None:
-        """Record report metrics to Prometheus."""
-        try:
-            from selfhealing.services.metrics import (
-                record_resilience_grade,
-                record_chaos_experiment_outcome,
-            )
-            
-            # Record grade
-            grade_value = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}.get(report.grade, 0)
-            record_resilience_grade(grade_value, report.report_date)
-            
-            # Record experiment outcomes
-            for exp in report.experiments:
-                record_chaos_experiment_outcome(
-                    experiment_type=exp.experiment_type,
-                    target_service=exp.target_service,
-                    outcome=exp.outcome,
-                )
-                
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not record metrics: {e}")
+        """Record report metrics to Prometheus.
+        
+        Note: Resilience grade and chaos experiment metrics are not yet implemented.
+        When needed, add record_resilience_grade and record_chaos_experiment_outcome
+        to selfhealing.services.metrics.recorders module.
+        """
+        # TODO: Implement when metrics are defined
+        # grade_value = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}.get(report.grade, 0)
+        logger.debug(
+            f"[ReportGenerator] Metrics recording skipped - grade={report.grade}, "
+            f"experiments={report.total_experiments}"
+        )
     
     def _record_audit(self, report: DailyResilienceReport) -> None:
         """Record report to audit trail."""

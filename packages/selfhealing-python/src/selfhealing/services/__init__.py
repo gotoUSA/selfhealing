@@ -1,260 +1,175 @@
 """
-L3 Self-Healing Services
+Self-Healing Services - Public API
+===================================
 
-.. deprecated:: 0.1.0
-    This module structure is deprecated. Use direct imports from selfhealing.
+Version: 2.0.0 (Breaking Change)
+Updated: 2026-01-04
 
-    Before (old Django app pattern):
-        from myapp.services.self_healing import CircuitBreakerService
+이 모듈은 Self-Healing 시스템의 **핵심 Public API**만 노출합니다.
+기업 사용자는 이 경로를 통해 모든 주요 기능에 접근할 수 있습니다.
 
-    After:
-        from selfhealing.services import CircuitBreakerService
+Usage:
+    from selfhealing.services import (
+        get_circuit_breaker_service,
+        get_dlq_service,
+        get_replay_service,
+        DLQService,
+        record_sla_breach,
+    )
 
-    See: packages/selfhealing-python/docs/MIGRATION.md
+    # Circuit Breaker 사용
+    cb = get_circuit_breaker_service("payment_gateway")
+    if cb.is_open():
+        return handle_fallback()
 
-This module provides self-healing capabilities for applications.
-Includes retry logic, backoff calculation, idempotency checking, DLQ management,
-replay functionality, circuit breaker management, and observability metrics.
+    # DLQ 사용
+    dlq = get_dlq_service()
+    dlq.push(failed_operation)
 
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md (§7, §8)
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md (§1, §2, §7, §9)
+=============================================================================
+MIGRATION GUIDE (v1.x → v2.0.0)
+=============================================================================
 
-Phase 3 Refactoring (2026-01-04):
-- Reduced from 182 exports to 63 exports (66% reduction)
-- Only symbols actually used by tests and shopping app are exported
-- Unused symbols can still be imported directly from submodules
+v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
+삭제된 심볼은 직접 import 경로를 사용하세요.
+
+변경 전 (v1.x):
+    from selfhealing.services import RetryHandler, RetryConfig
+    from selfhealing.services import IdempotencyService
+    from selfhealing.services import ControlAPIService
+
+변경 후 (v2.0.0):
+    from selfhealing.services.retry_handler import RetryHandler, RetryConfig
+    from selfhealing.services.idempotency_service import IdempotencyService
+    from selfhealing.services.control_api_service import ControlAPIService
+
+삭제된 심볼과 새 경로:
+    
+    # Retry (→ retry_handler.py)
+    RetryHandler         → from selfhealing.services.retry_handler import RetryHandler
+    RetryConfig          → from selfhealing.services.retry_handler import RetryConfig
+    RetryResult          → from selfhealing.services.retry_handler import RetryResult
+    RetryAction          → from selfhealing.services.retry_handler import RetryAction
+    MaxRetriesExceededError → from selfhealing.services.retry_handler import MaxRetriesExceededError
+
+    # Idempotency (→ idempotency_service.py)
+    IdempotencyService   → from selfhealing.services.idempotency_service import IdempotencyService
+    IdempotencyKey       → from selfhealing.services.idempotency_service import IdempotencyKey
+    IdempotencyDomain    → from selfhealing.services.idempotency_service import IdempotencyDomain
+    get_idempotency_service → from selfhealing.services.idempotency_service import get_idempotency_service
+
+    # Control API (→ control_api_service.py)
+    ControlAPIService    → from selfhealing.services.control_api_service import ControlAPIService
+    ControlRequest       → from selfhealing.services.control_api_service import ControlRequest
+    ControlResponse      → from selfhealing.services.control_api_service import ControlResponse
+
+    # Circuit Breaker 상세 (→ circuit_breaker_service.py)
+    CircuitBreakerConfig → from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
+    CircuitBreakerResult → from selfhealing.services.circuit_breaker_service import CircuitBreakerResult
+    CircuitState         → from selfhealing.services.circuit_breaker_service import CircuitState
+    should_allow_request → from selfhealing.services.circuit_breaker_service import should_allow_request
+    force_open_circuit   → from selfhealing.services.circuit_breaker_service import force_open_circuit
+    force_close_circuit  → from selfhealing.services.circuit_breaker_service import force_close_circuit
+    
+    # Rate Limit (→ circuit_breaker_service.py)
+    RateLimitTracker     → from selfhealing.services.circuit_breaker_service import RateLimitTracker
+    get_rate_limit_tracker → from selfhealing.services.circuit_breaker_service import get_rate_limit_tracker
+    record_rate_limit    → from selfhealing.services.circuit_breaker_service import record_rate_limit
+    should_allow_with_protection → from selfhealing.services.circuit_breaker_service import should_allow_with_protection
+    get_protection_status → from selfhealing.services.circuit_breaker_service import get_protection_status
+
+    # Metrics 상세 (→ metrics/ subpackage)
+    record_dlq_item_created → from selfhealing.services.metrics.recorders import record_dlq_item_created
+    record_retry_attempt → from selfhealing.services.metrics.recorders import record_retry_attempt
+    record_recovery_time → from selfhealing.services.metrics.recorders import record_recovery_time
+    record_circuit_breaker_state_change → from selfhealing.services.metrics.recorders import record_circuit_breaker_state_change
+    record_circuit_breaker_open_duration → from selfhealing.services.metrics.recorders import record_circuit_breaker_open_duration
+    record_replay_attempt → from selfhealing.services.metrics.recorders import record_replay_attempt
+    track_recovery_time  → from selfhealing.services.metrics.updaters import track_recovery_time
+    DEFAULT_DOMAINS      → from selfhealing.services.metrics.registry import DEFAULT_DOMAINS
+
+    # Security (→ security_*.py)
+    SecurityViolationResult → from selfhealing.services.security_violation_service import SecurityViolationResult
+    SecurityConfig       → from selfhealing.services.security_violation_service import SecurityConfig
+    ViolationType        → from selfhealing.services.security_violation_service import ViolationType
+    Severity             → from selfhealing.services.security_violation_service import Severity
+    SEVERITY_BY_VIOLATION_TYPE → from selfhealing.services.security_violation_service import SEVERITY_BY_VIOLATION_TYPE
+    get_security_violation_service → from selfhealing.services.security_violation_service import get_security_violation_service
+    handle_security_violation → from selfhealing.services.security_violation_service import handle_security_violation
+    SecurityNotificationService → from selfhealing.services.security_notification_service import SecurityNotificationService
+    SecurityNotificationResult → from selfhealing.services.security_notification_service import SecurityNotificationResult
+    NotificationResult   → from selfhealing.services.security_notification_service import NotificationResult
+    NotificationConfig   → from selfhealing.services.security_notification_service import NotificationConfig
+    NotificationChannel  → from selfhealing.services.security_notification_service import NotificationChannel
+    get_security_notification_service → from selfhealing.services.security_notification_service import get_security_notification_service
+    notify_security_incident → from selfhealing.services.security_notification_service import notify_security_incident
+
+    # DLQ 상세 (→ dlq_service.py)
+    DLQConfig            → from selfhealing.services.dlq_service import DLQConfig
+    DLQEntryResult       → from selfhealing.services.dlq_service import DLQEntryResult
+
+    # Replay 상세 (→ replay_service.py)
+    ReplayService        → from selfhealing.services.replay_service import ReplayService
+    ReplayResult         → from selfhealing.services.replay_service import ReplayResult
+    BatchReplayResult    → from selfhealing.services.replay_service import BatchReplayResult
+
+=============================================================================
 """
 
-import warnings
+# =============================================================================
+# PUBLIC API - 핵심 15개만 노출
+# =============================================================================
 
-# Emit deprecation warning on module import
-warnings.warn(
-    "Importing from old module paths is deprecated and will be "
-    "removed in a future version. Please migrate to 'selfhealing' package. "
-    "See packages/selfhealing-python/docs/MIGRATION.md for details.",
-    DeprecationWarning,
-    stacklevel=2,
+# --- Core Services (사용 빈도 순) ---
+from .circuit_breaker_service import (
+    get_circuit_breaker_service,
+    CircuitBreakerService,
 )
+from .dlq_service import (
+    get_dlq_service,
+    DLQService,
+)
+from .replay_service import get_replay_service
 
-# =============================================================================
-# Configuration (only get_sla_thresholds is used externally)
-# =============================================================================
+# --- Configuration ---
 from ..core.config import get_sla_thresholds
 
-# =============================================================================
-# Retry (used by tests)
-# =============================================================================
-from .retry_handler import (
-    RetryHandler,
-    RetryConfig,
-    RetryResult,
-    RetryAction,
-    MaxRetriesExceededError,
-)
+# --- Metrics (핵심만) ---
+from .metrics.recorders import record_sla_breach
+from .metrics.updaters import collect_all_metrics
+from .metrics.registry import DEFAULT_DOMAINS
+from .metrics.alerting_rules import ALERTING_RULES
 
-# =============================================================================
-# Idempotency (used by tests)
-# =============================================================================
-from .idempotency_service import (
-    IdempotencyService,
-    IdempotencyKey,
-    IdempotencyDomain,
-    get_idempotency_service,
-)
-
-# =============================================================================
-# Forensic (used by shopping)
-# =============================================================================
-from .forensic_context import ForensicContext
-
-# =============================================================================
-# Control API (used by tests)
-# =============================================================================
-from .control_api_service import (
-    ControlAPIService,
-    ControlRequest,
-    ControlResponse,
-)
-
-# =============================================================================
-# DLQ Service (widely used)
-# =============================================================================
-from .dlq_service import (
-    DLQService,
-    DLQConfig,
-    DLQEntryResult,
-    get_dlq_service,
-)
-
-# =============================================================================
-# Replay Service (widely used)
-# =============================================================================
-from .replay_service import (
-    ReplayService,
-    ReplayResult,
-    BatchReplayResult,
-    get_replay_service,
-)
-
-# =============================================================================
-# Circuit Breaker Service (most used)
-# =============================================================================
-from .circuit_breaker_service import (
-    CircuitBreakerService,
-    CircuitBreakerConfig,
-    CircuitBreakerResult,
-    CircuitState,
-    get_circuit_breaker_service,
-    should_allow_request,
-    force_open_circuit,
-    force_close_circuit,
-    # Rate Limit / Self-DDoS Protection
-    RateLimitTracker,
-    get_rate_limit_tracker,
-    record_rate_limit,
-    should_allow_with_protection,
-    get_protection_status,
-)
-
-# Module alias for tests
-from . import circuit_breaker_service
-
-# =============================================================================
-# Metrics (selectively used)
-# =============================================================================
-from .metrics import (
-    # Constants
-    ALERTING_RULES,
-    DEFAULT_DOMAINS,  # Used as DOMAINS by shopping
-    # Recording functions
-    record_dlq_item_created,
-    record_retry_attempt,
-    record_recovery_time,
-    record_sla_breach,
-    record_circuit_breaker_state_change,
-    record_circuit_breaker_open_duration,
-    record_replay_attempt,
-    # Aggregation
-    collect_all_metrics,
-    # Context managers
-    track_recovery_time,
-)
-
-# Alias for backward compatibility (shopping uses DOMAINS)
+# Alias for backward compatibility
 DOMAINS = DEFAULT_DOMAINS
 
-# =============================================================================
-# Security Violation Service (used by shopping and tests)
-# =============================================================================
-from .security_violation_service import (
-    SecurityViolationService,
-    SecurityViolationResult,
-    SecurityConfig,
-    ViolationType,
-    Severity,
-    SEVERITY_BY_VIOLATION_TYPE,
-    get_security_violation_service,
-    handle_security_violation,
-)
+# --- Context & Security (자주 사용) ---
+from .forensic_context import ForensicContext
+from .security_violation_service import SecurityViolationService
+
 
 # =============================================================================
-# Security Notification Service (used by shopping and tests)
+# __all__ - IDE 인텔리센스 최적화
 # =============================================================================
-from .security_notification_service import (
-    SecurityNotificationService,
-    SecurityNotificationResult,
-    NotificationResult,
-    NotificationConfig,
-    NotificationChannel,
-    get_security_notification_service,
-    notify_security_incident,
-)
-
 
 __all__ = [
-    # === Config ===
-    "get_sla_thresholds",
-
-    # === Retry ===
-    "RetryHandler",
-    "RetryConfig",
-    "RetryResult",
-    "RetryAction",
-    "MaxRetriesExceededError",
-
-    # === Idempotency ===
-    "IdempotencyService",
-    "IdempotencyKey",
-    "IdempotencyDomain",
-    "get_idempotency_service",
-
-    # === Forensic ===
-    "ForensicContext",
-
-    # === Control API ===
-    "ControlAPIService",
-    "ControlRequest",
-    "ControlResponse",
-
-    # === DLQ ===
-    "DLQService",
-    "DLQConfig",
-    "DLQEntryResult",
-    "get_dlq_service",
-
-    # === Replay ===
-    "ReplayService",
-    "ReplayResult",
-    "BatchReplayResult",
-    "get_replay_service",
-
-    # === Circuit Breaker ===
-    "CircuitBreakerService",
-    "CircuitBreakerConfig",
-    "CircuitBreakerResult",
-    "CircuitState",
+    # === Core Service Getters (가장 많이 사용) ===
     "get_circuit_breaker_service",
-    "should_allow_request",
-    "force_open_circuit",
-    "force_close_circuit",
-    "circuit_breaker_service",  # module alias
-
-    # === Rate Limit ===
-    "RateLimitTracker",
-    "get_rate_limit_tracker",
-    "record_rate_limit",
-    "should_allow_with_protection",
-    "get_protection_status",
-
+    "get_dlq_service", 
+    "get_replay_service",
+    "get_sla_thresholds",
+    
+    # === Core Service Classes ===
+    "CircuitBreakerService",
+    "DLQService",
+    
     # === Metrics ===
-    "ALERTING_RULES",
-    "DOMAINS",  # alias for DEFAULT_DOMAINS
-    "collect_all_metrics",
-    "record_dlq_item_created",
-    "record_retry_attempt",
-    "record_recovery_time",
     "record_sla_breach",
-    "record_circuit_breaker_state_change",
-    "record_circuit_breaker_open_duration",
-    "record_replay_attempt",
-    "track_recovery_time",
-
-    # === Security Violation ===
+    "collect_all_metrics",
+    "DOMAINS",
+    "ALERTING_RULES",
+    
+    # === Context & Security ===
+    "ForensicContext",
     "SecurityViolationService",
-    "SecurityViolationResult",
-    "SecurityConfig",
-    "ViolationType",
-    "Severity",
-    "SEVERITY_BY_VIOLATION_TYPE",
-    "get_security_violation_service",
-    "handle_security_violation",
-
-    # === Security Notification ===
-    "SecurityNotificationService",
-    "SecurityNotificationResult",
-    "NotificationResult",
-    "NotificationConfig",
-    "NotificationChannel",
-    "get_security_notification_service",
-    "notify_security_incident",
 ]

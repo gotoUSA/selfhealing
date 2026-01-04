@@ -16,12 +16,12 @@
       23
     ],
     [
-      "factory",
+      "interfaces.repositories",
       17
     ],
     [
-      "interfaces.repositories",
-      17
+      "factory",
+      16
     ],
     [
       "core.config",
@@ -319,10 +319,10 @@
     ]
   },
   "reexports": {
-    "total_definitions": 495,
+    "total_definitions": 376,
     "packages": {
       "services.factory": 19,
-      "services": 180,
+      "services": 61,
       "tasks": 36,
       "adapters.alert": 3,
       "adapters.audit": 12,
