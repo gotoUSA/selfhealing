@@ -944,14 +944,23 @@ curl -X POST /api/self-healing/config/pending/{pending_id}/cancel/
 
 ## 10. 구현 로드맵
 
-### Phase 1: Track 1 활성화 (1-2일)
+### Phase 1: Track 1 활성화 ✅ 완료 (2026-01-04)
 
-| 작업 | 파일 | 변경 내용 |
-|-----|------|----------|
-| 1 | `services/event_bus.py` | `_on_circuit_breaker_closed` 핸들러 수정 |
-| 2 | `services/runtime_config/base.py` | `replay_automation` config 타입 추가 |
-| 3 | `api/django/views/config.py` | `ReplayAutomationConfigView` 추가 |
-| 4 | `api/django/urls.py` | URL 라우트 추가 |
+| 작업 | 파일 | 변경 내용 | 상태 |
+|-----|------|----------|------|
+| 1 | `core/config.py` | `ReplayAutomationConfig` dataclass 추가 | ✅ |
+| 2 | `services/runtime_config/constants.py` | STORAGE_KEY, CONFIG_CLASS 추가 | ✅ |
+| 3 | `services/event_bus.py` | `_on_circuit_breaker_closed` 핸들러 수정 | ✅ |
+| 4 | `api/django/serializers/config.py` | `ReplayAutomationConfigSerializer` 추가 | ✅ |
+| 5 | `api/django/views/config.py` | `ReplayAutomationConfigView` 추가 | ✅ |
+| 6 | `api/django/urls.py` | URL 라우트 추가 (`/config/replay-automation/`) | ✅ |
+
+**구현 상세:**
+- `ReplayAutomationConfig`: Track 1/2/3 및 Adaptive 모드 설정을 위한 dataclass
+- CB CLOSED 이벤트 시 RuntimeConfig에서 `track1_enabled` 확인 후 자동 replay 트리거
+- API를 통한 런타임 설정 변경 지원 (immediate/delayed/graceful 전략)
+
+**테스트:** `tests/self_healing/unit/test_replay_automation_phase1.py` - 17개 테스트 통과
 
 ### Phase 2: Track 3 구현 (2-3일)
 
@@ -1204,14 +1213,13 @@ if not self.config.slack_webhook_url:
 
 ### 12.1 핵심 요약
 
-| 항목 | 현재 | 목표 | 방법 |
-|-----|------|------|------|
-| CB 복구 시 Replay | 수동 | 자동 | EventBus 핸들러 수정 |
-| max_items | 고정 | 동적 | AdaptiveReplayManager |
-| 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor |
-| 도메인 정책 | 일괄 | 차등 | domain_configs 활용 |
-| 런타임 변경 | 재시작 | API | RuntimeConfig 통합 |
-| 적용 전략 | 없음 | 3가지 | ApplyStrategy 재사용 |
+| 항목 | 현재 | 목표 | 방법 | 상태 |
+|-----|------|------|------|------|
+| CB 복구 시 Replay | 수동 | 자동 | EventBus 핸들러 수정 | ✅ Phase 1 완료 |
+| RuntimeConfig API | 없음 | 있음 | ReplayAutomationConfig | ✅ Phase 1 완료 |
+| max_items | 고정 | 동적 | AdaptiveReplayManager | ⏳ Phase 3 |
+| 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor | ⏳ Phase 2 |
+| 도메인 정책 | 일괄 | 차등 | domain_configs 활용 | ⏳ Phase 4 |
 
 ### 12.2 안전성 보장
 
@@ -1223,6 +1231,12 @@ if not self.config.slack_webhook_url:
 ### 12.3 다음 단계
 
 1. ✅ 문서 작성 완료
-2. ⏳ Phase 1 구현 (Track 1 활성화)
-3. ⏳ API 엔드포인트 테스트
-4. ⏳ Grafana 대시보드 업데이트
+2. ✅ Phase 1 구현 완료 (Track 1 활성화 + API 엔드포인트)
+   - `ReplayAutomationConfig` dataclass
+   - `_on_circuit_breaker_closed` 핸들러 자동화
+   - `/api/self-healing/config/replay-automation/` API
+   - 17개 단위 테스트 통과
+3. ⏳ Phase 2: Track 3 Traffic-Aware Replay 구현
+4. ⏳ Phase 3: Adaptive max_items 구현
+5. ⏳ Phase 4: 도메인별 차등 정책 구현
+6. ⏳ Grafana 대시보드 업데이트

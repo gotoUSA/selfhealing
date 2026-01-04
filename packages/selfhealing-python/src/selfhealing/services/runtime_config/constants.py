@@ -21,6 +21,7 @@ from selfhealing.core.config import (
     DriftThresholdConfig,
     L2StorageConfig,
     ChaosConfig,
+    ReplayAutomationConfig,
 )
 
 # Storage keys for each config type
@@ -44,6 +45,8 @@ STORAGE_KEYS = {
     "l2_storage": "runtime_config:l2_storage",
     "chaos": "runtime_config:chaos",
     "approval_requests": "runtime_config:approval_requests",
+    # Phase 4: Replay Automation
+    "replay_automation": "runtime_config:replay_automation",
 }
 
 # Default config classes
@@ -67,6 +70,8 @@ CONFIG_CLASSES = {
     "l2_storage": L2StorageConfig,
     "chaos": ChaosConfig,
     "approval_requests": None,  # ApprovalRequest는 리스트로 저장
+    # Phase 4: Replay Automation
+    "replay_automation": ReplayAutomationConfig,
 }
 
 # Default SLO configuration

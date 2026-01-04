@@ -545,14 +545,56 @@ def _on_error_budget_critical(event: SelfHealingEvent):
 
 def _on_circuit_breaker_closed(event: SelfHealingEvent):
     """
-    CB 복구 시 조건부 Replay 트리거.
+    CB 복구 시 자동 Replay 트리거 (Track 1).
+    
+    RuntimeConfig에서 track1_enabled 설정을 확인하고,
+    활성화된 경우 conditional_replay_on_circuit_close 태스크를 트리거합니다.
+    
+    Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
     """
     service_name = event.data.get("service_name", "unknown")
     
-    logger.info(
-        f"[EventHandler] Circuit breaker closed for {service_name}, "
-        f"conditional replay may be triggered"
-    )
+    # RuntimeConfig에서 replay_automation 설정 로드
+    try:
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        manager = get_runtime_config_manager()
+        config = manager._get_config("replay_automation")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to get replay_automation config: {e}")
+        config = {}
+    
+    # Track 1 활성화 여부 확인 (기본값: True)
+    track1_enabled = config.get("track1_enabled", True)
+    
+    if not track1_enabled:
+        logger.info(
+            f"[EventHandler] Circuit breaker closed for {service_name}, "
+            f"Track 1 disabled - skipping auto replay"
+        )
+        return
+    
+    max_items = config.get("track1_max_items", 50)
+    
+    # Celery 태스크 트리거
+    try:
+        from selfhealing.adapters.celery.tasks import conditional_replay_on_circuit_close
+        conditional_replay_on_circuit_close.delay(
+            service_name=service_name,
+            max_items=max_items,
+        )
+        logger.info(
+            f"[EventHandler] Circuit breaker closed for {service_name}, "
+            f"triggered Track 1 auto replay (max_items={max_items})"
+        )
+    except ImportError:
+        logger.debug(
+            f"[EventHandler] Celery tasks not available, "
+            f"skipping Track 1 replay for {service_name}"
+        )
+    except Exception as e:
+        logger.error(
+            f"[EventHandler] Failed to trigger Track 1 replay for {service_name}: {e}"
+        )
 
 
 def register_default_handlers():

@@ -93,6 +93,7 @@ from selfhealing.api.django.views.config import (
     LoggingConfigView,
     MetricsConfigView,
     ErrorBudgetConfigView,
+    ReplayAutomationConfigView,
 )
 
 # Drift Threshold Configuration Views
@@ -309,6 +310,11 @@ urlpatterns = [
     path("config/metrics/", MetricsConfigView.as_view(), name="config-metrics"),
     path("config/error-budget/", ErrorBudgetConfigView.as_view(), name="config-error-budget"),
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
+    # =========================================================================
+    # Replay Automation Configuration (DLQ Replay Tracks)
+    # Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
+    # =========================================================================
+    path("config/replay-automation/", ReplayAutomationConfigView.as_view(), name="config-replay-automation"),
     # =========================================================================
     # Drift Threshold Configuration (Metric Collection Strategy)
     # Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md

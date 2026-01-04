@@ -403,6 +403,49 @@ class DriftThresholdConfig:
 
 
 @dataclass
+class ReplayAutomationConfig:
+    """
+    DLQ Replay 자동화 설정.
+
+    Track 1: CB 복구 시 이벤트 기반 자동 Replay
+    Track 2: Scheduled Batch (기존 5분 주기)
+    Track 3: Traffic-Aware Replay (향후 구현)
+
+    RuntimeConfigManager를 통해 중앙 관리됩니다.
+    서버 재시작 없이 API로 변경 가능합니다.
+
+    Reference:
+    - docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
+    """
+
+    # =========================================================================
+    # Track 1: Event-Driven Replay (CB CLOSED 이벤트 기반)
+    # =========================================================================
+    track1_enabled: bool = True          # Track 1 활성화 여부
+    track1_max_items: int = 50           # CB 복구 시 최대 replay 건수
+
+    # =========================================================================
+    # Track 2: Scheduled Batch Replay (기존 5분 주기 Beat)
+    # =========================================================================
+    track2_enabled: bool = True          # Track 2 활성화 여부
+    track2_max_items: int = 50           # 배치당 최대 replay 건수
+
+    # =========================================================================
+    # Track 3: Traffic-Aware Replay (향후 구현)
+    # =========================================================================
+    track3_enabled: bool = False         # Track 3 활성화 여부 (기본: 비활성)
+    track3_max_items: int = 30           # 트래픽 정상화 시 최대 replay 건수
+
+    # =========================================================================
+    # Adaptive Mode (동적 max_items 조정)
+    # =========================================================================
+    adaptive_enabled: bool = False       # Adaptive 모드 활성화
+    adaptive_min_items: int = 10         # 최소 batch size
+    adaptive_max_items: int = 100        # 최대 batch size
+    adaptive_failure_threshold: float = 0.2  # 실패율 임계값 (20%)
+
+
+@dataclass
 class L2StorageConfig:
     """
     L2 Storage 런타임 설정.

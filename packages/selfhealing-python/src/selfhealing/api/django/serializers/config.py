@@ -884,3 +884,99 @@ class ShadowLogStatsSerializer(serializers.Serializer):
     oldest_record = serializers.CharField(read_only=True, allow_null=True)
     newest_record = serializers.CharField(read_only=True, allow_null=True)
 
+
+# =============================================================================
+# Replay Automation Configuration Serializer
+# Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
+# =============================================================================
+
+
+class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
+    """
+    Serializer for Replay Automation configuration.
+    
+    Manages DLQ Replay automation settings including:
+    - Track 1: Event-driven replay on CB recovery
+    - Track 2: Scheduled batch replay
+    - Track 3: Traffic-aware replay (future)
+    - Adaptive mode for dynamic batch sizing
+    """
+
+    _config_type = "replay_automation"
+
+    # Track 1: Event-Driven Replay
+    track1_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Enable Track 1 (event-driven replay on circuit breaker close)",
+    )
+    track1_max_items = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=500,
+        help_text="Maximum items to replay on CB recovery",
+    )
+
+    # Track 2: Scheduled Batch Replay
+    track2_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Enable Track 2 (scheduled batch replay)",
+    )
+    track2_max_items = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=500,
+        help_text="Maximum items per scheduled batch",
+    )
+
+    # Track 3: Traffic-Aware Replay
+    track3_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Enable Track 3 (traffic-aware replay) - Future feature",
+    )
+    track3_max_items = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=200,
+        help_text="Maximum items for traffic-aware replay",
+    )
+
+    # Adaptive Mode
+    adaptive_enabled = serializers.BooleanField(
+        required=False,
+        help_text="Enable adaptive batch sizing based on success rate",
+    )
+    adaptive_min_items = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=50,
+        help_text="Minimum batch size for adaptive mode",
+    )
+    adaptive_max_items = serializers.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=500,
+        help_text="Maximum batch size for adaptive mode",
+    )
+    adaptive_failure_threshold = serializers.FloatField(
+        required=False,
+        min_value=0.05,
+        max_value=0.5,
+        help_text="Failure rate threshold to trigger batch size reduction (0.05-0.5)",
+    )
+
+    def validate(self, attrs):
+        """검증 + Safe Default 폴백."""
+        validated = super().validate(attrs)
+        
+        # adaptive_min <= adaptive_max 검증
+        adaptive_min = validated.get("adaptive_min_items")
+        adaptive_max = validated.get("adaptive_max_items")
+        
+        if adaptive_min is not None and adaptive_max is not None:
+            if adaptive_min > adaptive_max:
+                raise serializers.ValidationError(
+                    "adaptive_min_items must be less than or equal to adaptive_max_items"
+                )
+        
+        return self.validate_with_safe_fallback(validated)
+

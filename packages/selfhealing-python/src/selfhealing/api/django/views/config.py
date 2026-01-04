@@ -44,6 +44,7 @@ from selfhealing.api.django.serializers.config import (
     MetricsConfigSerializer,
     ErrorBudgetConfigSerializer,
     PendingConfigChangeSerializer,
+    ReplayAutomationConfigSerializer,
 )
 from selfhealing.api.django.config_descriptions import format_changes_summary
 from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -548,3 +549,23 @@ class SLOConfigView(BaseConfigView):
                 {"status": "error", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class ReplayAutomationConfigView(BaseConfigView):
+    """
+    Replay Automation Configuration API.
+
+    GET  /api/self-healing/config/replay-automation/ - Get replay automation config
+    PUT  /api/self-healing/config/replay-automation/ - Update replay automation config
+
+    Manages DLQ Replay automation settings:
+    - Track 1: Event-driven replay on circuit breaker recovery
+    - Track 2: Scheduled batch replay (5-minute interval)
+    - Track 3: Traffic-aware replay (future implementation)
+    - Adaptive mode for dynamic batch sizing
+
+    Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
+    """
+
+    serializer_class = ReplayAutomationConfigSerializer
+    config_name = "replay_automation"
