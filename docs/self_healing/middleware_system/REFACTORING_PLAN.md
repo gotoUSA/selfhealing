@@ -12,18 +12,18 @@
 | 항목 | 초기 | 최종 | 감소율 |
 |------|------|------|--------|
 | **내부 re-export 사용** | 104개 | **0개** | **100%** |
-| **`services/__init__.py` exports** | 182개 | **15개** | **92%** |
+| **`services/__init__.py` exports** | 182개 | **12개** | **92%** |
 | **Internal Import Linter 위반** | - | **0개** | ✅ |
 | **수정된 파일** | - | 38개 | - |
 
 ### 🚀 V2.0.0 Breaking Change (Enterprise Ready)
 
 **주요 변경:**
-- `services/__init__.py`: 182개 → 15개 핵심 API만 노출
+- `services/__init__.py`: 182개 → 12개 핵심 API만 노출
 - `adapters/audit/singleton.py` 생성 (싱글톤 함수 분리)
 - Internal Import Linter 추가 (`scripts/analyze_dependencies.py`)
 
-**15개 Public API:**
+**12개 Public API:**
 ```python
 from selfhealing.services import (
     # Factory Functions (Core)
@@ -71,7 +71,7 @@ from selfhealing.services import (
 
 ### Phase 3 완료 (2026-01-04)
 
-`services/__init__.py`를 182개에서 **15개**로 축소 (92% 감소):
+`services/__init__.py`를 182개에서 **12개**로 축소 (92% 감소):
 
 | 카테고리 | 유지된 심볼 |
 |----------|------------|
@@ -94,7 +94,7 @@ violations = check_internal_import_violations(modules)
 ```
 
 **금지된 패턴 (패키지 내부에서):**
-- `from selfhealing.services.metrics import X` 
+- `from selfhealing.services.metrics import X`
 - `from selfhealing.services.circuit_breaker import X`
 - `from selfhealing.adapters.audit import X`
 - 등 (`__init__.py` 경유 import)

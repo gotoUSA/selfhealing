@@ -305,9 +305,9 @@ myproject/
 
 ### 5.5 Phase 5 체크리스트
 
-- [ ] 정상 요청 흐름도 작성
-- [ ] 예외 발생 흐름도 작성
-- [ ] 자동 복구 흐름도 작성
+- [x] 정상 요청 흐름도 작성
+- [x] 예외 발생 흐름도 작성
+- [x] 자동 복구 흐름도 작성
 
 ---
 
@@ -316,13 +316,13 @@ myproject/
 ### 6.1 전체 진행률
 
 ```
-Phase 1: ░░░░░░░░░░ 0%   (문서 검토 - Phase 5 이후 진행 예정)
+Phase 1: ░░░░░░░░░░ 0%   (문서 검토 - 선택적 진행)
 Phase 2: ██████████ 100% ✅ 완료 (2026-01-04)
 Phase 3: ██████████ 100% ✅ 완료 (2026-01-04)
 Phase 4: ██████████ 100% ✅ 완료 (2026-01-04)
-Phase 5: ░░░░░░░░░░ 0%   (흐름도 작성 - 다음 진행)
+Phase 5: ██████████ 100% ✅ 완료 (2026-01-04)
 ─────────────────────
-Total:   ████████░░ 60%
+Total:   ████████░░ 80%
 ```
 
 ### 6.2 진행 로그
@@ -333,6 +333,7 @@ Total:   ████████░░ 60%
 | 2026-01-04 | 2 | 코드 기반 미들웨어 분석 | ✅ 완료 - 19개 미들웨어 파악 |
 | 2026-01-04 | 4 | Feature Flag 전체 정리 | ✅ 완료 - 35개 환경변수 정리 |
 | 2026-01-04 | 3 | 의존성 분석 | ✅ 완료 - Redis/DB/Celery 의존성 매핑 |
+| 2026-01-04 | 5 | 전체 흐름도 작성 | ✅ 완료 - 3개 문서 (정상/예외/복구) |
 
 ### 6.3 발견된 이슈
 
@@ -344,16 +345,19 @@ Total:   ████████░░ 60%
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  즉시 시작 가능한 작업                                           │
+│  완료된 작업                                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ✅ Phase 2 완료: 11_PHASE2_MIDDLEWARE_ANALYSIS_RESULT.md       │
 │  ✅ Phase 4 완료: 12_PHASE4_FEATURE_FLAG_RESULT.md              │
 │  ✅ Phase 3 완료: 13_PHASE3_DEPENDENCY_ANALYSIS_RESULT.md       │
+│  ✅ Phase 5 완료: 14, 15, 16 흐름도 문서 3개                    │
+│     - 14_PHASE5_NORMAL_REQUEST_FLOW.md (정상 요청)              │
+│     - 15_PHASE5_EXCEPTION_HANDLING_FLOW.md (예외 발생)          │
+│     - 16_PHASE5_AUTO_RECOVERY_FLOW.md (자동 복구)               │
 │                                                                 │
-│  다음 권장:                                                     │
-│  1. Phase 5: 전체 흐름도 작성 (Mermaid)                         │
-│  2. Phase 1: 문서 검토 (기존 문서와 결과 비교)                  │
+│  선택적 작업:                                                   │
+│  1. Phase 1: 문서 검토 (기존 문서와 결과 비교)                  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -367,6 +371,10 @@ Total:   ████████░░ 60%
 - [11_PHASE2_MIDDLEWARE_ANALYSIS_RESULT.md](11_PHASE2_MIDDLEWARE_ANALYSIS_RESULT.md) - Phase 2 결과
 - [12_PHASE4_FEATURE_FLAG_RESULT.md](12_PHASE4_FEATURE_FLAG_RESULT.md) - Phase 4 결과
 - [13_PHASE3_DEPENDENCY_ANALYSIS_RESULT.md](13_PHASE3_DEPENDENCY_ANALYSIS_RESULT.md) - Phase 3 결과
+- [17_PHASE5_FLOW_DIAGRAMS_SUMMARY.md](17_PHASE5_FLOW_DIAGRAMS_SUMMARY.md) - **Phase 5 흐름도 요약 (통합 뷰)** ⭐
+- [14_PHASE5_NORMAL_REQUEST_FLOW.md](14_PHASE5_NORMAL_REQUEST_FLOW.md) - Phase 5 정상 요청 흐름도 (상세)
+- [15_PHASE5_EXCEPTION_HANDLING_FLOW.md](15_PHASE5_EXCEPTION_HANDLING_FLOW.md) - Phase 5 예외 발생 흐름도 (상세)
+- [16_PHASE5_AUTO_RECOVERY_FLOW.md](16_PHASE5_AUTO_RECOVERY_FLOW.md) - Phase 5 자동 복구 흐름도 (상세)
 - [53_UNCONNECTED_FEATURES_ANALYSIS.md](../53_UNCONNECTED_FEATURES_ANALYSIS.md) - 미연결 기능 분석
 
 ---

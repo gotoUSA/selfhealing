@@ -1,14 +1,14 @@
 # Self-Healing 미들웨어 시스템 문서 인덱스
 
-> **Version**: 2.4.0
-> **Updated**: 2026-01-02
+> **Version**: 2.5.0
+> **Updated**: 2026-01-04
 > **Based on**: MIDDLEWARE_REFERENCE.md v2.2.0
 
 ---
 
 ## 📚 문서 구조
 
-Self-Healing 시스템의 복잡성으로 인해 단일 문서를 **9개**의 주제별 문서로 분리하였습니다.
+Self-Healing 시스템의 복잡성으로 인해 단일 문서를 **10개**의 주제별 문서로 분리하였습니다.
 
 ```
 middleware_system/
@@ -20,8 +20,9 @@ middleware_system/
 ├── 05_RESILIENT_STORAGE_BACKEND.md    ← Redis 통합 저장소
 ├── 06_REDIS_MIGRATION.md              ← Redis 기본값 마이그레이션 가이드
 ├── 07_HYBRID_STORAGE_ARCHITECTURE.md  ← 하이브리드 스토리지 아키텍처
-├── 08_NOTIFICATION_ARCHITECTURE.md    ← 통합 알림 아키텍처 (신규)
-└── 09_AUTONOMOUS_TASK_EXPANSION.md    ← 자율 태스크 확장 (신규)
+├── 08_NOTIFICATION_ARCHITECTURE.md    ← 통합 알림 아키텍처
+├── 09_AUTONOMOUS_TASK_EXPANSION.md    ← 자율 태스크 확장
+└── 10_MIDDLEWARE_INVESTIGATION_PLAN.md ← 미들웨어 전체 조사 계획 (신규)
 ```
 
 ---
