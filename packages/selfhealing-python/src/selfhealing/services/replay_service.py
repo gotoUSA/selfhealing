@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         FailedOperationRepository,
         FailedOperationData,
     )
+    from selfhealing.services.adaptive_replay import AdaptiveReplayManager
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,7 @@ class ReplayService:
         domain: str | None = None,
         failure_type: str | None = None,
         max_items: int = 100,
+        use_adaptive: bool | None = None,
     ) -> BatchReplayResult:
         """
         Replay multiple DLQ entries matching criteria.
@@ -423,13 +425,20 @@ class ReplayService:
         2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
         3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
 
+        Adaptive Mode (Phase 3):
+        - When adaptive_enabled=True in RuntimeConfig, batch size is dynamic
+        - High failure rate (>=20%) reduces batch size by 20%
+        - 3 consecutive perfect batches increases batch size by 5
+        - See: services/adaptive_replay.py
+
         Audit Logging:
         - 차단 발생 시 자동으로 AuditLog에 기록됨
 
         Args:
             domain: Filter by domain (optional)
             failure_type: Filter by failure type (optional)
-            max_items: Maximum number of items to replay
+            max_items: Maximum number of items to replay (ignored in adaptive mode)
+            use_adaptive: Override adaptive mode setting (None = use RuntimeConfig)
 
         Returns:
             BatchReplayResult with summary and individual results
@@ -462,6 +471,12 @@ class ReplayService:
                 governance_block_reason=governance.block_message,
             )
 
+        # Determine effective max_items (Adaptive mode support)
+        effective_max_items, adaptive_manager = self._get_effective_max_items(
+            max_items=max_items,
+            use_adaptive=use_adaptive,
+        )
+
         max_replays = self.config["max_replay_attempts"]
 
         # Get eligible entries using repository
@@ -469,7 +484,7 @@ class ReplayService:
             domain=domain,
             failure_type=failure_type,
             max_retry_count=max_replays,
-            limit=max_items,
+            limit=effective_max_items,
         )
 
         batch_result = BatchReplayResult(
@@ -487,13 +502,103 @@ class ReplayService:
             else:
                 batch_result.failed_count += 1
 
+        # Record batch result for adaptive adjustment
+        if adaptive_manager is not None:
+            adaptive_manager.record_batch_result(
+                total=batch_result.total,
+                success=batch_result.success_count,
+                failures=batch_result.failed_count,
+            )
+            logger.debug(
+                f"[ReplayService] Adaptive batch recorded: "
+                f"next_max_items={adaptive_manager.get_current_max_items()}"
+            )
+
         logger.info(
             f"[ReplayService] Batch replay completed: "
             f"total={batch_result.total}, success={batch_result.success_count}, "
             f"failed={batch_result.failed_count}"
+            + (f", adaptive_max_items={adaptive_manager.get_current_max_items()}" 
+               if adaptive_manager else "")
         )
 
         return batch_result
+
+    def _get_effective_max_items(
+        self,
+        max_items: int,
+        use_adaptive: bool | None,
+    ) -> tuple[int, "AdaptiveReplayManager | None"]:
+        """
+        Determine effective max_items based on adaptive mode.
+
+        Args:
+            max_items: Caller-provided max_items
+            use_adaptive: Override for adaptive mode (None = use RuntimeConfig)
+
+        Returns:
+            Tuple of (effective_max_items, adaptive_manager or None)
+        """
+        from selfhealing.services.adaptive_replay import (
+            get_adaptive_replay_manager,
+            AdaptiveReplayConfig,
+        )
+
+        # Check RuntimeConfig for adaptive mode
+        adaptive_enabled = use_adaptive
+        if adaptive_enabled is None:
+            adaptive_enabled = self._is_adaptive_enabled()
+
+        if not adaptive_enabled:
+            return max_items, None
+
+        # Get adaptive manager and configure it
+        manager = get_adaptive_replay_manager()
+
+        # Sync config from RuntimeConfig
+        config = self._get_adaptive_config()
+        manager.configure(config)
+
+        effective_max_items = manager.get_current_max_items()
+
+        logger.debug(
+            f"[ReplayService] Adaptive mode: "
+            f"requested={max_items}, effective={effective_max_items}"
+        )
+
+        return effective_max_items, manager
+
+    def _is_adaptive_enabled(self) -> bool:
+        """Check if adaptive mode is enabled in RuntimeConfig."""
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            config = manager.get_config("replay_automation")
+            return config.get("adaptive_enabled", False)
+        except Exception as e:
+            logger.warning(f"[ReplayService] Failed to read adaptive_enabled: {e}")
+            return False
+
+    def _get_adaptive_config(self) -> "AdaptiveReplayConfig":
+        """Load AdaptiveReplayConfig from RuntimeConfig."""
+        from selfhealing.services.adaptive_replay import AdaptiveReplayConfig
+
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            config = manager.get_config("replay_automation")
+
+            return AdaptiveReplayConfig(
+                min_items=config.get("adaptive_min_items", 10),
+                max_items=config.get("adaptive_max_items", 100),
+                initial_items=config.get("track2_max_items", 50),  # Use track2 as initial
+                failure_threshold=config.get("adaptive_failure_threshold", 0.2),
+            )
+        except Exception as e:
+            logger.warning(f"[ReplayService] Failed to load adaptive config: {e}")
+            return AdaptiveReplayConfig()
 
     def _replay_single_internal(self, dlq_id: int) -> ReplayResult:
         """

@@ -983,12 +983,24 @@ curl -X POST /api/self-healing/config/pending/{pending_id}/cancel/
 
 **테스트:** `tests/self_healing/unit/test_replay_automation_phase2.py` - 25개 테스트 통과
 
-### Phase 3: Adaptive max_items (2-3일)
+### Phase 3: Adaptive max_items ✅ 완료 (2026-01-04)
 
-| 작업 | 파일 | 변경 내용 |
-|-----|------|----------|
-| 1 | `services/adaptive_replay.py` | 신규 생성 |
-| 2 | `services/replay_service.py` | Adaptive 통합 |
+| 작업 | 파일 | 변경 내용 | 상태 |
+|-----|------|----------|------|
+| 1 | `services/adaptive_replay.py` | 신규 생성 (AdaptiveReplayManager, AdaptiveReplayConfig) | ✅ |
+| 2 | `services/replay_service.py` | Adaptive 통합 (replay_batch, _get_effective_max_items) | ✅ |
+
+**구현 상세:**
+- `AdaptiveReplayConfig`: 동적 배치 크기 조정을 위한 설정 dataclass
+- `AdaptiveReplayManager`: 싱글톤 패턴의 배치 크기 동적 조정 관리자
+- `replay_batch()`: `use_adaptive` 파라미터 추가, RuntimeConfig 연동
+
+**알고리즘:**
+- 실패율 >= 20%: 배치 크기 20% 감소 (decrease_ratio=0.8)
+- 3연속 성공 배치: 배치 크기 5 증가 (increase_step=5)
+- 항상 [min_items, max_items] 범위 내 유지
+
+**테스트:** `tests/self_healing/unit/test_replay_automation_phase3.py` - 24개 테스트 통과
 
 ### Phase 4: 도메인 정책 (1-2일)
 
@@ -1232,7 +1244,7 @@ if not self.config.slack_webhook_url:
 | CB 복구 시 Replay | 수동 | 자동 | EventBus 핸들러 수정 | ✅ Phase 1 완료 |
 | RuntimeConfig API | 없음 | 있음 | ReplayAutomationConfig | ✅ Phase 1 완료 |
 | 트래픽 상태 인식 | 없음 | 있음 | Traffic Health Monitor | ✅ Phase 2 완료 |
-| max_items | 고정 | 동적 | AdaptiveReplayManager | ⏳ Phase 3 |
+| max_items | 고정 | 동적 | AdaptiveReplayManager | ✅ Phase 3 완료 |
 | 도메인 정책 | 일괄 | 차등 | domain_configs 활용 | ⏳ Phase 4 |
 
 ### 12.2 안전성 보장
@@ -1255,6 +1267,10 @@ if not self.config.slack_webhook_url:
    - `check_traffic_health()` 건강 체크 함수
    - Beat Schedule 통합 (매 1분마다)
    - 25개 단위 테스트 통과
-4. ⏳ Phase 3: Adaptive max_items 구현
+4. ✅ Phase 3 구현 완료 (Adaptive max_items)
+   - `AdaptiveReplayManager` 싱글톤 구현
+   - `replay_batch()` 메서드에 Adaptive 모드 통합
+   - 동적 배치 크기 조정 (실패율 기반)
+   - 24개 단위 테스트 통과
 5. ⏳ Phase 4: 도메인별 차등 정책 구현
 6. ⏳ Grafana 대시보드 업데이트
