@@ -8,7 +8,7 @@ Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md §5 (Phase 3)
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, Mock, patch, call, PropertyMock
 
 import pytest
 
@@ -29,23 +29,22 @@ class TestDLQServicePushEvents:
         
         Reference: Phase 3 - DLQ 생성 시 Push 이벤트
         """
-        from selfhealing.services.dlq_service import DLQService
+        from selfhealing.services.dlq_service import DLQService, DLQConfig
         
         # Arrange
         mock_repo = MagicMock()
         mock_repo.create.return_value = MagicMock(id=123)
         
-        service = DLQService(repository=mock_repo)
-        service._repository = mock_repo  # Force use mock
+        # Use config with enabled=True
+        config = DLQConfig(enabled=True)
+        service = DLQService(config=config, repository=mock_repo)
         
-        # Patch is_enabled
-        with patch.object(service, 'is_enabled', True):
-            # Act
-            result = service.store_failure(
-                domain="payment",
-                failure_type="PG_TIMEOUT",
-                error_message="Connection timeout",
-            )
+        # Act
+        result = service.store_failure(
+            domain="payment",
+            failure_type="PG_TIMEOUT",
+            error_message="Connection timeout",
+        )
         
         # Assert
         assert result.success is True
@@ -72,21 +71,21 @@ class TestDLQServicePushEvents:
         
         Reference: Phase 3 - Push 이벤트 통합
         """
-        from selfhealing.services.dlq_service import DLQService
+        from selfhealing.services.dlq_service import DLQService, DLQConfig
         
         # Arrange
         mock_repo = MagicMock()
         mock_repo.create.return_value = MagicMock(id=456)
         
-        service = DLQService(repository=mock_repo)
-        service._repository = mock_repo
+        # Use config with enabled=True
+        config = DLQConfig(enabled=True)
+        service = DLQService(config=config, repository=mock_repo)
         
-        with patch.object(service, 'is_enabled', True):
-            # Act - should work normally
-            result = service.store_failure(
-                domain="point",
-                failure_type="BALANCE_ERROR",
-            )
+        # Act - should work normally
+        result = service.store_failure(
+            domain="point",
+            failure_type="BALANCE_ERROR",
+        )
         
         # Assert - operation succeeded
         assert result.success is True
@@ -101,8 +100,9 @@ class TestDLQServicePushEvents:
 class TestCircuitBreakerPushEvents:
     """Tests for Circuit Breaker push event emission."""
 
+    @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
     @patch("selfhealing.metrics.event_handlers.CircuitBreakerEventHandler.on_state_changed")
-    def test_force_open_emits_on_state_changed(self, mock_on_state_changed):
+    def test_force_open_emits_on_state_changed(self, mock_on_state_changed, mock_system_enabled):
         """
         Purpose:
             Verify force_open calls on_state_changed event handler.
@@ -132,8 +132,9 @@ class TestCircuitBreakerPushEvents:
             to_state="open",
         )
 
+    @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
     @patch("selfhealing.metrics.event_handlers.CircuitBreakerEventHandler.on_state_changed")
-    def test_force_close_emits_on_state_changed(self, mock_on_state_changed):
+    def test_force_close_emits_on_state_changed(self, mock_on_state_changed, mock_system_enabled):
         """
         Purpose:
             Verify force_close calls on_state_changed event handler.
@@ -163,8 +164,9 @@ class TestCircuitBreakerPushEvents:
             to_state="closed",
         )
 
+    @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
     @patch("selfhealing.metrics.event_handlers.CircuitBreakerEventHandler.on_state_changed")
-    def test_no_event_when_state_unchanged(self, mock_on_state_changed):
+    def test_no_event_when_state_unchanged(self, mock_on_state_changed, mock_system_enabled):
         """
         Purpose:
             Verify no event is emitted when state doesn't change.
@@ -232,16 +234,19 @@ class TestCircuitBreakerPushEvents:
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
-        # Arrange
+        # Arrange - minimum_calls=1 to allow testing with fewer calls
         config = CircuitBreakerConfig(
             enabled=True,
             failure_threshold=3,
+            minimum_calls=1,  # Allow trigger with low call count
         )
         
         mock_state = MagicMock()
         mock_state.manually_controlled = False
         mock_state.failure_count = 3  # At threshold
+        mock_state.success_count = 0
         mock_state.state = "closed"
+        mock_state.service_name = "toss_payment"
         
         mock_repo = MagicMock()
         mock_repo.get_or_create.return_value = mock_state

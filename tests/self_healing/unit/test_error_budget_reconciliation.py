@@ -437,9 +437,9 @@ class TestReconciliationConfig:
 class TestReconciliationService:
     """ErrorBudgetReconciliationService 테스트."""
 
-    def test_on_failsafe_started(self, reconciliation_service):
+    def test_start_failsafe_period(self, reconciliation_service):
         """Fail-Safe 시작 이벤트 처리."""
-        period = reconciliation_service.on_failsafe_started(
+        period = reconciliation_service.start_failsafe_period(
             reason="Redis timeout",
             component="error_budget_gate",
         )
@@ -447,17 +447,17 @@ class TestReconciliationService:
         assert period is not None
         assert period.is_active is True
 
-    def test_on_failsafe_ended_auto_calculate(self, reconciliation_service, mock_current_budget):
+    def test_end_failsafe_period_auto_calculate(self, reconciliation_service, mock_current_budget):
         """Fail-Safe 종료 시 자동 계산."""
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
-        reconciliation_service.on_failsafe_started(reason="Test")
-        shadow = reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Test")
+        shadow = reconciliation_service.end_failsafe_period()
         
         assert shadow is not None
         assert shadow.status == ReconciliationStatus.CALCULATED
 
-    def test_on_failsafe_ended_short_period_excluded(self, period_tracker):
+    def test_end_failsafe_period_short_period_excluded(self, period_tracker):
         """짧은 기간 자동 제외."""
         # 이 테스트는 자동 제외를 활성화해야 함
         service = ErrorBudgetReconciliationService(
@@ -468,9 +468,9 @@ class TestReconciliationService:
             period_tracker=period_tracker,
         )
         
-        service.on_failsafe_started(reason="Quick recovery")
+        period = service.start_failsafe_period(reason="Quick recovery")
         # 즉시 종료 (1초 미만)
-        result = service.on_failsafe_ended()
+        result = service.end_failsafe_period()
         
         # 짧은 기간은 자동 제외되어 Shadow Budget 없음
         assert result is None
@@ -484,10 +484,10 @@ class TestReconciliationService:
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # 2개 기간 생성
-        reconciliation_service.on_failsafe_started(reason="First")
-        reconciliation_service.on_failsafe_ended()
-        reconciliation_service.on_failsafe_started(reason="Second")
-        reconciliation_service.on_failsafe_ended()
+        period1 = reconciliation_service.start_failsafe_period(reason="First")
+        reconciliation_service.end_failsafe_period()
+        period2 = reconciliation_service.start_failsafe_period(reason="Second")
+        reconciliation_service.end_failsafe_period()
         
         pending = reconciliation_service.get_pending_shadow_budgets()
         
@@ -498,8 +498,8 @@ class TestReconciliationService:
         """Shadow Budget 승인."""
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
-        reconciliation_service.on_failsafe_started(reason="Test")
-        shadow = reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Test")
+        shadow = reconciliation_service.end_failsafe_period()
         
         approved = reconciliation_service.approve_shadow_budget(
             calculation_id=shadow.calculation_id,
@@ -519,8 +519,8 @@ class TestReconciliationService:
         reconciliation_service._config.max_adjustment_percent_per_cycle = 5.0
         
         # Shadow Budget 생성 (조정량 > 5%)
-        reconciliation_service.on_failsafe_started(reason="Test")
-        shadow = reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Test")
+        shadow = reconciliation_service.end_failsafe_period()
         
         # 강제로 큰 조정량 설정
         shadow.adjustment_percent = 15.0
@@ -538,8 +538,8 @@ class TestReconciliationService:
         """Shadow Budget 거부 (Excluded Period 생성)."""
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
-        reconciliation_service.on_failsafe_started(reason="Chaos experiment")
-        shadow = reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Chaos experiment")
+        shadow = reconciliation_service.end_failsafe_period()
         
         rejected = reconciliation_service.reject_shadow_budget(
             calculation_id=shadow.calculation_id,
@@ -557,8 +557,8 @@ class TestReconciliationService:
         """이미 처리된 Shadow Budget 승인 시도."""
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
-        reconciliation_service.on_failsafe_started(reason="Test")
-        shadow = reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Test")
+        shadow = reconciliation_service.end_failsafe_period()
         
         # 첫 번째 승인
         reconciliation_service.approve_shadow_budget(
@@ -618,8 +618,8 @@ class TestReconciliationService:
         """전체 상태 조회."""
         reconciliation_service._get_current_budget = Mock(return_value=mock_current_budget)
         
-        reconciliation_service.on_failsafe_started(reason="Test")
-        reconciliation_service.on_failsafe_ended()
+        period = reconciliation_service.start_failsafe_period(reason="Test")
+        reconciliation_service.end_failsafe_period()
         
         status = reconciliation_service.get_status()
         
@@ -718,14 +718,14 @@ class TestReconciliationScenarios:
         service._apply_adjustment = mock_apply
         
         # 2. Fail-Safe 발동
-        period = service.on_failsafe_started(
+        period = service.start_failsafe_period(
             reason="Redis cluster failover",
             component="error_budget_gate",
         )
         assert period.is_active is True
         
         # 3. 일정 시간 후 복구 (여기서는 즉시)
-        shadow = service.on_failsafe_ended()
+        shadow = service.end_failsafe_period()
         assert shadow is not None
         assert shadow.log_source == "prometheus"
         
@@ -752,8 +752,8 @@ class TestReconciliationScenarios:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # 1. Chaos 실험 중 Fail-Safe 발동
-        service.on_failsafe_started(reason="Network partition injection")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Network partition injection")
+        shadow = service.end_failsafe_period()
         
         # 2. 운영자가 Chaos 실험임을 확인하고 거부
         rejected = service.reject_shadow_budget(
@@ -781,8 +781,8 @@ class TestReconciliationScenarios:
         
         # 여러 번 짧은 Fail-Safe 발생 (즉시 복구)
         for i in range(5):
-            service.on_failsafe_started(reason=f"Quick recovery {i}")
-            service.on_failsafe_ended()
+            period = service.start_failsafe_period(reason=f"Quick recovery {i}")
+            service.end_failsafe_period()
         
         # 모두 자동 제외
         excluded = service.get_excluded_periods()
@@ -815,8 +815,8 @@ class TestReconciliationHistoryIntegration:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # Fail-Safe 발생 및 종료
-        service.on_failsafe_started(reason="Test failure")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Test failure")
+        shadow = service.end_failsafe_period()
         
         # ConfigHistoryService mock
         with patch('selfhealing.services.config_history.get_config_history_service') as mock_get_service:
@@ -905,8 +905,8 @@ class TestReconciliationHistoryIntegration:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # Fail-Safe 발생 및 종료
-        service.on_failsafe_started(reason="Test failure")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Test failure")
+        shadow = service.end_failsafe_period()
         
         # ConfigHistoryService mock - 예외 발생
         with patch('selfhealing.services.config_history.get_config_history_service') as mock_get_service:
@@ -936,8 +936,8 @@ class TestReconciliationHistoryIntegration:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # Fail-Safe 발생 및 종료
-        service.on_failsafe_started(reason="Test failure")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Test failure")
+        shadow = service.end_failsafe_period()
         
         with patch('selfhealing.services.config_history.get_config_history_service') as mock_get_service:
             mock_history_service = Mock()
@@ -971,8 +971,8 @@ class TestReconciliationHistoryIntegration:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # Fail-Safe 발생 및 종료
-        service.on_failsafe_started(reason="Test failure")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Test failure")
+        shadow = service.end_failsafe_period()
         
         # Import 실패 시뮬레이션
         with patch('selfhealing.services.config_history.get_config_history_service') as mock_get_service:
@@ -999,8 +999,8 @@ class TestReconciliationHistoryIntegration:
         service._get_current_budget = Mock(return_value=mock_current_budget)
         
         # Fail-Safe 발생 및 종료
-        service.on_failsafe_started(reason="Test failure")
-        shadow = service.on_failsafe_ended()
+        period = service.start_failsafe_period(reason="Test failure")
+        shadow = service.end_failsafe_period()
         
         with patch('selfhealing.services.config_history.get_config_history_service') as mock_get_service:
             mock_history_service = Mock()

@@ -331,45 +331,52 @@ class TestAPIPermissions:
         """Test DashboardSummaryView has correct permissions."""
         from selfhealing.api.django.views.dashboard import DashboardSummaryView
         from rest_framework.permissions import IsAuthenticated
+        from selfhealing.api.django.permissions import IsViewer
 
         view = DashboardSummaryView()
 
-        # Should only require IsAuthenticated (not IsAdminUser)
-        assert len(view.permission_classes) == 1
-        assert view.permission_classes[0] == IsAuthenticated
+        # Should require IsAuthenticated and IsViewer
+        assert len(view.permission_classes) == 2
+        assert IsAuthenticated in view.permission_classes
+        assert IsViewer in view.permission_classes
 
     def test_audit_view_permissions(self):
         """Test ControlAuditView has correct permissions."""
         from selfhealing.api.django.views.circuit_breaker import ControlAuditView
         from rest_framework.permissions import IsAuthenticated
+        from selfhealing.api.django.permissions import IsViewer
 
         view = ControlAuditView()
 
-        # Should only require IsAuthenticated (not IsAdminUser)
-        assert len(view.permission_classes) == 1
-        assert view.permission_classes[0] == IsAuthenticated
+        # Should require IsAuthenticated and IsViewer
+        assert len(view.permission_classes) == 2
+        assert IsAuthenticated in view.permission_classes
+        assert IsViewer in view.permission_classes
 
     def test_dlq_stats_view_permissions(self):
         """Test DLQCleanupStatsView has correct permissions."""
         from selfhealing.api.django.views.dlq import DLQCleanupStatsView
-        from rest_framework.permissions import IsAuthenticated
+        from selfhealing.api.django.permissions import IsSelfHealingAuthenticated, IsViewer
 
         view = DLQCleanupStatsView()
 
-        # Should only require IsAuthenticated (not IsAdminUser)
-        assert len(view.permission_classes) == 1
-        assert view.permission_classes[0] == IsAuthenticated
+        # Should require IsSelfHealingAuthenticated and IsViewer
+        assert len(view.permission_classes) == 2
+        assert IsSelfHealingAuthenticated in view.permission_classes
+        assert IsViewer in view.permission_classes
 
     def test_control_action_still_requires_admin(self):
         """Test that control actions still require admin."""
         from selfhealing.api.django.views.circuit_breaker import ControlActionView
-        from rest_framework.permissions import IsAdminUser, IsAuthenticated
+        from rest_framework.permissions import IsAuthenticated
+        from selfhealing.api.django.permissions import IsSelfHealingAdmin
 
         view = ControlActionView()
 
-        # Should require both IsAuthenticated AND IsAdminUser
+        # Should require both IsAuthenticated AND IsSelfHealingAdmin
+        assert len(view.permission_classes) == 2
         assert IsAuthenticated in view.permission_classes
-        assert IsAdminUser in view.permission_classes
+        assert IsSelfHealingAdmin in view.permission_classes
 
 
 # =============================================================================

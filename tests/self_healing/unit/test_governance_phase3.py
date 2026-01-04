@@ -148,18 +148,18 @@ class TestRuntimeConfigManagerL2Storage:
 
     def test_l2_storage_in_storage_keys(self):
         """Test l2_storage key is in STORAGE_KEYS."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "l2_storage" in RuntimeConfigManager.STORAGE_KEYS
-        assert RuntimeConfigManager.STORAGE_KEYS["l2_storage"] == "runtime_config:l2_storage"
+        assert "l2_storage" in STORAGE_KEYS
+        assert STORAGE_KEYS["l2_storage"] == "runtime_config:l2_storage"
 
     def test_l2_storage_in_config_classes(self):
         """Test L2StorageConfig is in CONFIG_CLASSES."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import L2StorageConfig
 
-        assert "l2_storage" in RuntimeConfigManager.CONFIG_CLASSES
-        assert RuntimeConfigManager.CONFIG_CLASSES["l2_storage"] == L2StorageConfig
+        assert "l2_storage" in CONFIG_CLASSES
+        assert CONFIG_CLASSES["l2_storage"] == L2StorageConfig
 
     def test_get_l2_storage_config_method_exists(self):
         """Test get_l2_storage_config method exists."""
@@ -190,9 +190,9 @@ class TestApprovalWorkflow:
 
     def test_approval_requests_in_storage_keys(self):
         """Test approval_requests key is in STORAGE_KEYS."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "approval_requests" in RuntimeConfigManager.STORAGE_KEYS
+        assert "approval_requests" in STORAGE_KEYS
 
     def test_create_approval_request_method_exists(self):
         """Test create_approval_request method exists."""
@@ -339,22 +339,22 @@ class TestPhase3Integration:
 
     def test_chaos_config_in_storage_keys(self):
         """Test chaos config is in storage keys."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "chaos" in RuntimeConfigManager.STORAGE_KEYS
+        assert "chaos" in STORAGE_KEYS
 
     def test_all_phase3_storage_keys_present(self):
         """Test all Phase 3 storage keys are present."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
-        assert "l2_storage" in RuntimeConfigManager.STORAGE_KEYS
-        assert "chaos" in RuntimeConfigManager.STORAGE_KEYS
-        assert "approval_requests" in RuntimeConfigManager.STORAGE_KEYS
+        assert "l2_storage" in STORAGE_KEYS
+        assert "chaos" in STORAGE_KEYS
+        assert "approval_requests" in STORAGE_KEYS
 
     def test_all_phase3_config_classes_present(self):
         """Test all Phase 3 config classes are present."""
-        from selfhealing.services.runtime_config import RuntimeConfigManager
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import L2StorageConfig, ChaosConfig
 
-        assert RuntimeConfigManager.CONFIG_CLASSES["l2_storage"] == L2StorageConfig
-        assert RuntimeConfigManager.CONFIG_CLASSES["chaos"] == ChaosConfig
+        assert CONFIG_CLASSES["l2_storage"] == L2StorageConfig
+        assert CONFIG_CLASSES["chaos"] == ChaosConfig
