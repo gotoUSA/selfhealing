@@ -125,6 +125,33 @@ from .tracing import (
     log_state_change_with_trace,
 )
 
+# Service Config Manager (Phase 3)
+from .service_config import (
+    ServiceConfigManager,
+    get_service_config_manager,
+    reset_service_config_manager,
+    register_service,
+    get_service_config,
+    get_services_by_criticality,
+    get_shedding_targets,
+    is_critical_service,
+)
+
+# Blast Radius Integration (Phase 3)
+from .blast_radius_integration import (
+    BlastRadiusLevel,
+    BlastRadiusAssessment,
+    ServiceDependency,
+    ServiceDependencyGraph,
+    BlastRadiusIntegration,
+    BlastRadiusConfig,
+    get_blast_radius_integration,
+    reset_blast_radius_integration,
+    assess_cb_open_impact,
+    should_allow_cb_auto_open as should_allow_cb_auto_open_blast,
+    register_service_dependency,
+)
+
 __all__ = [
     # Config and types
     "CircuitBreakerConfig",
@@ -186,4 +213,25 @@ __all__ = [
     "record_failure_with_trace",
     "get_triggering_request",
     "log_state_change_with_trace",
+    # Service Config Manager (Phase 3)
+    "ServiceConfigManager",
+    "get_service_config_manager",
+    "reset_service_config_manager",
+    "register_service",
+    "get_service_config",
+    "get_services_by_criticality",
+    "get_shedding_targets",
+    "is_critical_service",
+    # Blast Radius Integration (Phase 3)
+    "BlastRadiusLevel",
+    "BlastRadiusAssessment",
+    "ServiceDependency",
+    "ServiceDependencyGraph",
+    "BlastRadiusIntegration",
+    "BlastRadiusConfig",
+    "get_blast_radius_integration",
+    "reset_blast_radius_integration",
+    "assess_cb_open_impact",
+    "should_allow_cb_auto_open_blast",
+    "register_service_dependency",
 ]
