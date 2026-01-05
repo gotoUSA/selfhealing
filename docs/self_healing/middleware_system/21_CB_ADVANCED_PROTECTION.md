@@ -769,6 +769,223 @@ configure_circuit_breaker(
 
 ---
 
+## 11.1 구체적 구현 순서 (Phase별)
+
+### Phase 0: 사전 준비 (Day 0)
+
+| 순서 | 작업 | 파일 | 예상 시간 |
+|------|------|------|----------|
+| 0.1 | **데이터 모델 정의** | `selfhealing/services/circuit_breaker/models.py` | 2시간 |
+| 0.2 | **Config 스키마 추가** | `selfhealing/core/config.py` | 1시간 |
+| 0.3 | **테스트 기반 작성** | `tests/services/circuit_breaker/test_advanced_protection.py` | 2시간 |
+
+**체크포인트**: 모든 dataclass 정의 완료, mypy 통과
+
+### Phase 1: 핵심 안전장치 (Day 1-2)
+
+> 🎯 **목표**: CB가 잘못 동작해도 시스템이 살아남게 만들기
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 1.1 | **Kill Switch Override 수정** | 없음 | `manual_control.py` | 1시간 |
+| 1.2 | **Adaptive Threshold 구현** | 0.1, 0.2 | `adaptive_threshold.py` (신규) | 3시간 |
+| 1.3 | **Freeze Mode 구현** | 0.1 | `freeze_mode.py` (신규) | 2시간 |
+| 1.4 | **Panic Threshold 구현** | 1.2, 1.3 | `panic_threshold.py` (신규) | 3시간 |
+
+**체크포인트**: Emergency Level 연동 테스트 통과
+
+```
+구현 순서 다이어그램:
+
+0.1 데이터 모델 ─────────────────────────────────┐
+                                                 │
+0.2 Config 스키마 ─────┬─────────────────────────┤
+                       │                         │
+                       ▼                         ▼
+                   1.1 Kill Switch     1.2 Adaptive Threshold
+                   Override 수정               │
+                                               │
+                       ┌───────────────────────┘
+                       │
+                       ▼
+                   1.3 Freeze Mode ────▶ 1.4 Panic Threshold
+```
+
+### Phase 2: Audit 강화 (Day 3)
+
+> 🎯 **목표**: 모든 상태 변화를 추적 가능하게 만들기
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 2.1 | **GOVERNANCE_BLOCKED Audit 추가** | 1.2 | `audit_helpers.py` | 1시간 |
+| 2.2 | **Distributed Tracing 연동** | 없음 | `tracing.py` (신규) | 3시간 |
+| 2.3 | **CB 상태 변화 Audit 확장** | 2.2 | `service.py` | 2시간 |
+
+**체크포인트**: trace_id가 모든 CB 상태 변화 로그에 포함됨
+
+### Phase 3: 연쇄 장애 방지 (Day 4-5)
+
+> 🎯 **목표**: CB OPEN이 다른 서비스에 영향 안 주게 만들기
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 3.1 | **ServiceConfig 모델 구현** | 0.1 | `service_config.py` (신규) | 2시간 |
+| 3.2 | **Blast Radius 연동** | 3.1, 1.4 | `blast_radius_integration.py` (신규) | 4시간 |
+| 3.3 | **Blast Radius 테스트** | 3.2 | `test_blast_radius.py` | 2시간 |
+
+**체크포인트**: Blast Radius CRITICAL 시 자동 OPEN 차단 확인
+
+### Phase 4: 복구 전략 (Day 6-7)
+
+> 🎯 **목표**: HALF_OPEN에서 안전하게 복구하기
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 4.1 | **Canary Stage 상태 머신** | 0.1 | `canary_recovery.py` (신규) | 4시간 |
+| 4.2 | **Canary + Stale Cache 결합** | 4.1 | `stale_cache_integration.py` (신규) | 4시간 |
+| 4.3 | **Recovery 전략 선택자** | 4.1 | `recovery_strategy.py` (신규) | 2시간 |
+
+**체크포인트**: Canary 4단계 (10→30→60→100%) 정상 동작 확인
+
+```
+복구 전략 구현 흐름:
+
+4.1 Canary Stage ───────┬──────▶ 4.3 Recovery 전략 선택자
+    상태 머신           │
+                        ▼
+              4.2 Canary + Stale Cache
+                  결합
+```
+
+### Phase 5: Load Shedding (Day 8-9)
+
+> 🎯 **목표**: 핵심 서비스 보호를 위해 비핵심 트래픽 제한
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 5.1 | **Shedding Level 정책** | 3.1 | `load_shedding.py` (신규) | 3시간 |
+| 5.2 | **Shedding 알고리즘 구현** | 5.1 | `load_shedding.py` | 4시간 |
+| 5.3 | **Shedding Middleware 연동** | 5.2 | `middleware.py` | 3시간 |
+| 5.4 | **Shedding 대시보드** | 5.2 | API 엔드포인트 | 2시간 |
+
+**체크포인트**: critical 서비스 에러율 30% → low criticality 50% 제한 확인
+
+### Phase 6: 통합 및 문서화 (Day 10)
+
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
+|------|------|--------|------|----------|
+| 6.1 | **통합 테스트 작성** | 전체 | `test_integration.py` | 4시간 |
+| 6.2 | **설정 가이드 문서화** | 전체 | `docs/` | 2시간 |
+| 6.3 | **모니터링 대시보드 설정** | 5.4 | Grafana JSON | 2시간 |
+
+---
+
+### 11.2 파일 구조 (최종)
+
+```
+packages/selfhealing-python/src/selfhealing/services/circuit_breaker/
+├── __init__.py
+├── service.py                    # 기존 (수정)
+├── manual_control.py             # 기존 (1.1 수정)
+├── protection.py                 # 기존
+├── models.py                     # 0.1 신규 - 데이터 모델
+├── adaptive_threshold.py         # 1.2 신규 - Emergency Level 연동
+├── freeze_mode.py                # 1.3 신규 - LOCKDOWN Freeze
+├── panic_threshold.py            # 1.4 신규 - 70% OPEN 감지
+├── tracing.py                    # 2.2 신규 - Distributed Tracing
+├── service_config.py             # 3.1 신규 - Criticality 설정
+├── blast_radius_integration.py   # 3.2 신규 - 연쇄 장애 분석
+├── canary_recovery.py            # 4.1 신규 - 단계적 복구
+├── stale_cache_integration.py    # 4.2 신규 - Canary + Cache
+├── recovery_strategy.py          # 4.3 신규 - 전략 선택자
+└── load_shedding.py              # 5.1, 5.2 신규 - 부분적 차단
+
+tests/services/circuit_breaker/
+├── test_advanced_protection.py   # 0.3 신규
+├── test_adaptive_threshold.py    # 1.2 테스트
+├── test_panic_threshold.py       # 1.4 테스트
+├── test_blast_radius.py          # 3.3 신규
+├── test_canary_recovery.py       # 4.1 테스트
+├── test_load_shedding.py         # 5.1 테스트
+└── test_integration.py           # 6.1 신규
+```
+
+---
+
+### 11.3 의존성 그래프 (전체)
+
+```
+                        ┌─────────────────────────────────────────────────────┐
+                        │               Phase 0: 사전 준비                     │
+                        │  0.1 데이터 모델 ──▶ 0.2 Config ──▶ 0.3 테스트 기반  │
+                        └──────────────────────────┬──────────────────────────┘
+                                                   │
+           ┌───────────────────────────────────────┼───────────────────────────────────────┐
+           │                                       │                                       │
+           ▼                                       ▼                                       ▼
+┌─────────────────────┐              ┌─────────────────────┐              ┌─────────────────────┐
+│  Phase 1: 안전장치  │              │  Phase 2: Audit     │              │  Phase 3: 연쇄방지  │
+│                     │              │                     │              │                     │
+│  1.1 Kill Switch    │              │  2.1 GOVERNANCE_    │              │  3.1 ServiceConfig  │
+│      Override       │              │      BLOCKED        │◀─────────────│                     │
+│         │           │              │         │           │              │         │           │
+│         ▼           │              │         ▼           │              │         ▼           │
+│  1.2 Adaptive       │──────────────│▶ 2.2 Tracing        │              │  3.2 Blast Radius   │
+│      Threshold      │              │         │           │              │      연동           │
+│         │           │              │         ▼           │              │         │           │
+│         ▼           │              │  2.3 CB Audit 확장  │              │         ▼           │
+│  1.3 Freeze Mode    │              │                     │              │  3.3 테스트         │
+│         │           │              └─────────────────────┘              └─────────────────────┘
+│         ▼           │                                                              │
+│  1.4 Panic          │──────────────────────────────────────────────────────────────┘
+│      Threshold      │
+└─────────────────────┘
+           │
+           ▼
+┌─────────────────────┐              ┌─────────────────────┐
+│  Phase 4: 복구 전략  │              │  Phase 5: Shedding  │
+│                     │              │                     │
+│  4.1 Canary Stage   │              │  5.1 Shedding Level │◀─── Phase 3.1
+│         │           │              │         │           │
+│    ┌────┴────┐      │              │         ▼           │
+│    ▼         ▼      │              │  5.2 알고리즘       │
+│  4.2      4.3       │              │         │           │
+│  Stale    Recovery  │              │         ▼           │
+│  Cache    전략      │              │  5.3 Middleware     │
+└─────────────────────┘              │         │           │
+           │                         │         ▼           │
+           │                         │  5.4 대시보드       │
+           │                         └─────────────────────┘
+           │                                   │
+           └───────────────────┬───────────────┘
+                               ▼
+                    ┌─────────────────────┐
+                    │  Phase 6: 통합      │
+                    │                     │
+                    │  6.1 통합 테스트    │
+                    │  6.2 문서화         │
+                    │  6.3 모니터링       │
+                    └─────────────────────┘
+```
+
+---
+
+### 11.4 예상 총 소요 시간
+
+| Phase | 작업 수 | 예상 시간 | 누적 |
+|-------|--------|----------|------|
+| Phase 0 | 3 | 5시간 | 5시간 |
+| Phase 1 | 4 | 9시간 | 14시간 |
+| Phase 2 | 3 | 6시간 | 20시간 |
+| Phase 3 | 3 | 8시간 | 28시간 |
+| Phase 4 | 3 | 10시간 | 38시간 |
+| Phase 5 | 4 | 12시간 | 50시간 |
+| Phase 6 | 3 | 8시간 | **58시간** |
+
+> 💡 **권장**: Phase 1-2를 먼저 완료하면 **20시간**으로 핵심 안전장치 확보
+
+---
+
 ## 12. 참고: 업계 관행
 
 | 회사 | 접근 방식 |
