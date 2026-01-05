@@ -58,6 +58,7 @@ class ManualControlMixin:
         reason: str = "",
         controlled_by: Any = None,
         controlled_by_id: int | None = None,
+        override_kill_switch: bool = False,
     ) -> CircuitBreakerResult:
         """
         Force the circuit breaker to OPEN state (block all requests).
@@ -73,20 +74,39 @@ class ManualControlMixin:
             reason: Reason for opening (for audit)
             controlled_by: User object who initiated the change (for backward compat)
             controlled_by_id: User ID who initiated the change
+            override_kill_switch: If True, bypass Kill Switch check (운영자 권한)
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
         # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
-        if not _is_system_enabled():
+        # 단, override_kill_switch=True면 수동 제어 허용 (운영자 권한)
+        if not _is_system_enabled() and not override_kill_switch:
             logger.warning(
                 f"[CircuitBreaker] force_open blocked: Kill Switch is active. "
-                f"service={service_name}"
+                f"service={service_name}. Use override_kill_switch=True for manual control."
             )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
-                error="Kill Switch is active: self-healing system is disabled",
+                error="Kill Switch is active: use override_kill_switch=True for manual control",
             )
+        
+        # Kill Switch override 시 Audit 기록 (KILL_SWITCH_OVERRIDE)
+        if override_kill_switch and not _is_system_enabled():
+            logger.warning(
+                f"[CircuitBreaker] Kill Switch override for force_open: "
+                f"service={service_name}, controlled_by_id={controlled_by_id}"
+            )
+            try:
+                from selfhealing.services.audit_helpers import log_kill_switch_override_audit
+                log_kill_switch_override_audit(
+                    service_name=service_name,
+                    action="force_open",
+                    reason=reason,
+                    controlled_by_id=controlled_by_id,
+                )
+            except Exception as e:
+                logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
 
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
@@ -172,6 +192,7 @@ class ManualControlMixin:
         controlled_by: Any = None,
         controlled_by_id: int | None = None,
         trigger_replay: bool = False,
+        override_kill_switch: bool = False,
     ) -> CircuitBreakerResult:
         """
         Force the circuit breaker to CLOSED state (allow all requests).
@@ -188,20 +209,39 @@ class ManualControlMixin:
             controlled_by: User object who initiated the change (for backward compat)
             controlled_by_id: User ID who initiated the change
             trigger_replay: Whether to trigger conditional replay for queued items
+            override_kill_switch: If True, bypass Kill Switch check (운영자 권한)
 
         Returns:
             CircuitBreakerResult with operation outcome
         """
         # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
-        if not _is_system_enabled():
+        # 단, override_kill_switch=True면 수동 제어 허용 (운영자 권한)
+        if not _is_system_enabled() and not override_kill_switch:
             logger.warning(
                 f"[CircuitBreaker] force_close blocked: Kill Switch is active. "
-                f"service={service_name}"
+                f"service={service_name}. Use override_kill_switch=True for manual control."
             )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
-                error="Kill Switch is active: self-healing system is disabled",
+                error="Kill Switch is active: use override_kill_switch=True for manual control",
             )
+        
+        # Kill Switch override 시 Audit 기록 (KILL_SWITCH_OVERRIDE)
+        if override_kill_switch and not _is_system_enabled():
+            logger.warning(
+                f"[CircuitBreaker] Kill Switch override for force_close: "
+                f"service={service_name}, controlled_by_id={controlled_by_id}"
+            )
+            try:
+                from selfhealing.services.audit_helpers import log_kill_switch_override_audit
+                log_kill_switch_override_audit(
+                    service_name=service_name,
+                    action="force_close",
+                    reason=reason,
+                    controlled_by_id=controlled_by_id,
+                )
+            except Exception as e:
+                logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
 
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:

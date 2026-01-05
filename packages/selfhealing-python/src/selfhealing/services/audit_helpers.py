@@ -916,6 +916,244 @@ def log_rollback_audit(
 
 
 # =============================================================================
+# Kill Switch Override Audit Helpers (Phase 1: 21_CB_ADVANCED_PROTECTION.md)
+# =============================================================================
+
+
+def log_kill_switch_override_audit(
+    service_name: str,
+    action: str,
+    reason: str = "",
+    controlled_by_id: Optional[int] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Kill Switch Override 이벤트를 Audit 로그에 기록.
+    
+    LOCKDOWN 상태에서 운영자가 수동으로 Kill Switch를 무시하고
+    CB 상태를 변경할 때 기록합니다.
+    
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    Section 13.3.3 - Kill Switch Override 수정
+    
+    Args:
+        service_name: 대상 서비스 이름
+        action: 수행된 액션 (force_open, force_close)
+        reason: 변경 사유
+        controlled_by_id: 운영자 ID
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "service_name": service_name,
+        "action": action,
+        "reason": reason,
+        "controlled_by_id": controlled_by_id,
+        "message": f"Kill Switch override for {action} on {service_name}",
+        "override_type": "manual_control",
+    }
+    
+    # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
+    wal_seq = _write_to_wal(
+        event_type="KILL_SWITCH_OVERRIDE",
+        source="CircuitBreaker",
+        details=details,
+        success=True,
+        target_id=service_name,
+    )
+    
+    # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            # KILL_SWITCH_OVERRIDE는 MANUAL_OVERRIDE로 매핑
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.MANUAL_OVERRIDE,
+                source="CircuitBreaker",
+                details=details,
+                success=True,
+                target_id=service_name,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
+    logger.warning(
+        f"[KillSwitchOverride] {action.upper()} | service={service_name} | "
+        f"by={controlled_by_id} | reason={reason or 'N/A'}"
+    )
+    return wal_seq
+
+
+# =============================================================================
+# Panic Threshold Audit Helpers (Phase 1: 21_CB_ADVANCED_PROTECTION.md)
+# =============================================================================
+
+
+def log_panic_threshold_audit(
+    open_rate: float,
+    threshold: float,
+    open_count: int,
+    total_count: int,
+    open_circuits: Optional[list] = None,
+    action_taken: str = "emergency_level_3_escalation",
+    halted_systems: Optional[list] = None,
+    triggered_by: str = "PanicThresholdMonitor",
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Panic Threshold 발동 이벤트를 Audit 로그에 기록.
+    
+    전체 CB 중 70% 이상이 OPEN 상태일 때 시스템 전체 붕괴로 판단하고
+    Emergency Level 3를 자동 선포할 때 기록합니다.
+    
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    Section 14 - Panic Threshold
+    
+    Args:
+        open_rate: 현재 OPEN 비율 (%)
+        threshold: 임계값 (기본 70%)
+        open_count: OPEN 상태 CB 수
+        total_count: 전체 등록된 CB 수
+        open_circuits: OPEN 상태인 서비스 목록
+        action_taken: 취한 조치 (emergency_level_3_escalation 등)
+        halted_systems: 중단된 시스템 목록 (replay, canary_recovery 등)
+        triggered_by: 트리거 주체
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "open_rate": open_rate,
+        "threshold": threshold,
+        "open_count": open_count,
+        "total_count": total_count,
+        "open_circuits": open_circuits or [],
+        "action_taken": action_taken,
+        "halted_systems": halted_systems or ["replay", "canary_recovery", "auto_open", "auto_close"],
+        "triggered_by": triggered_by,
+        "root_cause_hypothesis": "인프라 전체 붕괴 감지 - 개별 서비스 장애 아님",
+        "message": f"Panic Threshold triggered (Open Rate: {open_rate:.1f}%) - "
+                   f"Escalating to Emergency Level 3",
+    }
+    
+    # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
+    wal_seq = _write_to_wal(
+        event_type="PANIC_THRESHOLD_TRIGGERED",
+        source="PanicThresholdMonitor",
+        details=details,
+        success=True,
+        target_id="global",
+    )
+    
+    # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            # PANIC_THRESHOLD_TRIGGERED는 EMERGENCY_MODE_ACTIVATED로 매핑
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.EMERGENCY_MODE_ACTIVATED,
+                source="PanicThresholdMonitor",
+                details=details,
+                success=True,
+                target_id="global",
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
+    logger.critical(
+        f"🚨 [PanicThreshold] TRIGGERED | open_rate={open_rate:.1f}% | "
+        f"circuits={open_count}/{total_count} | action={action_taken}"
+    )
+    return wal_seq
+
+
+def log_freeze_mode_audit(
+    active: bool,
+    reason: str = "",
+    activated_by: str = "system",
+    previous_state: Optional[bool] = None,
+    emergency_level: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Freeze Mode 활성화/비활성화 이벤트를 Audit 로그에 기록.
+    
+    LOCKDOWN 상태에서 모든 CB 자동 변경을 금지할 때 기록합니다.
+    
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    Section 6 - LOCKDOWN Freeze Mode
+    
+    Args:
+        active: Freeze Mode 활성화 여부
+        reason: 변경 사유
+        activated_by: 활성화 주체 ("system" or "operator:<username>")
+        previous_state: 이전 상태 (있으면 상태 변경 기록)
+        emergency_level: 현재 Emergency Level
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    action = "activated" if active else "deactivated"
+    
+    details = {
+        "active": active,
+        "reason": reason,
+        "activated_by": activated_by,
+        "previous_state": previous_state,
+        "emergency_level": emergency_level,
+        "message": f"Freeze Mode {action}: {reason}",
+    }
+    
+    # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
+    wal_seq = _write_to_wal(
+        event_type="FREEZE_MODE_CHANGED",
+        source="FreezeModeManager",
+        details=details,
+        success=True,
+        target_id="global",
+    )
+    
+    # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.GOVERNANCE_KILL_SWITCH,
+                source="FreezeModeManager",
+                details=details,
+                success=True,
+                target_id="global",
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
+    logger.warning(
+        f"[FreezeMode] {action.upper()} | by={activated_by} | "
+        f"level={emergency_level or 'N/A'} | reason={reason or 'N/A'}"
+    )
+    return wal_seq
+
+
+# =============================================================================
 # Chaos Experiment Audit Helpers (Phase 2: 20_AUDIT_UNIFICATION_PLAN.md)
 # =============================================================================
 
