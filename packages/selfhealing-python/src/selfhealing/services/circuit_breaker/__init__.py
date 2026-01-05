@@ -201,6 +201,35 @@ from .recovery_strategy import (
     record_recovery_failure,
 )
 
+# Load Shedding (Phase 5)
+from .load_shedding import (
+    # Data Models
+    SheddingState,
+    SheddingDecision,
+    SheddingStatus,
+    SheddingAuditEntry,
+    # Error Rate Provider
+    ErrorRateProvider,
+    # Manager
+    LoadSheddingManager,
+    # Middleware
+    LoadSheddingMiddleware,
+    # Dashboard
+    LoadSheddingDashboard,
+    # Convenience Functions
+    get_load_shedding_manager,
+    reset_load_shedding_manager,
+    get_load_shedding_middleware,
+    get_load_shedding_dashboard,
+    register_load_shedding_service,
+    evaluate_shedding,
+    should_allow_shedding_request,
+    is_shedding_active,
+    get_shedding_status,
+    set_service_error_rate,
+    update_shedding_state,
+)
+
 __all__ = [
     # Config and types
     "CircuitBreakerConfig",
@@ -323,4 +352,24 @@ __all__ = [
     "handle_half_open",
     "record_recovery_success",
     "record_recovery_failure",
+    # Load Shedding (Phase 5)
+    "SheddingState",
+    "SheddingDecision",
+    "SheddingStatus",
+    "SheddingAuditEntry",
+    "ErrorRateProvider",
+    "LoadSheddingManager",
+    "LoadSheddingMiddleware",
+    "LoadSheddingDashboard",
+    "get_load_shedding_manager",
+    "reset_load_shedding_manager",
+    "get_load_shedding_middleware",
+    "get_load_shedding_dashboard",
+    "register_load_shedding_service",
+    "evaluate_shedding",
+    "should_allow_shedding_request",
+    "is_shedding_active",
+    "get_shedding_status",
+    "set_service_error_rate",
+    "update_shedding_state",
 ]

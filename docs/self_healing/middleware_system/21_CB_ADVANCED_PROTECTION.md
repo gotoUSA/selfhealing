@@ -910,18 +910,35 @@ configure_circuit_breaker(
                   (non-canary → stale cache)
 ```
 
-### Phase 5: Load Shedding (Day 8-9)
+### Phase 5: Load Shedding (Day 8-9) ✅ COMPLETED
 
 > 🎯 **목표**: 핵심 서비스 보호를 위해 비핵심 트래픽 제한
 
-| 순서 | 작업 | 의존성 | 파일 | 예상 시간 |
-|------|------|--------|------|----------|
-| 5.1 | **Shedding Level 정책** | 3.1 | `load_shedding.py` (신규) | 3시간 |
-| 5.2 | **Shedding 알고리즘 구현** | 5.1 | `load_shedding.py` | 4시간 |
-| 5.3 | **Shedding Middleware 연동** | 5.2 | `middleware.py` | 3시간 |
-| 5.4 | **Shedding 대시보드** | 5.2 | API 엔드포인트 | 2시간 |
+| 순서 | 작업 | 의존성 | 파일 | 예상 시간 | 상태 |
+|------|------|--------|------|----------|------|
+| 5.1 | **Shedding Level 정책** | 3.1 | `load_shedding.py` (신규) | 3시간 | ✅ 완료 |
+| 5.2 | **Shedding 알고리즘 구현** | 5.1 | `load_shedding.py` | 4시간 | ✅ 완료 |
+| 5.3 | **Shedding Middleware 연동** | 5.2 | `load_shedding.py` | 3시간 | ✅ 완료 |
+| 5.4 | **Shedding 대시보드** | 5.2 | `load_shedding.py` | 2시간 | ✅ 완료 |
 
-**체크포인트**: critical 서비스 에러율 30% → low criticality 50% 제한 확인
+**체크포인트**: ✅ critical 서비스 에러율 30% → low criticality 50% 제한 확인, 83개 Phase 5 테스트 통과
+
+**구현 상세:**
+- **load_shedding.py**: LoadSheddingManager (싱글톤), evaluate_shedding 알고리즘, LoadSheddingMiddleware, LoadSheddingDashboard (약 850줄)
+- **데이터 모델**: SheddingState, SheddingDecision, SheddingStatus, SheddingAuditEntry, ErrorRateProvider
+- **Convenience 함수**: get_load_shedding_manager, evaluate_shedding, should_allow_shedding_request 등
+- **__init__.py**: Phase 5 exports 추가
+
+```
+Load Shedding 구현 흐름:
+
+5.1 Shedding Level ─────┬──────▶ 5.2 알고리즘
+    정책 정의 ✅         │           evaluate_shedding() ✅
+                        │               │
+                        ▼               ▼
+              5.3 Middleware ✅ ◀──── 5.4 Dashboard ✅
+                  (요청 필터링)         (운영자 API)
+```
 
 ### Phase 6: 통합 및 문서화 (Day 10)
 
@@ -951,7 +968,7 @@ packages/selfhealing-python/src/selfhealing/services/circuit_breaker/
 ├── canary_recovery.py            # 4.1 ✅ 완료 - 단계적 복구 (약 650줄)
 ├── stale_cache_integration.py    # 4.2 ✅ 완료 - Canary + Cache (약 550줄)
 ├── recovery_strategy.py          # 4.3 ✅ 완료 - 전략 선택자 (약 450줄)
-└── load_shedding.py              # 5.1, 5.2 신규 - 부분적 차단
+└── load_shedding.py              # 5.1-5.4 ✅ 완료 - 부분적 차단 (약 850줄)
 
 packages/selfhealing-python/src/selfhealing/core/
 ├── config.py                     # 0.2 ✅ 완료 - CircuitBreakerAdvancedConfig 추가
@@ -964,6 +981,8 @@ tests/services/circuit_breaker/
 ├── test_phase1_advanced_protection.py  # 1.1-1.4 ✅ 완료 - 32개 테스트 (611줄)
 ├── test_phase2_advanced_protection.py  # 2.1-2.3 ✅ 완료 - 28개 테스트
 ├── test_phase3_advanced_protection.py  # 3.1-3.3 ✅ 완료 - 39개 테스트
+├── test_phase4_advanced_protection.py  # 4.1-4.3 ✅ 완료 - 45개 테스트
+├── test_phase5_advanced_protection.py  # 5.1-5.4 ✅ 완료 - 83개 테스트
 ├── test_canary_recovery.py       # 4.1 테스트
 ├── test_load_shedding.py         # 5.1 테스트
 └── test_integration.py           # 6.1 신규
@@ -1002,18 +1021,18 @@ tests/services/circuit_breaker/
            │
            ▼
 ┌─────────────────────┐              ┌─────────────────────┐
-│  Phase 4: 복구 전략 ✅│              │  Phase 5: Shedding  │
+│  Phase 4: 복구 전략 ✅│              │  Phase 5: Shedding ✅│
 │                     │              │                     │
-│  4.1 Canary Stage ✅ │              │  5.1 Shedding Level │◀─── Phase 3.1
+│  4.1 Canary Stage ✅ │              │  5.1 Shedding Level✅│◀─── Phase 3.1
 │         │           │              │         │           │
 │    ┌────┴────┐      │              │         ▼           │
-│    ▼         ▼      │              │  5.2 알고리즘       │
+│    ▼         ▼      │              │  5.2 알고리즘     ✅ │
 │  4.2 ✅    4.3 ✅    │              │         │           │
 │  Stale    Recovery  │              │         ▼           │
-│  Cache    전략      │              │  5.3 Middleware     │
+│  Cache    전략      │              │  5.3 Middleware  ✅ │
 └─────────────────────┘              │         │           │
            │                         │         ▼           │
-           │                         │  5.4 대시보드       │
+           │                         │  5.4 대시보드    ✅ │
            │                         └─────────────────────┘
            │                                   │
            └───────────────────┬───────────────┘
@@ -1038,12 +1057,12 @@ tests/services/circuit_breaker/
 | Phase 2 | 3 | 6시간 | 20시간 | ✅ 완료 |
 | Phase 3 | 3 | 8시간 | 28시간 | ✅ 완료 |
 | Phase 4 | 3 | 10시간 | 38시간 | ✅ 완료 |
-| Phase 5 | 4 | 12시간 | 50시간 | 🔲 대기 |
+| Phase 5 | 4 | 12시간 | 50시간 | ✅ 완료 |
 | Phase 6 | 3 | 8시간 | **58시간** | 🔲 대기 |
 
-> 💡 **현재 진행 상황**: Phase 0-4 완료 (38시간) - 복구 전략 완료
+> 💡 **현재 진행 상황**: Phase 0-5 완료 (50시간) - Load Shedding 완료
 > 
-> **테스트 현황**: 295개 테스트 통과 (65 Phase0 + 32 Phase1 + 28 Phase2 + 39 Phase3 + 45 Phase4 + 86 existing)
+> **테스트 현황**: 385개 테스트 통과 (65 Phase0 + 32 Phase1 + 28 Phase2 + 39 Phase3 + 45 Phase4 + 83 Phase5 + 93 existing)
 
 ---
 
@@ -2009,3 +2028,4 @@ HALF_OPEN (10%) 진입
 | 1.3.0 | 2026-01-05 | **Phase 0 구현 완료**: 데이터 모델 정의, Config 스키마 추가, 테스트 기반 작성 (65개 테스트 통과) |
 | 1.4.0 | 2026-01-05 | **Phase 1 구현 완료**: Kill Switch Override 수정, Adaptive Threshold, Freeze Mode, Panic Threshold (32개 테스트 추가, 총 97개 테스트 통과) |
 | 1.5.0 | 2026-01-06 | **Phase 4 구현 완료**: Canary Recovery (canary_recovery.py), Stale Cache Integration (stale_cache_integration.py), Recovery Strategy Selector (recovery_strategy.py) (45개 테스트 추가, 총 295개 테스트 통과) |
+| 1.6.0 | 2026-01-06 | **Phase 5 구현 완료**: Load Shedding (load_shedding.py) - LoadSheddingManager, Middleware, Dashboard (83개 테스트 추가, 총 385개 테스트 통과) |
