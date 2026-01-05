@@ -176,6 +176,89 @@ class TestServiceConfigManager:
         assert all(s.criticality != "critical" for s in non_critical)
 
 
+# =============================================================================
+# 3.1.1 ServiceConfig 입력 검증 테스트 (P1 - 외부 입력 방어)
+# =============================================================================
+
+
+class TestServiceConfigInputValidation:
+    """ServiceConfig 입력 검증 테스트 - 잘못된 입력에 대한 방어."""
+    
+    def test_invalid_criticality_raises_error(self):
+        """잘못된 criticality 값은 ValueError 발생."""
+        with pytest.raises(ValueError) as exc_info:
+            ServiceConfig(service_id="test-api", criticality="invalid")
+        
+        assert "Invalid criticality" in str(exc_info.value)
+        assert "invalid" in str(exc_info.value)
+    
+    def test_criticality_typo_raises_error(self):
+        """criticality 오타도 ValueError 발생 (Critical vs critical)."""
+        with pytest.raises(ValueError):
+            ServiceConfig(service_id="test-api", criticality="Critical")  # 대문자
+        
+        with pytest.raises(ValueError):
+            ServiceConfig(service_id="test-api", criticality="HIGH")  # 전체 대문자
+    
+    def test_negative_shed_priority_raises_error(self):
+        """음수 shed_priority는 ValueError 발생."""
+        with pytest.raises(ValueError) as exc_info:
+            ServiceConfig(
+                service_id="test-api",
+                criticality="low",
+                shed_priority=-1,
+            )
+        
+        assert "shed_priority" in str(exc_info.value)
+        assert "non-negative" in str(exc_info.value) or "-1" in str(exc_info.value)
+    
+    def test_min_traffic_percentage_below_zero_raises_error(self):
+        """min_traffic_percentage가 0 미만이면 ValueError 발생."""
+        with pytest.raises(ValueError) as exc_info:
+            ServiceConfig(
+                service_id="test-api",
+                criticality="low",
+                min_traffic_percentage=-10.0,
+            )
+        
+        assert "min_traffic_percentage" in str(exc_info.value)
+    
+    def test_min_traffic_percentage_above_100_raises_error(self):
+        """min_traffic_percentage가 100 초과면 ValueError 발생."""
+        with pytest.raises(ValueError) as exc_info:
+            ServiceConfig(
+                service_id="test-api",
+                criticality="low",
+                min_traffic_percentage=150.0,
+            )
+        
+        assert "min_traffic_percentage" in str(exc_info.value)
+    
+    def test_valid_criticality_values_accepted(self):
+        """유효한 criticality 값들은 정상 생성."""
+        valid_levels = ["critical", "high", "medium", "low"]
+        
+        for level in valid_levels:
+            config = ServiceConfig(service_id=f"test-{level}", criticality=level)
+            assert config.criticality == level
+    
+    def test_boundary_min_traffic_percentage_accepted(self):
+        """경계값 min_traffic_percentage (0, 100)은 정상 생성."""
+        config_zero = ServiceConfig(
+            service_id="test-zero",
+            criticality="low",
+            min_traffic_percentage=0.0,
+        )
+        assert config_zero.min_traffic_percentage == 0.0
+        
+        config_hundred = ServiceConfig(
+            service_id="test-hundred",
+            criticality="low",
+            min_traffic_percentage=100.0,
+        )
+        assert config_hundred.min_traffic_percentage == 100.0
+
+
 class TestServiceConfigLoadShedding:
     """ServiceConfigManager Load Shedding 테스트."""
     
