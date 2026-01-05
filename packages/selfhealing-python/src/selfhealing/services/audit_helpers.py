@@ -2293,3 +2293,222 @@ def log_drift_detection_audit(
         f"analyzed={operations_analyzed} | status={status} | task_id={task_id}"
     )
     return wal_seq
+
+# =============================================================================
+# Phase 2: Circuit Breaker Tracing Audit Helpers
+# =============================================================================
+
+
+def log_cb_state_change_with_trace_audit(
+    cb_name: str,
+    old_state: str,
+    new_state: str,
+    trigger: str,
+    reason: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    triggering_request_info: Optional[Dict[str, Any]] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Circuit Breaker 상태 변경을 trace 정보와 함께 Audit 로그에 기록.
+    
+    운영자가 "서킷이 왜 열렸지?"라고 물었을 때, 로그의 trace_id 하나로
+    전체 서비스 호출 흐름을 1초 만에 시각화할 수 있습니다.
+    
+    WAL 기반 누락 0 보장.
+    
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    Section 15 - Distributed Tracing 연동
+    
+    Args:
+        cb_name: Circuit Breaker 이름 (service_id)
+        old_state: 이전 상태 (closed, open, half_open)
+        new_state: 새 상태
+        trigger: 트리거 유형 (AUTO_THRESHOLD, MANUAL, CANARY_RECOVERY 등)
+        reason: 상태 변경 사유
+        trace_id: 현재 요청의 trace ID
+        triggering_request_info: 상태 변화를 유발한 마지막 요청 정보
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+        
+    Example Audit Log:
+        {
+            "event_type": "CB_STATE_CHANGE_WITH_TRACE",
+            "cb_name": "payment-api",
+            "old_state": "CLOSED",
+            "new_state": "OPEN",
+            "trigger": "AUTO_THRESHOLD",
+            "trace_id": "req-abc123",
+            "triggering_request": {
+                "trace_id": "req-abc123",
+                "endpoint": "/api/v1/payments",
+                "method": "POST",
+                "error_message": "Connection timeout to payment gateway",
+                "trace_url": "https://jaeger.internal/trace/abc123"
+            },
+            "debug_hint": "위 trace_id로 Jaeger/Zipkin에서 전체 호출 흐름 확인 가능"
+        }
+    """
+    details = {
+        "cb_name": cb_name,
+        "old_state": old_state,
+        "new_state": new_state,
+        "trigger": trigger,
+        "reason": reason,
+        "trace_id": trace_id,
+        "triggering_request": triggering_request_info,
+        "debug_hint": "위 trace_id로 Jaeger/Zipkin에서 전체 호출 흐름 확인 가능" if trace_id else None,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="CB_STATE_CHANGE_WITH_TRACE",
+        source="CircuitBreakerTracing",
+        details=details,
+        success=True,
+        target_id=cb_name,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.CB_STATE_CHANGE,  # 기존 타입 재사용
+                source="CircuitBreakerTracing",
+                details=details,
+                success=True,
+                target_id=cb_name,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    trace_info = f" | trace_id={trace_id}" if trace_id else ""
+    logger.info(
+        f"[CBAudit] STATE_CHANGE_WITH_TRACE | cb={cb_name} | "
+        f"{old_state} -> {new_state} | trigger={trigger}{trace_info}"
+    )
+    return wal_seq
+
+
+def log_governance_blocked_cb_audit(
+    service_id: str,
+    action: str,
+    block_reason: str,
+    blast_radius_level: Optional[str] = None,
+    affected_services: Optional[list] = None,
+    assessment_id: Optional[str] = None,
+    cascading_risk: bool = False,
+    trace_id: Optional[str] = None,
+    requires_manual_approval: bool = False,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Circuit Breaker 자동 OPEN이 Blast Radius CRITICAL로 차단됨을 Audit 로그에 기록.
+    
+    CB가 자동 OPEN되기 전에 연쇄 장애 영향을 분석하여,
+    CRITICAL 수준이면 OPEN을 보류합니다.
+    
+    WAL 기반 누락 0 보장.
+    
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    Section 7 - Blast Radius 연동
+    Section 10.2 - GOVERNANCE_BLOCKED 기록 예시
+    
+    Args:
+        service_id: 서비스 ID
+        action: 차단된 액션 (e.g., "auto_open")
+        block_reason: 차단 사유 (e.g., "blast_radius_critical")
+        blast_radius_level: Blast Radius 레벨 (MINIMAL, MODERATE, EXTENSIVE, CRITICAL)
+        affected_services: 영향받는 서비스 목록
+        assessment_id: Blast Radius 평가 ID
+        cascading_risk: 연쇄 장애 위험 여부
+        trace_id: 현재 요청의 trace ID
+        requires_manual_approval: 수동 승인 필요 여부
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+        
+    Example Audit Log:
+        {
+            "event_type": "GOVERNANCE_BLOCKED",
+            "target_type": "circuit_breaker",
+            "target_id": "payment-api",
+            "details": {
+                "action": "auto_open",
+                "blocked_reason": "blast_radius_critical",
+                "blast_radius_level": "CRITICAL",
+                "affected_services": ["order-api", "cart-api", "inventory-api"],
+                "affected_count": 3,
+                "cascading_risk": true,
+                "assessment_id": "abc123",
+                "message": "CB가 열려야 했으나, 연쇄 장애 위험(Blast Radius: CRITICAL)으로 인해 시스템이 차단을 보류함"
+            },
+            "requires_manual_approval": true
+        }
+    """
+    affected_count = len(affected_services) if affected_services else 0
+    
+    details = {
+        "action": action,
+        "blocked_reason": block_reason,
+        "blast_radius_level": blast_radius_level,
+        "affected_services": affected_services,
+        "affected_count": affected_count,
+        "cascading_risk": cascading_risk,
+        "assessment_id": assessment_id,
+        "trace_id": trace_id,
+        "message": (
+            f"CB가 열려야 했으나, 연쇄 장애 위험(Blast Radius: {blast_radius_level})으로 "
+            f"인해 시스템이 차단을 보류함"
+        ) if blast_radius_level else None,
+    }
+    # None 값 제거
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="GOVERNANCE_BLOCKED",
+        source="CircuitBreakerBlastRadius",
+        details=details,
+        success=False,
+        error_message=block_reason,
+        target_id=service_id,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.GOVERNANCE_BLOCKED,
+                source="CircuitBreakerBlastRadius",
+                details=details,
+                success=False,
+                error_message=block_reason,
+                target_id=service_id,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    logger.warning(
+        f"[CBAudit] GOVERNANCE_BLOCKED | cb={service_id} | "
+        f"action={action} | blast_radius={blast_radius_level} | "
+        f"affected={affected_count} | requires_approval={requires_manual_approval}"
+    )
+    return wal_seq

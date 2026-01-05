@@ -12,6 +12,7 @@ Features:
 - Adaptive Threshold (Emergency Level 연동)
 - Freeze Mode (LOCKDOWN 시 상태 동결)
 - Panic Threshold (70% OPEN 감지 시 Emergency Level 3 선포)
+- Distributed Tracing (CB 상태 변화 trace_id 추적)
 
 Structure:
 - config.py: Configuration and types (~125 lines)
@@ -24,6 +25,7 @@ Structure:
 - adaptive_threshold.py: Emergency Level 연동 임계값 조정
 - freeze_mode.py: LOCKDOWN Freeze Mode
 - panic_threshold.py: 시스템 전체 자폭 방지
+- tracing.py: Distributed Tracing 연동
 
 Usage:
     from selfhealing.services.circuit_breaker import (
@@ -111,6 +113,18 @@ from .panic_threshold import (
     is_panic_threshold_triggered,
 )
 
+# Distributed Tracing (Phase 2)
+from .tracing import (
+    TracingConfig,
+    TriggeringRequestInfo,
+    TraceContextProvider,
+    CircuitBreakerTracingManager,
+    get_tracing_manager,
+    record_failure_with_trace,
+    get_triggering_request,
+    log_state_change_with_trace,
+)
+
 __all__ = [
     # Config and types
     "CircuitBreakerConfig",
@@ -163,4 +177,13 @@ __all__ = [
     "get_panic_threshold_monitor",
     "check_panic_threshold",
     "is_panic_threshold_triggered",
+    # Distributed Tracing (Phase 2)
+    "TracingConfig",
+    "TriggeringRequestInfo",
+    "TraceContextProvider",
+    "CircuitBreakerTracingManager",
+    "get_tracing_manager",
+    "record_failure_with_trace",
+    "get_triggering_request",
+    "log_state_change_with_trace",
 ]
