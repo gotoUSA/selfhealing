@@ -22,7 +22,11 @@ middleware_system/
 ├── 07_HYBRID_STORAGE_ARCHITECTURE.md  ← 하이브리드 스토리지 아키텍처
 ├── 08_NOTIFICATION_ARCHITECTURE.md    ← 통합 알림 아키텍처
 ├── 09_AUTONOMOUS_TASK_EXPANSION.md    ← 자율 태스크 확장
-└── 10_MIDDLEWARE_INVESTIGATION_PLAN.md ← 미들웨어 전체 조사 계획 (신규)
+├── 10_MIDDLEWARE_INVESTIGATION_PLAN.md ← 미들웨어 전체 조사 계획
+├── ...
+├── 19_DLQ_AUTOMATION_BLUEPRINT.md     ← DLQ 9-Layer 자동화 설계
+├── 20_AUDIT_UNIFICATION_PLAN.md       ← Audit 통합 계획
+└── 21_CB_ADVANCED_PROTECTION.md       ← CB 고급 보호 시스템 (NEW)
 ```
 
 ---

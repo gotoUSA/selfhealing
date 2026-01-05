@@ -126,6 +126,17 @@ class ManualControlMixin:
                         f"[CircuitBreaker] Force opened circuit for '{service_name}': "
                         f"{previous_state} -> {new_state} | Reason: {reason}"
                     )
+                    # Audit 기록 - 수동 OPEN은 중요 운영 이벤트
+                    try:
+                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        log_cb_state_change_audit(
+                            cb_name=service_name,
+                            old_state=previous_state,
+                            new_state=new_state,
+                            reason=f"force_open: {reason}" if reason else "force_open: manual",
+                        )
+                    except Exception as e:
+                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
                     # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
                     try:
                         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
@@ -231,6 +242,18 @@ class ManualControlMixin:
                         f"{previous_state} -> {new_state} | Reason: {reason}"
                     )
 
+                    # Audit 기록 - 수동 CLOSE는 중요 복구 이벤트
+                    try:
+                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        log_cb_state_change_audit(
+                            cb_name=service_name,
+                            old_state=previous_state,
+                            new_state=new_state,
+                            reason=f"force_close: {reason}" if reason else "force_close: manual",
+                        )
+                    except Exception as e:
+                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+
                     # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
                     try:
                         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
@@ -303,6 +326,18 @@ class ManualControlMixin:
                     f"[CircuitBreaker] Reset circuit for '{service_name}': "
                     f"{previous_state} -> {new_state} | Reason: {reason}"
                 )
+                # Audit 기록 - reset은 상태 초기화 이벤트
+                if previous_state != new_state:
+                    try:
+                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        log_cb_state_change_audit(
+                            cb_name=service_name,
+                            old_state=previous_state,
+                            new_state=new_state,
+                            reason=f"reset: {reason}" if reason else "reset: manual",
+                        )
+                    except Exception as e:
+                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
                 # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
                 if previous_state != new_state:
                     try:

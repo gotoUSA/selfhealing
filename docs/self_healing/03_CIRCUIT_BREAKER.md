@@ -13,6 +13,7 @@
 7. [데이터 모델](#7-데이터-모델)
 8. [사용 예시](#8-사용-예시)
 9. [Celery 태스크](#9-celery-태스크)
+10. [Audit 기록](#10-audit-기록)
 
 ---
 
@@ -617,7 +618,79 @@ CELERY_BEAT_SCHEDULE = {
 
 ---
 
+## 10. Audit 기록
+
+> **중요**: 모든 Circuit Breaker 상태 변경은 Audit 시스템에 기록됩니다.  
+> 이를 통해 장애 분석, 운영 책임 추적, 규정 준수 감사가 가능합니다.
+
+### 10.1 Audit이 기록되는 상태 변경
+
+| 상태 변경 | 트리거 | Audit 이벤트 | reason 예시 |
+|----------|--------|-------------|-------------|
+| CLOSED → OPEN (자동) | `record_failure()` 임계값 초과 | `CB_STATE_CHANGE` | `auto_open: failure_threshold (5) exceeded` |
+| CLOSED → OPEN (수동) | `force_open()` | `CB_STATE_CHANGE` | `force_open: PG 장애 감지` |
+| OPEN → CLOSED (수동) | `force_close()` | `CB_STATE_CHANGE` | `force_close: 복구 확인` |
+| OPEN → HALF_OPEN (자동) | `should_allow()` recovery_timeout 경과 | `CB_STATE_CHANGE` | `auto_recovery: recovery_timeout (60s) elapsed` |
+| HALF_OPEN → CLOSED (자동) | `record_success()` 성공 임계값 도달 | `CB_STATE_CHANGE` | `auto_recovery: success_threshold (2) reached` |
+| ANY → CLOSED (리셋) | `reset()` | `CB_STATE_CHANGE` | `reset: 상태 초기화` |
+
+### 10.2 Audit 헬퍼 함수
+
+모든 상태 변경은 `log_cb_state_change_audit()` 헬퍼를 통해 기록됩니다:
+
+```python
+from selfhealing.services.audit_helpers import log_cb_state_change_audit
+
+# 내부적으로 호출됨 (직접 호출 필요 없음)
+log_cb_state_change_audit(
+    cb_name="toss_payment",
+    old_state="closed",
+    new_state="open",
+    reason="force_open: PG 점검",
+)
+```
+
+### 10.3 Audit vs Logger 비교
+
+| 구분 | Audit 시스템 | 일반 Logger |
+|------|-------------|-------------|
+| **저장 위치** | Audit 로그 + WAL | 표준 로그 파일 |
+| **해시 체인** | ✅ 무결성 검증 가능 | ❌ |
+| **영구 보존** | ✅ 규정 준수 기간 유지 | ❌ 로테이션 시 삭제 |
+| **WAL 보장** | ✅ 누락 0 보장 | ❌ 버퍼 손실 가능 |
+| **감사 증거** | ✅ 법적 효력 | ❌ 증거로 부적합 |
+
+### 10.4 Fail-Open 정책
+
+Audit 기록 실패 시에도 비즈니스 로직은 정상 동작합니다:
+
+```python
+# 내부 구현
+try:
+    log_cb_state_change_audit(...)
+except Exception as e:
+    logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+    # 비즈니스 로직은 계속 진행
+```
+
+### 10.5 Audit 로그 조회
+
+Admin 또는 API를 통해 CB 상태 변경 이력을 조회할 수 있습니다:
+
+```python
+# Audit 로그 조회 예시
+from selfhealing.audit import get_audit_logger
+
+logger = get_audit_logger()
+# 또는 Admin UI에서 "circuit_breaker" config_type으로 필터링
+```
+
+---
+
 ## 버전 정보
 
-- **현재 버전**: 1.0.0
-- **마지막 업데이트**: 2025-12-20
+- **현재 버전**: 1.1.0
+- **마지막 업데이트**: 2026-01-05
+- **변경 이력**:
+  - 1.1.0 (2026-01-05): 모든 상태 변경에 Audit 기록 추가
+  - 1.0.0 (2025-12-20): 초기 버전

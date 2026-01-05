@@ -159,6 +159,17 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                         state=CircuitState.HALF_OPEN,
                         success_count=0,
                     )
+                    # Audit 기록 - 자동 복구 시도 (OPEN → HALF_OPEN)
+                    try:
+                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        log_cb_state_change_audit(
+                            cb_name=service_name,
+                            old_state=CircuitState.OPEN,
+                            new_state=CircuitState.HALF_OPEN,
+                            reason=f"auto_recovery: recovery_timeout ({self.config.recovery_timeout}s) elapsed",
+                        )
+                    except Exception as e:
+                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
                     return True
             return False
 
@@ -616,6 +627,17 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             logger.info(
                 f"[CircuitBreaker] Circuit auto-closed for '{service_name}' " f"(successes: {self.config.success_threshold})"
             )
+            # Audit 기록 - 자동 복구 완료 (HALF_OPEN → CLOSED)
+            try:
+                from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                log_cb_state_change_audit(
+                    cb_name=service_name,
+                    old_state="half_open",
+                    new_state="closed",
+                    reason=f"auto_recovery: success_threshold ({self.config.success_threshold}) reached",
+                )
+            except Exception as e:
+                logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
             # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
                 from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
