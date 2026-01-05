@@ -509,6 +509,70 @@ class L2StorageConfig:
 
 
 @dataclass
+class CircuitBreakerAdvancedConfig:
+    """
+    Circuit Breaker 고급 보호 설정.
+    
+    Phase 0.2: Config 스키마 추가
+    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+    
+    이 설정은 RuntimeConfigManager를 통해 중앙 관리됩니다.
+    서버 재시작 없이 API로 변경 가능합니다.
+    
+    Attributes:
+        enabled: 고급 보호 기능 활성화 여부
+        load_shedding_enabled: Load Shedding 활성화
+        load_shedding_trigger_threshold: Load Shedding 트리거 임계값 (%)
+        adaptive_threshold_enabled: Adaptive Threshold 활성화
+        adaptive_base_failure_threshold: 기본 실패 횟수 임계값
+        adaptive_base_window_seconds: 기본 관찰 윈도우 (초)
+        canary_recovery_enabled: Canary Recovery 활성화
+        canary_default_stages: 기본 Canary 단계 수
+        blast_radius_integration: Blast Radius 연동 활성화
+        blast_radius_block_on_critical: CRITICAL 시 자동 OPEN 차단
+        freeze_on_lockdown: LOCKDOWN 시 Freeze Mode 활성화
+        allow_manual_override_in_lockdown: LOCKDOWN 중 수동 조작 허용
+        panic_threshold_enabled: Panic Threshold 활성화
+        panic_threshold_percent: OPEN CB 비율 임계값 (%)
+    """
+    
+    # 전체 활성화
+    enabled: bool = True
+    
+    # Load Shedding
+    load_shedding_enabled: bool = True
+    load_shedding_trigger_threshold: float = 30.0  # critical 서비스 에러율 임계값
+    
+    # Adaptive Threshold (Emergency Level 연동)
+    adaptive_threshold_enabled: bool = True
+    adaptive_base_failure_threshold: int = 5
+    adaptive_base_window_seconds: int = 60
+    
+    # Canary Recovery
+    canary_recovery_enabled: bool = True
+    canary_default_stages: int = 4  # 10% → 30% → 60% → 100%
+    canary_stage_duration_seconds: int = 5
+    canary_strict_mode_for_critical: bool = True  # critical 서비스는 100% 성공률 요구
+    
+    # Blast Radius 연동
+    blast_radius_integration: bool = True
+    blast_radius_block_on_critical: bool = True
+    
+    # Freeze Mode
+    freeze_on_lockdown: bool = True
+    allow_manual_override_in_lockdown: bool = True
+    
+    # Panic Threshold
+    panic_threshold_enabled: bool = True
+    panic_threshold_percent: float = 70.0  # 70% 이상 OPEN이면 Panic
+    panic_threshold_action: str = "freeze"  # "freeze" | "alert_only"
+    
+    # Open Strategy
+    default_open_strategy: str = "immediate"  # "immediate" | "graceful"
+    graceful_drain_timeout_seconds: int = 30
+
+
+@dataclass
 class ChaosConfig:
     """
     Chaos Engineering 설정.
@@ -597,6 +661,7 @@ class SelfHealingConfig:
     """
 
     circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
+    circuit_breaker_advanced: CircuitBreakerAdvancedConfig = field(default_factory=CircuitBreakerAdvancedConfig)
     dlq: DLQConfig = field(default_factory=DLQConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
     sla: SLAConfig = field(default_factory=SLAConfig)
@@ -630,6 +695,7 @@ class SelfHealingConfig:
             SelfHealingConfig instance
         """
         circuit_breaker = CircuitBreakerConfig(**config_dict.get("circuit_breaker", {}))
+        circuit_breaker_advanced = CircuitBreakerAdvancedConfig(**config_dict.get("circuit_breaker_advanced", {}))
         dlq = DLQConfig(**config_dict.get("dlq", {}))
         retry = RetryConfig(**config_dict.get("retry", {}))
         sla = SLAConfig(**config_dict.get("sla", {}))
@@ -642,6 +708,7 @@ class SelfHealingConfig:
 
         return cls(
             circuit_breaker=circuit_breaker,
+            circuit_breaker_advanced=circuit_breaker_advanced,
             dlq=dlq,
             retry=retry,
             sla=sla,
@@ -710,6 +777,23 @@ class SelfHealingConfig:
                 "recovery_timeout": self.circuit_breaker.recovery_timeout,
                 "success_threshold": self.circuit_breaker.success_threshold,
                 "half_open_max_calls": self.circuit_breaker.half_open_max_calls,
+            },
+            "circuit_breaker_advanced": {
+                "enabled": self.circuit_breaker_advanced.enabled,
+                "load_shedding_enabled": self.circuit_breaker_advanced.load_shedding_enabled,
+                "load_shedding_trigger_threshold": self.circuit_breaker_advanced.load_shedding_trigger_threshold,
+                "adaptive_threshold_enabled": self.circuit_breaker_advanced.adaptive_threshold_enabled,
+                "adaptive_base_failure_threshold": self.circuit_breaker_advanced.adaptive_base_failure_threshold,
+                "adaptive_base_window_seconds": self.circuit_breaker_advanced.adaptive_base_window_seconds,
+                "canary_recovery_enabled": self.circuit_breaker_advanced.canary_recovery_enabled,
+                "canary_default_stages": self.circuit_breaker_advanced.canary_default_stages,
+                "blast_radius_integration": self.circuit_breaker_advanced.blast_radius_integration,
+                "blast_radius_block_on_critical": self.circuit_breaker_advanced.blast_radius_block_on_critical,
+                "freeze_on_lockdown": self.circuit_breaker_advanced.freeze_on_lockdown,
+                "allow_manual_override_in_lockdown": self.circuit_breaker_advanced.allow_manual_override_in_lockdown,
+                "panic_threshold_enabled": self.circuit_breaker_advanced.panic_threshold_enabled,
+                "panic_threshold_percent": self.circuit_breaker_advanced.panic_threshold_percent,
+                "panic_threshold_action": self.circuit_breaker_advanced.panic_threshold_action,
             },
             "dlq": {
                 "enabled": self.dlq.enabled,
@@ -800,6 +884,11 @@ def configure(**kwargs) -> SelfHealingConfig:
 def get_circuit_breaker_settings() -> CircuitBreakerConfig:
     """Get circuit breaker configuration."""
     return get_config().circuit_breaker
+
+
+def get_circuit_breaker_advanced_settings() -> CircuitBreakerAdvancedConfig:
+    """Get circuit breaker advanced protection configuration."""
+    return get_config().circuit_breaker_advanced
 
 
 def get_dlq_settings() -> DLQConfig:
