@@ -152,6 +152,55 @@ from .blast_radius_integration import (
     register_service_dependency,
 )
 
+# Canary Recovery (Phase 4)
+from .canary_recovery import (
+    CanaryState,
+    CanaryStageMetrics,
+    CanaryRecoveryState,
+    CanaryDecision,
+    CanaryStageTransitionResult,
+    CanaryRecoveryManager,
+    get_canary_recovery_manager,
+    reset_canary_recovery_manager,
+    start_canary_recovery,
+    stop_canary_recovery,
+    is_in_canary_recovery,
+    canary_should_allow_request,
+    canary_record_success,
+    canary_record_failure,
+    get_canary_recovery_state,
+)
+
+# Stale Cache Integration (Phase 4)
+from .stale_cache_integration import (
+    CanaryWithStaleCacheConfig,
+    StaleCacheEntry,
+    CanaryWithStaleDecision,
+    StaleCacheStore,
+    CanaryWithStaleCacheService,
+    get_canary_stale_cache_service,
+    reset_canary_stale_cache_service,
+    should_allow_with_fallback as canary_should_allow_with_fallback,
+    update_stale_cache,
+    record_canary_success,
+    record_canary_failure,
+)
+
+# Recovery Strategy Selector (Phase 4)
+from .recovery_strategy import (
+    RecoveryStrategySelection,
+    RecoveryDecision,
+    RecoveryStrategySelector,
+    get_recovery_strategy_selector,
+    reset_recovery_strategy_selector,
+    select_recovery_strategy,
+    start_service_recovery,
+    stop_service_recovery,
+    handle_half_open,
+    record_recovery_success,
+    record_recovery_failure,
+)
+
 __all__ = [
     # Config and types
     "CircuitBreakerConfig",
@@ -234,4 +283,44 @@ __all__ = [
     "assess_cb_open_impact",
     "should_allow_cb_auto_open_blast",
     "register_service_dependency",
+    # Canary Recovery (Phase 4)
+    "CanaryState",
+    "CanaryStageMetrics",
+    "CanaryRecoveryState",
+    "CanaryDecision",
+    "CanaryStageTransitionResult",
+    "CanaryRecoveryManager",
+    "get_canary_recovery_manager",
+    "reset_canary_recovery_manager",
+    "start_canary_recovery",
+    "stop_canary_recovery",
+    "is_in_canary_recovery",
+    "canary_should_allow_request",
+    "canary_record_success",
+    "canary_record_failure",
+    "get_canary_recovery_state",
+    # Stale Cache Integration (Phase 4)
+    "CanaryWithStaleCacheConfig",
+    "StaleCacheEntry",
+    "CanaryWithStaleDecision",
+    "StaleCacheStore",
+    "CanaryWithStaleCacheService",
+    "get_canary_stale_cache_service",
+    "reset_canary_stale_cache_service",
+    "canary_should_allow_with_fallback",
+    "update_stale_cache",
+    "record_canary_success",
+    "record_canary_failure",
+    # Recovery Strategy Selector (Phase 4)
+    "RecoveryStrategySelection",
+    "RecoveryDecision",
+    "RecoveryStrategySelector",
+    "get_recovery_strategy_selector",
+    "reset_recovery_strategy_selector",
+    "select_recovery_strategy",
+    "start_service_recovery",
+    "stop_service_recovery",
+    "handle_half_open",
+    "record_recovery_success",
+    "record_recovery_failure",
 ]
