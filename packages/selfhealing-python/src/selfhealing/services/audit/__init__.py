@@ -1,60 +1,95 @@
 """
-Audit Helpers - Backward Compatibility Wrapper
+Selfhealing Audit Helpers Package
 
-이 모듈은 하위 호환성을 위한 re-export wrapper입니다.
-실제 구현은 selfhealing.services.audit 패키지에 있습니다.
+모든 Audit 로깅 헬퍼 함수들을 통합하여 제공합니다.
+기존 `services.audit_helpers` 모듈과의 하위 호환성을 유지합니다.
 
-Usage (기존 코드 그대로 동작):
+Usage:
+    from selfhealing.services.audit import (
+        log_dlq_store_audit,
+        log_dlq_replay_audit,
+        log_cb_state_change_audit,
+        log_retry_audit,
+        # ... 등등
+    )
+
+    # 또는 기존 방식:
     from selfhealing.services.audit_helpers import log_dlq_store_audit
-    from selfhealing.services.audit_helpers import log_cb_state_change_audit
-
-새 코드는 직접 패키지에서 import 가능:
-    from selfhealing.services.audit import log_dlq_store_audit
 """
 
 from __future__ import annotations
 
-# =============================================================================
-# Re-export everything from audit package for backward compatibility
-# =============================================================================
-
-from selfhealing.services.audit import (
-    # Base utilities
+# ============================================================
+# Base Utilities (WAL, buffer, adapter)
+# ============================================================
+from selfhealing.services.audit.base import (
     _write_to_wal,
     _try_add_to_buffer,
     _get_audit_adapter,
     _get_wal,
-    get_wal_instance,
     disable_wal,
     enable_wal,
     get_wal_stats,
-    # DLQ
+)
+
+# Alias for compatibility
+get_wal_instance = _get_wal
+
+# ============================================================
+# DLQ Audit Functions
+# ============================================================
+from selfhealing.services.audit.dlq_audit import (
     log_dlq_store_audit,
     log_dlq_replay_audit,
-    # Circuit Breaker
+)
+
+# ============================================================
+# Circuit Breaker & Governance Audit Functions
+# ============================================================
+from selfhealing.services.audit.cb_audit import (
     log_cb_state_change_audit,
     log_governance_blocked_audit,
     log_rate_limited_audit,
     log_pool_cb_rejection_audit,
     log_cb_state_change_with_trace_audit,
     log_governance_blocked_cb_audit,
-    # Retry & Rollback
+)
+
+# ============================================================
+# Retry, Rollback & System Control Audit Functions
+# ============================================================
+from selfhealing.services.audit.retry_audit import (
     log_retry_audit,
     log_system_control_audit,
     log_rollback_audit,
-    # Chaos & Emergency
+)
+
+# ============================================================
+# Chaos Experiment & Emergency Mode Audit Functions
+# ============================================================
+from selfhealing.services.audit.chaos_audit import (
     log_chaos_experiment_audit,
     log_emergency_mode_audit,
     log_kill_switch_override_audit,
     log_panic_threshold_audit,
     log_freeze_mode_audit,
     log_error_budget_blocked_audit,
-    # Compliance & FinOps
+)
+
+# ============================================================
+# Compliance & FinOps Audit Functions
+# ============================================================
+from selfhealing.services.audit.compliance_audit import (
     log_compliance_audit,
     log_blast_radius_audit,
     log_finops_audit,
     log_data_access_audit,
-    # Storage & Tasks
+)
+
+# ============================================================
+# Storage & Task Audit Functions
+# ============================================================
+from selfhealing.services.audit.storage_audit import (
     log_storage_failure_audit,
     log_storage_recovery_audit,
     log_drift_reconciliation_audit,
@@ -65,12 +100,14 @@ from selfhealing.services.audit import (
     log_drift_detection_audit,
 )
 
+# ============================================================
+# Public API
+# ============================================================
 __all__ = [
     # Base utilities
     "_write_to_wal",
     "_try_add_to_buffer",
     "_get_audit_adapter",
-    "_get_wal",
     "get_wal_instance",
     "disable_wal",
     "enable_wal",
