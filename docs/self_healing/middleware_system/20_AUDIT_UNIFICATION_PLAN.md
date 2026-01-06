@@ -785,6 +785,53 @@ class TestAuditUnification:
 
 ---
 
+## 📝 추가 통합 작업 (2026-01-06)
+
+### CB Auto-Open 레거시 마이그레이션
+
+**문제 발견**:
+- `CircuitBreakerService._log_circuit_open_audit()`이 `selfhealing.audit.log_config_change` 직접 호출
+- WAL 기반 누락 0 보장 및 해시 체인 연결 누락
+
+**수정 내용**:
+```python
+# Before (레거시)
+from selfhealing.audit import log_config_change
+log_config_change(config_type="circuit_breaker", ...)
+
+# After (통합)
+from selfhealing.services.audit_helpers import log_cb_state_change_audit
+log_cb_state_change_audit(cb_name=service_name, old_state="closed", new_state="open", ...)
+```
+
+**파일 변경**:
+- `packages/selfhealing-python/src/selfhealing/services/circuit_breaker/service.py`
+  - `_log_circuit_open_audit()` 메서드 수정
+
+**테스트 추가**:
+- `packages/selfhealing-python/tests/unit/test_circuit_breaker_audit.py`
+  - `TestCircuitBreakerAutoOpenAudit` 클래스 (6개 테스트)
+    - `test_auto_open_uses_audit_helpers`
+    - `test_auto_open_audit_includes_threshold_info`
+    - `test_auto_open_audit_handles_missing_snapshot_fields`
+    - `test_auto_open_audit_exception_handling`
+    - `test_auto_open_audit_import_error_handling`
+    - `test_auto_open_audit_not_using_legacy_log_config_change`
+
+**CB/DLQ/Retry/Replay Audit 통합 완료 현황**:
+
+| 컴포넌트 | 함수 | 상태 |
+|----------|------|:----:|
+| DLQService.store_failure() | `log_dlq_store_audit` | ✅ |
+| ReplayService.replay_item() | `log_dlq_replay_audit` | ✅ |
+| RetryHandler.execute() | `log_retry_audit` | ✅ |
+| CB.force_open/close/reset | `log_cb_state_change_audit` | ✅ |
+| CB.should_allow (OPEN→HALF_OPEN) | `log_cb_state_change_audit` | ✅ |
+| CB.record_success (HALF_OPEN→CLOSED) | `log_cb_state_change_audit` | ✅ |
+| **CB.record_failure (CLOSED→OPEN)** | `log_cb_state_change_audit` | ✅ (2026-01-06 수정) |
+
+---
+
 *작성: Self-Healing Team*
-*최종 수정: 2026-01-05*
+*최종 수정: 2026-01-06*
 

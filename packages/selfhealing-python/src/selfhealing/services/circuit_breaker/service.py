@@ -514,25 +514,33 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """
         Log circuit open event to audit log with snapshot.
 
+        Uses unified audit_helpers.log_cb_state_change_audit for:
+        - WAL-based zero-loss guarantee
+        - Hash chain integrity connection
+        - Consistent CB audit format
+
         Args:
             service_name: Name of the service
             snapshot: Failure snapshot data
         """
         try:
-            from selfhealing.audit import log_config_change
+            from selfhealing.services.audit_helpers import log_cb_state_change_audit
             
-            log_config_change(
-                config_type="circuit_breaker",
-                config_key=f"state.{service_name}",
-                old_value="closed",
-                new_value={
-                    "state": "open",
-                    "trigger": "auto",
-                    "snapshot": snapshot,
-                    "severity": "critical",
-                    "tag": "CB_AUTO_OPEN",
-                },
-                user="system",
+            # Build reason with snapshot context
+            reason = f"auto_trigger|failures={snapshot.get('failure_count', 'N/A')}|threshold={snapshot.get('threshold', 'N/A')}"
+            
+            log_cb_state_change_audit(
+                cb_name=service_name,
+                old_state="closed",
+                new_state="open",
+                reason=reason,
+                request=None,  # System-triggered, no HTTP context
+            )
+            
+            # Log detailed snapshot separately for debugging
+            logger.info(
+                f"[CircuitBreaker] AUTO_OPEN audit logged | service={service_name} | "
+                f"snapshot={snapshot}"
             )
         except Exception as e:
             logger.debug(f"[CircuitBreaker] Audit log failed: {e}")

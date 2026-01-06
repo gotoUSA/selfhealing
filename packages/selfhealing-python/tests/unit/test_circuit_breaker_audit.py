@@ -391,3 +391,142 @@ class TestCircuitBreakerAuditContent:
         
         call_args = mock_audit.call_args
         assert "force_open: manual" in call_args.kwargs["reason"]
+
+
+# =============================================================================
+# Auto-Open Audit 통합 테스트 (레거시 log_config_change → audit_helpers 마이그레이션)
+# =============================================================================
+
+class TestCircuitBreakerAutoOpenAudit:
+    """
+    CB 자동 OPEN 시 audit_helpers.log_cb_state_change_audit 사용 검증.
+    
+    기존 문제:
+    - _log_circuit_open_audit()이 selfhealing.audit.log_config_change 직접 호출
+    - WAL 기반 누락 0 보장 및 해시 체인 연결 누락
+    
+    수정 후:
+    - audit_helpers.log_cb_state_change_audit() 사용
+    - WAL 기록 + 해시 체인 연결 보장
+    
+    Ref: 20_AUDIT_UNIFICATION_PLAN.md
+    """
+    
+    @pytest.fixture
+    def mock_repository(self):
+        """Mock CircuitBreakerStateRepository."""
+        repo = Mock()
+        repo.get_state.return_value = None  # No existing state
+        repo.update_state.return_value = True
+        return repo
+    
+    @pytest.fixture
+    def mock_config(self):
+        """Mock CircuitBreakerConfig with threshold settings."""
+        config = Mock()
+        config.enabled = True
+        config.failure_threshold = 5
+        config.recovery_timeout = 60
+        config.half_open_max_calls = 3
+        config.cb_open_burn_rate_multiplier = 2.0
+        config.notification_cooldown_minutes = 5
+        config.success_threshold = 2
+        return config
+    
+    @pytest.fixture
+    def service(self, mock_repository, mock_config):
+        """CircuitBreakerService with mocked dependencies."""
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
+        
+        svc = CircuitBreakerService(config=mock_config, repository=mock_repository)
+        return svc
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    def test_auto_open_uses_audit_helpers(self, mock_audit, service):
+        """
+        자동 OPEN 시 audit_helpers.log_cb_state_change_audit 호출 확인.
+        
+        레거시 log_config_change 대신 audit_helpers 사용 검증.
+        """
+        snapshot = {
+            "failure_count": 5,
+            "threshold": 5,
+            "last_failures": ["timeout", "connection_error"],
+        }
+        
+        # Execute - 내부 메서드 직접 호출
+        service._log_circuit_open_audit("payment_service", snapshot)
+        
+        # Assert - audit_helpers 호출 확인
+        mock_audit.assert_called_once()
+        call_args = mock_audit.call_args
+        
+        # 파라미터 검증
+        assert call_args.kwargs["cb_name"] == "payment_service"
+        assert call_args.kwargs["old_state"] == "closed"
+        assert call_args.kwargs["new_state"] == "open"
+        assert "auto_trigger" in call_args.kwargs["reason"]
+        assert "failures=5" in call_args.kwargs["reason"]
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    def test_auto_open_audit_includes_threshold_info(self, mock_audit, service):
+        """auto-open reason에 threshold 정보가 포함되어야 함."""
+        snapshot = {
+            "failure_count": 10,
+            "threshold": 10,
+        }
+        
+        service._log_circuit_open_audit("order_service", snapshot)
+        
+        call_args = mock_audit.call_args
+        reason = call_args.kwargs["reason"]
+        
+        assert "threshold=10" in reason
+        assert "failures=10" in reason
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    def test_auto_open_audit_handles_missing_snapshot_fields(self, mock_audit, service):
+        """snapshot에 필드가 없어도 에러 없이 처리."""
+        empty_snapshot = {}
+        
+        # Should not raise
+        service._log_circuit_open_audit("test_service", empty_snapshot)
+        
+        mock_audit.assert_called_once()
+        call_args = mock_audit.call_args
+        
+        # N/A로 대체되어야 함
+        assert "N/A" in call_args.kwargs["reason"]
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    def test_auto_open_audit_exception_handling(self, mock_audit, service):
+        """audit 실패해도 CB 동작에는 영향 없어야 함."""
+        mock_audit.side_effect = Exception("Audit system unavailable")
+        
+        # Should not raise - graceful degradation
+        service._log_circuit_open_audit("payment", {"failure_count": 5})
+        
+        # Verify audit was attempted
+        mock_audit.assert_called_once()
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit", side_effect=ImportError)
+    def test_auto_open_audit_import_error_handling(self, mock_audit, service):
+        """audit_helpers import 실패 시에도 에러 없이 처리."""
+        # Should not raise
+        service._log_circuit_open_audit("payment", {"failure_count": 5})
+    
+    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    def test_auto_open_audit_not_using_legacy_log_config_change(self, mock_audit, service):
+        """
+        레거시 log_config_change가 아닌 audit_helpers 사용 확인.
+        
+        이 테스트는 마이그레이션이 올바르게 되었는지 검증합니다.
+        """
+        with patch("selfhealing.audit.log_config_change") as legacy_mock:
+            service._log_circuit_open_audit("payment", {"failure_count": 5})
+            
+            # 레거시 호출 없어야 함
+            legacy_mock.assert_not_called()
+            
+            # 새 audit_helpers 호출되어야 함
+            mock_audit.assert_called_once()
