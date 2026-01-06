@@ -25,7 +25,7 @@ def create_emergency_mode_mock(level: int):
     mock_emergency_mode = MagicMock()
     mock_emergency_manager = MagicMock()
     mock_emergency_manager.get_current_level.return_value = level
-    mock_emergency_mode.get_emergency_mode_manager.return_value = mock_emergency_manager
+    mock_emergency_mode.get_emergency_manager.return_value = mock_emergency_manager
     return mock_emergency_mode
 
 
@@ -38,7 +38,7 @@ class TestDynamicEscalationLevel2:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -64,7 +64,7 @@ class TestDynamicEscalationLevel2:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -90,7 +90,7 @@ class TestDynamicEscalationLevel2:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -116,7 +116,7 @@ class TestDynamicEscalationLevel2:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -146,7 +146,7 @@ class TestDynamicEscalationLevel3:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -172,7 +172,7 @@ class TestDynamicEscalationLevel3:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -198,7 +198,7 @@ class TestDynamicEscalationLevel3:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -224,7 +224,7 @@ class TestDynamicEscalationLevel3:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -254,7 +254,7 @@ class TestCriticalCeiling:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -280,7 +280,7 @@ class TestCriticalCeiling:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -331,7 +331,7 @@ class TestNormalLevelNoEscalation:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -357,7 +357,7 @@ class TestNormalLevelNoEscalation:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -445,7 +445,7 @@ class TestChannelVariability:
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
@@ -481,13 +481,13 @@ class TestEdgeCases:
     def test_exception_in_manager_returns_original_priority(self):
         """Exception in emergency_mode_manager returns original priority."""
         mock_emergency_mode = MagicMock()
-        mock_emergency_mode.get_emergency_mode_manager.side_effect = Exception(
+        mock_emergency_mode.get_emergency_manager.side_effect = Exception(
             "Manager unavailable"
         )
 
         with patch.dict(
             'sys.modules',
-            {'selfhealing.core.emergency_mode': mock_emergency_mode}
+            {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
                 UnifiedNotificationManager,
