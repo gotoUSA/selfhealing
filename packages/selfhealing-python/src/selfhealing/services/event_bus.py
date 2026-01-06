@@ -543,6 +543,56 @@ def _on_error_budget_critical(event: SelfHealingEvent):
     )
 
 
+def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
+    """
+    CB OPEN 시 알림 발송.
+    
+    EventBus 핸들러로 등록되어 CB 상태 변경 시 자동 호출됩니다.
+    알림 실패가 시스템에 영향을 주지 않도록 전체를 try-except로 감쌉니다.
+    
+    CB 상태 변경 → EventBus 발행 → 알림 핸들러 호출 순서이므로,
+    이 함수가 호출되는 시점에 CB 상태 변경은 이미 완료된 상태입니다.
+    
+    Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
+    Section 6.1 - 알림 함수 설계
+    """
+    try:
+        from selfhealing.services.unified_notification import (
+            get_unified_notification_manager,
+            NotificationPayload,
+            NotificationPriority,
+            NotificationCategory,
+        )
+        
+        service_name = event.data.get("service_name", "unknown")
+        trace_id = event.data.get("trace_id")
+        trace_url = event.data.get("trace_url")
+        timestamp = event.data.get("timestamp", "")
+        
+        manager = get_unified_notification_manager()
+        manager.notify(NotificationPayload(
+            title=f"🔴 Circuit Breaker OPEN: {service_name}",
+            message=f"서비스 '{service_name}'의 Circuit Breaker가 열렸습니다.",
+            priority=NotificationPriority.HIGH,
+            category=NotificationCategory.CIRCUIT_BREAKER,
+            source="circuit_breaker_service",
+            dedup_key=f"cb:{service_name}:open",
+            metadata={
+                "service_name": service_name,
+                "trace_id": trace_id,
+                "trace_url": trace_url,
+                "event_type": "circuit_breaker_opened",
+                "trigger_time": timestamp,
+            },
+        ))
+        
+        logger.info(f"[Notification] CB OPEN notification sent for {service_name}")
+        
+    except Exception as e:
+        # ⚠️ 알림 실패가 시스템에 영향을 주지 않도록 함
+        logger.warning(f"[Notification] Failed to send CB notification: {e}")
+
+
 def _on_circuit_breaker_closed(event: SelfHealingEvent):
     """
     CB 복구 시 자동 Replay 트리거 (Track 1).
@@ -627,6 +677,14 @@ def register_default_handlers():
         EventType.CIRCUIT_BREAKER_CLOSED,
         _on_circuit_breaker_closed,
         priority=EventPriority.NORMAL,
+    )
+    
+    # Circuit Breaker 알림 핸들러 (신규)
+    # Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_OPENED,
+        _on_circuit_breaker_opened_notify,
+        priority=EventPriority.HIGH,  # 지연 없이 처리
     )
     
     bus._handlers_registered = True

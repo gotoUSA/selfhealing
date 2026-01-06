@@ -1,8 +1,8 @@
 # 23. Circuit Breaker 알림 시스템 설계
 
-> **Version**: 1.0.0  
+> **Version**: 1.1.0  
 > **Date**: 2026-01-06  
-> **Status**: Design Complete  
+> **Status**: Phase 1 Complete  
 > **Authors**: Self-Healing Architecture Team
 
 ---
@@ -83,7 +83,13 @@ Circuit Breaker 자동화 시스템이 완료되면서, 모든 상태 변경에 
 
 ### 2.3 알림 연동 상태
 
-❌ **미구현** - CB → UnifiedNotificationManager 연결 없음
+✅ **Phase 1 완료** - CB OPEN 시 EventBus 핸들러를 통해 UnifiedNotificationManager 연결됨
+
+**구현 위치**: `packages/selfhealing-python/src/selfhealing/services/event_bus.py`
+- `_on_circuit_breaker_opened_notify()` 핸들러: CB OPEN 이벤트 수신 시 알림 발송
+- 우선순위: HIGH, 카테고리: CIRCUIT_BREAKER
+- dedup_key: `cb:{service_name}:open` (5분 쿨다운)
+- trace_url 포함으로 원인 분석 지원
 
 ---
 
@@ -688,13 +694,20 @@ class UnifiedNotificationManager:
 
 ## 9. 구현 로드맵
 
-### 9.1 Phase 1: 핵심 알림 연결 (1-2일)
+### 9.1 Phase 1: 핵심 알림 연결 ✅ 완료
 
-| 작업 | 파일 | 난이도 |
-|------|------|--------|
-| `_on_circuit_breaker_opened_notify()` 핸들러 구현 | `event_bus.py` | 낮음 |
-| EventBus 핸들러 등록 | `event_bus.py` | 낮음 |
-| `trace_url` 노출 | 알림 핸들러 | 낮음 |
+**구현 일자**: 2026-01-06
+
+| 작업 | 파일 | 상태 |
+|------|------|------|
+| `_on_circuit_breaker_opened_notify()` 핸들러 구현 | `event_bus.py` | ✅ 완료 |
+| EventBus 핸들러 등록 | `event_bus.py` | ✅ 완료 |
+| `trace_url` 노출 | 알림 핸들러 | ✅ 완료 |
+| Deduplication (`dedup_key`) 적용 | 알림 핸들러 | ✅ 완료 |
+| 신뢰성 보장 (try-except 래핑) | 알림 핸들러 | ✅ 완료 |
+
+**테스트 파일**: `tests/self_healing/unit/test_cb_notification_phase1.py`  
+**테스트 결과**: 9개 테스트 통과
 
 ### 9.2 Phase 2: 동적 에스컬레이션 (0.5일)
 
@@ -827,7 +840,8 @@ CB_RUNBOOK_URL="https://docs.internal/runbooks/circuit-breaker-recovery"
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0.0 | 2026-01-06 | Self-Healing Team | 초안 작성 |
+| 1.1.0 | 2026-01-06 | Self-Healing Team | Phase 1 구현 완료 - CB OPEN 알림 핸들러, EventBus 등록, 테스트 9개 통과 |
 
 ---
 
-> **다음 단계**: 이 설계 문서를 기반으로 Phase 1 구현을 시작합니다.
+> **다음 단계**: Phase 2 동적 에스컬레이션 구현을 진행합니다.
