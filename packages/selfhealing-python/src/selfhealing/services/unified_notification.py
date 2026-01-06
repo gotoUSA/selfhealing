@@ -302,28 +302,49 @@ class UnifiedNotificationManager:
         self._cooldown_cache[dedup_key] = datetime.now(timezone.utc)
 
     def _get_effective_priority(self, payload: NotificationPayload) -> NotificationPriority:
-        """Get effective priority considering emergency level."""
+        """
+        Get effective priority considering emergency level.
+
+        Dynamic escalation rules (23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md §7.1):
+        - Level 2+: LOW/INFO → MEDIUM
+        - Level 3+: LOW/INFO/MEDIUM → HIGH
+        - CRITICAL은 최고 우선순위이므로 에스컬레이션 불필요
+        """
+        priority = payload.priority
+
+        # 상한선 명시적 체크: 이미 CRITICAL이면 조기 반환 (방어적 코딩)
+        if priority == NotificationPriority.CRITICAL:
+            return priority
+
         try:
             from selfhealing.core.emergency_mode import get_emergency_mode_manager
 
             manager = get_emergency_mode_manager()
             level = manager.get_current_level()
 
+            # Emergency Level 2+: Escalate LOW/INFO to MEDIUM minimum
+            if level >= 2:
+                if priority in (
+                    NotificationPriority.LOW,
+                    NotificationPriority.INFO,
+                ):
+                    priority = NotificationPriority.MEDIUM
+
             # Emergency Level 3+: Escalate all to HIGH minimum
             if level >= 3:
-                if payload.priority in (
+                if priority in (
                     NotificationPriority.LOW,
                     NotificationPriority.INFO,
                     NotificationPriority.MEDIUM,
                 ):
-                    return NotificationPriority.HIGH
+                    priority = NotificationPriority.HIGH
 
         except ImportError:
             pass
         except Exception as e:
             logger.debug(f"[UnifiedNotification] Emergency level check failed: {e}")
 
-        return payload.priority
+        return priority
 
     def _send_to_channels(
         self,
