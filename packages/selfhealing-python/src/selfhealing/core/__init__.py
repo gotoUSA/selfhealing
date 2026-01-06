@@ -60,15 +60,7 @@ from selfhealing.core.config import (
     get_forensic_settings,
     get_notification_settings,
 )
-from selfhealing.core.forensic import (
-    ForensicContext,
-    ForensicContextBuilder,
-    StateSnapshot,
-    RetryAttempt,
-    capture_forensic_context,
-    create_snapshot_data,
-    set_time_provider,
-)
+# ForensicContext, ForensicContextBuilder, etc. removed - forensic.py deleted
 from selfhealing.core.pool_monitor import (
     PoolHealthStatus,
     PoolStats,
@@ -208,14 +200,7 @@ __all__ = [
     "get_security_thresholds",
     "get_forensic_settings",
     "get_notification_settings",
-    # Forensic
-    "ForensicContext",
-    "ForensicContextBuilder",
-    "StateSnapshot",
-    "RetryAttempt",
-    "capture_forensic_context",
-    "create_snapshot_data",
-    "set_time_provider",
+    # Forensic - removed (forensic.py deleted)
     # Pool Monitor (Stage 26)
     "PoolHealthStatus",
     "PoolStats",

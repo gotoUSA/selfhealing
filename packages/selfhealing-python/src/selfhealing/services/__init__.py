@@ -144,7 +144,7 @@ from .metrics.alerting_rules import ALERTING_RULES
 DOMAINS = DEFAULT_DOMAINS
 
 # --- Context & Security (자주 사용) ---
-from .forensic_context import ForensicContext
+# ForensicContext has been removed from the system.
 from .security_violation_service import SecurityViolationService
 
 
@@ -170,6 +170,6 @@ __all__ = [
     "ALERTING_RULES",
     
     # === Context & Security ===
-    "ForensicContext",
+    # ForensicContext removed
     "SecurityViolationService",
 ]

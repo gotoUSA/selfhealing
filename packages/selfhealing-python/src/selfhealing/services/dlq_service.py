@@ -285,56 +285,24 @@ class DLQService:
         request: Any = None,
     ) -> DLQEntryResult:
         """
-        Store a failed operation with full forensic context.
-
-        This is the preferred method when forensic context is available.
-
+        DEPRECATED: ForensicContext has been removed from the system.
+        
+        Use store_failure() directly instead with explicit parameters.
+        This method is kept for backward compatibility but will raise an error.
+        
         Args:
             domain: Business domain
             failure_type: Specific failure type
-            forensic_context: ForensicContext instance with full debug info
-            entity_type: Type of related entity (e.g., "order", "payment")
-            entity_id: ID of related entity
-            user_id: Related User ID
-            error_code: Error code
-            error_message: Human-readable error message
-            next_action_hint: Guidance for operators
-            recommended_action: Suggested action
-            request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+            forensic_context: No longer supported
+            ...
 
-        Returns:
-            DLQEntryResult with creation status
+        Raises:
+            NotImplementedError: ForensicContext is no longer available
         """
-        from .forensic_context import ForensicContext
-
-        if not isinstance(forensic_context, ForensicContext):
-            raise TypeError("forensic_context must be a ForensicContext instance")
-
-        # Build snapshot data from forensic context
-        snapshot_data = {
-            "entity_type": entity_type,
-            "entity_id": entity_id,
-            "user_id": user_id,
-        }
-
-        return self.store_failure(
-            domain=domain,
-            failure_type=failure_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            user_id=user_id,
-            error_code=error_code,
-            error_message=error_message,
-            snapshot_data=snapshot_data,
-            request_data=forensic_context.extra.get("request_data", {}),
-            response_data={
-                "external_response_code": forensic_context.external_response_code,
-                "external_response_body": forensic_context.external_response_body,
-            },
-            metadata=forensic_context.to_metadata(),
-            next_action_hint=next_action_hint,
-            recommended_action=recommended_action,
-            request=request,
+        raise NotImplementedError(
+            "store_with_forensic_context() is deprecated. "
+            "ForensicContext has been removed from the system. "
+            "Use store_failure() directly with explicit parameters instead."
         )
 
     # =========================================================================

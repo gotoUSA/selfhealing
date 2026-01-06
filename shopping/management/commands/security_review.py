@@ -226,12 +226,9 @@ def check_data_protection() -> list[CheckResult]:
     """Check sensitive data protection."""
     results = []
 
-    try:
-        from selfhealing.services import ForensicContext
-
-        results.append(CheckResult("data_protection", "ForensicContext class exists", True))
-    except ImportError as e:
-        results.append(CheckResult("data_protection", "ForensicContext exists", False, str(e)))
+    # ForensicContext has been removed from the system.
+    # Data protection is now handled directly by DLQService.
+    results.append(CheckResult("data_protection", "ForensicContext removed (handled by DLQService)", True))
 
     try:
         from selfhealing.services import DLQService

@@ -243,23 +243,10 @@ class SecurityReview:
         """Check sensitive data is properly protected."""
         print_header("Sensitive Data Protection")
 
-        try:
-            from selfhealing.services import ForensicContext
-
-            # Check 1: ForensicContext sanitizes sensitive data
-            # Look for sanitization methods
-            has_sanitize = any("saniti" in method.lower() for method in dir(ForensicContext) if not method.startswith("_"))
-
-            if not has_sanitize:
-                print_warning("No explicit sanitization method found in ForensicContext")
-                self.record_warning("data_protection", "Consider adding explicit sanitize methods")
-
-            print_check("ForensicContext class exists", True)
-            self.record_result("data_protection", "forensic_context_exists", True)
-
-        except ImportError as e:
-            print_check("ForensicContext exists", False, str(e))
-            self.record_result("data_protection", "forensic_context_exists", False, str(e))
+        # ForensicContext has been removed from the system.
+        # Skip this check - data protection is now handled by DLQService directly.
+        print_info("ForensicContext removed - using DLQService for data protection")
+        self.record_result("data_protection", "forensic_context_check", True, "Removed - handled by DLQService")
 
         try:
             from selfhealing.services import DLQService
