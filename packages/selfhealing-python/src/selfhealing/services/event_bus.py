@@ -553,8 +553,14 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
     CB 상태 변경 → EventBus 발행 → 알림 핸들러 호출 순서이므로,
     이 함수가 호출되는 시점에 CB 상태 변경은 이미 완료된 상태입니다.
     
+    Phase 3: Actionable Alert 추가 (문서 §7.2 ⑥)
+    - dashboard_url: Grafana 대시보드 (읽기 전용)
+    - admin_url: Admin 제어판 (쿼리 파라미터로 컨텍스트 전달)
+    - runbook_url: 장애 대응 매뉴얼
+    
     Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
     Section 6.1 - 알림 함수 설계
+    Section 9.3 - Phase 3: Actionable Alert
     """
     try:
         from selfhealing.services.unified_notification import (
@@ -563,11 +569,21 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
             NotificationPriority,
             NotificationCategory,
         )
+        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
+            get_actionable_alert_url_builder,
+        )
         
         service_name = event.data.get("service_name", "unknown")
         trace_id = event.data.get("trace_id")
         trace_url = event.data.get("trace_url")
         timestamp = event.data.get("timestamp", "")
+        
+        # Phase 3: Actionable URLs 생성
+        url_builder = get_actionable_alert_url_builder()
+        actionable_urls = url_builder.build_cb_open_urls(
+            service_name=service_name,
+            trigger_time=timestamp,
+        )
         
         manager = get_unified_notification_manager()
         manager.notify(NotificationPayload(
@@ -583,6 +599,10 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
                 "trace_url": trace_url,
                 "event_type": "circuit_breaker_opened",
                 "trigger_time": timestamp,
+                # Phase 3: Actionable Alert URLs
+                "dashboard_url": actionable_urls.dashboard_url,
+                "admin_url": actionable_urls.admin_url,
+                "runbook_url": actionable_urls.runbook_url,
             },
         ))
         

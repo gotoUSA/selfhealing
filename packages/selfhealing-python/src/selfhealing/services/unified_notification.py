@@ -317,9 +317,9 @@ class UnifiedNotificationManager:
             return priority
 
         try:
-            from selfhealing.core.emergency_mode import get_emergency_mode_manager
+            from selfhealing.services.emergency_mode import get_emergency_manager
 
-            manager = get_emergency_mode_manager()
+            manager = get_emergency_manager()
             level = manager.get_current_level()
 
             # Emergency Level 2+: Escalate LOW/INFO to MEDIUM minimum
@@ -596,3 +596,181 @@ def notify_error(
         metadata=metadata,
         **kwargs,
     )
+
+
+# =============================================================================
+# Slack Block Kit Formatters - Phase 3: Actionable Alert
+# =============================================================================
+
+
+def format_cb_slack_blocks(
+    payload: NotificationPayload,
+    priority: NotificationPriority,
+) -> Dict[str, Any]:
+    """
+    Circuit Breaker 알림용 Slack Block Kit 메시지 포맷.
+    
+    Actionable Alert 설계 원칙 (문서 §7.2 ⑥):
+    - 거버넌스 유지: 원클릭 해제 대신 Admin 제어판으로 이동
+    - 컨텍스트 유지: 쿼리 파라미터로 해당 서비스 즉시 조회
+    - 안전성: 운영자가 상태 확인 후 판단 가능
+    
+    Args:
+        payload: 알림 페이로드
+        priority: 효과적 우선순위 (에스컬레이션 적용 후)
+        
+    Returns:
+        Slack Block Kit 형식의 메시지 딕셔너리
+        
+    Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
+    Section 9.3 - Phase 3: Actionable Alert
+    """
+    severity_emoji = {
+        NotificationPriority.CRITICAL: "🔴",
+        NotificationPriority.HIGH: "🟠",
+        NotificationPriority.MEDIUM: "🟡",
+        NotificationPriority.LOW: "🔵",
+        NotificationPriority.INFO: "⚪",
+    }.get(priority, "⚪")
+    
+    metadata = payload.metadata or {}
+    service_name = metadata.get("service_name", "unknown")
+    trace_url = metadata.get("trace_url")
+    trigger_time = metadata.get("trigger_time", "")
+    
+    # Actionable URLs
+    dashboard_url = metadata.get("dashboard_url")
+    admin_url = metadata.get("admin_url")
+    runbook_url = metadata.get("runbook_url")
+    
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{severity_emoji} {payload.title}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Service:*\n{service_name}"},
+                {"type": "mrkdwn", "text": f"*Priority:*\n{priority.value.upper()}"},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Message:*\n{payload.message}",
+            },
+        },
+    ]
+    
+    # Trace URL 섹션 (있는 경우)
+    if trace_url:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Trace:*\n<{trace_url}|View in Jaeger>",
+            },
+        })
+    
+    # Actionable 버튼 섹션
+    action_elements = []
+    
+    if dashboard_url:
+        action_elements.append({
+            "type": "button",
+            "text": {
+                "type": "plain_text",
+                "text": "📊 Dashboard",
+                "emoji": True,
+            },
+            "url": dashboard_url,
+            "action_id": "view_dashboard",
+        })
+    
+    if admin_url:
+        action_elements.append({
+            "type": "button",
+            "text": {
+                "type": "plain_text",
+                "text": "⚙️ Admin Panel",
+                "emoji": True,
+            },
+            "url": admin_url,
+            "action_id": "view_admin",
+            "style": "primary",
+        })
+    
+    if runbook_url:
+        action_elements.append({
+            "type": "button",
+            "text": {
+                "type": "plain_text",
+                "text": "📖 Runbook",
+                "emoji": True,
+            },
+            "url": runbook_url,
+            "action_id": "view_runbook",
+        })
+    
+    if action_elements:
+        blocks.append({
+            "type": "actions",
+            "elements": action_elements,
+        })
+    
+    # 컨텍스트 섹션 (타임스탬프)
+    context_text = f"Event: {payload.category.value}"
+    if trigger_time:
+        context_text += f" | Time: {trigger_time}"
+    
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {
+                "type": "mrkdwn",
+                "text": context_text,
+            },
+        ],
+    })
+    
+    return {"blocks": blocks}
+
+
+def format_cb_notification_with_actions(payload: NotificationPayload) -> Dict[str, Any]:
+    """
+    Circuit Breaker 알림을 Actionable Alert 형식으로 포맷.
+    
+    이 함수는 SecurityNotificationService에서 호출되어
+    Slack으로 전송될 메시지를 Actionable 버튼이 포함된 Block Kit 형식으로 변환합니다.
+    
+    Args:
+        payload: 알림 페이로드
+        
+    Returns:
+        Actionable 버튼이 포함된 Slack Block Kit 메시지
+    """
+    try:
+        from selfhealing.services.emergency_mode import get_emergency_manager
+        
+        manager = get_emergency_manager()
+        level = manager.get_current_level()
+        
+        # Emergency Level에 따른 우선순위 조정
+        priority = payload.priority
+        if level >= 3 and priority in (NotificationPriority.LOW, NotificationPriority.INFO, NotificationPriority.MEDIUM):
+            priority = NotificationPriority.HIGH
+        elif level >= 2 and priority in (NotificationPriority.LOW, NotificationPriority.INFO):
+            priority = NotificationPriority.MEDIUM
+            
+    except ImportError:
+        priority = payload.priority
+    except Exception:
+        priority = payload.priority
+    
+    return format_cb_slack_blocks(payload, priority)
