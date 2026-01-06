@@ -2512,3 +2512,247 @@ def log_governance_blocked_cb_audit(
         f"affected={affected_count} | requires_approval={requires_manual_approval}"
     )
     return wal_seq
+
+
+# ============================================================
+# Layered Storage Audit Helpers
+# ============================================================
+
+def log_storage_failure_audit(
+    storage_type: str,
+    adapter_type: str,
+    operation: str,
+    service_name: str,
+    error_type: str,
+    error_message: str,
+    consecutive_failures: int,
+    trace_id: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Layered Storage L2 장애 발생을 Audit 로그에 기록.
+    
+    L2 저장소(Redis/Django)가 timeout이나 error로 실패할 때 호출됩니다.
+    WAL 기반 누락 0 보장.
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    
+    Args:
+        storage_type: 저장소 타입 (e.g., "L2_REDIS", "L2_DJANGO")
+        adapter_type: 어댑터 타입 (e.g., "redis", "django")
+        operation: 실패한 작업 (e.g., "get", "set", "delete")
+        service_name: CircuitBreaker 서비스 이름
+        error_type: 에러 타입 (e.g., "timeout", "connection_error")
+        error_message: 에러 메시지
+        consecutive_failures: 연속 실패 횟수
+        trace_id: 현재 요청의 trace ID
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "storage_type": storage_type,
+        "adapter_type": adapter_type,
+        "operation": operation,
+        "service_name": service_name,
+        "error_type": error_type,
+        "consecutive_failures": consecutive_failures,
+        "trace_id": trace_id,
+        "message": f"L2 storage failure: {error_type} during {operation} for {service_name}",
+    }
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="STORAGE_FAILURE",
+        source="LayeredStorageRepository",
+        details=details,
+        success=False,
+        error_message=error_message,
+        target_id=service_name,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.CONFIG_CHANGE,  # 가장 근접한 타입 사용
+                source="LayeredStorageRepository",
+                details=details,
+                success=False,
+                error_message=error_message,
+                target_id=service_name,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    logger.warning(
+        f"[StorageAudit] STORAGE_FAILURE | storage={storage_type} | "
+        f"adapter={adapter_type} | op={operation} | service={service_name} | "
+        f"error={error_type} | failures={consecutive_failures}"
+    )
+    return wal_seq
+
+
+def log_storage_recovery_audit(
+    storage_type: str,
+    adapter_type: str,
+    total_failures: int,
+    downtime_seconds: Optional[float] = None,
+    trace_id: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Layered Storage L2 복구를 Audit 로그에 기록.
+    
+    L2 저장소가 장애에서 복구되었을 때 호출됩니다.
+    WAL 기반 누락 0 보장.
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    
+    Args:
+        storage_type: 저장소 타입 (e.g., "L2_REDIS", "L2_DJANGO")
+        adapter_type: 어댑터 타입 (e.g., "redis", "django")
+        total_failures: 총 실패 횟수
+        downtime_seconds: 다운타임 (초)
+        trace_id: 현재 요청의 trace ID
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "storage_type": storage_type,
+        "adapter_type": adapter_type,
+        "total_failures": total_failures,
+        "downtime_seconds": downtime_seconds,
+        "trace_id": trace_id,
+        "message": f"L2 storage recovered after {total_failures} failures",
+    }
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="STORAGE_RECOVERY",
+        source="LayeredStorageRepository",
+        details=details,
+        success=True,
+        error_message=None,
+        target_id=adapter_type,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.CONFIG_CHANGE,
+                source="LayeredStorageRepository",
+                details=details,
+                success=True,
+                error_message=None,
+                target_id=adapter_type,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    logger.info(
+        f"[StorageAudit] STORAGE_RECOVERY | storage={storage_type} | "
+        f"adapter={adapter_type} | total_failures={total_failures} | "
+        f"downtime={downtime_seconds}s"
+    )
+    return wal_seq
+
+
+def log_drift_reconciliation_audit(
+    adapter_type: str,
+    total_checked: int,
+    reconciled: int,
+    l1_wins: int,
+    l2_wins: int,
+    error_count: int,
+    trace_id: Optional[str] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    Layered Storage Drift 복구를 Audit 로그에 기록.
+    
+    L2 복구 시 L1과 L2 간의 데이터 불일치를 조정했을 때 호출됩니다.
+    WAL 기반 누락 0 보장.
+    
+    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
+    
+    Args:
+        adapter_type: 어댑터 타입 (e.g., "redis", "django")
+        total_checked: 검사한 총 항목 수
+        reconciled: 조정된 항목 수
+        l1_wins: L1 값으로 덮어쓴 횟수
+        l2_wins: L2 값으로 덮어쓴 횟수
+        error_count: 오류 발생 횟수
+        trace_id: 현재 요청의 trace ID
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    details = {
+        "adapter_type": adapter_type,
+        "total_checked": total_checked,
+        "reconciled": reconciled,
+        "l1_wins": l1_wins,
+        "l2_wins": l2_wins,
+        "error_count": error_count,
+        "trace_id": trace_id,
+        "message": f"Drift reconciliation: {reconciled}/{total_checked} items reconciled (L1:{l1_wins}, L2:{l2_wins})",
+    }
+    details = {k: v for k, v in details.items() if v is not None}
+    
+    # === Step 1: WAL에 먼저 기록 ===
+    wal_seq = _write_to_wal(
+        event_type="DRIFT_RECONCILIATION",
+        source="DriftReconciler",
+        details=details,
+        success=error_count == 0,
+        error_message=f"{error_count} errors during reconciliation" if error_count > 0 else None,
+        target_id=adapter_type,
+    )
+    
+    # === Step 2: 버퍼 또는 직접 로깅 ===
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=AuditEventType.CONFIG_CHANGE,
+                source="DriftReconciler",
+                details=details,
+                success=error_count == 0,
+                error_message=f"{error_count} errors" if error_count > 0 else None,
+                target_id=adapter_type,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # Fallback: 직접 로깅
+    log_level = logger.info if error_count == 0 else logger.warning
+    log_level(
+        f"[StorageAudit] DRIFT_RECONCILIATION | adapter={adapter_type} | "
+        f"checked={total_checked} | reconciled={reconciled} | "
+        f"l1_wins={l1_wins} | l2_wins={l2_wins} | errors={error_count}"
+    )
+    return wal_seq

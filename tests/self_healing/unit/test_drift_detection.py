@@ -104,52 +104,6 @@ class TestSLADriftDetector:
         assert payment_metrics.get("sla_breach_count", 0) > 0
 
 
-class TestForensicAnalyzer:
-    """Test ForensicAnalyzer class."""
-
-    def test_analyze_pending_no_operations(self):
-        """Test analyzing when no pending operations exist."""
-        from selfhealing.tasks.drift_detection import ForensicAnalyzer
-
-        mock_qs = MagicMock()
-        mock_qs.order_by.return_value.__getitem__.return_value = []
-
-        analyzer = ForensicAnalyzer(
-            get_failed_operations=lambda **kwargs: mock_qs,
-            get_forensic_advisor=lambda: MagicMock(),
-        )
-
-        result = analyzer.analyze_pending(batch_size=100)
-
-        assert result["success"] is True
-        assert result["analyzed_count"] == 0
-
-    def test_analyze_pending_with_operations(self):
-        """Test analyzing pending operations."""
-        from selfhealing.tasks.drift_detection import ForensicAnalyzer
-
-        mock_ops = [MagicMock(), MagicMock(), MagicMock()]
-
-        mock_qs = MagicMock()
-        mock_qs.order_by.return_value.__getitem__.return_value = mock_ops
-
-        mock_advisor = MagicMock()
-        mock_advisory = MagicMock()
-        mock_advisory.recommended_action = "replay"
-        mock_advisor.analyze_and_update.return_value = mock_advisory
-
-        analyzer = ForensicAnalyzer(
-            get_failed_operations=lambda **kwargs: mock_qs,
-            get_forensic_advisor=lambda: mock_advisor,
-        )
-
-        result = analyzer.analyze_pending(batch_size=100)
-
-        assert result["success"] is True
-        assert result["analyzed_count"] == 3
-        assert result["results_by_action"]["replay"] == 3
-
-
 class TestChaosExperimentCleaner:
     """Test ChaosExperimentCleaner class."""
 
@@ -252,22 +206,6 @@ class TestCeleryTaskWrappers:
 
         assert result["success"] is True
 
-    @patch("shopping.tasks.drift_detection_tasks._get_forensic_advisor")
-    @patch("shopping.tasks.drift_detection_tasks._get_failed_operations")
-    def test_analyze_pending_task(self, mock_get_ops, mock_get_advisor):
-        """Test analyze_pending_operations Celery task."""
-        from shopping.tasks.drift_detection_tasks import analyze_pending_operations
-
-        mock_qs = MagicMock()
-        mock_qs.order_by.return_value.__getitem__.return_value = []
-        mock_get_ops.return_value = mock_qs
-
-        mock_get_advisor.return_value = MagicMock()
-
-        result = analyze_pending_operations()
-
-        assert result["success"] is True
-
     @patch("shopping.tasks.drift_detection_tasks._resolve_expired_chaos_experiments")
     def test_cleanup_chaos_task(self, mock_resolve):
         """Test cleanup_expired_chaos_experiments Celery task."""
@@ -286,7 +224,7 @@ class TestCeleryTaskWrappers:
         from shopping.tasks.drift_detection_tasks import record_advisory_decision
 
         mock_op = MagicMock()
-        mock_op.metadata = {"forensic_advisory": {}}
+        mock_op.metadata = {}
         mock_get_op.return_value = mock_op
 
         result = record_advisory_decision(

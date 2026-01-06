@@ -570,7 +570,6 @@ Budget < 20% 감지
 - [08_OBSERVABILITY.md](08_OBSERVABILITY.md) - 메트릭 및 모니터링
 - [09_CONFIGURATION.md](09_CONFIGURATION.md) - 런타임 설정 (Error Budget 임계값 동적 변경)
 - [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) - 운영 가이드
-- [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) - Forensic Advisor
 
 ---
 

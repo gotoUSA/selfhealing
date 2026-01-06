@@ -499,6 +499,51 @@ def analyze_l2_failures(self) -> Dict[str, Any]:
 
 ---
 
+## 8.5 Phase 5: Audit/Notification 연결 ✅ 완료
+
+| 항목 | 설명 | 상태 |
+|------|------|------|
+| Audit Helper 함수 추가 | `log_storage_failure_audit()`, `log_storage_recovery_audit()`, `log_drift_reconciliation_audit()` | ✅ 구현됨 |
+| L2 장애 시 Audit 기록 | `_handle_l2_timeout()`, `_handle_l2_error()` | ✅ 구현됨 |
+| L2 복구 시 Audit 기록 | `_handle_l2_success()` | ✅ 구현됨 |
+| Drift 복구 시 Audit 기록 | `_reconcile_all_drift()` | ✅ 구현됨 |
+| Notification 연동 | L2 장애/복구 시 알림 발송 | ✅ 구현됨 |
+
+**구현 위치:**
+- `packages/selfhealing-python/src/selfhealing/services/audit_helpers.py`: Audit 함수 추가
+- `packages/selfhealing-python/src/selfhealing/adapters/memory/layered_repository.py`: Audit/Notification 호출
+
+**Audit 이벤트 타입:**
+- `STORAGE_FAILURE`: L2 timeout/error 발생 시
+- `STORAGE_RECOVERY`: L2 복구 시
+- `DRIFT_RECONCILIATION`: L1/L2 데이터 동기화 완료 시
+
+**Notification 채널:**
+- Slack/Teams 알림 (unified_notification 연동)
+- 심각도: L2 장애 = `high`, L2 복구 = `info`
+
+**코드 예시:**
+```python
+# L2 장애 시 Audit 기록
+def _log_l2_failure_audit(self, adapter_type: str, operation: str, service_name: str, 
+                          error_type: str, error_message: str) -> None:
+    try:
+        from selfhealing.services.audit_helpers import log_storage_failure_audit
+        log_storage_failure_audit(
+            storage_type="L2",
+            adapter_type=adapter_type,
+            operation=operation,
+            service_name=service_name,
+            error_type=error_type,
+            error_message=error_message,
+            consecutive_failures=self._l2_consecutive_failures.get(adapter_type, 0),
+        )
+    except Exception as e:
+        logger.debug(f"[LayeredRepo] Audit logging failed (non-critical): {e}")
+```
+
+---
+
 ## 9. 테스트 계획
 
 ### 9.1 단위 테스트
@@ -680,7 +725,6 @@ class TestLayeredStorageChaos:
 - [01_OVERVIEW.md](01_OVERVIEW.md) - 시스템 개요
 - [03_CIRCUIT_BREAKER.md](03_CIRCUIT_BREAKER.md) - Circuit Breaker 상세
 - [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) - Error Budget Gate
-- [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) - Forensic Advisor
 
 ---
 
@@ -690,3 +734,4 @@ class TestLayeredStorageChaos:
 |------|------|----------|
 | 1.0 | 2024-12-22 | 초안 작성 |
 | 1.1 | 2025-12-22 | Phase 1~4 구현 완료 - 모든 기능 구현 및 49개 테스트 통과 |
+| 1.2 | 2025-01-15 | Audit/Notification 연결 추가 - L2 장애/복구 이벤트 기록 |

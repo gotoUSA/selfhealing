@@ -40,7 +40,6 @@
 
 | 문서 | 설명 | 대상 |
 |------|------|------|
-| [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | Forensic Advisor, Chaos Context, SLA Drift Detection | 개발자, 운영자 |
 | [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 관리 및 배포 동결 권고 시스템 | 개발자, 운영자, SRE |
 | [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) | 자율 카오스 엔진 (Continuous Resilience Validation) | SRE, 개발자, 운영자 |
 
@@ -89,7 +88,6 @@
 | `packages/selfhealing-python/src/selfhealing/services/circuit_breaker/` | Circuit Breaker 서비스 |
 | `packages/selfhealing-python/src/selfhealing/services/chaos/` | 카오스 엔진 핵심 모듈 |
 | `packages/selfhealing-python/src/selfhealing/services/error_budget_service.py` | Error Budget 서비스 |
-| `packages/selfhealing-python/src/selfhealing/services/forensic_advisor.py` | Forensic Advisor |
 | `packages/selfhealing-python/src/selfhealing/adapters/` | 프레임워크별 어댑터 |
 | `packages/selfhealing-python/src/selfhealing/api/django/views/` | Django API Views |
 | `packages/selfhealing-python/src/selfhealing/tasks/` | Celery 태스크 |

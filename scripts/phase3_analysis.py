@@ -21,12 +21,6 @@ ALL_EXPORTS = [
     # Idempotency
     "IdempotencyService", "IdempotencyKey", "IdempotencyResult", "IdempotencyDomain",
     "get_idempotency_service",
-    # Forensic
-    "ForensicContext", "capture_forensic_context",
-    # Forensic Advisor
-    "AdvisoryLevel", "RecommendedAction", "FailurePattern", "ForensicAdvisory",
-    "ForensicAdvisorService", "KNOWN_PATTERNS", "get_forensic_advisor",
-    "analyze_failed_operation", "analyze_and_update_operation",
     # Chaos Context
     "ChaosExperimentType", "ChaosExperimentStatus", "ChaosExperimentContext",
     "is_chaos_experiment", "get_chaos_context", "attach_chaos_context",

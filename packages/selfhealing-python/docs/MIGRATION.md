@@ -35,12 +35,10 @@ from shopping.services.self_healing.circuit_breaker_service import (
     CircuitBreakerService,
 )
 from shopping.services.self_healing.dlq_service import DLQService
-from shopping.services.self_healing.forensic_advisor import ForensicAdvisorService
 
 # ✅ 새로운 방식
 from selfhealing.services.circuit_breaker import CircuitBreakerService
 from selfhealing.services.dlq_service import DLQService
-from selfhealing.services.forensic_advisor import ForensicAdvisorService
 ```
 
 ### Chaos Context

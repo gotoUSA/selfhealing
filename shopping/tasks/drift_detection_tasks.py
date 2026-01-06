@@ -7,7 +7,7 @@ The actual logic lives in selfhealing.tasks.drift_detection.
 Core Principle: "System provides data, humans make decisions."
 These tasks ONLY generate warnings - they NEVER auto-adjust settings.
 
-Reference: docs/self_healing/11_FORENSIC_ADVISOR.md
+Reference: docs/self_healing/middleware_system/02_LOGIC_ENGINE.md
 """
 
 from __future__ import annotations
@@ -56,13 +56,6 @@ def _record_sla_breach(domain: str):
         record_sla_breach(domain)
     except Exception:
         pass
-
-
-def _get_forensic_advisor():
-    """Get ForensicAdvisorService instance."""
-    from selfhealing.services.forensic_advisor import get_forensic_advisor
-
-    return get_forensic_advisor()
 
 
 def _resolve_expired_chaos_experiments() -> int:
@@ -177,81 +170,6 @@ def check_sla_drift(self) -> dict[str, Any]:
             
             log_drift_detection_audit(
                 check_type="sla_drift",
-                status="error",
-                error_message=str(e),
-                task_id=task_id,
-            )
-        except Exception:
-            pass
-        raise
-
-
-@shared_task(
-    bind=True,
-    name="shopping.tasks.drift_detection_tasks.analyze_pending_operations",
-    queue="maintenance",
-    max_retries=1,
-    time_limit=300,
-    soft_time_limit=290,
-)
-def analyze_pending_operations(self, batch_size: int = 100) -> dict[str, Any]:
-    """
-    Analyze pending DLQ operations and generate forensic advisories.
-
-    This task runs periodically to:
-    1. Find pending operations without forensic analysis
-    2. Run ForensicAdvisor to generate recommendations
-    3. Update operations with next_action_hint
-    
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
-    - CONFIG_CHANGE 이벤트로 분석 결과 기록
-
-    IMPORTANT: This task ONLY provides recommendations.
-    It NEVER executes replay or other actions automatically.
-
-    Args:
-        batch_size: Maximum number of operations to analyze per run
-
-    Returns:
-        Dictionary with analysis results
-    """
-    from selfhealing.tasks.drift_detection import ForensicAnalyzer
-
-    task_id = self.request.id
-    
-    try:
-        analyzer = ForensicAnalyzer(
-            get_failed_operations=_get_failed_operations,
-            get_forensic_advisor=_get_forensic_advisor,
-        )
-
-        result = analyzer.analyze_pending(batch_size=batch_size)
-        
-        # === Audit 기록 (Phase 4) ===
-        try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
-            log_drift_detection_audit(
-                check_type="analyze_pending",
-                status=result.get("status", "completed"),
-                operations_analyzed=result.get("analyzed_count", 0),
-                task_id=task_id,
-                details={
-                    "recommendations_generated": result.get("recommendations_generated", 0),
-                },
-            )
-        except Exception as audit_error:
-            logger.debug(f"[DriftDetection] Audit logging failed: {audit_error}")
-        
-        return result
-        
-    except Exception as e:
-        # === Audit 기록 (실패) ===
-        try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
-            log_drift_detection_audit(
-                check_type="analyze_pending",
                 status="error",
                 error_message=str(e),
                 task_id=task_id,

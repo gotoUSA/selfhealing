@@ -17,10 +17,9 @@ Test Categories:
         - Payment idempotency checking
         - Webhook duplicate detection
         - Point operation deduplication
-    D. Forensic Context Tests:
-        - State snapshot capture
-        - Retry history tracking
-        - DLQ context completeness
+    D. DLQ Integration Tests:
+        - Full failure to DLQ flow
+        - DLQ state transitions
 
 Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7, §8
 """
@@ -47,12 +46,6 @@ from selfhealing.core import (
     calculate_backoff,
 )
 from selfhealing.services.backoff_calculator import get_calculator_for_domain
-from selfhealing.services import ForensicContext
-from selfhealing.core.forensic import create_snapshot_data
-from selfhealing.services.forensic_context import (
-    ForensicContextBuilder,
-    capture_forensic_context,
-)
 from selfhealing.services import (
     IdempotencyKey,
     IdempotencyService,
@@ -531,143 +524,7 @@ class TestIdempotencyService:
 
 
 # =============================================================================
-# D. Forensic Context Tests
-# =============================================================================
-
-
-@pytest.mark.django_db(transaction=True)
-class TestForensicContext:
-    """
-    Tests for forensic context capture.
-
-    Validates:
-    - State snapshot completeness
-    - Retry history tracking
-    - Context builder fluent API
-    """
-
-    def test_state_snapshot_capture(self, category):
-        """
-        Purpose:
-            Verify state snapshots capture all relevant data.
-        Expected:
-            order_status, payment_status, user_points captured.
-        """
-        user = UserFactory.with_points(5000)
-        order = OrderFactory(user=user, status="confirmed")
-        payment = PaymentFactory(order=order, status="in_progress")
-
-        context = ForensicContext()
-        context.capture_state_before(order=order, payment=payment, user=user)
-
-        assert context.state_before is not None
-        assert context.state_before.order_status == "confirmed"
-        assert context.state_before.payment_status == "in_progress"
-        assert context.state_before.user_points == 5000
-
-    def test_retry_history_tracking(self):
-        """
-        Purpose:
-            Verify retry attempts are tracked in history.
-        Expected:
-            Each attempt recorded with error details.
-        """
-        context = ForensicContext()
-
-        context.add_retry_attempt(
-            attempt=1,
-            error_code="TIMEOUT",
-            error_message="Request timed out",
-            backoff_seconds=4,
-        )
-        context.add_retry_attempt(
-            attempt=2,
-            error_code="TIMEOUT",
-            error_message="Request timed out again",
-            backoff_seconds=16,
-        )
-
-        assert len(context.retry_history) == 2
-        assert context.retry_history[0].attempt == 1
-        assert context.retry_history[0].error_code == "TIMEOUT"
-        assert context.retry_history[0].backoff_seconds == 4
-        assert context.retry_history[1].attempt == 2
-
-    def test_forensic_context_builder(self, category):
-        """
-        Purpose:
-            Verify builder pattern creates complete context.
-        """
-        user = UserFactory.with_points(5000)
-        order = OrderFactory(user=user, status="confirmed")
-        payment = PaymentFactory(order=order, status="in_progress")
-
-        context = (
-            ForensicContextBuilder()
-            .start_timing()
-            .with_task(task_id="task-123", task_name="process_payment")
-            .with_state_before(order=order, payment=payment, user=user)
-            .with_extra(custom_field="custom_value")
-            .end_timing()
-            .build()
-        )
-
-        assert context.task_id == "task-123"
-        assert context.task_name == "process_payment"
-        assert context.state_before is not None
-        assert context.latency_ms >= 0
-        assert context.extra["custom_field"] == "custom_value"
-
-    def test_snapshot_data_creation(self, category):
-        """
-        Purpose:
-            Verify snapshot data for DLQ contains all needed info.
-        """
-        user = UserFactory.with_points(5000)
-        order = OrderFactory(user=user, status="confirmed")
-        payment = PaymentFactory(
-            order=order,
-            status="in_progress",
-            payment_key="pay_key_123",
-            amount=Decimal("10000"),
-        )
-
-        snapshot = create_snapshot_data(order=order, payment=payment, user=user)
-
-        assert snapshot["order_id"] == order.id
-        assert snapshot["payment_id"] == payment.id
-        assert snapshot["user_id"] == user.id
-        assert snapshot["payment_key"] == "pay_key_123"
-        assert snapshot["user_points"] == 5000
-
-    def test_metadata_to_dict_conversion(self):
-        """
-        Purpose:
-            Verify ForensicContext converts to storable dict.
-        """
-        context = ForensicContext(
-            request_timestamp="2025-01-01T10:00:00Z",
-            client_ip="127.0.0.1",
-            task_name="test_task",
-        )
-        context.add_retry_attempt(
-            attempt=1,
-            error_code="ERROR",
-            error_message="Test",
-            backoff_seconds=4,
-        )
-
-        metadata = context.to_metadata()
-
-        assert metadata["request_timestamp"] == "2025-01-01T10:00:00Z"
-        assert metadata["client_ip"] == "127.0.0.1"
-        assert metadata["task_name"] == "test_task"
-        assert len(metadata["retry_history"]) == 1
-        assert metadata["retry_history"][0]["attempt"] == 1
-
-
-# =============================================================================
-# E. Integration Tests - Full DLQ Flow
+# D. Integration Tests - Full DLQ Flow
 # =============================================================================
 
 
@@ -678,7 +535,6 @@ class TestDLQIntegrationFlow:
 
     Validates:
     - Failure → Retry → DLQ complete flow
-    - Forensic context in DLQ entries
     - DLQ state transitions
     """
 
@@ -693,15 +549,6 @@ class TestDLQIntegrationFlow:
         order = OrderFactory(user=user, status="confirmed")
         payment = PaymentFactory(order=order, status="in_progress")
 
-        # Create forensic context
-        forensic = (
-            ForensicContextBuilder()
-            .start_timing()
-            .with_task(task_id="celery-task-123", task_name="confirm_payment")
-            .with_state_before(order=order, payment=payment, user=user)
-            .build()
-        )
-
         # Simulate retry exhaustion
         config = RetryConfig(max_attempts=2, enable_dlq=True, domain="payment")
         handler = RetryHandler(config=config)
@@ -715,7 +562,6 @@ class TestDLQIntegrationFlow:
                 "order": order,
                 "payment": payment,
                 "user": user,
-                "snapshot_data": create_snapshot_data(order, payment, user),
             },
         )
 

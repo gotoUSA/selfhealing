@@ -213,7 +213,6 @@ packages/selfhealing-python/src/selfhealing/
 | [08_OBSERVABILITY.md](08_OBSERVABILITY.md) | 메트릭 및 모니터링 |
 | [09_CONFIGURATION.md](09_CONFIGURATION.md) | 설정 참조 |
 | [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) | 운영자 가이드 |
-| [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | Forensic Advisor 상세 |
 | [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 관리 |
 | [13_CHAOS_ENGINEERING.md](13_CHAOS_ENGINEERING.md) | 자율 카오스 엔진 |
 

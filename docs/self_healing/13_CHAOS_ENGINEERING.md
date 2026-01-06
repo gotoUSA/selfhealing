@@ -82,8 +82,8 @@
 │  ┌───────────────────────────────────────────────────────────────────┐   │
 │  │                    Post-Experiment Analysis                        │   │
 │  │  ┌────────────────┐    ┌────────────────┐    ┌────────────────┐   │   │
-│  │  │ ForensicAdvisor│    │ ResilienceReport│   │  Audit Trail   │   │   │
-│  │  │   Analysis     │    │   Generator     │   │   Recording    │   │   │
+│  │  │  Resilience    │    │ ResilienceReport│   │  Audit Trail   │   │   │
+│  │  │   Metrics      │    │   Generator     │   │   Recording    │   │   │
 │  │  └────────────────┘    └────────────────┘    └────────────────┘   │   │
 │  └───────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
@@ -675,7 +675,6 @@ experiment.rollback()  # 무시됨
 
 | 문서 | 설명 |
 |------|------|
-| [11_FORENSIC_ADVISOR.md](11_FORENSIC_ADVISOR.md) | ForensicAdvisor 연동 |
 | [12_ERROR_BUDGET.md](12_ERROR_BUDGET.md) | Error Budget 시스템 |
 | [07_CONTROL_API.md](07_CONTROL_API.md) | Control API 레퍼런스 |
 | [10_OPERATIONS_GUIDE.md](10_OPERATIONS_GUIDE.md) | 운영자 가이드 |

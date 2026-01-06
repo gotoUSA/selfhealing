@@ -55,7 +55,7 @@
 │  │              거버넌스 Layer (자동화 실행 가능 여부 판단)                    │  │
 │  │                                                                            │  │
 │  │  ┌─ 수동 제어 (Human Decision) ────────────────────────────────────────┐  │  │
-│  │  │  ┌────────────────────────┐                                          │  │  │
+│  │  │  ┌────────────────────────┐                                         │  │  │
 │  │  │  │  SystemControlManager  │  ← 관리자가 직접 Enable/Disable          │  │  │
 │  │  │  │ (Kill Switch, Dry-Run) │                                          │  │  │
 │  │  │  └────────────────────────┘                                          │  │  │
@@ -341,7 +341,6 @@ def process_payment(order_id: int):
 | `circuit_breaker_context` | CB 스코프 |
 | `retry_context` | 재시도 스코프 |
 | `timeout_context` | 타임아웃 스코프 |
-| `forensic_context` | 포렌식 데이터 수집 |
 
 ### 3.3 Backoff Strategies
 

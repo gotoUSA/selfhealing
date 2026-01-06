@@ -1,7 +1,7 @@
 """
 Tests for Drift Detection Tasks.
 
-Reference: docs/self_healing/11_FORENSIC_ADVISOR.md
+Reference: docs/self_healing/middleware_system/02_LOGIC_ENGINE.md
 """
 
 from datetime import datetime, timezone, timedelta

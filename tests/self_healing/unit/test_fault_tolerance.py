@@ -2,10 +2,9 @@
 Fault Tolerance Tests for New Self-Healing Features
 
 Tests that verify:
-1. ForensicAdvisor failures don't break core DLQ operations
-2. ChaosContext failures don't break DLQ operations
-3. Drift Detection task failures are logged and don't crash system
-4. All new features have graceful degradation
+1. ChaosContext failures don't break DLQ operations
+2. Drift Detection task failures are logged and don't crash system
+3. All new features have graceful degradation
 
 Core Principle: Self-healing features should NEVER make things worse.
 """
@@ -13,57 +12,6 @@ Core Principle: Self-healing features should NEVER make things worse.
 import pytest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
-
-
-class TestForensicAdvisorFaultTolerance:
-    """Test ForensicAdvisor failure handling."""
-
-    def test_analyze_with_invalid_operation(self):
-        """Advisor should handle invalid operation gracefully."""
-        from selfhealing.services.forensic_advisor import (
-            ForensicAdvisorService,
-        )
-
-        advisor = ForensicAdvisorService()
-
-        # Mock operation with missing/invalid data
-        mock_op = MagicMock()
-        mock_op.id = 1
-        mock_op.error_code = None
-        mock_op.error_message = None
-        mock_op.retry_count = 0
-        mock_op.metadata = None
-
-        # Should not raise exception
-        advisory = advisor.analyze(mock_op)
-
-        # Should return valid advisory with fallback values
-        assert advisory is not None
-        assert advisory.recommended_action == "manual_check"
-        assert advisory.confidence > 0
-
-    def test_analyze_and_update_db_failure_logged(self):
-        """When DB save fails, should log error but not crash."""
-        from selfhealing.services.forensic_advisor import (
-            ForensicAdvisorService,
-        )
-
-        advisor = ForensicAdvisorService()
-
-        # Mock operation that fails on save
-        mock_op = MagicMock()
-        mock_op.id = 1
-        mock_op.error_code = "TIMEOUT"
-        mock_op.error_message = "Connection timeout"
-        mock_op.retry_count = 1
-        mock_op.metadata = {}
-        mock_op.save.side_effect = Exception("DB connection failed")
-
-        # Should raise exception (this is expected - caller handles it)
-        with pytest.raises(Exception) as exc_info:
-            advisor.analyze_and_update(mock_op)
-
-        assert "DB connection failed" in str(exc_info.value)
 
 
 class TestChaosContextFaultTolerance:
@@ -173,27 +121,6 @@ class TestAuditTrailResilience:
         assert "except" in source
         assert "Best-effort" in source or "best-effort" in source
 
-    def test_forensic_advisor_logs_on_failure(self):
-        """ForensicAdvisor should log failures properly."""
-        from selfhealing.services.forensic_advisor import ForensicAdvisorService
-
-        advisor = ForensicAdvisorService()
-
-        # Mock operation with edge case data
-        mock_op = MagicMock()
-        mock_op.id = 1
-        mock_op.error_code = None
-        mock_op.error_message = None
-        mock_op.retry_count = 0
-        mock_op.metadata = {}
-
-        with patch("selfhealing.services.forensic_advisor.logger") as mock_logger:
-            advisory = advisor.analyze(mock_op)
-
-            # Should return valid advisory even with edge case
-            assert advisory is not None
-            assert advisory.matched_pattern_id == "UNKNOWN"
-
 
 class TestGracefulDegradation:
     """Test graceful degradation patterns in new features."""
@@ -227,23 +154,15 @@ class TestGracefulDegradation:
     def test_new_features_dont_block_core_operations(self):
         """New features should not block core DLQ operations."""
         # This is verified by the architecture:
-        # - ForensicAdvisor is called AFTER DLQ entry creation
         # - ChaosContext is OPTIONAL metadata
         # - Drift Detection runs in separate Celery tasks
 
         from selfhealing.services.dlq_service import DLQService
-        from selfhealing.services.forensic_advisor import (
-            ForensicAdvisorService,
-        )
         from selfhealing.services.chaos_context import ChaosExperimentContext
 
-        # Verify DLQService doesn't require ForensicAdvisor
+        # Verify DLQService works without additional dependencies
         dlq = DLQService()
-        assert not hasattr(dlq, "forensic_advisor")
-
-        # Verify ForensicAdvisor is separate service
-        advisor = ForensicAdvisorService()
-        assert advisor is not None
+        assert dlq is not None
 
         # Verify ChaosContext is standalone
         context = ChaosExperimentContext()
@@ -266,18 +185,6 @@ class TestSystemRecovery:
             assert result["success"] is False
             assert "error" in result
             assert "checked_at" in result  # Always includes timestamp
-
-    def test_forensic_analysis_task_failure_logged(self):
-        """analyze_pending_operations logs failures properly."""
-        from shopping.tasks.drift_detection_tasks import analyze_pending_operations
-
-        with patch("shopping.tasks.drift_detection_tasks._get_failed_operations") as mock_ops:
-            mock_ops.side_effect = Exception("DB unavailable")
-
-            result = analyze_pending_operations()
-
-            assert result["success"] is False
-            assert "error" in result
 
     def test_cleanup_task_failure_logged(self):
         """cleanup_expired_chaos_experiments logs failures properly."""

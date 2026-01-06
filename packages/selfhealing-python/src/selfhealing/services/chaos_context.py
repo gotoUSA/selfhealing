@@ -7,7 +7,7 @@ Distinguishes intentional chaos experiments from actual failures.
 Core Principle: Chaos experiments should be clearly identifiable
 in the DLQ to prevent confusion with real incidents.
 
-Reference: docs/self_healing/11_FORENSIC_ADVISOR.md
+Reference: docs/self_healing/middleware_system/02_LOGIC_ENGINE.md
 """
 
 from __future__ import annotations

@@ -1,12 +1,10 @@
 """
 Resilience Report Generator
 
-Generates daily resilience reports based on chaos experiment results
-and forensic advisor analysis.
+Generates daily resilience reports based on chaos experiment results.
 
 Features:
 - Daily resilience summary
-- ForensicAdvisor integration
 - Trend analysis
 - SLA compliance tracking
 - Metrics recording
@@ -234,11 +232,10 @@ class ResilienceReportGenerator:
     
     Responsibilities:
     1. Collect experiment results from scheduler
-    2. Integrate with ForensicAdvisor for analysis
-    3. Calculate resilience grade
-    4. Generate actionable recommendations
-    5. Record to metrics and audit trail
-    6. Notify stakeholders
+    2. Calculate resilience grade
+    3. Generate actionable recommendations
+    4. Record to metrics and audit trail
+    5. Notify stakeholders
     
     Usage:
         generator = get_report_generator()
@@ -448,45 +445,14 @@ class ResilienceReportGenerator:
         return experiments
     
     def _run_forensic_analysis(self, experiments: List[ExperimentSummary]) -> Dict[str, Any]:
-        """Run forensic analysis on experiment results."""
-        try:
-            from selfhealing.services.forensic_advisor import get_forensic_advisor
-            
-            advisor = get_forensic_advisor()
-            
-            # Collect patterns
-            patterns = []
-            recommendations_by_service = {}
-            
-            for exp in experiments:
-                if exp.outcome in (ExperimentOutcome.FAILED.value, ExperimentOutcome.DEGRADED.value):
-                    # Get advisory for this failure
-                    advisory = advisor.analyze({
-                        "service": exp.target_service,
-                        "experiment_type": exp.experiment_type,
-                        "outcome": exp.outcome,
-                        "recovery_time": exp.recovery_time_seconds,
-                    })
-                    
-                    if hasattr(advisory, 'recommendations'):
-                        if exp.target_service not in recommendations_by_service:
-                            recommendations_by_service[exp.target_service] = []
-                        recommendations_by_service[exp.target_service].extend(
-                            advisory.recommendations if hasattr(advisory, 'recommendations') else []
-                        )
-                    
-                    if hasattr(advisory, 'pattern'):
-                        patterns.append(advisory.pattern)
-            
-            return {
-                "patterns_detected": list(set(patterns)) if patterns else [],
-                "recommendations_by_service": recommendations_by_service,
-                "total_issues_analyzed": len([e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]),
-            }
-            
-        except Exception as e:
-            logger.warning(f"[ReportGenerator] Forensic analysis failed: {e}")
-            return {"error": str(e)}
+        """Run analysis on experiment results (stub - ForensicAdvisor removed)."""
+        # ForensicAdvisor has been removed from the system.
+        # This method returns empty analysis results.
+        return {
+            "patterns_detected": [],
+            "recommendations_by_service": {},
+            "total_issues_analyzed": len([e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]),
+        }
     
     def _get_error_budget_status(self) -> Dict[str, Any]:
         """Get current error budget status."""

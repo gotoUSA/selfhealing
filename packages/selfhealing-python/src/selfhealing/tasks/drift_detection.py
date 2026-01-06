@@ -11,7 +11,7 @@ NOTE: This module provides task functions that can be registered with
 any task queue system (Celery, RQ, etc.). The actual task registration
 is done in the framework-specific adapter layer.
 
-Reference: docs/self_healing/11_FORENSIC_ADVISOR.md
+Reference: docs/self_healing/middleware_system/02_LOGIC_ENGINE.md
 """
 
 from __future__ import annotations
@@ -325,88 +325,6 @@ class SLADriftDetector:
                 )
             except Exception as e:
                 logger.error(f"[SLADriftWarning] Failed to send notification: {e}")
-
-
-# =============================================================================
-# Forensic Analysis
-# =============================================================================
-
-
-class ForensicAnalyzer:
-    """Analyzes pending DLQ operations and generates advisories."""
-
-    def __init__(
-        self,
-        get_failed_operations: Callable[..., FailedOperationQuerySet],
-        get_forensic_advisor: Callable[[], Any],
-    ):
-        """
-        Initialize analyzer with dependencies.
-
-        Args:
-            get_failed_operations: Function to query failed operations
-            get_forensic_advisor: Function to get forensic advisor instance
-        """
-        self.get_failed_operations = get_failed_operations
-        self.get_forensic_advisor = get_forensic_advisor
-
-    def analyze_pending(self, batch_size: int = 100) -> dict[str, Any]:
-        """
-        Analyze pending operations and generate forensic advisories.
-
-        Args:
-            batch_size: Maximum operations to analyze per run
-
-        Returns:
-            Dictionary with analysis results
-        """
-        logger.info("[ForensicAnalysis] Starting pending operations analysis")
-
-        try:
-            advisor = self.get_forensic_advisor()
-
-            pending_ops = self.get_failed_operations(
-                status__in=["pending", "requires_review"],
-                next_action_hint="",
-            ).order_by(
-                "created_at"
-            )[:batch_size]
-
-            analyzed_count = 0
-            results_by_action = {}
-
-            for operation in pending_ops:
-                try:
-                    advisory = advisor.analyze_and_update(operation)
-                    analyzed_count += 1
-
-                    action = advisory.recommended_action
-                    results_by_action[action] = results_by_action.get(action, 0) + 1
-
-                    logger.debug(
-                        f"[ForensicAnalysis] Analyzed operation {operation.id}: "
-                        f"action={action}, confidence={advisory.confidence}"
-                    )
-
-                except Exception as e:
-                    logger.warning(f"[ForensicAnalysis] Failed to analyze operation " f"{operation.id}: {e}")
-
-            logger.info(f"[ForensicAnalysis] Completed - analyzed {analyzed_count} operations")
-
-            return {
-                "success": True,
-                "analyzed_at": now().isoformat(),
-                "analyzed_count": analyzed_count,
-                "results_by_action": results_by_action,
-            }
-
-        except Exception as e:
-            logger.error(f"[ForensicAnalysis] Error during analysis: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "analyzed_at": now().isoformat(),
-            }
 
 
 # =============================================================================

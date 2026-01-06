@@ -9,7 +9,6 @@ Key Components:
 - BaseNotifyingTask: Base class with built-in notifications
 - NotificationPolicy: Configurable notification policies
 - SLADriftDetector: SLA drift detection logic
-- ForensicAnalyzer: Forensic analysis for pending operations
 
 Usage:
     from selfhealing.tasks import (
@@ -39,7 +38,6 @@ from .base import (
 
 from .drift_detection import (
     SLADriftDetector,
-    ForensicAnalyzer,
 )
 
 from .daily_report import (
@@ -103,7 +101,6 @@ __all__ = [
     "get_cooldown_status",
     # Drift Detection
     "SLADriftDetector",
-    "ForensicAnalyzer",
     # Daily Report
     "DailyReportData",
     "DailyReportCollector",
