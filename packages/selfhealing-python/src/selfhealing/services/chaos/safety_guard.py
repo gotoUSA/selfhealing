@@ -646,10 +646,40 @@ class SafetyGuard:
                 f"chaos experiments blocked"
             )
             result.checks_failed.append("emergency_mode")
+            
+            # Audit 로그 기록 (리뷰 피드백 반영 - 26_IMPROVEMENT_PART1)
+            self._log_emergency_block_audit(emergency_result)
+            
             return True
         
         result.checks_passed.append("emergency_mode")
         return False
+    
+    def _log_emergency_block_audit(self, emergency_result: Dict[str, Any]) -> None:
+        """
+        Emergency Mode 차단 시 Audit 로그 기록.
+        
+        리뷰 피드백: "왜 이때 카오스 실험이 안 돌았지?"라는 질문에
+        시스템이 "비상 상황이라 내가 막았다"고 대답할 수 있도록 증적을 남김.
+        
+        Args:
+            emergency_result: Emergency mode 체크 결과 (level, level_value 포함)
+        """
+        try:
+            from selfhealing.services.audit_helpers import log_governance_blocked_audit
+            
+            log_governance_blocked_audit(
+                action="chaos_experiment",
+                block_reason="emergency_mode_active",
+                details={
+                    "current_emergency_level": emergency_result["level"],
+                    "emergency_level_value": emergency_result["level_value"],
+                    "blocked_by": "SafetyGuard._check_emergency_mode_status",
+                },
+            )
+        except Exception as e:
+            # Audit 실패는 실험 차단에 영향을 주지 않음 (non-critical)
+            logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
     
     def _check_cooldown(self) -> Dict[str, Any]:
         """Check if cooldown period is active."""
