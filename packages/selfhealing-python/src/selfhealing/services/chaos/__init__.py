@@ -56,6 +56,20 @@ from .stop_conditions import (
     get_dry_run_config,
     get_stop_conditions_config,
 )
+# Phase 2: Impact Prediction
+from .impact_predictor import (
+    ImpactPredictor,
+    PredictedOutcome,
+    ServiceImpact,
+    get_impact_predictor,
+)
+from .blast_radius_analyzer import (
+    BlastRadiusAnalyzer,
+    BlastRadiusAnalysisResult,
+    BlastRadiusLevel,
+    DependencyNode,
+    get_blast_radius_analyzer,
+)
 
 __all__ = [
     # Experiments
@@ -95,4 +109,14 @@ __all__ = [
     "get_ttl_config",
     "get_dry_run_config",
     "get_stop_conditions_config",
+    # Phase 2: Impact Prediction
+    "ImpactPredictor",
+    "PredictedOutcome",
+    "ServiceImpact",
+    "get_impact_predictor",
+    "BlastRadiusAnalyzer",
+    "BlastRadiusAnalysisResult",
+    "BlastRadiusLevel",
+    "DependencyNode",
+    "get_blast_radius_analyzer",
 ]

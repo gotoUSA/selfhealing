@@ -184,6 +184,8 @@ from selfhealing.api.django.views.chaos import (
     TTLConfigView,
     DryRunConfigView,
     KillAllView,
+    # Phase 2: Impact Prediction Views
+    DryRunAnalysisView,
 )
 
 # L2 Storage Resilience API Views
@@ -477,6 +479,8 @@ urlpatterns = [
     path("chaos/config/stop-conditions/", StopConditionsConfigView.as_view(), name="chaos-config-stop-conditions"),
     path("chaos/config/ttl/", TTLConfigView.as_view(), name="chaos-config-ttl"),
     path("chaos/config/dry-run/", DryRunConfigView.as_view(), name="chaos-config-dry-run"),
+    # Phase 2: Dry Run Analysis with Impact Prediction
+    path("chaos/dry-run/analyze/", DryRunAnalysisView.as_view(), name="chaos-dry-run-analyze"),
     # Scheduled Experiments CRUD
     path("chaos/schedules/", ScheduleListView.as_view(), name="chaos-schedules-list"),
     path("chaos/schedules/<str:schedule_id>/", ScheduleDetailView.as_view(), name="chaos-schedule-detail"),

@@ -1,7 +1,7 @@
 # 24. Chaos Engineering 통합 확장 계획
 
 > **작성일**: 2026-01-07  
-> **상태**: Phase 0-1 완료 ✅  
+> **상태**: Phase 0-2 완료 ✅  
 > **관련 문서**: [13_CHAOS_ENGINEERING.md](../13_CHAOS_ENGINEERING.md), [21_CB_ADVANCED_PROTECTION.md](21_CB_ADVANCED_PROTECTION.md)
 
 ---
@@ -28,7 +28,7 @@
 |-------|------|----------|--------|
 | Phase 0 | ✅ 완료 | NotificationCategory.CHAOS 추가, cooldown 300초 설정 | 3/3 통과 |
 | Phase 1 | ✅ 완료 | ChaosActionableAlertUrlBuilder, ChaosNotificationService | 8/8 통과 |
-| Phase 2 | ⬜ 예정 | ImpactPredictor, BlastRadiusAnalyzer, Dry Run API | - |
+| Phase 2 | ✅ 완료 | ImpactPredictor, BlastRadiusAnalyzer, Dry Run API | 14/14 통과 |
 | Phase 3 | ⬜ 예정 | SyntheticLoadGenerator, TrafficShaper | - |
 | Phase 4 | ⬜ 예정 | 통합 테스트 | - |
 
@@ -2502,3 +2502,4 @@ class TestChaosActionableUrls:
 | 2026-01-07 | 1.2 | NotificationCategory 확장 (§6.4), Admin Deep Link 보완 (§6.5) | - |
 | 2026-01-07 | 1.3 | Phase 구분 (§7), 테스트 케이스 요약 (§8) 추가 | - |
 | 2026-01-07 | 1.4 | **Phase 0-1 구현 완료**: NotificationCategory.CHAOS 추가, ChaosActionableAlertUrlBuilder, ChaosNotificationService 구현, 11개 테스트 통과 | - |
+| 2026-01-07 | 1.5 | **Phase 2 구현 완료**: ImpactPredictor, BlastRadiusAnalyzer, DryRunAnalysisView API 구현, 14개 테스트 작성 | - |

@@ -48,6 +48,9 @@ from selfhealing.api.django.serializers.chaos import (
     DryRunConfigSerializer,
     KillAllRequestSerializer,
     KillAllResponseSerializer,
+    # Phase 2: Impact Prediction Serializers
+    DryRunAnalysisRequestSerializer,
+    DryRunAnalysisResponseSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -958,4 +961,164 @@ class KillAllView(APIView):
                 "ttl_configs_cleared": ttl_configs_cleared,
             },
         })
+
+
+# =============================================================================
+# Phase 2: Dry Run Analysis Views
+# =============================================================================
+
+
+class DryRunAnalysisView(APIView):
+    """
+    API for Dry Run analysis with impact prediction.
+
+    Dry Run 모드에서 실험의 예상 결과와 영향 범위를 분석합니다.
+    실제 장애 주입 없이 안전하게 실험 계획을 검증할 수 있습니다.
+
+    POST: Analyze experiment with predictions
+
+    Design Reference:
+    - 24_CHAOS_INTEGRATION_PLAN.md Phase 2
+    - ImpactPredictor: services/chaos/impact_predictor.py
+    - BlastRadiusAnalyzer: services/chaos/blast_radius_analyzer.py
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        """
+        Analyze experiment and return predictions.
+
+        Request body:
+        {
+            "target_service": "payment-api",
+            "experiment_type": "latency_injection",
+            "config": {"latency_ms": 500},
+            "include_blast_radius": true
+        }
+
+        Response:
+        {
+            "status": "success",
+            "data": {
+                "target_service": "payment-api",
+                "experiment_type": "latency_injection",
+                "predicted_outcome": {...},
+                "blast_radius_analysis": {...},
+                "service_impacts": [...],
+                "experiment_allowed": true,
+                "requires_approval": false,
+                "approval_level": "",
+                "overall_risk_level": "medium"
+            }
+        }
+        """
+        serializer = DryRunAnalysisRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": "error", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_service = serializer.validated_data["target_service"]
+        experiment_type = serializer.validated_data["experiment_type"]
+        config = serializer.validated_data.get("config", {})
+        include_blast_radius = serializer.validated_data.get("include_blast_radius", True)
+
+        try:
+            from selfhealing.services.chaos.impact_predictor import get_impact_predictor
+            from selfhealing.services.chaos.blast_radius_analyzer import get_blast_radius_analyzer
+
+            # 1. Impact Prediction
+            predictor = get_impact_predictor()
+            predicted_outcome = predictor.predict_outcome(
+                experiment_type=experiment_type,
+                target_service=target_service,
+                config=config,
+            )
+
+            # 2. Service Impact Analysis
+            service_impacts = predictor.predict_service_impact(
+                target_service=target_service,
+                experiment_type=experiment_type,
+                config=config,
+            )
+
+            # 3. Blast Radius Analysis (optional)
+            blast_radius_analysis = None
+            if include_blast_radius:
+                analyzer = get_blast_radius_analyzer()
+                blast_radius_analysis = analyzer.analyze(
+                    target_service=target_service,
+                    experiment_type=experiment_type,
+                )
+
+            # 4. Determine overall risk level and approval requirements
+            requires_approval = predicted_outcome.requires_approval
+            approval_level = predicted_outcome.approval_reason
+            experiment_allowed = True
+
+            if blast_radius_analysis:
+                if blast_radius_analysis.requires_approval:
+                    requires_approval = True
+                    approval_level = blast_radius_analysis.approval_level
+                if not blast_radius_analysis.experiment_allowed:
+                    experiment_allowed = False
+
+            # 5. Calculate overall risk level
+            risk_score = blast_radius_analysis.risk_score if blast_radius_analysis else 0.5
+            overall_risk_level = self._calculate_risk_level(
+                risk_score=risk_score,
+                confidence_score=predicted_outcome.confidence_score,
+            )
+
+            logger.info(
+                f"[ChaosAPI] Dry run analysis completed by {request.user}: "
+                f"target={target_service}, type={experiment_type}, "
+                f"risk={overall_risk_level}, allowed={experiment_allowed}"
+            )
+
+            response_data = {
+                "target_service": target_service,
+                "experiment_type": experiment_type,
+                "predicted_outcome": predicted_outcome.to_dict(),
+                "blast_radius_analysis": (
+                    blast_radius_analysis.to_dict() if blast_radius_analysis else None
+                ),
+                "service_impacts": [s.to_dict() for s in service_impacts],
+                "experiment_allowed": experiment_allowed,
+                "requires_approval": requires_approval,
+                "approval_level": approval_level,
+                "overall_risk_level": overall_risk_level,
+            }
+
+            return Response({
+                "status": "success",
+                "data": response_data,
+            })
+
+        except Exception as e:
+            logger.error(f"[ChaosAPI] Dry run analysis failed: {e}")
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _calculate_risk_level(
+        self,
+        risk_score: float,
+        confidence_score: float,
+    ) -> str:
+        """Calculate overall risk level."""
+        # Lower confidence = higher uncertainty = higher effective risk
+        effective_risk = risk_score + (1 - confidence_score) * 0.2
+
+        if effective_risk >= 0.75:
+            return "critical"
+        elif effective_risk >= 0.5:
+            return "high"
+        elif effective_risk >= 0.25:
+            return "medium"
+        else:
+            return "low"
 

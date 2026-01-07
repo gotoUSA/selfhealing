@@ -757,3 +757,124 @@ class ExperimentConfigWithTTLSerializer(serializers.Serializer):
         default=False,
         help_text="True이면 실제 장애 주입 없이 시뮬레이션만 수행."
     )
+
+
+# =============================================================================
+# Phase 2: Impact Prediction Serializers
+# =============================================================================
+
+
+class DryRunAnalysisRequestSerializer(serializers.Serializer):
+    """Request serializer for Dry Run analysis with prediction."""
+
+    target_service = serializers.CharField(
+        required=True,
+        help_text="Target service name"
+    )
+    experiment_type = serializers.ChoiceField(
+        choices=[
+            "latency_injection",
+            "failure_injection",
+            "resource_exhaustion",
+            "network_partition",
+        ],
+        required=True,
+        help_text="Type of chaos experiment"
+    )
+    config = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Experiment-specific configuration (e.g., latency_ms, failure_rate)"
+    )
+    include_blast_radius = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Include blast radius analysis"
+    )
+
+
+class ServiceImpactSerializer(serializers.Serializer):
+    """Serializer for service impact prediction."""
+
+    service_name = serializers.CharField()
+    impact_level = serializers.CharField()
+    predicted_latency_increase_ms = serializers.FloatField()
+    predicted_error_rate_percent = serializers.FloatField()
+    predicted_availability_drop_percent = serializers.FloatField()
+    is_direct_target = serializers.BooleanField()
+    dependency_chain = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+
+
+class PredictedOutcomeSerializer(serializers.Serializer):
+    """Serializer for predicted outcome."""
+
+    predicted_cb_state = serializers.CharField()
+    predicted_recovery_time_seconds = serializers.FloatField()
+    predicted_error_rate_increase_percent = serializers.FloatField()
+    predicted_canary_recovery = serializers.BooleanField()
+    confidence_score = serializers.FloatField()
+    patterns_used = serializers.IntegerField()
+    similar_experiment_ids = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+    recommendations = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+    requires_approval = serializers.BooleanField()
+    approval_reason = serializers.CharField(allow_blank=True)
+
+
+class DependencyNodeSerializer(serializers.Serializer):
+    """Serializer for dependency graph node."""
+
+    service_name = serializers.CharField()
+    depth = serializers.IntegerField()
+    is_critical = serializers.BooleanField()
+    dependency_type = serializers.CharField()
+    impact_score = serializers.FloatField()
+
+
+class BlastRadiusAnalysisResultSerializer(serializers.Serializer):
+    """Serializer for blast radius analysis result."""
+
+    target_service = serializers.CharField()
+    experiment_type = serializers.CharField()
+    level = serializers.CharField()
+    affected_services = DependencyNodeSerializer(many=True)
+    total_affected_count = serializers.IntegerField()
+    includes_critical_services = serializers.BooleanField()
+    critical_services = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+    risk_score = serializers.FloatField()
+    recommendations = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+    requires_approval = serializers.BooleanField()
+    approval_level = serializers.CharField(allow_blank=True)
+    experiment_allowed = serializers.BooleanField()
+    blocking_reasons = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+
+
+class DryRunAnalysisResponseSerializer(serializers.Serializer):
+    """Response serializer for Dry Run analysis."""
+
+    target_service = serializers.CharField()
+    experiment_type = serializers.CharField()
+    predicted_outcome = PredictedOutcomeSerializer()
+    blast_radius_analysis = BlastRadiusAnalysisResultSerializer(required=False)
+    service_impacts = ServiceImpactSerializer(many=True, required=False)
+    experiment_allowed = serializers.BooleanField()
+    requires_approval = serializers.BooleanField()
+    approval_level = serializers.CharField(allow_blank=True)
+    overall_risk_level = serializers.CharField()  # "low", "medium", "high", "critical"
