@@ -57,6 +57,7 @@ class NotificationCategory(str, Enum):
     APPROVAL = "approval"  # Approval requests
     REPORT = "report"  # Daily reports
     ERROR = "error"  # Task failures
+    CHAOS = "chaos"  # Chaos experiment notifications
 
 
 @dataclass
@@ -174,6 +175,7 @@ class RoutingPolicy:
             NotificationCategory.APPROVAL: 0,  # No cooldown
             NotificationCategory.REPORT: 0,  # No cooldown
             NotificationCategory.ERROR: 60,  # 1 min
+            NotificationCategory.CHAOS: 300,  # 5 min - Chaos experiments
         }
     )
 
