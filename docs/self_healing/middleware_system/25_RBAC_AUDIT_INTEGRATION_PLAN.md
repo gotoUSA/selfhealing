@@ -4,7 +4,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 버전 | 1.3.0 |
+| 버전 | 1.4.0 |
 | 작성일 | 2026-01-07 |
 | 최종 수정 | 2026-01-07 |
 | 관련 문서 | 20_AUDIT_UNIFICATION_PLAN.md, 19_DLQ_AUTOMATION_BLUEPRINT.md |
@@ -992,8 +992,8 @@ class DLQReplayView(APIView):
 - [x] **Phase 2.2**: _try_add_to_buffer() actor_roles 지원 ✅ (2026-01-07)
 - [x] **Phase 3.5**: Celery Task actor_info 전달 ✅ (2026-01-07)
 - [x] **Phase 4.1**: 단위 테스트 작성 ✅ (2026-01-07, 51개 테스트 통과)
-- [ ] **Phase 4.2**: 통합 테스트 작성
-- [ ] **Phase 4.3**: Grafana 대시보드 업데이트
+- [x] **Phase 4.2**: 통합 테스트 작성 ✅ (2026-01-07, 13개 테스트 통과)
+- [x] **Phase 4.3**: Grafana 대시보드 업데이트 ✅ (2026-01-07, RBAC 역할별 패널 5개 추가)
 
 ### Phase 5: trace_id 일관성 확보
 - [ ] **Phase 5.1**: _write_to_wal() trace_id 파라미터 추가
@@ -1102,3 +1102,4 @@ def restore_trace_from_celery(trace_info: Optional[dict]) -> Generator[str, None
 | 1.1.0 | 2026-01-07 | AI Assistant | 리뷰 피드백 반영: 배경 섹션 추가, trace_id 일관성 Phase 5 추가, 선택적 강제 전략 문서화 |
 | 1.2.0 | 2026-01-07 | AI Assistant | **Phase 1 구현 완료**: Actor.roles, _extract_selfhealing_roles(), set_actor() roles, AuditEntry.actor_roles, 39개 단위 테스트 |
 | 1.3.0 | 2026-01-07 | AI Assistant | **Phase 2, 3 구현 완료**: _write_to_wal() actor_roles 자동 전파, _try_add_to_buffer() actor_roles 지원, Celery Task actor_info 전달, 51개 단위 테스트 통과 |
+| 1.4.0 | 2026-01-07 | AI Assistant | **Phase 4 구현 완료**: 통합 테스트 13개 추가 (test_rbac_audit_flow.py), Grafana 대시보드 RBAC 역할별 패널 5개 추가 (dlq_monitoring.json), 전체 64개 테스트 통과 |
