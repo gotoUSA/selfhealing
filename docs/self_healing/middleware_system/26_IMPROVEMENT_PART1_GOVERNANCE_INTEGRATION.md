@@ -1,7 +1,8 @@
 # Part 1: Governance Integration 개선 구현 가이드
 
-**문서 버전**: 1.0.0  
+**문서 버전**: 1.1.0  
 **작성일**: 2026-01-07  
+**최종 수정**: 2026-01-07 (코드 재분석 기반 정정)  
 **근거 코드**: 실제 소스 코드 분석 기반
 
 ---
@@ -9,6 +10,8 @@
 ## 1. 현황 분석
 
 ### 1.1 현재 Governance 체크 구현 위치
+
+#### governance_checks.py - 통합 Governance 체크
 
 [governance_checks.py](../../../packages/selfhealing-python/src/selfhealing/services/governance_checks.py) 파일에서 확인된 핵심 함수들:
 
@@ -41,54 +44,73 @@ def check_all_governance(
 @require_error_budget()      # Error Budget 체크
 ```
 
-### 1.2 Governance 미연결 서비스 확인 결과
+### 1.2 ChaosSchedulerService 분석 결과
 
-#### Gap 1: ChaosSchedulerService
+#### ✅ Kill Switch: SafetyGuard 경유로 **이미 구현됨**
 
-[scheduler.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py) 분석 결과:
+[scheduler.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py) 코드 추적 결과:
 
-```python
-# scheduler.py L56-78
-class ChaosSchedulerService:
-    """
-    Manages scheduled chaos experiments.
-    
-    Responsibilities:
-    1. CRUD for scheduled experiments
-    2. Pre-flight safety checks before execution
-    3. Blast radius validation
-    4. Approval workflow
-    5. Kill switch integration  # ⚠️ 문서에는 있으나 실제 구현 없음
-    6. Execution tracking and reporting
-    """
+```
+ChaosSchedulerService.execute_now()
+    └─► _check_safety_conditions()           # scheduler.py L468-485
+            └─► SafetyGuard.check()          # safety_guard.py
+                    └─► _run_core_checks()   # safety_guard.py L411-423
+                            └─► _check_kill_switch_status()
+                                    └─► _check_kill_switch()  # L530-539
+                                            └─► SystemControlManager.is_selfhealing_enabled()
+                                                    ✅ 글로벌 Kill Switch 체크
 ```
 
-**현재 `execute_now()` 메서드** (L502-550):
+**SafetyGuard._check_kill_switch() 구현** ([safety_guard.py#L530](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py#L530)):
+
 ```python
-def execute_now(self, schedule_id: str, force: bool = False) -> ExecutionResult:
-    # 0. Error Budget Gate Check
-    if not force:
-        blocked = self._check_error_budget_gate(...)
-    
-    # 1-3. Check pre-execution conditions
-    blocked = self._check_pre_execution_conditions(...)
-    
-    # 4. Safety checks (Pre-flight)
-    if not force:
-        blocked = self._check_safety_conditions(...)
-    
-    # 5. Blast radius check
-    if not force:
-        blocked = self._check_blast_radius_conditions(...)
-    
-    # ⚠️ check_all_governance() 호출 없음
-    # ⚠️ Kill Switch 체크 없음
-    # ⚠️ Emergency Mode 체크 없음
+def _check_kill_switch(self) -> bool:
+    """Check if kill switch is active."""
+    try:
+        from selfhealing.services.system_control import get_system_control
+        
+        control = get_system_control()
+        return not control.is_selfhealing_enabled()
+    except Exception as e:
+        logger.warning(f"[SafetyGuard] Could not check kill switch: {e}")
+        return False  # Fail-open
 ```
 
-**grep 검색 결과**: `governance|is_system_enabled|kill_switch` → **No matches found**
+#### ❌ Emergency Mode: SafetyGuard에 **구현 없음**
 
-#### Gap 2: AutoTuningService
+SafetyGuard의 `_run_core_checks()` 분석 ([safety_guard.py#L411-423](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py#L411)):
+
+```python
+def _run_core_checks(self, result: SafetyCheckResult, experiment_id: str) -> bool:
+    # 1. Check global block
+    if self._check_global_block(result):
+        return True
+
+    # 2. Check kill switch  ← ✅ 있음
+    if self._check_kill_switch_status(result):
+        return True
+
+    # 3. Check error budget ← ✅ 있음
+    if self._check_error_budget_status(result, experiment_id):
+        return True
+
+    # ❌ Emergency Mode 체크 없음
+    return False
+```
+
+#### SafetyGuard 체크 항목 현황
+
+| 체크 항목 | 구현 여부 | 위치 |
+|----------|----------|------|
+| Kill Switch | ✅ 있음 | `_check_kill_switch()` |
+| Error Budget | ✅ 있음 | `_check_error_budget()` |
+| System Health | ✅ 있음 | `_check_system_health()` |
+| Active Incidents | ✅ 있음 | `_check_active_incidents()` |
+| Deployment Freeze | ✅ 있음 | `_check_deployment_freeze()` |
+| Cooldown | ✅ 있음 | `_check_cooldown()` |
+| **Emergency Mode** | ❌ **없음** | 추가 필요 |
+
+### 1.3 AutoTuningService 분석 결과
 
 [service.py](../../../packages/selfhealing-python/src/selfhealing/services/auto_tuning/service.py) 분석 결과:
 
@@ -105,12 +127,13 @@ class AutoTuningService:
 
 **현재 상태**:
 - `trigger_emergency_recovery()` 메서드 존재 (L173)
-- 그러나 `check_all_governance()` 호출 없음
+- SafetyGuard를 사용하지 않음
+- `check_all_governance()` 호출 없음
 - 조정 실행 전 Kill Switch / Emergency Mode 체크 없음
 
-**grep 검색 결과**: `governance|is_system_enabled` → **No matches found**
+**grep 검색 결과**: `governance|is_system_enabled|SafetyGuard` → **No matches found**
 
-### 1.3 Governance 연결이 불필요한 서비스
+### 1.4 Governance 연결이 불필요한 서비스
 
 #### CircuitBreakerService - Governance 불필요
 
@@ -167,90 +190,108 @@ def _is_system_enabled() -> bool:
 
 ## 2. 구현 계획
 
-### 2.1 ChaosSchedulerService Governance 통합
+### 2.1 SafetyGuard에 Emergency Mode 체크 추가
 
 #### 목표
-Chaos 실험 실행 전 반드시 Governance 체크 수행
+Chaos 실험 실행 전 Emergency Mode (LEVEL_2+) 상태에서 차단
 
 #### 수정 위치
-[scheduler.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py#L502)
+[safety_guard.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py)
 
-#### 구현 코드
+#### BlockReason Enum 확장
 
 ```python
-# scheduler.py 수정안
-# 상단에 import 추가
-from selfhealing.services.governance_checks import (
-    check_all_governance,
-    GovernanceCheckResult,
-    BlockReason,
-)
+# safety_guard.py - BlockReason enum에 추가
+class BlockReason(str, Enum):
+    # ... 기존 항목 ...
+    
+    EMERGENCY_MODE_ACTIVE = "emergency_mode_active"
+    """Emergency mode is active (LEVEL_2+)."""
+```
 
-class ChaosSchedulerService:
+#### SafetyCheckResult 필드 추가
+
+```python
+# safety_guard.py - SafetyCheckResult에 필드 추가
+@dataclass
+class SafetyCheckResult:
+    # ... 기존 필드 ...
     
-    def _check_governance_conditions(
-        self, 
-        schedule: "ScheduledExperiment", 
-        schedule_id: str, 
-        experiment_id: str, 
-        started_at
-    ) -> ExecutionResult | None:
-        """
-        Governance 조건 체크.
-        
-        Kill Switch, Emergency Mode, Error Budget 순차 검증.
-        Returns ExecutionResult if blocked, None otherwise.
-        """
-        result = check_all_governance(
-            check_kill_switch=True,
-            check_emergency=True,
-            emergency_min_level=2,  # LEVEL_2 이상에서 차단
-            check_error_budget=True,
-            operation_name=f"chaos_experiment:{schedule.experiment_type}",
-            service_name=schedule.target_service,
-            domain=schedule.target_domain,
-            audit_on_block=True,  # 차단 시 자동 Audit 기록
-        )
-        
-        if not result.allowed:
-            self._record_audit("experiment_blocked_governance", {
-                "schedule_id": schedule_id,
-                "experiment_id": experiment_id,
-                "block_reason": result.block_reason.value if result.block_reason else "unknown",
-                "block_message": result.block_message,
-            })
-            
-            return self._make_skipped_result(
-                schedule_id, 
-                experiment_id, 
-                started_at,
-                f"Governance blocked: {result.block_message}",
-                status="governance_blocked"
-            )
-        
-        return None  # 허용됨
+    # Emergency Mode
+    emergency_mode_active: bool = False
+    emergency_level: str = "NORMAL"
+```
+
+#### Emergency Mode 체크 메서드 구현
+
+```python
+# safety_guard.py 수정안
+class SafetyGuard:
     
-    def execute_now(self, schedule_id: str, force: bool = False) -> ExecutionResult:
-        """Execute a scheduled experiment immediately."""
-        # ... 기존 코드 ...
-        
+    def _check_emergency_mode(self) -> Dict[str, Any]:
+        """Check current emergency mode status."""
         try:
-            # 0. Error Budget Gate Check (기존)
-            if not force:
-                blocked = self._check_error_budget_gate(...)
-                if blocked:
-                    return blocked
+            from selfhealing.services.emergency_mode import get_emergency_manager
+            from selfhealing.services.emergency_mode.enums import EmergencyLevel
             
-            # ✅ 신규: Governance 통합 체크
-            if not force:
-                blocked = self._check_governance_conditions(
-                    schedule, schedule_id, experiment_id, started_at
-                )
-                if blocked:
-                    return blocked
+            manager = get_emergency_manager()
+            level = manager.get_current_level()
             
-            # 1-3. Check pre-execution conditions (기존)
-            # ...
+            return {
+                "active": level.value >= EmergencyLevel.LEVEL_2.value,
+                "level": level.name,
+                "level_value": level.value,
+            }
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Could not check emergency mode: {e}")
+            # Fail-open: 비상 모드 확인 실패 시 허용
+            return {"active": False, "level": "UNKNOWN", "level_value": 0}
+    
+    def _check_emergency_mode_status(self, result: SafetyCheckResult) -> bool:
+        """Check emergency mode status. Returns True if blocked."""
+        result.checks_performed.append("emergency_mode")
+        emergency_result = self._check_emergency_mode()
+        result.emergency_mode_active = emergency_result["active"]
+        result.emergency_level = emergency_result["level"]
+        
+        if emergency_result["active"]:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.EMERGENCY_MODE_ACTIVE.value
+            result.block_message = (
+                f"Emergency mode {emergency_result['level']} is active: "
+                f"chaos experiments blocked"
+            )
+            result.checks_failed.append("emergency_mode")
+            return True
+        
+        result.checks_passed.append("emergency_mode")
+        return False
+```
+
+#### _run_core_checks() 수정
+
+```python
+# safety_guard.py - _run_core_checks() 수정
+def _run_core_checks(self, result: SafetyCheckResult, experiment_id: str) -> bool:
+    """Run core safety checks (always required). Returns True if blocked."""
+    # 1. Check global block
+    if self._check_global_block(result):
+        return True
+
+    # 2. Check kill switch
+    if self._check_kill_switch_status(result):
+        return True
+
+    # 3. ✅ 신규: Check emergency mode (LEVEL_2+에서 차단)
+    if self._check_emergency_mode_status(result):
+        return True
+
+    # 4. Check error budget (CRITICAL)
+    if self._check_error_budget_status(result, experiment_id):
+        return True
+
+    return False
 ```
 
 ### 2.2 AutoTuningService Governance 통합
@@ -355,34 +396,27 @@ class AutoTuningService:
         return True
 ```
 
-### 2.3 execute_due_schedules Governance 통합
+### 2.3 SafetyGuard Audit 통합 (선택사항)
 
-[scheduler.py L620-635](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py#L620) Celery Beat에서 호출되는 메서드:
+Emergency Mode 차단 시 Audit 로그에 기록:
 
 ```python
-# scheduler.py 수정안
-def execute_due_schedules(self) -> List[ExecutionResult]:
-    """
-    Execute all schedules that are due.
-    Called by Celery Beat task.
-    """
-    # ✅ 신규: Beat 작업 시작 전 전역 Governance 체크
-    gov_result = check_all_governance(
-        operation_name="chaos_beat_execution",
-        service_name="chaos_scheduler",
-        audit_on_block=True,
-    )
-    
-    if not gov_result.allowed:
-        logger.warning(
-            f"[ChaosScheduler] Beat execution blocked: {gov_result.block_message}"
+# safety_guard.py - _check_emergency_mode_status() 내부
+if emergency_result["active"]:
+    # Audit 기록
+    try:
+        from selfhealing.services.audit_helpers import log_governance_blocked_audit
+        
+        log_governance_blocked_audit(
+            block_reason="emergency_mode",
+            operation_name=f"chaos_experiment:{experiment_id}",
+            details={
+                "emergency_level": emergency_result["level"],
+                "experiment_id": experiment_id,
+            },
         )
-        return []  # 모든 실험 건너뜀
-    
-    results = []
-    current = now()
-    
-    # ... 기존 로직 ...
+    except Exception as e:
+        logger.debug(f"[SafetyGuard] Audit logging failed: {e}")
 ```
 
 ---
@@ -392,73 +426,112 @@ def execute_due_schedules(self) -> List[ExecutionResult]:
 ### 3.1 단위 테스트
 
 ```python
-# tests/self_healing/unit/test_chaos_governance_integration.py
+# tests/chaos/test_safety_guard_emergency_mode.py
 
 import pytest
 from unittest.mock import patch, MagicMock
 
-class TestChaosSchedulerGovernanceIntegration:
-    """ChaosSchedulerService Governance 통합 테스트."""
+class TestSafetyGuardEmergencyMode:
+    """SafetyGuard Emergency Mode 체크 테스트."""
     
-    def test_execute_now_blocked_by_kill_switch(self):
-        """Kill Switch 활성화 시 실험 차단."""
-        from selfhealing.services.chaos.scheduler import get_chaos_scheduler
-        
-        scheduler = get_chaos_scheduler()
-        schedule = scheduler.create_schedule(
-            experiment_type="latency_injection",
-            target_service="payment",
-        )
-        
-        with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
-            return_value=False
-        ):
-            result = scheduler.execute_now(schedule.id)
-            
-            assert result.status == "governance_blocked"
-            assert "Kill Switch" in result.skip_reason
-    
-    def test_execute_now_blocked_by_emergency_mode(self):
-        """Emergency Mode LEVEL_2 이상에서 실험 차단."""
-        from selfhealing.services.chaos.scheduler import get_chaos_scheduler
+    def test_blocked_by_emergency_level_2(self):
+        """Emergency Mode LEVEL_2에서 실험 차단."""
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
         
-        scheduler = get_chaos_scheduler()
-        schedule = scheduler.create_schedule(
-            experiment_type="cpu_stress",
-            target_service="order",
-        )
+        guard = get_safety_guard()
         
         with patch(
             "selfhealing.services.emergency_mode.get_emergency_manager"
         ) as mock_em:
-            mock_em.return_value.get_current_level.return_value = EmergencyLevel.LEVEL_3
+            mock_manager = MagicMock()
+            mock_manager.get_current_level.return_value = EmergencyLevel.LEVEL_2
+            mock_em.return_value = mock_manager
             
-            result = scheduler.execute_now(schedule.id)
+            result = guard.check(experiment_id="test-001")
             
-            assert result.status == "governance_blocked"
-            assert "emergency" in result.skip_reason.lower()
+            assert not result.allowed
+            assert result.block_reason == "emergency_mode_active"
+            assert result.emergency_level == "LEVEL_2"
     
-    def test_execute_now_allowed_when_governance_passes(self):
-        """모든 Governance 통과 시 실험 실행."""
-        from selfhealing.services.chaos.scheduler import get_chaos_scheduler
+    def test_blocked_by_emergency_level_3(self):
+        """Emergency Mode LEVEL_3에서 실험 차단."""
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
         
-        scheduler = get_chaos_scheduler()
-        schedule = scheduler.create_schedule(
-            experiment_type="network_partition",
-            target_service="inventory",
-        )
+        guard = get_safety_guard()
         
         with patch(
-            "selfhealing.services.governance_checks.check_all_governance"
-        ) as mock_gov:
-            mock_gov.return_value.allowed = True
+            "selfhealing.services.emergency_mode.get_emergency_manager"
+        ) as mock_em:
+            mock_manager = MagicMock()
+            mock_manager.get_current_level.return_value = EmergencyLevel.LEVEL_3
+            mock_em.return_value = mock_manager
             
-            result = scheduler.execute_now(schedule.id, force=True)
+            result = guard.check(experiment_id="test-002")
             
-            # force=True이므로 Governance 체크 건너뜀
-            assert result.status != "governance_blocked"
+            assert not result.allowed
+            assert result.block_reason == "emergency_mode_active"
+            assert result.emergency_level == "LEVEL_3"
+    
+    def test_allowed_on_level_1(self):
+        """Emergency Mode LEVEL_1에서는 허용."""
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
+        
+        guard = get_safety_guard()
+        
+        with patch(
+            "selfhealing.services.emergency_mode.get_emergency_manager"
+        ) as mock_em:
+            mock_manager = MagicMock()
+            mock_manager.get_current_level.return_value = EmergencyLevel.LEVEL_1
+            mock_em.return_value = mock_manager
+            
+            # 다른 체크들도 통과하도록 설정
+            with patch.object(guard, '_check_kill_switch', return_value=False):
+                with patch.object(guard, '_check_error_budget', return_value={"remaining_percent": 100.0}):
+                    result = guard.check(experiment_id="test-003")
+            
+            # emergency_mode 체크는 통과
+            assert "emergency_mode" in result.checks_passed
+    
+    def test_allowed_on_normal(self):
+        """Emergency Mode NORMAL에서는 허용."""
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
+        
+        guard = get_safety_guard()
+        
+        with patch(
+            "selfhealing.services.emergency_mode.get_emergency_manager"
+        ) as mock_em:
+            mock_manager = MagicMock()
+            mock_manager.get_current_level.return_value = EmergencyLevel.NORMAL
+            mock_em.return_value = mock_manager
+            
+            with patch.object(guard, '_check_kill_switch', return_value=False):
+                with patch.object(guard, '_check_error_budget', return_value={"remaining_percent": 100.0}):
+                    result = guard.check(experiment_id="test-004")
+            
+            assert "emergency_mode" in result.checks_passed
+    
+    def test_fail_open_on_exception(self):
+        """Emergency Mode 확인 실패 시 Fail-open."""
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
+        
+        guard = get_safety_guard()
+        
+        with patch(
+            "selfhealing.services.emergency_mode.get_emergency_manager",
+            side_effect=ImportError("Module not found")
+        ):
+            with patch.object(guard, '_check_kill_switch', return_value=False):
+                with patch.object(guard, '_check_error_budget', return_value={"remaining_percent": 100.0}):
+                    result = guard.check(experiment_id="test-005")
+            
+            # Fail-open: 예외 발생 시 허용
+            assert "emergency_mode" in result.checks_passed
 
 
 class TestAutoTuningGovernanceIntegration:
@@ -483,24 +556,34 @@ class TestAutoTuningGovernanceIntegration:
 
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
-| `services/chaos/scheduler.py` | 수정 | Governance 통합 체크 추가 |
+| `services/chaos/safety_guard.py` | 수정 | Emergency Mode 체크 추가 |
 | `services/auto_tuning/service.py` | 수정 | Governance 통합 체크 추가 |
-| `tests/.../test_chaos_governance_integration.py` | 신규 | 통합 테스트 |
-| `tests/.../test_auto_tuning_governance.py` | 신규 | 통합 테스트 |
+| `tests/chaos/test_safety_guard_emergency_mode.py` | 신규 | Emergency Mode 테스트 |
+| `tests/.../test_auto_tuning_governance.py` | 신규 | AutoTuning 통합 테스트 |
 
-### 4.2 하위 호환성
+### 4.2 ChaosSchedulerService - 변경 불필요
 
-- **기존 API 유지**: 모든 public 메서드 시그니처 변경 없음
-- **force 파라미터**: 기존처럼 `force=True`로 Governance 우회 가능
-- **Fail-open 정책**: Governance 서비스 장애 시 기본적으로 허용
+**이유**: SafetyGuard 경유로 이미 Kill Switch 체크됨. SafetyGuard에 Emergency Mode만 추가하면 자동 적용.
 
-### 4.3 위험도
+```
+ChaosSchedulerService.execute_now()
+    └─► _check_safety_conditions()
+            └─► SafetyGuard.check()  ← 여기에 Emergency Mode 추가하면 끝
+```
+
+### 4.3 하위 호환성
+
+- **기존 API 유지**: SafetyCheckResult에 필드 추가만 (기존 필드 변경 없음)
+- **force 파라미터**: 기존처럼 `force=True`로 Safety 체크 우회 가능
+- **Fail-open 정책**: Emergency Mode 확인 실패 시 기본적으로 허용
+
+### 4.4 위험도
 
 | 항목 | 위험도 | 완화 방안 |
 |------|--------|----------|
 | 서비스 장애 | 낮음 | Fail-open 정책 유지 |
-| 성능 영향 | 최소 | TTL 캐시 (30초) 활용 |
-| 호환성 | 없음 | API 변경 없음 |
+| 성능 영향 | 최소 | Emergency Mode는 싱글톤 캐시 활용 |
+| 호환성 | 없음 | 기존 필드 변경 없음 |
 
 ---
 
@@ -508,17 +591,43 @@ class TestAutoTuningGovernanceIntegration:
 
 | 순위 | 작업 | 중요도 | 예상 공수 |
 |------|------|--------|----------|
-| 1 | ChaosScheduler Governance 통합 | 🔴 Critical | 2시간 |
+| 1 | SafetyGuard Emergency Mode 추가 | 🔴 Critical | 1시간 |
 | 2 | AutoTuningService Governance 통합 | 🟡 High | 2시간 |
-| 3 | execute_due_schedules 체크 추가 | 🟡 High | 1시간 |
-| 4 | 단위 테스트 작성 | 🟢 Medium | 3시간 |
+| 3 | SafetyGuard Audit 통합 | 🟢 Medium | 30분 |
+| 4 | 단위 테스트 작성 | 🟢 Medium | 2시간 |
 
-**총 예상 공수**: 8시간
+**총 예상 공수**: 5.5시간
 
 ---
 
-## 6. 관련 문서
+## 6. 현황 요약
 
+### 6.1 ChaosSchedulerService 체크 항목 현황
+
+| 체크 항목 | 구현 여부 | 위치 |
+|----------|----------|------|
+| Kill Switch | ✅ 있음 | SafetyGuard._check_kill_switch() |
+| Error Budget | ✅ 있음 | SafetyGuard._check_error_budget() + scheduler._check_error_budget_gate() |
+| System Health | ✅ 있음 | SafetyGuard._check_system_health() |
+| Active Incidents | ✅ 있음 | SafetyGuard._check_active_incidents() |
+| Deployment Freeze | ✅ 있음 | SafetyGuard._check_deployment_freeze() |
+| Blast Radius | ✅ 있음 | scheduler._check_blast_radius_conditions() |
+| Approval Status | ✅ 있음 | scheduler._check_pre_execution_conditions() |
+| **Emergency Mode** | ❌ **없음** | SafetyGuard에 추가 필요 |
+
+### 6.2 AutoTuningService 체크 항목 현황
+
+| 체크 항목 | 구현 여부 | 비고 |
+|----------|----------|------|
+| Kill Switch | ❌ 없음 | check_all_governance() 추가 필요 |
+| Emergency Mode | ❌ 없음 | check_all_governance() 추가 필요 |
+| Error Budget | ❌ 없음 | check_all_governance() 추가 필요 |
+
+---
+
+## 7. 관련 문서
+
+- [safety_guard.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py) - Chaos Safety Guard (Emergency Mode 추가 대상)
 - [governance_checks.py](../../../packages/selfhealing-python/src/selfhealing/services/governance_checks.py) - Governance 핵심 구현
 - [scheduler.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py) - ChaosScheduler 서비스
 - [service.py](../../../packages/selfhealing-python/src/selfhealing/services/auto_tuning/service.py) - AutoTuning 서비스
