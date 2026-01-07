@@ -357,6 +357,123 @@ def on_task_retry(
 
 
 # =============================================================================
+# Phase 28: Celery Task trace_id 표준화 - Prerun/Postrun 핸들러
+# =============================================================================
+
+
+@task_prerun.connect
+def on_task_prerun(
+    sender=None,
+    task_id: str = None,
+    task=None,
+    args: tuple = None,
+    kwargs: dict = None,
+    **kw,
+):
+    """
+    Celery Task 시작 전 TraceContext 자동 주입.
+    
+    Phase 28: 모든 Celery Task에 자동으로 trace_id를 주입합니다.
+    
+    동작:
+    1. kwargs에 trace_info가 있으면 HTTP에서 전파된 것으로 간주 → 원본 trace_id 사용
+    2. 없으면 CELERY_{task_id} 형식으로 생성
+    
+    이를 통해:
+    - 개발자가 수동으로 trace_id 설정 불필요
+    - 모든 Audit 로그에 자동으로 Celery Task ID 포함
+    - Flower UI에서 직접 검색 가능
+    """
+    if not _config.enabled:
+        return
+    
+    task_name = sender.name if sender else "unknown"
+    
+    # Skip excluded tasks
+    if task_name in _config.excluded_tasks:
+        return
+    
+    try:
+        from selfhealing.audit.trace import (
+            generate_celery_trace_id,
+            set_celery_context,
+            set_trace_id,
+        )
+        
+        # HTTP에서 전파된 trace_info 확인
+        trace_info = kwargs.get("trace_info") if kwargs else None
+        
+        if trace_info and trace_info.get("trace_id"):
+            # HTTP 요청에서 전파된 trace_id 사용
+            trace_id = trace_info["trace_id"]
+            set_trace_id(trace_id)
+        else:
+            # Celery Task ID 기반 trace_id 생성
+            trace_id = generate_celery_trace_id(task_id)
+            set_trace_id(trace_id)
+        
+        # 재시도 횟수 추출
+        request = sender.request if sender else None
+        retries = getattr(request, "retries", 0) if request else 0
+        
+        # Celery 컨텍스트 설정 (trace_id는 이미 위에서 설정됨)
+        from selfhealing.audit.trace import _celery_context_var
+        context = {
+            "task_id": task_id,
+            "task_name": task_name,
+            "retries": retries,
+        }
+        _celery_context_var.set(context)
+        
+        logger.debug(
+            f"[SelfHealing Signal] Task prerun: {task_name}, "
+            f"task_id={task_id}, trace_id={trace_id}"
+        )
+        
+    except Exception as e:
+        # Never let signal handler crash affect task execution
+        logger.error(f"[SelfHealing Signal] Error in prerun handler: {e}")
+
+
+@task_postrun.connect
+def on_task_postrun(
+    sender=None,
+    task_id: str = None,
+    task=None,
+    args: tuple = None,
+    kwargs: dict = None,
+    retval=None,
+    state: str = None,
+    **kw,
+):
+    """
+    Celery Task 완료 후 TraceContext 정리.
+    
+    Phase 28: Worker 재사용 시 이전 Task의 trace_id/celery_context 잔존 방지.
+    """
+    if not _config.enabled:
+        return
+    
+    task_name = sender.name if sender else "unknown"
+    
+    if task_name in _config.excluded_tasks:
+        return
+    
+    try:
+        from selfhealing.audit.trace import clear_celery_context
+        
+        clear_celery_context()
+        
+        logger.debug(
+            f"[SelfHealing Signal] Task postrun: {task_name}, "
+            f"task_id={task_id}, state={state}"
+        )
+        
+    except Exception as e:
+        logger.error(f"[SelfHealing Signal] Error in postrun handler: {e}")
+
+
+# =============================================================================
 # Circuit Breaker Integration
 # =============================================================================
 
@@ -780,6 +897,8 @@ def disconnect_selfhealing_signals():
         task_failure.disconnect(on_task_failure)
         task_success.disconnect(on_task_success)
         task_retry.disconnect(on_task_retry)
+        task_prerun.disconnect(on_task_prerun)    # Phase 28: trace_id 자동 주입
+        task_postrun.disconnect(on_task_postrun)  # Phase 28: trace_id 정리
         _signals_connected = False
         logger.info("[SelfHealing] Signal hooks disconnected")
     except Exception as e:

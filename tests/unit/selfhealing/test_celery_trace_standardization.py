@@ -200,3 +200,407 @@ class TestRestoreTraceFromCelery:
             assert active_trace_id == http_trace_id
 
         clear_celery_context()
+
+
+# =============================================================================
+# Phase 28 Phase 2: task_prerun/postrun 시그널 핸들러 테스트
+# =============================================================================
+
+
+class TestTaskPrerunHandler:
+    """task_prerun 시그널 핸들러 테스트."""
+
+    def test_prerun_sets_celery_trace_id(self):
+        """task_prerun이 CELERY_{task_id} 형식의 trace_id를 설정하는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "my_test_task"
+            mock_sender.request.retries = 0
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="abc-123-def",
+                task=None,
+                args=(),
+                kwargs={},
+            )
+
+            trace_id = get_trace_id()
+            assert trace_id == "CELERY_abc-123-def"
+
+            clear_celery_context()
+
+    def test_prerun_preserves_http_trace_id(self):
+        """HTTP에서 전파된 trace_id가 있으면 그대로 유지하는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "my_test_task"
+            mock_sender.request.retries = 0
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="abc-123-def",
+                task=None,
+                args=(),
+                kwargs={"trace_info": {"trace_id": "req-original-http"}},
+            )
+
+            trace_id = get_trace_id()
+            assert trace_id == "req-original-http"
+
+            clear_celery_context()
+
+    def test_prerun_sets_celery_context(self):
+        """task_prerun이 celery_context를 설정하는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import (
+            get_celery_context,
+            is_celery_task,
+            clear_celery_context,
+        )
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "my_replay_task"
+            mock_sender.request.retries = 2
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="task-456-xyz",
+                task=None,
+                args=(),
+                kwargs={},
+            )
+
+            assert is_celery_task() is True
+
+            context = get_celery_context()
+            assert context["task_id"] == "task-456-xyz"
+            assert context["task_name"] == "my_replay_task"
+            assert context["retries"] == 2
+
+            clear_celery_context()
+
+    def test_prerun_skips_excluded_tasks(self):
+        """excluded_tasks에 있는 태스크는 건너뛰는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import is_celery_task, clear_celery_context
+
+        clear_celery_context()  # 먼저 정리
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = {"celery.backend_cleanup"}
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "celery.backend_cleanup"
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="cleanup-task-id",
+                task=None,
+                args=(),
+                kwargs={},
+            )
+
+            # excluded task이므로 컨텍스트가 설정되지 않아야 함
+            assert is_celery_task() is False
+
+    def test_prerun_disabled_config(self):
+        """enabled=False일 때 핸들러가 동작하지 않는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import is_celery_task, clear_celery_context
+
+        clear_celery_context()
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = False
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "test_task"
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="test-id",
+                task=None,
+                args=(),
+                kwargs={},
+            )
+
+            assert is_celery_task() is False
+
+
+class TestTaskPostrunHandler:
+    """task_postrun 시그널 핸들러 테스트."""
+
+    def test_postrun_clears_celery_context(self):
+        """task_postrun이 celery_context를 정리하는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import (
+            set_celery_context,
+            is_celery_task,
+            clear_celery_context,
+        )
+
+        # 먼저 컨텍스트 설정
+        set_celery_context(task_id="test", task_name="test", retries=0)
+        assert is_celery_task() is True
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_postrun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "test"
+
+            on_task_postrun(
+                sender=mock_sender,
+                task_id="test",
+                task=None,
+                args=(),
+                kwargs={},
+                retval={"success": True},
+                state="SUCCESS",
+            )
+
+            # postrun 후 컨텍스트 정리됨
+            assert is_celery_task() is False
+
+    def test_postrun_skips_excluded_tasks(self):
+        """excluded_tasks에 있는 태스크는 건너뛰는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import (
+            set_celery_context,
+            is_celery_task,
+            clear_celery_context,
+        )
+
+        # 먼저 컨텍스트 설정
+        set_celery_context(task_id="cleanup", task_name="celery.backend_cleanup", retries=0)
+        assert is_celery_task() is True
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = {"celery.backend_cleanup"}
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_postrun
+
+            mock_sender = MagicMock()
+            mock_sender.name = "celery.backend_cleanup"
+
+            on_task_postrun(
+                sender=mock_sender,
+                task_id="cleanup",
+                task=None,
+                args=(),
+                kwargs={},
+                retval=None,
+                state="SUCCESS",
+            )
+
+            # excluded task이므로 컨텍스트가 정리되지 않아야 함
+            assert is_celery_task() is True
+
+            clear_celery_context()
+
+
+# =============================================================================
+# Phase 28 Phase 3: WAL celery_context 자동 추가 테스트
+# =============================================================================
+
+
+class TestWalCeleryContext:
+    """_write_to_wal()의 celery_context 자동 추가 테스트."""
+
+    def test_wal_includes_celery_context(self):
+        """WAL 레코드에 celery_context가 포함되는지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import set_celery_context, clear_celery_context
+
+        mock_wal = MagicMock()
+        mock_wal.write.return_value = 1
+
+        with patch("selfhealing.services.audit.base._get_wal", return_value=mock_wal):
+            from selfhealing.services.audit.base import _write_to_wal
+
+            # Celery 컨텍스트 설정
+            set_celery_context(
+                task_id="test-task-999",
+                task_name="my_replay_task",
+                retries=1,
+            )
+
+            _write_to_wal(
+                event_type="TEST_EVENT",
+                source="test",
+                details={"foo": "bar"},
+            )
+
+            # WAL에 기록된 데이터 확인
+            call_args = mock_wal.write.call_args[0][0]
+            assert "celery_context" in call_args
+            assert call_args["celery_context"]["task_id"] == "test-task-999"
+            assert call_args["celery_context"]["task_name"] == "my_replay_task"
+            assert call_args["celery_context"]["retries"] == 1
+
+            clear_celery_context()
+
+    def test_wal_celery_context_none_outside_celery(self):
+        """Celery Task 외부에서는 celery_context가 None인지 검증."""
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import clear_celery_context
+
+        mock_wal = MagicMock()
+        mock_wal.write.return_value = 1
+
+        clear_celery_context()  # 확실히 정리
+
+        with patch("selfhealing.services.audit.base._get_wal", return_value=mock_wal):
+            from selfhealing.services.audit.base import _write_to_wal
+
+            _write_to_wal(
+                event_type="TEST_EVENT",
+                source="test",
+                details={"foo": "bar"},
+            )
+
+            call_args = mock_wal.write.call_args[0][0]
+            assert call_args["celery_context"] is None
+
+
+# =============================================================================
+# Phase 28 통합 테스트: Celery → Audit 전체 흐름
+# =============================================================================
+
+
+class TestCeleryTraceFlowE2E:
+    """Celery → Audit 전체 흐름 E2E 테스트."""
+
+    def test_full_celery_task_trace_flow(self):
+        """
+        전체 흐름 테스트:
+        task_prerun → Audit 기록 → task_postrun
+        """
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import get_trace_id, is_celery_task, clear_celery_context
+
+        mock_wal = MagicMock()
+        mock_wal.write.return_value = 1
+
+        # Given: Task 정보
+        task_id = "e2e-test-task-123"
+        task_name = "selfhealing.adapters.celery.tasks.replay_single_dlq_entry"
+
+        mock_sender = MagicMock()
+        mock_sender.name = task_name
+        mock_sender.request.retries = 0
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun, on_task_postrun
+
+            # Step 1: task_prerun 시그널
+            on_task_prerun(
+                sender=mock_sender,
+                task_id=task_id,
+                task=None,
+                args=(),
+                kwargs={},
+            )
+
+            # 검증: trace_id가 CELERY_ 형식으로 설정됨
+            assert get_trace_id() == f"CELERY_{task_id}"
+            assert is_celery_task() is True
+
+            # Step 2: Task 내에서 Audit 기록
+            with patch("selfhealing.services.audit.base._get_wal", return_value=mock_wal):
+                from selfhealing.services.audit.base import _write_to_wal
+
+                _write_to_wal(
+                    event_type="DLQ_REPLAY_SUCCESS",
+                    source="ReplayService",
+                    details={"dlq_id": 123, "domain": "payment"},
+                )
+
+                # 검증: WAL 레코드에 trace_id와 celery_context 포함
+                call_args = mock_wal.write.call_args[0][0]
+                assert call_args["trace_id"] == f"CELERY_{task_id}"
+                assert call_args["celery_context"]["task_id"] == task_id
+                assert call_args["celery_context"]["task_name"] == task_name
+
+            # Step 3: task_postrun 시그널
+            on_task_postrun(
+                sender=mock_sender,
+                task_id=task_id,
+                task=None,
+                args=(),
+                kwargs={},
+                retval={"success": True},
+                state="SUCCESS",
+            )
+
+            # 검증: 컨텍스트 정리됨
+            assert is_celery_task() is False
+
+    def test_http_to_celery_trace_propagation(self):
+        """
+        HTTP → Celery 전파 테스트:
+        HTTP 요청의 trace_id가 Celery Task까지 전파되는지 검증
+        """
+        from unittest.mock import MagicMock, patch
+        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        mock_sender = MagicMock()
+        mock_sender.name = "test_task"
+        mock_sender.request.retries = 0
+
+        # HTTP 요청에서 생성된 원본 trace_id
+        http_trace_id = "req-a1b2c3d4"
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+            on_task_prerun(
+                sender=mock_sender,
+                task_id="celery-task-456",
+                task=None,
+                args=(),
+                kwargs={"trace_info": {"trace_id": http_trace_id}},
+            )
+
+            # 검증: HTTP trace_id가 유지됨 (CELERY_로 덮어쓰지 않음)
+            assert get_trace_id() == http_trace_id
+
+            clear_celery_context()

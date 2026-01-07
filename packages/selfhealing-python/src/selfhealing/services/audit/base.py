@@ -136,6 +136,17 @@ def _write_to_wal(
         except Exception:
             pass
     
+    # Phase 28: Celery 컨텍스트 자동 추출
+    celery_context = None
+    try:
+        from selfhealing.audit.trace import get_celery_context, is_celery_task
+        if is_celery_task():
+            celery_context = get_celery_context()
+    except ImportError:
+        pass
+    except Exception:
+        pass
+    
     try:
         record_id = f"audit-{uuid.uuid4().hex[:12]}"
         wal_entry = {
@@ -151,6 +162,7 @@ def _write_to_wal(
             "actor_id": actor_id,  # Phase 25: actor 정보 추가
             "actor_type": actor_type,  # Phase 25: actor 정보 추가
             "actor_roles": actor_roles,  # Phase 25: RBAC 역할 추가
+            "celery_context": celery_context,  # Phase 28: Celery 메타데이터 이중화
             "timestamp": time.time(),
             "synced": False,  # Background Sync Worker가 처리 후 True로 변경
         }

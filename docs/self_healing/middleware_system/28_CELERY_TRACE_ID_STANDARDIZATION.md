@@ -1015,12 +1015,12 @@ class TestCeleryTraceFlowE2E:
 - [x] **1.5**: Phase 1 단위 테스트 작성 및 통과 (12개 테스트)
 
 ### Phase 2: signal_hooks.py 핸들러
-- [ ] **2.1**: `on_task_prerun()` 핸들러 구현
-- [ ] **2.2**: `on_task_postrun()` 핸들러 구현
-- [ ] **2.3**: `disconnect_selfhealing_signals()` 업데이트
+- [x] **2.1**: `on_task_prerun()` 핸들러 구현
+- [x] **2.2**: `on_task_postrun()` 핸들러 구현
+- [x] **2.3**: `disconnect_selfhealing_signals()` 업데이트
 
 ### Phase 3: _write_to_wal() 수정
-- [ ] **3.1**: `celery_context` 자동 추출 및 WAL 레코드에 추가
+- [x] **3.1**: `celery_context` 자동 추출 및 WAL 레코드에 추가
 
 ### Phase 4: 기존 코드 정리 (Optional)
 - [ ] **4.1**: `dlq_replay.py`의 `restore_trace_from_celery()` 제거
@@ -1028,7 +1028,7 @@ class TestCeleryTraceFlowE2E:
 
 ### Phase 5: 테스트
 - [x] **5.1**: 단위 테스트 작성 (Phase 1)
-- [ ] **5.2**: 통합 테스트 작성
+- [x] **5.2**: 통합 테스트 작성 (Phase 2, 3 포함 - 26개 테스트)
 
 ---
 
@@ -1094,3 +1094,4 @@ Audit 로그: trace_id = "req-abc123"  ← HTTP와 동일!
 | 버전 | 날짜 | 작성자 | 변경 내용 |
 |------|------|--------|-----------|
 | 1.0.0 | 2026-01-07 | AI Assistant | 초안 작성 - CELERY_ 접두사 표준화, task_prerun/postrun 핸들러, celery_context 이중화 설계 |
+| 1.1.0 | 2026-01-08 | AI Assistant | Phase 2, 3 구현 완료 - on_task_prerun/postrun 핸들러, _write_to_wal celery_context 추가, 테스트 26개 작성 |
