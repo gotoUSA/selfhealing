@@ -4,7 +4,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 버전 | 1.4.0 |
+| 버전 | 1.5.0 |
 | 작성일 | 2026-01-07 |
 | 최종 수정 | 2026-01-07 |
 | 관련 문서 | 20_AUDIT_UNIFICATION_PLAN.md, 19_DLQ_AUTOMATION_BLUEPRINT.md |
@@ -996,10 +996,11 @@ class DLQReplayView(APIView):
 - [x] **Phase 4.3**: Grafana 대시보드 업데이트 ✅ (2026-01-07, RBAC 역할별 패널 5개 추가)
 
 ### Phase 5: trace_id 일관성 확보
-- [ ] **Phase 5.1**: _write_to_wal() trace_id 파라미터 추가
-- [ ] **Phase 5.2**: get_trace_for_celery(), restore_trace_from_celery() 구현
-- [ ] **Phase 5.3**: Celery Task에 trace_info 파라미터 추가
-- [ ] **Phase 5.4**: Beat Task에 INTERNAL_BEAT_xxx 자체 생성 로직 추가
+- [x] **Phase 5.1**: _write_to_wal() trace_id 파라미터 추가 ✅ (2026-01-07)
+- [x] **Phase 5.2**: get_trace_for_celery(), restore_trace_from_celery() 구현 ✅ (2026-01-07)
+- [x] **Phase 5.3**: Celery Task에 trace_info 파라미터 추가 ✅ (2026-01-07)
+- [x] **Phase 5.4**: Beat Task에 INTERNAL_BEAT_xxx 자체 생성 로직 추가 ✅ (2026-01-07)
+- [x] **Phase 5.5**: 단위 테스트 14개 작성 및 통과 ✅ (2026-01-07)
 
 ---
 
@@ -1103,3 +1104,4 @@ def restore_trace_from_celery(trace_info: Optional[dict]) -> Generator[str, None
 | 1.2.0 | 2026-01-07 | AI Assistant | **Phase 1 구현 완료**: Actor.roles, _extract_selfhealing_roles(), set_actor() roles, AuditEntry.actor_roles, 39개 단위 테스트 |
 | 1.3.0 | 2026-01-07 | AI Assistant | **Phase 2, 3 구현 완료**: _write_to_wal() actor_roles 자동 전파, _try_add_to_buffer() actor_roles 지원, Celery Task actor_info 전달, 51개 단위 테스트 통과 |
 | 1.4.0 | 2026-01-07 | AI Assistant | **Phase 4 구현 완료**: 통합 테스트 13개 추가 (test_rbac_audit_flow.py), Grafana 대시보드 RBAC 역할별 패널 5개 추가 (dlq_monitoring.json), 전체 64개 테스트 통과 |
+| 1.5.0 | 2026-01-07 | AI Assistant | **Phase 5 구현 완료**: trace_id 일관성 확보 - _write_to_wal() trace_id 파라미터, get_trace_for_celery(), restore_trace_from_celery(), Celery Task trace_info 파라미터, INTERNAL_BEAT_xxx 자체 생성, 14개 신규 테스트 추가, 전체 78개 테스트 통과 |

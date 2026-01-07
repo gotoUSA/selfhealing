@@ -9,7 +9,8 @@ import contextvars
 import logging
 import threading
 import uuid
-from typing import Optional
+from contextlib import contextmanager
+from typing import Any, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -198,3 +199,74 @@ def trace_id_middleware(get_response):
         return response
 
     return middleware
+
+
+# =============================================================================
+# Phase 25: Celery Task trace_id 전파 및 복원
+# =============================================================================
+
+
+def get_trace_for_celery() -> dict[str, Any]:
+    """
+    Celery Task에 전달할 trace 정보를 반환합니다.
+    
+    HTTP 요청 컨텍스트에서 호출 시 현재 trace_id를 포함하여 반환합니다.
+    Celery Task 내에서 restore_trace_from_celery()로 복원할 수 있습니다.
+    
+    Returns:
+        dict: trace_id와 source 정보를 담은 딕셔너리
+        
+    Example:
+        # View에서 Task 호출 시
+        from selfhealing.audit.trace import get_trace_for_celery
+        
+        replay_single_dlq_entry.delay(
+            dlq_id=pk,
+            trace_info=get_trace_for_celery(),
+        )
+    """
+    current_trace_id = _trace_id_var.get() or getattr(_thread_local, "trace_id", None)
+    
+    return {
+        "trace_id": current_trace_id,
+        "source": "celery_propagated",
+    }
+
+
+@contextmanager
+def restore_trace_from_celery(
+    trace_info: Optional[dict[str, Any]] = None
+) -> Generator[str, None, None]:
+    """
+    Celery Task에서 trace 컨텍스트를 복원하거나 자체 생성합니다.
+    
+    동작:
+    - trace_info가 있고 trace_id가 존재하면: 전파된 trace_id 사용
+    - trace_info가 없거나 trace_id가 없으면: INTERNAL_BEAT_xxx 형식으로 자체 생성
+    
+    이를 통해:
+    - 수동 API 호출: 원본 HTTP 요청의 trace_id가 Celery Task까지 추적 가능
+    - Beat 자동 호출: 별도의 내부 trace_id로 추적 가능
+    
+    Args:
+        trace_info: get_trace_for_celery()로 생성된 trace 정보 (optional)
+        
+    Yields:
+        str: 현재 사용 중인 trace_id
+        
+    Example:
+        @shared_task
+        def my_task(dlq_id: int, trace_info: dict = None):
+            with restore_trace_from_celery(trace_info):
+                # 이 블록 내에서 get_trace_id()는 적절한 trace_id 반환
+                do_work()
+    """
+    if trace_info and trace_info.get("trace_id"):
+        # 전파된 trace_id 사용
+        trace_id = trace_info["trace_id"]
+    else:
+        # Beat에서 호출된 경우: INTERNAL_BEAT_xxx 형식으로 자체 생성
+        trace_id = f"INTERNAL_BEAT_{generate_trace_id()}"
+    
+    with TraceContext(trace_id) as active_trace_id:
+        yield active_trace_id

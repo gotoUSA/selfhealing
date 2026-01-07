@@ -33,6 +33,7 @@ def replay_single_dlq_entry(
     self,
     dlq_id: int,
     actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
+    trace_info: Optional[dict[str, Any]] = None,  # Phase 25: trace_id 전파
 ) -> dict:
     """
     Replay a single DLQ entry.
@@ -43,11 +44,15 @@ def replay_single_dlq_entry(
     - ErrorBudgetGate
 
     Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
-    actor_info가 None이면 자동(Beat) 호출로 간주하여 SYSTEM_ACTOR가 사용됩니다.
+    trace_info를 통해 원본 요청의 trace_id가 전파됩니다.
+    
+    - actor_info가 None이면 자동(Beat) 호출로 간주하여 SYSTEM_ACTOR가 사용됩니다.
+    - trace_info가 None이면 INTERNAL_BEAT_xxx 형식의 trace_id가 자동 생성됩니다.
 
     Args:
         dlq_id: ID of the FailedOperation to replay
         actor_info: Actor information from calling context (optional)
+        trace_info: Trace information from calling context (optional)
 
     Returns:
         Dictionary with replay result
@@ -56,13 +61,16 @@ def replay_single_dlq_entry(
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
+        from selfhealing.audit.trace import restore_trace_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
-        # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
-        with restore_actor_from_celery(actor_info or {}):
-            service = ReplayService()
-            result = service.replay_single(dlq_id)
+        # Phase 25: trace_info가 있으면 원본 trace_id 사용, 없으면 INTERNAL_BEAT_xxx 자체 생성
+        with restore_trace_from_celery(trace_info):
+            # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+            # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
+            with restore_actor_from_celery(actor_info or {}):
+                service = ReplayService()
+                result = service.replay_single(dlq_id)
 
         return {
             "success": result.success,
@@ -95,6 +103,7 @@ def replay_batch_by_domain(
     domain: str,
     max_items: int = 100,
     actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
+    trace_info: Optional[dict[str, Any]] = None,  # Phase 25: trace_id 전파
 ) -> dict:
     """
     Replay all pending DLQ entries for a specific domain.
@@ -105,11 +114,13 @@ def replay_batch_by_domain(
     - ErrorBudgetGate
 
     Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
+    trace_info를 통해 원본 요청의 trace_id가 전파됩니다.
 
     Args:
         domain: The domain to filter by (payment, point, inventory, etc.)
         max_items: Maximum number of items to replay
         actor_info: Actor information from calling context (optional)
+        trace_info: Trace information from calling context (optional)
 
     Returns:
         Dictionary with batch replay summary
@@ -120,12 +131,15 @@ def replay_batch_by_domain(
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
+        from selfhealing.audit.trace import restore_trace_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
-        with restore_actor_from_celery(actor_info or {}):
-            service = ReplayService()
-            result = service.replay_batch(domain=domain, max_items=max_items)
+        # Phase 25: trace_info가 있으면 원본 trace_id 사용, 없으면 INTERNAL_BEAT_xxx 자체 생성
+        with restore_trace_from_celery(trace_info):
+            # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+            with restore_actor_from_celery(actor_info or {}):
+                service = ReplayService()
+                result = service.replay_batch(domain=domain, max_items=max_items)
 
         return {
             "success": result.success_count > 0 or result.total == 0,

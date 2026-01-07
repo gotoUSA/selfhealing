@@ -76,11 +76,12 @@ def _write_to_wal(
     domain: Optional[str] = None,
     target_id: Optional[str] = None,
     actor_roles: Optional[list[str]] = None,  # Phase 25: RBAC 역할 정보
+    trace_id: Optional[str] = None,  # Phase 25: trace_id 일관성 확보
 ) -> Optional[int]:
     """
     WAL에 audit 이벤트 기록.
     
-    Phase 25: actor_roles를 자동으로 ActorContext에서 가져옴.
+    Phase 25: actor_roles와 trace_id를 자동으로 컨텍스트에서 가져옴.
     
     Args:
         event_type: 이벤트 유형 (e.g., "CB_STATE_CHANGE")
@@ -91,6 +92,7 @@ def _write_to_wal(
         domain: 비즈니스 도메인 (e.g., "payment")
         target_id: 대상 ID
         actor_roles: RBAC 역할 목록 (None이면 ActorContext에서 자동 추출)
+        trace_id: 분산 추적 ID (None이면 TraceContext에서 자동 추출)
     
     Returns:
         WAL 시퀀스 번호 (성공 시), None (실패 시)
@@ -124,11 +126,22 @@ def _write_to_wal(
     except Exception:
         pass
     
+    # Phase 25: TraceContext에서 trace_id 자동 추출
+    if trace_id is None:
+        try:
+            from selfhealing.audit.trace import get_trace_id
+            trace_id = get_trace_id()
+        except ImportError:
+            pass
+        except Exception:
+            pass
+    
     try:
         record_id = f"audit-{uuid.uuid4().hex[:12]}"
         wal_entry = {
             "record_id": record_id,
             "event_type": event_type,
+            "trace_id": trace_id,  # Phase 25: trace_id 추가
             "source": source,
             "details": details,
             "success": success,
@@ -147,7 +160,7 @@ def _write_to_wal(
         if metrics:
             metrics.record_write("wal", success=True)
         
-        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}")
+        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={trace_id}")
         return seq
     except Exception as e:
         logger.error(f"[AuditHelpers] WAL write failed (CRITICAL): {e}")
