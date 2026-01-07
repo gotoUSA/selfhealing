@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 # 기본 규정 검사 항목
+#
+# TODO: 아래 규정 검사 항목들은 실제 규정 문서를 검토하여 요구사항을 구체화해야 합니다.
+# - DORA: EU Regulation 2022/2554 (Digital Operational Resilience Act) 원문 검토 필요
+# - PCI-DSS: Payment Card Industry Data Security Standard v4.0 문서 검토 필요
+# - SOC2: AICPA Trust Services Criteria 문서 검토 필요
+#
+# 현재 정의된 check_id와 description은 placeholder이며,
+# 실제 규정의 Article/Section 번호 및 구체적 요구사항으로 매핑되어야 합니다.
+#
 DEFAULT_CHECKS: Dict[ComplianceStandard, List[Dict]] = {
     ComplianceStandard.DORA_2025: [
         {
@@ -27,24 +36,37 @@ DEFAULT_CHECKS: Dict[ComplianceStandard, List[Dict]] = {
             "name": "ICT Risk Management",
             "description": "ICT 리스크 관리 프레임워크 확인",
             "category": "risk",
+            # TODO: DORA Article 5-16 (ICT Risk Management) 실제 요구사항 검토 필요
+            # - 리스크 관리 프레임워크 구성 요소
+            # - 거버넌스 및 조직 체계 요구사항
         },
         {
             "check_id": "DORA-002",
             "name": "Incident Reporting",
             "description": "사고 보고 체계 확인",
             "category": "incident",
+            # TODO: DORA Article 17-23 (ICT-related Incident Management) 실제 요구사항 검토 필요
+            # - 사고 분류 체계 및 보고 기한
+            # - 주요 ICT 관련 사고 정의 기준
         },
         {
             "check_id": "DORA-003",
             "name": "Resilience Testing",
             "description": "디지털 운영 복원력 테스트 확인",
             "category": "testing",
+            # TODO: DORA Article 24-27 (Digital Operational Resilience Testing) 실제 요구사항 검토 필요
+            # - 기본 테스트 vs 고급 테스트 (TLPT) 요구사항 구분
+            # - 테스트 빈도, 범위, 방법론 규정
+            # - Threat-Led Penetration Testing (TLPT) 대상 기관 기준
         },
         {
             "check_id": "DORA-004",
             "name": "Third-Party Risk",
             "description": "제3자 ICT 리스크 관리 확인",
             "category": "vendor",
+            # TODO: DORA Article 28-44 (Third-Party Risk) 실제 요구사항 검토 필요
+            # - 중요 ICT 서비스 제공자 정의 기준
+            # - 계약 조항 필수 요구사항
         },
     ],
     ComplianceStandard.PCI_DSS: [
@@ -53,24 +75,37 @@ DEFAULT_CHECKS: Dict[ComplianceStandard, List[Dict]] = {
             "name": "Secure Network",
             "description": "보안 네트워크 구성 확인",
             "category": "network",
+            # TODO: PCI-DSS v4.0 Requirement 1-2 실제 요구사항 검토 필요
+            # - 방화벽/네트워크 보안 통제 구성
+            # - 보안 구성 기준
         },
         {
             "check_id": "PCI-002",
             "name": "Cardholder Data Protection",
             "description": "카드소유자 데이터 보호 확인",
             "category": "data",
+            # TODO: PCI-DSS v4.0 Requirement 3-4 실제 요구사항 검토 필요
+            # - 저장된 카드소유자 데이터 보호
+            # - 전송 중 암호화 요구사항
         },
         {
             "check_id": "PCI-003",
             "name": "Access Control",
             "description": "접근 제어 확인",
             "category": "access",
+            # TODO: PCI-DSS v4.0 Requirement 7-9 실제 요구사항 검토 필요
+            # - 업무상 필요한 경우에만 접근 허용
+            # - 사용자 식별 및 인증
+            # - 물리적 접근 제한
         },
         {
             "check_id": "PCI-004",
             "name": "Monitoring & Testing",
             "description": "모니터링 및 테스트 확인",
             "category": "monitoring",
+            # TODO: PCI-DSS v4.0 Requirement 10-11 실제 요구사항 검토 필요
+            # - 네트워크 자원 및 카드소유자 데이터 접근 로깅
+            # - 보안 시스템 및 프로세스 정기 테스트
         },
     ],
     ComplianceStandard.SOC2: [
@@ -79,18 +114,27 @@ DEFAULT_CHECKS: Dict[ComplianceStandard, List[Dict]] = {
             "name": "Security",
             "description": "보안 통제 확인",
             "category": "security",
+            # TODO: SOC2 Type II - Security (CC6.x) Trust Services Criteria 검토 필요
+            # - 논리적 및 물리적 접근 통제
+            # - 시스템 운영 보안
         },
         {
             "check_id": "SOC2-002",
             "name": "Availability",
             "description": "가용성 확인",
             "category": "availability",
+            # TODO: SOC2 Type II - Availability (A1.x) Trust Services Criteria 검토 필요
+            # - 시스템 가용성 목표 정의 (SLA)
+            # - 재해 복구 및 비즈니스 연속성 계획
         },
         {
             "check_id": "SOC2-003",
             "name": "Confidentiality",
             "description": "기밀성 확인",
             "category": "confidentiality",
+            # TODO: SOC2 Type II - Confidentiality (C1.x) Trust Services Criteria 검토 필요
+            # - 기밀 정보 식별 및 보호
+            # - 기밀 정보 폐기 절차
         },
     ],
 }
