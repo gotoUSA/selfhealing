@@ -1,9 +1,26 @@
 # Part 1: Governance Integration 개선 구현 가이드
 
-**문서 버전**: 1.1.0  
+**문서 버전**: 1.2.0  
 **작성일**: 2026-01-07  
-**최종 수정**: 2026-01-07 (코드 재분석 기반 정정)  
-**근거 코드**: 실제 소스 코드 분석 기반
+**최종 수정**: 2026-01-07 (구현 완료)  
+**근거 코드**: 실제 소스 코드 분석 기반  
+**구현 상태**: ✅ **구현 완료**
+
+---
+
+## 구현 완료 요약
+
+| 항목 | 상태 | 구현 내용 |
+|------|------|----------|
+| SafetyGuard Emergency Mode | ✅ 완료 | `_check_emergency_mode()`, `BlockReason.EMERGENCY_MODE_ACTIVE` 추가 |
+| AutoTuningService Governance | ✅ 완료 | `_check_governance_before_adjustment()`, `start()` 체크 추가 |
+| 단위 테스트 | ✅ 완료 | 15개 테스트 작성 및 통과 |
+
+**변경된 파일:**
+- [safety_guard.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py)
+- [auto_tuning/service.py](../../../packages/selfhealing-python/src/selfhealing/services/auto_tuning/service.py)
+- [tests/chaos/test_safety_guard_emergency_mode.py](../../../packages/selfhealing-python/tests/chaos/test_safety_guard_emergency_mode.py) (신규)
+- [tests/unit/test_auto_tuning_governance.py](../../../packages/selfhealing-python/tests/unit/test_auto_tuning_governance.py) (신규)
 
 ---
 
@@ -600,7 +617,7 @@ ChaosSchedulerService.execute_now()
 
 ---
 
-## 6. 현황 요약
+## 6. 현황 요약 (구현 완료 후)
 
 ### 6.1 ChaosSchedulerService 체크 항목 현황
 
@@ -613,22 +630,24 @@ ChaosSchedulerService.execute_now()
 | Deployment Freeze | ✅ 있음 | SafetyGuard._check_deployment_freeze() |
 | Blast Radius | ✅ 있음 | scheduler._check_blast_radius_conditions() |
 | Approval Status | ✅ 있음 | scheduler._check_pre_execution_conditions() |
-| **Emergency Mode** | ❌ **없음** | SafetyGuard에 추가 필요 |
+| **Emergency Mode** | ✅ **구현 완료** | SafetyGuard._check_emergency_mode() |
 
 ### 6.2 AutoTuningService 체크 항목 현황
 
 | 체크 항목 | 구현 여부 | 비고 |
 |----------|----------|------|
-| Kill Switch | ❌ 없음 | check_all_governance() 추가 필요 |
-| Emergency Mode | ❌ 없음 | check_all_governance() 추가 필요 |
-| Error Budget | ❌ 없음 | check_all_governance() 추가 필요 |
+| Kill Switch | ✅ 구현 완료 | _check_governance_before_adjustment() |
+| Emergency Mode | ✅ 구현 완료 | _check_governance_before_adjustment() |
+| Error Budget | ✅ 구현 완료 | _check_governance_before_adjustment() |
 
 ---
 
 ## 7. 관련 문서
 
-- [safety_guard.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py) - Chaos Safety Guard (Emergency Mode 추가 대상)
+- [safety_guard.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py) - Chaos Safety Guard (Emergency Mode 구현 완료)
 - [governance_checks.py](../../../packages/selfhealing-python/src/selfhealing/services/governance_checks.py) - Governance 핵심 구현
 - [scheduler.py](../../../packages/selfhealing-python/src/selfhealing/services/chaos/scheduler.py) - ChaosScheduler 서비스
-- [service.py](../../../packages/selfhealing-python/src/selfhealing/services/auto_tuning/service.py) - AutoTuning 서비스
+- [service.py](../../../packages/selfhealing-python/src/selfhealing/services/auto_tuning/service.py) - AutoTuning 서비스 (Governance 구현 완료)
 - [16_GOVERNANCE_IMPLEMENTATION_PART1.md](../16_GOVERNANCE_IMPLEMENTATION_PART1.md) - Governance 설계 문서
+- [test_safety_guard_emergency_mode.py](../../../packages/selfhealing-python/tests/chaos/test_safety_guard_emergency_mode.py) - Emergency Mode 테스트
+- [test_auto_tuning_governance.py](../../../packages/selfhealing-python/tests/unit/test_auto_tuning_governance.py) - AutoTuning Governance 테스트

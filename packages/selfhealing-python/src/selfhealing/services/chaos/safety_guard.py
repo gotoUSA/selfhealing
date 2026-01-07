@@ -77,6 +77,9 @@ class BlockReason(str, Enum):
     
     MANUAL_BLOCK = "manual_block"
     """Manually blocked by operator."""
+    
+    EMERGENCY_MODE_ACTIVE = "emergency_mode_active"
+    """Emergency mode is active (LEVEL_2+)."""
 
 
 # =============================================================================
@@ -161,6 +164,10 @@ class SafetyCheckResult:
     deployment_freeze_active: bool = False
     kill_switch_active: bool = False
     
+    # Emergency mode
+    emergency_mode_active: bool = False
+    emergency_level: str = "NORMAL"
+    
     # Timing
     last_experiment_at: str = ""
     cooldown_remaining_minutes: int = 0
@@ -185,6 +192,8 @@ class SafetyCheckResult:
             "active_incidents": self.active_incidents,
             "deployment_freeze_active": self.deployment_freeze_active,
             "kill_switch_active": self.kill_switch_active,
+            "emergency_mode_active": self.emergency_mode_active,
+            "emergency_level": self.emergency_level,
             "last_experiment_at": self.last_experiment_at,
             "cooldown_remaining_minutes": self.cooldown_remaining_minutes,
             "checked_at": self.checked_at,
@@ -417,7 +426,11 @@ class SafetyGuard:
         if self._check_kill_switch_status(result):
             return True
 
-        # 3. Check error budget (CRITICAL)
+        # 3. Check emergency mode (LEVEL_2+에서 차단)
+        if self._check_emergency_mode_status(result):
+            return True
+
+        # 4. Check error budget (CRITICAL)
         if self._check_error_budget_status(result, experiment_id):
             return True
 
@@ -597,6 +610,46 @@ class SafetyGuard:
         except Exception as e:
             logger.warning(f"[SafetyGuard] Could not check deployment freeze: {e}")
             return {"active": False, "reason": ""}
+    
+    def _check_emergency_mode(self) -> Dict[str, Any]:
+        """Check current emergency mode status."""
+        try:
+            from selfhealing.services.emergency_mode import get_emergency_manager
+            from selfhealing.services.emergency_mode.enums import EmergencyLevel
+            
+            manager = get_emergency_manager()
+            level = manager.get_current_level()
+            
+            return {
+                "active": level.value >= EmergencyLevel.LEVEL_2.value,
+                "level": level.name,
+                "level_value": level.value,
+            }
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Could not check emergency mode: {e}")
+            # Fail-open: 비상 모드 확인 실패 시 허용
+            return {"active": False, "level": "UNKNOWN", "level_value": 0}
+    
+    def _check_emergency_mode_status(self, result: SafetyCheckResult) -> bool:
+        """Check emergency mode status. Returns True if blocked."""
+        result.checks_performed.append("emergency_mode")
+        emergency_result = self._check_emergency_mode()
+        result.emergency_mode_active = emergency_result["active"]
+        result.emergency_level = emergency_result["level"]
+        
+        if emergency_result["active"]:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.EMERGENCY_MODE_ACTIVE.value
+            result.block_message = (
+                f"Emergency mode {emergency_result['level']} is active: "
+                f"chaos experiments blocked"
+            )
+            result.checks_failed.append("emergency_mode")
+            return True
+        
+        result.checks_passed.append("emergency_mode")
+        return False
     
     def _check_cooldown(self) -> Dict[str, Any]:
         """Check if cooldown period is active."""

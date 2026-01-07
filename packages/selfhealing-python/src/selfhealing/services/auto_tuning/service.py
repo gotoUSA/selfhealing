@@ -19,6 +19,12 @@ from enum import Enum
 from .adjustment_recorder import AdjustmentRecorder
 from .models import TuningState, AdjustmentRecord
 
+# Governance integration
+from selfhealing.services.governance_checks import (
+    check_all_governance,
+    GovernanceCheckResult,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -137,9 +143,47 @@ class AutoTuningService:
         
         logger.info("[AutoTuningService] Initialized")
     
+    def _check_governance_before_adjustment(
+        self,
+        module: str,
+        adjustment_type: str = "automatic",
+    ) -> GovernanceCheckResult:
+        """
+        조정 전 Governance 체크.
+        
+        Args:
+            module: 조정 대상 모듈 (circuit_breaker, retry 등)
+            adjustment_type: 조정 유형 (automatic, manual, rollback, service_start)
+            
+        Returns:
+            GovernanceCheckResult
+        """
+        return check_all_governance(
+            check_kill_switch=True,
+            check_emergency=True,
+            emergency_min_level=2,  # LEVEL_2 이상에서 차단
+            check_error_budget=True,
+            operation_name=f"auto_tuning:{module}:{adjustment_type}",
+            service_name="auto_tuning",
+            domain=module,
+            audit_on_block=True,
+        )
+    
     def start(self) -> bool:
         """서비스 시작"""
         with self._lock:
+            # Governance 체크
+            gov_result = self._check_governance_before_adjustment(
+                module="all",
+                adjustment_type="service_start",
+            )
+            if not gov_result.allowed:
+                logger.warning(
+                    f"[AutoTuningService] Start blocked by governance: "
+                    f"{gov_result.block_message}"
+                )
+                return False
+            
             # 세션 시작
             self.adjustment_recorder.start_session("AutoTuningService started")
             
