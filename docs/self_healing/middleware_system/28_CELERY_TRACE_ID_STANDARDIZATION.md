@@ -1008,10 +1008,11 @@ class TestCeleryTraceFlowE2E:
 ## 9. 작업 체크리스트
 
 ### Phase 1: trace.py 유틸리티 함수
-- [ ] **1.1**: `generate_celery_trace_id()` 함수 추가
-- [ ] **1.2**: `_celery_context_var` 컨텍스트 변수 추가
-- [ ] **1.3**: `set_celery_context()`, `get_celery_context()`, `clear_celery_context()`, `is_celery_task()` 추가
-- [ ] **1.4**: `restore_trace_from_celery()` 수정
+- [x] **1.1**: `generate_celery_trace_id()` 함수 추가
+- [x] **1.2**: `_celery_context_var` 컨텍스트 변수 추가
+- [x] **1.3**: `set_celery_context()`, `get_celery_context()`, `clear_celery_context()`, `is_celery_task()` 추가
+- [x] **1.4**: `restore_trace_from_celery()` 수정
+- [x] **1.5**: Phase 1 단위 테스트 작성 및 통과 (12개 테스트)
 
 ### Phase 2: signal_hooks.py 핸들러
 - [ ] **2.1**: `on_task_prerun()` 핸들러 구현
@@ -1026,7 +1027,7 @@ class TestCeleryTraceFlowE2E:
 - [ ] **4.2**: `chaos_scheduler.py`의 수동 task_id 전달 제거
 
 ### Phase 5: 테스트
-- [ ] **5.1**: 단위 테스트 작성
+- [x] **5.1**: 단위 테스트 작성 (Phase 1)
 - [ ] **5.2**: 통합 테스트 작성
 
 ---

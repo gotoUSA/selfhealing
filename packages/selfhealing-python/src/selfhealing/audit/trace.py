@@ -206,6 +206,100 @@ def trace_id_middleware(get_response):
 # =============================================================================
 
 
+# =============================================================================
+# Phase 28: Celery Task trace_id 표준화
+# =============================================================================
+
+# Celery 컨텍스트 저장용 변수
+_celery_context_var: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "celery_context", default=None
+)
+
+
+def generate_celery_trace_id(task_id: str) -> str:
+    """
+    Celery Task ID를 기반으로 trace_id를 생성합니다.
+    
+    Format: "CELERY_{task_id}"
+    
+    이 형식을 사용하면:
+    - Flower UI에서 task_id로 직접 검색 가능
+    - 재시도 시에도 동일한 trace_id 유지
+    - Audit 로그에서 Celery Task와 1:1 매칭
+    
+    Args:
+        task_id: Celery Task ID (예: "7483abc-1234-...")
+        
+    Returns:
+        str: "CELERY_{task_id}" 형식의 trace_id
+        
+    Example:
+        >>> generate_celery_trace_id("7483abc-1234-5678-90ab-cdef12345678")
+        "CELERY_7483abc-1234-5678-90ab-cdef12345678"
+    """
+    if not task_id:
+        # Fallback: task_id가 없으면 기존 방식으로 생성
+        return f"CELERY_{generate_trace_id()}"
+    return f"CELERY_{task_id}"
+
+
+def set_celery_context(
+    task_id: str,
+    task_name: str,
+    retries: int = 0,
+) -> None:
+    """
+    현재 Celery Task 컨텍스트를 설정합니다.
+    
+    task_prerun 시그널에서 호출되어 Task 실행 동안 유지됩니다.
+    
+    Args:
+        task_id: Celery Task ID
+        task_name: Celery Task 이름 (예: "selfhealing.adapters.celery.tasks.replay_single_dlq_entry")
+        retries: 현재 재시도 횟수
+    """
+    context = {
+        "task_id": task_id,
+        "task_name": task_name,
+        "retries": retries,
+    }
+    _celery_context_var.set(context)
+    
+    # trace_id도 함께 설정
+    trace_id = generate_celery_trace_id(task_id)
+    set_trace_id(trace_id)
+
+
+def get_celery_context() -> Optional[dict]:
+    """
+    현재 Celery Task 컨텍스트를 반환합니다.
+    
+    Returns:
+        dict: {"task_id": ..., "task_name": ..., "retries": ...} 또는 None
+    """
+    return _celery_context_var.get()
+
+
+def clear_celery_context() -> None:
+    """
+    Celery Task 컨텍스트를 정리합니다.
+    
+    task_postrun 시그널에서 호출되어 Worker 재사용 시 이전 컨텍스트 잔존을 방지합니다.
+    """
+    _celery_context_var.set(None)
+    clear_trace_id()
+
+
+def is_celery_task() -> bool:
+    """
+    현재 실행 컨텍스트가 Celery Task 내부인지 확인합니다.
+    
+    Returns:
+        bool: Celery Task 내부이면 True
+    """
+    return _celery_context_var.get() is not None
+
+
 def get_trace_for_celery() -> dict[str, Any]:
     """
     Celery Task에 전달할 trace 정보를 반환합니다.
@@ -235,38 +329,51 @@ def get_trace_for_celery() -> dict[str, Any]:
 
 @contextmanager
 def restore_trace_from_celery(
-    trace_info: Optional[dict[str, Any]] = None
+    trace_info: Optional[dict[str, Any]] = None,
+    celery_task_id: Optional[str] = None,
+    celery_task_name: Optional[str] = None,
 ) -> Generator[str, None, None]:
     """
     Celery Task에서 trace 컨텍스트를 복원하거나 자체 생성합니다.
     
-    동작:
-    - trace_info가 있고 trace_id가 존재하면: 전파된 trace_id 사용
-    - trace_info가 없거나 trace_id가 없으면: INTERNAL_BEAT_xxx 형식으로 자체 생성
+    우선순위:
+    1. trace_info에 trace_id가 있으면 사용 (HTTP → Celery 전파)
+    2. celery_task_id가 있으면 CELERY_{task_id} 생성
+    3. 둘 다 없으면 CELERY_{uuid} 생성 (Fallback)
     
-    이를 통해:
-    - 수동 API 호출: 원본 HTTP 요청의 trace_id가 Celery Task까지 추적 가능
-    - Beat 자동 호출: 별도의 내부 trace_id로 추적 가능
+    Note:
+        task_prerun 시그널이 활성화되면 이 함수는 더 이상 수동 호출 불필요.
+        하위 호환성을 위해 유지됨.
     
     Args:
-        trace_info: get_trace_for_celery()로 생성된 trace 정보 (optional)
+        trace_info: HTTP 요청에서 전파된 trace 정보 (optional)
+        celery_task_id: Celery Task ID (optional, self.request.id)
+        celery_task_name: Celery Task 이름 (optional)
         
     Yields:
         str: 현재 사용 중인 trace_id
-        
-    Example:
-        @shared_task
-        def my_task(dlq_id: int, trace_info: dict = None):
-            with restore_trace_from_celery(trace_info):
-                # 이 블록 내에서 get_trace_id()는 적절한 trace_id 반환
-                do_work()
     """
     if trace_info and trace_info.get("trace_id"):
-        # 전파된 trace_id 사용
+        # HTTP 요청에서 전파된 trace_id 사용
         trace_id = trace_info["trace_id"]
+    elif celery_task_id:
+        # Celery Task ID 기반 생성
+        trace_id = generate_celery_trace_id(celery_task_id)
     else:
-        # Beat에서 호출된 경우: INTERNAL_BEAT_xxx 형식으로 자체 생성
-        trace_id = f"INTERNAL_BEAT_{generate_trace_id()}"
+        # Fallback: UUID 기반 생성
+        trace_id = f"CELERY_{generate_trace_id()}"
     
-    with TraceContext(trace_id) as active_trace_id:
-        yield active_trace_id
+    # Celery 컨텍스트 설정 (있는 경우)
+    if celery_task_id:
+        set_celery_context(
+            task_id=celery_task_id,
+            task_name=celery_task_name or "unknown",
+            retries=0,
+        )
+    
+    try:
+        with TraceContext(trace_id) as active_trace_id:
+            yield active_trace_id
+    finally:
+        if celery_task_id:
+            clear_celery_context()
