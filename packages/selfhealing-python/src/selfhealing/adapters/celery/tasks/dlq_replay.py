@@ -3,12 +3,16 @@ DLQ Replay Celery Tasks.
 
 These tasks handle replay of failed operations from the Dead Letter Queue.
 
+Phase 25: actor_info 파라미터를 통해 RBAC 역할 정보가 전파됩니다.
+
 Usage in CELERY_BEAT_SCHEDULE:
     'cleanup-dlq-entries': {
         'task': 'selfhealing.adapters.celery.tasks.cleanup_resolved_dlq_entries',
         'schedule': 86400.0,  # Daily
     },
 """
+
+from typing import Any, Optional
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
@@ -25,7 +29,11 @@ logger = get_task_logger(__name__)
     soft_time_limit=110,
     acks_late=True,
 )
-def replay_single_dlq_entry(self, dlq_id: int) -> dict:
+def replay_single_dlq_entry(
+    self,
+    dlq_id: int,
+    actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
+) -> dict:
     """
     Replay a single DLQ entry.
 
@@ -34,8 +42,12 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     - Emergency Level (LEVEL_2+)
     - ErrorBudgetGate
 
+    Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
+    actor_info가 None이면 자동(Beat) 호출로 간주하여 SYSTEM_ACTOR가 사용됩니다.
+
     Args:
         dlq_id: ID of the FailedOperation to replay
+        actor_info: Actor information from calling context (optional)
 
     Returns:
         Dictionary with replay result
@@ -43,10 +55,14 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     logger.info(f"[DLQ Replay Task] Starting replay for DLQ entry: {dlq_id}")
 
     try:
+        from selfhealing.context.actor_context import restore_actor_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        service = ReplayService()
-        result = service.replay_single(dlq_id)
+        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
+        with restore_actor_from_celery(actor_info or {}):
+            service = ReplayService()
+            result = service.replay_single(dlq_id)
 
         return {
             "success": result.success,
@@ -78,6 +94,7 @@ def replay_batch_by_domain(
     self,
     domain: str,
     max_items: int = 100,
+    actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
 ) -> dict:
     """
     Replay all pending DLQ entries for a specific domain.
@@ -87,9 +104,12 @@ def replay_batch_by_domain(
     - Emergency Level (LEVEL_2+)
     - ErrorBudgetGate
 
+    Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
+
     Args:
         domain: The domain to filter by (payment, point, inventory, etc.)
         max_items: Maximum number of items to replay
+        actor_info: Actor information from calling context (optional)
 
     Returns:
         Dictionary with batch replay summary
@@ -99,10 +119,13 @@ def replay_batch_by_domain(
     )
 
     try:
+        from selfhealing.context.actor_context import restore_actor_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        service = ReplayService()
-        result = service.replay_batch(domain=domain, max_items=max_items)
+        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        with restore_actor_from_celery(actor_info or {}):
+            service = ReplayService()
+            result = service.replay_batch(domain=domain, max_items=max_items)
 
         return {
             "success": result.success_count > 0 or result.total == 0,

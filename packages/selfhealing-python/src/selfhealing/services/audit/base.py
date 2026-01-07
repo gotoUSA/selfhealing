@@ -75,9 +75,22 @@ def _write_to_wal(
     error_message: Optional[str] = None,
     domain: Optional[str] = None,
     target_id: Optional[str] = None,
+    actor_roles: Optional[list[str]] = None,  # Phase 25: RBAC 역할 정보
 ) -> Optional[int]:
     """
     WAL에 audit 이벤트 기록.
+    
+    Phase 25: actor_roles를 자동으로 ActorContext에서 가져옴.
+    
+    Args:
+        event_type: 이벤트 유형 (e.g., "CB_STATE_CHANGE")
+        source: 이벤트 소스 (e.g., "CircuitBreaker")
+        details: 이벤트 상세 정보
+        success: 성공 여부
+        error_message: 에러 메시지 (실패 시)
+        domain: 비즈니스 도메인 (e.g., "payment")
+        target_id: 대상 ID
+        actor_roles: RBAC 역할 목록 (None이면 ActorContext에서 자동 추출)
     
     Returns:
         WAL 시퀀스 번호 (성공 시), None (실패 시)
@@ -92,6 +105,25 @@ def _write_to_wal(
     except Exception:
         metrics = None
     
+    # Phase 25: ActorContext에서 actor 정보 자동 추출
+    actor_id = None
+    actor_type = "system"
+    if actor_roles is None:
+        actor_roles = []
+    
+    try:
+        from selfhealing.context.actor_context import ActorContext
+        if ActorContext.is_set():
+            actor = ActorContext.get_current()
+            actor_id = actor.actor_id
+            actor_type = actor.actor_type
+            if not actor_roles:  # 명시적으로 전달되지 않은 경우에만
+                actor_roles = actor.roles
+    except ImportError:
+        pass
+    except Exception:
+        pass
+    
     try:
         record_id = f"audit-{uuid.uuid4().hex[:12]}"
         wal_entry = {
@@ -103,6 +135,9 @@ def _write_to_wal(
             "error_message": error_message,
             "domain": domain,
             "target_id": target_id,
+            "actor_id": actor_id,  # Phase 25: actor 정보 추가
+            "actor_type": actor_type,  # Phase 25: actor 정보 추가
+            "actor_roles": actor_roles,  # Phase 25: RBAC 역할 추가
             "timestamp": time.time(),
             "synced": False,  # Background Sync Worker가 처리 후 True로 변경
         }
@@ -182,9 +217,23 @@ def _try_add_to_buffer(
     error_message: Optional[str] = None,
     domain: Optional[str] = None,
     target_id: Optional[str] = None,
+    actor_roles: Optional[list[str]] = None,  # Phase 25: RBAC 역할 정보
 ) -> bool:
     """
     request의 버퍼에 이벤트 추가 시도.
+    
+    Phase 25: actor_roles를 자동으로 ActorContext에서 가져옴.
+    
+    Args:
+        request: Django HttpRequest 객체
+        event_type: 이벤트 유형
+        source: 이벤트 소스
+        details: 이벤트 상세 정보
+        success: 성공 여부
+        error_message: 에러 메시지
+        domain: 비즈니스 도메인
+        target_id: 대상 ID
+        actor_roles: RBAC 역할 목록 (None이면 ActorContext에서 자동 추출)
     
     Returns:
         True: 버퍼에 추가 성공 (AuditMiddleware에서 기록됨)
@@ -193,14 +242,31 @@ def _try_add_to_buffer(
     if request is None:
         return False
     
+    # Phase 25: ActorContext에서 actor_roles 자동 추출
+    if actor_roles is None:
+        try:
+            from selfhealing.context.actor_context import ActorContext
+            if ActorContext.is_set():
+                actor = ActorContext.get_current()
+                actor_roles = actor.roles
+            else:
+                actor_roles = []
+        except (ImportError, Exception):
+            actor_roles = []
+    
     try:
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        # details에 actor_roles 추가 (버퍼에서 사용)
+        enriched_details = {**details}
+        if actor_roles:
+            enriched_details["_actor_roles"] = actor_roles
         
         buffer = RequestAuditBuffer.get_or_create(request)
         buffer.add(
             event_type=event_type,
             source=source,
-            details=details,
+            details=enriched_details,
             success=success,
             error_message=error_message,
             domain=domain,
