@@ -145,6 +145,7 @@ class WriteAheadLog:
         config: Optional[WALConfig] = None,
         on_rotate: Optional[Callable[[str], None]] = None,
         on_corruption: Optional[Callable[[WALCorruptionError], None]] = None,
+        audit_adapter=None,  # Audit 어댑터 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
     ):
         """
         WAL 초기화.
@@ -153,10 +154,12 @@ class WriteAheadLog:
             config: WAL 설정
             on_rotate: 파일 로테이션 시 콜백
             on_corruption: 손상 발견 시 콜백
+            audit_adapter: Audit 어댑터 (이벤트 기록용)
         """
         self._config = config or WALConfig()
         self._on_rotate = on_rotate
         self._on_corruption = on_corruption
+        self._audit_adapter = audit_adapter
         
         self._wal_dir = Path(self._config.wal_dir)
         self._current_file: Optional[Path] = None
@@ -233,8 +236,10 @@ class WriteAheadLog:
             
             try:
                 old_file = self._current_file
+                old_size = 0
                 
                 if self._current_handle:
+                    old_size = self._current_handle.tell()
                     self._current_handle.flush()
                     if self._config.sync_on_write:
                         os.fsync(self._current_handle.fileno())
@@ -242,6 +247,16 @@ class WriteAheadLog:
                     self._current_handle = None
                 
                 self._current_file = None
+                
+                # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+                if old_file:
+                    self._record_audit_event(
+                        event_type="WAL_ROTATED",
+                        details={
+                            "old_file": str(old_file),
+                            "old_size_bytes": old_size,
+                        },
+                    )
                 
                 # 콜백 호출
                 if self._on_rotate and old_file:
@@ -447,11 +462,21 @@ class WriteAheadLog:
                     # 체크섬 검증
                     if not self._verify_checksum(data_bytes, checksum):
                         self._corrupted_entries += 1
+                        computed_checksum = self._compute_checksum(data_bytes)
                         error = WALCorruptionError(
                             f"Checksum mismatch in {filepath}",
                             sequence=-1,
                             expected=checksum,
-                            computed=self._compute_checksum(data_bytes),
+                            computed=computed_checksum,
+                        )
+                        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+                        self._record_audit_event(
+                            event_type="WAL_CORRUPTION_DETECTED",
+                            details={
+                                "filepath": str(filepath),
+                                "expected_checksum": checksum,
+                                "computed_checksum": computed_checksum,
+                            },
                         )
                         if self._on_corruption:
                             self._on_corruption(error)
@@ -494,7 +519,20 @@ class WriteAheadLog:
                         entries.append(entry)
                         self._recovered_entries += 1
         
-        return sorted(entries, key=lambda e: e.sequence)
+        sorted_entries = sorted(entries, key=lambda e: e.sequence)
+        
+        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+        if sorted_entries:
+            self._record_audit_event(
+                event_type="WAL_RECOVERED",
+                details={
+                    "recovered_count": len(sorted_entries),
+                    "last_processed_seq": last_processed_seq,
+                    "new_last_seq": sorted_entries[-1].sequence,
+                },
+            )
+        
+        return sorted_entries
     
     def cleanup_processed(self, last_processed_seq: int) -> int:
         """
@@ -587,6 +625,23 @@ class WriteAheadLog:
     
     def __exit__(self, *args: Any) -> None:
         self.close()
+    
+    def _record_audit_event(self, event_type: str, details: Dict[str, Any]) -> None:
+        """
+        Audit 이벤트 기록.
+        
+        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        """
+        if self._audit_adapter:
+            try:
+                self._audit_adapter.log_event(
+                    event_type=event_type,
+                    source="WriteAheadLog",
+                    details=details,
+                )
+            except Exception:
+                # Audit 실패가 WAL 동작을 방해하면 안됨
+                pass
 
 
 # =============================================================================

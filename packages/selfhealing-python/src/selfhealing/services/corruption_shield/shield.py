@@ -102,6 +102,7 @@ class CorruptionShield:
         data: dict,
         context: Optional[dict] = None,
         block_on_violation: bool = True,
+        request=None,  # Django request 객체 (Audit 통합용)
     ) -> ValidationResult:
         """
         Validate data through all enabled layers.
@@ -110,6 +111,7 @@ class CorruptionShield:
             data: Data to validate
             context: Additional context (expected values, user info, etc.)
             block_on_violation: Whether to block on any violation
+            request: Django request 객체 (RequestAuditBuffer에 적재)
             
         Returns:
             ValidationResult with all violations and pass/fail status
@@ -186,7 +188,67 @@ class CorruptionShield:
         if self.config.log_violations and not is_valid:
             self._log_violations(data, result)
         
+        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+        if not is_valid:
+            self._record_audit_event(result, data, request)
+        
         return result
+    
+    def _record_audit_event(
+        self,
+        result: ValidationResult,
+        data: dict,
+        request=None,
+    ) -> None:
+        """
+        Corruption 이벤트를 Audit 시스템에 기록.
+        
+        request가 있으면 RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 처리)
+        request가 없으면 직접 로깅
+        
+        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        """
+        # Phase 3 패턴: 버퍼 우선
+        if request is not None:
+            try:
+                from selfhealing.audit.event_buffer import (
+                    RequestAuditBuffer,
+                    AuditEventType,
+                )
+                
+                buffer = RequestAuditBuffer.get_or_create(request)
+                
+                for violation in result.violations:
+                    # 이벤트 유형 결정
+                    if result.blocked:
+                        event_type = AuditEventType.CORRUPTION_BLOCKED
+                    else:
+                        event_type = AuditEventType.CORRUPTION_DETECTED
+                    
+                    buffer.add(
+                        event_type=event_type,
+                        source="CorruptionShield",
+                        details={
+                            "layer": violation.layer,
+                            "code": violation.code,
+                            "message": violation.message,
+                            "field": violation.field,
+                            "severity": violation.severity,
+                            "blocked": result.blocked,
+                        },
+                        success=False,
+                        error_message=violation.message,
+                    )
+                return
+            except ImportError:
+                pass  # event_buffer 미사용 환경
+        
+        # Fallback: 직접 로깅 (request 없는 경우)
+        for violation in result.violations:
+            logger.warning(
+                f"[CorruptionShield/Audit] {violation.layer} violation: "
+                f"{violation.code} - {violation.message}"
+            )
     
     def _log_violations(self, data: dict, result: ValidationResult) -> None:
         """Log violations for debugging and audit."""

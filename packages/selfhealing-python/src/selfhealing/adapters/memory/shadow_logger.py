@@ -115,6 +115,18 @@ class ShadowLogger:
             if len(self._failure_log) > self._max_entries:
                 self._failure_log = self._failure_log[-self._max_entries:]
 
+            # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+            self._record_audit_event(
+                event_type="SHADOW_LOG_SYNC_FAILED",
+                service_name=service_name,
+                details={
+                    "intended_state": intended_state,
+                    "error_message": str(error),
+                    "adapter_type": adapter_type,
+                    "operation": operation,
+                },
+            )
+
             logger.warning(
                 f"[ShadowLog] L2 sync failed: service={service_name} "
                 f"state={intended_state} adapter={adapter_type} error={error}"
@@ -141,13 +153,23 @@ class ShadowLogger:
             마킹된 레코드 수
         """
         count = 0
+        recovery_time = datetime.now(timezone.utc)
         with self._lock:
             for record in self._failure_log:
                 if record.service_name == service_name and not record.synced_after_recovery:
                     record.synced_after_recovery = True
-                    record.recovery_time = datetime.now(timezone.utc)
+                    record.recovery_time = recovery_time
                     count += 1
         if count > 0:
+            # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+            self._record_audit_event(
+                event_type="SHADOW_LOG_RECOVERED",
+                service_name=service_name,
+                details={
+                    "recovered_count": count,
+                    "recovery_time": recovery_time.isoformat(),
+                },
+            )
             logger.info(f"[ShadowLog] Marked {count} records as synced for {service_name}")
         return count
 
@@ -331,6 +353,34 @@ class ShadowLogger:
                 r for r in self._failure_log
                 if start_time <= r.failure_time <= end_time
             ]
+
+    def _record_audit_event(
+        self,
+        event_type: str,
+        service_name: str,
+        details: Dict[str, Any],
+    ) -> None:
+        """
+        Audit 이벤트 기록.
+        
+        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        """
+        try:
+            from selfhealing.factory import ProviderRegistry
+            
+            adapter = ProviderRegistry.get_audit_adapter()
+            if adapter:
+                adapter.log_event(
+                    event_type=event_type,
+                    source="ShadowLogger",
+                    details={
+                        "service_name": service_name,
+                        **details,
+                    },
+                )
+        except Exception as e:
+            # Audit 실패가 메인 로직을 방해하면 안됨
+            logger.debug(f"[ShadowLogger] Audit recording failed: {e}")
 
 
 def get_shadow_logger() -> ShadowLogger:

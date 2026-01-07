@@ -119,6 +119,48 @@ class AuditEventType(Enum):
     # 데이터 접근 (ADR-002: 설정 기반)
     DATA_ACCESS = "data_access"
     
+    # ═══════════════════════════════════════════════════════════
+    # CorruptionShield 관련 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+    # ═══════════════════════════════════════════════════════════
+    CORRUPTION_DETECTED = "corruption_detected"
+    """데이터 무결성 위반 발견 (L1/L2/L3)."""
+    
+    CORRUPTION_BLOCKED = "corruption_blocked"
+    """무결성 위반으로 요청 차단."""
+    
+    # ═══════════════════════════════════════════════════════════
+    # ShadowLogger/L2 Sync 관련 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+    # ═══════════════════════════════════════════════════════════
+    SHADOW_LOG_SYNC_FAILED = "shadow_log_sync_failed"
+    """L2 동기화 실패 기록."""
+    
+    SHADOW_LOG_RECOVERED = "shadow_log_recovered"
+    """L2 복구 후 재동기화 완료."""
+    
+    # ═══════════════════════════════════════════════════════════
+    # WAL 관련 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+    # ═══════════════════════════════════════════════════════════
+    WAL_CORRUPTION_DETECTED = "wal_corruption_detected"
+    """WAL CRC32 체크섬 불일치 발견."""
+    
+    WAL_RECOVERED = "wal_recovered"
+    """WAL 미처리 엔트리 복구 완료."""
+    
+    WAL_ROTATED = "wal_rotated"
+    """WAL 파일 로테이션 발생."""
+    
+    # ═══════════════════════════════════════════════════════════
+    # Forensic 관련 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+    # ═══════════════════════════════════════════════════════════
+    FORENSIC_CAPTURE_STARTED = "forensic_capture_started"
+    """Forensic 캡처 시작."""
+    
+    FORENSIC_CAPTURE_COMPLETED = "forensic_capture_completed"
+    """Forensic 캡처 완료."""
+    
+    FORENSIC_ANOMALY_DETECTED = "forensic_anomaly_detected"
+    """Forensic 분석 중 이상 패턴 발견."""
+    
     # 일반
     GENERIC = "generic"
 
