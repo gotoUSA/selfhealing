@@ -192,9 +192,9 @@ class SecurityViolationService:
             try:
                 self._repository = ProviderRegistry.get_security_repo()
             except (ValueError, ImportError):
-                from .adapters.django_repositories import DjangoSecurityIncidentRepository
+                from selfhealing.adapters.memory import InMemorySecurityIncidentRepository
 
-                self._repository = DjangoSecurityIncidentRepository()
+                self._repository = InMemorySecurityIncidentRepository()
         return self._repository
 
     @property

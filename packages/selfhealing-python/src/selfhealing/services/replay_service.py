@@ -282,7 +282,7 @@ class ReplayService:
 
     @property
     def repository(self) -> "FailedOperationRepository":
-        """Get the repository, creating Django adapter if needed."""
+        """Get the repository, creating InMemory adapter if needed."""
         if self._repository is None:
             # Try to use ProviderRegistry from selfhealing package first
             try:
@@ -290,10 +290,10 @@ class ReplayService:
 
                 self._repository = ProviderRegistry.get_failed_operation_repo()
             except (ImportError, ValueError):
-                # Fallback to local Django adapter
-                from .adapters.django_repositories import DjangoFailedOperationRepository
+                # Fallback to in-memory adapter
+                from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
-                self._repository = DjangoFailedOperationRepository()
+                self._repository = InMemoryFailedOperationRepository()
         return self._repository
 
     def _load_config(self) -> dict[str, Any]:

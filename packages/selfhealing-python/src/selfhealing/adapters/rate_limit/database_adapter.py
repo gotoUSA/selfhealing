@@ -82,15 +82,12 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
         if self._repository_factory:
             return self._repository_factory()
 
-        # Default: Try Django ORM
-        try:
-            from selfhealing.adapters.django_repositories import (
-                DjangoRateLimitStateRepository,
-            )
-
-            return DjangoRateLimitStateRepository()
-        except ImportError:
-            raise RuntimeError("No repository available. Provide repository_factory or install Django.")
+        # Django repository is not available in the package
+        # Users must provide repository_factory for database storage
+        raise RuntimeError(
+            "No repository available. DatabaseRateLimitStorage requires "
+            "repository_factory to be provided during initialization."
+        )
 
     def is_available(self) -> bool:
         """Check if database is available."""

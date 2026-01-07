@@ -706,7 +706,7 @@ class ControlAPIService:
             update_dlq_pending_gauges,
             update_retry_success_rates,
         )
-        from selfhealing.registry import ProviderRegistry
+        from selfhealing.factory import ProviderRegistry
 
         current_time = get_now()
         five_min_ago = current_time - timedelta(minutes=5)

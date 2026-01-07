@@ -179,26 +179,14 @@ class ServiceFactory:
         
         ⚠️ opt-in: 호스트가 명시적으로 SELFHEALING_STORAGE=django 설정 필요
         ⚠️ 마이그레이션: selfhealing.adapters.django를 INSTALLED_APPS에 추가 필요
+        
+        NOTE: Django repository 모듈이 현재 구현되지 않아 InMemory로 fallback합니다.
         """
-        try:
-            from selfhealing.adapters.django.repositories import (
-                DjangoFailedOperationRepository,
-                DjangoCircuitBreakerStateRepository,
-                DjangoSecurityIncidentRepository,
-            )
-
-            mapping = {
-                "failed_operation": DjangoFailedOperationRepository,
-                "circuit_breaker": DjangoCircuitBreakerStateRepository,
-                "security_incident": DjangoSecurityIncidentRepository,
-            }
-            return mapping[repo_type]()
-        except Exception as e:
-            logger.warning(
-                f"[ServiceFactory] Django repository failed: {e}. "
-                f"Falling back to in-memory for: {repo_type}"
-            )
-            return self._create_inmemory_repository(repo_type)
+        logger.warning(
+            f"[ServiceFactory] Django repository not implemented. "
+            f"Falling back to in-memory for: {repo_type}"
+        )
+        return self._create_inmemory_repository(repo_type)
     
     def _create_layered_repository(self, repo_type: str) -> Any:
         """
