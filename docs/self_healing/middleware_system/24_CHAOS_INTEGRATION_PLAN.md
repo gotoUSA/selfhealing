@@ -1,7 +1,7 @@
 # 24. Chaos Engineering 통합 확장 계획
 
 > **작성일**: 2026-01-07  
-> **상태**: Phase 0-2 완료 ✅  
+> **상태**: Phase 0-3 완료 ✅  
 > **관련 문서**: [13_CHAOS_ENGINEERING.md](../13_CHAOS_ENGINEERING.md), [21_CB_ADVANCED_PROTECTION.md](21_CB_ADVANCED_PROTECTION.md)
 
 ---
@@ -29,7 +29,7 @@
 | Phase 0 | ✅ 완료 | NotificationCategory.CHAOS 추가, cooldown 300초 설정 | 3/3 통과 |
 | Phase 1 | ✅ 완료 | ChaosActionableAlertUrlBuilder, ChaosNotificationService | 8/8 통과 |
 | Phase 2 | ✅ 완료 | ImpactPredictor, BlastRadiusAnalyzer, Dry Run API | 14/14 통과 |
-| Phase 3 | ⬜ 예정 | SyntheticLoadGenerator, TrafficShaper | - |
+| Phase 3 | ✅ 완료 | SyntheticLoadGenerator, TrafficShaper | 14/14 통과 |
 | Phase 4 | ⬜ 예정 | 통합 테스트 | - |
 
 ---
@@ -2457,7 +2457,7 @@ class TestChaosActionableUrls:
 | TestDryRunAPI | `test_dry_run_recommendation` | 권장 사항 포함 |
 | TestDryRunAPI | `test_dry_run_approval_requirement` | 승인 필요 여부 |
 
-### 8.4 Phase 3 테스트 (10개)
+### 8.4 Phase 3 테스트 (14개)
 
 | 테스트 클래스 | 테스트 메서드 | 검증 내용 |
 |--------------|--------------|----------|
@@ -2468,9 +2468,13 @@ class TestChaosActionableUrls:
 | TestSyntheticLoadGenerator | `test_graceful_shutdown` | 정상 종료 |
 | TestTrafficShaper | `test_shape_request_rate` | 요청 비율 조절 |
 | TestTrafficShaper | `test_shape_concurrent_users` | 동시 사용자 조절 |
-| TestTrafficShaper | `test_traffic_distribution` | 트래픽 분배 |
-| TestExperimentIntegration | `test_experiment_with_synthetic_traffic` | 실험 연동 |
-| TestExperimentIntegration | `test_traffic_cleanup_on_error` | 에러 시 정리 |
+| TestTrafficShaper | `test_traffic_distribution_uniform` | 균등 트래픽 분배 |
+| TestTrafficShaper | `test_traffic_distribution_weighted` | 가중치 트래픽 분배 |
+| TestTrafficShaper | `test_adaptive_shaping` | 적응형 레이트 조절 |
+| TestPhase3Integration | `test_experiment_with_synthetic_traffic` | 실험 연동 |
+| TestPhase3Integration | `test_traffic_cleanup_on_error` | 에러 시 정리 |
+| TestPhase3Integration | `test_synthetic_request_headers` | 합성 요청 헤더 검증 |
+| TestPhase3Integration | `test_shaper_reset` | 형성기 리셋 검증 |
 
 ### 8.5 Phase 4 통합 테스트 (12개)
 
@@ -2485,11 +2489,11 @@ class TestChaosActionableUrls:
 | 신규 테스트 파일 | 기존 패턴 참조 | 테스트 수 |
 |-----------------|---------------|----------|
 | `test_chaos_notification.py` | `test_chaos_scheduler.py:TestSafetyGuard` | 8개 |
-| `test_chaos_dry_run.py` | `test_chaos_scheduler.py:TestBlastRadiusManager` | 12개 |
-| `test_chaos_synthetic_traffic.py` | `test_chaos_scheduler.py:TestChaosSchedulerService` | 10개 |
+| `test_phase2_dry_run.py` | `test_chaos_scheduler.py:TestBlastRadiusManager` | 14개 |
+| `test_phase3_synthetic_traffic.py` | `test_chaos_scheduler.py:TestChaosSchedulerService` | 14개 |
 | `test_chaos_e2e.py` | `test_chaos_api.py` 패턴 | 4개 |
 
-**총 테스트 수**: 45개 (Phase 0: 3개, Phase 1: 8개, Phase 2: 12개, Phase 3: 10개, Phase 4: 12개)
+**총 테스트 수**: 51개 (Phase 0: 3개, Phase 1: 8개, Phase 2: 14개, Phase 3: 14개, Phase 4: 12개)
 
 ---
 
@@ -2503,3 +2507,4 @@ class TestChaosActionableUrls:
 | 2026-01-07 | 1.3 | Phase 구분 (§7), 테스트 케이스 요약 (§8) 추가 | - |
 | 2026-01-07 | 1.4 | **Phase 0-1 구현 완료**: NotificationCategory.CHAOS 추가, ChaosActionableAlertUrlBuilder, ChaosNotificationService 구현, 11개 테스트 통과 | - |
 | 2026-01-07 | 1.5 | **Phase 2 구현 완료**: ImpactPredictor, BlastRadiusAnalyzer, DryRunAnalysisView API 구현, 14개 테스트 작성 | - |
+| 2026-01-07 | 1.6 | **Phase 3 구현 완료**: SyntheticLoadGenerator, TrafficShaper 구현, 14개 테스트 통과 | - |
