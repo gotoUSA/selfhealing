@@ -109,22 +109,24 @@ class ContextType(str, Enum):
     UNKNOWN = "unknown"      # 알 수 없음 (폴백)
 
 
-def _get_default_actor() -> tuple[Optional[str], str]:
+def _get_default_actor() -> tuple[Optional[str], str, list[str]]:
     """
     Get default actor from ActorContext if available.
 
-    Returns (actor_id, actor_type) tuple.
-    Falls back to (None, "system") if ActorContext not available.
+    Returns (actor_id, actor_type, roles) tuple.
+    Falls back to (None, "system", []) if ActorContext not available.
+    
+    Phase 25: roles 도 함께 반환하여 RBAC-Audit 연동 지원.
     """
     try:
         from selfhealing.context.actor_context import ActorContext
 
         if ActorContext.is_set():
             actor = ActorContext.get_current()
-            return actor.actor_id, actor.actor_type
+            return actor.actor_id, actor.actor_type, actor.roles
     except ImportError:
         pass
-    return None, "system"
+    return None, "system", []
 
 
 @dataclass
@@ -151,6 +153,7 @@ class AuditEntry:
     # Actor information - 자동으로 ActorContext에서 가져옴
     actor_id: Optional[str] = field(default=None)
     actor_type: str = field(default="system")
+    actor_roles: list[str] = field(default_factory=list)  # Phase 25: RBAC 역할
     
     # Context type - 이벤트 발생 환경 구분 (미들웨어/태스크/시스템)
     context_type: ContextType = field(default=ContextType.UNKNOWN)
@@ -175,14 +178,30 @@ class AuditEntry:
 
         actor_id가 명시적으로 설정되지 않았으면 ActorContext에서 가져옵니다.
         이를 통해 "누가 이 설정을 변경했는지" 자동 추적됩니다.
+        
+        Phase 25: actor_roles도 자동으로 채움.
         """
         # actor_id가 None이고 actor_type이 기본값 "system"이면 자동 채우기
         if self.actor_id is None and self.actor_type == "system":
-            auto_actor_id, auto_actor_type = _get_default_actor()
+            auto_actor_id, auto_actor_type, auto_roles = _get_default_actor()
             if auto_actor_id is not None:
                 # Use object.__setattr__ for frozen-like behavior compatibility
                 object.__setattr__(self, "actor_id", auto_actor_id)
                 object.__setattr__(self, "actor_type", auto_actor_type)
+                # Phase 25: roles도 자동 채우기
+                if auto_roles and not self.actor_roles:
+                    object.__setattr__(self, "actor_roles", auto_roles)
+        
+        # Phase 25: actor_id가 설정되었지만 actor_roles가 비어있으면 ActorContext에서 가져오기
+        if not self.actor_roles:
+            try:
+                from selfhealing.context.actor_context import ActorContext
+                if ActorContext.is_set():
+                    actor = ActorContext.get_current()
+                    if actor.roles:
+                        object.__setattr__(self, "actor_roles", actor.roles)
+            except ImportError:
+                pass
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -191,6 +210,7 @@ class AuditEntry:
             "timestamp": self.timestamp.isoformat(),
             "actor_id": self.actor_id,
             "actor_type": self.actor_type,
+            "actor_roles": self.actor_roles,
             "context_type": self.context_type.value if isinstance(self.context_type, ContextType) else self.context_type,
             "target_type": self.target_type,
             "target_id": self.target_id,

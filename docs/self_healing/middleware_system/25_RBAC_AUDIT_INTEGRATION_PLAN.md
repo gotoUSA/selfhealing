@@ -4,7 +4,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 버전 | 1.1.0 |
+| 버전 | 1.2.0 |
 | 작성일 | 2026-01-07 |
 | 최종 수정 | 2026-01-07 |
 | 관련 문서 | 20_AUDIT_UNIFICATION_PLAN.md, 19_DLQ_AUTOMATION_BLUEPRINT.md |
@@ -984,13 +984,13 @@ class DLQReplayView(APIView):
 ## 10. 작업 체크리스트
 
 ### Phase 1-4: RBAC-Audit 연동
-- [ ] **Phase 1.1**: Actor 클래스에 roles 필드 추가
-- [ ] **Phase 1.2**: _extract_selfhealing_roles() 구현
-- [ ] **Phase 1.3**: set_actor() roles 파라미터 추가
-- [ ] **Phase 1.4**: AuditEntry.actor_roles 필드 추가
+- [x] **Phase 1.1**: Actor 클래스에 roles 필드 추가 ✅ (2026-01-07)
+- [x] **Phase 1.2**: _extract_selfhealing_roles() 구현 ✅ (2026-01-07)
+- [x] **Phase 1.3**: set_actor() roles 파라미터 추가 ✅ (2026-01-07)
+- [x] **Phase 1.4**: AuditEntry.actor_roles 필드 추가 ✅ (2026-01-07)
 - [ ] **Phase 2.1**: _write_to_wal() actor_roles 지원
 - [ ] **Phase 3.5**: Celery Task actor_info 전달 (선택적)
-- [ ] **Phase 4.1**: 단위 테스트 작성
+- [x] **Phase 4.1**: 단위 테스트 작성 ✅ (2026-01-07, 39개 테스트 통과)
 - [ ] **Phase 4.2**: 통합 테스트 작성
 - [ ] **Phase 4.3**: Grafana 대시보드 업데이트
 
@@ -1099,3 +1099,4 @@ def restore_trace_from_celery(trace_info: Optional[dict]) -> Generator[str, None
 |------|------|--------|-----------|
 | 1.0.0 | 2026-01-07 | AI Assistant | 초안 작성 |
 | 1.1.0 | 2026-01-07 | AI Assistant | 리뷰 피드백 반영: 배경 섹션 추가, trace_id 일관성 Phase 5 추가, 선택적 강제 전략 문서화 |
+| 1.2.0 | 2026-01-07 | AI Assistant | **Phase 1 구현 완료**: Actor.roles, _extract_selfhealing_roles(), set_actor() roles, AuditEntry.actor_roles, 39개 단위 테스트 |

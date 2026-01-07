@@ -48,6 +48,14 @@ logger = logging.getLogger(__name__)
 _current_actor: contextvars.ContextVar[Optional["Actor"]] = contextvars.ContextVar("current_actor", default=None)
 
 
+# RBAC 역할 우선순위 상수
+RBAC_ROLE_PRIORITY: dict[str, int] = {
+    "selfhealing_admin": 3,
+    "selfhealing_operator": 2,
+    "selfhealing_viewer": 1,
+}
+
+
 @dataclass
 class Actor:
     """
@@ -61,6 +69,7 @@ class Actor:
         session_id: 세션 ID (같은 세션 내 작업 연결)
         set_at: Actor가 설정된 시점
         metadata: 추가 정보 (user-agent, request_id 등)
+        roles: RBAC 역할 목록 (Phase 25: RBAC-Audit 연동)
     """
 
     actor_id: str
@@ -70,6 +79,18 @@ class Actor:
     session_id: Optional[str] = None
     set_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
+    roles: list[str] = field(default_factory=list)
+
+    @property
+    def highest_role(self) -> str:
+        """RBAC 역할 중 가장 높은 권한 반환."""
+        if not self.roles:
+            return self.actor_type  # fallback to actor_type
+        return max(
+            self.roles,
+            key=lambda r: RBAC_ROLE_PRIORITY.get(r, 0),
+            default=self.actor_type,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for audit logging."""
@@ -81,6 +102,7 @@ class Actor:
             "session_id": self.session_id,
             "set_at": self.set_at.isoformat(),
             "metadata": self.metadata,
+            "roles": self.roles,
         }
 
 
@@ -89,12 +111,14 @@ SYSTEM_ACTOR = Actor(
     actor_id="system",
     actor_type="system",
     source="internal",
+    roles=[],
 )
 
 ANONYMOUS_ACTOR = Actor(
     actor_id="anonymous",
     actor_type="anonymous",
     source="unknown",
+    roles=[],
 )
 
 
@@ -115,6 +139,7 @@ class ActorContext:
         source: str = "unknown",
         ip_address: Optional[str] = None,
         session_id: Optional[str] = None,
+        roles: Optional[list[str]] = None,
         **metadata: Any,
     ) -> Generator[Actor, None, None]:
         """
@@ -132,10 +157,11 @@ class ActorContext:
             ip_address=ip_address,
             session_id=session_id,
             metadata=metadata,
+            roles=roles or [],
         )
         token = _current_actor.set(actor)
         try:
-            logger.debug(f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source}")
+            logger.debug(f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}")
             yield actor
         finally:
             _current_actor.reset(token)
@@ -146,15 +172,26 @@ class ActorContext:
         """
         Set actor from Django request object.
 
-        Extracts user info, IP address, session ID automatically.
+        Extracts user info, IP address, session ID, and RBAC roles automatically.
+        
+        Phase 25: RBAC 역할도 함께 추출하여 actor_type에 가장 높은 권한을 설정.
         """
         # Extract user info
         if hasattr(request, "user") and request.user.is_authenticated:
             actor_id = getattr(request.user, "email", None) or str(request.user.pk)
-            actor_type = "user"
+            
+            # Phase 25: RBAC 역할 추출
+            roles = cls._extract_selfhealing_roles(request.user)
+            
+            # actor_type을 가장 높은 RBAC 역할로 설정 (있는 경우)
+            if roles:
+                actor_type = cls._get_highest_role(roles)
+            else:
+                actor_type = "user"
         else:
             actor_id = "anonymous"
             actor_type = "anonymous"
+            roles = []
 
         # Extract IP address
         ip_address = cls._get_client_ip(request)
@@ -173,9 +210,55 @@ class ActorContext:
             source=source,
             ip_address=ip_address,
             session_id=session_id,
+            roles=roles,
             path=request.path,
             method=request.method,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+
+    @classmethod
+    def _extract_selfhealing_roles(cls, user: Any) -> list[str]:
+        """
+        사용자의 selfhealing RBAC 그룹 추출.
+        
+        Phase 25: Django User의 groups에서 selfhealing_ 접두사 그룹만 필터링.
+        
+        Args:
+            user: Django User 객체
+            
+        Returns:
+            selfhealing_ 접두사를 가진 그룹 이름 리스트
+        """
+        try:
+            if hasattr(user, "groups"):
+                return list(
+                    user.groups.filter(
+                        name__startswith="selfhealing_"
+                    ).values_list("name", flat=True)
+                )
+        except Exception:
+            logger.debug(f"[ActorContext] Failed to extract RBAC roles for user {user}")
+        return []
+
+    @classmethod
+    def _get_highest_role(cls, roles: list[str]) -> str:
+        """
+        RBAC 역할 중 가장 높은 권한 반환.
+        
+        Phase 25: selfhealing_admin > selfhealing_operator > selfhealing_viewer 순.
+        
+        Args:
+            roles: RBAC 역할 리스트
+            
+        Returns:
+            가장 높은 권한의 역할 이름, 없으면 'user'
+        """
+        if not roles:
+            return "user"
+        return max(
+            roles,
+            key=lambda r: RBAC_ROLE_PRIORITY.get(r, 0),
+            default="user",
         )
 
     @classmethod
@@ -301,12 +384,14 @@ def get_audit_actor_info() -> dict[str, Any]:
     """
     Get actor info formatted for AuditEntry.
 
-    Returns dict with actor_id, actor_type that can be unpacked into AuditEntry.
+    Returns dict with actor_id, actor_type, actor_roles that can be unpacked into AuditEntry.
+    
+    Phase 25: actor_roles도 포함하여 RBAC-Audit 연동 지원.
 
     Usage:
         entry = AuditEntry(
             action=AuditAction.CONFIG_CHANGE,
-            **get_audit_actor_info(),  # Adds actor_id, actor_type
+            **get_audit_actor_info(),  # Adds actor_id, actor_type, actor_roles
             ...
         )
     """
@@ -314,6 +399,7 @@ def get_audit_actor_info() -> dict[str, Any]:
     return {
         "actor_id": actor.actor_id,
         "actor_type": actor.actor_type,
+        "actor_roles": actor.roles,
     }
 
 
@@ -325,6 +411,8 @@ def get_audit_actor_info() -> dict[str, Any]:
 def get_actor_for_celery() -> dict[str, Any]:
     """
     Get current actor info for passing to Celery task.
+    
+    Phase 25: roles 정보도 함께 전달하여 Celery Task에서 RBAC 역할 유지.
 
     Usage (in view/api):
         from selfhealing.context import get_actor_for_celery
@@ -349,6 +437,7 @@ def get_actor_for_celery() -> dict[str, Any]:
         "ip_address": actor.ip_address,
         "session_id": actor.session_id,
         "original_set_at": actor.set_at.isoformat(),
+        "roles": actor.roles,  # Phase 25: RBAC 역할 전달
     }
 
 
@@ -356,6 +445,8 @@ def get_actor_for_celery() -> dict[str, Any]:
 def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, None, None]:
     """
     Restore actor context in Celery task from passed info.
+    
+    Phase 25: roles 정보도 함께 복원하여 RBAC 역할 유지.
 
     Usage:
         @app.task
@@ -377,6 +468,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
         source=actor_info.get("source", "celery"),
         ip_address=actor_info.get("ip_address"),
         session_id=actor_info.get("session_id"),
+        roles=actor_info.get("roles", []),  # Phase 25: RBAC 역할 복원
         original_request_time=actor_info.get("original_set_at"),
     ) as actor:
         yield actor
