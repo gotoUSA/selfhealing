@@ -1023,8 +1023,8 @@ class TestCeleryTraceFlowE2E:
 - [x] **3.1**: `celery_context` 자동 추출 및 WAL 레코드에 추가
 
 ### Phase 4: 기존 코드 정리 (Optional)
-- [ ] **4.1**: `dlq_replay.py`의 `restore_trace_from_celery()` 제거
-- [ ] **4.2**: `chaos_scheduler.py`의 수동 task_id 전달 제거
+- [x] **4.1**: `dlq_replay.py`의 `restore_trace_from_celery()` 제거
+- [x] **4.2**: `chaos_scheduler.py`의 수동 task_id 전달 제거
 
 ### Phase 5: 테스트
 - [x] **5.1**: 단위 테스트 작성 (Phase 1)
@@ -1095,3 +1095,4 @@ Audit 로그: trace_id = "req-abc123"  ← HTTP와 동일!
 |------|------|--------|-----------|
 | 1.0.0 | 2026-01-07 | AI Assistant | 초안 작성 - CELERY_ 접두사 표준화, task_prerun/postrun 핸들러, celery_context 이중화 설계 |
 | 1.1.0 | 2026-01-08 | AI Assistant | Phase 2, 3 구현 완료 - on_task_prerun/postrun 핸들러, _write_to_wal celery_context 추가, 테스트 26개 작성 |
+| 1.2.0 | 2026-01-08 | AI Assistant | Phase 4 구현 완료 - dlq_replay.py의 restore_trace_from_celery() 제거, chaos_scheduler.py의 task_id 수동 전달 제거 |

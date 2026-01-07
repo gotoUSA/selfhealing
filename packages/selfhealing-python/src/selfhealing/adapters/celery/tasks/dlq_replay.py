@@ -61,16 +61,14 @@ def replay_single_dlq_entry(
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
-        from selfhealing.audit.trace import restore_trace_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 25: trace_info가 있으면 원본 trace_id 사용, 없으면 INTERNAL_BEAT_xxx 자체 생성
-        with restore_trace_from_celery(trace_info):
-            # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
-            # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
-            with restore_actor_from_celery(actor_info or {}):
-                service = ReplayService()
-                result = service.replay_single(dlq_id)
+        # Phase 28: trace_id는 task_prerun 시그널에서 자동 주입됨
+        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
+        with restore_actor_from_celery(actor_info or {}):
+            service = ReplayService()
+            result = service.replay_single(dlq_id)
 
         return {
             "success": result.success,
@@ -131,15 +129,13 @@ def replay_batch_by_domain(
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
-        from selfhealing.audit.trace import restore_trace_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 25: trace_info가 있으면 원본 trace_id 사용, 없으면 INTERNAL_BEAT_xxx 자체 생성
-        with restore_trace_from_celery(trace_info):
-            # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
-            with restore_actor_from_celery(actor_info or {}):
-                service = ReplayService()
-                result = service.replay_batch(domain=domain, max_items=max_items)
+        # Phase 28: trace_id는 task_prerun 시그널에서 자동 주입됨
+        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        with restore_actor_from_celery(actor_info or {}):
+            service = ReplayService()
+            result = service.replay_batch(domain=domain, max_items=max_items)
 
         return {
             "success": result.success_count > 0 or result.total == 0,

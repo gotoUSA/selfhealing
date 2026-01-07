@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def run_scheduled_experiments(task_id: str = None) -> Dict[str, Any]:
+def run_scheduled_experiments() -> Dict[str, Any]:
     """
     Run scheduled chaos experiments.
     
@@ -42,10 +42,9 @@ def run_scheduled_experiments(task_id: str = None) -> Dict[str, Any]:
     Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
     - CHAOS_EXPERIMENT_STARTED/COMPLETED 이벤트 기록
     
-    Called at regular intervals (default: every 5 minutes) via Celery Beat.
+    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
-    Args:
-        task_id: Celery task ID (for audit tracking)
+    Called at regular intervals (default: every 5 minutes) via Celery Beat.
     
     Returns:
         Summary of execution results
@@ -65,7 +64,6 @@ def run_scheduled_experiments(task_id: str = None) -> Dict[str, Any]:
             log_chaos_scheduler_audit(
                 action="scheduled",
                 status=status,
-                task_id=task_id,
                 details={
                     "executed_count": result_dict.get("executed_count", 0),
                     "skipped_count": result_dict.get("skipped_count", 0),
@@ -86,14 +84,13 @@ def run_scheduled_experiments(task_id: str = None) -> Dict[str, Any]:
                 action="scheduled",
                 status="failed",
                 error_message=str(e),
-                task_id=task_id,
             )
         except Exception:
             pass
         raise
 
 
-def generate_daily_resilience_report(task_id: str = None) -> Dict[str, Any]:
+def generate_daily_resilience_report() -> Dict[str, Any]:
     """
     Generate daily resilience report.
     
@@ -103,8 +100,7 @@ def generate_daily_resilience_report(task_id: str = None) -> Dict[str, Any]:
     Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
     - 리포트 생성 결과 기록
     
-    Args:
-        task_id: Celery task ID (for audit tracking)
+    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Report summary
@@ -123,7 +119,6 @@ def generate_daily_resilience_report(task_id: str = None) -> Dict[str, Any]:
             log_chaos_scheduler_audit(
                 action="report_generated",
                 status="completed",
-                task_id=task_id,
                 details=result_dict,
             )
         except Exception as audit_error:
@@ -140,14 +135,13 @@ def generate_daily_resilience_report(task_id: str = None) -> Dict[str, Any]:
                 action="report_generated",
                 status="failed",
                 error_message=str(e),
-                task_id=task_id,
             )
         except Exception:
             pass
         raise
 
 
-def cleanup_expired_approvals(task_id: str = None) -> Dict[str, Any]:
+def cleanup_expired_approvals() -> Dict[str, Any]:
     """
     Clean up expired approval requests.
     
@@ -156,8 +150,7 @@ def cleanup_expired_approvals(task_id: str = None) -> Dict[str, Any]:
     Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
     - 만료된 승인 정리 결과 기록
     
-    Args:
-        task_id: Celery task ID (for audit tracking)
+    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Cleanup summary
@@ -176,7 +169,6 @@ def cleanup_expired_approvals(task_id: str = None) -> Dict[str, Any]:
             log_chaos_scheduler_audit(
                 action="cleanup",
                 status="completed",
-                task_id=task_id,
                 details={
                     "cleaned_count": result_dict.get("cleaned_count", 0),
                 },
@@ -195,21 +187,19 @@ def cleanup_expired_approvals(task_id: str = None) -> Dict[str, Any]:
                 action="cleanup",
                 status="failed",
                 error_message=str(e),
-                task_id=task_id,
             )
         except Exception:
             pass
         raise
 
 
-def check_and_alert_pending_approvals(task_id: str = None) -> Dict[str, Any]:
+def check_and_alert_pending_approvals() -> Dict[str, Any]:
     """
     Check for pending approvals and send alerts.
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
     
-    Args:
-        task_id: Celery task ID (for audit tracking)
+    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Alert summary
@@ -248,7 +238,7 @@ def register_celery_tasks(app):
     )
     def run_scheduled_experiments_task(self):
         """Celery task wrapper for run_scheduled_experiments."""
-        return run_scheduled_experiments(task_id=self.request.id)
+        return run_scheduled_experiments()
     
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.generate_daily_resilience_report_task",
@@ -259,7 +249,7 @@ def register_celery_tasks(app):
     def generate_daily_resilience_report_task(self):
         """Celery task wrapper for generate_daily_resilience_report."""
         try:
-            return generate_daily_resilience_report(task_id=self.request.id)
+            return generate_daily_resilience_report()
         except Exception as exc:
             logger.exception("[ChaosScheduler] Daily report generation failed")
             raise self.retry(exc=exc)
@@ -271,7 +261,7 @@ def register_celery_tasks(app):
     )
     def cleanup_expired_approvals_task(self):
         """Celery task wrapper for cleanup_expired_approvals."""
-        return cleanup_expired_approvals(task_id=self.request.id)
+        return cleanup_expired_approvals()
     
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.check_pending_approvals_task",
@@ -280,7 +270,7 @@ def register_celery_tasks(app):
     )
     def check_pending_approvals_task(self):
         """Celery task wrapper for check_and_alert_pending_approvals."""
-        return check_and_alert_pending_approvals(task_id=self.request.id)
+        return check_and_alert_pending_approvals()
     
     return {
         "run_scheduled_experiments": run_scheduled_experiments_task,
