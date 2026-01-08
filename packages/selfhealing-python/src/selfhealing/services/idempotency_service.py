@@ -42,11 +42,51 @@ T = TypeVar("T")
 class IdempotencyDomain(Enum):
     """Domains that support idempotency checking (domain-neutral)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 기존 도메인
+    # ═══════════════════════════════════════════════════════════════════════════
     EXTERNAL_SERVICE = "external_service"
+    """외부 서비스 호출 (결제, 알림 등)."""
+
     INTERNAL_PROCESS = "internal_process"
+    """내부 프로세스 (재고 차감, 포인트 적립 등)."""
+
     ASYNC_TASK = "async_task"
+    """비동기 작업 (Celery Task 등)."""
+
     EVENT = "event"
+    """이벤트 처리 (Webhook, 메시지 등)."""
+
     CUSTOM = "custom"
+    """커스텀 도메인."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Chaos Engineering 관련 (순위 4 - v2.4.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    CHAOS_EXPERIMENT = "chaos_experiment"
+    """Chaos 실험 실행 (동일 실험 중복 실행 방지)."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 설정 관리 관련 (순위 4 - v2.4.0)
+    # ═══════════════════════════════════════════════════════════════════════════
+    CONFIG_CHANGE = "config_change"
+    """설정 변경 (동일 변경 중복 적용 방지)."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 저장소 동기화 관련 (순위 4 - v2.4.0)
+    # ═══════════════════════════════════════════════════════════════════════════
+    L2_SYNC = "l2_sync"
+    """L2 저장소 동기화 (복구 후 재동기화 중복 방지)."""
+
+    WAL_RECOVERY = "wal_recovery"
+    """WAL 복구 (동일 엔트리 중복 처리 방지)."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Auto Tuning 관련 (순위 4 - v2.4.0)
+    # ═══════════════════════════════════════════════════════════════════════════
+    AUTO_ADJUSTMENT = "auto_adjustment"
+    """자율 조정 (동일 조정 중복 적용 방지)."""
 
 
 @dataclass
@@ -171,6 +211,189 @@ class IdempotencyKey:
             domain=IdempotencyDomain.CUSTOM,
             key=key,
             components=components,
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 신규 팩토리 메서드 (순위 5 - v2.4.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.2
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def for_chaos_experiment(
+        cls,
+        schedule_id: str,
+        experiment_type: str,
+        target_service: str,
+    ) -> "IdempotencyKey":
+        """
+        Chaos 실험에 대한 멱등성 키 생성.
+
+        동일 스케줄의 실험이 동시에 실행되는 것을 방지.
+
+        Args:
+            schedule_id: 스케줄 ID
+            experiment_type: 실험 유형 (예: latency_injection, fault_injection)
+            target_service: 대상 서비스
+
+        Returns:
+            IdempotencyKey for chaos experiment
+        """
+        key = f"chaos:{schedule_id}:{experiment_type}:{target_service}"
+        return cls(
+            domain=IdempotencyDomain.CHAOS_EXPERIMENT,
+            key=key,
+            components={
+                "schedule_id": schedule_id,
+                "experiment_type": experiment_type,
+                "target_service": target_service,
+            },
+        )
+
+    @classmethod
+    def for_config_change(
+        cls,
+        config_key: str,
+        new_value_hash: str,
+        changed_by: str,
+        request_id: Optional[str] = None,
+        window_id: Optional[str] = None,
+    ) -> "IdempotencyKey":
+        """
+        설정 변경에 대한 멱등성 키 생성.
+
+        동일 설정 변경이 중복 적용되는 것을 방지.
+
+        Args:
+            config_key: 설정 키
+            new_value_hash: 새 값의 해시
+            changed_by: 변경 주체
+            request_id: 요청 ID (동일 요청 재시도만 중복 처리)
+            window_id: 슬라이딩 윈도우 ID (시간 창 기반, 권장)
+
+        멱등성 범위 정책:
+        - request_id 제공: 동일 요청의 재시도만 중복
+        - window_id 제공: 동일 윈도우 내 동일 변경만 중복
+        - 둘 다 없음: new_value_hash 기준 (기존 동작)
+
+        Returns:
+            IdempotencyKey for config change
+
+        Reference: Architect Review - "의도된 재설정 vs 중복 구분"
+        """
+        if request_id:
+            # 요청 단위 멱등성 (가장 엄격)
+            key = f"config:{config_key}:{request_id}"
+        elif window_id:
+            # 슬라이딩 윈도우 기반 (권장)
+            key = f"config:{config_key}:{new_value_hash}:w{window_id}"
+        else:
+            # 기존 동작 (값 기반)
+            key = f"config:{config_key}:{new_value_hash}"
+
+        return cls(
+            domain=IdempotencyDomain.CONFIG_CHANGE,
+            key=key,
+            components={
+                "config_key": config_key,
+                "new_value_hash": new_value_hash,
+                "changed_by": changed_by,
+                "request_id": request_id,
+                "window_id": window_id,
+            },
+        )
+
+    @classmethod
+    def for_l2_sync(
+        cls,
+        service_name: str,
+        record_id: str,
+        intended_state: str,
+    ) -> "IdempotencyKey":
+        """
+        L2 동기화에 대한 멱등성 키 생성.
+
+        복구 후 동일 레코드가 중복 동기화되는 것을 방지.
+
+        Args:
+            service_name: 서비스 이름
+            record_id: 레코드 ID
+            intended_state: 목표 상태
+
+        Returns:
+            IdempotencyKey for L2 sync
+        """
+        key = f"l2sync:{service_name}:{record_id}"
+        return cls(
+            domain=IdempotencyDomain.L2_SYNC,
+            key=key,
+            components={
+                "service_name": service_name,
+                "record_id": record_id,
+                "intended_state": intended_state,
+            },
+        )
+
+    @classmethod
+    def for_wal_recovery(
+        cls,
+        wal_entry_id: str,
+        operation: str,
+    ) -> "IdempotencyKey":
+        """
+        WAL 복구에 대한 멱등성 키 생성.
+
+        동일 WAL 엔트리가 중복 처리되는 것을 방지.
+
+        Args:
+            wal_entry_id: WAL 엔트리 ID
+            operation: 복구 작업 유형
+
+        Returns:
+            IdempotencyKey for WAL recovery
+        """
+        key = f"wal:{wal_entry_id}:{operation}"
+        return cls(
+            domain=IdempotencyDomain.WAL_RECOVERY,
+            key=key,
+            components={
+                "wal_entry_id": wal_entry_id,
+                "operation": operation,
+            },
+        )
+
+    @classmethod
+    def for_auto_adjustment(
+        cls,
+        module: str,
+        parameter: str,
+        target_value: str,
+    ) -> "IdempotencyKey":
+        """
+        자율 조정에 대한 멱등성 키 생성.
+
+        동일 조정이 중복 적용되는 것을 방지.
+
+        Args:
+            module: 모듈 이름 (circuit_breaker, retry 등)
+            parameter: 파라미터 이름
+            target_value: 목표 값
+
+        Returns:
+            IdempotencyKey for auto adjustment
+
+        Note:
+            플래핑 체크는 AntiFlappingWindow를 별도로 사용하세요.
+            get_anti_flapping_window().check_and_record(...)
+        """
+        key = f"adjust:{module}:{parameter}:{target_value}"
+        return cls(
+            domain=IdempotencyDomain.AUTO_ADJUSTMENT,
+            key=key,
+            components={
+                "module": module,
+                "parameter": parameter,
+                "target_value": target_value,
+            },
         )
 
 
@@ -459,3 +682,236 @@ def get_idempotency_service() -> IdempotencyService:
     if _service is None:
         _service = IdempotencyService()
     return _service
+
+
+# =============================================================================
+# AntiFlappingWindow (순위 5, 5.3 - v2.4.0)
+# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.3
+# =============================================================================
+
+
+import time
+from collections import defaultdict
+from threading import Lock
+
+
+class AntiFlappingWindow:
+    """
+    Anti-Flapping 윈도우 (슬라이딩 윈도우 기반).
+
+    동일하거나 유사한 값이 짧은 시간 내 반복되는 것을 감지.
+
+    분산 환경 지원 (v2.4.0):
+    - Redis 사용 가능 시: ZSET 기반 분산 슬라이딩 윈도우
+    - Redis 미사용 시: 메모리 기반 로컬 윈도우 (기존 동작)
+
+    Reference:
+    - Architect Review: "1% 미만의 조정 반복을 중복/루프로 간주"
+    - 기존 SlidingWindowThrottle 패턴 재사용
+    """
+
+    REDIS_KEY_PREFIX = "selfhealing:anti_flapping:"
+
+    def __init__(
+        self,
+        window_seconds: int = 60,
+        similarity_threshold: float = 0.01,  # 1% 이내 = 유사
+        max_similar_changes: int = 3,
+        use_redis: bool = True,
+    ):
+        """
+        Initialize AntiFlappingWindow.
+
+        Args:
+            window_seconds: 슬라이딩 윈도우 크기 (초)
+            similarity_threshold: 유사 판정 임계값 (0.01 = 1%)
+            max_similar_changes: 윈도우 내 최대 유사 변경 횟수
+            use_redis: Redis 사용 여부 (분산 환경 지원)
+        """
+        self.window_seconds = window_seconds
+        self.similarity_threshold = similarity_threshold
+        self.max_similar_changes = max_similar_changes
+        self._use_redis = use_redis
+
+        # 메모리 기반 로컬 윈도우 (fallback)
+        # key -> [(timestamp, value), ...]
+        self._windows: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        self._lock = Lock()
+
+        # Redis 클라이언트 초기화
+        self._redis_client = None
+        if use_redis:
+            self._init_redis_client()
+
+    def _init_redis_client(self) -> None:
+        """Redis 클라이언트 초기화."""
+        try:
+            from selfhealing.core.state_backend import get_state_backend, RedisStateBackend
+
+            backend = get_state_backend()
+            if isinstance(backend, RedisStateBackend):
+                self._redis_client = backend._client
+                logger.info("[AntiFlappingWindow] Redis mode enabled (distributed)")
+            else:
+                logger.info("[AntiFlappingWindow] File backend detected, using memory mode")
+        except Exception as e:
+            logger.warning(f"[AntiFlappingWindow] Redis init failed, using memory: {e}")
+
+    def check_and_record(
+        self,
+        key: str,
+        new_value: float,
+    ) -> tuple[bool, str]:
+        """
+        새 값이 플래핑인지 확인하고 기록.
+
+        Args:
+            key: 파라미터 키 (예: "circuit_breaker:threshold")
+            new_value: 새로운 값
+
+        Returns:
+            (is_flapping, reason)
+        """
+        if self._redis_client:
+            return self._check_and_record_redis(key, new_value)
+        else:
+            return self._check_and_record_memory(key, new_value)
+
+    def _check_and_record_redis(
+        self,
+        key: str,
+        new_value: float,
+    ) -> tuple[bool, str]:
+        """
+        Redis ZSET 기반 분산 슬라이딩 윈도우.
+
+        ZSET 활용:
+        - score: timestamp
+        - member: "timestamp:value" 문자열
+        - ZRANGEBYSCORE로 윈도우 내 값들 조회
+        - ZREMRANGEBYSCORE로 만료된 엔트리 제거
+
+        순위 5.3 구현
+        """
+        redis_key = f"{self.REDIS_KEY_PREFIX}{key}"
+        now_ts = time.time()
+        window_start = now_ts - self.window_seconds
+
+        try:
+            pipe = self._redis_client.pipeline()
+
+            # 1. 오래된 엔트리 제거
+            pipe.zremrangebyscore(redis_key, "-inf", window_start)
+
+            # 2. 현재 윈도우 내 모든 엔트리 조회
+            pipe.zrangebyscore(redis_key, window_start, "+inf", withscores=True)
+
+            results = pipe.execute()
+            entries = results[1]  # [(member, score), ...]
+
+            # 3. 유사한 값 변경 횟수 계산
+            similar_count = 0
+            for member, _ in entries:
+                # member 형식: "timestamp:value"
+                try:
+                    if isinstance(member, bytes):
+                        member = member.decode("utf-8")
+                    _, val_str = member.split(":", 1)
+                    val = float(val_str)
+                    if self._is_similar(val, new_value):
+                        similar_count += 1
+                except (ValueError, AttributeError):
+                    continue
+
+            # 4. 플래핑 감지
+            if similar_count >= self.max_similar_changes:
+                return True, f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s"
+
+            # 5. 현재 값 기록
+            member = f"{now_ts}:{new_value}"
+            self._redis_client.zadd(redis_key, {member: now_ts})
+
+            # 6. TTL 설정 (윈도우 * 2로 안전하게)
+            self._redis_client.expire(redis_key, self.window_seconds * 2)
+
+            return False, ""
+
+        except Exception as e:
+            logger.warning(f"[AntiFlappingWindow] Redis error, fallback to memory: {e}")
+            return self._check_and_record_memory(key, new_value)
+
+    def _check_and_record_memory(
+        self,
+        key: str,
+        new_value: float,
+    ) -> tuple[bool, str]:
+        """메모리 기반 로컬 슬라이딩 윈도우 (기존 로직)."""
+        now_ts = time.time()
+        window_start = now_ts - self.window_seconds
+
+        with self._lock:
+            # 슬라이딩 윈도우: 오래된 엔트리 제거
+            self._windows[key] = [
+                (ts, val) for ts, val in self._windows[key]
+                if ts > window_start
+            ]
+
+            # 유사한 값 변경 횟수 계산
+            similar_count = 0
+            for ts, val in self._windows[key]:
+                if self._is_similar(val, new_value):
+                    similar_count += 1
+
+            # 플래핑 감지
+            if similar_count >= self.max_similar_changes:
+                return True, f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s"
+
+            # 현재 값 기록
+            self._windows[key].append((now_ts, new_value))
+
+            return False, ""
+
+    def _is_similar(self, val1: float, val2: float) -> bool:
+        """두 값이 유사한지 확인 (threshold 이내)."""
+        if val1 == 0 and val2 == 0:
+            return True
+        if val1 == 0 or val2 == 0:
+            return False
+
+        diff_ratio = abs(val1 - val2) / max(abs(val1), abs(val2))
+        return diff_ratio <= self.similarity_threshold
+
+    def clear_window(self, key: str) -> bool:
+        """
+        특정 키의 윈도우 클리어 (테스트용).
+
+        Args:
+            key: 파라미터 키
+
+        Returns:
+            성공 여부
+        """
+        if self._redis_client:
+            try:
+                redis_key = f"{self.REDIS_KEY_PREFIX}{key}"
+                self._redis_client.delete(redis_key)
+                return True
+            except Exception as e:
+                logger.warning(f"[AntiFlappingWindow] Redis clear failed: {e}")
+
+        with self._lock:
+            if key in self._windows:
+                del self._windows[key]
+        return True
+
+
+# 전역 Anti-Flapping 윈도우
+_anti_flapping_window: AntiFlappingWindow | None = None
+
+
+def get_anti_flapping_window() -> AntiFlappingWindow:
+    """Get singleton AntiFlappingWindow."""
+    global _anti_flapping_window
+    if _anti_flapping_window is None:
+        _anti_flapping_window = AntiFlappingWindow()
+    return _anti_flapping_window
