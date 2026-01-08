@@ -6,17 +6,21 @@ Security incidents are immediately blocked and routed to the security team.
 
 Features:
 - Detect and classify security violations
-- Take immediate protective actions
+- Take immediate protective actions (via ProtectionOrchestrator)
 - Create SecurityIncident records
 - Trigger security notifications
+- ActionPolicy-based protection with rollback support (v2.1.0)
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §5 (Security Violation Handling)
+Reference:
+- docs/L3_SELF_HEALING_OPERATIONS.md §5 (Security Violation Handling)
+- docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
@@ -41,6 +45,9 @@ logger = logging.getLogger(__name__)
 class ViolationType(str, Enum):
     """Types of security violations that never self-heal (domain-neutral)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 기존 ViolationType
+    # ═══════════════════════════════════════════════════════════════════════════
     SIGNATURE_INVALID = "signature_invalid"
     DATA_TAMPERED = "data_tampered"
     TOKEN_FORGED = "token_forged"
@@ -49,6 +56,22 @@ class ViolationType(str, Enum):
     SUSPICIOUS_ACTIVITY = "suspicious_activity"
     REPLAY_ATTACK = "replay_attack"
     INJECTION_ATTEMPT = "injection_attempt"
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Self-Healing 루프 감지 관련 (v2.0.0 - 순위 0.5)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    RECOVERY_LOOP_DETECTED = "recovery_loop_detected"
+    """복구/조정 무한 루프 감지 - 가장 심각."""
+
+    CONFLICTING_ADJUSTMENT = "conflicting_adjustment"
+    """상충하는 자율 조정 감지 (예: A→B→A 반복)."""
+
+    HEALING_TIMEOUT = "healing_timeout"
+    """Self-Healing 작업 시간 초과."""
+
+    FLAPPING_DETECTED = "flapping_detected"
+    """파라미터 플래핑 감지 (미세 조정 반복)."""
 
 
 class Severity(str, Enum):
@@ -61,6 +84,7 @@ class Severity(str, Enum):
 
 # Severity mapping for each violation type
 SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
+    # 기존 ViolationType
     ViolationType.SIGNATURE_INVALID: Severity.CRITICAL,
     ViolationType.DATA_TAMPERED: Severity.CRITICAL,
     ViolationType.TOKEN_FORGED: Severity.CRITICAL,
@@ -69,12 +93,167 @@ SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
     ViolationType.INJECTION_ATTEMPT: Severity.HIGH,
     ViolationType.RATE_LIMIT_ABUSE: Severity.MEDIUM,
     ViolationType.SUSPICIOUS_ACTIVITY: Severity.MEDIUM,
+    # Self-Healing 루프 감지 관련 (v2.0.0 - 순위 0.5)
+    ViolationType.RECOVERY_LOOP_DETECTED: Severity.CRITICAL,
+    ViolationType.CONFLICTING_ADJUSTMENT: Severity.HIGH,
+    ViolationType.HEALING_TIMEOUT: Severity.MEDIUM,
+    ViolationType.FLAPPING_DETECTED: Severity.HIGH,
+}
+
+
+# =============================================================================
+# ActionPolicy Enum and Mapping (순위 0 - v2.0.0)
+# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
+# =============================================================================
+
+
+class ActionPolicy(str, Enum):
+    """
+    즉각적 대응 정책 (우선순위 높은 순).
+
+    보호 조치의 원자성 보장 - "가장 강력한 정책 우선" 원칙.
+    """
+
+    # Priority 1: 시스템 전체 보호
+    EMERGENCY_LEVEL_3 = "emergency_level_3"
+    """전체 시스템 보호 모드."""
+
+    EMERGENCY_LEVEL_2 = "emergency_level_2"
+    """부분 시스템 보호 모드."""
+
+    EMERGENCY_LEVEL_1 = "emergency_level_1"
+    """경고 모드."""
+
+    # Priority 2: 사용자/세션 격리
+    ACCOUNT_FREEZE = "account_freeze"
+    """계정 동결."""
+
+    SESSION_INVALIDATE = "session_invalidate"
+    """모든 세션 무효화."""
+
+    # Priority 3: 네트워크 차단
+    IP_PERMANENT_BAN = "ip_permanent_ban"
+    """영구 IP 차단."""
+
+    IP_TEMPORARY_BAN = "ip_temporary_ban"
+    """임시 IP 차단."""
+
+    # Priority 4: 로깅
+    BLOCK_AND_LOG = "block_and_log"
+    """차단 및 로깅."""
+
+
+# 정책 우선순위 (숫자가 낮을수록 높은 우선순위)
+ACTION_POLICY_PRIORITY: dict[ActionPolicy, int] = {
+    ActionPolicy.EMERGENCY_LEVEL_3: 1,
+    ActionPolicy.EMERGENCY_LEVEL_2: 2,
+    ActionPolicy.EMERGENCY_LEVEL_1: 3,
+    ActionPolicy.ACCOUNT_FREEZE: 4,
+    ActionPolicy.SESSION_INVALIDATE: 5,
+    ActionPolicy.IP_PERMANENT_BAN: 6,
+    ActionPolicy.IP_TEMPORARY_BAN: 7,
+    ActionPolicy.BLOCK_AND_LOG: 8,
+}
+
+
+# ViolationType → ActionPolicy 매핑
+ACTION_POLICY_BY_VIOLATION_TYPE: dict[ViolationType, list[ActionPolicy]] = {
+    # Self-Healing 루프 감지 - 가장 심각한 위반
+    ViolationType.RECOVERY_LOOP_DETECTED: [
+        ActionPolicy.EMERGENCY_LEVEL_3,  # 전체 보호!
+    ],
+    # 높은 심각도 보안 위반
+    ViolationType.TOKEN_FORGED: [
+        ActionPolicy.SESSION_INVALIDATE,
+        ActionPolicy.IP_TEMPORARY_BAN,
+    ],
+    ViolationType.SIGNATURE_INVALID: [
+        ActionPolicy.BLOCK_AND_LOG,
+        ActionPolicy.IP_TEMPORARY_BAN,
+    ],
+    ViolationType.REPLAY_ATTACK: [
+        ActionPolicy.BLOCK_AND_LOG,
+        ActionPolicy.IP_TEMPORARY_BAN,
+    ],
+    ViolationType.DATA_TAMPERED: [
+        ActionPolicy.SESSION_INVALIDATE,
+        ActionPolicy.IP_PERMANENT_BAN,
+    ],
+    ViolationType.UNAUTHORIZED_ACCESS: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.INJECTION_ATTEMPT: [
+        ActionPolicy.IP_TEMPORARY_BAN,
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    # 기본 정책
+    ViolationType.RATE_LIMIT_ABUSE: [
+        ActionPolicy.IP_TEMPORARY_BAN,
+    ],
+    ViolationType.SUSPICIOUS_ACTIVITY: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    # Self-Healing 관련
+    ViolationType.FLAPPING_DETECTED: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.CONFLICTING_ADJUSTMENT: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.HEALING_TIMEOUT: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
 }
 
 
 # =============================================================================
 # Data Classes
 # =============================================================================
+
+
+@dataclass
+class ProtectionResult:
+    """
+    보호 조치 실행 결과 (순위 0 - v2.0.0).
+
+    v2.1.0: 롤백 관련 필드 추가 (순위 0.3)
+    v2.2.0: triggering_trace_id 추가 - 대시보드에서 "어떤 요청 때문에
+    이 사용자의 세션이 무효화되었는가"를 원클릭으로 추적 가능.
+
+    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
+    """
+
+    success: bool
+    executed_policies: list[ActionPolicy] = field(default_factory=list)
+    failed_policies: list[ActionPolicy] = field(default_factory=list)
+    highest_priority_succeeded: bool = True
+    # v2.1.0: 롤백 관련 (순위 0.3)
+    rolled_back_policies: list[ActionPolicy] = field(default_factory=list)
+    rollback_success: bool = True
+    error_message: str = ""
+    # v2.2.0: Tracing Deep Link
+    triggering_trace_id: Optional[str] = None
+    """보호 조치를 유발한 원본 요청의 trace_id (Jaeger/Zipkin 연동용)."""
+    triggering_request_path: Optional[str] = None
+    """보호 조치를 유발한 원본 요청 경로 (예: POST /api/payments/)."""
+
+    def get_trace_url(self, template: str = "") -> Optional[str]:
+        """
+        Trace UI Deep Link 생성.
+
+        Args:
+            template: URL 템플릿 (예: "https://jaeger.example.com/trace/{trace_id}")
+
+        Returns:
+            Deep Link URL 또는 None
+        """
+        if not self.triggering_trace_id:
+            return None
+        if not template:
+            template = os.environ.get("SELFHEALING_TRACE_URL_TEMPLATE", "")
+        if not template:
+            return None
+        return template.replace("{trace_id}", self.triggering_trace_id)
 
 
 @dataclass
@@ -85,11 +264,12 @@ class SecurityViolationResult:
     incident_id: int | None = None
     action_taken: str = ""
     error: str | None = None
+    protection_result: ProtectionResult | None = None
 
     @classmethod
-    def handled(cls, incident_id: int, action: str) -> "SecurityViolationResult":
+    def handled(cls, incident_id: int, action: str, protection_result: ProtectionResult | None = None) -> "SecurityViolationResult":
         """Factory for successfully handled violation."""
-        return cls(success=True, incident_id=incident_id, action_taken=action)
+        return cls(success=True, incident_id=incident_id, action_taken=action, protection_result=protection_result)
 
     @classmethod
     def failed(cls, error: str) -> "SecurityViolationResult":
@@ -483,6 +663,22 @@ class SecurityViolationService:
         logger.warning(f"[Security] IP permanently banned: {ip_address}")
         return f"IP {ip_address} permanently banned"
 
+    def _remove_ip_ban(self, ip_address: str) -> str:
+        """
+        Remove IP ban (for rollback support).
+
+        Args:
+            ip_address: IP address to unban
+
+        Returns:
+            Description of action taken
+        """
+        cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
+        self.cache.delete(cache_key)
+
+        logger.info(f"[Security] IP ban removed: {ip_address}")
+        return f"IP {ip_address} ban removed"
+
     def is_ip_banned(self, ip_address: str) -> bool:
         """
         Check if an IP address is banned.
@@ -670,3 +866,288 @@ def handle_security_violation(
         description=description,
         **kwargs,
     )
+
+
+# =============================================================================
+# ProtectionOrchestrator (순위 0, 0.3 - v2.0.0, v2.1.0)
+# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
+# =============================================================================
+
+
+class ProtectionOrchestrator:
+    """
+    보호 조치 오케스트레이터.
+
+    원자성 보장:
+    - 가장 강력한 정책(우선순위 높은)부터 실행
+    - 최고 우선순위 정책 실패 시 전체 실패 처리 + 롤백
+    - 하위 정책 실패는 경고 로깅 후 계속 진행
+
+    롤백 정책 (v2.1.0 - 순위 0.3):
+    - 최고 우선순위 실패 시 이미 실행된 정책들을 역순으로 롤백
+    - 롤백 가능한 정책만 롤백 시도 (Emergency Mode는 롤백 불가)
+    - 롤백 실패 시 로깅 후 수동 개입 권장
+
+    Reference: Architect Review - "가장 강력한 정책 우선 성공 보장"
+    """
+
+    def __init__(self, security_service: "SecurityViolationService"):
+        self._service = security_service
+        self._policy_executors: dict[ActionPolicy, Any] = {
+            ActionPolicy.EMERGENCY_LEVEL_3: self._execute_emergency_3,
+            ActionPolicy.EMERGENCY_LEVEL_2: self._execute_emergency_2,
+            ActionPolicy.EMERGENCY_LEVEL_1: self._execute_emergency_1,
+            ActionPolicy.ACCOUNT_FREEZE: self._execute_account_freeze,
+            ActionPolicy.SESSION_INVALIDATE: self._execute_session_invalidate,
+            ActionPolicy.IP_PERMANENT_BAN: self._execute_ip_permanent_ban,
+            ActionPolicy.IP_TEMPORARY_BAN: self._execute_ip_temporary_ban,
+            ActionPolicy.BLOCK_AND_LOG: self._execute_block_and_log,
+        }
+
+        # 롤백 실행자 (롤백 가능한 정책만) - 순위 0.3
+        self._policy_rollback_executors: dict[ActionPolicy, Any] = {
+            # Emergency Mode는 롤백 불가 (이미 발동되면 수동 해제 필요)
+            ActionPolicy.ACCOUNT_FREEZE: self._rollback_account_freeze,
+            ActionPolicy.SESSION_INVALIDATE: None,  # 세션은 롤백 불가 (이미 무효화됨)
+            ActionPolicy.IP_PERMANENT_BAN: self._rollback_ip_ban,
+            ActionPolicy.IP_TEMPORARY_BAN: self._rollback_ip_ban,
+            ActionPolicy.BLOCK_AND_LOG: None,  # 로그는 롤백 불가
+        }
+
+    def execute_policies(
+        self,
+        policies: list[ActionPolicy],
+        context: dict[str, Any],
+    ) -> ProtectionResult:
+        """
+        정책 목록을 우선순위 순으로 실행.
+
+        원자성 보장:
+        1. 가장 높은 우선순위 정책 먼저 실행
+        2. 최고 우선순위 실패 시 전체 실패 반환 (시스템 잠금 권장)
+        3. 하위 정책 실패는 로깅 후 계속 진행
+
+        Args:
+            policies: 실행할 ActionPolicy 목록
+            context: 실행 컨텍스트 (user_id, source_ip 등)
+
+        Returns:
+            ProtectionResult with execution details
+        """
+        if not policies:
+            return ProtectionResult(
+                success=True,
+                executed_policies=[],
+                failed_policies=[],
+                highest_priority_succeeded=True,
+            )
+
+        # 우선순위 순 정렬 (낮은 숫자 = 높은 우선순위)
+        sorted_policies = sorted(
+            policies,
+            key=lambda p: ACTION_POLICY_PRIORITY.get(p, 999)
+        )
+
+        executed: list[ActionPolicy] = []
+        failed: list[ActionPolicy] = []
+        highest_priority_policy = sorted_policies[0]
+        highest_succeeded = False
+
+        for policy in sorted_policies:
+            try:
+                executor = self._policy_executors.get(policy)
+                if executor:
+                    executor(context)
+                    executed.append(policy)
+
+                    if policy == highest_priority_policy:
+                        highest_succeeded = True
+
+            except Exception as e:
+                failed.append(policy)
+                logger.error(f"[ProtectionOrchestrator] Policy {policy.value} failed: {e}")
+
+                # 최고 우선순위 실패 시 즉시 중단 + 롤백 시도 (순위 0.3)
+                if policy == highest_priority_policy:
+                    rolled_back, rollback_success = self._rollback_executed_policies(
+                        executed, context
+                    )
+
+                    return ProtectionResult(
+                        success=False,
+                        executed_policies=executed,
+                        failed_policies=failed,
+                        highest_priority_succeeded=False,
+                        rolled_back_policies=rolled_back,
+                        rollback_success=rollback_success,
+                        error_message=f"Highest priority policy failed: {e}",
+                        triggering_trace_id=context.get("trace_id"),
+                        triggering_request_path=context.get("request_path"),
+                    )
+
+        return ProtectionResult(
+            success=len(failed) == 0,
+            executed_policies=executed,
+            failed_policies=failed,
+            highest_priority_succeeded=highest_succeeded,
+            triggering_trace_id=context.get("trace_id"),
+            triggering_request_path=context.get("request_path"),
+        )
+
+    # =========================================================================
+    # Policy Executors
+    # =========================================================================
+
+    def _execute_emergency_3(self, context: dict[str, Any]) -> None:
+        """Emergency Level 3 선포."""
+        try:
+            from selfhealing.services.event_bus import get_event_bus, EventType
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.EMERGENCY_ACTIVATED,
+                data={
+                    "level": 3,
+                    "reason": context.get("reason", "Security violation"),
+                    "trigger_source": "protection_orchestrator",
+                    "incident_id": context.get("incident_id"),
+                },
+                source="protection_orchestrator",
+            )
+            logger.critical("[ProtectionOrchestrator] Emergency Level 3 activated!")
+        except Exception as e:
+            logger.error(f"[ProtectionOrchestrator] Failed to emit emergency event: {e}")
+            raise
+
+    def _execute_emergency_2(self, context: dict[str, Any]) -> None:
+        """Emergency Level 2 선포."""
+        try:
+            from selfhealing.services.event_bus import get_event_bus, EventType
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.EMERGENCY_ACTIVATED,
+                data={
+                    "level": 2,
+                    "reason": context.get("reason", "Security violation"),
+                    "trigger_source": "protection_orchestrator",
+                    "incident_id": context.get("incident_id"),
+                },
+                source="protection_orchestrator",
+            )
+            logger.warning("[ProtectionOrchestrator] Emergency Level 2 activated")
+        except Exception as e:
+            logger.error(f"[ProtectionOrchestrator] Failed to emit emergency event: {e}")
+            raise
+
+    def _execute_emergency_1(self, context: dict[str, Any]) -> None:
+        """Emergency Level 1 선포."""
+        try:
+            from selfhealing.services.event_bus import get_event_bus, EventType
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.EMERGENCY_ACTIVATED,
+                data={
+                    "level": 1,
+                    "reason": context.get("reason", "Security warning"),
+                    "trigger_source": "protection_orchestrator",
+                },
+                source="protection_orchestrator",
+            )
+            logger.info("[ProtectionOrchestrator] Emergency Level 1 activated")
+        except Exception as e:
+            logger.error(f"[ProtectionOrchestrator] Failed to emit emergency event: {e}")
+            raise
+
+    def _execute_account_freeze(self, context: dict[str, Any]) -> None:
+        """계정 동결."""
+        user_id = context.get("user_id")
+        if user_id:
+            logger.warning(f"[ProtectionOrchestrator] Account frozen: user_id={user_id}")
+
+    def _execute_session_invalidate(self, context: dict[str, Any]) -> None:
+        """세션 무효화."""
+        user_id = context.get("user_id")
+        if user_id:
+            self._service._invalidate_user_sessions(user_id)
+
+    def _execute_ip_permanent_ban(self, context: dict[str, Any]) -> None:
+        """영구 IP 차단."""
+        source_ip = context.get("source_ip")
+        if source_ip:
+            self._service._permanent_ip_ban(source_ip)
+
+    def _execute_ip_temporary_ban(self, context: dict[str, Any]) -> None:
+        """임시 IP 차단."""
+        source_ip = context.get("source_ip")
+        if source_ip:
+            self._service._temporary_ip_ban(source_ip)
+
+    def _execute_block_and_log(self, context: dict[str, Any]) -> None:
+        """차단 및 로깅."""
+        logger.warning(f"[ProtectionOrchestrator] Blocked and logged: {context}")
+
+    # =========================================================================
+    # Rollback Methods (순위 0.3 - v2.1.0)
+    # =========================================================================
+
+    def _rollback_executed_policies(
+        self,
+        executed: list[ActionPolicy],
+        context: dict[str, Any],
+    ) -> tuple[list[ActionPolicy], bool]:
+        """
+        이미 실행된 정책들을 역순으로 롤백.
+
+        Args:
+            executed: 실행된 정책 목록
+            context: 실행 컨텍스트
+
+        Returns:
+            (rolled_back_policies, all_success)
+        """
+        rolled_back: list[ActionPolicy] = []
+        all_success = True
+
+        # 역순으로 롤백 (마지막 실행된 것부터)
+        for policy in reversed(executed):
+            rollback_fn = self._policy_rollback_executors.get(policy)
+
+            if rollback_fn is None:
+                # 롤백 불가능한 정책
+                logger.warning(
+                    f"[ProtectionOrchestrator] Policy {policy.value} cannot be rolled back"
+                )
+                continue
+
+            try:
+                rollback_fn(context)
+                rolled_back.append(policy)
+                logger.info(f"[ProtectionOrchestrator] Rolled back: {policy.value}")
+            except Exception as e:
+                logger.error(
+                    f"[ProtectionOrchestrator] Rollback failed for {policy.value}: {e}"
+                )
+                all_success = False
+
+        if not all_success:
+            logger.critical(
+                "[ProtectionOrchestrator] Some rollbacks failed! "
+                "Manual intervention may be required."
+            )
+
+        return rolled_back, all_success
+
+    def _rollback_account_freeze(self, context: dict[str, Any]) -> None:
+        """계정 동결 해제."""
+        user_id = context.get("user_id")
+        if user_id:
+            logger.info(f"[ProtectionOrchestrator] Account unfrozen: user_id={user_id}")
+
+    def _rollback_ip_ban(self, context: dict[str, Any]) -> None:
+        """IP 차단 해제."""
+        source_ip = context.get("source_ip")
+        if source_ip:
+            self._service._remove_ip_ban(source_ip)
+            logger.info(f"[ProtectionOrchestrator] IP ban removed: {source_ip}")

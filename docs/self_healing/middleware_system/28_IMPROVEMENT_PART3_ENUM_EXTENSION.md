@@ -1,6 +1,6 @@
 # Part 3: ViolationType & IdempotencyDomain 확장 가이드
 
-**문서 버전**: 2.2.0  
+**문서 버전**: 2.3.0  
 **작성일**: 2026-01-07  
 **최종 수정**: 2026-01-08  
 **근거 코드**: 실제 소스 코드 분석 기반
@@ -15,6 +15,7 @@
 | 2.0.0 | 2026-01-08 | 아키텍트 리뷰 반영: ActionPolicy, Anti-Flapping, Escape Strategy 추가 |
 | 2.1.0 | 2026-01-08 | 롤백 로직, StateBackend 기반 영속성, Redis 분산 캐싱 추가 |
 | 2.2.0 | 2026-01-08 | 순환 참조 방지 가이드, 블랙리스트 Admin API, triggering_trace_id 추가 |
+| 2.3.0 | 2026-01-08 | 순위 0, 0.3, 0.5 구현 완료: ActionPolicy, ProtectionOrchestrator, 롤백, Self-Healing ViolationType |
 
 ---
 
@@ -693,21 +694,21 @@ class TestIdempotencyDomainExtension:
 
 ## 6. 구현 우선순위
 
-| 순위 | 작업 | 중요도 | 예상 공수 |
-|------|------|--------|----------|
-| **0** | **ActionPolicy Enum 및 ProtectionOrchestrator** | 🔴 Critical | 2시간 |
-| **0.3** | **ProtectionOrchestrator 롤백 로직** (v2.1.0) | 🔴 Critical | 1시간 |
-| **0.5** | **Self-Healing Loop ViolationType 추가** | 🔴 Critical | 1시간 |
-| 1 | ViolationType 신규 추가 | 🔴 Critical | 1시간 |
-| 2 | Severity 매핑 업데이트 | 🔴 Critical | 0.5시간 |
-| **2.5** | **EventBus → Emergency Mode 연동** | 🟡 High | 1.5시간 |
-| 3 | CorruptionShield ViolationType 매핑 | 🟡 High | 1시간 |
-| 4 | IdempotencyDomain 신규 추가 | 🟡 High | 1시간 |
-| 5 | IdempotencyKey 팩토리 메서드 추가 (**Anti-Flapping 포함**) | 🟡 High | 2시간 |
-| **5.3** | **AntiFlappingWindow Redis 분산 캐싱** (v2.1.0) | 🟡 High | 1시간 |
-| **5.5** | **Escape Strategy (LearningService 블랙리스트)** | 🟡 High | 2시간 |
-| **5.7** | **ParameterBlacklist StateBackend 영속성** (v2.1.0) | 🟡 High | 1시간 |
-| 6 | ChaosScheduler Idempotency 적용 | 🟢 Medium | 1.5시간 |
+| 순위 | 작업 | 중요도 | 예상 공수 | 상태 |
+|------|------|--------|----------|------|
+| **0** | **ActionPolicy Enum 및 ProtectionOrchestrator** | 🔴 Critical | 2시간 | ✅ 완료 (2026-01-08) |
+| **0.3** | **ProtectionOrchestrator 롤백 로직** (v2.1.0) | 🔴 Critical | 1시간 | ✅ 완료 (2026-01-08) |
+| **0.5** | **Self-Healing Loop ViolationType 추가** | 🔴 Critical | 1시간 | ✅ 완료 (2026-01-08) |
+| 1 | ViolationType 신규 추가 | 🔴 Critical | 1시간 | ⏳ 대기 |
+| 2 | Severity 매핑 업데이트 | 🔴 Critical | 0.5시간 | ⏳ 대기 |
+| **2.5** | **EventBus → Emergency Mode 연동** | 🟡 High | 1.5시간 | ⏳ 대기 |
+| 3 | CorruptionShield ViolationType 매핑 | 🟡 High | 1시간 | ⏳ 대기 |
+| 4 | IdempotencyDomain 신규 추가 | 🟡 High | 1시간 | ⏳ 대기 |
+| 5 | IdempotencyKey 팩토리 메서드 추가 (**Anti-Flapping 포함**) | 🟡 High | 2시간 | ⏳ 대기 |
+| **5.3** | **AntiFlappingWindow Redis 분산 캐싱** (v2.1.0) | 🟡 High | 1시간 | ⏳ 대기 |
+| **5.5** | **Escape Strategy (LearningService 블랙리스트)** | 🟡 High | 2시간 | ⏳ 대기 |
+| **5.7** | **ParameterBlacklist StateBackend 영속성** (v2.1.0) | 🟡 High | 1시간 | ⏳ 대기 |
+| 6 | ChaosScheduler Idempotency 적용 | 🟢 Medium | 1.5시간 | ⏳ 대기 |
 | 7 | 단위 테스트 작성 (롤백, 영속성, Redis 포함) | 🟢 Medium | 4시간 |
 
 **총 예상 공수**: 20.5시간
