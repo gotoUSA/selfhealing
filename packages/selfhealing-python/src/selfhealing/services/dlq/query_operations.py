@@ -78,8 +78,8 @@ class QueryOperationsMixin:
         """
         Get entries that have breached their SLA.
 
-        SLA thresholds are loaded from configuration.
-        See config.SLAThresholds for default values.
+        SLA thresholds are loaded from configuration (domain-free).
+        Uses SLAConfig.get_all_thresholds() to support any configured domain.
 
         Returns:
             List of SLA-breached FailedOperationData entries
@@ -89,15 +89,10 @@ class QueryOperationsMixin:
         current_time = now()
         sla_config = get_config().sla
 
+        # Domain-Free: 설정된 모든 도메인의 임계값을 동적으로 로드
         return self.repository.find_sla_breached(
             current_time=current_time,
-            sla_thresholds={
-                "payment": sla_config.get_threshold("payment"),
-                "point": sla_config.get_threshold("point"),
-                "inventory": sla_config.get_threshold("inventory"),
-                "webhook": sla_config.get_threshold("webhook"),
-                "notification": sla_config.get_threshold("notification"),
-            },
+            sla_thresholds=sla_config.get_all_thresholds(),
         )
 
     def get_expired_entries(self) -> List["FailedOperationData"]:

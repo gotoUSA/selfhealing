@@ -687,7 +687,7 @@ class ChaosScheduler:
                 status="blocked",
                 message=f"Error Budget Gate: {gate_result.reason}"
             )
-        
+
         # 정상 실행
         return await self._execute_injection(...)
 ```
@@ -706,7 +706,7 @@ def replay_single_dlq_entry(entry_id: str, ...):
             "manual_mode_enforced": True,
             "reason": gate_result.reason,
         }
-    
+
     # 정상 재시도 로직
     ...
 ```
@@ -896,7 +896,7 @@ status = gate.get_circuit_breaker_status()
 ```
 Request 1: Error Budget 조회 성공 → CLOSED 유지
 Request 2: Error Budget 조회 실패 → failure_count=1, CLOSED
-Request 3: Error Budget 조회 실패 → failure_count=2, CLOSED  
+Request 3: Error Budget 조회 실패 → failure_count=2, CLOSED
 Request 4: Error Budget 조회 실패 → failure_count=3, CLOSED → OPEN 전환
 
 Request 5-100: 즉시 Fail-Open 반환 (조회 안함, 빠른 응답)
