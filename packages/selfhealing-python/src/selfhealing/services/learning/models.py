@@ -17,6 +17,26 @@ class PatternType(Enum):
     OPTIMIZATION = "optimization" # 최적화 패턴
 
 
+class BlacklistReason(str, Enum):
+    """
+    블랙리스트 등록 사유.
+    
+    순위 5.5: Escape Strategy - LearningService 블랙리스트
+    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
+    """
+    RECOVERY_LOOP = "recovery_loop"
+    """복구/조정 무한 루프 감지."""
+    
+    CONFLICTING_ADJUSTMENT = "conflicting_adjustment"
+    """상충하는 자율 조정 감지 (예: A→B→A 반복)."""
+    
+    FLAPPING = "flapping"
+    """파라미터 플래핑 감지 (미세 조정 반복)."""
+    
+    MANUAL_BLOCK = "manual_block"
+    """관리자에 의한 수동 차단."""
+
+
 class SuggestionPriority(Enum):
     """제안 우선순위"""
     LOW = "low"
@@ -133,3 +153,67 @@ class PerformanceMetric:
             "timestamp": self.timestamp.isoformat(),
             "tags": self.tags,
         }
+
+
+@dataclass
+class BlacklistedParameter:
+    """
+    블랙리스트된 파라미터.
+    
+    순위 5.5: Escape Strategy - 위험한 파라미터 조합 학습
+    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
+    """
+    module: str
+    """모듈 이름 (예: circuit_breaker, retry)."""
+    
+    parameter: str
+    """파라미터 이름 (예: threshold, max_attempts)."""
+    
+    blocked_values: set[str]
+    """차단된 값들."""
+    
+    reason: BlacklistReason
+    """등록 사유."""
+    
+    registered_at: datetime
+    """등록 시간."""
+    
+    registered_by: str = "system"
+    """등록 주체 ('system' 또는 사용자 ID)."""
+    
+    incident_id: Optional[int] = None
+    """관련 인시던트 ID."""
+    
+    expires_at: Optional[datetime] = None
+    """만료 시간 (None = 영구)."""
+    
+    def to_dict(self) -> Dict:
+        """직렬화 가능한 딕셔너리로 변환."""
+        return {
+            "module": self.module,
+            "parameter": self.parameter,
+            "blocked_values": list(self.blocked_values),
+            "reason": self.reason.value,
+            "registered_at": self.registered_at.isoformat(),
+            "registered_by": self.registered_by,
+            "incident_id": self.incident_id,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> "BlacklistedParameter":
+        """딕셔너리에서 복원."""
+        return cls(
+            module=data["module"],
+            parameter=data["parameter"],
+            blocked_values=set(data["blocked_values"]),
+            reason=BlacklistReason(data["reason"]),
+            registered_at=datetime.fromisoformat(data["registered_at"]),
+            registered_by=data.get("registered_by", "system"),
+            incident_id=data.get("incident_id"),
+            expires_at=(
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
+            ),
+        )

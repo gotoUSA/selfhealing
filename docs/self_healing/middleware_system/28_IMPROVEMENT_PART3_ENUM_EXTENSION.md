@@ -708,10 +708,10 @@ class TestIdempotencyDomainExtension:
 | **4** | **IdempotencyDomain 신규 추가** | 🟡 High | 1시간 | ✅ 완료 (2026-01-08) |
 | **5** | **IdempotencyKey 팩토리 메서드 추가 (Anti-Flapping 포함)** | 🟡 High | 2시간 | ✅ 완료 (2026-01-08) |
 | **5.3** | **AntiFlappingWindow Redis 분산 캐싱** (v2.1.0) | 🟡 High | 1시간 | ✅ 완료 (2026-01-08) |
-| **5.5** | **Escape Strategy (LearningService 블랙리스트)** | 🟡 High | 2시간 | ⏳ 대기 |
-| **5.7** | **ParameterBlacklist StateBackend 영속성** (v2.1.0) | 🟡 High | 1시간 | ⏳ 대기 |
-| 6 | ChaosScheduler Idempotency 적용 | 🟢 Medium | 1.5시간 | ⏳ 대기 |
-| 7 | 단위 테스트 작성 (롤백, 영속성, Redis 포함) | 🟢 Medium | 4시간 |
+| **5.5** | **Escape Strategy (LearningService 블랙리스트)** | 🟡 High | 2시간 | ✅ 완료 (2026-01-08) |
+| **5.7** | **ParameterBlacklist StateBackend 영속성** (v2.1.0) | 🟡 High | 1시간 | ✅ 완료 (2026-01-08) |
+| **6** | **ChaosScheduler Idempotency 적용** | 🟢 Medium | 1.5시간 | ✅ 완료 (2026-01-08) |
+| **7** | **단위 테스트 작성** (롤백, 영속성, Redis 포함) | 🟢 Medium | 4시간 | ✅ 완료 (2026-01-08) |
 
 **총 예상 공수**: 20.5시간
 

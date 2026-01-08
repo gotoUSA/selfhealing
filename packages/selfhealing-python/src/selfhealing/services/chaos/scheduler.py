@@ -425,6 +425,96 @@ class ChaosSchedulerService:
             completed_at=now().isoformat(),
         )
 
+    # =========================================================================
+    # 순위 6: Idempotency 체크 (v2.5.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.3
+    # =========================================================================
+
+    def _check_idempotency(
+        self,
+        schedule: "ScheduledExperiment",
+        schedule_id: str,
+        experiment_id: str,
+        started_at,
+    ) -> ExecutionResult | None:
+        """
+        멱등성 체크: 동일 실험의 중복 실행 방지.
+        
+        Args:
+            schedule: 스케줄 정보
+            schedule_id: 스케줄 ID
+            experiment_id: 실험 ID
+            started_at: 시작 시간
+        
+        Returns:
+            ExecutionResult if duplicate, None otherwise
+        """
+        try:
+            from selfhealing.services.idempotency_service import (
+                IdempotencyKey,
+                get_idempotency_service,
+            )
+            
+            # 멱등성 키 생성
+            idempotency_key = IdempotencyKey.for_chaos_experiment(
+                schedule_id=schedule_id,
+                experiment_type=schedule.experiment_type,
+                target_service=schedule.target_service,
+            )
+            
+            # 중복 체크
+            service = get_idempotency_service()
+            idem_result = service.check(idempotency_key)
+            
+            if idem_result.is_duplicate:
+                logger.warning(
+                    f"[ChaosScheduler] Duplicate experiment blocked: "
+                    f"schedule_id={schedule_id}, reason={idem_result.message}"
+                )
+                return ExecutionResult(
+                    schedule_id=schedule_id,
+                    experiment_id=experiment_id,
+                    status="duplicate",
+                    skipped=True,
+                    skip_reason=f"Duplicate experiment: {idem_result.message}",
+                    started_at=started_at.isoformat(),
+                    completed_at=now().isoformat(),
+                )
+            
+            return None
+            
+        except ImportError:
+            logger.debug("[ChaosScheduler] IdempotencyService not available")
+            return None
+        except Exception as e:
+            logger.warning(f"[ChaosScheduler] Idempotency check failed: {e}")
+            return None
+
+    def _mark_idempotency_processed(self, schedule: "ScheduledExperiment") -> None:
+        """
+        실험 완료 후 멱등성 처리 완료 마킹.
+        
+        Args:
+            schedule: 스케줄 정보
+        """
+        try:
+            from selfhealing.services.idempotency_service import (
+                IdempotencyKey,
+                get_idempotency_service,
+            )
+            
+            idempotency_key = IdempotencyKey.for_chaos_experiment(
+                schedule_id=schedule.id,
+                experiment_type=schedule.experiment_type,
+                target_service=schedule.target_service,
+            )
+            
+            service = get_idempotency_service()
+            service.mark_as_processed(idempotency_key)
+            
+        except Exception as e:
+            logger.warning(f"[ChaosScheduler] Failed to mark idempotency: {e}")
+
     def _check_error_budget_gate(self, schedule_id: str, experiment_id: str, started_at) -> ExecutionResult | None:
         """Check error budget gate. Returns ExecutionResult if blocked, None otherwise."""
         try:
@@ -541,6 +631,12 @@ class ChaosSchedulerService:
         started_at = now()
         
         try:
+            # 순위 6: Idempotency 체크
+            if not force:
+                blocked = self._check_idempotency(schedule, schedule_id, experiment_id, started_at)
+                if blocked:
+                    return blocked
+            
             # 0. Error Budget Gate Check
             if not force:
                 blocked = self._check_error_budget_gate(schedule_id, experiment_id, started_at)
@@ -602,6 +698,10 @@ class ChaosSchedulerService:
                 # Record safety guard cooldown
                 if not force:
                     guard.record_experiment_completed()
+                
+                # 순위 6: 멱등성 처리 완료 마킹
+                if not force:
+                    self._mark_idempotency_processed(schedule)
                 
                 execution_result = ExecutionResult(
                     schedule_id=schedule_id,
