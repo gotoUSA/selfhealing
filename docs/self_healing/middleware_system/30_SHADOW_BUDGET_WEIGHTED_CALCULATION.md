@@ -1,6 +1,6 @@
 # Shadow Budget 가중치 기반 계산 개선
 
-> **문서 버전**: 1.0.0  
+> **문서 버전**: 1.4.0  
 > **최종 수정일**: 2026-01-08  
 > **관련 문서**: [12_ERROR_BUDGET.md](../12_ERROR_BUDGET.md) §13
 
@@ -912,21 +912,22 @@ class TestWeightedReconciliationFlow:
 
 ### 9.1 단계별 계획
 
-| Phase | 작업 | 예상 시간 | 우선순위 |
-|-------|------|----------|----------|
-| **Phase 0** | 핵심 설계 (Cap, Source Reliability, 공식) | 0.5시간 | 🔴 High |
-| **Phase 1** | Severity 기반 가중치 | 1시간 | 🔴 High |
-| **Phase 2** | Domain SLA 기반 가중치 | 1시간 | 🔴 High |
-| **Phase 3** | Learning 패턴 연계 | 2시간 | 🟡 Medium |
-| **Phase 4** | 통합 가중치 계산 | 1시간 | 🔴 High |
-| **Phase 5** | SimulationBridge (Chaos Callback) | 1시간 | 🟡 Medium |
-| **Phase 6** | Pending Reconciliation Freeze | 1시간 | 🟡 Medium |
-| **Phase 7** | Audit 이벤트 추가 (투명성 강화 포함) | 1.5시간 | 🔴 High |
-| **Phase 8** | Accuracy Audit (사후 검증) | 1시간 | 🟢 Low |
-| **Phase 9** | 알림 연동 | 1시간 | 🟢 Low |
-| **Phase 10** | 테스트 작성 | 2시간 | 🔴 High |
+| Phase | 작업 | 예상 시간 | 우선순위 | 상태 |
+|-------|------|----------|----------|------|
+| **Phase 0** | 핵심 설계 (Cap, Source Reliability, 공식) | 0.5시간 | 🔴 High | ✅ 완료 |
+| **Phase 1** | Severity 기반 가중치 | 1시간 | 🔴 High | ✅ 완료 |
+| **Phase 2** | Domain SLA 기반 가중치 | 1시간 | 🔴 High | ⏳ 대기 |
+| **Phase 3** | Learning 패턴 연계 | 2시간 | 🟡 Medium | ⏳ 대기 |
+| **Phase 4** | 통합 가중치 계산 | 1시간 | 🔴 High | ⏳ 대기 |
+| **Phase 5** | SimulationBridge (Chaos Callback) | 1시간 | 🟡 Medium | ⏳ 대기 |
+| **Phase 6** | Pending Reconciliation Freeze | 1시간 | 🟡 Medium | ⏳ 대기 |
+| **Phase 7** | Audit 이벤트 추가 (투명성 강화 포함) | 1.5시간 | 🔴 High | ⏳ 대기 |
+| **Phase 8** | Accuracy Audit (사후 검증) | 1시간 | 🟢 Low | ⏳ 대기 |
+| **Phase 9** | 알림 연동 | 1시간 | 🟢 Low | ⏳ 대기 |
+| **Phase 10** | 테스트 작성 | 2시간 | 🔴 High | 🔄 진행중 |
 
-**총 예상 시간**: 13시간
+**총 예상 시간**: 13시간  
+**진행률**: Phase 0, 1 완료 (약 1.5시간 / 13시간)
 
 ### 9.2 의존성
 
@@ -957,3 +958,4 @@ Phase 9 (알림) ───────────▶ 독립 구현 가능
 | 1.1.0 | 2026-01-08 | AI Assistant | Architect Review 반영: Multiplier Cap, Pending Freeze, Accuracy Audit |
 | 1.2.0 | 2026-01-08 | AI Assistant | 추가 Review 반영: Source Reliability Weight, SimulationBridge, ExcludedPeriod 투명성 |
 | 1.3.0 | 2026-01-08 | AI Assistant | 최종 Review 반영: Accuracy Audit Celery Beat 통합, ExcludedPeriod 전용 필드, 네이밍 보완 |
+| 1.4.0 | 2026-01-08 | AI Assistant | Phase 0, 1 구현 완료: MAX_WEIGHT_MULTIPLIER, SOURCE_RELIABILITY, SEVERITY_WEIGHT 상수 및 `_calculate_weighted_errors()` 메서드 추가. 30개 단위 테스트 통과 |

@@ -2,6 +2,8 @@
 Shadow Budget Calculator.
 
 Calculates shadow budget by estimating missed errors from logs.
+
+Reference: docs/self_healing/middleware_system/30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md
 """
 
 from __future__ import annotations
@@ -17,6 +19,43 @@ from .enums import ReconciliationStatus
 from .models import FailSafePeriod, ShadowBudget
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Phase 0: 핵심 설계 원칙
+# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0
+# =============================================================================
+
+# 4.0.1 Multiplier Cap - 가중치 폭발 방지
+# Critical(10x) × Payment(24x) × 반복(2x) = 480배 폭발 방지
+MAX_WEIGHT_MULTIPLIER: float = 50.0
+
+# 4.0.2 Source Reliability Weight - 데이터 소스 신뢰도
+# 낮을수록 보수적 차감 (정확하지 않은 소스에서 온 데이터는 덜 차감)
+SOURCE_RELIABILITY: Dict[str, float] = {
+    "prometheus": 1.0,        # 가장 정확
+    "dlq": 0.9,               # 리플레이 대기 데이터
+    "application_logs": 0.8,  # 누락 가능성 존재
+    "none_available": 0.5,    # 추정치 (매우 보수적)
+}
+
+
+# =============================================================================
+# Phase 1: Severity 기반 가중치
+# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.1
+# =============================================================================
+
+# 에러 심각도별 가중치 (분 단위)
+# 기본값 0.001분 대비 배수로 정의
+SEVERITY_WEIGHT: Dict[str, float] = {
+    "critical": 0.01,   # 10배 가중치
+    "high": 0.005,      # 5배 가중치
+    "medium": 0.001,    # 기본값
+    "low": 0.0005,      # 절반 가중치
+}
+
+# 기본 가중치 (분)
+BASE_WEIGHT_MINUTES: float = 0.001
 
 
 class ShadowBudgetCalculator:
@@ -51,6 +90,7 @@ class ShadowBudgetCalculator:
         primary_remaining_percent: float,
         primary_consumed_minutes: float,
         budget_total_minutes: float = 43.2,  # 99.9% SLO, 30일 기준
+        errors_by_severity: Optional[Dict[str, int]] = None,
     ) -> ShadowBudget:
         """
         Shadow Budget 계산.
@@ -60,6 +100,7 @@ class ShadowBudgetCalculator:
             primary_remaining_percent: 현재 Primary Budget 잔여율
             primary_consumed_minutes: 현재 Primary Budget 소진량 (분)
             budget_total_minutes: 전체 Budget (분)
+            errors_by_severity: 심각도별 에러 수 (Phase 1 가중치 계산용)
             
         Returns:
             ShadowBudget 계산 결과
@@ -70,10 +111,21 @@ class ShadowBudgetCalculator:
         # 에러 수 추정 (여러 소스에서)
         estimated_errors, log_source = self._estimate_errors(period_start, period_end)
         
-        # 에러를 Budget 소진량으로 변환
-        # 단순화: 에러 1개 = 0.001분 소진 (실제로는 에러 심각도 등에 따라 가중치)
-        error_weight_minutes = 0.001
-        additional_consumed = estimated_errors * error_weight_minutes
+        # Phase 1: 가중치 기반 에러 계산
+        # errors_by_severity가 제공되면 가중치 적용, 아니면 기본값 사용
+        if errors_by_severity:
+            additional_consumed = self._calculate_weighted_errors(
+                errors_by_severity=errors_by_severity,
+                log_source=log_source,
+            )
+            # 총 에러 수는 severity별 합계로 업데이트
+            estimated_errors = sum(errors_by_severity.values())
+        else:
+            # 기존 방식: 모든 에러를 medium으로 간주
+            additional_consumed = self._calculate_weighted_errors(
+                errors_by_severity={"medium": estimated_errors},
+                log_source=log_source,
+            )
         
         # Shadow Budget 계산
         shadow_consumed = primary_consumed_minutes + additional_consumed
@@ -107,6 +159,51 @@ class ShadowBudgetCalculator:
         )
         
         return shadow_budget
+    
+    def _calculate_weighted_errors(
+        self,
+        errors_by_severity: Dict[str, int],
+        log_source: str = "none_available",
+    ) -> float:
+        """
+        Severity 기반 가중치 계산.
+        
+        Phase 0: Source Reliability Weight 적용
+        Phase 1: Severity Weight 적용
+        
+        Args:
+            errors_by_severity: 심각도별 에러 수 {"critical": 5, "high": 10, ...}
+            log_source: 데이터 소스 ("prometheus", "dlq", "application_logs", "none_available")
+            
+        Returns:
+            가중치 적용된 Budget 소진량 (분)
+            
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0, §4.1
+        """
+        total_weighted = 0.0
+        
+        for severity, count in errors_by_severity.items():
+            # Phase 1: Severity 가중치 적용
+            weight = SEVERITY_WEIGHT.get(severity.lower(), BASE_WEIGHT_MINUTES)
+            total_weighted += count * weight
+        
+        # Phase 0: Source Reliability 적용
+        # 정확하지 않은 소스에서 온 데이터는 덜 차감 (보수적 접근)
+        source_reliability = SOURCE_RELIABILITY.get(log_source, 1.0)
+        total_weighted *= source_reliability
+        
+        # Phase 0: Multiplier Cap 적용 (향후 Phase 2, 3에서 domain_mult, pattern_mult 추가 시)
+        # 현재는 단일 severity 가중치만 적용되므로 max 10배
+        # Cap 로직은 Phase 4 통합 시 적용됨
+        
+        logger.debug(
+            f"[ShadowBudget] Weighted calculation: "
+            f"errors_by_severity={errors_by_severity}, "
+            f"source_reliability={source_reliability}, "
+            f"total_weighted={total_weighted:.6f}"
+        )
+        
+        return total_weighted
     
     def _estimate_errors(
         self,
