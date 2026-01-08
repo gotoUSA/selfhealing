@@ -172,6 +172,9 @@ def _write_to_wal(
         if metrics:
             metrics.record_write("wal", success=True)
         
+        # Phase 4: 성공 시 메모리 버퍼 플러시 시도
+        _try_flush_memory_buffer()
+        
         logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={trace_id}")
         return seq
     except Exception as e:
@@ -179,7 +182,52 @@ def _write_to_wal(
         if metrics:
             metrics.record_write("wal", success=False)
             metrics.record_failure("wal", type(e).__name__)
+        
+        # Phase 4: 실패 시 메모리 버퍼에 저장
+        try:
+            from selfhealing.audit.resilience import InMemoryAuditBuffer
+            buffer = InMemoryAuditBuffer.get_instance()
+            buffer.add(wal_entry)
+            logger.warning("[AuditHelpers] Entry saved to in-memory buffer")
+        except Exception as buffer_error:
+            logger.critical(f"[AuditHelpers] Memory buffer also failed: {buffer_error}")
+        
         return None
+
+
+def _try_flush_memory_buffer() -> int:
+    """
+    메모리 버퍼 플러시 시도.
+    
+    Phase 4: WAL 정상화 후 버퍼에 쌓인 엔트리들을 WAL로 플러시.
+    
+    Returns:
+        플러시된 엔트리 수
+    """
+    try:
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        buffer = InMemoryAuditBuffer.get_instance()
+        
+        if buffer.get_buffer_size() == 0:
+            return 0
+        
+        wal = _get_wal()
+        if wal is None:
+            return 0
+        
+        def wal_write_entry(entry: dict) -> Optional[int]:
+            """버퍼 엔트리를 WAL에 기록."""
+            try:
+                return wal.write(entry)
+            except Exception:
+                return None
+        
+        return buffer.try_flush(wal_write_entry)
+    except ImportError:
+        return 0
+    except Exception as e:
+        logger.debug(f"[AuditHelpers] Memory buffer flush failed: {e}")
+        return 0
 
 
 def disable_wal():

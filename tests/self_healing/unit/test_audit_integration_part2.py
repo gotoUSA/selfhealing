@@ -840,3 +840,308 @@ class TestAuditContextAutoInjection:
             # 레코드가 정상적으로 기록되어야 함
             records = logger.get_all_records()
             assert len(records) >= 1
+
+
+# =============================================================================
+# Test: Phase 3 - Forensic 민감정보 마스킹
+# =============================================================================
+
+
+class TestForensicMasking:
+    """Forensic 민감정보 마스킹 테스트 (Phase 3)."""
+    
+    def test_password_masked_in_context(self):
+        """password 필드 마스킹."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        bridge = ForensicAuditBridge()
+        context = {
+            "user": "admin",
+            "password": "secret123",
+            "action": "login",
+        }
+        
+        masked = bridge._mask_context(context)
+        
+        assert masked["user"] == "admin"
+        assert masked["password"] == "***REDACTED***"
+        assert masked["action"] == "login"
+    
+    def test_api_key_masked_in_context(self):
+        """api_key 필드 마스킹."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        bridge = ForensicAuditBridge()
+        context = {
+            "api_key": "sk-1234567890",
+            "endpoint": "/api/v1/data",
+        }
+        
+        masked = bridge._mask_context(context)
+        
+        assert masked["api_key"] == "***REDACTED***"
+        assert masked["endpoint"] == "/api/v1/data"
+    
+    def test_nested_sensitive_fields_masked(self):
+        """중첩된 민감 필드 마스킹."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        # 커스텀 패턴 사용 (credentials가 기본 패턴에 있으므로)
+        bridge = ForensicAuditBridge(sensitive_patterns=["password", "token"])
+        context = {
+            "user": {
+                "name": "admin",
+                "login_info": {
+                    "password": "secret123",
+                    "token": "jwt-token-xyz",
+                },
+            },
+            "action": "update",
+        }
+        
+        masked = bridge._mask_context(context)
+        
+        assert masked["user"]["name"] == "admin"
+        assert masked["user"]["login_info"]["password"] == "***REDACTED***"
+        assert masked["user"]["login_info"]["token"] == "***REDACTED***"
+        assert masked["action"] == "update"
+    
+    def test_custom_sensitive_patterns(self):
+        """커스텀 민감 패턴 사용."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        bridge = ForensicAuditBridge(sensitive_patterns=["custom_secret", "my_key"])
+        context = {
+            "custom_secret": "value1",
+            "my_key": "value2",
+            "password": "should-not-be-masked",  # 커스텀 패턴에 없음
+        }
+        
+        masked = bridge._mask_context(context)
+        
+        assert masked["custom_secret"] == "***REDACTED***"
+        assert masked["my_key"] == "***REDACTED***"
+        assert masked["password"] == "should-not-be-masked"
+    
+    def test_on_exception_captured_masks_context(self, mock_audit_adapter):
+        """on_exception_captured 시 컨텍스트 마스킹."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        bridge = ForensicAuditBridge(audit_adapter=mock_audit_adapter)
+        
+        exception = ValueError("Test error")
+        stack_trace = "line 1\nline 2\nline 3"
+        context = {
+            "user_id": "123",
+            "api_key": "secret-key",
+        }
+        
+        bridge.on_exception_captured(
+            exception=exception,
+            stack_trace=stack_trace,
+            context=context,
+            sanitized=True,
+        )
+        
+        # Audit 이벤트가 기록되어야 함
+        events = mock_audit_adapter.get_events_by_type("FORENSIC_CAPTURE_COMPLETED")
+        assert len(events) == 1
+        assert events[0]["details"]["sanitized"] is True
+    
+    def test_on_exception_captured_no_mask_when_sanitized_false(self, mock_audit_adapter):
+        """sanitized=False일 때 마스킹 안함."""
+        from selfhealing.services.forensic_audit_bridge import ForensicAuditBridge
+        
+        bridge = ForensicAuditBridge(audit_adapter=mock_audit_adapter)
+        
+        exception = ValueError("Test error")
+        stack_trace = "line 1"
+        context = {"password": "secret"}
+        
+        # sanitized=False로 호출해도 _mask_context는 호출되지 않음
+        bridge.on_exception_captured(
+            exception=exception,
+            stack_trace=stack_trace,
+            context=context,
+            sanitized=False,
+        )
+        
+        events = mock_audit_adapter.get_events_by_type("FORENSIC_CAPTURE_COMPLETED")
+        assert len(events) == 1
+        assert events[0]["details"]["sanitized"] is False
+
+
+# =============================================================================
+# Test: Phase 4 - InMemoryAuditBuffer
+# =============================================================================
+
+
+class TestInMemoryAuditBuffer:
+    """메모리 버퍼 폴백 테스트 (Phase 4)."""
+    
+    def test_buffer_add_entry(self):
+        """엔트리 추가."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        
+        # 새 인스턴스 생성 (테스트 격리)
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        entry = {"event_type": "TEST", "data": "test"}
+        result = buffer.add(entry)
+        
+        assert result is True
+        assert buffer.get_buffer_size() == 1
+        
+        stats = buffer.get_stats()
+        assert stats["buffered_entries"] == 1
+        assert stats["total_buffered"] == 1
+        assert stats["total_dropped"] == 0
+    
+    def test_buffer_overflow_drops_oldest(self):
+        """버퍼 초과 시 가장 오래된 엔트리 삭제."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        # MAX_ENTRIES를 임시로 줄여서 테스트
+        original_max = InMemoryAuditBuffer.MAX_ENTRIES
+        InMemoryAuditBuffer.MAX_ENTRIES = 3
+        
+        try:
+            buffer.add({"id": 1})
+            buffer.add({"id": 2})
+            buffer.add({"id": 3})
+            
+            # 4번째 추가 시 1번이 삭제됨
+            result = buffer.add({"id": 4})
+            
+            assert result is False  # dropped 발생
+            assert buffer.get_buffer_size() == 3
+            
+            stats = buffer.get_stats()
+            assert stats["total_dropped"] == 1
+        finally:
+            InMemoryAuditBuffer.MAX_ENTRIES = original_max
+    
+    def test_buffer_flush_success(self):
+        """버퍼 플러시 성공."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        buffer.add({"event_type": "TEST1"})
+        buffer.add({"event_type": "TEST2"})
+        
+        # Mock WAL 쓰기 함수
+        written = []
+        def mock_wal_write(entry):
+            written.append(entry)
+            return len(written)  # sequence 반환
+        
+        flushed = buffer.try_flush(mock_wal_write)
+        
+        assert flushed == 2
+        assert buffer.get_buffer_size() == 0
+        assert len(written) == 2
+    
+    def test_buffer_flush_partial_failure(self):
+        """플러시 중 일부 실패."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        buffer.add({"event_type": "SUCCESS"})
+        buffer.add({"event_type": "FAIL"})
+        buffer.add({"event_type": "SUCCESS2"})
+        
+        call_count = [0]
+        def mock_wal_write(entry):
+            call_count[0] += 1
+            if entry["event_type"] == "FAIL":
+                return None  # 실패
+            return call_count[0]
+        
+        flushed = buffer.try_flush(mock_wal_write)
+        
+        assert flushed == 2  # SUCCESS, SUCCESS2
+        assert buffer.get_buffer_size() == 1  # FAIL이 남음
+    
+    def test_wal_failure_triggers_memory_buffer(self, temp_wal_dir):
+        """WAL 실패 시 메모리 버퍼 저장."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        from selfhealing.services.audit.base import _write_to_wal, _get_wal
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        # WAL write가 실패하도록 Mock
+        with patch("selfhealing.services.audit.base._get_wal") as mock_get_wal:
+            mock_wal = MagicMock()
+            mock_wal.write.side_effect = IOError("Disk full")
+            mock_get_wal.return_value = mock_wal
+            
+            result = _write_to_wal(
+                event_type="TEST_EVENT",
+                source="TestSource",
+                details={"key": "value"},
+            )
+            
+            assert result is None  # WAL 쓰기 실패
+            assert buffer.get_buffer_size() >= 1  # 메모리 버퍼에 저장됨
+    
+    def test_buffer_flush_on_wal_recovery(self, temp_wal_dir):
+        """WAL 복구 시 버퍼 플러시."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        from selfhealing.services.audit.base import _try_flush_memory_buffer
+        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        # 수동으로 버퍼에 엔트리 추가
+        buffer.add({"event_type": "BUFFERED1", "data": "test1"})
+        buffer.add({"event_type": "BUFFERED2", "data": "test2"})
+        
+        assert buffer.get_buffer_size() == 2
+        
+        # 정상 WAL로 플러시
+        config = WALConfig(wal_dir=temp_wal_dir, sync_on_write=False)
+        wal = WriteAheadLog(config=config)
+        
+        try:
+            with patch("selfhealing.services.audit.base._get_wal", return_value=wal):
+                flushed = _try_flush_memory_buffer()
+                
+                assert flushed == 2
+                assert buffer.get_buffer_size() == 0
+        finally:
+            wal.close()
+    
+    def test_buffer_stats(self):
+        """버퍼 통계 확인."""
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        
+        InMemoryAuditBuffer.reset_instance()
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.clear()
+        
+        buffer.add({"event_type": "TEST"})
+        
+        stats = buffer.get_stats()
+        
+        assert "buffered_entries" in stats
+        assert "max_entries" in stats
+        assert "total_buffered" in stats
+        assert "total_dropped" in stats
+        assert "flush_failures" in stats
+        assert "last_flush_attempt" in stats
