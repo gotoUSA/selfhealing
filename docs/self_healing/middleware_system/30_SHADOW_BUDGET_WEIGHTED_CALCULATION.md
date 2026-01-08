@@ -916,18 +916,18 @@ class TestWeightedReconciliationFlow:
 |-------|------|----------|----------|------|
 | **Phase 0** | 핵심 설계 (Cap, Source Reliability, 공식) | 0.5시간 | 🔴 High | ✅ 완료 |
 | **Phase 1** | Severity 기반 가중치 | 1시간 | 🔴 High | ✅ 완료 |
-| **Phase 2** | Domain SLA 기반 가중치 | 1시간 | 🔴 High | ⏳ 대기 |
-| **Phase 3** | Learning 패턴 연계 | 2시간 | 🟡 Medium | ⏳ 대기 |
-| **Phase 4** | 통합 가중치 계산 | 1시간 | 🔴 High | ⏳ 대기 |
+| **Phase 2** | Domain SLA 기반 가중치 | 1시간 | 🔴 High | ✅ 완료 |
+| **Phase 3** | Learning 패턴 연계 | 2시간 | 🟡 Medium | ✅ 완료 |
+| **Phase 4** | 통합 가중치 계산 | 1시간 | 🔴 High | ✅ 완료 |
 | **Phase 5** | SimulationBridge (Chaos Callback) | 1시간 | 🟡 Medium | ⏳ 대기 |
 | **Phase 6** | Pending Reconciliation Freeze | 1시간 | 🟡 Medium | ⏳ 대기 |
 | **Phase 7** | Audit 이벤트 추가 (투명성 강화 포함) | 1.5시간 | 🔴 High | ⏳ 대기 |
 | **Phase 8** | Accuracy Audit (사후 검증) | 1시간 | 🟢 Low | ⏳ 대기 |
 | **Phase 9** | 알림 연동 | 1시간 | 🟢 Low | ⏳ 대기 |
-| **Phase 10** | 테스트 작성 | 2시간 | 🔴 High | 🔄 진행중 |
+| **Phase 10** | 테스트 작성 | 2시간 | 🔴 High | ✅ 완료 |
 
 **총 예상 시간**: 13시간  
-**진행률**: Phase 0, 1 완료 (약 1.5시간 / 13시간)
+**진행률**: Phase 0~4, 10 완료 (약 6.5시간 / 13시간)
 
 ### 9.2 의존성
 
@@ -959,3 +959,4 @@ Phase 9 (알림) ───────────▶ 독립 구현 가능
 | 1.2.0 | 2026-01-08 | AI Assistant | 추가 Review 반영: Source Reliability Weight, SimulationBridge, ExcludedPeriod 투명성 |
 | 1.3.0 | 2026-01-08 | AI Assistant | 최종 Review 반영: Accuracy Audit Celery Beat 통합, ExcludedPeriod 전용 필드, 네이밍 보완 |
 | 1.4.0 | 2026-01-08 | AI Assistant | Phase 0, 1 구현 완료: MAX_WEIGHT_MULTIPLIER, SOURCE_RELIABILITY, SEVERITY_WEIGHT 상수 및 `_calculate_weighted_errors()` 메서드 추가. 30개 단위 테스트 통과 |
+| 1.5.0 | 2026-01-08 | AI Assistant | Phase 2, 3, 4, 10 구현 완료: `_get_domain_weight()`, `_get_pattern_weight()` 메서드 추가. 통합 가중치 계산 및 Multiplier Cap 적용. 47개 단위 테스트 통과 |
