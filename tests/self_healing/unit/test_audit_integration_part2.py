@@ -1145,3 +1145,359 @@ class TestInMemoryAuditBuffer:
         assert "total_dropped" in stats
         assert "flush_failures" in stats
         assert "last_flush_attempt" in stats
+
+
+# =============================================================================
+# Test: Phase 5 - ForensicRateLimiter
+# =============================================================================
+
+
+class TestForensicRateLimiter:
+    """Forensic Rate Limiter 테스트 (Phase 5)."""
+    
+    def test_exception_rate_limit(self):
+        """분당 10건 초과 시 드롭."""
+        from selfhealing.services.forensic_audit_bridge import ForensicRateLimiter
+        
+        limiter = ForensicRateLimiter(exception_limit=3, window_seconds=60.0)
+        
+        # 첫 3건은 허용
+        assert limiter.try_acquire_exception() is True
+        assert limiter.try_acquire_exception() is True
+        assert limiter.try_acquire_exception() is True
+        
+        # 4번째부터 거부
+        assert limiter.try_acquire_exception() is False
+        assert limiter.try_acquire_exception() is False
+        
+        stats = limiter.get_stats()
+        assert stats["exception_requests_in_window"] == 3
+        assert stats["exceptions_dropped"] == 2
+    
+    def test_snapshot_rate_limit(self):
+        """분당 1건 초과 시 드롭."""
+        from selfhealing.services.forensic_audit_bridge import ForensicRateLimiter
+        
+        limiter = ForensicRateLimiter(snapshot_limit=1, window_seconds=60.0)
+        
+        assert limiter.try_acquire_snapshot() is True
+        assert limiter.try_acquire_snapshot() is False
+        assert limiter.try_acquire_snapshot() is False
+        
+        stats = limiter.get_stats()
+        assert stats["snapshot_requests_in_window"] == 1
+        assert stats["snapshots_dropped"] == 2
+    
+    def test_anomaly_rate_limit(self):
+        """이상 탐지 Rate Limit."""
+        from selfhealing.services.forensic_audit_bridge import ForensicRateLimiter
+        
+        limiter = ForensicRateLimiter(anomaly_limit=2, window_seconds=60.0)
+        
+        assert limiter.try_acquire_anomaly() is True
+        assert limiter.try_acquire_anomaly() is True
+        assert limiter.try_acquire_anomaly() is False
+        
+        stats = limiter.get_stats()
+        assert stats["anomaly_requests_in_window"] == 2
+        assert stats["anomalies_dropped"] == 1
+    
+    def test_window_expiry(self):
+        """윈도우 경과 후 토큰 재충전."""
+        import time
+        from selfhealing.services.forensic_audit_bridge import ForensicRateLimiter
+        
+        # 0.1초 윈도우로 빠른 테스트
+        limiter = ForensicRateLimiter(exception_limit=1, window_seconds=0.1)
+        
+        assert limiter.try_acquire_exception() is True
+        assert limiter.try_acquire_exception() is False
+        
+        # 윈도우 경과 대기
+        time.sleep(0.15)
+        
+        # 다시 허용
+        assert limiter.try_acquire_exception() is True
+    
+    def test_reset(self):
+        """Rate limiter 리셋."""
+        from selfhealing.services.forensic_audit_bridge import ForensicRateLimiter
+        
+        limiter = ForensicRateLimiter(exception_limit=1)
+        
+        limiter.try_acquire_exception()
+        limiter.try_acquire_exception()  # dropped
+        
+        stats_before = limiter.get_stats()
+        assert stats_before["exceptions_dropped"] == 1
+        
+        limiter.reset()
+        
+        stats_after = limiter.get_stats()
+        assert stats_after["exceptions_dropped"] == 0
+        assert stats_after["exception_requests_in_window"] == 0
+    
+    def test_bridge_uses_rate_limiter(self):
+        """ForensicAuditBridge가 Rate Limiter 사용."""
+        from selfhealing.services.forensic_audit_bridge import (
+            ForensicAuditBridge,
+            ForensicRateLimiter,
+        )
+        
+        limiter = ForensicRateLimiter(exception_limit=2)
+        bridge = ForensicAuditBridge(rate_limiter=limiter)
+        
+        # 첫 2건은 성공
+        result1 = bridge.on_exception_captured(
+            ValueError("test"), "stack", {"key": "value"}
+        )
+        result2 = bridge.on_exception_captured(
+            ValueError("test2"), "stack2", {"key2": "value2"}
+        )
+        
+        # 3번째는 Rate Limited
+        result3 = bridge.on_exception_captured(
+            ValueError("test3"), "stack3", {"key3": "value3"}
+        )
+        
+        assert result1 is True
+        assert result2 is True
+        assert result3 is False
+    
+    def test_bridge_rate_limiter_stats(self):
+        """Bridge에서 Rate Limiter 통계 조회."""
+        from selfhealing.services.forensic_audit_bridge import (
+            ForensicAuditBridge,
+            ForensicRateLimiter,
+        )
+        
+        limiter = ForensicRateLimiter()
+        bridge = ForensicAuditBridge(rate_limiter=limiter)
+        
+        stats = bridge.get_rate_limiter_stats()
+        
+        assert "exception_limit" in stats
+        assert "snapshot_limit" in stats
+        assert "anomaly_limit" in stats
+
+
+# =============================================================================
+# Test: Phase 6 - RedisAuditBuffer
+# =============================================================================
+
+
+class TestRedisAuditBuffer:
+    """Redis Audit Buffer 테스트 (Phase 6)."""
+    
+    def test_log_success(self):
+        """Redis 기록 성공."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        # Mock Redis
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        result = buffer.log({"event_type": "TEST"}, domain="test")
+        
+        assert result is True
+        mock_redis.pipeline.assert_called_once()
+        mock_pipe.lpush.assert_called_once()
+        mock_pipe.expire.assert_called_once()
+        mock_pipe.execute.assert_called_once()
+    
+    def test_log_failure_uses_fallback(self):
+        """Redis 실패 시 폴백 사용."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_pipe.execute.side_effect = Exception("Redis down")
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        # spec을 사용하여 log_raw가 없는 fallback 시뮬레이션
+        mock_fallback = MagicMock(spec=['log'])
+        
+        buffer = RedisAuditBuffer(
+            redis_client=mock_redis,
+            fallback_adapter=mock_fallback,
+        )
+        
+        result = buffer.log({"event_type": "TEST"})
+        
+        assert result is False
+        mock_fallback.log.assert_called_once()
+    
+    def test_on_fallback_callback(self):
+        """폴백 콜백 호출."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_pipe.execute.side_effect = Exception("Connection refused")
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        callback_called = []
+        def on_fallback(e):
+            callback_called.append(str(e))
+        
+        buffer = RedisAuditBuffer(
+            redis_client=mock_redis,
+            on_fallback=on_fallback,
+        )
+        
+        buffer.log({"event_type": "TEST"})
+        
+        assert len(callback_called) == 1
+        assert "Connection refused" in callback_called[0]
+    
+    def test_consecutive_failures_tracking(self):
+        """연속 실패 추적."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_pipe.execute.side_effect = Exception("Error")
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        buffer.log({"event_type": "TEST1"})
+        buffer.log({"event_type": "TEST2"})
+        buffer.log({"event_type": "TEST3"})
+        
+        stats = buffer.get_buffer_stats()
+        assert stats["consecutive_failures"] == 3
+        assert stats["total_fallbacks"] == 3
+    
+    def test_success_resets_failure_count(self):
+        """성공 시 실패 카운트 리셋."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        # 수동으로 failure 설정
+        buffer._consecutive_failures = 5
+        
+        buffer.log({"event_type": "TEST"})
+        
+        assert buffer._consecutive_failures == 0
+    
+    def test_should_use_fallback(self):
+        """폴백 사용 여부 판단."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        buffer._consecutive_failures = 2
+        assert buffer.should_use_fallback() is False
+        
+        buffer._consecutive_failures = 3
+        assert buffer.should_use_fallback() is True
+    
+    def test_is_healthy(self):
+        """Redis 연결 상태 확인."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        # Healthy
+        mock_redis.ping.return_value = True
+        assert buffer.is_healthy() is True
+        
+        # Unhealthy
+        mock_redis.ping.side_effect = Exception("Connection lost")
+        assert buffer.is_healthy() is False
+    
+    def test_get_pending_count(self):
+        """대기 엔트리 수 조회."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_redis.llen.return_value = 42
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        count = buffer.get_pending_count("test")
+        
+        assert count == 42
+        mock_redis.llen.assert_called_with("audit:buffer:test")
+    
+    def test_flush_to_external(self):
+        """외부 저장소로 플러시."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        import json
+        
+        mock_redis = MagicMock()
+        
+        # scan_iter 설정
+        mock_redis.scan_iter.return_value = [b"audit:buffer:test"]
+        
+        # rpop 설정 (2개 항목 후 None)
+        entries = [
+            json.dumps({"entry": {"event": "e1"}, "timestamp": "2026-01-08T00:00:00Z", "instance_id": "test"}),
+            json.dumps({"entry": {"event": "e2"}, "timestamp": "2026-01-08T00:00:01Z", "instance_id": "test"}),
+            None,
+        ]
+        mock_redis.rpop.side_effect = entries
+        
+        # spec을 사용하여 log_raw가 없는 target 시뮬레이션
+        mock_target = MagicMock(spec=['log'])
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        flushed = buffer.flush_to_external(mock_target, domain="test")
+        
+        assert flushed == 2
+        assert mock_target.log.call_count == 2
+    
+    def test_clear_domain(self):
+        """도메인 삭제."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_redis.llen.return_value = 5
+        
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+        
+        count = buffer.clear_domain("test")
+        
+        assert count == 5
+        mock_redis.delete.assert_called_with("audit:buffer:test")
+    
+    def test_custom_key_prefix(self):
+        """커스텀 키 프리픽스."""
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+        
+        buffer = RedisAuditBuffer(
+            redis_client=mock_redis,
+            key_prefix="custom:audit:",
+        )
+        
+        buffer.log({"event": "test"}, domain="myapp")
+        
+        # lpush가 custom:audit:myapp 키로 호출되었는지 확인
+        call_args = mock_pipe.lpush.call_args
+        assert "custom:audit:myapp" in str(call_args)
+    
+    def test_factory_function_no_redis(self):
+        """Redis 없을 때 팩토리 함수."""
+        from selfhealing.adapters.audit.redis_buffer import create_redis_audit_buffer
+        
+        # 존재하지 않는 Redis URL
+        result = create_redis_audit_buffer("redis://nonexistent:6379")
+        
+        # Redis 연결 실패 시 None 반환
+        assert result is None

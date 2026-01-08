@@ -1,9 +1,9 @@
 # Part 2: Audit Integration 개선 구현 가이드
 
-**문서 버전**: 1.4.0  
+**문서 버전**: 1.5.0  
 **작성일**: 2026-01-07  
 **최종 수정일**: 2026-01-08  
-**구현 상태**: 🟢 Phase 1,2,3,4 완료  
+**구현 상태**: 🟢 Phase 1,2,3,4,5,6 완료  
 **근거 코드**: 실제 소스 코드 분석 기반
 
 ---
@@ -27,8 +27,8 @@
 | ActorContext/TraceContext 자동 결합 | ✅ 완료 | `shadow_logger.py`, `wal.py` |
 | Forensic 민감정보 마스킹 연동 | ✅ 완료 | `forensic_audit_bridge.py` |
 | InMemoryAuditBuffer 폴백 | ✅ 완료 | `resilience.py`, `base.py` |
-| Forensic Rate Limiter (SlidingWindow) | 🟡 계획됨 | `forensic_audit_bridge.py` |
-| RedisAuditBuffer 분산 버퍼 | 🟡 계획됨 | `redis_buffer.py` (신규) |
+| Forensic Rate Limiter (SlidingWindow) | ✅ 완료 | `forensic_audit_bridge.py` |
+| RedisAuditBuffer 분산 버퍼 | ✅ 완료 | `redis_buffer.py` (신규) |
 | MTTR Calculator | 🟡 계획됨 | `mttr_calculator.py` (신규) |
 
 ---
@@ -1738,14 +1738,15 @@ class ProviderRegistry:
 | **Phase 2** | ShadowLogger/WAL → _write_to_wal() 연동 | 🔴 Critical | 3h | ✅ 완료 |
 | **Phase 3** | Forensic 민감정보 마스킹 연동 | 🟡 High | 2h | ✅ 완료 |
 | **Phase 4** | InMemoryAuditBuffer 폴백 구현 | 🟡 High | 4h | ✅ 완료 |
-| **Phase 5** | Forensic Rate Limiter 구현 (SlidingWindow) | 🟡 High | 3h | 🟡 계획됨 |
-| **Phase 6** | RedisAuditBuffer 분산 버퍼 구현 | 🟡 High | 4h | 🟡 계획됨 |
+| **Phase 5** | Forensic Rate Limiter 구현 (SlidingWindow) | 🟡 High | 3h | ✅ 완료 |
+| **Phase 6** | RedisAuditBuffer 분산 버퍼 구현 | 🟡 High | 4h | ✅ 완료 |
 | **Phase 7** | MTTR Calculator 구현 | 🟢 Medium | 4h | 🟡 계획됨 |
 | **Phase 8** | 단위 테스트 작성 | 🟢 Medium | 4h | ✅ 완료 |
 
 **Phase 1,2 완료일**: 2026-01-08  
 **Phase 3,4 완료일**: 2026-01-08  
-**테스트 결과**: 44개 테스트 통과
+**Phase 5,6 완료일**: 2026-01-08  
+**테스트 결과**: 64개 테스트 통과 (Phase 5: 7개, Phase 6: 13개 추가)
 
 ### 9.2 변경 파일 목록
 
@@ -1754,11 +1755,11 @@ class ProviderRegistry:
 | `services/corruption_shield/shield.py` | 수정 | 1 | ✅ 완료 |
 | `adapters/memory/shadow_logger.py` | 수정 | 2 | ✅ 완료 |
 | `audit/wal.py` | 수정 | 2 | ✅ 완료 |
-| `tests/self_healing/unit/test_audit_integration_part2.py` | 수정 | 1, 2, 3, 4 | ✅ 완료 |
-| `services/forensic_audit_bridge.py` | 수정 | 3 | ✅ 완료 |
+| `tests/self_healing/unit/test_audit_integration_part2.py` | 수정 | 1, 2, 3, 4, 5, 6 | ✅ 완료 |
+| `services/forensic_audit_bridge.py` | 수정 | 3, 5 | ✅ 완료 |
 | `audit/resilience.py` | 수정 | 4 | ✅ 완료 |
 | `services/audit/base.py` | 수정 | 4 | ✅ 완료 |
-| `adapters/audit/redis_buffer.py` | 신규 | 6 | 🟡 계획됨 |
+| `adapters/audit/redis_buffer.py` | 신규 | 6 | ✅ 완료 |
 | `services/audit/mttr_calculator.py` | 신규 | 7 | 🟡 계획됨 |
 
 ### 9.3 테스트 계획
@@ -1871,28 +1872,96 @@ class TestInMemoryAuditBuffer:
 ```
 
 
-# 향후 테스트 (Phase 5-7 구현 시 추가)
+# Phase 5,6 테스트 (완료됨)
 
 ```python
 
 class TestForensicRateLimiter:
-    """Forensic Rate Limiter 테스트."""
+    """Forensic Rate Limiter 테스트 (Phase 5)."""
     
     def test_exception_rate_limit(self):
-        """분당 10건 초과 시 드롭."""
-        pass
+        """분당 N건 초과 시 드롭."""
+        # ✅ 통과
     
     def test_snapshot_rate_limit(self):
         """분당 1건 초과 시 드롭."""
-        pass
+        # ✅ 통과
     
-    def test_token_refill_after_window(self):
+    def test_anomaly_rate_limit(self):
+        """이상 탐지 Rate Limit."""
+        # ✅ 통과
+    
+    def test_window_expiry(self):
         """윈도우 경과 후 토큰 재충전."""
-        pass
+        # ✅ 통과
+    
+    def test_reset(self):
+        """Rate limiter 리셋."""
+        # ✅ 통과
+    
+    def test_bridge_uses_rate_limiter(self):
+        """ForensicAuditBridge가 Rate Limiter 사용."""
+        # ✅ 통과
+    
+    def test_bridge_rate_limiter_stats(self):
+        """Bridge에서 Rate Limiter 통계 조회."""
+        # ✅ 통과
+
+
+class TestRedisAuditBuffer:
+    """Redis Audit Buffer 테스트 (Phase 6)."""
+    
+    def test_log_success(self):
+        """Redis 기록 성공."""
+        # ✅ 통과
+    
+    def test_log_failure_uses_fallback(self):
+        """Redis 실패 시 폴백 사용."""
+        # ✅ 통과
+    
+    def test_on_fallback_callback(self):
+        """폴백 콜백 호출."""
+        # ✅ 통과
+    
+    def test_consecutive_failures_tracking(self):
+        """연속 실패 추적."""
+        # ✅ 통과
+    
+    def test_success_resets_failure_count(self):
+        """성공 시 실패 카운트 리셋."""
+        # ✅ 통과
+    
+    def test_should_use_fallback(self):
+        """폴백 사용 여부 판단."""
+        # ✅ 통과
+    
+    def test_is_healthy(self):
+        """Redis 연결 상태 확인."""
+        # ✅ 통과
+    
+    def test_get_pending_count(self):
+        """대기 엔트리 수 조회."""
+        # ✅ 통과
+    
+    def test_flush_to_external(self):
+        """외부 저장소로 플러시."""
+        # ✅ 통과
+    
+    def test_clear_domain(self):
+        """도메인 삭제."""
+        # ✅ 통과
+    
+    def test_custom_key_prefix(self):
+        """커스텀 키 프리픽스."""
+        # ✅ 통과
+    
+    def test_factory_function_no_redis(self):
+        """Redis 없을 때 팩토리 함수."""
+        # ✅ 통과
 
 
 class TestMTTRCalculator:
-    """MTTR 계산기 테스트."""
+    """MTTR 계산기 테스트 (Phase 7 - 계획됨)."""
     
     def test_mttr_calculation_accuracy(self):
         """MTTR 계산 정확도."""
@@ -1915,8 +1984,9 @@ class TestMTTRCalculator:
 - [shield.py](../../../packages/selfhealing-python/src/selfhealing/services/corruption_shield/shield.py) - CorruptionShield
 - [shadow_logger.py](../../../packages/selfhealing-python/src/selfhealing/adapters/memory/shadow_logger.py) - ShadowLogger
 - [wal.py](../../../packages/selfhealing-python/src/selfhealing/audit/wal.py) - Write-Ahead Log
-- [forensic_audit_bridge.py](../../../packages/selfhealing-python/src/selfhealing/services/forensic_audit_bridge.py) - Forensic-Audit 브릿지
-- [resilience.py](../../../packages/selfhealing-python/src/selfhealing/audit/resilience.py) - Audit Resilience
+- [forensic_audit_bridge.py](../../../packages/selfhealing-python/src/selfhealing/services/forensic_audit_bridge.py) - Forensic-Audit 브릿지 (Phase 5: Rate Limiter 포함)
+- [resilience.py](../../../packages/selfhealing-python/src/selfhealing/audit/resilience.py) - Audit Resilience (Phase 4: InMemoryAuditBuffer 포함)
+- [redis_buffer.py](../../../packages/selfhealing-python/src/selfhealing/adapters/audit/redis_buffer.py) - Redis Audit Buffer (Phase 6: 신규)
 - [base.py](../../../packages/selfhealing-python/src/selfhealing/services/audit/base.py) - Audit Base Helpers
 - [masking.py](../../../packages/selfhealing-python/src/selfhealing/audit/masking.py) - 민감정보 마스킹
 - [config.py](../../../packages/selfhealing-python/src/selfhealing/config.py) - ForensicSettings
