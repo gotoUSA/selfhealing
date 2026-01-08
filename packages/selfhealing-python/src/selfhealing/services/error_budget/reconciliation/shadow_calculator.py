@@ -397,3 +397,169 @@ class ShadowBudgetCalculator:
         # 보수적으로 Fail-Open 1회당 10개 에러 가정
         logger.info("[ShadowBudget] Using fallback estimation based on fail_open_count")
         return 0, "none_available"
+    
+    # =========================================================================
+    # Phase 6: Pending Reconciliation Freeze
+    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
+    # =========================================================================
+    
+    def _notify_pending_freeze(self, shadow: ShadowBudget) -> None:
+        """
+        대규모 조정(>5%) 시 배포 동결 신호.
+        
+        Pending Reconciliation 승인 대기 중 배포/자동 튜닝 동결.
+        
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
+        """
+        if shadow.adjustment_percent <= 5.0:
+            return  # 소규모 조정은 무시
+        
+        try:
+            from selfhealing.services.circuit_breaker.freeze_mode import (
+                FreezeModeManager,
+            )
+            
+            manager = FreezeModeManager()
+            manager.activate(
+                reason=(
+                    f"Pending Reconciliation: {shadow.adjustment_percent:.2f}% adjustment. "
+                    f"Awaiting approval for calculation_id={shadow.calculation_id}"
+                ),
+                activated_by="shadow_budget_calculator",
+            )
+            
+            logger.warning(
+                f"[ShadowBudget] Freeze Mode ACTIVATED for large adjustment: "
+                f"{shadow.adjustment_percent:.2f}%"
+            )
+            
+            # Audit 이벤트 기록
+            self._record_audit_event(
+                event_type="pending_reconciliation_freeze",
+                details={
+                    "calculation_id": shadow.calculation_id,
+                    "adjustment_percent": shadow.adjustment_percent,
+                    "action": "freeze_activated",
+                },
+            )
+            
+        except Exception as e:
+            logger.warning(f"[ShadowBudget] Failed to activate freeze: {e}")
+    
+    def _deactivate_pending_freeze(self, calculation_id: str, reason: str) -> None:
+        """
+        Pending Reconciliation 완료(승인/거부) 시 동결 해제.
+        
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
+        """
+        try:
+            from selfhealing.services.circuit_breaker.freeze_mode import (
+                FreezeModeManager,
+            )
+            
+            manager = FreezeModeManager()
+            if manager.is_active():
+                manager.deactivate(
+                    reason=f"Reconciliation resolved: {reason}",
+                    deactivated_by="shadow_budget_calculator",
+                )
+                
+                logger.info(
+                    f"[ShadowBudget] Freeze Mode DEACTIVATED: calculation_id={calculation_id}"
+                )
+                
+        except Exception as e:
+            logger.warning(f"[ShadowBudget] Failed to deactivate freeze: {e}")
+    
+    # =========================================================================
+    # Phase 9: 알림 연동
+    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §6
+    # =========================================================================
+    
+    def _notify_shadow_budget_calculated(self, shadow: ShadowBudget) -> None:
+        """
+        Shadow Budget 계산 완료 알림.
+        
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §6.3
+        """
+        try:
+            from selfhealing.services.unified_notification import (
+                get_unified_notification_manager,
+                NotificationPayload,
+                NotificationPriority,
+                NotificationCategory,
+            )
+            
+            # 대규모 조정 시 우선순위 상향
+            priority = (
+                NotificationPriority.HIGH 
+                if shadow.adjustment_percent > 5.0 
+                else NotificationPriority.MEDIUM
+            )
+            
+            payload = NotificationPayload(
+                title="Shadow Budget 승인 대기",
+                message=(
+                    f"Fail-Safe 기간 동안 {shadow.estimated_errors}개 에러 추정. "
+                    f"예상 조정: {shadow.adjustment_percent:.2f}%. 검토가 필요합니다."
+                ),
+                priority=priority,
+                category=NotificationCategory.APPROVAL,
+                source="shadow_budget_calculator",
+                metadata={
+                    "calculation_id": shadow.calculation_id,
+                    "estimated_errors": shadow.estimated_errors,
+                    "adjustment_percent": shadow.adjustment_percent,
+                    "log_source": shadow.log_source,
+                    "failsafe_period_id": shadow.failsafe_period_id,
+                },
+            )
+            
+            manager = get_unified_notification_manager()
+            manager.send(payload)
+            
+            logger.debug(
+                f"[ShadowBudget] Notification sent for calculation_id={shadow.calculation_id}"
+            )
+            
+        except Exception as e:
+            logger.warning(f"[ShadowBudget] Notification failed (non-critical): {e}")
+    
+    # =========================================================================
+    # Audit 이벤트 기록 헬퍼
+    # =========================================================================
+    
+    def _record_audit_event(
+        self,
+        event_type: str,
+        details: Dict[str, Any],
+    ) -> None:
+        """
+        Audit 이벤트 기록.
+        
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5
+        """
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType, AuditEvent
+            from selfhealing.audit.continuous_audit import get_audit_recorder
+            
+            # 문자열을 enum으로 변환
+            audit_type = getattr(
+                AuditEventType, 
+                event_type.upper(), 
+                AuditEventType.GENERIC
+            )
+            
+            event = AuditEvent(
+                event_type=audit_type,
+                source="shadow_budget_calculator",
+                details=details,
+                actor_type="system",
+            )
+            
+            recorder = get_audit_recorder()
+            if recorder:
+                recorder.record(event)
+                
+        except Exception as e:
+            logger.debug(f"[ShadowBudget] Audit recording failed (non-critical): {e}")

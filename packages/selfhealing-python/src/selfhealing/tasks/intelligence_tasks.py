@@ -512,6 +512,227 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
 
 
 # =============================================================================
+# Task 5: Verify Reconciliation Accuracy (Phase 8)
+# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+# =============================================================================
+
+
+class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
+    """
+    Shadow Budget 추정 정확도 검증.
+    
+    승인/거부 30분 후 실제 에러 수와 비교하여 추정 정확도 기록.
+    
+    스케줄: 5분마다 (Beat에 편승)
+    큐: analysis
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "verified_count": int,
+            "high_variance_count": int,
+        }
+    
+    Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+    """
+    
+    name = "selfhealing.verify_reconciliation_accuracy"
+    
+    notification_policy = NotificationPolicy(
+        timing=NotificationTiming.AGGREGATED,  # 일일 요약에 포함
+        threshold=0,  # 항상 실행 (로그만, 알림은 선택적)
+        cooldown_seconds=0,
+    )
+    
+    def run(self) -> Dict[str, Any]:
+        """검증 대기 중인 Shadow Budget들 처리."""
+        logger.info("[VerifyReconciliationAccuracy] Starting accuracy verification")
+        
+        try:
+            from selfhealing.services.error_budget.reconciliation import (
+                get_reconciliation_service,
+            )
+            from selfhealing.core.timezone import now as get_now
+            from datetime import timedelta
+            
+            service = get_reconciliation_service()
+            verified_count = 0
+            high_variance_count = 0
+            
+            # 승인/거부 30분 지난 항목 필터링
+            cutoff = get_now() - timedelta(minutes=30)
+            
+            for shadow in service.get_all_shadow_budgets():
+                # 이미 검증된 항목 스킵
+                if shadow.verified_at:
+                    continue
+                
+                # 승인/거부 후 30분 경과 확인
+                if shadow.reviewed_at and shadow.reviewed_at < cutoff:
+                    variance = self._verify_accuracy(shadow, service)
+                    verified_count += 1
+                    
+                    # 10% 이상 오차는 주목
+                    if variance and variance > 10.0:
+                        high_variance_count += 1
+            
+            logger.info(
+                f"[VerifyReconciliationAccuracy] Completed: "
+                f"verified={verified_count}, high_variance={high_variance_count}"
+            )
+            
+            return {
+                "success": True,
+                "verified_count": verified_count,
+                "high_variance_count": high_variance_count,
+            }
+            
+        except Exception as e:
+            logger.error(f"[VerifyReconciliationAccuracy] Failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "verified_count": 0,
+            }
+    
+    def _verify_accuracy(self, shadow, service) -> Optional[float]:
+        """
+        단일 Shadow Budget 정확도 검증.
+        
+        Returns:
+            variance_percent 또는 None (검증 실패 시)
+        """
+        from selfhealing.core.timezone import now as get_now
+        from datetime import timedelta
+        
+        try:
+            # 실제 에러 수 조회 (Prometheus 또는 DLQ)
+            actual_errors = self._get_actual_errors(
+                start=shadow.failsafe_period_end,
+                end=shadow.failsafe_period_end + timedelta(minutes=30),
+            )
+            
+            # 오차율 계산
+            if shadow.estimated_errors > 0:
+                variance_percent = abs(
+                    (shadow.estimated_errors - actual_errors) 
+                    / shadow.estimated_errors * 100
+                )
+            else:
+                variance_percent = 0.0 if actual_errors == 0 else 100.0
+            
+            # 모델 업데이트
+            shadow.verified_at = get_now()
+            shadow.accuracy_variance_percent = variance_percent
+            
+            # Audit 기록
+            self._record_accuracy_audit(shadow, actual_errors, variance_percent)
+            
+            logger.debug(
+                f"[VerifyReconciliationAccuracy] Verified: "
+                f"calculation_id={shadow.calculation_id}, "
+                f"estimated={shadow.estimated_errors}, actual={actual_errors}, "
+                f"variance={variance_percent:.2f}%"
+            )
+            
+            return variance_percent
+            
+        except Exception as e:
+            logger.warning(
+                f"[VerifyReconciliationAccuracy] Failed to verify {shadow.calculation_id}: {e}"
+            )
+            return None
+    
+    def _get_actual_errors(self, start, end) -> int:
+        """
+        지정된 기간 동안의 실제 에러 수 조회.
+        
+        Prometheus 또는 DLQ에서 데이터를 가져옵니다.
+        """
+        try:
+            # Prometheus 메트릭 조회 시도
+            from selfhealing.adapters.prometheus_adapter import (
+                get_prometheus_adapter,
+            )
+            
+            adapter = get_prometheus_adapter()
+            if adapter:
+                count = adapter.query_error_count(start, end)
+                if count is not None:
+                    return count
+        except Exception:
+            pass
+        
+        try:
+            # DLQ 엔트리 수 조회 시도
+            from selfhealing.services.dlq import get_dlq_service
+            
+            dlq_service = get_dlq_service()
+            entries = dlq_service.query_entries(
+                start_time=start,
+                end_time=end,
+            )
+            return len(entries) if entries else 0
+        except Exception:
+            pass
+        
+        # 데이터 소스 없음
+        return 0
+    
+    def _record_accuracy_audit(
+        self,
+        shadow,
+        actual_errors: int,
+        variance_percent: float,
+    ) -> None:
+        """Accuracy 검증 결과 Audit 기록."""
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType, AuditEvent
+            from selfhealing.audit.continuous_audit import get_audit_recorder
+            
+            event = AuditEvent(
+                event_type=AuditEventType.RECONCILIATION_ACCURACY_VERIFIED,
+                source="verify_reconciliation_accuracy_task",
+                details={
+                    "calculation_id": shadow.calculation_id,
+                    "estimated_errors": shadow.estimated_errors,
+                    "actual_errors_30m": actual_errors,
+                    "variance_percent": round(variance_percent, 2),
+                    "log_source": shadow.log_source,
+                    "status": shadow.status.value if shadow.status else "unknown",
+                },
+                actor_type="system",
+            )
+            
+            recorder = get_audit_recorder()
+            if recorder:
+                recorder.record(event)
+                
+        except Exception as e:
+            logger.debug(f"[VerifyReconciliationAccuracy] Audit recording failed: {e}")
+    
+    def _get_severity(self, result: Dict[str, Any]) -> str:
+        """고분산 항목 수에 따른 심각도."""
+        high_variance = result.get("high_variance_count", 0)
+        if high_variance >= 3:
+            return "warning"
+        return "info"
+    
+    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+        """알림 메시지 생성."""
+        if result.get("error"):
+            return f"❌ 정확도 검증 실패: {result['error']}"
+        
+        verified = result.get("verified_count", 0)
+        high_variance = result.get("high_variance_count", 0)
+        
+        if high_variance > 0:
+            return f"⚠️ Reconciliation 정확도 검증: {verified}건 완료, {high_variance}건 고분산"
+        
+        return f"✅ Reconciliation 정확도 검증: {verified}건 완료"
+
+
+# =============================================================================
 # Task Registry (Celery 등록용)
 # =============================================================================
 
@@ -522,6 +743,7 @@ INTELLIGENCE_TASKS = [
     AnalyzeForensicPendingTask,
     AnalyzeCrossStageInsightsTask,
     CheckRecoveryTransitionsTask,
+    VerifyReconciliationAccuracyTask,  # Phase 8: Accuracy Audit
 ]
 
 
@@ -596,6 +818,13 @@ def get_intelligence_beat_schedule() -> Dict[str, Any]:
             "schedule": crontab(hour=22, minute=0),
             "options": {"queue": "analysis"},
         },
+        # 5분마다 - Reconciliation 정확도 검증 (Phase 8)
+        # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+        "verify-reconciliation-accuracy": {
+            "task": "selfhealing.verify_reconciliation_accuracy",
+            "schedule": crontab(minute="*/5"),
+            "options": {"queue": "analysis"},
+        },
     }
 
 
@@ -605,6 +834,7 @@ __all__ = [
     "AnalyzeForensicPendingTask",
     "AnalyzeCrossStageInsightsTask",
     "CheckRecoveryTransitionsTask",
+    "VerifyReconciliationAccuracyTask",  # Phase 8
     # Registry
     "INTELLIGENCE_TASKS",
     "register_intelligence_tasks_with_celery",

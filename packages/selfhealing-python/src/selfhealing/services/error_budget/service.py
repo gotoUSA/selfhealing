@@ -39,9 +39,27 @@ class ErrorBudgetService:
         emit_otel_event: Optional[Callable] = None,
     ):
         """초기화."""
+        # 테스트용 인위적 에러 카운터 (Chaos Engineering)
+        self._simulated_errors: int = 0
+        self._simulated_requests: int = 0
+        
+        # Phase 5: Simulation Stats Callback - Chaos 연동
+        # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.5
+        def _simulation_stats_callback(start_time, end_time) -> dict:
+            """Chaos Engineering 테스트용 콜백."""
+            if self._simulated_errors > 0:
+                return {
+                    "total_errors": self._simulated_errors,
+                    "source": "simulation",
+                }
+            return None  # 시뮬레이션 데이터가 없으면 None 반환
+        
+        # 실제 콜백이 없으면 시뮬레이션 콜백 사용
+        actual_failed_stats = get_failed_operation_stats or _simulation_stats_callback
+        
         self.calculator = ErrorBudgetCalculator(
             slo_config=slo_config,
-            get_failed_operation_stats=get_failed_operation_stats,
+            get_failed_operation_stats=actual_failed_stats,
             get_request_stats=get_request_stats,
         )
         self.advisor = DeploymentPolicyAdvisor(calculator=self.calculator)
@@ -51,9 +69,6 @@ class ErrorBudgetService:
             emit_metric=emit_metric,
             emit_otel_event=emit_otel_event,
         )
-        # 테스트용 인위적 에러 카운터 (Chaos Engineering)
-        self._simulated_errors: int = 0
-        self._simulated_requests: int = 0
 
     def get_budget_status(self, slo_name: str = "availability") -> ErrorBudgetStatus:
         """Error Budget 상태 조회."""

@@ -223,6 +223,8 @@ class ErrorBudgetReconciliationService:
         
         승인 후 Primary Budget에 반영됩니다.
         Capped 모드인 경우 최대 N%까지만 반영됩니다.
+        
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2
         """
         with self._lock:
             shadow = self._shadow_budgets.get(calculation_id)
@@ -239,6 +241,25 @@ class ErrorBudgetReconciliationService:
             shadow.reviewed_by = approved_by
             shadow.reviewed_at = now()
             shadow.review_justification = justification
+            
+            # Audit 이벤트 기록 (Phase 7)
+            self._record_audit_event(
+                event_type="reconciliation_approved",
+                details={
+                    "calculation_id": calculation_id,
+                    "approved_by": approved_by,
+                    "justification": justification,
+                    "adjustment_percent": shadow.adjustment_percent,
+                    "estimated_errors": shadow.estimated_errors,
+                    "log_source": shadow.log_source,
+                    "failsafe_period_id": shadow.failsafe_period_id,
+                },
+            )
+            
+            # Pending Freeze 해제 (Phase 6)
+            self._shadow_calculator._deactivate_pending_freeze(
+                calculation_id, f"approved: {justification}"
+            )
             
             logger.info(
                 f"[Reconciliation] Shadow budget approved: {calculation_id}, "
@@ -322,6 +343,9 @@ class ErrorBudgetReconciliationService:
     ) -> Optional[ShadowBudget]:
         """
         Shadow Budget 거부 (Excluded Period로 처리).
+        
+        투명성 강화: 원본 에러 데이터를 ExcludedPeriod에 기록.
+        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.1
         """
         with self._lock:
             shadow = self._shadow_budgets.get(calculation_id)
@@ -337,7 +361,7 @@ class ErrorBudgetReconciliationService:
             shadow.reviewed_at = now()
             shadow.review_justification = reason
             
-            # Excluded Period 생성
+            # Excluded Period 생성 (투명성 강화: 원본 데이터 포함)
             exclusion = ExcludedPeriod(
                 exclusion_id=str(uuid.uuid4()),
                 started_at=shadow.failsafe_period_start,
@@ -346,8 +370,33 @@ class ErrorBudgetReconciliationService:
                 excluded_by=rejected_by,
                 excluded_at=now(),
                 failsafe_period_id=shadow.failsafe_period_id,
+                # 투명성 강화: 제외 당시 원본 데이터 (Phase 7)
+                original_estimated_errors=shadow.estimated_errors,
+                original_log_source=shadow.log_source,
+                original_adjustment_percent=shadow.adjustment_percent,
             )
             self._excluded_periods[exclusion.exclusion_id] = exclusion
+            
+            # Audit 이벤트 기록 (Phase 7)
+            self._record_audit_event(
+                event_type="reconciliation_rejected",
+                details={
+                    "calculation_id": calculation_id,
+                    "rejected_by": rejected_by,
+                    "rejection_reason": reason,
+                    "original_estimated_errors": shadow.estimated_errors,
+                    "original_log_source": shadow.log_source,
+                    "original_adjustment_percent": shadow.adjustment_percent,
+                    "failsafe_period_id": shadow.failsafe_period_id,
+                    "period_start": shadow.failsafe_period_start.isoformat(),
+                    "period_end": shadow.failsafe_period_end.isoformat(),
+                },
+            )
+            
+            # Pending Freeze 해제 (Phase 6)
+            self._shadow_calculator._deactivate_pending_freeze(
+                calculation_id, f"rejected: {reason}"
+            )
             
             logger.info(
                 f"[Reconciliation] Shadow budget rejected: {calculation_id}, "
@@ -439,3 +488,43 @@ class ErrorBudgetReconciliationService:
                 "excluded_periods_count": len(self._excluded_periods),
                 "config": self._config.to_dict(),
             }
+    
+    # =========================================================================
+    # Audit 이벤트 기록 (Phase 7)
+    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5
+    # =========================================================================
+    
+    def _record_audit_event(
+        self,
+        event_type: str,
+        details: Dict[str, Any],
+    ) -> None:
+        """
+        Audit 이벤트 기록.
+        
+        Graceful Degradation: Audit 기록 실패해도 메인 로직은 계속 진행.
+        """
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType, AuditEvent
+            from selfhealing.audit.continuous_audit import get_audit_recorder
+            
+            # 문자열을 enum으로 변환
+            audit_type = getattr(
+                AuditEventType, 
+                event_type.upper(), 
+                AuditEventType.GENERIC
+            )
+            
+            event = AuditEvent(
+                event_type=audit_type,
+                source="reconciliation_service",
+                details=details,
+                actor_type="system",
+            )
+            
+            recorder = get_audit_recorder()
+            if recorder:
+                recorder.record(event)
+                
+        except Exception as e:
+            logger.debug(f"[Reconciliation] Audit recording failed (non-critical): {e}")

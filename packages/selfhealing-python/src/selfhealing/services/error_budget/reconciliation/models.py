@@ -99,6 +99,11 @@ class ShadowBudget:
     reviewed_at: Optional[datetime] = None
     review_justification: Optional[str] = None
     
+    # 정확도 검증 (Phase 8: Accuracy Audit)
+    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+    verified_at: Optional[datetime] = None
+    accuracy_variance_percent: Optional[float] = None
+    
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환."""
         return {
@@ -148,7 +153,13 @@ class ExcludedPeriod:
     # 연관 Fail-Safe 기간
     failsafe_period_id: Optional[str] = None
     
-    # 메모
+    # 투명성 강화: 제외 당시 원본 데이터 (Phase 7)
+    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.1
+    original_estimated_errors: Optional[int] = None
+    original_log_source: Optional[str] = None
+    original_adjustment_percent: Optional[float] = None
+    
+    # 메모 (deprecated, 전용 필드 사용 권장)
     notes: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
@@ -162,6 +173,9 @@ class ExcludedPeriod:
             "excluded_by": self.excluded_by,
             "excluded_at": self.excluded_at.isoformat(),
             "failsafe_period_id": self.failsafe_period_id,
+            "original_estimated_errors": self.original_estimated_errors,
+            "original_log_source": self.original_log_source,
+            "original_adjustment_percent": self.original_adjustment_percent,
             "notes": self.notes,
         }
 

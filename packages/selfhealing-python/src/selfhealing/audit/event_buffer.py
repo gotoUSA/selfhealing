@@ -161,6 +161,30 @@ class AuditEventType(Enum):
     FORENSIC_ANOMALY_DETECTED = "forensic_anomaly_detected"
     """Forensic 분석 중 이상 패턴 발견."""
     
+    # ═══════════════════════════════════════════════════════════
+    # Reconciliation 관련 (30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md)
+    # ═══════════════════════════════════════════════════════════
+    FAILSAFE_PERIOD_STARTED = "failsafe_period_started"
+    """Fail-Safe 기간 시작."""
+    
+    FAILSAFE_PERIOD_ENDED = "failsafe_period_ended"
+    """Fail-Safe 기간 종료."""
+    
+    SHADOW_BUDGET_CALCULATED = "shadow_budget_calculated"
+    """Shadow Budget 계산 완료."""
+    
+    RECONCILIATION_APPROVED = "reconciliation_approved"
+    """Reconciliation 승인됨."""
+    
+    RECONCILIATION_REJECTED = "reconciliation_rejected"
+    """Reconciliation 거부됨."""
+    
+    RECONCILIATION_ACCURACY_VERIFIED = "reconciliation_accuracy_verified"
+    """Reconciliation 정확도 사후 검증 완료."""
+    
+    PENDING_RECONCILIATION_FREEZE = "pending_reconciliation_freeze"
+    """대규모 조정으로 인한 배포 동결."""
+    
     # 일반
     GENERIC = "generic"
 
