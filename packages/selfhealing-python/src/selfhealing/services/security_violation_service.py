@@ -73,6 +73,48 @@ class ViolationType(str, Enum):
     FLAPPING_DETECTED = "flapping_detected"
     """파라미터 플래핑 감지 (미세 조정 반복)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CorruptionShield / 이상 감지 관련 (순위 1 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    ANOMALY_STATISTICAL = "anomaly_statistical"
+    """L3 통계적 이상 감지 (Z-score 기반)."""
+
+    ANOMALY_BEHAVIORAL = "anomaly_behavioral"
+    """행위 이상 감지 (시퀀스 패턴 이탈)."""
+
+    SCHEMA_VIOLATION = "schema_violation"
+    """L1 스키마 위반 (필수 필드 누락, 타입 불일치)."""
+
+    BUSINESS_RULE_VIOLATION = "business_rule_violation"
+    """L2 비즈니스 규칙 위반."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Audit 무결성 관련 (순위 1 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    AUDIT_TAMPERING = "audit_tampering"
+    """Audit 로그 조작 시도 감지."""
+
+    HASH_CHAIN_BROKEN = "hash_chain_broken"
+    """ContinuousAuditRecorder 해시 체인 무결성 위반."""
+
+    WAL_CORRUPTION = "wal_corruption"
+    """WAL CRC32 체크섬 불일치."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Governance 위반 관련 (순위 1 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    UNAUTHORIZED_OVERRIDE = "unauthorized_override"
+    """권한 없는 설정 변경 시도."""
+
+    GOVERNANCE_BYPASS_ATTEMPT = "governance_bypass_attempt"
+    """Kill Switch/Emergency Mode 우회 시도."""
+
+    PRIVILEGE_ESCALATION = "privilege_escalation"
+    """권한 상승 시도."""
+
 
 class Severity(str, Enum):
     """Severity levels for security incidents."""
@@ -98,6 +140,24 @@ SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
     ViolationType.CONFLICTING_ADJUSTMENT: Severity.HIGH,
     ViolationType.HEALING_TIMEOUT: Severity.MEDIUM,
     ViolationType.FLAPPING_DETECTED: Severity.HIGH,
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 신규 ViolationType Severity (순위 2 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Audit 무결성 - 가장 심각 (즉시 차단)
+    ViolationType.AUDIT_TAMPERING: Severity.CRITICAL,
+    ViolationType.HASH_CHAIN_BROKEN: Severity.CRITICAL,
+    ViolationType.WAL_CORRUPTION: Severity.CRITICAL,
+    # Governance 위반 - 심각 (즉시 차단)
+    ViolationType.GOVERNANCE_BYPASS_ATTEMPT: Severity.CRITICAL,
+    ViolationType.PRIVILEGE_ESCALATION: Severity.CRITICAL,
+    # CorruptionShield / 이상 감지 - HIGH (차단, DLQ 저장)
+    ViolationType.ANOMALY_STATISTICAL: Severity.HIGH,
+    ViolationType.ANOMALY_BEHAVIORAL: Severity.HIGH,
+    ViolationType.UNAUTHORIZED_OVERRIDE: Severity.HIGH,
+    ViolationType.BUSINESS_RULE_VIOLATION: Severity.HIGH,
+    # 스키마 위반 - MEDIUM (로깅, 모니터링)
+    ViolationType.SCHEMA_VIOLATION: Severity.MEDIUM,
 }
 
 
@@ -201,6 +261,51 @@ ACTION_POLICY_BY_VIOLATION_TYPE: dict[ViolationType, list[ActionPolicy]] = {
         ActionPolicy.BLOCK_AND_LOG,
     ],
     ViolationType.HEALING_TIMEOUT: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 신규 ViolationType ActionPolicy 매핑 (순위 2 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Governance 위반 - 가장 심각 (다중 정책)
+    ViolationType.PRIVILEGE_ESCALATION: [
+        ActionPolicy.EMERGENCY_LEVEL_2,
+        ActionPolicy.SESSION_INVALIDATE,
+        ActionPolicy.ACCOUNT_FREEZE,
+    ],
+    ViolationType.GOVERNANCE_BYPASS_ATTEMPT: [
+        ActionPolicy.EMERGENCY_LEVEL_2,
+        ActionPolicy.SESSION_INVALIDATE,
+    ],
+    # Audit 무결성 - 심각 (IP 영구 차단)
+    ViolationType.AUDIT_TAMPERING: [
+        ActionPolicy.EMERGENCY_LEVEL_2,
+        ActionPolicy.IP_PERMANENT_BAN,
+    ],
+    ViolationType.HASH_CHAIN_BROKEN: [
+        ActionPolicy.EMERGENCY_LEVEL_2,
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.WAL_CORRUPTION: [
+        ActionPolicy.EMERGENCY_LEVEL_1,
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    # CorruptionShield / 이상 감지
+    ViolationType.ANOMALY_STATISTICAL: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.ANOMALY_BEHAVIORAL: [
+        ActionPolicy.BLOCK_AND_LOG,
+        ActionPolicy.IP_TEMPORARY_BAN,
+    ],
+    ViolationType.UNAUTHORIZED_OVERRIDE: [
+        ActionPolicy.SESSION_INVALIDATE,
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.BUSINESS_RULE_VIOLATION: [
+        ActionPolicy.BLOCK_AND_LOG,
+    ],
+    ViolationType.SCHEMA_VIOLATION: [
         ActionPolicy.BLOCK_AND_LOG,
     ],
 }
@@ -463,6 +568,18 @@ class SecurityViolationService:
                 self._send_security_notification(incident.id, violation_type_str, severity.value)
             except Exception as e:
                 logger.error(f"[Security Violation] Notification failed but incident saved: {e}")
+
+            # ═══════════════════════════════════════════════════════════════════
+            # 순위 2.5: CRITICAL 보안 위반 시 EventBus 연동 (v2.3.0)
+            # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
+            # ═══════════════════════════════════════════════════════════════════
+            if severity == Severity.CRITICAL:
+                self._emit_critical_violation_event(
+                    violation_type=violation_type_str,
+                    incident_id=incident.id,
+                    source_ip=source_ip,
+                    user_id=user_id,
+                )
 
             return SecurityViolationResult.handled(
                 incident_id=incident.id,
@@ -818,6 +935,52 @@ class SecurityViolationService:
         except Exception as e:
             # Don't fail the main flow if notification fails
             logger.error(f"[Security] Failed to send notification for incident {incident_id}: {e}")
+
+    def _emit_critical_violation_event(
+        self,
+        violation_type: str,
+        incident_id: int,
+        source_ip: Optional[str],
+        user_id: Optional[int],
+    ) -> None:
+        """
+        CRITICAL 보안 위반 시 EventBus를 통해 이벤트 발행.
+
+        순위 2.5 - v2.3.0:
+        - SECURITY_VIOLATION_CRITICAL 이벤트 발행
+        - Emergency Mode 및 Error Budget 연동 트리거
+
+        Args:
+            violation_type: 위반 유형
+            incident_id: 인시던트 ID
+            source_ip: 소스 IP
+            user_id: 사용자 ID
+
+        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
+        """
+        try:
+            from selfhealing.services.event_bus import get_event_bus, EventType
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.SECURITY_VIOLATION_CRITICAL,
+                data={
+                    "violation_type": violation_type,
+                    "severity": "critical",
+                    "incident_id": incident_id,
+                    "source_ip": source_ip,
+                    "user_id": user_id,
+                    "trigger_source": "security_violation_service",
+                },
+                source="security_violation_service",
+            )
+            logger.warning(
+                f"[SecurityViolationService] Emitted SECURITY_VIOLATION_CRITICAL "
+                f"for incident {incident_id}, type={violation_type}"
+            )
+        except Exception as e:
+            # EventBus 실패가 주요 흐름을 막지 않도록
+            logger.error(f"[SecurityViolationService] Failed to emit critical event: {e}")
 
 
 # =============================================================================

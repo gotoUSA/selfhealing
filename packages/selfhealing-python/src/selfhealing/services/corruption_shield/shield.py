@@ -308,7 +308,12 @@ class CorruptionShield:
         data: dict,
         result: ValidationResult,
     ) -> None:
-        """Create security incident for critical violations."""
+        """
+        Create security incident for critical violations.
+
+        순위 3 - v2.3.0: 표준 ViolationType 매핑 적용
+        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.3
+        """
         critical_violations = [
             v for v in result.violations
             if v.severity == "critical"
@@ -321,13 +326,17 @@ class CorruptionShield:
         try:
             from selfhealing.services.security_violation_service import (
                 SecurityViolationService,
+                ViolationType,
             )
             
             service = SecurityViolationService()
             
             for violation in critical_violations:
+                # ✅ 순위 3: 표준 ViolationType 매핑
+                violation_type = self._map_to_violation_type(violation)
+                
                 service.record_violation(
-                    violation_type=f"corruption_{violation.code}",
+                    violation_type=violation_type,
                     details={
                         "layer": violation.layer,
                         "message": violation.message,
@@ -337,6 +346,50 @@ class CorruptionShield:
                 )
         except Exception as e:
             logger.warning(f"[CorruptionShield] Failed to create security incident: {e}")
+
+    def _map_to_violation_type(self, violation) -> str:
+        """
+        Corruption 위반을 표준 ViolationType으로 매핑.
+
+        순위 3 - v2.3.0:
+        - L1 → SCHEMA_VIOLATION
+        - L2 → BUSINESS_RULE_VIOLATION
+        - L3 → ANOMALY_STATISTICAL 또는 ANOMALY_BEHAVIORAL
+
+        Args:
+            violation: CorruptionShield의 Violation 객체
+
+        Returns:
+            ViolationType enum 값 (문자열)
+
+        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.3
+        """
+        try:
+            from selfhealing.services.security_violation_service import ViolationType
+        except ImportError:
+            # Fallback to string
+            return f"corruption_{violation.code}"
+
+        # Layer 기반 매핑
+        layer_mapping = {
+            "L1": ViolationType.SCHEMA_VIOLATION,
+            "L2": ViolationType.BUSINESS_RULE_VIOLATION,
+            "L3": ViolationType.ANOMALY_STATISTICAL,
+        }
+
+        # 특수 케이스: 행위 이상 (behavioral anomaly)
+        if hasattr(violation, "code") and "anomaly" in violation.code.lower():
+            if "behavioral" in violation.code.lower():
+                return ViolationType.ANOMALY_BEHAVIORAL.value
+            return ViolationType.ANOMALY_STATISTICAL.value
+
+        # Layer 기반 기본 매핑
+        layer = getattr(violation, "layer", "")
+        if layer in layer_mapping:
+            return layer_mapping[layer].value
+
+        # 알 수 없는 경우 SUSPICIOUS_ACTIVITY로 폴백
+        return ViolationType.SUSPICIOUS_ACTIVITY.value
     
     def get_stats(self) -> dict:
         """Get shield statistics."""

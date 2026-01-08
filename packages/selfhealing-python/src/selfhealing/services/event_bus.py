@@ -89,6 +89,16 @@ class EventType(Enum):
     CHAOS_EXPERIMENT_STARTED = "chaos_experiment_started"
     CHAOS_EXPERIMENT_STOPPED = "chaos_experiment_stopped"
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Security Violation Events (순위 2.5 - v2.3.0)
+    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
+    # ═══════════════════════════════════════════════════════════════════════════
+    SECURITY_VIOLATION_DETECTED = "security_violation_detected"
+    """보안 위반 감지됨."""
+
+    SECURITY_VIOLATION_CRITICAL = "security_violation_critical"
+    """CRITICAL 보안 위반 - Emergency Mode 및 Error Budget 연동 트리거."""
+
 
 class EventPriority(Enum):
     """이벤트 처리 우선순위."""
