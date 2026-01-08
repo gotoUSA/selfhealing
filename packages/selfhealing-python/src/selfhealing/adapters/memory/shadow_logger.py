@@ -363,21 +363,25 @@ class ShadowLogger:
         """
         Audit 이벤트 기록.
         
-        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+        - _write_to_wal() 직접 호출로 ActorContext/TraceContext 자동 결합
+        - "L2 장애 중 어떤 운영자의 어떤 작업에서 동기화 실패 발생" 추적 가능
         """
         try:
-            from selfhealing.factory import ProviderRegistry
+            from selfhealing.services.audit.base import _write_to_wal
             
-            adapter = ProviderRegistry.get_audit_adapter()
-            if adapter:
-                adapter.log_event(
-                    event_type=event_type,
-                    source="ShadowLogger",
-                    details={
-                        "service_name": service_name,
-                        **details,
-                    },
-                )
+            _write_to_wal(
+                event_type=event_type,
+                source="ShadowLogger",
+                details={
+                    "service_name": service_name,
+                    **details,
+                },
+            )
+            # 자동으로 actor_id, actor_roles, trace_id가 포함됨
+        except ImportError:
+            # _write_to_wal 미사용 환경: 로거로 폴백
+            logger.debug(f"[ShadowLogger] Audit recording skipped: _write_to_wal not available")
         except Exception as e:
             # Audit 실패가 메인 로직을 방해하면 안됨
             logger.debug(f"[ShadowLogger] Audit recording failed: {e}")

@@ -630,18 +630,39 @@ class WriteAheadLog:
         """
         Audit 이벤트 기록.
         
-        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+        - _write_to_wal() 직접 호출로 ActorContext/TraceContext 자동 결합
+        - 순환 참조 방지: audit_adapter 우선 사용, 없으면 _write_to_wal() 사용
+        - WAL 로테이션/손상/복구 이벤트도 중앙 추적 가능
         """
-        if self._audit_adapter:
+        # 1. 외부 주입된 adapter 우선 사용 (순환 참조 방지)
+        if self._audit_adapter is not None:
             try:
                 self._audit_adapter.log_event(
                     event_type=event_type,
                     source="WriteAheadLog",
                     details=details,
                 )
+                return
             except Exception:
-                # Audit 실패가 WAL 동작을 방해하면 안됨
-                pass
+                pass  # fallback to _write_to_wal
+        
+        # 2. _write_to_wal() 사용 (ActorContext/TraceContext 자동 결합)
+        # 주의: 자기 자신을 호출하지 않도록 _get_wal()이 다른 WAL 인스턴스를 반환해야 함
+        # 현재 구조: audit/base.py의 _get_wal()은 별도 singleton WAL을 사용
+        try:
+            from selfhealing.services.audit.base import _write_to_wal
+            
+            _write_to_wal(
+                event_type=event_type,
+                source="WriteAheadLog",
+                details=details,
+            )
+        except ImportError:
+            pass  # _write_to_wal 미사용 환경
+        except Exception:
+            # Audit 실패가 WAL 동작을 방해하면 안됨
+            pass
 
 
 # =============================================================================

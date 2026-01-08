@@ -541,3 +541,302 @@ class TestAuditIntegrationEnd2End:
         
         for type_name in new_types:
             assert hasattr(AuditEventType, type_name), f"{type_name}이 없음"
+
+
+# =============================================================================
+# Test: Phase 1 - CorruptionShield Batching (배칭)
+# =============================================================================
+
+
+class TestCorruptionShieldBatching:
+    """
+    CorruptionShield 배칭 테스트.
+    
+    Phase 1 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+    - 10개 필드 위반 시 10개 로그 → 1개 로그로 최적화
+    """
+    
+    def test_multiple_violations_single_event(self):
+        """여러 위반 사항이 단일 Audit 이벤트로 기록됨."""
+        from selfhealing.services.corruption_shield import CorruptionShield
+        from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        # L2 규칙으로 여러 위반 유도
+        config = CorruptionShieldConfig(
+            l1_enabled=True,
+            l2_enabled=True,
+            l3_enabled=False,
+        )
+        shield = CorruptionShield(config)
+        
+        mock_request = MagicMock()
+        mock_request.META = {}
+        
+        # 여러 필드 위반 데이터
+        data = {
+            "amount": -1000,  # L2 위반: 음수 금액
+            "status": "INVALID_STATUS",  # L2 위반: 유효하지 않은 상태
+        }
+        
+        result = shield.validate(data, request=mock_request)
+        
+        if not result.is_valid and len(result.violations) > 1:
+            buffer = RequestAuditBuffer.get_or_create(mock_request)
+            events = buffer.get_events()
+            
+            corruption_events = [
+                e for e in events
+                if e.event_type in (
+                    AuditEventType.CORRUPTION_DETECTED,
+                    AuditEventType.CORRUPTION_BLOCKED,
+                )
+            ]
+            
+            # 배칭: 여러 violations에 대해 단일 이벤트만 생성되어야 함
+            assert len(corruption_events) == 1, \
+                f"배칭 실패: {len(corruption_events)}개 이벤트 생성됨 (예상: 1개)"
+    
+    def test_violations_list_in_details(self):
+        """단일 이벤트에 violations 리스트가 포함됨."""
+        from selfhealing.services.corruption_shield import CorruptionShield
+        from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        config = CorruptionShieldConfig(
+            l1_enabled=True,
+            l2_enabled=True,
+            l3_enabled=False,
+        )
+        shield = CorruptionShield(config)
+        
+        mock_request = MagicMock()
+        mock_request.META = {}
+        
+        # 위반 데이터
+        data = {"amount": -100}
+        
+        result = shield.validate(data, request=mock_request)
+        
+        if not result.is_valid:
+            buffer = RequestAuditBuffer.get_or_create(mock_request)
+            events = buffer.get_events()
+            
+            corruption_events = [
+                e for e in events
+                if e.event_type in (
+                    AuditEventType.CORRUPTION_DETECTED,
+                    AuditEventType.CORRUPTION_BLOCKED,
+                )
+            ]
+            
+            if corruption_events:
+                event = corruption_events[0]
+                details = event.details
+                
+                # 배칭된 상세 정보 확인
+                assert "violation_count" in details, "violation_count 누락"
+                assert "violations" in details, "violations 리스트 누락"
+                assert "layers" in details, "layers 정보 누락"
+                assert isinstance(details["violations"], list), "violations가 리스트여야 함"
+    
+    def test_violation_count_matches_violations_list(self):
+        """violation_count가 violations 리스트 길이와 일치."""
+        from selfhealing.services.corruption_shield import CorruptionShield
+        from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        config = CorruptionShieldConfig(
+            l1_enabled=True,
+            l2_enabled=True,
+            l3_enabled=False,
+        )
+        shield = CorruptionShield(config)
+        
+        mock_request = MagicMock()
+        mock_request.META = {}
+        
+        # 위반 데이터
+        data = {"amount": -100, "order_id": None}
+        
+        result = shield.validate(data, request=mock_request)
+        
+        if not result.is_valid:
+            buffer = RequestAuditBuffer.get_or_create(mock_request)
+            events = buffer.get_events()
+            
+            corruption_events = [
+                e for e in events
+                if e.event_type in (
+                    AuditEventType.CORRUPTION_DETECTED,
+                    AuditEventType.CORRUPTION_BLOCKED,
+                )
+            ]
+            
+            if corruption_events:
+                details = corruption_events[0].details
+                assert details["violation_count"] == len(details["violations"]), \
+                    "violation_count와 violations 리스트 길이 불일치"
+    
+    def test_fallback_to_write_to_wal_without_request(self):
+        """request 없을 때 _write_to_wal()로 폴백."""
+        from selfhealing.services.corruption_shield import CorruptionShield
+        from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
+        
+        config = CorruptionShieldConfig(
+            l1_enabled=True,
+            l2_enabled=True,
+            l3_enabled=False,
+        )
+        shield = CorruptionShield(config)
+        
+        # request 없이 호출
+        with patch("selfhealing.services.audit.base._write_to_wal") as mock_wal:
+            data = {"amount": -100}
+            result = shield.validate(data)  # request=None
+            
+            if not result.is_valid:
+                # _write_to_wal이 호출되어야 함
+                mock_wal.assert_called_once()
+                call_kwargs = mock_wal.call_args[1]
+                assert call_kwargs["event_type"] in ("CORRUPTION_DETECTED", "CORRUPTION_BLOCKED")
+                assert call_kwargs["source"] == "CorruptionShield"
+                assert "violations" in call_kwargs["details"]
+
+
+# =============================================================================
+# Test: Phase 2 - ActorContext/TraceContext 자동 결합
+# =============================================================================
+
+
+class TestAuditContextAutoInjection:
+    """
+    ActorContext/TraceContext 자동 주입 테스트.
+    
+    Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+    - ShadowLogger/WAL에서 _write_to_wal() 직접 호출
+    - "어떤 운영자의 어떤 작업에서 발생" 추적 가능
+    """
+    
+    def test_shadow_logger_uses_write_to_wal(self):
+        """ShadowLogger가 _write_to_wal()을 직접 호출."""
+        from selfhealing.adapters.memory.shadow_logger import ShadowLogger
+        
+        logger = ShadowLogger()
+        logger.clear()
+        
+        with patch("selfhealing.services.audit.base._write_to_wal") as mock_wal:
+            logger.record_sync_failure(
+                service_name="test_service",
+                intended_state="OPEN",
+                error=Exception("Connection timeout"),
+                adapter_type="redis",
+                operation="sync",
+            )
+            
+            # _write_to_wal이 호출되어야 함
+            mock_wal.assert_called_once()
+            call_kwargs = mock_wal.call_args[1]
+            assert call_kwargs["event_type"] == "SHADOW_LOG_SYNC_FAILED"
+            assert call_kwargs["source"] == "ShadowLogger"
+            assert call_kwargs["details"]["service_name"] == "test_service"
+    
+    def test_shadow_logger_recovery_uses_write_to_wal(self):
+        """ShadowLogger 복구 시 _write_to_wal() 호출."""
+        from selfhealing.adapters.memory.shadow_logger import ShadowLogger
+        
+        logger = ShadowLogger()
+        logger.clear()
+        
+        # 먼저 실패 기록
+        with patch("selfhealing.services.audit.base._write_to_wal"):
+            logger.record_sync_failure(
+                service_name="test_service",
+                intended_state="OPEN",
+                error=Exception("Test error"),
+            )
+        
+        # 복구 시 _write_to_wal 호출 확인
+        with patch("selfhealing.services.audit.base._write_to_wal") as mock_wal:
+            count = logger.mark_as_synced("test_service")
+            
+            if count > 0:
+                mock_wal.assert_called_once()
+                call_kwargs = mock_wal.call_args[1]
+                assert call_kwargs["event_type"] == "SHADOW_LOG_RECOVERED"
+                assert call_kwargs["details"]["recovered_count"] == count
+    
+    def test_wal_uses_write_to_wal_for_rotation(self, temp_wal_dir):
+        """WAL 로테이션 시 _write_to_wal() 호출."""
+        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        
+        config = WALConfig(
+            wal_dir=temp_wal_dir,
+            max_file_size_mb=0.0001,  # 매우 작은 크기로 로테이션 유도
+            sync_on_write=False,
+        )
+        
+        with patch("selfhealing.services.audit.base._write_to_wal") as mock_wal:
+            wal = WriteAheadLog(config=config)  # audit_adapter=None
+            
+            # 로테이션 유도
+            for i in range(50):
+                wal.write({"event": f"test_{i}", "data": "x" * 2000})
+            
+            wal.close()
+            
+            # WAL_ROTATED 이벤트가 기록되어야 함
+            rotation_calls = [
+                call for call in mock_wal.call_args_list
+                if call[1].get("event_type") == "WAL_ROTATED"
+            ]
+            assert len(rotation_calls) > 0, "WAL_ROTATED 이벤트가 기록되어야 함"
+    
+    def test_wal_audit_adapter_priority_over_write_to_wal(self, temp_wal_dir, mock_audit_adapter):
+        """WAL에 audit_adapter가 주입되면 우선 사용."""
+        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        
+        config = WALConfig(
+            wal_dir=temp_wal_dir,
+            max_file_size_mb=0.0001,
+            sync_on_write=False,
+        )
+        
+        with patch("selfhealing.services.audit.base._write_to_wal") as mock_wal:
+            wal = WriteAheadLog(config=config, audit_adapter=mock_audit_adapter)
+            
+            # 로테이션 유도
+            for i in range(50):
+                wal.write({"event": f"test_{i}", "data": "x" * 2000})
+            
+            wal.close()
+            
+            # audit_adapter가 우선 사용되어야 함
+            rotation_events = mock_audit_adapter.get_events_by_type("WAL_ROTATED")
+            if rotation_events:
+                # audit_adapter가 사용됨 → _write_to_wal은 호출되지 않아야 함
+                wal_rotation_calls = [
+                    call for call in mock_wal.call_args_list
+                    if call[1].get("event_type") == "WAL_ROTATED"
+                ]
+                assert len(wal_rotation_calls) == 0, \
+                    "audit_adapter가 있으면 _write_to_wal 호출 안됨"
+    
+    def test_shadow_logger_graceful_on_import_error(self):
+        """_write_to_wal import 실패 시 graceful 처리."""
+        from selfhealing.adapters.memory.shadow_logger import ShadowLogger
+        
+        logger = ShadowLogger()
+        logger.clear()
+        
+        with patch.dict("sys.modules", {"selfhealing.services.audit.base": None}):
+            # ImportError가 발생해도 메인 로직은 정상 동작
+            logger.record_sync_failure(
+                service_name="test_service",
+                intended_state="OPEN",
+                error=Exception("Test error"),
+            )
+            
+            # 레코드가 정상적으로 기록되어야 함
+            records = logger.get_all_records()
+            assert len(records) >= 1

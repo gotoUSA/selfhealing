@@ -204,10 +204,42 @@ class CorruptionShield:
         Corruption 이벤트를 Audit 시스템에 기록.
         
         request가 있으면 RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 처리)
-        request가 없으면 직접 로깅
+        request가 없으면 _write_to_wal()을 통해 직접 기록
         
-        Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
+        Phase 1 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+        - 배칭: 단일 이벤트에 모든 violations 포함 (개별 이벤트 대신)
+        - 10개 필드 위반 시 10개 로그 → 1개 로그로 최적화
         """
+        # 이벤트 유형 결정
+        if result.blocked:
+            event_type_str = "CORRUPTION_BLOCKED"
+        else:
+            event_type_str = "CORRUPTION_DETECTED"
+        
+        # violations 리스트 구성 (배칭)
+        violations_list = [
+            {
+                "layer": v.layer,
+                "code": v.code,
+                "message": v.message,
+                "field": v.field,
+                "severity": v.severity,
+            }
+            for v in result.violations
+        ]
+        
+        # 배칭된 상세 정보
+        batched_details = {
+            "violation_count": len(result.violations),
+            "blocked": result.blocked,
+            "violations": violations_list,
+            "layers": {
+                "l1_passed": result.l1_passed,
+                "l2_passed": result.l2_passed,
+                "l3_passed": result.l3_passed,
+            },
+        }
+        
         # Phase 3 패턴: 버퍼 우선
         if request is not None:
             try:
@@ -218,36 +250,40 @@ class CorruptionShield:
                 
                 buffer = RequestAuditBuffer.get_or_create(request)
                 
-                for violation in result.violations:
-                    # 이벤트 유형 결정
-                    if result.blocked:
-                        event_type = AuditEventType.CORRUPTION_BLOCKED
-                    else:
-                        event_type = AuditEventType.CORRUPTION_DETECTED
-                    
-                    buffer.add(
-                        event_type=event_type,
-                        source="CorruptionShield",
-                        details={
-                            "layer": violation.layer,
-                            "code": violation.code,
-                            "message": violation.message,
-                            "field": violation.field,
-                            "severity": violation.severity,
-                            "blocked": result.blocked,
-                        },
-                        success=False,
-                        error_message=violation.message,
-                    )
+                # 배칭: 단일 이벤트에 모든 violations 포함
+                event_type = (
+                    AuditEventType.CORRUPTION_BLOCKED
+                    if result.blocked
+                    else AuditEventType.CORRUPTION_DETECTED
+                )
+                
+                buffer.add(
+                    event_type=event_type,
+                    source="CorruptionShield",
+                    details=batched_details,
+                    success=False,
+                    error_message=f"{len(result.violations)} violation(s) detected",
+                )
                 return
             except ImportError:
                 pass  # event_buffer 미사용 환경
         
-        # Fallback: 직접 로깅 (request 없는 경우)
-        for violation in result.violations:
+        # Fallback: _write_to_wal()로 직접 기록 (ActorContext/TraceContext 자동 결합)
+        try:
+            from selfhealing.services.audit.base import _write_to_wal
+            
+            _write_to_wal(
+                event_type=event_type_str,
+                source="CorruptionShield",
+                details=batched_details,
+                success=False,
+                error_message=f"{len(result.violations)} violation(s) detected",
+            )
+        except ImportError:
+            # _write_to_wal 미사용 환경: 로거로 폴백
             logger.warning(
-                f"[CorruptionShield/Audit] {violation.layer} violation: "
-                f"{violation.code} - {violation.message}"
+                f"[CorruptionShield/Audit] {len(result.violations)} violations detected, "
+                f"blocked={result.blocked}"
             )
     
     def _log_violations(self, data: dict, result: ValidationResult) -> None:
