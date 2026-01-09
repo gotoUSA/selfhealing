@@ -630,6 +630,52 @@ class ChaosExperiment(abc.ABC):
             "throughput_rps": 500.0,
         }
     
+    # =========================================================================
+    # Phase 2: CB 상태 스냅샷 캡처 (32_CHAOS_SYSTEM_INTEGRATION.md §2)
+    # =========================================================================
+    
+    def _get_cb_state_snapshot(self) -> Dict[str, Any]:
+        """
+        실험 전후 CB 상태 스냅샷 캡처.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §2.2.1
+        
+        Returns:
+            Dict with:
+                - target_service_state: 대상 서비스 CB 상태
+                - is_allowed: 요청 허용 여부
+                - timestamp: 스냅샷 시간
+        """
+        try:
+            from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+            
+            service = get_circuit_breaker_service()
+            target = self.config.target_service
+            
+            return {
+                "target_service_state": service.get_state(target),
+                "is_allowed": service.should_allow(target),
+                "timestamp": now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"[Chaos] CB state snapshot failed: {e}")
+            return {}
+    
+    def capture_steady_state_with_cb(self) -> Dict[str, Any]:
+        """
+        CB 상태를 포함한 Steady State 캡처.
+        
+        기본 메트릭 + Circuit Breaker 상태를 함께 캡처.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §2.2.2
+        
+        Returns:
+            Dict containing metrics and circuit_breaker state
+        """
+        steady_state = self.capture_steady_state()
+        steady_state["circuit_breaker"] = self._get_cb_state_snapshot()
+        return steady_state
+    
     def validate_recovery(self) -> float:
         """Wait for system to recover and measure recovery time."""
         import time

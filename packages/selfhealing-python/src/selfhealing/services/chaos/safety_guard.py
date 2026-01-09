@@ -80,6 +80,10 @@ class BlockReason(str, Enum):
     
     EMERGENCY_MODE_ACTIVE = "emergency_mode_active"
     """Emergency mode is active (LEVEL_2+)."""
+    
+    # Phase 2: Panic Threshold 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    PANIC_THRESHOLD_TRIGGERED = "panic_threshold_triggered"
+    """Panic Threshold 발동 (70%+ CB OPEN)."""
 
 
 # =============================================================================
@@ -168,6 +172,11 @@ class SafetyCheckResult:
     emergency_mode_active: bool = False
     emergency_level: str = "NORMAL"
     
+    # Panic threshold (Phase 2: 32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    panic_threshold_triggered: bool = False
+    panic_open_rate: float = 0.0
+    panic_open_circuits: List[str] = field(default_factory=list)
+    
     # Timing
     last_experiment_at: str = ""
     cooldown_remaining_minutes: int = 0
@@ -194,6 +203,9 @@ class SafetyCheckResult:
             "kill_switch_active": self.kill_switch_active,
             "emergency_mode_active": self.emergency_mode_active,
             "emergency_level": self.emergency_level,
+            "panic_threshold_triggered": self.panic_threshold_triggered,
+            "panic_open_rate": self.panic_open_rate,
+            "panic_open_circuits": self.panic_open_circuits,
             "last_experiment_at": self.last_experiment_at,
             "cooldown_remaining_minutes": self.cooldown_remaining_minutes,
             "checked_at": self.checked_at,
@@ -429,8 +441,12 @@ class SafetyGuard:
         # 3. Check emergency mode (LEVEL_2+에서 차단)
         if self._check_emergency_mode_status(result):
             return True
+        
+        # 4. Check panic threshold (Phase 2: 32_CHAOS_SYSTEM_INTEGRATION.md §5)
+        if self._check_panic_threshold_status(result):
+            return True
 
-        # 4. Check error budget (CRITICAL)
+        # 5. Check error budget (CRITICAL)
         if self._check_error_budget_status(result, experiment_id):
             return True
 
@@ -675,6 +691,122 @@ class SafetyGuard:
                     "current_emergency_level": emergency_result["level"],
                     "emergency_level_value": emergency_result["level_value"],
                     "blocked_by": "SafetyGuard._check_emergency_mode_status",
+                },
+            )
+        except Exception as e:
+            # Audit 실패는 실험 차단에 영향을 주지 않음 (non-critical)
+            logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
+    
+    # =========================================================================
+    # Phase 2: Panic Threshold Check (32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    # =========================================================================
+    
+    def _check_panic_threshold(self) -> Dict[str, Any]:
+        """
+        Panic Threshold 상태 확인.
+        
+        70% 이상의 Circuit Breaker가 OPEN 상태이면 시스템 전체 붕괴로 판단.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §5
+        
+        Returns:
+            Dict with:
+                - triggered: Panic 발동 여부
+                - open_rate: OPEN 비율 (%)
+                - open_count: OPEN 상태 CB 수
+                - total_count: 전체 CB 수
+                - open_circuits: OPEN 상태인 서비스 목록
+        """
+        try:
+            from selfhealing.services.circuit_breaker.panic_threshold import (
+                PanicThresholdMonitor,
+            )
+            
+            monitor = PanicThresholdMonitor()
+            result = monitor.check_panic_threshold()
+            
+            return {
+                "triggered": result.triggered,
+                "open_rate": result.open_rate,
+                "open_count": result.open_count,
+                "total_count": result.total_count,
+                "open_circuits": result.open_circuits,
+            }
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Could not check panic threshold: {e}")
+            # Fail-open: panic threshold 확인 실패 시 허용
+            return {
+                "triggered": False,
+                "open_rate": 0.0,
+                "open_count": 0,
+                "total_count": 0,
+                "open_circuits": [],
+            }
+    
+    def _check_panic_threshold_status(self, result: SafetyCheckResult) -> bool:
+        """
+        Check panic threshold status. Returns True if blocked.
+        
+        Panic Threshold 발동 시 모든 카오스 실험 차단.
+        50% 이상 OPEN이면 경고.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §5.2.1
+        """
+        result.checks_performed.append("panic_threshold")
+        panic_result = self._check_panic_threshold()
+        
+        result.panic_threshold_triggered = panic_result["triggered"]
+        result.panic_open_rate = panic_result["open_rate"]
+        result.panic_open_circuits = panic_result["open_circuits"]
+        
+        # Panic 발동 상태: 차단
+        if panic_result["triggered"]:
+            result.status = SafetyStatus.BLOCKED.value
+            result.allowed = False
+            result.block_reason = BlockReason.PANIC_THRESHOLD_TRIGGERED.value
+            result.block_message = (
+                f"PANIC: {panic_result['open_rate']:.1f}% CB OPEN "
+                f"({panic_result['open_count']}/{panic_result['total_count']}) - "
+                f"시스템 전체 불안정"
+            )
+            result.checks_failed.append("panic_threshold")
+            
+            # Audit 로그 기록
+            self._log_panic_block_audit(panic_result)
+            
+            return True
+        
+        # 경고 수준 (50% 이상): 경고만, 차단하지 않음
+        if panic_result["open_rate"] >= 50.0:
+            result.warnings.append(
+                f"Warning: {panic_result['open_rate']:.1f}% CB OPEN - "
+                f"저위험 실험만 권장"
+            )
+            if result.status == SafetyStatus.SAFE.value:
+                result.status = SafetyStatus.WARNING.value
+        
+        result.checks_passed.append("panic_threshold")
+        return False
+    
+    def _log_panic_block_audit(self, panic_result: Dict[str, Any]) -> None:
+        """
+        Panic Threshold 차단 시 Audit 로그 기록.
+        
+        Args:
+            panic_result: Panic threshold 체크 결과
+        """
+        try:
+            from selfhealing.services.audit_helpers import log_governance_blocked_audit
+            
+            log_governance_blocked_audit(
+                action="chaos_experiment",
+                block_reason="panic_threshold_triggered",
+                details={
+                    "open_rate": panic_result["open_rate"],
+                    "open_count": panic_result["open_count"],
+                    "total_count": panic_result["total_count"],
+                    "open_circuits": panic_result["open_circuits"],
+                    "blocked_by": "SafetyGuard._check_panic_threshold_status",
                 },
             )
         except Exception as e:

@@ -1,7 +1,7 @@
 # 32. Chaos Engineering 힐링 시스템 연동 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: Phase 1 구현 완료  
+> **상태**: Phase 2 구현 완료  
 > **관련 문서**: [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md), [24_CHAOS_INTEGRATION_PLAN.md](24_CHAOS_INTEGRATION_PLAN.md)
 
 ---
@@ -22,10 +22,11 @@
 | **Chaos-Aware Metadata** | ✅ **Phase 1 구현** | `manager.py:204-290` |
 | **RECOVERY_MONITORING** | ✅ **Phase 1 구현** | `base.py:60-90` |
 | **Soft/Hard TTL** | ✅ **Phase 1 구현** | `base.py:155-175` |
-| Circuit Breaker | ❌ 미연동 | - |
-| Emergency Mode | ⚡ 부분 연동 | `is_chaos_experiment` 파라미터 추가 |
+| **CB 상태 스냅샷** | ✅ **Phase 2 구현** | `base.py:630-680` |
+| **Panic Threshold 체크** | ✅ **Phase 2 구현** | `safety_guard.py:700-810` |
+| Emergency Mode | ✅ 연동 완료 | `safety_guard.py:633-680` |
+| Circuit Breaker | ⚡ 부분 연동 | `base.py:_get_cb_state_snapshot()` |
 | Canary Recovery | ❌ 미연동 | - |
-| Panic Threshold | ❌ 미연동 | - |
 | Load Shedding | ❌ 미연동 | - |
 | Freeze Mode | ❌ 미연동 | - |
 | Corruption Shield | ❌ 미연동 | - |
@@ -1973,7 +1974,7 @@ def _record_hypothesis_validation(
 
 ## 버전 정보
 
-- **현재 버전**: 1.3.0
+- **현재 버전**: 1.4.0
 - **마지막 업데이트**: 2026-01-09
 - **담당자**: SelfHealing Team
 
@@ -1981,6 +1982,7 @@ def _record_hypothesis_validation(
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.4.0 | 2026-01-09 | **Phase 2 구현 완료**: SafetyGuard._check_panic_threshold() (§5), CB 상태 스냅샷 캡처 (§2), BlockReason.PANIC_THRESHOLD_TRIGGERED 추가, 테스트 15개 통과 |
 | 1.3.0 | 2026-01-09 | **Phase 1 구현 완료**: FailureHypothesis 클래스, 실험별 가설 상수, Chaos-Aware 메타데이터, RECOVERY_MONITORING 상태, Soft/Hard TTL |
 | 1.0.0 | 2026-01-09 | 초기 연동 계획 수립 |
 | 1.1.0 | 2026-01-09 | Architect Review 반영: Chaos-Aware 분류, 비동기 모니터링, 시뮬레이션 인터페이스, FinOps GameDay Budget 추가 |
