@@ -50,6 +50,7 @@ class ErrorBudgetCalculator:
         slo_name: str = "availability",
         window_start: Optional[datetime] = None,
         window_end: Optional[datetime] = None,
+        exclude_chaos: bool = True,
     ) -> ErrorBudgetStatus:
         """
         Error Budget 상태 계산.
@@ -58,9 +59,14 @@ class ErrorBudgetCalculator:
             slo_name: SLO 이름
             window_start: 윈도우 시작 시간 (None이면 SLO window 사용)
             window_end: 윈도우 종료 시간 (None이면 현재)
+            exclude_chaos: Chaos 실험 데이터 제외 여부 (기본: True)
+                           True이면 is_chaos_experiment=True인 에러는 예산 소진에서 제외됨
 
         Returns:
             ErrorBudgetStatus
+            
+        Reference:
+            31_CHAOS_EXPERIMENT_EXPANSION.md §7.1 (Q1: 실험 데이터 자동 태깅)
         """
         slo = self.slo_config.get_slo(slo_name)
         if not slo:
@@ -85,6 +91,14 @@ class ErrorBudgetCalculator:
 
         if self._get_failed_operation_stats:
             try:
+                stats = self._get_failed_operation_stats(
+                    start_time=window_start,
+                    end_time=current_time,
+                    exclude_chaos=exclude_chaos,
+                )
+                error_count = stats.get("total_errors", 0)
+            except TypeError:
+                # 이전 버전 호환: exclude_chaos 미지원 시
                 stats = self._get_failed_operation_stats(
                     start_time=window_start,
                     end_time=current_time,

@@ -1,7 +1,8 @@
 # 31. Chaos Experiment 확장 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: 계획 수립  
+> **최종 수정**: 2026-01-10  
+> **상태**: Phase 0-5 구현 완료  
 > **관련 문서**: [13_CHAOS_ENGINEERING.md](../13_CHAOS_ENGINEERING.md), [24_CHAOS_INTEGRATION_PLAN.md](24_CHAOS_INTEGRATION_PLAN.md)
 
 ---
@@ -57,8 +58,8 @@
 **완료 기준:**
 - [x] `ExperimentType` Enum에 6개 타입 추가됨 ✅ (2026-01-09)
 - [x] Factory 함수가 새 타입을 인식함 (placeholder 클래스 포함) ✅ (2026-01-09)
-- [ ] `CgroupResourceMonitor` 단위 테스트 통과
-- [ ] 환경변수로 `CHAOS_EXCLUDED_SERVICES` 설정 가능
+- [x] `CgroupResourceMonitor` 단위 테스트 통과 ✅ (2026-01-10)
+- [x] 환경변수로 `CHAOS_EXCLUDED_SERVICES` 설정 가능 ✅ (2026-01-10)
 
 ---
 
@@ -146,11 +147,11 @@
 | 4-10 | 온보딩 체크리스트 문서화 | `docs/` | [7.5](#75-q5-default-payment-blacklist) | 4-9 |
 
 **완료 기준:**
-- [ ] Chaos 실험 데이터가 Error Budget에서 자동 제외됨
-- [ ] AutoTuning이 실험 중 메트릭 수집 스킵
-- [ ] 컨테이너 메모리 제한의 85%까지만 사용
-- [ ] 동일 서비스 동시 실험 차단됨
-- [ ] 결제 서비스 Blacklist 환경변수 설정 가이드 완료
+- [x] Chaos 실험 데이터가 Error Budget에서 자동 제외됨 ✅ (2026-01-10)
+- [x] AutoTuning이 실험 중 메트릭 수집 스킵 ✅ (2026-01-10)
+- [x] 컨테이너 메모리 제한의 85%까지만 사용 ✅ (2026-01-10)
+- [x] 동일 서비스 동시 실험 차단됨 ✅ (2026-01-10)
+- [x] 결제 서비스 Blacklist 환경변수 설정 가이드 완료 ✅ (2026-01-10)
 
 ---
 
@@ -167,9 +168,9 @@
 | 5-5 | `get_event_bus()` 팩토리 함수 (distributed 플래그) | `event_bus_redis.py` | [6.1](#61-redis-pubsub-실시간-동기화) | 5-2 |
 
 **완료 기준:**
-- [ ] 멀티-인스턴스 환경에서 Chaos 이벤트 실시간 전파됨
-- [ ] `SelfHealingHttpClient` 사용 시 헤더 자동 전파됨
-- [ ] OTel 의존 없이 수동 전파 가능
+- [x] 멀티-인스턴스 환경에서 Chaos 이벤트 실시간 전파됨 ✅ (2026-01-10)
+- [x] `SelfHealingHttpClient` 사용 시 헤더 자동 전파됨 ✅ (2026-01-10)
+- [x] OTel 의존 없이 수동 전파 가능 ✅ (2026-01-10)
 
 ---
 

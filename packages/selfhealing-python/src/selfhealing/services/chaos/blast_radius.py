@@ -129,6 +129,87 @@ class BlastRadiusPolicy:
             "excluded_domains": self.excluded_domains,
         }
 
+    @classmethod
+    def from_env(cls) -> "BlastRadiusPolicy":
+        """
+        환경변수에서 정책 로드.
+        
+        환경변수:
+            CHAOS_EXCLUDED_SERVICES: 제외 서비스 (쉼표 구분)
+            CHAOS_EXCLUDED_DOMAINS: 제외 도메인 (쉼표 구분)
+            CHAOS_MAX_FAILURE_PERCENT: 최대 실패율 (기본: 10.0)
+            CHAOS_MAX_AFFECTED_INSTANCES: 최대 영향 인스턴스 (기본: 1)
+            CHAOS_ALLOW_OUTSIDE_WINDOW: 유지보수 윈도우 외 허용 (기본: false)
+        
+        Returns:
+            환경변수 기반 BlastRadiusPolicy
+        
+        Example:
+            # .env
+            CHAOS_EXCLUDED_SERVICES=payment-core,toss-payment,iamport
+            CHAOS_EXCLUDED_DOMAINS=payment,billing,settlement
+            CHAOS_MAX_FAILURE_PERCENT=5.0
+            
+        Reference:
+            31_CHAOS_EXPERIMENT_EXPANSION.md §7.5 (Q5: Default Payment Blacklist)
+        """
+        import os
+        
+        def parse_list(env_key: str) -> List[str]:
+            raw = os.getenv(env_key, "")
+            return [s.strip() for s in raw.split(",") if s.strip()]
+        
+        def parse_bool(env_key: str, default: bool = False) -> bool:
+            raw = os.getenv(env_key, "").lower()
+            if raw in ("true", "1", "yes"):
+                return True
+            if raw in ("false", "0", "no"):
+                return False
+            return default
+        
+        excluded_services = parse_list("CHAOS_EXCLUDED_SERVICES")
+        excluded_domains = parse_list("CHAOS_EXCLUDED_DOMAINS")
+        
+        if excluded_services:
+            logger.info(f"[BlastRadius] Loaded excluded services from env: {excluded_services}")
+        if excluded_domains:
+            logger.info(f"[BlastRadius] Loaded excluded domains from env: {excluded_domains}")
+        
+        return cls(
+            excluded_services=excluded_services,
+            excluded_domains=excluded_domains,
+            max_traffic_percent_region=float(os.getenv("CHAOS_MAX_FAILURE_PERCENT", "10.0")),
+            region_max_concurrent=int(os.getenv("CHAOS_MAX_AFFECTED_INSTANCES", "1")),
+            allow_outside_window=parse_bool("CHAOS_ALLOW_OUTSIDE_WINDOW", False),
+        )
+    
+    def is_service_allowed(self, service_name: str) -> bool:
+        """
+        서비스가 Chaos 실험 대상으로 허용되는지 확인.
+        
+        Args:
+            service_name: 확인할 서비스 이름
+        
+        Returns:
+            True if 서비스가 실험 대상으로 허용됨
+        """
+        if service_name in self.excluded_services:
+            logger.warning(
+                f"[BlastRadius] Service '{service_name}' is in excluded list"
+            )
+            return False
+        
+        # 도메인 패턴 매칭 (서비스명에 도메인이 포함된 경우)
+        for domain in self.excluded_domains:
+            if domain.lower() in service_name.lower():
+                logger.warning(
+                    f"[BlastRadius] Service '{service_name}' matches "
+                    f"excluded domain '{domain}'"
+                )
+                return False
+        
+        return True
+
 
 @dataclass
 class ApprovalRequest:

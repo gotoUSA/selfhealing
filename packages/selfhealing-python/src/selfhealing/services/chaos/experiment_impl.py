@@ -341,10 +341,20 @@ class ResourceExhaustionExperiment(ChaosExperiment):
     Config parameters:
         - resource_type: "cpu", "memory", "connections" (default: "connections")
         - exhaustion_percent: Percentage of resource to consume (default: 80%)
+        
+    Safety Features:
+        - Cgroup-aware memory limit (15% safety margin)
+        - OOM Killer 방지를 위한 자동 캡핑
+        
+    Reference:
+        31_CHAOS_EXPERIMENT_EXPANSION.md §7.3 (Q3: Cgroup-Aware Limit)
     """
     
     experiment_type = ExperimentType.RESOURCE_EXHAUSTION.value
     requires_approval = True  # High risk
+    
+    # 안전 마진 (15% - 아키텍트 제안 10% + 5% 버퍼)
+    SAFETY_MARGIN_PERCENT = 0.15
     
     @property
     def resource_type(self) -> str:
@@ -354,12 +364,61 @@ class ResourceExhaustionExperiment(ChaosExperiment):
     def exhaustion_percent(self) -> float:
         return self.config.parameters.get("exhaustion_percent", 0.80)  # 80%
     
+    def _get_safe_exhaustion_bytes(self) -> Optional[int]:
+        """
+        Cgroup 제한을 고려한 안전한 메모리 사용량 계산.
+        
+        Returns:
+            안전하게 사용 가능한 bytes. None이면 제한 없음.
+        """
+        if self.resource_type != "memory":
+            return None
+        
+        try:
+            from selfhealing.core.resource_monitor import CgroupResourceMonitor
+            
+            max_bytes = CgroupResourceMonitor.get_memory_max_bytes()
+            if max_bytes is None:
+                return None
+            
+            # 요청된 메모리 계산
+            requested_bytes = int(max_bytes * self.exhaustion_percent)
+            
+            # 안전 한계 확인
+            is_safe, actual_bytes = CgroupResourceMonitor.check_safe_for_exhaustion(
+                requested_bytes=requested_bytes,
+                safety_margin=self.SAFETY_MARGIN_PERCENT,
+            )
+            
+            if not is_safe:
+                logger.warning(
+                    f"[ResourceExhaustion] Capping memory to {actual_bytes / 1024 / 1024:.0f}MB "
+                    f"(cgroup limit: {max_bytes / 1024 / 1024:.0f}MB, "
+                    f"safety margin: {self.SAFETY_MARGIN_PERCENT * 100:.0f}%)"
+                )
+            
+            return actual_bytes
+        except Exception as e:
+            logger.debug(f"[ResourceExhaustion] Cgroup check failed: {e}")
+            return None
+    
     def inject_chaos(self) -> bool:
-        """Inject resource exhaustion with TTL."""
+        """Inject resource exhaustion with TTL and cgroup safety margin."""
+        # 메모리 타입일 경우 cgroup 안전 마진 적용
+        safe_bytes = self._get_safe_exhaustion_bytes()
+        exhaustion_config = {
+            "exhaustion_percent": self.exhaustion_percent,
+        }
+        
+        if safe_bytes is not None:
+            exhaustion_config["capped_bytes"] = safe_bytes
+            exhaustion_config["safety_margin_applied"] = True
+        
         logger.info(
             f"[ResourceExhaustion] Exhausting {self.resource_type} to "
             f"{self.exhaustion_percent*100}% on {self.config.target_service} "
-            f"(TTL: {self._effective_ttl}s)"
+            f"(TTL: {self._effective_ttl}s"
+            f"{f', capped to {safe_bytes / 1024 / 1024:.0f}MB' if safe_bytes else ''})"
         )
         
         try:
@@ -368,7 +427,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                     "enabled": True,
                     "target_service": self.config.target_service,
                     "resource_type": self.resource_type,
-                    "exhaustion_percent": self.exhaustion_percent,
+                    **exhaustion_config,
                     "experiment_id": self.experiment_id,
                     "expires_at": self._expires_at.isoformat() if self._expires_at else "",
                     "ttl_seconds": self._effective_ttl,

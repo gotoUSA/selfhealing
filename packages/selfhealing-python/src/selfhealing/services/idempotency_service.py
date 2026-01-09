@@ -250,6 +250,61 @@ class IdempotencyKey:
         )
 
     @classmethod
+    def for_chaos_service_lock(
+        cls,
+        target_service: str,
+    ) -> "IdempotencyKey":
+        """
+        서비스 단위 Chaos 실험 락.
+        
+        동일 서비스에 2개 이상의 실험이 동시 실행되는 것을 방지.
+        (원인 분석 명확성 확보)
+        
+        Schedule 락과 함께 사용하는 이중 락 패턴:
+        - Service Lock: 동시성 제어 (실험 종료 시 해제)
+        - Schedule Lock: 재실행 방지 (TTL까지 유지)
+        
+        Args:
+            target_service: 대상 서비스명
+        
+        Returns:
+            IdempotencyKey for service-level chaos lock
+            
+        Usage:
+            # 이중 락 패턴 사용 예시
+            service_lock = IdempotencyKey.for_chaos_service_lock(target_service)
+            schedule_lock = IdempotencyKey.for_chaos_experiment(schedule_id, exp_type, target_service)
+            
+            # 1. 서비스 락 획득 (동시성 제어)
+            if not idempotency.acquire_lock(service_lock, ttl_seconds=7200):
+                return "다른 실험 실행 중"
+                
+            # 2. 스케줄 락 획득 (재실행 방지)
+            if not idempotency.acquire_lock(schedule_lock, ttl_seconds=86400):
+                idempotency.release_lock(service_lock)  # 롤백
+                return "이미 실행된 스케줄"
+                
+            try:
+                # 3. 실험 실행
+                execute_experiment()
+            finally:
+                # 4. 서비스 락만 해제 (스케줄 락은 TTL 유지)
+                idempotency.release_lock(service_lock)
+        
+        Reference:
+            31_CHAOS_EXPERIMENT_EXPANSION.md §7.4 (Q4: Domain-Level Lock)
+        """
+        key = f"chaos:service_lock:{target_service}"
+        return cls(
+            domain=IdempotencyDomain.CHAOS_EXPERIMENT,
+            key=key,
+            components={
+                "lock_type": "service_level",
+                "target_service": target_service,
+            },
+        )
+
+    @classmethod
     def for_config_change(
         cls,
         config_key: str,
