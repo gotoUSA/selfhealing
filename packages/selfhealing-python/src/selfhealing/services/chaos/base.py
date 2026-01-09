@@ -686,6 +686,94 @@ class ChaosExperiment(abc.ABC):
         steady_state["circuit_breaker"] = self._get_cb_state_snapshot()
         return steady_state
     
+    # =========================================================================
+    # Phase 4: 고급 기능 - 통합 스냅샷 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §7, §8, §9)
+    # =========================================================================
+    
+    def _get_corruption_shield_stats(self) -> Dict[str, Any]:
+        """
+        Corruption Shield 통계 조회.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §7.2.2
+        
+        Returns:
+            Dict with corruption shield statistics
+        """
+        try:
+            from selfhealing.services.corruption_shield import get_corruption_shield
+            
+            shield = get_corruption_shield()
+            return shield.get_stats()
+        except ImportError:
+            logger.debug("[Chaos] Corruption shield not available (import failed)")
+            return {}
+        except Exception as e:
+            logger.warning(f"[Chaos] Corruption shield stats failed: {e}")
+            return {}
+    
+    def _get_dlq_stats(self) -> Dict[str, Any]:
+        """
+        DLQ 통계 조회 (카오스 실험 제외).
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §8.2.2
+        
+        Returns:
+            Dict with DLQ pending counts
+        """
+        try:
+            from selfhealing.services.dlq import get_dlq_service
+            
+            service = get_dlq_service()
+            return {
+                "pending_count": service.get_pending_count() if hasattr(service, 'get_pending_count') else 0,
+            }
+        except ImportError:
+            logger.debug("[Chaos] DLQ service not available (import failed)")
+            return {}
+        except Exception as e:
+            logger.warning(f"[Chaos] DLQ stats failed: {e}")
+            return {}
+    
+    def _get_throttle_stats(self) -> Dict[str, Any]:
+        """
+        Adaptive Throttle 통계 조회.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §9.2.1
+        
+        Returns:
+            Dict with throttle statistics
+        """
+        try:
+            from selfhealing.services.throttle import get_adaptive_throttle
+            
+            throttle = get_adaptive_throttle()
+            return throttle.get_stats() if hasattr(throttle, 'get_stats') else {}
+        except ImportError:
+            logger.debug("[Chaos] Adaptive throttle not available (import failed)")
+            return {}
+        except Exception as e:
+            logger.warning(f"[Chaos] Throttle stats failed: {e}")
+            return {}
+    
+    def capture_comprehensive_snapshot(self) -> Dict[str, Any]:
+        """
+        모든 관련 서비스의 종합 스냅샷 캡처.
+        
+        CB, Corruption Shield, DLQ, Throttle 상태를 모두 포함.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4
+        
+        Returns:
+            Dict containing all service snapshots
+        """
+        return {
+            "circuit_breaker": self._get_cb_state_snapshot(),
+            "corruption_shield": self._get_corruption_shield_stats(),
+            "dlq": self._get_dlq_stats(),
+            "throttle": self._get_throttle_stats(),
+            "timestamp": now().isoformat(),
+        }
+    
     def validate_recovery(self) -> float:
         """Wait for system to recover and measure recovery time."""
         import time

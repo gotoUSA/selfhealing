@@ -173,6 +173,10 @@ class ComplianceService:
         # 기본 검사 항목 로드
         self._load_default_checks()
         
+        # Phase 4: DORA-003 자동 검사 함수 등록
+        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
+        self._register_resilience_testing_check()
+        
         logger.info("ComplianceService initialized")
     
     def _log_compliance_audit(
@@ -213,6 +217,90 @@ class ComplianceService:
                 )
                 self._checks[check.check_id] = check
     
+    def _register_resilience_testing_check(self) -> None:
+        """
+        DORA-003 자동 검사 함수 등록.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
+        """
+        self._check_functions["DORA-003"] = self._check_resilience_testing
+    
+    def _check_resilience_testing(self) -> bool:
+        """
+        DORA-003: Resilience Testing 자동 검사.
+        
+        판정 기준:
+        - 최근 30일 내 카오스 실험 4회 이상 실행
+        - "실패한 실험"도 "복원력 한계를 발견한 성공적 테스트"로 인정
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
+        
+        Returns:
+            bool: True if compliant, False otherwise
+        """
+        try:
+            from selfhealing.services.chaos import get_chaos_scheduler
+            
+            scheduler = get_chaos_scheduler()
+            
+            # 최근 30일 실험 이력 조회
+            recent_experiments = scheduler.get_execution_history(limit=500)
+            
+            if not recent_experiments:
+                logger.warning("[Compliance] DORA-003: No chaos experiments in history")
+                return False
+            
+            # 최근 30일 필터링
+            from datetime import datetime, timedelta
+            from selfhealing.core.timezone import now as tz_now
+            
+            cutoff = tz_now() - timedelta(days=30)
+            recent_30_days = []
+            
+            for exp in recent_experiments:
+                # ExecutionResult의 executed_at 필드 확인
+                if hasattr(exp, 'executed_at') and exp.executed_at:
+                    try:
+                        if isinstance(exp.executed_at, str):
+                            exp_time = datetime.fromisoformat(exp.executed_at.replace('Z', '+00:00'))
+                        else:
+                            exp_time = exp.executed_at
+                        
+                        # Timezone-naive 비교를 위한 처리
+                        if exp_time.tzinfo is None:
+                            exp_time = exp_time.replace(tzinfo=cutoff.tzinfo)
+                        
+                        if exp_time >= cutoff:
+                            recent_30_days.append(exp)
+                    except (ValueError, TypeError):
+                        continue
+            
+            total_count = len(recent_30_days)
+            
+            # 최소 실험 횟수: 월 4회 (주 1회)
+            min_required = 4
+            
+            if total_count < min_required:
+                logger.warning(
+                    f"[Compliance] DORA-003: Insufficient experiments "
+                    f"({total_count}/{min_required})"
+                )
+                return False
+            
+            # 통과: 실패한 실험도 "복원력 한계 발견"으로 인정
+            logger.info(
+                f"[Compliance] DORA-003: PASSED - {total_count} experiments in 30 days "
+                f"(includes failed experiments as valid resilience testing)"
+            )
+            return True
+            
+        except ImportError as e:
+            logger.warning(f"[Compliance] DORA-003 check failed (import): {e}")
+            return False
+        except Exception as e:
+            logger.warning(f"[Compliance] DORA-003 check failed: {e}")
+            return False
+
     def register_check(
         self,
         check_id: str,
