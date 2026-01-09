@@ -100,6 +100,10 @@ class ChaosSchedulerService:
         # Currently running experiments
         self._running_experiments: Dict[str, str] = {}  # schedule_id -> experiment_id
         
+        # Phase 6: Experiment instances by status (32_CHAOS_SYSTEM_INTEGRATION.md §22.2.3)
+        # Maps experiment_id -> ChaosExperiment instance for recovery monitoring
+        self._experiment_instances: Dict[str, Any] = {}
+        
         # Load from persistent storage
         self._load_schedules()
     
@@ -843,6 +847,62 @@ class ChaosSchedulerService:
         """Get currently running experiments."""
         with self._lock:
             return self._running_experiments.copy()
+    
+    def register_experiment_instance(self, experiment_id: str, experiment: Any) -> None:
+        """
+        Register an experiment instance for recovery monitoring.
+        
+        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22.2.3
+        
+        Args:
+            experiment_id: Unique experiment ID
+            experiment: ChaosExperiment instance
+        """
+        with self._lock:
+            self._experiment_instances[experiment_id] = experiment
+            logger.debug(f"[ChaosScheduler] Registered experiment instance {experiment_id}")
+    
+    def unregister_experiment_instance(self, experiment_id: str) -> None:
+        """
+        Unregister an experiment instance.
+        
+        Args:
+            experiment_id: Unique experiment ID
+        """
+        with self._lock:
+            if experiment_id in self._experiment_instances:
+                del self._experiment_instances[experiment_id]
+                logger.debug(f"[ChaosScheduler] Unregistered experiment instance {experiment_id}")
+    
+    def get_experiments_by_status(self, status: str) -> List[Any]:
+        """
+        Get experiments by status.
+        
+        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3
+        
+        Used by check_recovery_monitoring_experiments Celery task
+        to find experiments in RECOVERY_MONITORING state.
+        
+        Args:
+            status: ExperimentStatus value (e.g., "recovery_monitoring")
+            
+        Returns:
+            List of ChaosExperiment instances with matching status
+        """
+        with self._lock:
+            matching = []
+            for exp_id, experiment in list(self._experiment_instances.items()):
+                try:
+                    if hasattr(experiment, 'status'):
+                        exp_status = experiment.status
+                        # Handle both enum and string
+                        if hasattr(exp_status, 'value'):
+                            exp_status = exp_status.value
+                        if exp_status == status:
+                            matching.append(experiment)
+                except Exception as e:
+                    logger.warning(f"[ChaosScheduler] Error checking experiment {exp_id} status: {e}")
+            return matching
     
     # =========================================================================
     # Internal Helpers

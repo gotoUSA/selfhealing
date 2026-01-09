@@ -88,6 +88,10 @@ class BlockReason(str, Enum):
     # Phase 3: Chaos Budget 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §17)
     CHAOS_BUDGET_EXCEEDED = "chaos_budget_exceeded"
     """월간 카오스 실험 예산 초과."""
+    
+    # Phase 6: CB Freeze Mode 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    CB_FREEZE_MODE_ACTIVE = "cb_freeze_mode_active"
+    """Circuit Breaker Freeze Mode 활성화 - 모든 카오스 실험 차단."""
 
 
 # =============================================================================
@@ -120,6 +124,10 @@ class SafetyConfig:
     require_no_deployment_freeze: bool = True
     """Require no active deployment freeze."""
     
+    # Phase 6: CB Freeze Mode 체크 (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    require_no_freeze_mode: bool = True
+    """Require CB Freeze Mode to be inactive for chaos experiments."""
+    
     # Fail-safe behavior
     fail_safe_on_error: bool = True
     """Block experiments if safety checks fail (fail-closed)."""
@@ -137,6 +145,7 @@ class SafetyConfig:
             "require_healthy_system": self.require_healthy_system,
             "require_no_active_incidents": self.require_no_active_incidents,
             "require_no_deployment_freeze": self.require_no_deployment_freeze,
+            "require_no_freeze_mode": self.require_no_freeze_mode,
             "fail_safe_on_error": self.fail_safe_on_error,
             "skip_in_test_environment": self.skip_in_test_environment,
         }
@@ -181,6 +190,10 @@ class SafetyCheckResult:
     panic_open_rate: float = 0.0
     panic_open_circuits: List[str] = field(default_factory=list)
     
+    # Phase 6: CB Freeze Mode (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    freeze_mode_active: bool = False
+    """CB Freeze Mode 활성화 여부."""
+    
     # Timing
     last_experiment_at: str = ""
     cooldown_remaining_minutes: int = 0
@@ -210,6 +223,7 @@ class SafetyCheckResult:
             "panic_threshold_triggered": self.panic_threshold_triggered,
             "panic_open_rate": self.panic_open_rate,
             "panic_open_circuits": self.panic_open_circuits,
+            "freeze_mode_active": self.freeze_mode_active,
             "last_experiment_at": self.last_experiment_at,
             "cooldown_remaining_minutes": self.cooldown_remaining_minutes,
             "checked_at": self.checked_at,
@@ -416,6 +430,62 @@ class SafetyGuard:
         result.checks_passed.append("deployment_freeze")
         return False
 
+    def _check_freeze_mode_status(self, result: SafetyCheckResult) -> bool:
+        """
+        Check CB Freeze Mode status. Returns True if blocked.
+        
+        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22
+        
+        CB Freeze Mode가 활성화되면 모든 카오스 실험을 차단합니다.
+        Freeze Mode는 LOCKDOWN 상태에서 CB 상태를 동결하여
+        시스템 안정성을 보호합니다.
+        """
+        result.checks_performed.append("freeze_mode")
+        
+        try:
+            from selfhealing.services.circuit_breaker.freeze_mode import (
+                FreezeModeManager,
+            )
+            
+            manager = FreezeModeManager()
+            is_active = manager.is_active()
+            result.freeze_mode_active = is_active
+            
+            if is_active:
+                state = manager.get_state()
+                result.status = SafetyStatus.BLOCKED.value
+                result.allowed = False
+                result.block_reason = BlockReason.CB_FREEZE_MODE_ACTIVE.value
+                result.block_message = (
+                    f"CB Freeze Mode active: {state.reason or 'System stability protection'}"
+                )
+                result.checks_failed.append("freeze_mode")
+                logger.warning(
+                    f"[SafetyGuard] CB Freeze Mode active, blocking chaos experiment. "
+                    f"Reason: {state.reason}"
+                )
+                return True
+            
+            result.checks_passed.append("freeze_mode")
+            return False
+            
+        except ImportError:
+            logger.debug("[SafetyGuard] FreezeModeManager not available, skipping check")
+            result.checks_passed.append("freeze_mode")
+            return False
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Freeze mode check failed: {e}")
+            if self._config.fail_safe_on_error:
+                result.freeze_mode_active = True
+                result.status = SafetyStatus.BLOCKED.value
+                result.allowed = False
+                result.block_reason = BlockReason.CB_FREEZE_MODE_ACTIVE.value
+                result.block_message = f"Freeze mode check failed (fail-safe): {e}"
+                result.checks_failed.append("freeze_mode")
+                return True
+            result.checks_passed.append("freeze_mode")
+            return False
+
     def _check_cooldown_status(self, result: SafetyCheckResult) -> None:
         """Check cooldown status and add warnings if needed."""
         result.checks_performed.append("cooldown")
@@ -453,8 +523,13 @@ class SafetyGuard:
         # 5. Check chaos budget (Phase 3: 32_CHAOS_SYSTEM_INTEGRATION.md §17)
         if self._check_chaos_budget_status(result):
             return True
+        
+        # 6. Check CB Freeze Mode (Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22)
+        if self._config.require_no_freeze_mode:
+            if self._check_freeze_mode_status(result):
+                return True
 
-        # 6. Check error budget (CRITICAL)
+        # 7. Check error budget (CRITICAL)
         if self._check_error_budget_status(result, experiment_id):
             return True
 

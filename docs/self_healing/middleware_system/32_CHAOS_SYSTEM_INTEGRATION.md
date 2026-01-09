@@ -1,7 +1,7 @@
 # 32. Chaos Engineering 힐링 시스템 연동 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: Phase 5 구현 완료  
+> **상태**: Phase 6 구현 완료  
 > **관련 문서**: [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md), [24_CHAOS_INTEGRATION_PLAN.md](24_CHAOS_INTEGRATION_PLAN.md)
 
 ---
@@ -34,12 +34,15 @@
 | **Throttle (Adaptive)** | ✅ **Phase 4 구현** | `base.py:_get_throttle_stats()` |
 | **Compliance Service** | ✅ **Phase 4 구현** | `compliance/service.py:_check_resilience_testing()` |
 | **Load Shedding** | ✅ **Phase 5 구현** | `experiment_impl.py:_trigger_load_shedding()`, `_verify_shedding_behavior()`, `_deactivate_load_shedding()` |
-| Freeze Mode | ❌ **Phase 6 계획** | 카오스 직접 연동 미구현 |
+| Freeze Mode | ✅ **Phase 6 구현** | `safety_guard.py:_check_freeze_mode_status()` |
 | **Simulation Override** | ✅ **Phase 5 구현** | `pool_monitor.py:set_simulation_override()`, `connection_health.py:set_simulation_override()` |
 | **Recovery Monitoring Methods** | ✅ **Phase 5 구현** | `base.py:complete_recovery_monitoring()`, `is_hard_ttl_expired()` |
 | **Monitor Snapshots** | ✅ **Phase 5 구현** | `base.py:_get_pool_state_snapshot()`, `_get_connection_health_snapshot()` |
 | **PoolExhaustionExperiment** | ✅ **Phase 5 구현** | `experiment_impl.py:PoolExhaustionExperiment` |
 | **ConnectionPartitionExperiment** | ✅ **Phase 5 구현** | `experiment_impl.py:ConnectionPartitionExperiment` |
+| **Freeze Mode 연동** | ✅ **Phase 6 구현** | `safety_guard.py:_check_freeze_mode_status()` |
+| **CB Freeze Mode Safety Check** | ✅ **Phase 6 구현** | `safety_guard.py:BlockReason.CB_FREEZE_MODE_ACTIVE` |
+| **check_recovery_monitoring_experiments** | ✅ **Phase 6 구현** | `self_healing_tasks.py:check_recovery_monitoring_experiments` |
 
 ---
 
@@ -2000,21 +2003,103 @@ def _record_hypothesis_validation(
 
 ---
 
-## 22. Phase 6 구현 계획 (미구현 항목)
+## 22. Phase 6 구현 완료
 
 > **검토일**: 2026-01-09  
-> **상태**: Phase 5 구현 완료, Phase 6 계획
+> **구현일**: 2026-01-12  
+> **상태**: Phase 6 구현 완료
 
-### 22.1 미구현 항목 현황 분석
+### 22.1 Phase 6 구현 항목
+
+| 항목 | 코드 위치 | 상태 |
+|------|----------|------|
+| CB Freeze Mode 연동 | `safety_guard.py:_check_freeze_mode_status()` | ✅ 구현 완료 |
+| BlockReason.CB_FREEZE_MODE_ACTIVE | `safety_guard.py:BlockReason` | ✅ 구현 완료 |
+| SafetyConfig.require_no_freeze_mode | `safety_guard.py:SafetyConfig` | ✅ 구현 완료 |
+| SafetyCheckResult.freeze_mode_active | `safety_guard.py:SafetyCheckResult` | ✅ 구현 완료 |
+| check_recovery_monitoring_experiments | `self_healing_tasks.py` | ✅ 구현 완료 |
+| Celery Beat 스케줄 | `myproject/celery.py` | ✅ 구현 완료 |
+| ChaosScheduler.get_experiments_by_status() | `scheduler.py` | ✅ 구현 완료 |
+| ChaosScheduler.register_experiment_instance() | `scheduler.py` | ✅ 구현 완료 |
+| ChaosScheduler.unregister_experiment_instance() | `scheduler.py` | ✅ 구현 완료 |
+
+### 22.2 Phase 6 기능 설명
+
+#### 22.2.1 CB Freeze Mode 연동
+
+Safety Guard에서 Circuit Breaker Freeze Mode 상태를 체크하여, Freeze Mode가 활성화된 경우 카오스 실험을 차단합니다.
+
+**코드 위치**: `packages/selfhealing-python/src/selfhealing/services/chaos/safety_guard.py`
+
+```python
+def _check_freeze_mode_status(self) -> SafetyCheckResult:
+    """CB Freeze Mode 상태 확인."""
+    try:
+        from selfhealing.services.circuit_breaker.freeze_mode import FreezeModeManager
+        
+        manager = FreezeModeManager()
+        status = manager.get_status()
+        
+        if status.is_frozen:
+            return SafetyCheckResult(
+                passed=False,
+                block_reason=BlockReason.CB_FREEZE_MODE_ACTIVE,
+                freeze_mode_active=True,
+            )
+        return SafetyCheckResult(passed=True)
+    except ImportError:
+        return SafetyCheckResult(passed=True)
+```
+
+#### 22.2.2 check_recovery_monitoring_experiments Celery Task
+
+RECOVERY_MONITORING 상태의 실험들을 주기적으로 폴링하여 Canary 복구 완료 여부를 확인합니다.
+
+**코드 위치**: `shopping/tasks/self_healing_tasks.py`
+
+```python
+@shared_task(bind=True, name="chaos.check_recovery_monitoring")
+def check_recovery_monitoring_experiments(self):
+    """RECOVERY_MONITORING 상태 실험들의 Canary 복구 완료 체크."""
+    scheduler = get_chaos_scheduler()
+    experiments = scheduler.get_experiments_by_status("recovery_monitoring")
+    
+    for exp in experiments:
+        if not exp._verify_canary_recovery().get("in_canary", True):
+            exp.complete_recovery_monitoring()
+        elif exp.is_hard_ttl_expired():
+            exp.force_complete(reason="hard_ttl_expired")
+```
+
+**Celery Beat 스케줄**: 30초마다 실행
+
+### 22.3 테스트
+
+Phase 6 구현에 대한 테스트: `tests/self_healing/chaos/test_phase6_chaos_integration.py`
+
+| 테스트 클래스 | 테스트 수 | 상태 |
+|--------------|----------|------|
+| TestBlockReasonExtension | 2 | ✅ 통과 |
+| TestSafetyConfigExtension | 2 | ✅ 통과 |
+| TestSafetyCheckResultExtension | 2 | ✅ 통과 |
+| TestSafetyGuardFreezeModeCheck | 4 | ✅ 통과 |
+| TestChaosSchedulerGetExperimentsByStatus | 5 | ✅ 통과 |
+| TestCheckRecoveryMonitoringTask | 6 | ✅ 통과 |
+| TestFreezeModeIntegration | 1 | ✅ 통과 |
+| TestCeleryBeatSchedule | 1 | ✅ 통과 |
+
+**총 23개 테스트 통과**
+
+### 22.4 이전 버전 미구현 항목 현황 분석 (참고용)
 
 문서에 정의되어 있으나 실제 코드에 구현되지 않은 항목들:
 
 | 항목 | 문서 섹션 | 현재 상태 | 우선순위 |
 |------|----------|----------|----------|
 | ~~Load Shedding 연동~~ | ~~§6~~ | ✅ **Phase 5 구현 완료** - `PartialFailureExperiment._trigger_load_shedding()`, `_verify_shedding_behavior()`, `_deactivate_load_shedding()` 구현됨 | - |
-| Freeze Mode 연동 | - | ❌ 카오스 시스템에서 직접 연동 없음 | P3 |
+| ~~Freeze Mode 연동~~ | - | ✅ **Phase 6 구현 완료** - `safety_guard.py:_check_freeze_mode_status()` | - |
 | ~~set_simulation_override()~~ | ~~§16~~ | ✅ **Phase 5 구현 완료** - PoolMonitor, ConnectionHealthMonitor 구현됨 | - |
-| check_recovery_monitoring_experiments | §15.3 | ❌ Celery Beat task 미구현 | P2 |
+| ~~check_recovery_monitoring_experiments~~ | §15.3 | ✅ **Phase 6 구현 완료** - `self_healing_tasks.py` Celery task | - |
 | ~~_get_pool_state_snapshot()~~ | ~~§13.1~~ | ✅ **Phase 5 구현 완료** | - |
 | ~~_get_cert_state_snapshot()~~ | ~~§13.2~~ | ✅ **Phase 5 구현 완료** | - |
 | ~~_get_connection_health_snapshot()~~ | ~~§13.3~~ | ✅ **Phase 5 구현 완료** | - |

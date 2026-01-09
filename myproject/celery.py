@@ -176,6 +176,16 @@ app.conf.beat_schedule = {
             "expires": 3600,
         },
     },
+    # Phase 6: Chaos Recovery Monitoring (32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3)
+    # Check RECOVERY_MONITORING experiments - 30초마다
+    "check-chaos-recovery-monitoring": {
+        "task": "chaos.check_recovery_monitoring",
+        "schedule": 30.0,  # 30초마다
+        "options": {
+            "expires": 25,
+            "queue": "chaos_monitoring",
+        },
+    },
     # 테스트용: 5분마다 실행 (개발 환경에서만 사용)
     # 'test-periodic-task': {
     #     'task': 'shopping.tasks.test_periodic_task',
