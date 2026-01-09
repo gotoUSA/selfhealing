@@ -1169,6 +1169,109 @@ class PartialFailureExperiment(ChaosExperiment):
                 self._rollback_completed = True
             except Exception as e:
                 logger.error(f"[PartialFailure] Rollback failed: {e}")
+    
+    # =========================================================================
+    # Phase 5-3: Load Shedding 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1)
+    # =========================================================================
+    
+    def _trigger_load_shedding(self) -> Dict[str, Any]:
+        """
+        Load Shedding 강제 트리거 시뮬레이션.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
+        
+        Returns:
+            Dict with before/after status and whether shedding was triggered
+        """
+        try:
+            from selfhealing.services.circuit_breaker.load_shedding import (
+                get_load_shedding_manager,
+            )
+            
+            manager = get_load_shedding_manager()
+            before_status = manager.get_status()
+            
+            # 강제 활성화 (레벨 0 = 가장 낮은 단계)
+            if self.trigger_shedding and not before_status.active:
+                manager.force_activate(
+                    level_index=0,
+                    reason=f"chaos_experiment:{self.experiment_id}",
+                )
+            
+            after_status = manager.get_status()
+            
+            return {
+                "before": before_status.to_dict() if hasattr(before_status, 'to_dict') else {
+                    "active": before_status.active,
+                    "current_level_index": before_status.current_level_index,
+                },
+                "after": after_status.to_dict() if hasattr(after_status, 'to_dict') else {
+                    "active": after_status.active,
+                    "current_level_index": after_status.current_level_index,
+                },
+                "shedding_triggered": after_status.active and not before_status.active,
+            }
+        except ImportError:
+            logger.debug("[PartialFailure] LoadSheddingManager not available")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[PartialFailure] Load shedding trigger failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _verify_shedding_behavior(self) -> Dict[str, Any]:
+        """
+        Load Shedding 동작 검증.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
+        
+        Returns:
+            Dict with shedding status information
+        """
+        try:
+            from selfhealing.services.circuit_breaker.load_shedding import (
+                get_load_shedding_manager,
+            )
+            
+            manager = get_load_shedding_manager()
+            status = manager.get_status()
+            
+            return {
+                "shedding_active": status.active,
+                "current_level_index": status.current_level_index,
+                "current_level_description": status.current_level_description,
+                "shed_services": status.shed_services,
+                "shed_criticality": status.shed_criticality,
+                "traffic_limit": status.traffic_limit,
+                "timestamp": status.timestamp,
+            }
+        except ImportError:
+            logger.debug("[PartialFailure] LoadSheddingManager not available")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[PartialFailure] Shedding verification failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _deactivate_load_shedding(self) -> None:
+        """
+        Load Shedding 비활성화 (rollback 시 호출).
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
+        """
+        try:
+            from selfhealing.services.circuit_breaker.load_shedding import (
+                get_load_shedding_manager,
+            )
+            
+            manager = get_load_shedding_manager()
+            if manager.is_shedding_active():
+                manager.force_deactivate(
+                    reason=f"chaos_experiment_rollback:{self.experiment_id}",
+                )
+                logger.info(f"[PartialFailure] Load shedding deactivated for {self.experiment_id}")
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"[PartialFailure] Load shedding deactivation failed: {e}")
 
 
 # =============================================================================

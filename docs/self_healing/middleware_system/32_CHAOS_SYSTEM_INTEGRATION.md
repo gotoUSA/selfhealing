@@ -33,7 +33,7 @@
 | **DLQ Service** | ✅ **Phase 4 구현** | `base.py:_get_dlq_stats()` |
 | **Throttle (Adaptive)** | ✅ **Phase 4 구현** | `base.py:_get_throttle_stats()` |
 | **Compliance Service** | ✅ **Phase 4 구현** | `compliance/service.py:_check_resilience_testing()` |
-| Load Shedding | ❌ **Phase 6 계획** | §6, §22.2.1 - `_trigger_load_shedding()` 미구현 |
+| **Load Shedding** | ✅ **Phase 5 구현** | `experiment_impl.py:_trigger_load_shedding()`, `_verify_shedding_behavior()`, `_deactivate_load_shedding()` |
 | Freeze Mode | ❌ **Phase 6 계획** | 카오스 직접 연동 미구현 |
 | **Simulation Override** | ✅ **Phase 5 구현** | `pool_monitor.py:set_simulation_override()`, `connection_health.py:set_simulation_override()` |
 | **Recovery Monitoring Methods** | ✅ **Phase 5 구현** | `base.py:complete_recovery_monitoring()`, `is_hard_ttl_expired()` |
@@ -1988,6 +1988,7 @@ def _record_hypothesis_validation(
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.7.1 | 2026-01-09 | **Phase 5 테스트 검증 완료**: Load Shedding 연동 (§6) - `_trigger_load_shedding()`, `_verify_shedding_behavior()`, `_deactivate_load_shedding()` 구현 확인, 전용 테스트 파일 `test_phase5_chaos_integration.py` 추가 (26개 테스트) |
 | 1.7.0 | 2026-01-09 | **Phase 5 구현 완료**: 비동기 복구 모니터링 (§15) - `is_hard_ttl_expired()`, `complete_recovery_monitoring()`, `force_complete()`, `transition_to_recovery_monitoring()` 추가, Simulation Override 인터페이스 (§16) - `PoolMonitor.set_simulation_override()`, `ConnectionHealthMonitor.set_simulation_override()`, `set_partition_simulation()` 추가, Monitor Snapshots - `_get_pool_state_snapshot()`, `_get_cert_state_snapshot()`, `_get_connection_health_snapshot()` 추가, PoolExhaustionExperiment/ConnectionPartitionExperiment 실험 타입 추가, 테스트 46개 통과 |
 | 1.6.0 | 2026-01-09 | **Phase 4 구현 완료**: Corruption Shield 연동 (§7), DLQ Service 연동 (§8), Throttle 연동 (§9), DORA-003 자동 검사 (§18), capture_comprehensive_snapshot() 추가, 테스트 검증 완료 |
 | 1.5.0 | 2026-01-09 | **Phase 3 구현 완료**: Canary Recovery 검증 (§4), FinOps Chaos Budget (§17), LearningService 피드백 루프 (§20.4), BlockReason.CHAOS_BUDGET_EXCEEDED 추가, 테스트 24개 통과 |
@@ -2010,7 +2011,7 @@ def _record_hypothesis_validation(
 
 | 항목 | 문서 섹션 | 현재 상태 | 우선순위 |
 |------|----------|----------|----------|
-| Load Shedding 연동 | §6 | ❌ `_trigger_load_shedding()`, `_verify_shedding_behavior()` 미구현 | P2 |
+| ~~Load Shedding 연동~~ | ~~§6~~ | ✅ **Phase 5 구현 완료** - `PartialFailureExperiment._trigger_load_shedding()`, `_verify_shedding_behavior()`, `_deactivate_load_shedding()` 구현됨 | - |
 | Freeze Mode 연동 | - | ❌ 카오스 시스템에서 직접 연동 없음 | P3 |
 | ~~set_simulation_override()~~ | ~~§16~~ | ✅ **Phase 5 구현 완료** - PoolMonitor, ConnectionHealthMonitor 구현됨 | - |
 | check_recovery_monitoring_experiments | §15.3 | ❌ Celery Beat task 미구현 | P2 |

@@ -999,8 +999,9 @@ class ChaosExperiment(abc.ABC):
         모든 관련 서비스의 종합 스냅샷 캡처.
         
         CB, Corruption Shield, DLQ, Throttle 상태를 모두 포함.
+        Phase 5-4: Pool, Cert, Connection Health 스냅샷 추가.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4, Phase 5-4 (§13, §22.2.4)
         
         Returns:
             Dict containing all service snapshots
@@ -1010,6 +1011,10 @@ class ChaosExperiment(abc.ABC):
             "corruption_shield": self._get_corruption_shield_stats(),
             "dlq": self._get_dlq_stats(),
             "throttle": self._get_throttle_stats(),
+            # Phase 5-4: Monitor snapshots
+            "pool": self._get_pool_state_snapshot(),
+            "cert": self._get_cert_state_snapshot(),
+            "connection_health": self._get_connection_health_snapshot(),
             "timestamp": now().isoformat(),
         }
     
