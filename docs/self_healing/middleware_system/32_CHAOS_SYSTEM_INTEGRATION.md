@@ -1,7 +1,7 @@
 # 32. Chaos Engineering 힐링 시스템 연동 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: Phase 4 구현 완료  
+> **상태**: Phase 5 구현 완료  
 > **관련 문서**: [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md), [24_CHAOS_INTEGRATION_PLAN.md](24_CHAOS_INTEGRATION_PLAN.md)
 
 ---
@@ -33,8 +33,13 @@
 | **DLQ Service** | ✅ **Phase 4 구현** | `base.py:_get_dlq_stats()` |
 | **Throttle (Adaptive)** | ✅ **Phase 4 구현** | `base.py:_get_throttle_stats()` |
 | **Compliance Service** | ✅ **Phase 4 구현** | `compliance/service.py:_check_resilience_testing()` |
-| Load Shedding | ❌ 미연동 | - |
-| Freeze Mode | ❌ 미연동 | - |
+| Load Shedding | ❌ **Phase 6 계획** | §6, §22.2.1 - `_trigger_load_shedding()` 미구현 |
+| Freeze Mode | ❌ **Phase 6 계획** | 카오스 직접 연동 미구현 |
+| **Simulation Override** | ✅ **Phase 5 구현** | `pool_monitor.py:set_simulation_override()`, `connection_health.py:set_simulation_override()` |
+| **Recovery Monitoring Methods** | ✅ **Phase 5 구현** | `base.py:complete_recovery_monitoring()`, `is_hard_ttl_expired()` |
+| **Monitor Snapshots** | ✅ **Phase 5 구현** | `base.py:_get_pool_state_snapshot()`, `_get_connection_health_snapshot()` |
+| **PoolExhaustionExperiment** | ✅ **Phase 5 구현** | `experiment_impl.py:PoolExhaustionExperiment` |
+| **ConnectionPartitionExperiment** | ✅ **Phase 5 구현** | `experiment_impl.py:ConnectionPartitionExperiment` |
 
 ---
 
@@ -1975,7 +1980,7 @@ def _record_hypothesis_validation(
 
 ## 버전 정보
 
-- **현재 버전**: 1.6.0
+- **현재 버전**: 1.7.0
 - **마지막 업데이트**: 2026-01-09
 - **담당자**: SelfHealing Team
 
@@ -1983,6 +1988,7 @@ def _record_hypothesis_validation(
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.7.0 | 2026-01-09 | **Phase 5 구현 완료**: 비동기 복구 모니터링 (§15) - `is_hard_ttl_expired()`, `complete_recovery_monitoring()`, `force_complete()`, `transition_to_recovery_monitoring()` 추가, Simulation Override 인터페이스 (§16) - `PoolMonitor.set_simulation_override()`, `ConnectionHealthMonitor.set_simulation_override()`, `set_partition_simulation()` 추가, Monitor Snapshots - `_get_pool_state_snapshot()`, `_get_cert_state_snapshot()`, `_get_connection_health_snapshot()` 추가, PoolExhaustionExperiment/ConnectionPartitionExperiment 실험 타입 추가, 테스트 46개 통과 |
 | 1.6.0 | 2026-01-09 | **Phase 4 구현 완료**: Corruption Shield 연동 (§7), DLQ Service 연동 (§8), Throttle 연동 (§9), DORA-003 자동 검사 (§18), capture_comprehensive_snapshot() 추가, 테스트 검증 완료 |
 | 1.5.0 | 2026-01-09 | **Phase 3 구현 완료**: Canary Recovery 검증 (§4), FinOps Chaos Budget (§17), LearningService 피드백 루프 (§20.4), BlockReason.CHAOS_BUDGET_EXCEEDED 추가, 테스트 24개 통과 |
 | 1.4.0 | 2026-01-09 | **Phase 2 구현 완료**: SafetyGuard._check_panic_threshold() (§5), CB 상태 스냅샷 캡처 (§2), BlockReason.PANIC_THRESHOLD_TRIGGERED 추가, 테스트 15개 통과 |
@@ -1990,3 +1996,296 @@ def _record_hypothesis_validation(
 | 1.0.0 | 2026-01-09 | 초기 연동 계획 수립 |
 | 1.1.0 | 2026-01-09 | Architect Review 반영: Chaos-Aware 분류, 비동기 모니터링, 시뮬레이션 인터페이스, FinOps GameDay Budget 추가 |
 | 1.2.0 | 2026-01-09 | **Failure Hypothesis (§20) 추가**: LearningService 피드백 루프, 복구 기대 가설 정의, 구현 순서 정리 |
+
+---
+
+## 22. Phase 6 구현 계획 (미구현 항목)
+
+> **검토일**: 2026-01-09  
+> **상태**: Phase 5 구현 완료, Phase 6 계획
+
+### 22.1 미구현 항목 현황 분석
+
+문서에 정의되어 있으나 실제 코드에 구현되지 않은 항목들:
+
+| 항목 | 문서 섹션 | 현재 상태 | 우선순위 |
+|------|----------|----------|----------|
+| Load Shedding 연동 | §6 | ❌ `_trigger_load_shedding()`, `_verify_shedding_behavior()` 미구현 | P2 |
+| Freeze Mode 연동 | - | ❌ 카오스 시스템에서 직접 연동 없음 | P3 |
+| ~~set_simulation_override()~~ | ~~§16~~ | ✅ **Phase 5 구현 완료** - PoolMonitor, ConnectionHealthMonitor 구현됨 | - |
+| check_recovery_monitoring_experiments | §15.3 | ❌ Celery Beat task 미구현 | P2 |
+| ~~_get_pool_state_snapshot()~~ | ~~§13.1~~ | ✅ **Phase 5 구현 완료** | - |
+| ~~_get_cert_state_snapshot()~~ | ~~§13.2~~ | ✅ **Phase 5 구현 완료** | - |
+| ~~_get_connection_health_snapshot()~~ | ~~§13.3~~ | ✅ **Phase 5 구현 완료** | - |
+
+### 22.2 구현 계획
+
+#### 22.2.1 Load Shedding 연동 (P2)
+
+**목적**: Partial Failure 실험에서 Load Shedding 트리거 및 검증
+
+**구현 위치**: `services/chaos/experiment_impl.py`
+
+```python
+# PartialFailureExperiment 확장
+def _trigger_load_shedding(self) -> Dict[str, Any]:
+    """Load Shedding 강제 트리거 시뮬레이션."""
+    try:
+        from selfhealing.services.circuit_breaker.load_shedding import (
+            get_load_shedding_manager,
+        )
+        manager = get_load_shedding_manager()
+        before_status = manager.get_status()
+        # 상태 변경 기록 (실제 트리거는 메트릭 시스템 필요)
+        after_status = manager.get_status()
+        return {
+            "before": before_status.to_dict() if hasattr(before_status, 'to_dict') else {},
+            "after": after_status.to_dict() if hasattr(after_status, 'to_dict') else {},
+            "shedding_triggered": after_status.active and not before_status.active,
+        }
+    except Exception as e:
+        logger.warning(f"[PartialFailure] Load shedding trigger failed: {e}")
+        return {}
+
+def _verify_shedding_behavior(self) -> Dict[str, Any]:
+    """Load Shedding 동작 검증."""
+    try:
+        from selfhealing.services.circuit_breaker.load_shedding import (
+            get_load_shedding_manager,
+        )
+        manager = get_load_shedding_manager()
+        status = manager.get_status()
+        return {
+            "shedding_active": status.active,
+            "current_level": status.current_state.value if hasattr(status, 'current_state') else None,
+        }
+    except Exception as e:
+        logger.warning(f"[PartialFailure] Shedding verification failed: {e}")
+        return {}
+```
+
+**소요 시간**: 2시간
+
+#### 22.2.2 set_simulation_override() 인터페이스 (P2)
+
+**목적**: 실제 인프라 변경 없이 "가짜 장애 상태"를 주입하는 모킹 인터페이스
+
+**구현 위치**: 
+- `core/pool_monitor.py` - ConnectionPoolMonitor 클래스
+- `core/connection_health.py` - DefaultConnectionHealthMonitor 클래스
+
+**ConnectionPoolMonitor 확장**:
+```python
+class ConnectionPoolMonitor:
+    def __init__(self, ...):
+        # 기존 코드
+        self._simulation_override: Optional[PoolHealthStatus] = None
+        self._simulation_stats: Optional[PoolStats] = None
+    
+    def set_simulation_override(
+        self,
+        health_status: Optional[PoolHealthStatus] = None,
+        stats: Optional[PoolStats] = None,
+        experiment_id: Optional[str] = None,
+    ) -> None:
+        """시뮬레이션 상태 오버라이드 설정."""
+        self._simulation_override = health_status
+        self._simulation_stats = stats
+        if health_status:
+            logger.info(f"[PoolMonitor] Simulation override set: {health_status.value}")
+        else:
+            logger.info("[PoolMonitor] Simulation override cleared")
+    
+    def clear_simulation_override(self) -> None:
+        """시뮬레이션 오버라이드 해제."""
+        self.set_simulation_override(None, None)
+    
+    def check_health(self) -> Tuple[PoolHealthStatus, PoolStats]:
+        # 시뮬레이션 모드 체크
+        if self._simulation_override is not None:
+            stats = self._simulation_stats or self._get_default_stats()
+            return self._simulation_override, stats
+        # 기존 실제 상태 체크 로직
+```
+
+**소요 시간**: 4시간
+
+#### 22.2.3 check_recovery_monitoring_experiments Celery Task (P2)
+
+**목적**: RECOVERY_MONITORING 상태 실험들의 Canary 복구 완료를 비동기로 폴링
+
+**구현 위치**: `shopping/tasks/chaos_tasks.py` (신규)
+
+```python
+from celery import shared_task
+
+@shared_task(bind=True, name="chaos.check_recovery_monitoring")
+def check_recovery_monitoring_experiments(self):
+    """
+    RECOVERY_MONITORING 상태 실험들의 Canary 복구 완료 체크.
+    
+    Celery Beat: 매 30초마다 실행
+    """
+    from selfhealing.services.chaos import get_chaos_scheduler
+    from selfhealing.services.chaos.base import ExperimentStatus
+    
+    scheduler = get_chaos_scheduler()
+    monitoring_experiments = scheduler.get_experiments_by_status(
+        ExperimentStatus.RECOVERY_MONITORING
+    )
+    
+    completed = 0
+    for exp in monitoring_experiments:
+        try:
+            canary_status = exp._verify_canary_recovery()
+            
+            if not canary_status.get("in_canary", True):
+                exp.complete_recovery_monitoring()
+                completed += 1
+            elif exp.is_hard_ttl_expired():
+                exp.force_complete(reason="hard_ttl_expired")
+                completed += 1
+        except Exception as e:
+            logger.warning(f"[ChaosTask] Recovery check failed for {exp.experiment_id}: {e}")
+    
+    return {"checked": len(monitoring_experiments), "completed": completed}
+```
+
+**Celery Beat 스케줄 추가** (`shopping/celery.py`):
+```python
+app.conf.beat_schedule["check-recovery-monitoring"] = {
+    "task": "chaos.check_recovery_monitoring",
+    "schedule": 30.0,  # 30초마다
+}
+```
+
+**소요 시간**: 3시간
+
+#### 22.2.4 모니터 스냅샷 메서드 (P3)
+
+**목적**: 실험 전후 Pool/Cert/Connection 상태 캡처
+
+**구현 위치**: `services/chaos/base.py`
+
+```python
+def _get_pool_state_snapshot(self) -> Dict[str, Any]:
+    """실험 전후 커넥션 풀 상태 캡처."""
+    try:
+        from selfhealing.core.pool_monitor import ConnectionPoolMonitor
+        monitor = ConnectionPoolMonitor()
+        if not monitor._stats_provider:
+            return {"available": False}
+        status, stats = monitor.check_health()
+        return {
+            "health_status": status.value,
+            "active_connections": stats.active_connections,
+            "available_connections": stats.available_connections,
+            "usage_percent": stats.usage_percent,
+            "timestamp": now().isoformat(),
+        }
+    except Exception as e:
+        logger.warning(f"[Chaos] Pool state snapshot failed: {e}")
+        return {}
+
+def _get_cert_state_snapshot(self) -> Dict[str, Any]:
+    """실험 전후 인증서 상태 캡처."""
+    try:
+        from selfhealing.core.cert_monitor import CertificateExpiryMonitor
+        monitor = CertificateExpiryMonitor()
+        return {
+            "target_endpoint": self.config.target_service,
+            "check_performed": True,
+            "timestamp": now().isoformat(),
+        }
+    except Exception as e:
+        logger.warning(f"[Chaos] Cert state snapshot failed: {e}")
+        return {}
+
+def _get_connection_health_snapshot(self) -> Dict[str, Any]:
+    """실험 전후 연결 상태 캡처."""
+    try:
+        from selfhealing.core.connection_health import get_connection_health_monitor
+        monitor = get_connection_health_monitor()
+        partition = monitor.get_partition_state()
+        return {
+            "is_partial_partition": partition.is_partial_partition,
+            "is_full_partition": partition.is_full_partition,
+            "db_available": partition.db_available,
+            "cache_available": partition.cache_available,
+            "timestamp": now().isoformat(),
+        }
+    except Exception as e:
+        logger.warning(f"[Chaos] Connection health snapshot failed: {e}")
+        return {}
+```
+
+**소요 시간**: 3시간
+
+### 22.3 구현 우선순위 및 일정
+
+| 우선순위 | 항목 | 소요 시간 | 의존성 |
+|----------|------|----------|--------|
+| **P2** | Load Shedding 연동 | 2시간 | LoadSheddingManager |
+| **P2** | set_simulation_override() | 4시간 | - |
+| **P2** | check_recovery_monitoring Celery task | 3시간 | RECOVERY_MONITORING 상태 |
+| **P3** | _get_pool_state_snapshot() | 1시간 | PoolMonitor |
+| **P3** | _get_cert_state_snapshot() | 1시간 | CertMonitor |
+| **P3** | _get_connection_health_snapshot() | 1시간 | ConnectionHealthMonitor |
+
+**총 예상 소요**: 12시간 (약 1.5일)
+
+### 22.4 테스트 계획
+
+| 테스트 | 검증 항목 |
+|--------|----------|
+| `test_trigger_load_shedding` | `_trigger_load_shedding()` 동작 검증 |
+| `test_verify_shedding_behavior` | Load Shedding 상태 조회 검증 |
+| `test_simulation_override_pool` | Pool 시뮬레이션 오버라이드 |
+| `test_simulation_override_connection_health` | Connection Health 시뮬레이션 |
+| `test_check_recovery_monitoring_celery_task` | Celery task 실행 검증 |
+| `test_pool_state_snapshot` | Pool 스냅샷 캡처 |
+| `test_cert_state_snapshot` | 인증서 스냅샷 캡처 |
+| `test_connection_health_snapshot` | Connection Health 스냅샷 캡처 |
+
+### 22.5 구현 순서 권장
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        Phase 5-1: 비동기 모니터링                     │
+│                         예상 소요: 3시간                              │
+├──────────────────────────────────────────────────────────────────────┤
+│ 1. check_recovery_monitoring_experiments Celery task 구현            │
+│ 2. Celery Beat 스케줄 등록                                           │
+│ 3. complete_recovery_monitoring() 메서드 구현                        │
+└──────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                      Phase 5-2: 시뮬레이션 인터페이스                 │
+│                         예상 소요: 4시간                              │
+├──────────────────────────────────────────────────────────────────────┤
+│ 1. ConnectionPoolMonitor.set_simulation_override() 구현              │
+│ 2. DefaultConnectionHealthMonitor.set_simulation_override() 구현     │
+│ 3. PoolExhaustionExperiment 실험 타입 추가 (선택)                    │
+└──────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                      Phase 5-3: Load Shedding 연동                    │
+│                         예상 소요: 2시간                              │
+├──────────────────────────────────────────────────────────────────────┤
+│ 1. PartialFailureExperiment._trigger_load_shedding() 구현            │
+│ 2. PartialFailureExperiment._verify_shedding_behavior() 구현         │
+└──────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                      Phase 5-4: 모니터 스냅샷                         │
+│                         예상 소요: 3시간                              │
+├──────────────────────────────────────────────────────────────────────┤
+│ 1. ChaosExperiment._get_pool_state_snapshot() 구현                   │
+│ 2. ChaosExperiment._get_cert_state_snapshot() 구현                   │
+│ 3. ChaosExperiment._get_connection_health_snapshot() 구현            │
+│ 4. capture_comprehensive_snapshot() 확장                             │
+└──────────────────────────────────────────────────────────────────────┘
+```

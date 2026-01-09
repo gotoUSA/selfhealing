@@ -100,6 +100,12 @@ class ConnectionPoolMonitor:
 
         # Get leak report
         leaks = monitor.detect_leaks(threshold_seconds=300)
+        
+        # Phase 5-2: Simulation override for chaos testing
+        monitor.set_simulation_override(
+            health_status=PoolHealthStatus.EXHAUSTED,
+            experiment_id="exp-123",
+        )
     """
 
     def __init__(
@@ -121,6 +127,104 @@ class ConnectionPoolMonitor:
         # History for trend analysis
         self._stats_history: List[PoolStats] = []
         self._max_history = 100
+        
+        # Phase 5-2: Simulation override for chaos testing
+        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1, §22.2.2
+        self._simulation_override: Optional[PoolHealthStatus] = None
+        self._simulation_stats: Optional[PoolStats] = None
+        self._simulation_experiment_id: Optional[str] = None
+
+    def set_simulation_override(
+        self,
+        health_status: Optional[PoolHealthStatus] = None,
+        stats: Optional[PoolStats] = None,
+        experiment_id: Optional[str] = None,
+    ) -> None:
+        """
+        시뮬레이션 상태 오버라이드 설정.
+        
+        실제 인프라를 변경하지 않고 모니터가 특정 상태를 보고하도록 강제.
+        카오스 실험에서 알림/복구 체인 검증에 사용.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1, §22.2.2
+        
+        Args:
+            health_status: 강제할 건강 상태 (None이면 해제)
+            stats: 강제할 통계 (None이면 기본값 사용)
+            experiment_id: 관련 카오스 실험 ID (감사 추적용)
+        
+        Example:
+            monitor.set_simulation_override(
+                health_status=PoolHealthStatus.EXHAUSTED,
+                experiment_id="exp-123",
+            )
+        """
+        with self._lock:
+            self._simulation_override = health_status
+            self._simulation_stats = stats
+            self._simulation_experiment_id = experiment_id
+            
+            if health_status:
+                import logging
+                logging.getLogger(__name__).info(
+                    f"[PoolMonitor] Simulation override set: {health_status.value} "
+                    f"(experiment_id={experiment_id})"
+                )
+            else:
+                import logging
+                logging.getLogger(__name__).info("[PoolMonitor] Simulation override cleared")
+    
+    def clear_simulation_override(self) -> None:
+        """
+        시뮬레이션 오버라이드 해제.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1
+        """
+        self.set_simulation_override(None, None, None)
+    
+    def is_simulation_active(self) -> bool:
+        """시뮬레이션 오버라이드가 활성화되어 있는지 확인."""
+        return self._simulation_override is not None
+    
+    def get_simulation_experiment_id(self) -> Optional[str]:
+        """현재 시뮬레이션과 연관된 실험 ID 반환."""
+        return self._simulation_experiment_id
+    
+    def _get_default_simulated_stats(self) -> PoolStats:
+        """시뮬레이션용 기본 통계 생성."""
+        # 오버라이드 상태에 맞는 기본 통계
+        if self._simulation_override == PoolHealthStatus.EXHAUSTED:
+            return PoolStats(
+                pool_name="simulated_pool",
+                max_connections=100,
+                active_connections=100,
+                available_connections=0,
+                waiting_requests=50,
+            )
+        elif self._simulation_override == PoolHealthStatus.CRITICAL:
+            return PoolStats(
+                pool_name="simulated_pool",
+                max_connections=100,
+                active_connections=95,
+                available_connections=5,
+                waiting_requests=10,
+            )
+        elif self._simulation_override == PoolHealthStatus.WARNING:
+            return PoolStats(
+                pool_name="simulated_pool",
+                max_connections=100,
+                active_connections=75,
+                available_connections=25,
+                waiting_requests=0,
+            )
+        else:
+            return PoolStats(
+                pool_name="simulated_pool",
+                max_connections=100,
+                active_connections=30,
+                available_connections=70,
+                waiting_requests=0,
+            )
 
     def set_stats_provider(self, provider: PoolStatsProvider) -> None:
         """Set the pool statistics provider"""
@@ -130,7 +234,19 @@ class ConnectionPoolMonitor:
         """
         Check pool health status.
         Returns (status, stats)
+        
+        Phase 5-2: 시뮬레이션 오버라이드 지원
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1
         """
+        # Phase 5-2: 시뮬레이션 모드 체크
+        if self._simulation_override is not None:
+            import logging
+            logging.getLogger(__name__).debug(
+                f"[PoolMonitor] Returning simulated status: {self._simulation_override.value}"
+            )
+            stats = self._simulation_stats or self._get_default_simulated_stats()
+            return self._simulation_override, stats
+        
         if not self._stats_provider:
             raise ValueError("Pool stats provider not configured")
 

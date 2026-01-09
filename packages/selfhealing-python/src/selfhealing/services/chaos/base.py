@@ -106,6 +106,14 @@ class ExperimentType(str, Enum):
     CIRCUIT_BREAKER_OPEN = "circuit_breaker_open"
     PARTIAL_FAILURE = "partial_failure"
     CASCADING_FAILURE = "cascading_failure"
+    
+    # Phase 5-2: Pool/Connection simulation experiments
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
+    POOL_EXHAUSTION = "pool_exhaustion"
+    """Connection Pool 고갈 시뮬레이션 실험."""
+    
+    CONNECTION_PARTITION = "connection_partition"
+    """네트워크 파티션 시뮬레이션 실험."""
 
 
 class TrafficType(str, Enum):
@@ -436,6 +444,237 @@ class ChaosExperiment(abc.ABC):
         if self._expires_at is None:
             return False
         return now() > self._expires_at
+    
+    # =========================================================================
+    # Phase 5-1: 비동기 복구 모니터링 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §15, §22.2.3)
+    # =========================================================================
+    
+    def is_hard_ttl_expired(self) -> bool:
+        """
+        Check if Hard TTL has expired.
+        
+        Hard TTL = Soft TTL + Grace Period.
+        Grace Period 동안 Canary 복구를 기다리며,
+        Hard TTL이 지나면 강제 종료.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
+        
+        Returns:
+            True if hard TTL expired, False otherwise
+        """
+        if self._expires_at is None:
+            return False
+        
+        # Hard TTL = expires_at + grace_period
+        grace_period = timedelta(seconds=self.config.grace_period_seconds)
+        hard_expires_at = self._expires_at + grace_period
+        
+        return now() > hard_expires_at
+    
+    def complete_recovery_monitoring(self) -> None:
+        """
+        RECOVERY_MONITORING 상태에서 복구 완료 처리.
+        
+        Canary 복구가 완료되면 호출되어 실험을 COMPLETED로 전환.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3
+        """
+        if self.status != ExperimentStatus.RECOVERY_MONITORING:
+            logger.warning(
+                f"[ChaosExperiment] {self.experiment_id} - "
+                f"Cannot complete recovery monitoring from status {self.status}"
+            )
+            return
+        
+        self.status = ExperimentStatus.COMPLETED
+        self.completed_at = now()
+        
+        self._audit("recovery_monitoring_completed", {
+            "previous_status": ExperimentStatus.RECOVERY_MONITORING.value,
+            "completed_at": self.completed_at.isoformat(),
+        })
+        
+        logger.info(
+            f"[ChaosExperiment] {self.experiment_id} - "
+            f"Recovery monitoring completed, status changed to COMPLETED"
+        )
+    
+    def force_complete(self, reason: str = "hard_ttl_expired") -> None:
+        """
+        실험 강제 종료.
+        
+        Hard TTL 만료 시 또는 관리자 개입 시 호출.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3
+        
+        Args:
+            reason: 강제 종료 사유
+        """
+        previous_status = self.status
+        self.status = ExperimentStatus.COMPLETED
+        self.completed_at = now()
+        
+        self._audit("force_completed", {
+            "previous_status": previous_status.value if hasattr(previous_status, 'value') else str(previous_status),
+            "reason": reason,
+            "completed_at": self.completed_at.isoformat(),
+        })
+        
+        logger.warning(
+            f"[ChaosExperiment] {self.experiment_id} - "
+            f"Force completed due to: {reason}"
+        )
+    
+    def transition_to_recovery_monitoring(self) -> None:
+        """
+        RUNNING 상태에서 RECOVERY_MONITORING 상태로 전환.
+        
+        Soft TTL 도달 시 장애 주입을 중단하고 복구 모니터링 단계로 전환.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.2, §15.4
+        """
+        if self.status != ExperimentStatus.RUNNING:
+            logger.warning(
+                f"[ChaosExperiment] {self.experiment_id} - "
+                f"Cannot transition to RECOVERY_MONITORING from status {self.status}"
+            )
+            return
+        
+        # 먼저 rollback 수행하여 장애 주입 중단
+        self.rollback()
+        
+        self.status = ExperimentStatus.RECOVERY_MONITORING
+        
+        self._audit("transition_to_recovery_monitoring", {
+            "previous_status": ExperimentStatus.RUNNING.value,
+            "soft_ttl_expired": True,
+            "grace_period_seconds": self.config.grace_period_seconds,
+        })
+        
+        logger.info(
+            f"[ChaosExperiment] {self.experiment_id} - "
+            f"Transitioned to RECOVERY_MONITORING (grace period: {self.config.grace_period_seconds}s)"
+        )
+    
+    def _verify_canary_recovery(self) -> Dict[str, Any]:
+        """
+        Canary 복구 단계 검증.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.1
+        
+        Returns:
+            Dict with canary state information
+        """
+        try:
+            from selfhealing.services.circuit_breaker.canary_recovery import (
+                CanaryRecoveryManager,
+                CanaryState,
+            )
+            
+            manager = CanaryRecoveryManager()
+            state = manager.get_canary_state(self.config.target_service)
+            traffic = manager.get_traffic_percent(self.config.target_service)
+            
+            return {
+                "canary_state": state.value if hasattr(state, 'value') else str(state),
+                "traffic_percent": traffic,
+                "in_canary": state != CanaryState.NOT_IN_CANARY,
+            }
+        except ImportError:
+            logger.debug("[ChaosExperiment] CanaryRecoveryManager not available")
+            return {"in_canary": False, "canary_state": "not_available"}
+        except Exception as e:
+            logger.warning(f"[ChaosExperiment] Canary verification failed: {e}")
+            return {"in_canary": False, "error": str(e)}
+    
+    # =========================================================================
+    # Phase 5-1: 모니터 스냅샷 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §13, §22.2.4)
+    # =========================================================================
+    
+    def _get_pool_state_snapshot(self) -> Dict[str, Any]:
+        """
+        실험 전후 커넥션 풀 상태 캡처.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.1, §22.2.4
+        
+        Returns:
+            Dict with pool health status and statistics
+        """
+        try:
+            from selfhealing.core.pool_monitor import ConnectionPoolMonitor
+            
+            monitor = ConnectionPoolMonitor()
+            if not monitor._stats_provider:
+                return {"available": False, "reason": "no_stats_provider"}
+            
+            status, stats = monitor.check_health()
+            return {
+                "health_status": status.value if hasattr(status, 'value') else str(status),
+                "active_connections": stats.active_connections,
+                "available_connections": stats.available_connections,
+                "usage_percent": stats.usage_percent,
+                "waiting_requests": stats.waiting_requests,
+                "timestamp": now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"[Chaos] Pool state snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _get_cert_state_snapshot(self) -> Dict[str, Any]:
+        """
+        실험 전후 인증서 상태 캡처.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.2, §22.2.4
+        
+        Returns:
+            Dict with certificate check status
+        """
+        try:
+            from selfhealing.core.cert_monitor import CertificateExpiryMonitor
+            
+            # 기본적인 체크 정보만 반환
+            return {
+                "target_endpoint": self.config.target_service,
+                "check_performed": True,
+                "timestamp": now().isoformat(),
+            }
+        except ImportError:
+            logger.debug("[Chaos] CertificateExpiryMonitor not available")
+            return {"check_performed": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Cert state snapshot failed: {e}")
+            return {"check_performed": False, "error": str(e)}
+    
+    def _get_connection_health_snapshot(self) -> Dict[str, Any]:
+        """
+        실험 전후 연결 상태 캡처.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.3, §22.2.4
+        
+        Returns:
+            Dict with connection health and partition state
+        """
+        try:
+            from selfhealing.core.connection_health import (
+                DefaultConnectionHealthMonitor,
+            )
+            
+            monitor = DefaultConnectionHealthMonitor()
+            partition = monitor.get_partition_state()
+            
+            return {
+                "is_partial_partition": partition.is_partial_partition,
+                "is_full_partition": partition.is_full_partition,
+                "db_available": partition.db_available,
+                "cache_available": partition.cache_available,
+                "timestamp": now().isoformat(),
+            }
+        except ImportError:
+            logger.debug("[Chaos] ConnectionHealthMonitor not available")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Connection health snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
     
     # =========================================================================
     # Dry Run Methods

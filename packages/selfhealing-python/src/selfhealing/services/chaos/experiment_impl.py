@@ -1391,6 +1391,306 @@ class CascadingFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
+# Phase 5-2: Pool Exhaustion Simulation Experiment
+# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
+# =============================================================================
+
+
+# 복구 기대 가설 (Pool Exhaustion)
+POOL_EXHAUSTION_HYPOTHESIS = FailureHypothesis(
+    description="Pool 고갈 시뮬레이션 시, 시스템이 graceful degradation 수행해야 함",
+    expected_recovery_time_seconds=120.0,
+    expected_cb_state_after="open",
+    expected_cb_transition_within_seconds=30.0,
+    expected_fallback_activated=True,
+    expected_fallback_type="cache",
+)
+
+
+class PoolExhaustionExperiment(ChaosExperiment):
+    """
+    Connection Pool 고갈 시뮬레이션 실험.
+    
+    실제 인프라를 변경하지 않고 PoolMonitor가 EXHAUSTED 상태를 보고하도록
+    시뮬레이션하여 알림/복구 체인을 검증.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • Pool 고갈 시뮬레이션 시, 시스템이 graceful degradation     │
+    │ • 120초 내에 복구 완료                                       │
+    │ • Fallback(cache) 활성화 필수                                │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
+    
+    Config parameters:
+        - simulated_status: 시뮬레이션할 Pool 상태 (default: "exhausted")
+        - target_pool: 대상 Pool 이름 (optional)
+    
+    Usage:
+        experiment = PoolExhaustionExperiment(
+            config=ExperimentConfig(
+                target_service="payment",
+                parameters={"simulated_status": "exhausted"},
+            )
+        )
+        result = experiment.execute()
+    """
+    
+    experiment_type = ExperimentType.POOL_EXHAUSTION.value
+    requires_approval = True  # 높은 위험 - 수동 승인 필요
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = POOL_EXHAUSTION_HYPOTHESIS
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._monitor_instance = None
+    
+    @property
+    def simulated_status(self) -> str:
+        return self.config.parameters.get("simulated_status", "exhausted")
+    
+    @property
+    def target_pool(self) -> str:
+        return self.config.parameters.get("target_pool", "default")
+    
+    def inject_chaos(self) -> bool:
+        """시뮬레이션 모드로 Pool 고갈 상태 주입."""
+        from selfhealing.core.pool_monitor import (
+            ConnectionPoolMonitor,
+            PoolHealthStatus,
+        )
+        
+        logger.info(
+            f"[PoolExhaustion] Injecting simulated {self.simulated_status} status "
+            f"for pool '{self.target_pool}' (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            # 상태 매핑
+            status_map = {
+                "exhausted": PoolHealthStatus.EXHAUSTED,
+                "critical": PoolHealthStatus.CRITICAL,
+                "warning": PoolHealthStatus.WARNING,
+                "leak_suspected": PoolHealthStatus.LEAK_SUSPECTED,
+            }
+            
+            health_status = status_map.get(
+                self.simulated_status.lower(),
+                PoolHealthStatus.EXHAUSTED
+            )
+            
+            # Monitor 인스턴스 생성 및 시뮬레이션 설정
+            self._monitor_instance = ConnectionPoolMonitor()
+            self._monitor_instance.set_simulation_override(
+                health_status=health_status,
+                experiment_id=self.experiment_id,
+            )
+            
+            _apply_chaos_config({
+                "pool_exhaustion": {
+                    "enabled": True,
+                    "target_pool": self.target_pool,
+                    "simulated_status": self.simulated_status,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.info(
+                f"[PoolExhaustion] Simulation override set: {health_status.value}"
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(f"[PoolExhaustion] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """시뮬레이션 오버라이드 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[PoolExhaustion] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[PoolExhaustion] Rolling back {self.experiment_id}")
+            
+            try:
+                if self._monitor_instance:
+                    self._monitor_instance.clear_simulation_override()
+                
+                _apply_chaos_config({
+                    "pool_exhaustion": {
+                        "enabled": False,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+                logger.info("[PoolExhaustion] Simulation override cleared")
+            except Exception as e:
+                logger.error(f"[PoolExhaustion] Rollback failed: {e}")
+
+
+# =============================================================================
+# Phase 5-2: Connection Partition Simulation Experiment
+# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
+# =============================================================================
+
+
+# 복구 기대 가설 (Connection Partition)
+CONNECTION_PARTITION_HYPOTHESIS = FailureHypothesis(
+    description="네트워크 파티션 시뮬레이션 시, 시스템이 partial partition 처리해야 함",
+    expected_recovery_time_seconds=60.0,
+    expected_cb_state_after="open",
+    expected_cb_transition_within_seconds=15.0,
+    expected_fallback_activated=True,
+)
+
+
+class ConnectionPartitionExperiment(ChaosExperiment):
+    """
+    네트워크 파티션 시뮬레이션 실험.
+    
+    실제 네트워크를 분리하지 않고 ConnectionHealthMonitor가
+    partial/full partition 상태를 보고하도록 시뮬레이션.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 네트워크 파티션 시뮬레이션 시, partial partition 처리      │
+    │ • 60초 내에 복구 완료                                        │
+    │ • Fallback 활성화 필수                                       │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
+    
+    Config parameters:
+        - partition_type: "partial" or "full" (default: "partial")
+        - db_available: DB 가용성 (default: False)
+        - cache_available: Cache 가용성 (default: True)
+    
+    Usage:
+        experiment = ConnectionPartitionExperiment(
+            config=ExperimentConfig(
+                target_service="payment",
+                parameters={
+                    "partition_type": "partial",
+                    "db_available": False,
+                    "cache_available": True,
+                },
+            )
+        )
+        result = experiment.execute()
+    """
+    
+    experiment_type = ExperimentType.CONNECTION_PARTITION.value
+    requires_approval = True  # 높은 위험 - 수동 승인 필요
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = CONNECTION_PARTITION_HYPOTHESIS
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._monitor_instance = None
+    
+    @property
+    def partition_type(self) -> str:
+        return self.config.parameters.get("partition_type", "partial")
+    
+    @property
+    def db_available(self) -> bool:
+        return self.config.parameters.get("db_available", False)
+    
+    @property
+    def cache_available(self) -> bool:
+        return self.config.parameters.get("cache_available", True)
+    
+    def inject_chaos(self) -> bool:
+        """시뮬레이션 모드로 네트워크 파티션 상태 주입."""
+        from selfhealing.core.connection_health import (
+            DefaultConnectionHealthMonitor,
+            PartitionState,
+        )
+        
+        logger.info(
+            f"[ConnectionPartition] Injecting simulated {self.partition_type} partition "
+            f"(db={self.db_available}, cache={self.cache_available}) "
+            f"(TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            # 파티션 상태 생성
+            partition_state = PartitionState(
+                db_available=self.db_available,
+                cache_available=self.cache_available,
+                external_apis={},
+            )
+            
+            # Monitor 인스턴스 생성 및 파티션 시뮬레이션 설정
+            self._monitor_instance = DefaultConnectionHealthMonitor()
+            self._monitor_instance.set_partition_simulation(
+                partition_state=partition_state,
+                experiment_id=self.experiment_id,
+            )
+            
+            _apply_chaos_config({
+                "connection_partition": {
+                    "enabled": True,
+                    "partition_type": self.partition_type,
+                    "db_available": self.db_available,
+                    "cache_available": self.cache_available,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.info(
+                f"[ConnectionPartition] Partition simulation set: "
+                f"partial={partition_state.is_partial_partition}, "
+                f"full={partition_state.is_full_partition}"
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(f"[ConnectionPartition] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """파티션 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[ConnectionPartition] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[ConnectionPartition] Rolling back {self.experiment_id}")
+            
+            try:
+                if self._monitor_instance:
+                    self._monitor_instance.clear_all_simulation_overrides()
+                
+                _apply_chaos_config({
+                    "connection_partition": {
+                        "enabled": False,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+                logger.info("[ConnectionPartition] Partition simulation cleared")
+            except Exception as e:
+                logger.error(f"[ConnectionPartition] Rollback failed: {e}")
+
+
+# =============================================================================
 # Experiment Factory
 # =============================================================================
 
@@ -1427,6 +1727,9 @@ def create_experiment(
         # Phase 3: P3 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
         ExperimentType.CONNECTION_RESET.value: ConnectionResetExperiment,
         ExperimentType.CASCADING_FAILURE.value: CascadingFailureExperiment,
+        # Phase 5-2: Simulation experiments (32_CHAOS_SYSTEM_INTEGRATION.md)
+        ExperimentType.POOL_EXHAUSTION.value: PoolExhaustionExperiment,
+        ExperimentType.CONNECTION_PARTITION.value: ConnectionPartitionExperiment,
     }
     
     experiment_class = experiment_classes.get(experiment_type)
@@ -1466,6 +1769,7 @@ __all__ = [
     "ExperimentConfig",
     "ExperimentResult",
     "SteadyStateHypothesis",
+    "FailureHypothesis",
     # Base Class
     "ChaosExperiment",
     # Concrete Experiments (Existing)
@@ -1483,6 +1787,9 @@ __all__ = [
     # Concrete Experiments (Phase 3 - P3 Priority)
     "ConnectionResetExperiment",
     "CascadingFailureExperiment",
+    # Concrete Experiments (Phase 5-2 - Simulation)
+    "PoolExhaustionExperiment",
+    "ConnectionPartitionExperiment",
     # Factory
     "create_experiment",
 ]
