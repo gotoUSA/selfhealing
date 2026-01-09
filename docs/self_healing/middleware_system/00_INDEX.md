@@ -1,14 +1,14 @@
 # Self-Healing 미들웨어 시스템 문서 인덱스
 
-> **Version**: 2.5.0
-> **Updated**: 2026-01-04
+> **Version**: 2.6.0
+> **Updated**: 2026-01-09
 > **Based on**: MIDDLEWARE_REFERENCE.md v2.2.0
 
 ---
 
 ## 📚 문서 구조
 
-Self-Healing 시스템의 복잡성으로 인해 단일 문서를 **10개**의 주제별 문서로 분리하였습니다.
+Self-Healing 시스템의 복잡성으로 인해 단일 문서를 **여러 개**의 주제별 문서로 분리하였습니다.
 
 ```
 middleware_system/
@@ -26,7 +26,11 @@ middleware_system/
 ├── ...
 ├── 19_DLQ_AUTOMATION_BLUEPRINT.md     ← DLQ 9-Layer 자동화 설계
 ├── 20_AUDIT_UNIFICATION_PLAN.md       ← Audit 통합 계획
-└── 21_CB_ADVANCED_PROTECTION.md       ← CB 고급 보호 시스템 (NEW)
+├── 21_CB_ADVANCED_PROTECTION.md       ← CB 고급 보호 시스템
+├── ...
+├── 31_CHAOS_EXPERIMENT_EXPANSION.md   ← 미구현 Chaos 실험 타입 구현 계획 (NEW)
+├── 32_CHAOS_SYSTEM_INTEGRATION.md     ← Self-Healing 시스템 연동 계획 (NEW)
+└── 33_CHAOS_INDUSTRY_EXPERIMENTS.md   ← 업계 표준 Chaos 실험 추가 계획 (NEW)
 ```
 
 ---
@@ -350,6 +354,7 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 2.6.0 | 2026-01-09 | 31_CHAOS_EXPERIMENT_EXPANSION.md, 32_CHAOS_SYSTEM_INTEGRATION.md, 33_CHAOS_INDUSTRY_EXPERIMENTS.md 추가 |
 | 2.4.0 | 2026-01-02 | 08_NOTIFICATION_ARCHITECTURE.md, 09_AUTONOMOUS_TASK_EXPANSION.md 추가 |
 | 2.3.0 | 2026-01-02 | 07_HYBRID_STORAGE_ARCHITECTURE.md 추가 |
 | 2.2.0 | 2026-01-02 | MIDDLEWARE_REFERENCE.md → 4개 문서 분리 |
