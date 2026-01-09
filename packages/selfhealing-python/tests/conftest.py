@@ -11,6 +11,40 @@ from datetime import datetime
 # Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 
+@pytest.fixture(autouse=True, scope="function")
+def auto_reset_watchdog_singleton():
+    """
+    모든 테스트 전에 AuditWatchdog 싱글톤을 자동으로 리셋하는 fixture.
+    
+    다른 테스트 파일에서 watchdog을 시작한 경우에도 격리를 보장합니다.
+    """
+    import selfhealing.audit.audit_watchdog as aw_module
+    
+    # Setup: 기존 싱글톤 정리
+    if aw_module._watchdog_instance is not None:
+        try:
+            aw_module._watchdog_instance.stop()
+            # 스레드 완전 종료 대기
+            if aw_module._watchdog_instance._thread and aw_module._watchdog_instance._thread.is_alive():
+                aw_module._watchdog_instance._thread.join(timeout=1.0)
+        except Exception:
+            pass
+        aw_module._watchdog_instance = None
+    
+    yield
+    
+    # Teardown: 테스트 후 정리 (다음 테스트를 위해)
+    if aw_module._watchdog_instance is not None:
+        try:
+            aw_module._watchdog_instance.stop()
+            # 스레드 완전 종료 대기
+            if aw_module._watchdog_instance._thread and aw_module._watchdog_instance._thread.is_alive():
+                aw_module._watchdog_instance._thread.join(timeout=1.0)
+        except Exception:
+            pass
+        aw_module._watchdog_instance = None
+
+
 @pytest.fixture
 def reset_watchdog_singleton():
     """
@@ -21,11 +55,15 @@ def reset_watchdog_singleton():
             # 테스트 코드
     """
     import selfhealing.audit.audit_watchdog as aw_module
+    from selfhealing.audit.audit_watchdog import WatchdogState
     
     # Setup: 기존 싱글톤 정리
     if aw_module._watchdog_instance is not None:
         try:
             aw_module._watchdog_instance.stop()
+            # 스레드 완전 종료 대기
+            if aw_module._watchdog_instance._thread and aw_module._watchdog_instance._thread.is_alive():
+                aw_module._watchdog_instance._thread.join(timeout=1.0)
         except Exception:
             pass
         aw_module._watchdog_instance = None
@@ -36,6 +74,9 @@ def reset_watchdog_singleton():
     if aw_module._watchdog_instance is not None:
         try:
             aw_module._watchdog_instance.stop()
+            # 스레드 완전 종료 대기
+            if aw_module._watchdog_instance._thread and aw_module._watchdog_instance._thread.is_alive():
+                aw_module._watchdog_instance._thread.join(timeout=1.0)
         except Exception:
             pass
         aw_module._watchdog_instance = None

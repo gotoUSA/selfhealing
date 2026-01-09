@@ -16,10 +16,10 @@ class TestLogRetryAudit:
     def test_logs_retry_attempted_to_standard_logger(self, caplog):
         """Should log RETRY status when attempt < max_attempts."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -43,10 +43,10 @@ class TestLogRetryAudit:
     def test_logs_retry_exhausted_when_max_attempts_reached(self, caplog):
         """Should log EXHAUSTED status when attempt >= max_attempts."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=2,
         ):
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -68,10 +68,10 @@ class TestLogRetryAudit:
     def test_logs_retry_success(self, caplog):
         """Should log SUCCESS status when retry succeeds."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=3,
         ):
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -89,10 +89,10 @@ class TestLogRetryAudit:
     def test_wal_event_type_is_retry_exhausted(self):
         """Should use RETRY_EXHAUSTED event type when exhausted."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=4,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -111,10 +111,10 @@ class TestLogRetryAudit:
     def test_wal_event_type_is_retry_attempted(self):
         """Should use RETRY_ATTEMPTED event type when not exhausted."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=5,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -133,10 +133,10 @@ class TestLogRetryAudit:
     def test_includes_rate_limited_flag(self):
         """Should include rate_limited flag in details."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=6,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -155,10 +155,10 @@ class TestLogRetryAudit:
     def test_includes_context_in_details(self):
         """Should merge context into details."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=7,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_retry_audit
@@ -182,10 +182,10 @@ class TestLogSystemControlAudit:
     def test_logs_enable_action(self, caplog):
         """Should log ENABLE action."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=10,
         ):
             from selfhealing.services.audit_helpers import log_system_control_audit
@@ -207,10 +207,10 @@ class TestLogSystemControlAudit:
     def test_logs_disable_action(self, caplog):
         """Should log DISABLE action."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=11,
         ):
             from selfhealing.services.audit_helpers import log_system_control_audit
@@ -227,10 +227,10 @@ class TestLogSystemControlAudit:
     def test_wal_event_type_is_system_control_changed(self):
         """Should use SYSTEM_CONTROL_CHANGED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=12,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_system_control_audit
@@ -248,10 +248,10 @@ class TestLogSystemControlAudit:
     def test_includes_state_changes_in_details(self):
         """Should include old and new state in details."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=13,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_system_control_audit
@@ -274,10 +274,10 @@ class TestLogRollbackAudit:
     def test_logs_pending_state(self, caplog):
         """Should log PENDING status when rollback is requested."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=20,
         ):
             from selfhealing.services.audit_helpers import log_rollback_audit
@@ -299,10 +299,10 @@ class TestLogRollbackAudit:
     def test_logs_completed_state(self, caplog):
         """Should log COMPLETED status when rollback succeeds."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=21,
         ):
             from selfhealing.services.audit_helpers import log_rollback_audit
@@ -323,10 +323,10 @@ class TestLogRollbackAudit:
     def test_logs_failed_state_with_errors(self, caplog):
         """Should log FAILED status with errors."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=22,
         ):
             from selfhealing.services.audit_helpers import log_rollback_audit
@@ -345,10 +345,10 @@ class TestLogRollbackAudit:
     def test_wal_event_type_is_rollback_performed(self):
         """Should use ROLLBACK_PERFORMED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=23,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_rollback_audit
@@ -369,10 +369,10 @@ class TestLogRollbackAudit:
     def test_error_message_from_errors_list(self):
         """Should join errors into error_message."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=24,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_rollback_audit
@@ -431,7 +431,7 @@ class TestRetryHandlerAuditIntegration:
             "selfhealing.services.retry_handler._is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=100,
         ) as mock_wal:
             from selfhealing.services.retry_handler import RetryHandler, RetryConfig
@@ -454,7 +454,7 @@ class TestRetryHandlerAuditIntegration:
             "selfhealing.services.retry_handler._is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=101,
         ) as mock_wal, patch(
             "selfhealing.services.retry_handler.RetryHandler._move_to_dlq",
@@ -485,7 +485,7 @@ class TestSystemControlAuditIntegration:
     def test_system_control_calls_audit_on_disable(self):
         """SystemControlManager should call audit when disabled."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=200,
         ) as mock_wal:
             from selfhealing.services.system_control import SystemControlManager
@@ -509,7 +509,7 @@ class TestSystemControlAuditIntegration:
     def test_system_control_calls_audit_on_enable(self):
         """SystemControlManager should call audit when enabled."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=201,
         ) as mock_wal:
             from selfhealing.services.system_control import SystemControlManager
@@ -533,7 +533,7 @@ class TestRollbackServiceAuditIntegration:
     def test_rollback_service_calls_audit_on_request(self):
         """RollbackService should call audit when rollback is requested."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=300,
         ) as mock_wal:
             from selfhealing.services.rollback.service import RollbackService
@@ -563,7 +563,7 @@ class TestRollbackServiceAuditIntegration:
     def test_rollback_service_calls_audit_on_execution(self):
         """RollbackService should call audit when rollback is executed."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=301,
         ) as mock_wal:
             from selfhealing.services.rollback.service import RollbackService, RollbackStrategy

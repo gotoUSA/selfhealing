@@ -74,7 +74,7 @@ class TestLogComplianceAudit:
     def test_returns_wal_sequence_on_success(self):
         """Should return WAL sequence number."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=42,
         ):
             from selfhealing.services.audit_helpers import log_compliance_audit
@@ -91,7 +91,7 @@ class TestLogComplianceAudit:
     def test_logs_passed_check_to_wal(self):
         """Should write passed check to WAL with correct event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_compliance_audit
@@ -118,7 +118,7 @@ class TestLogComplianceAudit:
     def test_logs_violation_to_wal(self):
         """Should write violation to WAL with correct event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_compliance_audit
@@ -148,10 +148,10 @@ class TestLogComplianceAudit:
         mock_request.META = {}
         
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ), patch(
-            "selfhealing.services.audit_helpers._try_add_to_buffer",
+            "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_compliance_audit
@@ -169,7 +169,7 @@ class TestLogComplianceAudit:
     def test_fallback_logging_without_request(self, caplog):
         """Should fallback to logger when no request."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_compliance_audit
@@ -197,7 +197,7 @@ class TestLogBlastRadiusAudit:
     def test_returns_wal_sequence_on_success(self):
         """Should return WAL sequence number."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=99,
         ):
             from selfhealing.services.audit_helpers import log_blast_radius_audit
@@ -215,7 +215,7 @@ class TestLogBlastRadiusAudit:
     def test_logs_allowed_check_to_wal(self):
         """Should write allowed check to WAL."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
@@ -242,7 +242,7 @@ class TestLogBlastRadiusAudit:
     def test_logs_violation_to_wal(self):
         """Should write violation to WAL with violations list."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
@@ -272,7 +272,7 @@ class TestLogBlastRadiusAudit:
     def test_fallback_logging_for_violation(self, caplog):
         """Should fallback to logger for violations."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_blast_radius_audit
@@ -302,7 +302,7 @@ class TestLogFinopsAudit:
     def test_returns_wal_sequence_on_success(self):
         """Should return WAL sequence number."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=77,
         ):
             from selfhealing.services.audit_helpers import log_finops_audit
@@ -320,7 +320,7 @@ class TestLogFinopsAudit:
     def test_logs_threshold_alert_to_wal(self):
         """Should write threshold alert to WAL."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_finops_audit
@@ -347,7 +347,7 @@ class TestLogFinopsAudit:
     def test_logs_over_budget_alert_to_wal(self):
         """Should write over_budget alert to WAL as critical."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_finops_audit
@@ -370,7 +370,7 @@ class TestLogFinopsAudit:
     def test_fallback_logging_for_critical(self, caplog):
         """Should use critical log level for over_budget."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_finops_audit
@@ -398,7 +398,7 @@ class TestLogDataAccessAudit:
     def test_returns_wal_sequence_on_success(self):
         """Should return WAL sequence number."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=55,
         ):
             from selfhealing.services.audit_helpers import log_data_access_audit
@@ -414,7 +414,7 @@ class TestLogDataAccessAudit:
     def test_logs_data_access_to_wal(self):
         """Should write data access to WAL."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_data_access_audit
@@ -444,10 +444,10 @@ class TestLogDataAccessAudit:
         mock_request.META = {}
         
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ), patch(
-            "selfhealing.services.audit_helpers._try_add_to_buffer",
+            "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_data_access_audit
@@ -472,7 +472,7 @@ class TestComplianceServiceIntegration:
     def test_run_check_logs_passed_audit(self):
         """Should log audit when check passes."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.compliance.service import ComplianceService
@@ -490,7 +490,7 @@ class TestComplianceServiceIntegration:
     def test_run_check_logs_violation_audit(self):
         """Should log audit when check fails (violation)."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.compliance.service import ComplianceService
@@ -528,7 +528,7 @@ class TestBlastRadiusManagerIntegration:
     def test_check_logs_audit_on_allowed(self):
         """Should log audit when experiment is allowed."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.chaos.blast_radius import BlastRadiusManager, BlastRadiusPolicy
@@ -553,7 +553,7 @@ class TestBlastRadiusManagerIntegration:
     def test_check_logs_audit_on_violation(self):
         """Should log audit when experiment is blocked."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.chaos.blast_radius import BlastRadiusManager, BlastRadiusPolicy
@@ -583,7 +583,7 @@ class TestFinOpsServiceIntegration:
     def test_record_cost_logs_audit_on_threshold(self):
         """Should log audit when threshold is exceeded."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.finops.service import FinOpsService
@@ -621,7 +621,7 @@ class TestFinOpsServiceIntegration:
     def test_record_cost_logs_audit_on_over_budget(self):
         """Should log audit when budget is exceeded."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.finops.service import FinOpsService

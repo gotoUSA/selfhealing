@@ -13,13 +13,17 @@ import pytest
 
 from selfhealing.services import (
     collect_all_metrics,
+    record_sla_breach,
+)
+from selfhealing.services.metrics.recorders import (
     record_circuit_breaker_open_duration,
     record_circuit_breaker_state_change,
     record_dlq_item_created,
     record_recovery_time,
     record_replay_attempt,
     record_retry_attempt,
-    record_sla_breach,
+)
+from selfhealing.services.metrics.updaters import (
     track_recovery_time,
 )
 from selfhealing.services.metrics import (

@@ -69,7 +69,7 @@ class TestLogChaosExperimentAudit:
     def test_returns_record_id(self):
         """Should return audit record ID."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -86,7 +86,7 @@ class TestLogChaosExperimentAudit:
     def test_logs_experiment_started_to_wal(self):
         """Should write experiment_started to WAL with correct event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -110,7 +110,7 @@ class TestLogChaosExperimentAudit:
     def test_logs_experiment_completed_to_wal(self):
         """Should write experiment_completed with CHAOS_EXPERIMENT_COMPLETED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -128,7 +128,7 @@ class TestLogChaosExperimentAudit:
     def test_logs_rollback_triggered_to_wal(self):
         """Should write rollback events with CHAOS_ROLLBACK_TRIGGERED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -147,7 +147,7 @@ class TestLogChaosExperimentAudit:
     def test_logs_chaos_injection_applied(self):
         """Should write injection events with CHAOS_INJECTION_APPLIED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=4,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -164,7 +164,7 @@ class TestLogChaosExperimentAudit:
     def test_includes_dry_run_flag(self):
         """Should include dry_run flag in details."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=5,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -181,7 +181,7 @@ class TestLogChaosExperimentAudit:
     def test_logs_to_standard_logger_fallback(self, caplog):
         """Should log to standard logger when no request/buffer available."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
         ):
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -199,7 +199,7 @@ class TestLogChaosExperimentAudit:
     def test_removes_none_values_from_details(self):
         """Should remove None values from details dict."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=7,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -230,7 +230,7 @@ class TestLogEmergencyModeAudit:
     def test_logs_activation_to_wal(self):
         """Should write activation events with EMERGENCY_MODE_ACTIVATED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal, patch(
             "selfhealing.audit.log_config_change",
@@ -255,7 +255,7 @@ class TestLogEmergencyModeAudit:
     def test_logs_auto_activation_to_wal(self):
         """Should use EMERGENCY_MODE_ACTIVATED for auto_activate action."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal, patch(
             "selfhealing.audit.log_config_change",
@@ -278,7 +278,7 @@ class TestLogEmergencyModeAudit:
     def test_logs_deactivation_to_wal(self):
         """Should write deactivation events with EMERGENCY_MODE_DEACTIVATED event type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal, patch(
             "selfhealing.audit.log_config_change",
@@ -300,7 +300,7 @@ class TestLogEmergencyModeAudit:
     def test_includes_severity_based_on_action(self):
         """Should set severity based on action type."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=4,
         ) as mock_wal, patch(
             "selfhealing.audit.log_config_change",
@@ -334,7 +334,7 @@ class TestLogEmergencyModeAudit:
     def test_includes_tag_field(self):
         """Should include formatted tag field."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=5,
         ) as mock_wal, patch(
             "selfhealing.audit.log_config_change",
@@ -355,7 +355,7 @@ class TestLogEmergencyModeAudit:
     def test_logs_to_standard_logger_fallback(self, caplog):
         """Should log to standard logger when no request/buffer available."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
         ), patch(
             "selfhealing.audit.log_config_change",
@@ -378,7 +378,7 @@ class TestLogEmergencyModeAudit:
     def test_calls_log_config_change_for_compatibility(self):
         """Should also call log_config_change for backward compatibility."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=7,
         ), patch(
             "selfhealing.audit.log_config_change",
@@ -411,7 +411,7 @@ class TestLogErrorBudgetBlockedAudit:
     def test_logs_blocked_action_to_wal(self):
         """Should write blocked events to WAL."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
@@ -435,7 +435,7 @@ class TestLogErrorBudgetBlockedAudit:
     def test_includes_error_budget_details(self):
         """Should include error budget details in WAL entry."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
@@ -459,7 +459,7 @@ class TestLogErrorBudgetBlockedAudit:
     def test_logs_rate_limited_status(self):
         """Should handle fail_open_rate_limited status."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
@@ -480,7 +480,7 @@ class TestLogErrorBudgetBlockedAudit:
     def test_logs_to_standard_logger_fallback(self, caplog):
         """Should log to standard logger when no request/buffer available."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=4,
         ):
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
@@ -502,7 +502,7 @@ class TestLogErrorBudgetBlockedAudit:
     def test_handles_none_error_budget_percent(self, caplog):
         """Should handle None error_budget_percent gracefully."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=5,
         ):
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
@@ -530,7 +530,7 @@ class TestChaosExperimentMigration:
     def test_audit_method_calls_helper(self):
         """ChaosExperiment._audit should call log_chaos_experiment_audit."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
             "selfhealing.services.audit_helpers.log_chaos_experiment_audit",
@@ -566,7 +566,7 @@ class TestChaosExperimentMigration:
     def test_audit_records_list_preserved(self):
         """Should maintain _audit_records list for backward compatibility."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ):
             from selfhealing.services.chaos.base import ChaosExperiment, ExperimentConfig
@@ -604,7 +604,7 @@ class TestEmergencyModeManagerMigration:
     def test_log_audit_calls_helper(self):
         """EmergencyModeManager._log_audit should call log_emergency_mode_audit."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
             "selfhealing.services.audit_helpers.log_emergency_mode_audit",
@@ -652,7 +652,7 @@ class TestErrorBudgetGateMigration:
     def test_audit_block_calls_helper(self):
         """ErrorBudgetGate._audit_block should call log_error_budget_blocked_audit."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
             "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
@@ -717,10 +717,10 @@ class TestBufferIntegration:
     def test_chaos_audit_adds_to_buffer_when_request_provided(self):
         """Should add to buffer when request is provided."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
-            "selfhealing.services.audit_helpers._try_add_to_buffer",
+            "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
@@ -741,10 +741,10 @@ class TestBufferIntegration:
     def test_emergency_audit_adds_to_buffer_when_request_provided(self):
         """Should add to buffer when request is provided."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
-            "selfhealing.services.audit_helpers._try_add_to_buffer",
+            "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer, patch(
             "selfhealing.audit.log_config_change",
@@ -770,10 +770,10 @@ class TestBufferIntegration:
     def test_error_budget_audit_adds_to_buffer_when_request_provided(self):
         """Should add to buffer when request is provided."""
         with patch(
-            "selfhealing.services.audit_helpers._write_to_wal",
+            "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ), patch(
-            "selfhealing.services.audit_helpers._try_add_to_buffer",
+            "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit

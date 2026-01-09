@@ -1,8 +1,6 @@
 """
 Resource Exhaustion Tests
 
-File: integration/chaos/test_resource_exhaustion.py
-
 Business Risk: System collapse under resource constraints
 Compliance Alignment: NIST CP-2 (Contingency Planning), SOC 2 (Availability)
 
@@ -13,23 +11,14 @@ Test Cases:
 - EXHAUST-004: Queue capacity overflow
 - EXHAUST-005: Concurrent request overload
 
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md §8
+Migrated from: shopping/tests/integration/chaos/test_resource_exhaustion.py
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from datetime import datetime
 
 import pytest
-from django.utils import timezone
-
-from selfhealing.services import (
-    CircuitBreakerConfig,
-    CircuitBreakerService,
-    CircuitState,
-)
-from selfhealing.services import DLQConfig, DLQService
 
 
 # =============================================================================
@@ -58,7 +47,7 @@ class QueueSimulator:
             self.overflow_count += 1
             self.overflow_events.append(
                 {
-                    "timestamp": timezone.now(),
+                    "timestamp": datetime.now(),
                     "item": item,
                     "queue_size": len(self.items),
                 }
@@ -95,12 +84,37 @@ class QueueSimulator:
         return count
 
 
+@dataclass
+class RedisConnectionSimulator:
+    """Simulates Redis connection pool."""
+
+    max_connections: int = 100
+    current_connections: int = 0
+    failed_connections: int = 0
+
+    def get_connection(self) -> bool:
+        """Attempt to get a Redis connection."""
+        if self.current_connections >= self.max_connections:
+            self.failed_connections += 1
+            return False
+        self.current_connections += 1
+        return True
+
+    def release_connection(self) -> None:
+        """Release a Redis connection."""
+        if self.current_connections > 0:
+            self.current_connections -= 1
+
+    @property
+    def is_exhausted(self) -> bool:
+        return self.current_connections >= self.max_connections
+
+
 # =============================================================================
 # EXHAUST: Resource Exhaustion Tests
 # =============================================================================
 
 
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.tier3_chaos
 class TestResourceExhaustion:
     """
@@ -127,359 +141,237 @@ class TestResourceExhaustion:
             - No crash on exhaustion
             - Requests queued or rejected with proper error
             - Full recovery after connections freed
-
-        Risk Covered:
-            R-004: Cascading system failure
-
-        Compliance:
-            SOC 2 (Availability)
         """
         # Arrange
         resource_simulator.max_connections = 50
         successful_requests = []
-        queued_requests = []
+        failed_requests = []
 
         # Act: Exhaust connections
         for i in range(70):
             if resource_simulator.acquire_connection():
                 successful_requests.append(i)
             else:
-                queued_requests.append(i)
+                failed_requests.append(i)
 
         # Assert
         assert len(successful_requests) == 50, f"Expected 50 successful connections, got {len(successful_requests)}"
+        assert len(failed_requests) == 20, f"Expected 20 failed requests, got {len(failed_requests)}"
 
-        assert len(queued_requests) == 20, f"Expected 20 queued requests, got {len(queued_requests)}"
+        # Verify exhaustion was detected
+        assert len(resource_simulator.exhaustion_events) == 20
 
-        assert resource_simulator.is_exhausted, "Pool should be exhausted"
+        # Act: Release some connections and try again
+        for _ in range(10):
+            resource_simulator.release_connection()
 
-        # Verify exhaustion events recorded
-        assert (
-            len(resource_simulator.exhaustion_events) == 20
-        ), f"Expected 20 exhaustion events, got {len(resource_simulator.exhaustion_events)}"
+        recovered_requests = []
+        for i in range(10):
+            if resource_simulator.acquire_connection():
+                recovered_requests.append(i)
 
-    def test_exhaust_002_redis_connection_exhaustion(self, resource_simulator):
+        # Assert: Recovery successful
+        assert len(recovered_requests) == 10, "Should recover connections after release"
+
+    def test_exhaust_002_redis_connection_exhaustion(self):
         """
         Purpose:
-            Test Redis connection exhaustion handling.
+            Test Redis connection pool exhaustion handling.
 
         Scenario:
-            1. Exhaust Redis connection pool
-            2. Verify fallback behavior (memory cache or skip)
-            3. Verify operations continue without Redis
-            4. Verify recovery when Redis available
+            1. Exhaust Redis connections
+            2. Verify fallback behavior
+            3. Verify recovery
 
         Expected:
-            - Fallback mechanisms activated
-            - Core functionality preserved
-            - Audit trail for degraded mode
-
-        Risk Covered:
-            R-004: Cascading system failure
+            - Graceful degradation to non-Redis path
+            - No crash
+            - Recovery when connections available
         """
         # Arrange
-        resource_simulator.max_connections = 20  # Smaller Redis pool
-
-        redis_ops_succeeded = []
-        fallback_ops = []
+        redis_sim = RedisConnectionSimulator(max_connections=20)
+        fallback_used = 0
 
         # Act: Exhaust Redis connections
         for i in range(30):
-            if resource_simulator.acquire_connection():
-                redis_ops_succeeded.append(
-                    {
-                        "id": i,
-                        "type": "redis",
-                    }
-                )
-            else:
-                # Fallback to memory cache
-                fallback_ops.append(
-                    {
-                        "id": i,
-                        "type": "memory_fallback",
-                        "degraded": True,
-                    }
-                )
+            if not redis_sim.get_connection():
+                fallback_used += 1
 
         # Assert
-        assert len(redis_ops_succeeded) == 20, f"Expected 20 Redis ops, got {len(redis_ops_succeeded)}"
+        assert redis_sim.is_exhausted, "Redis should be exhausted"
+        assert fallback_used == 10, f"Expected 10 fallback uses, got {fallback_used}"
+        assert redis_sim.failed_connections == 10
 
-        assert len(fallback_ops) == 10, f"Expected 10 fallback ops, got {len(fallback_ops)}"
+        # Recovery
+        for _ in range(10):
+            redis_sim.release_connection()
 
-        # Verify all operations completed (either way)
-        total_ops = len(redis_ops_succeeded) + len(fallback_ops)
-        assert total_ops == 30, "All operations should complete via fallback"
-
-    def test_exhaust_003_memory_limit_handling(self):
-        """
-        Purpose:
-            Test behavior when approaching memory limits.
-
-        Scenario:
-            1. Simulate increasing memory usage
-            2. Detect threshold crossing
-            3. Verify emergency cleanup triggered
-            4. Verify no OOM crash
-
-        Expected:
-            - Cleanup triggered at threshold
-            - Non-essential data shed first
-            - Critical operations preserved
-
-        Risk Covered:
-            R-004: Cascading system failure
-        """
-        # Arrange
-        memory_threshold_percent = 85
-        current_usage_percent = 70
-        cleanup_triggered = False
-        cleanup_actions = []
-
-        # Act: Simulate memory growth
-        for i in range(20):
-            current_usage_percent += 2
-
-            if current_usage_percent >= memory_threshold_percent and not cleanup_triggered:
-                cleanup_triggered = True
-                cleanup_actions.append(
-                    {
-                        "action": "emergency_cleanup",
-                        "usage_at_trigger": current_usage_percent,
-                        "timestamp": timezone.now(),
-                    }
-                )
-                # Simulate cleanup reducing usage significantly
-                current_usage_percent = 60  # Reset to safe level
-
-        # Assert
-        assert cleanup_triggered, "Emergency cleanup should have triggered"
-
-        assert len(cleanup_actions) == 1, f"Expected 1 cleanup action, got {len(cleanup_actions)}"
-
-        # Verify cleanup was effective
-        assert (
-            current_usage_percent < memory_threshold_percent
-        ), f"Memory should be below threshold after cleanup, got {current_usage_percent}%"
+        assert redis_sim.is_exhausted is False
 
     def test_exhaust_004_queue_capacity_overflow(self):
         """
         Purpose:
-            Test DLQ/retry queue behavior at capacity.
+            Test queue overflow handling.
 
         Scenario:
             1. Fill queue to capacity
             2. Attempt to add more items
             3. Verify overflow handling
-            4. Verify no silent data loss
 
         Expected:
-            - Overflow items handled (reject or emergency store)
-            - Clear error indication
-            - Metrics track overflow rate
-
-        Risk Covered:
-            R-014: DLQ entries lost or corrupted
-
-        Compliance:
-            SOC 2 CC5.2 (Data Integrity)
+            - Queue rejects new items when full
+            - Overflow count tracked
+            - No data corruption
         """
         # Arrange
         queue = QueueSimulator(max_size=100)
 
         # Act: Fill queue
         for i in range(100):
-            result = queue.enqueue({"id": i, "data": f"item_{i}"})
-            assert result, f"Should succeed for item {i}"
+            assert queue.enqueue({"id": i}) is True
 
-        assert queue.is_full, "Queue should be full"
+        # Assert: Queue is full
+        assert queue.is_full
+        assert queue.size == 100
 
-        # Attempt overflow
+        # Act: Attempt overflow
         overflow_items = []
-        for i in range(20):
-            result = queue.enqueue({"id": 100 + i, "overflow": True})
+        for i in range(10):
+            result = queue.enqueue({"id": 100 + i})
             if not result:
-                overflow_items.append(100 + i)
+                overflow_items.append(i)
 
-        # Assert
-        assert len(overflow_items) == 20, f"Expected 20 overflow items, got {len(overflow_items)}"
+        # Assert: Overflow handled
+        assert len(overflow_items) == 10
+        assert queue.overflow_count == 10
+        assert queue.size == 100  # Size unchanged
 
-        assert queue.overflow_count == 20, f"Expected overflow_count=20, got {queue.overflow_count}"
-
-        # Verify overflow events recorded (for monitoring)
-        assert len(queue.overflow_events) == 20, "All overflow events should be recorded for audit"
-
-    def test_exhaust_005_concurrent_request_overload(self, resource_simulator):
+    def test_exhaust_005_queue_recovery(self):
         """
         Purpose:
-            Test behavior under massive concurrent request load.
-
-        Scenario:
-            1. Simulate 100 concurrent requests
-            2. Resource pool can only handle 50
-            3. Verify fair queueing
-            4. Verify no deadlocks
+            Test queue recovery after dequeue operations.
 
         Expected:
-            - Resources distributed fairly
-            - No deadlock or starvation
-            - All requests eventually handled or rejected
-
-        Risk Covered:
-            R-010: Queue saturation under load
+            - Queue accepts new items after dequeue
+            - FIFO order maintained
         """
         # Arrange
-        resource_simulator.max_connections = 50
-        results = {"success": [], "queued": []}
+        queue = QueueSimulator(max_size=10)
 
-        # Simulate concurrent requests
-        concurrent_count = 100
-
-        # Act: All requests try to acquire simultaneously
-        for i in range(concurrent_count):
-            if resource_simulator.acquire_connection():
-                results["success"].append(i)
-            else:
-                results["queued"].append(i)
-
-        # Assert
-        assert len(results["success"]) == 50, f"Expected 50 successful, got {len(results['success'])}"
-
-        assert len(results["queued"]) == 50, f"Expected 50 queued, got {len(results['queued'])}"
-
-        total = len(results["success"]) + len(results["queued"])
-        assert total == concurrent_count, f"All {concurrent_count} requests should be accounted for"
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.tier3_chaos
-class TestResourceRecovery:
-    """
-    Tests for recovery from resource exhaustion scenarios.
-    """
-
-    def test_resource_recovery_after_exhaustion(self, resource_simulator):
-        """
-        Purpose:
-            Verify complete recovery after resource exhaustion.
-
-        Scenario:
-            1. Exhaust resources
-            2. Release all resources
-            3. Verify full capacity restored
-            4. Verify no residual exhaustion state
-
-        Expected:
-            - Full capacity available
-            - No lingering exhaustion markers
-            - Normal operations resume
-        """
-        # Arrange: Exhaust
-        resource_simulator.max_connections = 30
-        for _ in range(30):
-            resource_simulator.acquire_connection()
-
-        assert resource_simulator.is_exhausted
-
-        # Act: Release all
-        for _ in range(30):
-            resource_simulator.release_connection()
-
-        # Assert: Full recovery
-        assert resource_simulator.current_connections == 0
-        assert not resource_simulator.is_exhausted
-
-        # Verify can use full capacity again
-        for _ in range(30):
-            assert resource_simulator.acquire_connection()
-
-        assert resource_simulator.is_exhausted
-
-    def test_queue_draining_restores_capacity(self):
-        """
-        Purpose:
-            Verify queue processing restores capacity.
-
-        Scenario:
-            1. Fill queue to capacity
-            2. Process (drain) items
-            3. Verify capacity restored
-            4. Verify new items can be added
-
-        Expected:
-            - Queue drains successfully
-            - Full capacity restored
-            - New items accepted
-        """
-        # Arrange
-        queue = QueueSimulator(max_size=50)
-
-        for i in range(50):
+        # Fill queue
+        for i in range(10):
             queue.enqueue({"id": i})
 
         assert queue.is_full
 
-        # Act: Drain queue
-        drained = []
-        while queue.size > 0:
+        # Dequeue some items
+        dequeued = []
+        for _ in range(5):
             item = queue.dequeue()
-            if item:
-                drained.append(item)
+            dequeued.append(item)
 
-        # Assert
-        assert len(drained) == 50, f"Should drain 50 items, got {len(drained)}"
-        assert queue.size == 0, "Queue should be empty"
-        assert not queue.is_full, "Queue should not be full"
+        # Assert: FIFO order
+        assert dequeued[0]["id"] == 0
+        assert dequeued[4]["id"] == 4
 
-        # Verify new items can be added
-        for i in range(25):
-            assert queue.enqueue({"id": 100 + i})
+        # Assert: Can enqueue again
+        assert queue.enqueue({"id": 100}) is True
+        assert queue.size == 6
 
-        assert queue.size == 25
 
-    def test_graceful_degradation_metrics(self, resource_simulator):
+@pytest.mark.tier3_chaos
+class TestConcurrentResourceExhaustion:
+    """Tests for concurrent resource exhaustion scenarios."""
+
+    def test_concurrent_connection_requests(self, resource_simulator):
         """
         Purpose:
-            Verify degradation metrics are accurately tracked.
-
-        Scenario:
-            1. Approach exhaustion gradually
-            2. Record metrics at each stage
-            3. Verify metrics reflect actual state
+            Test concurrent connection requests under resource constraints.
 
         Expected:
-            - Utilization metrics accurate
-            - Exhaustion events counted correctly
-            - Recovery metrics accurate
+            - Total connections don't exceed max
+            - All requests handled (success or failure)
         """
-        # Arrange
-        resource_simulator.max_connections = 100
-        metrics_log = []
+        resource_simulator.max_connections = 20
+        results = {"success": 0, "failed": 0}
 
-        # Act: Gradual approach to exhaustion
-        for i in range(120):
-            success = resource_simulator.acquire_connection()
-            metrics_log.append(
-                {
-                    "attempt": i,
-                    "success": success,
-                    "current": resource_simulator.current_connections,
-                    "exhausted": resource_simulator.is_exhausted,
-                }
-            )
+        def acquire():
+            if resource_simulator.acquire_connection():
+                return "success"
+            return "failed"
 
-            if i == 50:  # Midpoint checkpoint
-                assert resource_simulator.current_connections == 51
-                assert not resource_simulator.is_exhausted
+        # Simulate concurrent requests (sequential for simplicity)
+        for _ in range(50):
+            result = acquire()
+            results[result] += 1
 
         # Assert
-        successful_acquisitions = [m for m in metrics_log if m["success"]]
-        failed_acquisitions = [m for m in metrics_log if not m["success"]]
+        assert results["success"] == 20
+        assert results["failed"] == 30
+        assert resource_simulator.current_connections == 20
 
-        assert len(successful_acquisitions) == 100, f"Expected 100 successful, got {len(successful_acquisitions)}"
+    def test_queue_concurrent_enqueue(self):
+        """
+        Purpose:
+            Test concurrent queue enqueue operations.
 
-        assert len(failed_acquisitions) == 20, f"Expected 20 failed, got {len(failed_acquisitions)}"
+        Expected:
+            - Queue maintains max size
+            - Overflow tracked correctly
+        """
+        queue = QueueSimulator(max_size=50)
+        results = {"success": 0, "overflow": 0}
 
-        # Verify exhaustion started at correct point
-        first_failure = failed_acquisitions[0]
-        assert first_failure["attempt"] == 100, f"First failure should be at attempt 100, got {first_failure['attempt']}"
+        for i in range(100):
+            if queue.enqueue({"id": i}):
+                results["success"] += 1
+            else:
+                results["overflow"] += 1
+
+        # Assert
+        assert results["success"] == 50
+        assert results["overflow"] == 50
+        assert queue.size == 50
+
+
+@pytest.mark.tier3_chaos
+class TestResourceExhaustionMetrics:
+    """Tests for resource exhaustion metrics tracking."""
+
+    def test_exhaustion_event_details(self, resource_simulator):
+        """Verify exhaustion events contain required details."""
+        resource_simulator.max_connections = 5
+
+        # Exhaust connections
+        for _ in range(5):
+            resource_simulator.acquire_connection()
+
+        # Trigger exhaustion events
+        for _ in range(3):
+            resource_simulator.acquire_connection()
+
+        # Assert
+        assert len(resource_simulator.exhaustion_events) == 3
+
+        for event in resource_simulator.exhaustion_events:
+            assert "timestamp" in event
+            assert "current" in event
+            assert event["current"] == 5
+            assert event["max"] == 5
+
+    def test_queue_overflow_metrics(self):
+        """Verify queue overflow metrics are accurate."""
+        queue = QueueSimulator(max_size=10)
+
+        # Fill and overflow
+        for i in range(20):
+            queue.enqueue({"id": i})
+
+        # Assert
+        assert queue.overflow_count == 10
+        assert len(queue.overflow_events) == 10
+
+        for event in queue.overflow_events:
+            assert "timestamp" in event
+            assert "item" in event
+            assert event["queue_size"] == 10

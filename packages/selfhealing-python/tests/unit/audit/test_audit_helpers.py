@@ -16,8 +16,11 @@ class TestLogDlqStoreAudit:
         mock_adapter = MagicMock()
         
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=mock_adapter,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
             
@@ -38,8 +41,11 @@ class TestLogDlqStoreAudit:
     def test_logs_to_standard_logger_when_adapter_unavailable(self, caplog):
         """Should log to standard logger when adapter is not available."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=None,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
             import logging
@@ -61,8 +67,11 @@ class TestLogDlqStoreAudit:
         mock_adapter.log_dlq_store.side_effect = Exception("Adapter error")
         
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=mock_adapter,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
             import logging
@@ -86,8 +95,11 @@ class TestLogDlqReplayAudit:
         mock_adapter = MagicMock()
         
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=mock_adapter,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
             
@@ -111,8 +123,11 @@ class TestLogDlqReplayAudit:
         mock_adapter = MagicMock()
         
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=mock_adapter,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
             
@@ -134,8 +149,11 @@ class TestLogDlqReplayAudit:
     def test_logs_success_to_standard_logger_when_adapter_unavailable(self, caplog):
         """Should log SUCCESS to standard logger when adapter is unavailable."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=None,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
             import logging
@@ -153,8 +171,11 @@ class TestLogDlqReplayAudit:
     def test_logs_failure_to_standard_logger_when_adapter_unavailable(self, caplog):
         """Should log FAILED to standard logger when adapter is unavailable."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=None,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
             import logging
@@ -177,8 +198,11 @@ class TestLogDlqReplayAudit:
         mock_adapter.log_dlq_replay.side_effect = Exception("Adapter error")
         
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
             return_value=mock_adapter,
+        ), patch(
+            "selfhealing.services.audit.dlq_audit._write_to_wal",
+            return_value=1,
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
             import logging
@@ -200,7 +224,7 @@ class TestGetAuditAdapter:
     def test_returns_none_when_provider_registry_unavailable(self):
         """Should return None when ProviderRegistry is not available."""
         with patch(
-            "selfhealing.services.audit_helpers._get_audit_adapter",
+            "selfhealing.services.audit.base._get_audit_adapter",
             return_value=None,
         ):
             from selfhealing.services.audit_helpers import _get_audit_adapter

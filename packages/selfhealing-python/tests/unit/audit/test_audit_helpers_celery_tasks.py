@@ -28,17 +28,36 @@ import pytest
 @pytest.fixture
 def mock_wal():
     """WAL mock fixture."""
-    with patch("selfhealing.services.audit_helpers._get_wal") as mock:
+    # 싱글톤 인스턴스 초기화
+    import selfhealing.services.audit.base as base_module
+    original_instance = base_module._wal_instance
+    base_module._wal_instance = None
+    
+    # InMemoryAuditBuffer 싱글톤도 초기화 (테스트 격리)
+    try:
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        InMemoryAuditBuffer._instance = None
+    except ImportError:
+        pass
+    
+    # 실제 함수가 정의된 base 모듈에서 패치해야 함
+    with patch("selfhealing.services.audit.base._get_wal") as mock:
         mock_wal = MagicMock()
         mock_wal.write.return_value = 12345
         mock.return_value = mock_wal
+        # 테스트 시작 전 mock 상태 초기화
+        mock_wal.reset_mock()
         yield mock_wal
+    
+    # 복원
+    base_module._wal_instance = original_instance
 
 
 @pytest.fixture
 def mock_adapter():
     """Audit adapter mock fixture."""
-    with patch("selfhealing.services.audit_helpers._get_audit_adapter") as mock:
+    # storage_audit에서 import된 위치에서 패치해야 함
+    with patch("selfhealing.services.audit.storage_audit._get_audit_adapter") as mock:
         mock_adapter = MagicMock()
         mock.return_value = mock_adapter
         yield mock_adapter
@@ -529,26 +548,46 @@ class TestAuditEdgeCases:
     def test_wal_failure_does_not_raise(self, mock_adapter):
         """WAL 실패 시에도 예외 발생 안함 (Fail-Open)."""
         from selfhealing.services.audit_helpers import log_config_apply_audit
+        import selfhealing.services.audit.base as base_module
         
-        with patch("selfhealing.services.audit_helpers._get_wal") as mock_get_wal:
-            mock_wal = MagicMock()
-            mock_wal.write.side_effect = Exception("WAL error")
-            mock_get_wal.return_value = mock_wal
-            
-            # 예외 발생하지 않아야 함
-            result = log_config_apply_audit(
-                config_key="test",
-                status="applied",
-            )
-            
-            # WAL 실패 시 None 반환
-            assert result is None
+        # 싱글톤 초기화
+        original_instance = base_module._wal_instance
+        base_module._wal_instance = None
+        
+        try:
+            with patch("selfhealing.services.audit.base._get_wal") as mock_get_wal:
+                mock_wal = MagicMock()
+                mock_wal.write.side_effect = Exception("WAL error")
+                mock_get_wal.return_value = mock_wal
+                
+                # 예외 발생하지 않아야 함
+                result = log_config_apply_audit(
+                    config_key="test",
+                    status="applied",
+                )
+                
+                # WAL 실패 시 None 반환
+                assert result is None
+        finally:
+            # 싱글톤 복원
+            base_module._wal_instance = original_instance
     
     def test_complex_details_merge(self, mock_wal, mock_adapter):
         """복잡한 details 병합 테스트."""
         from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
         
-        log_chaos_scheduler_audit(
+        # 메모리 버퍼 초기화 (이전 테스트의 실패한 이벤트 제거)
+        try:
+            from selfhealing.audit.resilience import InMemoryAuditBuffer
+            buffer = InMemoryAuditBuffer.get_instance()
+            buffer._entries.clear()
+        except Exception:
+            pass
+        
+        # mock 상태 초기화
+        mock_wal.reset_mock()
+        
+        result = log_chaos_scheduler_audit(
             experiment_id="exp-1",
             action="scheduled",
             status="completed",
@@ -559,10 +598,27 @@ class TestAuditEdgeCases:
             },
         )
         
-        call_args = mock_wal.write.call_args[0][0]
-        details = call_args["details"]
+        # 이 테스트에서 write가 호출되었는지 확인
+        assert mock_wal.write.call_count >= 1, (
+            f"mock_wal.write was not called. result: {result}"
+        )
+        
+        # CHAOS 이벤트 찾기 (메모리 버퍼 flush로 인해 여러 호출이 있을 수 있음)
+        chaos_entry = None
+        for call in mock_wal.write.call_args_list:
+            entry = call[0][0]
+            if entry.get("event_type", "").startswith("CHAOS_"):
+                chaos_entry = entry
+                break
+        
+        assert chaos_entry is not None, (
+            f"CHAOS event not found in calls: {[c[0][0].get('event_type') for c in mock_wal.write.call_args_list]}"
+        )
+        
+        details = chaos_entry["details"]
         
         # 기본 필드와 추가 details가 모두 포함
+        assert "experiment_id" in details, f"'experiment_id' not in details: {details}"
         assert details["experiment_id"] == "exp-1"
         assert details["executed_count"] == 5
         assert details["custom_field"] == "custom_value"

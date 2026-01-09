@@ -136,7 +136,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
         
-        with patch("selfhealing.services.chaos.scheduler.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.is_duplicate = False
@@ -161,7 +161,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
         
-        with patch("selfhealing.services.chaos.scheduler.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.is_duplicate = True
@@ -189,18 +189,17 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
         
-        # patch import to raise ImportError
-        with patch("selfhealing.services.chaos.scheduler.IdempotencyKey", None):
-            with patch("selfhealing.services.chaos.scheduler.get_idempotency_service", side_effect=ImportError):
-                result = scheduler._check_idempotency(
-                    mock_schedule,
-                    "test-schedule-123",
-                    "chaos-abc123",
-                    datetime.now(),
-                )
+        # patch import to raise ImportError - 내부 import이므로 idempotency_service 모듈 패치
+        with patch.dict("sys.modules", {"selfhealing.services.idempotency_service": None}):
+            result = scheduler._check_idempotency(
+                mock_schedule,
+                "test-schedule-123",
+                "chaos-abc123",
+                datetime.now(),
+            )
 
-                # ImportError → None (통과)
-                assert result is None
+            # ImportError → None (통과)
+            assert result is None
 
     def test_mark_idempotency_processed_calls_service(self, mock_schedule):
         """
@@ -211,7 +210,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
         
-        with patch("selfhealing.services.chaos.scheduler.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_get_svc.return_value = mock_svc
 
