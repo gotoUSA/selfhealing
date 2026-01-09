@@ -130,11 +130,17 @@ class GradientCalculator:
                 if s.timestamp > time.time() - self.sample_window_seconds
             ]
             
+            # Calculate gradient inline to avoid deadlock (self.get_gradient also uses self._lock)
+            gradient = 0.0
+            if self._smoothed_rtt is not None and self._previous_smoothed_rtt is not None:
+                if self._previous_smoothed_rtt != 0:
+                    gradient = (self._smoothed_rtt - self._previous_smoothed_rtt) / self._previous_smoothed_rtt
+            
             return {
                 "sample_count": len(self._samples),
                 "recent_sample_count": len(recent_samples),
                 "smoothed_rtt_ms": self._smoothed_rtt,
-                "gradient": self.get_gradient(),
+                "gradient": gradient,
             }
     
     def reset(self) -> None:
