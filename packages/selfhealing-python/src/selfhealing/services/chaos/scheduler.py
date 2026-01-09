@@ -624,129 +624,164 @@ class ChaosSchedulerService:
         
         schedule = self.get_schedule(schedule_id)
         if not schedule:
-            return ExecutionResult(
-                schedule_id=schedule_id,
-                experiment_id="",
-                status="error",
-                error_message=f"Schedule not found: {schedule_id}",
+            return self._create_error_result(
+                schedule_id, "", f"Schedule not found: {schedule_id}"
             )
         
         experiment_id = f"chaos-{uuid.uuid4().hex[:12]}"
         started_at = now()
         
         try:
-            # 순위 6: Idempotency 체크
-            if not force:
-                blocked = self._check_idempotency(schedule, schedule_id, experiment_id, started_at)
-                if blocked:
-                    return blocked
-            
-            # 0. Error Budget Gate Check
-            if not force:
-                blocked = self._check_error_budget_gate(schedule_id, experiment_id, started_at)
-                if blocked:
-                    return blocked
-
-            # 1-3. Check pre-execution conditions (scheduler, schedule, approval)
-            blocked = self._check_pre_execution_conditions(schedule, schedule_id, experiment_id, started_at)
+            # Pre-execution checks
+            blocked = self._run_pre_execution_checks(schedule, schedule_id, experiment_id, started_at, force)
             if blocked:
                 return blocked
-
-            # 4. Safety checks (Pre-flight)
-            if not force:
-                blocked = self._check_safety_conditions(schedule, schedule_id, experiment_id, started_at)
-                if blocked:
-                    return blocked
-
-            # 5. Blast radius check
-            if not force:
-                blocked = self._check_blast_radius_conditions(schedule, schedule_id, experiment_id, started_at)
-                if blocked:
-                    return blocked
             
-            # 6. Create and execute experiment
-            with self._lock:
-                self._running_experiments[schedule_id] = experiment_id
-            
-            try:
-                config = ExperimentConfig(
-                    target_service=schedule.target_service,
-                    target_domain=schedule.target_domain,
-                    **schedule.experiment_config,
-                )
-                
-                # Apply dry_run mode from scheduler config
-                if self._config.dry_run_mode:
-                    config.dry_run = True
-                    logger.info(
-                        f"[ChaosScheduler] Running in DRY RUN mode: {self._config.dry_run_reason}"
-                    )
-                
-                experiment = create_experiment(
-                    experiment_type=schedule.experiment_type,
-                    config=config,
-                )
-                experiment.experiment_id = experiment_id
-                
-                # Execute (will use dry run if config.dry_run is True)
-                result = experiment.execute()
-                
-                # Update schedule
-                with self._lock:
-                    schedule.last_run_at = now().isoformat()
-                    schedule.last_run_result = result.status
-                    schedule.run_count += 1
-                    schedule.next_run_at = self._calculate_next_run(schedule).isoformat()
-                    self._persist_schedules()
-                
-                # Record safety guard cooldown
-                if not force:
-                    guard.record_experiment_completed()
-                
-                # 순위 6: 멱등성 처리 완료 마킹
-                if not force:
-                    self._mark_idempotency_processed(schedule)
-                
-                execution_result = ExecutionResult(
-                    schedule_id=schedule_id,
-                    experiment_id=experiment_id,
-                    status=result.status,
-                    started_at=started_at.isoformat(),
-                    completed_at=now().isoformat(),
-                    duration_seconds=(now() - started_at).total_seconds(),
-                    success=result.status == "completed",
-                    experiment_result=result.to_dict(),
-                    dry_run=result.dry_run,
-                )
-                
-                # Store in history
-                self._execution_history.append(execution_result)
-                if len(self._execution_history) > 1000:
-                    self._execution_history = self._execution_history[-1000:]
-                
-                return execution_result
-                
-            finally:
-                # Cleanup
-                with self._lock:
-                    if schedule_id in self._running_experiments:
-                        del self._running_experiments[schedule_id]
-                
-                if not force:
-                    br_manager.unregister_experiment(experiment_id)
+            # Execute experiment
+            return self._execute_experiment(
+                schedule, schedule_id, experiment_id, started_at, force
+            )
         
         except Exception as e:
             logger.exception(f"[ChaosScheduler] Error executing {schedule_id}: {e}")
+            return self._create_error_result(
+                schedule_id, experiment_id, str(e), started_at
+            )
+    
+    def _create_error_result(
+        self,
+        schedule_id: str,
+        experiment_id: str,
+        error_message: str,
+        started_at: Optional[Any] = None,
+    ) -> ExecutionResult:
+        """Create an error ExecutionResult."""
+        current_time = now()
+        result = ExecutionResult(
+            schedule_id=schedule_id,
+            experiment_id=experiment_id,
+            status="error",
+            error_message=error_message,
+        )
+        if started_at:
+            result.started_at = started_at.isoformat()
+            result.completed_at = current_time.isoformat()
+            result.duration_seconds = (current_time - started_at).total_seconds()
+        return result
+    
+    def _run_pre_execution_checks(
+        self,
+        schedule: Any,
+        schedule_id: str,
+        experiment_id: str,
+        started_at: Any,
+        force: bool,
+    ) -> Optional[ExecutionResult]:
+        """Run all pre-execution checks. Returns blocked result or None."""
+        if not force:
+            blocked = self._check_idempotency(schedule, schedule_id, experiment_id, started_at)
+            if blocked:
+                return blocked
             
-            return ExecutionResult(
+            blocked = self._check_error_budget_gate(schedule_id, experiment_id, started_at)
+            if blocked:
+                return blocked
+
+        blocked = self._check_pre_execution_conditions(schedule, schedule_id, experiment_id, started_at)
+        if blocked:
+            return blocked
+
+        if not force:
+            blocked = self._check_safety_conditions(schedule, schedule_id, experiment_id, started_at)
+            if blocked:
+                return blocked
+
+            blocked = self._check_blast_radius_conditions(schedule, schedule_id, experiment_id, started_at)
+            if blocked:
+                return blocked
+        
+        return None
+    
+    def _execute_experiment(
+        self,
+        schedule: Any,
+        schedule_id: str,
+        experiment_id: str,
+        started_at: Any,
+        force: bool,
+    ) -> ExecutionResult:
+        """Execute the experiment and return result."""
+        from .experiments import create_experiment, ExperimentConfig
+        from .safety_guard import get_safety_guard
+        from .blast_radius import get_blast_radius_manager
+        
+        guard = get_safety_guard()
+        br_manager = get_blast_radius_manager()
+        
+        with self._lock:
+            self._running_experiments[schedule_id] = experiment_id
+        
+        try:
+            config = ExperimentConfig(
+                target_service=schedule.target_service,
+                target_domain=schedule.target_domain,
+                **schedule.experiment_config,
+            )
+            
+            if self._config.dry_run_mode:
+                config.dry_run = True
+                logger.info(
+                    f"[ChaosScheduler] Running in DRY RUN mode: {self._config.dry_run_reason}"
+                )
+            
+            experiment = create_experiment(
+                experiment_type=schedule.experiment_type,
+                config=config,
+            )
+            experiment.experiment_id = experiment_id
+            
+            result = experiment.execute()
+            
+            self._update_schedule_after_execution(schedule, result)
+            
+            if not force:
+                guard.record_experiment_completed()
+                self._mark_idempotency_processed(schedule)
+            
+            execution_result = ExecutionResult(
                 schedule_id=schedule_id,
                 experiment_id=experiment_id,
-                status="error",
+                status=result.status,
                 started_at=started_at.isoformat(),
                 completed_at=now().isoformat(),
                 duration_seconds=(now() - started_at).total_seconds(),
-                error_message=str(e),
+                success=result.status == "completed",
+                experiment_result=result.to_dict(),
+                dry_run=result.dry_run,
             )
+            
+            self._execution_history.append(execution_result)
+            if len(self._execution_history) > 1000:
+                self._execution_history = self._execution_history[-1000:]
+            
+            return execution_result
+            
+        finally:
+            with self._lock:
+                if schedule_id in self._running_experiments:
+                    del self._running_experiments[schedule_id]
+            
+            if not force:
+                br_manager.unregister_experiment(experiment_id)
+    
+    def _update_schedule_after_execution(self, schedule: Any, result: Any) -> None:
+        """Update schedule after experiment execution."""
+        with self._lock:
+            schedule.last_run_at = now().isoformat()
+            schedule.last_run_result = result.status
+            schedule.run_count += 1
+            schedule.next_run_at = self._calculate_next_run(schedule).isoformat()
+            self._persist_schedules()
     
     def execute_due_schedules(self) -> List[ExecutionResult]:
         """

@@ -67,6 +67,66 @@ def _get_wal():
         return None
 
 
+def _get_actor_info(
+    actor_roles: Optional[list[str]] = None,
+) -> tuple[Optional[str], str, list[str]]:
+    """
+    ActorContext에서 actor 정보 추출.
+    
+    Returns:
+        (actor_id, actor_type, actor_roles)
+    """
+    actor_id = None
+    actor_type = "system"
+    roles = actor_roles or []
+    
+    try:
+        from selfhealing.context.actor_context import ActorContext
+        if ActorContext.is_set():
+            actor = ActorContext.get_current()
+            actor_id = actor.actor_id
+            actor_type = actor.actor_type
+            if not roles:
+                roles = actor.roles
+    except (ImportError, Exception):
+        pass
+    
+    return actor_id, actor_type, roles
+
+
+def _get_trace_id_from_context(trace_id: Optional[str] = None) -> Optional[str]:
+    """TraceContext에서 trace_id 추출."""
+    if trace_id is not None:
+        return trace_id
+    try:
+        from selfhealing.audit.trace import get_trace_id
+        return get_trace_id()
+    except (ImportError, Exception):
+        return None
+
+
+def _get_celery_context() -> Optional[dict]:
+    """Celery 컨텍스트 추출."""
+    try:
+        from selfhealing.audit.trace import get_celery_context, is_celery_task
+        if is_celery_task():
+            return get_celery_context()
+    except (ImportError, Exception):
+        pass
+    return None
+
+
+def _save_to_memory_buffer(entry: dict) -> None:
+    """실패 시 메모리 버퍼에 저장."""
+    try:
+        from selfhealing.audit.resilience import InMemoryAuditBuffer
+        buffer = InMemoryAuditBuffer.get_instance()
+        buffer.add(entry)
+        logger.warning("[AuditHelpers] Entry saved to in-memory buffer")
+    except Exception as buffer_error:
+        logger.critical(f"[AuditHelpers] Memory buffer also failed: {buffer_error}")
+
+
 def _write_to_wal(
     event_type: str,
     source: str,
@@ -107,66 +167,30 @@ def _write_to_wal(
     except Exception:
         metrics = None
     
-    # Phase 25: ActorContext에서 actor 정보 자동 추출
-    actor_id = None
-    actor_type = "system"
-    if actor_roles is None:
-        actor_roles = []
+    # 컨텍스트에서 정보 추출
+    actor_id, actor_type, final_roles = _get_actor_info(actor_roles)
+    final_trace_id = _get_trace_id_from_context(trace_id)
+    celery_context = _get_celery_context()
+    
+    wal_entry = {
+        "record_id": f"audit-{uuid.uuid4().hex[:12]}",
+        "event_type": event_type,
+        "trace_id": final_trace_id,
+        "source": source,
+        "details": details,
+        "success": success,
+        "error_message": error_message,
+        "domain": domain,
+        "target_id": target_id,
+        "actor_id": actor_id,
+        "actor_type": actor_type,
+        "actor_roles": final_roles,
+        "celery_context": celery_context,
+        "timestamp": time.time(),
+        "synced": False,
+    }
     
     try:
-        from selfhealing.context.actor_context import ActorContext
-        if ActorContext.is_set():
-            actor = ActorContext.get_current()
-            actor_id = actor.actor_id
-            actor_type = actor.actor_type
-            if not actor_roles:  # 명시적으로 전달되지 않은 경우에만
-                actor_roles = actor.roles
-    except ImportError:
-        pass
-    except Exception:
-        pass
-    
-    # Phase 25: TraceContext에서 trace_id 자동 추출
-    if trace_id is None:
-        try:
-            from selfhealing.audit.trace import get_trace_id
-            trace_id = get_trace_id()
-        except ImportError:
-            pass
-        except Exception:
-            pass
-    
-    # Phase 28: Celery 컨텍스트 자동 추출
-    celery_context = None
-    try:
-        from selfhealing.audit.trace import get_celery_context, is_celery_task
-        if is_celery_task():
-            celery_context = get_celery_context()
-    except ImportError:
-        pass
-    except Exception:
-        pass
-    
-    try:
-        record_id = f"audit-{uuid.uuid4().hex[:12]}"
-        wal_entry = {
-            "record_id": record_id,
-            "event_type": event_type,
-            "trace_id": trace_id,  # Phase 25: trace_id 추가
-            "source": source,
-            "details": details,
-            "success": success,
-            "error_message": error_message,
-            "domain": domain,
-            "target_id": target_id,
-            "actor_id": actor_id,  # Phase 25: actor 정보 추가
-            "actor_type": actor_type,  # Phase 25: actor 정보 추가
-            "actor_roles": actor_roles,  # Phase 25: RBAC 역할 추가
-            "celery_context": celery_context,  # Phase 28: Celery 메타데이터 이중화
-            "timestamp": time.time(),
-            "synced": False,  # Background Sync Worker가 처리 후 True로 변경
-        }
-        
         seq = wal.write(wal_entry)
         
         if metrics:
@@ -175,7 +199,7 @@ def _write_to_wal(
         # Phase 4: 성공 시 메모리 버퍼 플러시 시도
         _try_flush_memory_buffer()
         
-        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={trace_id}")
+        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={final_trace_id}")
         return seq
     except Exception as e:
         logger.error(f"[AuditHelpers] WAL write failed (CRITICAL): {e}")
@@ -183,15 +207,7 @@ def _write_to_wal(
             metrics.record_write("wal", success=False)
             metrics.record_failure("wal", type(e).__name__)
         
-        # Phase 4: 실패 시 메모리 버퍼에 저장
-        try:
-            from selfhealing.audit.resilience import InMemoryAuditBuffer
-            buffer = InMemoryAuditBuffer.get_instance()
-            buffer.add(wal_entry)
-            logger.warning("[AuditHelpers] Entry saved to in-memory buffer")
-        except Exception as buffer_error:
-            logger.critical(f"[AuditHelpers] Memory buffer also failed: {buffer_error}")
-        
+        _save_to_memory_buffer(wal_entry)
         return None
 
 

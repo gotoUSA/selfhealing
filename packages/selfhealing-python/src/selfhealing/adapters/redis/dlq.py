@@ -348,29 +348,55 @@ class RedisDLQRepository(FailedOperationRepository):
         if status == FailedOperationStatus.PENDING.value:
             return self.get_pending(limit)
         
-        # For other statuses, we need to scan
-        # This is inefficient - in production, add status-specific indexes
-        results = []
-        
         # In degraded mode, scan memory
         if self._backend.is_degraded:
-            for key, value in self._backend._memory.items():
-                if (
-                    key.startswith(self.KEY_PREFIX)
-                    and not key.startswith("dlq:pending")
-                    and not key.startswith("dlq:by_domain")
-                    and not key.startswith("dlq:id_seq")
-                ):
-                    if isinstance(value, dict) and value.get("status") == status:
-                        results.append(self._to_data(value))
-                        if len(results) >= limit:
-                            break
-            return results
+            return self._get_by_status_from_memory(status, limit)
         
         # In Redis mode, scan keys
+        return self._get_by_status_from_redis(status, limit)
+    
+    def _is_valid_entry_key(self, key: str) -> bool:
+        """Check if key is a valid entry key (not a special key)."""
+        if not key.startswith(self.KEY_PREFIX):
+            return False
+        special_prefixes = ["dlq:pending", "dlq:by_domain", "dlq:id_seq"]
+        return not any(key.startswith(prefix) for prefix in special_prefixes)
+    
+    def _get_by_status_from_memory(
+        self,
+        status: str,
+        limit: int,
+    ) -> List[FailedOperationData]:
+        """Get entries by status from in-memory storage (degraded mode)."""
+        results = []
+        for key, value in self._backend._memory.items():
+            if not self._is_valid_entry_key(key):
+                continue
+            if isinstance(value, dict) and value.get("status") == status:
+                results.append(self._to_data(value))
+                if len(results) >= limit:
+                    break
+        return results
+    
+    def _decode_redis_data(self, data: dict) -> dict:
+        """Decode bytes to strings in Redis hash data."""
+        return {
+            (k.decode() if isinstance(k, bytes) else k): 
+            (v.decode() if isinstance(v, bytes) else v)
+            for k, v in data.items()
+        }
+    
+    def _get_by_status_from_redis(
+        self,
+        status: str,
+        limit: int,
+    ) -> List[FailedOperationData]:
+        """Get entries by status from Redis (normal mode)."""
+        results = []
         try:
             pattern = f"{self._backend.config.key_prefix}{self.KEY_PREFIX}[0-9]*"
             cursor = 0
+            special_keys = ["pending", "by_domain", "id_seq"]
             
             while len(results) < limit:
                 cursor, keys = self._backend._redis._redis.scan(
@@ -381,20 +407,12 @@ class RedisDLQRepository(FailedOperationRepository):
                     if isinstance(key, bytes):
                         key = key.decode()
                     
-                    # Skip special keys
-                    if any(
-                        special in key
-                        for special in ["pending", "by_domain", "id_seq"]
-                    ):
+                    if any(special in key for special in special_keys):
                         continue
                     
                     data = self._backend._redis._redis.hgetall(key)
                     if data:
-                        decoded = {
-                            (k.decode() if isinstance(k, bytes) else k): 
-                            (v.decode() if isinstance(v, bytes) else v)
-                            for k, v in data.items()
-                        }
+                        decoded = self._decode_redis_data(data)
                         if decoded.get("status") == status:
                             results.append(self._to_data(decoded))
                             if len(results) >= limit:

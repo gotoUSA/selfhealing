@@ -119,58 +119,15 @@ class CorruptionShield:
         import time
         start_time = time.time()
         
-        all_violations: List[Violation] = []
-        l1_passed = True
-        l2_passed = True
-        l3_passed = True
+        # 각 레이어별 검증 수행
+        all_violations, layer_results = self._validate_all_layers(data, context)
         
-        # L1: Schema validation
-        if self.config.l1_enabled:
-            l1_violations = self._l1.validate(data, context)
-            if l1_violations:
-                all_violations.extend(l1_violations)
-                l1_passed = False
-                with self._stats_lock:
-                    self._stats["l1_violations"] += len(l1_violations)
-        
-        # L2: Business rules (only if L1 passed or continue on error)
-        if self.config.l2_enabled:
-            l2_violations = self._l2.validate(data, context)
-            if l2_violations:
-                all_violations.extend(l2_violations)
-                l2_passed = False
-                with self._stats_lock:
-                    self._stats["l2_violations"] += len(l2_violations)
-        
-        # L3: Anomaly detection (only if L1 and L2 passed or continue on error)
-        if self.config.l3_enabled:
-            l3_violations = self._l3.validate(data, context)
-            if l3_violations:
-                all_violations.extend(l3_violations)
-                l3_passed = False
-                with self._stats_lock:
-                    self._stats["l3_violations"] += len(l3_violations)
-        
-        # Determine if valid
+        # 결과 판정
         is_valid = len(all_violations) == 0
+        blocked = self._should_block(all_violations, block_on_violation, is_valid)
         
-        # Determine if should block
-        blocked = False
-        if block_on_violation and not is_valid:
-            # Block on critical/high severity violations
-            critical_violations = [
-                v for v in all_violations
-                if v.severity in ("critical", "high")
-            ]
-            blocked = len(critical_violations) > 0
-        
-        # Update stats
-        with self._stats_lock:
-            self._stats["total_validations"] += 1
-            if is_valid:
-                self._stats["passed"] += 1
-            if blocked:
-                self._stats["blocked"] += 1
+        # 통계 업데이트
+        self._update_stats(is_valid, blocked)
         
         elapsed_ms = (time.time() - start_time) * 1000
         
@@ -178,21 +135,84 @@ class CorruptionShield:
             is_valid=is_valid,
             violations=all_violations,
             blocked=blocked,
-            l1_passed=l1_passed,
-            l2_passed=l2_passed,
-            l3_passed=l3_passed,
+            l1_passed=layer_results["l1"],
+            l2_passed=layer_results["l2"],
+            l3_passed=layer_results["l3"],
             validation_time_ms=elapsed_ms,
         )
         
-        # Log violations
+        # 로깅 및 Audit
         if self.config.log_violations and not is_valid:
             self._log_violations(data, result)
         
-        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
         if not is_valid:
             self._record_audit_event(result, data, request)
         
         return result
+    
+    def _validate_all_layers(
+        self,
+        data: dict,
+        context: Optional[dict],
+    ) -> tuple[List[Violation], dict[str, bool]]:
+        """모든 레이어에서 검증 수행."""
+        all_violations: List[Violation] = []
+        layer_results = {"l1": True, "l2": True, "l3": True}
+        
+        # L1: Schema validation
+        if self.config.l1_enabled:
+            l1_violations = self._l1.validate(data, context)
+            if l1_violations:
+                all_violations.extend(l1_violations)
+                layer_results["l1"] = False
+                self._increment_violation_count("l1", len(l1_violations))
+        
+        # L2: Business rules
+        if self.config.l2_enabled:
+            l2_violations = self._l2.validate(data, context)
+            if l2_violations:
+                all_violations.extend(l2_violations)
+                layer_results["l2"] = False
+                self._increment_violation_count("l2", len(l2_violations))
+        
+        # L3: Anomaly detection
+        if self.config.l3_enabled:
+            l3_violations = self._l3.validate(data, context)
+            if l3_violations:
+                all_violations.extend(l3_violations)
+                layer_results["l3"] = False
+                self._increment_violation_count("l3", len(l3_violations))
+        
+        return all_violations, layer_results
+    
+    def _increment_violation_count(self, layer: str, count: int) -> None:
+        """레이어별 위반 카운트 증가."""
+        with self._stats_lock:
+            self._stats[f"{layer}_violations"] += count
+    
+    def _should_block(
+        self,
+        violations: List[Violation],
+        block_on_violation: bool,
+        is_valid: bool,
+    ) -> bool:
+        """차단 여부 판단."""
+        if not block_on_violation or is_valid:
+            return False
+        critical_violations = [
+            v for v in violations
+            if v.severity in ("critical", "high")
+        ]
+        return len(critical_violations) > 0
+    
+    def _update_stats(self, is_valid: bool, blocked: bool) -> None:
+        """통계 업데이트."""
+        with self._stats_lock:
+            self._stats["total_validations"] += 1
+            if is_valid:
+                self._stats["passed"] += 1
+            if blocked:
+                self._stats["blocked"] += 1
     
     def _record_audit_event(
         self,

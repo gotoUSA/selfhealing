@@ -214,34 +214,12 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        # Kill Switch 체크: 시스템이 비활성화되면 모든 self-healing 작업 중단
-        # 단, override_kill_switch=True면 수동 제어 허용 (운영자 권한)
-        if not _is_system_enabled() and not override_kill_switch:
-            logger.warning(
-                f"[CircuitBreaker] force_close blocked: Kill Switch is active. "
-                f"service={service_name}. Use override_kill_switch=True for manual control."
-            )
-            return CircuitBreakerResult.failed(
-                service_name=service_name,
-                error="Kill Switch is active: use override_kill_switch=True for manual control",
-            )
-        
-        # Kill Switch override 시 Audit 기록 (KILL_SWITCH_OVERRIDE)
-        if override_kill_switch and not _is_system_enabled():
-            logger.warning(
-                f"[CircuitBreaker] Kill Switch override for force_close: "
-                f"service={service_name}, controlled_by_id={controlled_by_id}"
-            )
-            try:
-                from selfhealing.services.audit_helpers import log_kill_switch_override_audit
-                log_kill_switch_override_audit(
-                    service_name=service_name,
-                    action="force_close",
-                    reason=reason,
-                    controlled_by_id=controlled_by_id,
-                )
-            except Exception as e:
-                logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
+        # Kill Switch 체크
+        kill_switch_result = self._check_kill_switch(
+            service_name, "force_close", reason, controlled_by_id, override_kill_switch
+        )
+        if kill_switch_result:
+            return kill_switch_result
 
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
@@ -253,14 +231,12 @@ class ManualControlMixin:
             reason=ReasonCode.INTERVENTION_ALLOWED,
         )
 
-        # 행동 직전 로깅 - Circuit Breaker CLOSE 전에 기록
         logger.info(
             f"[CircuitBreaker] FORCE_CLOSE service={service_name}, "
             f"reason={reason}, controlled_by_id={controlled_by_id}, trigger_replay={trigger_replay}"
         )
 
         try:
-            # Use atomic operation to prevent race conditions
             success, previous_state, new_state = self.repository.atomic_force_close(
                 service_name=service_name,
                 reason=reason,
@@ -268,55 +244,9 @@ class ManualControlMixin:
             )
 
             if success:
-                if previous_state == new_state:
-                    logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
-                    return CircuitBreakerResult.succeeded(
-                        service_name=service_name,
-                        previous_state=previous_state,
-                        new_state=new_state,
-                        message="Circuit breaker already closed",
-                    )
-                else:
-                    logger.info(
-                        f"[CircuitBreaker] Force closed circuit for '{service_name}': "
-                        f"{previous_state} -> {new_state} | Reason: {reason}"
-                    )
-
-                    # Audit 기록 - 수동 CLOSE는 중요 복구 이벤트
-                    try:
-                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
-                        log_cb_state_change_audit(
-                            cb_name=service_name,
-                            old_state=previous_state,
-                            new_state=new_state,
-                            reason=f"force_close: {reason}" if reason else "force_close: manual",
-                        )
-                    except Exception as e:
-                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
-
-                    # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
-                    try:
-                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
-                        CircuitBreakerEventHandler.on_state_changed(
-                            service=service_name,
-                            from_state=previous_state,
-                            to_state=new_state,
-                        )
-                    except ImportError:
-                        pass  # Metrics not available
-
-                    result = CircuitBreakerResult.succeeded(
-                        service_name=service_name,
-                        previous_state=previous_state,
-                        new_state=new_state,
-                        message=f"Circuit breaker closed for {service_name}",
-                    )
-
-                    # Trigger conditional replay if requested
-                    if trigger_replay:
-                        self._trigger_conditional_replay(service_name)
-
-                    return result
+                return self._handle_force_close_success(
+                    service_name, previous_state, new_state, reason, trigger_replay
+                )
             else:
                 return CircuitBreakerResult.failed(
                     service_name=service_name,
@@ -328,6 +258,121 @@ class ManualControlMixin:
                 service_name=service_name,
                 error=str(e),
             )
+    
+    def _check_kill_switch(
+        self,
+        service_name: str,
+        action: str,
+        reason: str,
+        controlled_by_id: int | None,
+        override_kill_switch: bool,
+    ) -> CircuitBreakerResult | None:
+        """Kill Switch 체크. 차단 시 결과 반환, 통과 시 None."""
+        if _is_system_enabled():
+            return None
+        
+        if not override_kill_switch:
+            logger.warning(
+                f"[CircuitBreaker] {action} blocked: Kill Switch is active. "
+                f"service={service_name}. Use override_kill_switch=True for manual control."
+            )
+            return CircuitBreakerResult.failed(
+                service_name=service_name,
+                error="Kill Switch is active: use override_kill_switch=True for manual control",
+            )
+        
+        # Kill Switch override 시 Audit 기록
+        logger.warning(
+            f"[CircuitBreaker] Kill Switch override for {action}: "
+            f"service={service_name}, controlled_by_id={controlled_by_id}"
+        )
+        try:
+            from selfhealing.services.audit_helpers import log_kill_switch_override_audit
+            log_kill_switch_override_audit(
+                service_name=service_name,
+                action=action,
+                reason=reason,
+                controlled_by_id=controlled_by_id,
+            )
+        except Exception as e:
+            logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
+        
+        return None
+    
+    def _handle_force_close_success(
+        self,
+        service_name: str,
+        previous_state: str,
+        new_state: str,
+        reason: str,
+        trigger_replay: bool,
+    ) -> CircuitBreakerResult:
+        """Force close 성공 시 처리."""
+        if previous_state == new_state:
+            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
+            return CircuitBreakerResult.succeeded(
+                service_name=service_name,
+                previous_state=previous_state,
+                new_state=new_state,
+                message="Circuit breaker already closed",
+            )
+        
+        logger.info(
+            f"[CircuitBreaker] Force closed circuit for '{service_name}': "
+            f"{previous_state} -> {new_state} | Reason: {reason}"
+        )
+        
+        self._log_state_change_audit(service_name, previous_state, new_state, reason, "force_close")
+        self._emit_state_change_metric(service_name, previous_state, new_state)
+        
+        result = CircuitBreakerResult.succeeded(
+            service_name=service_name,
+            previous_state=previous_state,
+            new_state=new_state,
+            message=f"Circuit breaker closed for {service_name}",
+        )
+        
+        if trigger_replay:
+            self._trigger_conditional_replay(service_name)
+        
+        return result
+    
+    def _log_state_change_audit(
+        self,
+        service_name: str,
+        previous_state: str,
+        new_state: str,
+        reason: str,
+        action: str,
+    ) -> None:
+        """CB 상태 변경 Audit 로그 기록."""
+        try:
+            from selfhealing.services.audit_helpers import log_cb_state_change_audit
+            log_cb_state_change_audit(
+                cb_name=service_name,
+                old_state=previous_state,
+                new_state=new_state,
+                reason=f"{action}: {reason}" if reason else f"{action}: manual",
+            )
+        except Exception as e:
+            logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+    
+    def _emit_state_change_metric(
+        self,
+        service_name: str,
+        previous_state: str,
+        new_state: str,
+    ) -> None:
+        """CB 상태 변경 메트릭 기록."""
+        try:
+            from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+            CircuitBreakerEventHandler.on_state_changed(
+                service=service_name,
+                from_state=previous_state,
+                to_state=new_state,
+            )
+        except ImportError:
+            pass
 
     # =========================================================================
     # Reset Operations

@@ -322,15 +322,7 @@ class AuditReconciler:
         
         try:
             # 검증 범위 내 WAL 엔트리 조회
-            cutoff_time = time.time() - self._config.check_window_seconds
-            all_entries = wal.recover_unprocessed(0)
-            
-            # 시간 범위 내 엔트리 필터링
-            recent_entries = [
-                e for e in all_entries
-                if e.timestamp >= cutoff_time
-            ]
-            
+            recent_entries = self._get_recent_entries(wal)
             result.wal_entry_count = len(recent_entries)
             
             if not recent_entries:
@@ -338,30 +330,11 @@ class AuditReconciler:
                 return result
             
             # 누락 엔트리 식별
-            missing_entries = []
-            for entry in recent_entries:
-                record_id = entry.data.get("record_id")
-                if record_id and record_id not in self._confirmed_ids:
-                    # 중앙 저장소에서 확인 (어댑터가 있는 경우)
-                    if adapter and hasattr(adapter, 'exists'):
-                        try:
-                            if adapter.exists(record_id):
-                                self._add_confirmed_id(record_id)
-                                result.central_entry_count += 1
-                                continue
-                        except Exception:
-                            pass
-                    
-                    missing_entries.append(entry)
-            
+            missing_entries = self._identify_missing_entries(recent_entries, adapter, result)
             result.missing_count = len(missing_entries)
             
             # 누락 콜백 호출
-            if missing_entries and self._on_missing_found:
-                try:
-                    self._on_missing_found(len(missing_entries))
-                except Exception:
-                    pass
+            self._notify_missing_found(missing_entries)
             
             # 누락 엔트리 재전송
             if missing_entries and adapter:
@@ -375,6 +348,56 @@ class AuditReconciler:
         
         result.duration_ms = (time.time() - start_time) * 1000
         return result
+    
+    def _get_recent_entries(self, wal: Any) -> List[Any]:
+        """시간 범위 내 최근 엔트리 조회."""
+        cutoff_time = time.time() - self._config.check_window_seconds
+        all_entries = wal.recover_unprocessed(0)
+        return [e for e in all_entries if e.timestamp >= cutoff_time]
+    
+    def _identify_missing_entries(
+        self,
+        entries: List[Any],
+        adapter: Any,
+        result: ReconcileResult,
+    ) -> List[Any]:
+        """누락된 엔트리 식별."""
+        missing_entries = []
+        for entry in entries:
+            record_id = entry.data.get("record_id")
+            if not record_id or record_id in self._confirmed_ids:
+                continue
+            
+            if self._check_central_storage(adapter, record_id, result):
+                continue
+            
+            missing_entries.append(entry)
+        return missing_entries
+    
+    def _check_central_storage(
+        self,
+        adapter: Any,
+        record_id: str,
+        result: ReconcileResult,
+    ) -> bool:
+        """중앙 저장소에서 엔트리 확인."""
+        if adapter and hasattr(adapter, 'exists'):
+            try:
+                if adapter.exists(record_id):
+                    self._add_confirmed_id(record_id)
+                    result.central_entry_count += 1
+                    return True
+            except Exception:
+                pass
+        return False
+    
+    def _notify_missing_found(self, missing_entries: List[Any]) -> None:
+        """누락 엔트리 콜백 호출."""
+        if missing_entries and self._on_missing_found:
+            try:
+                self._on_missing_found(len(missing_entries))
+            except Exception:
+                pass
     
     def _resend_missing(
         self,

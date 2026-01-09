@@ -588,42 +588,13 @@ class SecurityNotificationService:
         channels = channels or ["slack"]
         metadata = metadata or {}
 
-        from selfhealing.core.timezone import now
+        formatted_message = self._format_alert_message(title, message, severity, metadata)
 
-        # Format message for Slack
-        formatted_message = {
-            "title": self._truncate_with_ellipsis(title, TITLE_MAX_LENGTH),
-            "severity": severity.upper(),
-            "description": self._truncate_with_ellipsis(message, DESCRIPTION_MAX_LENGTH),
-            "detected_at": now().isoformat(),
-            "metadata": metadata,
-        }
-
-        # Determine channel based on severity
-        if "slack" in channels:
-            if severity == "critical":
-                channel = self.config.slack_critical_channel
-            elif severity in ("warning", "high"):
-                channel = self.config.slack_high_channel
-            else:
-                channel = self.config.slack_medium_channel
-            result.add_result(self._send_slack_alert(formatted_message, channel))
-
-        if "email" in channels:
-            if severity == "critical":
-                recipients = self.config.email_critical_recipients
-            else:
-                recipients = self.config.email_high_recipients
-            if recipients:
-                result.add_result(self._send_email_alert(formatted_message, recipients))
-
-        if "sms" in channels and severity == "critical":
-            if self.config.sms_critical_recipients:
-                result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
-
-        if "pagerduty" in channels and severity == "critical":
-            if self.config.pagerduty_enabled:
-                result.add_result(self._send_pagerduty_alert(formatted_message))
+        # 채널별 알림 전송
+        self._send_to_slack_if_enabled(channels, severity, formatted_message, result)
+        self._send_to_email_if_enabled(channels, severity, formatted_message, result)
+        self._send_to_sms_if_enabled(channels, severity, formatted_message, result)
+        self._send_to_pagerduty_if_enabled(channels, severity, formatted_message, result)
 
         # Log results
         success_count = sum(1 for r in result.results if r.success)
@@ -631,6 +602,84 @@ class SecurityNotificationService:
         logger.info(f"[Security Notification] Alert '{title}': {success_count}/{total_count} notifications sent")
 
         return result
+    
+    def _format_alert_message(
+        self,
+        title: str,
+        message: str,
+        severity: str,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """알림 메시지 포맷팅."""
+        from selfhealing.core.timezone import now
+        return {
+            "title": self._truncate_with_ellipsis(title, TITLE_MAX_LENGTH),
+            "severity": severity.upper(),
+            "description": self._truncate_with_ellipsis(message, DESCRIPTION_MAX_LENGTH),
+            "detected_at": now().isoformat(),
+            "metadata": metadata,
+        }
+    
+    def _send_to_slack_if_enabled(
+        self,
+        channels: list[str],
+        severity: str,
+        formatted_message: dict[str, Any],
+        result: SecurityNotificationResult,
+    ) -> None:
+        """Slack 채널로 알림 전송."""
+        if "slack" not in channels:
+            return
+        if severity == "critical":
+            channel = self.config.slack_critical_channel
+        elif severity in ("warning", "high"):
+            channel = self.config.slack_high_channel
+        else:
+            channel = self.config.slack_medium_channel
+        result.add_result(self._send_slack_alert(formatted_message, channel))
+    
+    def _send_to_email_if_enabled(
+        self,
+        channels: list[str],
+        severity: str,
+        formatted_message: dict[str, Any],
+        result: SecurityNotificationResult,
+    ) -> None:
+        """Email로 알림 전송."""
+        if "email" not in channels:
+            return
+        if severity == "critical":
+            recipients = self.config.email_critical_recipients
+        else:
+            recipients = self.config.email_high_recipients
+        if recipients:
+            result.add_result(self._send_email_alert(formatted_message, recipients))
+    
+    def _send_to_sms_if_enabled(
+        self,
+        channels: list[str],
+        severity: str,
+        formatted_message: dict[str, Any],
+        result: SecurityNotificationResult,
+    ) -> None:
+        """SMS로 알림 전송 (critical만)."""
+        if "sms" not in channels or severity != "critical":
+            return
+        if self.config.sms_critical_recipients:
+            result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
+    
+    def _send_to_pagerduty_if_enabled(
+        self,
+        channels: list[str],
+        severity: str,
+        formatted_message: dict[str, Any],
+        result: SecurityNotificationResult,
+    ) -> None:
+        """PagerDuty로 알림 전송 (critical만)."""
+        if "pagerduty" not in channels or severity != "critical":
+            return
+        if self.config.pagerduty_enabled:
+            result.add_result(self._send_pagerduty_alert(formatted_message))
 
     def _send_slack_alert(self, message: dict[str, Any], channel: str) -> NotificationResult:
         """

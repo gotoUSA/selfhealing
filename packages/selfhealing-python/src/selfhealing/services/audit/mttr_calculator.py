@@ -150,50 +150,59 @@ class MTTRCalculator:
             MTTRReport
         """
         if not events:
-            now = datetime.now(timezone.utc)
-            return MTTRReport(
-                period_start=period_start or now,
-                period_end=period_end or now,
-                total_incidents=0,
-                avg_mttr_seconds=0,
-                min_mttr_seconds=0,
-                max_mttr_seconds=0,
-                p50_mttr_seconds=0,
-                p90_mttr_seconds=0,
-                p99_mttr_seconds=0,
-                by_service={},
-                recovery_events=[],
-            )
+            return self._create_empty_report(period_start, period_end)
         
-        # 잘못된 타임스탬프를 가진 이벤트 필터링
+        # 유효한 이벤트 필터링 및 정렬
+        sorted_events = self._filter_and_sort_events(events)
+        if not sorted_events:
+            return self._create_empty_report(period_start, period_end)
+        
+        # 복구 이벤트 수집
+        recovery_events = self._collect_recovery_events(sorted_events)
+        
+        # 리포트 생성
+        return self._build_report(sorted_events, recovery_events, period_start, period_end)
+    
+    def _create_empty_report(
+        self,
+        period_start: Optional[datetime] = None,
+        period_end: Optional[datetime] = None,
+    ) -> MTTRReport:
+        """빈 MTTR 리포트 생성."""
+        now_time = datetime.now(timezone.utc)
+        return MTTRReport(
+            period_start=period_start or now_time,
+            period_end=period_end or now_time,
+            total_incidents=0,
+            avg_mttr_seconds=0,
+            min_mttr_seconds=0,
+            max_mttr_seconds=0,
+            p50_mttr_seconds=0,
+            p90_mttr_seconds=0,
+            p99_mttr_seconds=0,
+            by_service={},
+            recovery_events=[],
+        )
+    
+    def _filter_and_sort_events(
+        self,
+        events: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """유효한 타임스탬프를 가진 이벤트 필터링 및 정렬."""
         valid_events = [
             e for e in events 
             if self._parse_timestamp(e.get("timestamp", "")) is not None
         ]
-        
-        if not valid_events:
-            now = datetime.now(timezone.utc)
-            return MTTRReport(
-                period_start=period_start or now,
-                period_end=period_end or now,
-                total_incidents=0,
-                avg_mttr_seconds=0,
-                min_mttr_seconds=0,
-                max_mttr_seconds=0,
-                p50_mttr_seconds=0,
-                p90_mttr_seconds=0,
-                p99_mttr_seconds=0,
-                by_service={},
-                recovery_events=[],
-            )
-        
-        # 타임스탬프 정렬
-        sorted_events = sorted(
+        return sorted(
             valid_events, 
             key=lambda e: self._parse_timestamp(e.get("timestamp", ""))  # type: ignore
         )
-        
-        # 서비스별 OPEN 시점 추적
+    
+    def _collect_recovery_events(
+        self,
+        sorted_events: List[Dict[str, Any]],
+    ) -> List[RecoveryEvent]:
+        """정렬된 이벤트에서 복구 이벤트 수집."""
         open_times: Dict[str, Dict[str, Any]] = {}
         recovery_events: List[RecoveryEvent] = []
         
@@ -203,30 +212,57 @@ class MTTRCalculator:
             timestamp = self._parse_timestamp(event.get("timestamp", ""))
             
             if new_state == "open":
-                # 장애 시작
-                open_times[service] = {
-                    "timestamp": timestamp,
-                    "cause": event.get("cause", "unknown"),
-                    "failure_count": event.get("failure_count", 0),
-                    "trace_id": event.get("trace_id"),
-                }
+                self._record_open_event(open_times, service, event, timestamp)
             elif new_state == "closed" and service in open_times:
-                # 장애 종료 (복구 완료)
-                open_info = open_times[service]
-                duration = (timestamp - open_info["timestamp"]).total_seconds()
-                
-                recovery_events.append(RecoveryEvent(
-                    service_name=service,
-                    incident_start=open_info["timestamp"],
-                    incident_end=timestamp,
-                    duration_seconds=duration,
-                    cause=open_info["cause"],
-                    failure_count=open_info["failure_count"],
-                    trace_id=open_info["trace_id"],
-                ))
+                recovery_event = self._create_recovery_event(
+                    service, open_times[service], timestamp
+                )
+                recovery_events.append(recovery_event)
                 del open_times[service]
         
-        # 리포트 생성
+        return recovery_events
+    
+    def _record_open_event(
+        self,
+        open_times: Dict[str, Dict[str, Any]],
+        service: str,
+        event: Dict[str, Any],
+        timestamp: Optional[datetime],
+    ) -> None:
+        """OPEN 이벤트 기록."""
+        open_times[service] = {
+            "timestamp": timestamp,
+            "cause": event.get("cause", "unknown"),
+            "failure_count": event.get("failure_count", 0),
+            "trace_id": event.get("trace_id"),
+        }
+    
+    def _create_recovery_event(
+        self,
+        service: str,
+        open_info: Dict[str, Any],
+        closed_timestamp: Optional[datetime],
+    ) -> RecoveryEvent:
+        """복구 이벤트 생성."""
+        duration = (closed_timestamp - open_info["timestamp"]).total_seconds()
+        return RecoveryEvent(
+            service_name=service,
+            incident_start=open_info["timestamp"],
+            incident_end=closed_timestamp,
+            duration_seconds=duration,
+            cause=open_info["cause"],
+            failure_count=open_info["failure_count"],
+            trace_id=open_info["trace_id"],
+        )
+    
+    def _build_report(
+        self,
+        sorted_events: List[Dict[str, Any]],
+        recovery_events: List[RecoveryEvent],
+        period_start: Optional[datetime] = None,
+        period_end: Optional[datetime] = None,
+    ) -> MTTRReport:
+        """MTTR 리포트 빌드."""
         if not recovery_events:
             first_ts = self._parse_timestamp(sorted_events[0].get("timestamp", ""))
             last_ts = self._parse_timestamp(sorted_events[-1].get("timestamp", ""))
@@ -244,8 +280,7 @@ class MTTRCalculator:
                 recovery_events=[],
             )
         
-        durations = [e.duration_seconds for e in recovery_events]
-        durations.sort()
+        durations = sorted(e.duration_seconds for e in recovery_events)
         
         return MTTRReport(
             period_start=period_start or recovery_events[0].incident_start,
