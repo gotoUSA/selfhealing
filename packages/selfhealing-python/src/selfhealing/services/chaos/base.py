@@ -589,6 +589,16 @@ class ChaosExperiment(abc.ABC):
             
             self._audit("experiment_completed", {"result": self.result.to_dict()})
             
+            # Phase 3: LearningService 피드백 루프 (32_CHAOS_SYSTEM_INTEGRATION.md §20.4)
+            cb_snapshot = self._get_cb_state_snapshot()
+            self._record_hypothesis_validation(
+                actual_recovery_time=recovery_time if recovery_time > 0 else 60.0,
+                actual_cb_state=cb_snapshot.get("target_service_state"),
+            )
+            
+            # Phase 3: FinOps 비용 기록 (32_CHAOS_SYSTEM_INTEGRATION.md §10.2)
+            self.record_finops_cost()
+            
             return self.result
             
         except Exception as e:
@@ -693,6 +703,138 @@ class ChaosExperiment(abc.ABC):
         
         return -1.0
     
+    # =========================================================================
+    # Phase 3: LearningService 피드백 루프 (32_CHAOS_SYSTEM_INTEGRATION.md §20.4)
+    # =========================================================================
+    
+    def _record_hypothesis_validation(
+        self,
+        actual_recovery_time: float,
+        actual_canary_stage: Optional[str] = None,
+        actual_cb_state: Optional[str] = None,
+        actual_fallback_activated: Optional[bool] = None,
+        actual_fallback_type: Optional[str] = None,
+    ) -> None:
+        """
+        가설 검증 결과를 LearningService에 기록.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.4
+        
+        Args:
+            actual_recovery_time: 실제 복구 시간 (초)
+            actual_canary_stage: 실제 Canary 단계
+            actual_cb_state: 실제 CB 상태
+            actual_fallback_activated: 실제 Fallback 활성화 여부
+            actual_fallback_type: 실제 Fallback 유형
+        """
+        # failure_hypothesis가 없으면 스킵
+        if not hasattr(self, 'failure_hypothesis') or self.failure_hypothesis is None:
+            logger.debug(f"[Chaos] No failure_hypothesis defined for {self.experiment_id}")
+            return
+        
+        # Validate hypothesis
+        passed, violations = self.failure_hypothesis.validate(
+            actual_recovery_time=actual_recovery_time,
+            actual_canary_stage=actual_canary_stage,
+            actual_cb_state=actual_cb_state,
+            actual_fallback_activated=actual_fallback_activated,
+            actual_fallback_type=actual_fallback_type,
+        )
+        
+        # Audit log
+        self._audit("hypothesis_validation", {
+            "passed": passed,
+            "violations": violations,
+            "expected": self.failure_hypothesis.to_dict() if hasattr(self.failure_hypothesis, 'to_dict') else {},
+            "actual": {
+                "recovery_time": actual_recovery_time,
+                "canary_stage": actual_canary_stage,
+                "cb_state": actual_cb_state,
+                "fallback_activated": actual_fallback_activated,
+                "fallback_type": actual_fallback_type,
+            },
+        })
+        
+        try:
+            from selfhealing.services.learning import get_learning_service
+            from selfhealing.services.learning.models import PatternType
+            
+            learning = get_learning_service()
+            
+            # 패턴 기록
+            pattern_type = PatternType.SUCCESS if passed else PatternType.FAILURE
+            
+            expected_recovery_time = (
+                self.failure_hypothesis.expected_recovery_time_seconds
+                if hasattr(self.failure_hypothesis, 'expected_recovery_time_seconds')
+                else 30.0
+            )
+            
+            learning.record_pattern(
+                pattern_type=pattern_type,
+                source=f"chaos:{self.experiment_type}",
+                target=self.config.target_service,
+                features={
+                    "experiment_id": self.experiment_id,
+                    "experiment_type": self.experiment_type,
+                    "hypothesis_passed": passed,
+                    "violations": violations,
+                    "expected_recovery_time": expected_recovery_time,
+                    "actual_recovery_time": actual_recovery_time,
+                    "recovery_time_delta": actual_recovery_time - expected_recovery_time,
+                    "expected_canary_stage": (
+                        self.failure_hypothesis.expected_canary_stage
+                        if hasattr(self.failure_hypothesis, 'expected_canary_stage')
+                        else None
+                    ),
+                    "actual_canary_stage": actual_canary_stage,
+                },
+                confidence=0.9 if passed else 0.7,
+            )
+            
+            # 복구 시간 추세 분석 요청 (실패 시)
+            if not passed and violations:
+                logger.warning(
+                    f"[Chaos] Hypothesis validation FAILED for {self.experiment_id}: {violations}"
+                )
+                
+                # LearningService에 추세 분석 트리거
+                if hasattr(learning, 'analyze_trend'):
+                    learning.analyze_trend(
+                        target_field="recovery_time",
+                        source=f"chaos:{self.experiment_type}",
+                        window_days=30,
+                    )
+            else:
+                logger.info(
+                    f"[Chaos] Hypothesis validation PASSED for {self.experiment_id}"
+                )
+                
+        except ImportError as e:
+            logger.debug(f"[Chaos] LearningService not available: {e}")
+        except Exception as e:
+            logger.warning(f"[Chaos] Failed to record hypothesis validation: {e}")
+    
+    def record_finops_cost(self) -> None:
+        """
+        카오스 실험 비용을 FinOps에 기록.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §10.2
+        """
+        try:
+            from selfhealing.services.finops.service import FinOpsService
+            
+            finops = FinOpsService()
+            finops.record_chaos_cost(
+                experiment_id=self.experiment_id,
+                experiment_type=self.experiment_type,
+                target_domain=self.config.target_domain or self.config.target_service,
+                success=self.status == ExperimentStatus.COMPLETED,
+                dry_run=self.config.dry_run,
+            )
+        except Exception as e:
+            logger.debug(f"[Chaos] FinOps recording skipped: {e}")
+
     # =========================================================================
     # Kill Switch Integration
     # =========================================================================

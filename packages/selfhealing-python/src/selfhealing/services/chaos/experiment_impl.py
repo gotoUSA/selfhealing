@@ -786,6 +786,124 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 self._rollback_completed = True
             except Exception as e:
                 logger.error(f"[CBOpenInjection] Rollback failed: {e}")
+    
+    # =========================================================================
+    # Phase 3: Canary Recovery 검증 (32_CHAOS_SYSTEM_INTEGRATION.md §4)
+    # =========================================================================
+    
+    def _verify_canary_recovery(self) -> Dict[str, Any]:
+        """
+        Canary 복구 단계 검증.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.1
+        
+        Returns:
+            Dict with:
+                - canary_state: 현재 Canary 상태 (e.g., "canary_1")
+                - traffic_percent: 현재 트래픽 비율 (%)
+                - in_canary: Canary 복구 진행 중 여부
+                - success_rate: 성공률 (%)
+                - stage_started_at: 현재 단계 시작 시간
+        """
+        try:
+            from selfhealing.services.circuit_breaker.canary_recovery import (
+                get_canary_recovery_manager,
+                CanaryState,
+            )
+            
+            manager = get_canary_recovery_manager()
+            target = self.config.target_service
+            
+            state = manager.get_recovery_state(target)
+            
+            if state is None:
+                return {
+                    "canary_state": CanaryState.NOT_IN_CANARY.value,
+                    "traffic_percent": 100.0,
+                    "in_canary": False,
+                    "success_rate": None,
+                    "stage_started_at": None,
+                }
+            
+            return {
+                "canary_state": state.current_stage.value,
+                "traffic_percent": state.traffic_percent,
+                "in_canary": state.is_in_canary(),
+                "success_rate": state.success_rate,
+                "stage_started_at": state.stage_started_at.isoformat() if state.stage_started_at else None,
+            }
+        except Exception as e:
+            logger.warning(f"[CBOpenExperiment] Canary verification failed: {e}")
+            return {
+                "canary_state": "unknown",
+                "traffic_percent": None,
+                "in_canary": None,
+                "success_rate": None,
+                "error": str(e),
+            }
+    
+    def _check_canary_started(self, timeout_seconds: float = 30.0) -> bool:
+        """
+        Canary 복구 시작 확인 (비동기 폴링용).
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.2
+        
+        Args:
+            timeout_seconds: 대기 시간 (초)
+            
+        Returns:
+            True if canary started within timeout
+        """
+        import time
+        from selfhealing.core.timezone import now
+        
+        start_time = now()
+        
+        while (now() - start_time).total_seconds() < timeout_seconds:
+            status = self._verify_canary_recovery()
+            
+            if status.get("in_canary", False):
+                logger.info(
+                    f"[CBOpenExperiment] Canary recovery started: "
+                    f"stage={status.get('canary_state')}, "
+                    f"traffic={status.get('traffic_percent')}%"
+                )
+                return True
+            
+            time.sleep(1.0)  # 1초마다 체크
+        
+        logger.warning(
+            f"[CBOpenExperiment] Canary recovery did not start within {timeout_seconds}s"
+        )
+        return False
+    
+    def get_canary_verification_result(self) -> Dict[str, Any]:
+        """
+        실험 결과에 포함할 Canary 검증 결과.
+        
+        Returns:
+            Dict containing canary recovery verification data
+        """
+        canary_status = self._verify_canary_recovery()
+        
+        # FailureHypothesis 검증
+        if hasattr(self, 'failure_hypothesis') and self.failure_hypothesis:
+            actual_canary_stage = canary_status.get("canary_state")
+            hypothesis_canary_match = (
+                actual_canary_stage == self.failure_hypothesis.expected_canary_stage
+            )
+        else:
+            hypothesis_canary_match = None
+        
+        return {
+            "canary_status": canary_status,
+            "hypothesis_canary_match": hypothesis_canary_match,
+            "expected_canary_stage": (
+                self.failure_hypothesis.expected_canary_stage
+                if hasattr(self, 'failure_hypothesis') and self.failure_hypothesis
+                else None
+            ),
+        }
 
 
 # =============================================================================

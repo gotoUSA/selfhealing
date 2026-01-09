@@ -373,3 +373,164 @@ class FinOpsService:
         self._budgets.clear()
         self._records.clear()
         self._alerts.clear()
+    
+    # =========================================================================
+    # Phase 3: Chaos Budget 전용 (32_CHAOS_SYSTEM_INTEGRATION.md §17)
+    # =========================================================================
+    
+    # 가중치 폭발 방지
+    MAX_CHAOS_WEIGHT_MULTIPLIER: float = 10.0
+    
+    # Chaos Budget 전용 stage 이름
+    CHAOS_BUDGET_STAGE_NAME: str = "_chaos_global_pool"
+    
+    def set_chaos_budget(
+        self,
+        max_budget: Decimal,
+        alert_threshold: float = 0.8,
+        hard_limit: bool = True,
+        reset_period: str = "monthly",
+    ) -> CostBudget:
+        """
+        전역 카오스 실험 예산 설정.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.1
+        
+        Args:
+            max_budget: 월간 최대 예산 (USD)
+            alert_threshold: 알림 임계값 (0.0 ~ 1.0)
+            hard_limit: 예산 초과 시 실험 차단 여부
+            reset_period: 리셋 주기 (daily, weekly, monthly)
+            
+        Returns:
+            CostBudget: 설정된 예산
+        """
+        budget = self.set_budget(
+            stage_name=self.CHAOS_BUDGET_STAGE_NAME,
+            max_budget=max_budget,
+            alert_threshold=alert_threshold,
+            hard_limit=hard_limit,
+            reset_period=reset_period,
+        )
+        logger.info(f"[FinOps] Chaos budget set: ${max_budget}")
+        return budget
+    
+    def get_chaos_budget(self) -> Optional[CostBudget]:
+        """
+        전역 카오스 예산 조회.
+        
+        Returns:
+            CostBudget or None if not configured
+        """
+        return self.get_budget(self.CHAOS_BUDGET_STAGE_NAME)
+    
+    def set_domain_weight(self, domain: str, weight: float) -> None:
+        """
+        도메인별 비용 가중치 설정.
+        
+        높은 가중치 = 높은 위험 도메인 = 더 많은 예산 소진
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.1
+        
+        Args:
+            domain: 도메인 이름 (e.g., "payment", "order")
+            weight: 가중치 배수 (기본 1.0, 최대 MAX_CHAOS_WEIGHT_MULTIPLIER)
+        """
+        if not hasattr(self, "_domain_weights"):
+            self._domain_weights: Dict[str, float] = {}
+        
+        # Cap weight
+        capped_weight = min(weight, self.MAX_CHAOS_WEIGHT_MULTIPLIER)
+        self._domain_weights[domain.lower()] = capped_weight
+        logger.info(f"[FinOps] Domain weight set: {domain}={capped_weight}x")
+    
+    def get_domain_weight(self, domain: str) -> float:
+        """도메인 가중치 조회 (없으면 1.0)."""
+        if not hasattr(self, "_domain_weights"):
+            return 1.0
+        return self._domain_weights.get(domain.lower(), 1.0)
+    
+    def record_chaos_cost(
+        self,
+        experiment_id: str,
+        experiment_type: str,
+        target_domain: str,
+        success: bool = True,
+        dry_run: bool = False,
+    ) -> Optional[CostRecord]:
+        """
+        카오스 실험 비용 기록 (가중치 적용).
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.2
+        
+        Args:
+            experiment_id: 실험 ID
+            experiment_type: 실험 유형
+            target_domain: 대상 도메인
+            success: 실험 성공 여부
+            dry_run: Dry Run 여부 (True이면 비용 기록 안 함)
+            
+        Returns:
+            CostRecord or None if chaos budget not configured or dry_run
+            
+        Raises:
+            ValueError: 예산 초과 시 (hard_limit=True인 경우)
+        """
+        if dry_run:
+            logger.debug(f"[FinOps] Chaos cost skipped for dry_run experiment: {experiment_id}")
+            return None
+        
+        chaos_budget = self.get_chaos_budget()
+        if chaos_budget is None:
+            logger.debug("[FinOps] No chaos budget configured, skipping cost recording")
+            return None
+        
+        # 기본 비용
+        base_cost = self._operation_costs.get("chaos_test", Decimal("0.02"))
+        
+        # 도메인 가중치 적용
+        domain_weight = self.get_domain_weight(target_domain)
+        final_cost = base_cost * Decimal(str(domain_weight))
+        
+        # 예산에서 차감
+        return self.record_cost(
+            operation="chaos_test",
+            stage_name=self.CHAOS_BUDGET_STAGE_NAME,
+            cost=final_cost,
+            success=success,
+            metadata={
+                "experiment_id": experiment_id,
+                "experiment_type": experiment_type,
+                "target_domain": target_domain,
+                "domain_weight": domain_weight,
+                "base_cost": str(base_cost),
+                "final_cost": str(final_cost),
+            },
+        )
+    
+    def get_chaos_budget_status(self) -> Dict[str, any]:
+        """
+        카오스 예산 현재 상태 조회.
+        
+        Returns:
+            Dict with budget status or empty if not configured
+        """
+        budget = self.get_chaos_budget()
+        if budget is None:
+            return {
+                "configured": False,
+            }
+        
+        return {
+            "configured": True,
+            "max_budget": str(budget.max_budget),
+            "current_spent": str(budget.current_spent),
+            "remaining": str(budget.remaining),
+            "usage_percent": budget.usage_percent,
+            "alert_threshold": budget.alert_threshold,
+            "should_alert": budget.should_alert,
+            "is_over_budget": budget.is_over_budget,
+            "hard_limit": budget.hard_limit,
+            "reset_period": budget.reset_period,
+        }
+

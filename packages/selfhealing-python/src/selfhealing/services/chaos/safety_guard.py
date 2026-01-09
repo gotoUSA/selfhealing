@@ -84,6 +84,10 @@ class BlockReason(str, Enum):
     # Phase 2: Panic Threshold 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §5)
     PANIC_THRESHOLD_TRIGGERED = "panic_threshold_triggered"
     """Panic Threshold 발동 (70%+ CB OPEN)."""
+    
+    # Phase 3: Chaos Budget 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §17)
+    CHAOS_BUDGET_EXCEEDED = "chaos_budget_exceeded"
+    """월간 카오스 실험 예산 초과."""
 
 
 # =============================================================================
@@ -445,8 +449,12 @@ class SafetyGuard:
         # 4. Check panic threshold (Phase 2: 32_CHAOS_SYSTEM_INTEGRATION.md §5)
         if self._check_panic_threshold_status(result):
             return True
+        
+        # 5. Check chaos budget (Phase 3: 32_CHAOS_SYSTEM_INTEGRATION.md §17)
+        if self._check_chaos_budget_status(result):
+            return True
 
-        # 5. Check error budget (CRITICAL)
+        # 6. Check error budget (CRITICAL)
         if self._check_error_budget_status(result, experiment_id):
             return True
 
@@ -813,6 +821,117 @@ class SafetyGuard:
             # Audit 실패는 실험 차단에 영향을 주지 않음 (non-critical)
             logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
     
+    # =========================================================================
+    # Phase 3: Chaos Budget Check (32_CHAOS_SYSTEM_INTEGRATION.md §17.3)
+    # =========================================================================
+    
+    def _check_chaos_budget_status(self, result: SafetyCheckResult) -> bool:
+        """
+        Check chaos budget status. Returns True if blocked.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.3
+        
+        Args:
+            result: SafetyCheckResult to update
+            
+        Returns:
+            True if budget exceeded and experiment should be blocked
+        """
+        result.checks_performed.append("chaos_budget")
+        
+        try:
+            from selfhealing.services.finops.service import FinOpsService
+            
+            finops = FinOpsService()
+            budget_status = finops.get_chaos_budget_status()
+            
+            # Store budget info in result
+            if not hasattr(result, "chaos_budget_usage_percent"):
+                result.chaos_budget_usage_percent = 0.0
+            
+            if not budget_status.get("configured", False):
+                # 예산 미설정 시 통과
+                result.checks_passed.append("chaos_budget")
+                return False
+            
+            usage_percent = budget_status.get("usage_percent", 0.0)
+            result.chaos_budget_usage_percent = usage_percent
+            
+            # 100% 소진: 차단
+            if budget_status.get("is_over_budget", False):
+                result.status = SafetyStatus.BLOCKED.value
+                result.allowed = False
+                result.block_reason = BlockReason.CHAOS_BUDGET_EXCEEDED.value
+                result.block_message = f"Chaos budget exhausted: {usage_percent:.1f}%"
+                result.checks_failed.append("chaos_budget")
+                
+                # 알림 발송
+                self._notify_chaos_budget_exceeded(budget_status)
+                return True
+            
+            # 80% 이상: 경고
+            alert_threshold = budget_status.get("alert_threshold", 0.8)
+            if usage_percent >= alert_threshold * 100:
+                result.warnings.append(
+                    f"Chaos budget usage high: {usage_percent:.1f}%"
+                )
+                if result.status == SafetyStatus.SAFE.value:
+                    result.status = SafetyStatus.WARNING.value
+                
+                # 알림 발송
+                self._notify_chaos_budget_warning(budget_status)
+            
+            result.checks_passed.append("chaos_budget")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Could not check chaos budget: {e}")
+            result.checks_passed.append("chaos_budget")
+            return False
+    
+    def _notify_chaos_budget_exceeded(self, budget_status: Dict[str, Any]) -> None:
+        """예산 초과 알림."""
+        try:
+            from selfhealing.adapters.alert import get_alert_adapter
+            
+            adapter = get_alert_adapter()
+            if adapter:
+                adapter.alert(
+                    severity="critical",
+                    title="ChaosBudgetExhausted",
+                    message=(
+                        f"Chaos experiment budget exhausted.\n\n"
+                        f"Current spent: ${budget_status.get('current_spent', 'N/A')}\n"
+                        f"Max budget: ${budget_status.get('max_budget', 'N/A')}\n"
+                        f"Usage: {budget_status.get('usage_percent', 0):.1f}%\n\n"
+                        "Increase budget or wait for reset to enable chaos experiments."
+                    ),
+                    tags=["chaos", "safety", "finops", "budget"],
+                )
+        except Exception as e:
+            logger.warning(f"[SafetyGuard] Could not send budget exceeded notification: {e}")
+    
+    def _notify_chaos_budget_warning(self, budget_status: Dict[str, Any]) -> None:
+        """예산 경고 알림 (80%+ 사용)."""
+        try:
+            from selfhealing.adapters.alert import get_alert_adapter
+            
+            adapter = get_alert_adapter()
+            if adapter:
+                adapter.alert(
+                    severity="warning",
+                    title="ChaosBudgetWarning",
+                    message=(
+                        f"Chaos experiment budget usage is high.\n\n"
+                        f"Current spent: ${budget_status.get('current_spent', 'N/A')}\n"
+                        f"Max budget: ${budget_status.get('max_budget', 'N/A')}\n"
+                        f"Usage: {budget_status.get('usage_percent', 0):.1f}%"
+                    ),
+                    tags=["chaos", "safety", "finops", "budget"],
+                )
+        except Exception as e:
+            logger.debug(f"[SafetyGuard] Could not send budget warning notification: {e}")
+
     def _check_cooldown(self) -> Dict[str, Any]:
         """Check if cooldown period is active."""
         if self._last_experiment_at is None:
