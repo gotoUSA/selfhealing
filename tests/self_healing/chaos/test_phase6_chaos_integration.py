@@ -304,81 +304,83 @@ class TestCheckRecoveryMonitoringTask:
         
         assert check_recovery_monitoring_experiments.name == "chaos.check_recovery_monitoring"
     
-    @patch("selfhealing.services.chaos.get_chaos_scheduler")
-    def test_task_returns_correct_format(self, mock_get_scheduler):
+    def test_task_returns_correct_format(self):
         """Test task returns expected dictionary format."""
         from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.services.chaos.base import ExperimentStatus
         
-        mock_scheduler = MagicMock()
-        mock_scheduler.get_experiments_by_status.return_value = []
-        mock_get_scheduler.return_value = mock_scheduler
-        
-        result = check_recovery_monitoring_experiments()
-        
-        assert isinstance(result, dict)
-        assert "success" in result
-        assert "checked" in result
-        assert "completed" in result
-        assert "force_completed" in result
+        # Patch where the import happens (inside the function)
+        with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
+            mock_scheduler = MagicMock()
+            mock_scheduler.get_experiments_by_status.return_value = []
+            mock_get_scheduler.return_value = mock_scheduler
+            
+            result = check_recovery_monitoring_experiments()
+            
+            assert isinstance(result, dict)
+            assert "success" in result
+            assert "checked" in result
+            assert "completed" in result
+            assert "force_completed" in result
     
-    @patch("selfhealing.services.chaos.get_chaos_scheduler")
-    def test_task_completes_recovery_monitoring(self, mock_get_scheduler):
+    def test_task_completes_recovery_monitoring(self):
         """Test task completes experiments when canary recovery is done."""
         from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
         from selfhealing.services.chaos.base import ExperimentStatus
         
-        # Create mock experiment
-        mock_exp = MagicMock()
-        mock_exp.experiment_id = "test-exp"
-        mock_exp.status = ExperimentStatus.RECOVERY_MONITORING
-        mock_exp._verify_canary_recovery.return_value = {"in_canary": False}
-        
-        mock_scheduler = MagicMock()
-        mock_scheduler.get_experiments_by_status.return_value = [mock_exp]
-        mock_get_scheduler.return_value = mock_scheduler
-        
-        result = check_recovery_monitoring_experiments()
-        
-        assert result["success"] is True
-        assert result["checked"] == 1
-        assert result["completed"] == 1
-        mock_exp.complete_recovery_monitoring.assert_called_once()
+        with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
+            # Create mock experiment
+            mock_exp = MagicMock()
+            mock_exp.experiment_id = "test-exp"
+            mock_exp.status = ExperimentStatus.RECOVERY_MONITORING
+            mock_exp._verify_canary_recovery.return_value = {"in_canary": False}
+            
+            mock_scheduler = MagicMock()
+            mock_scheduler.get_experiments_by_status.return_value = [mock_exp]
+            mock_get_scheduler.return_value = mock_scheduler
+            
+            result = check_recovery_monitoring_experiments()
+            
+            assert result["success"] is True
+            assert result["checked"] == 1
+            assert result["completed"] == 1
+            mock_exp.complete_recovery_monitoring.assert_called_once()
     
-    @patch("selfhealing.services.chaos.get_chaos_scheduler")
-    def test_task_force_completes_on_hard_ttl(self, mock_get_scheduler):
+    def test_task_force_completes_on_hard_ttl(self):
         """Test task force completes experiments when hard TTL expired."""
         from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
         from selfhealing.services.chaos.base import ExperimentStatus
         
-        # Create mock experiment
-        mock_exp = MagicMock()
-        mock_exp.experiment_id = "test-exp"
-        mock_exp.status = ExperimentStatus.RECOVERY_MONITORING
-        mock_exp._verify_canary_recovery.return_value = {"in_canary": True}
-        mock_exp.is_hard_ttl_expired.return_value = True
-        
-        mock_scheduler = MagicMock()
-        mock_scheduler.get_experiments_by_status.return_value = [mock_exp]
-        mock_get_scheduler.return_value = mock_scheduler
-        
-        result = check_recovery_monitoring_experiments()
-        
-        assert result["success"] is True
-        assert result["checked"] == 1
-        assert result["force_completed"] == 1
-        mock_exp.force_complete.assert_called_once_with(reason="hard_ttl_expired")
+        with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
+            # Create mock experiment
+            mock_exp = MagicMock()
+            mock_exp.experiment_id = "test-exp"
+            mock_exp.status = ExperimentStatus.RECOVERY_MONITORING
+            mock_exp._verify_canary_recovery.return_value = {"in_canary": True}
+            mock_exp.is_hard_ttl_expired.return_value = True
+            
+            mock_scheduler = MagicMock()
+            mock_scheduler.get_experiments_by_status.return_value = [mock_exp]
+            mock_get_scheduler.return_value = mock_scheduler
+            
+            result = check_recovery_monitoring_experiments()
+            
+            assert result["success"] is True
+            assert result["checked"] == 1
+            assert result["force_completed"] == 1
+            mock_exp.force_complete.assert_called_once_with(reason="hard_ttl_expired")
     
-    @patch("selfhealing.services.chaos.get_chaos_scheduler")
-    def test_task_handles_errors_gracefully(self, mock_get_scheduler):
+    def test_task_handles_errors_gracefully(self):
         """Test task handles errors without crashing."""
         from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
         
-        mock_get_scheduler.side_effect = Exception("Test error")
-        
-        result = check_recovery_monitoring_experiments()
-        
-        assert result["success"] is False
-        assert "error" in result
+        with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
+            mock_get_scheduler.side_effect = Exception("Test error")
+            
+            result = check_recovery_monitoring_experiments()
+            
+            assert result["success"] is False
+            assert "error" in result
 
 
 # =============================================================================
