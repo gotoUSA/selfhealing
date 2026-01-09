@@ -87,11 +87,20 @@ class ExperimentStatus(str, Enum):
 class ExperimentType(str, Enum):
     """Core experiment types."""
     
+    # Existing types
     LATENCY_INJECTION = "latency_injection"
     ERROR_5XX = "error_5xx"
     PACKET_LOSS = "packet_loss"
     TIMEOUT = "timeout"
     RESOURCE_EXHAUSTION = "resource_exhaustion"
+    
+    # Phase 0-1: New types added per 31_CHAOS_EXPERIMENT_EXPANSION.md
+    ERROR_4XX = "error_4xx"
+    CONNECTION_RESET = "connection_reset"
+    RATE_LIMIT = "rate_limit"
+    CIRCUIT_BREAKER_OPEN = "circuit_breaker_open"
+    PARTIAL_FAILURE = "partial_failure"
+    CASCADING_FAILURE = "cascading_failure"
 
 
 class TrafficType(str, Enum):

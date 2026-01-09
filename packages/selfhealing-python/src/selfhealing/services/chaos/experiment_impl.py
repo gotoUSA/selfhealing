@@ -402,6 +402,196 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
 
 # =============================================================================
+# Phase 1: CircuitBreakerOpenExperiment (P1 Priority)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.4
+# =============================================================================
+
+
+class CircuitBreakerOpenExperiment(ChaosExperiment):
+    """
+    Force Circuit Breaker to OPEN state.
+    
+    Tests fast-fail behavior, fallback strategies, and canary recovery.
+    
+    Config parameters:
+        - trigger_canary: Whether to wait for canary recovery (default: True)
+        - fallback_type: Expected fallback type (cache, dlq, default)
+    """
+    
+    experiment_type = ExperimentType.CIRCUIT_BREAKER_OPEN.value
+    requires_approval = True  # High risk - blocks real traffic
+    
+    @property
+    def trigger_canary(self) -> bool:
+        return self.config.parameters.get("trigger_canary", True)
+    
+    @property
+    def fallback_type(self) -> str:
+        return self.config.parameters.get("fallback_type", "default")
+    
+    def inject_chaos(self) -> bool:
+        """Force CB to OPEN state."""
+        logger.info(
+            f"[CBOpenInjection] Forcing CB OPEN for {self.config.target_service} "
+            f"(TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            from selfhealing.services.circuit_breaker import (
+                get_circuit_breaker_service,
+            )
+            
+            # CB 강제 OPEN
+            cb_service = get_circuit_breaker_service()
+            result = cb_service.force_open(
+                service_name=self.config.target_service,
+                reason=f"Chaos Experiment: {self.experiment_id}",
+                controlled_by="chaos_engine",
+            )
+            
+            if not result.success:
+                logger.error(f"[CBOpenInjection] Failed to open CB: {result.message}")
+                return False
+            
+            # 설정 저장 (TTL 및 rollback용)
+            _apply_chaos_config({
+                "circuit_breaker_open": {
+                    "enabled": True,
+                    "target_service": self.config.target_service,
+                    "trigger_canary": self.trigger_canary,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[CBOpenInjection] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Force CB back to CLOSED state."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[CBOpenInjection] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[CBOpenInjection] Rolling back {self.experiment_id}")
+            
+            try:
+                from selfhealing.services.circuit_breaker import (
+                    get_circuit_breaker_service,
+                )
+                
+                cb_service = get_circuit_breaker_service()
+                cb_service.force_close(
+                    service_name=self.config.target_service,
+                    reason=f"Chaos Experiment Rollback: {self.experiment_id}",
+                    controlled_by="chaos_engine",
+                    trigger_replay=False,  # 실험이므로 리플레이 안 함
+                )
+                
+                _apply_chaos_config({
+                    "circuit_breaker_open": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[CBOpenInjection] Rollback failed: {e}")
+
+
+# =============================================================================
+# Phase 1: RateLimitExperiment (P1 Priority)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.3
+# =============================================================================
+
+
+class RateLimitExperiment(ChaosExperiment):
+    """
+    Inject rate limit (429) responses to trigger CB auto-open.
+    
+    Tests rate limit cascade detection and self-DDoS protection.
+    
+    Config parameters:
+        - rate_limit_count: Number of 429s to inject (default: 10)
+        - window_seconds: Time window for injection (default: 60)
+        - retry_after_seconds: Retry-After header value (default: 30)
+    """
+    
+    experiment_type = ExperimentType.RATE_LIMIT.value
+    requires_approval = False  # Medium risk
+    
+    @property
+    def rate_limit_count(self) -> int:
+        return self.config.parameters.get("rate_limit_count", 10)
+    
+    @property
+    def retry_after_seconds(self) -> int:
+        return self.config.parameters.get("retry_after_seconds", 30)
+    
+    def inject_chaos(self) -> bool:
+        """Inject rate limit responses to trigger CB cascade."""
+        logger.info(
+            f"[RateLimitInjection] Injecting {self.rate_limit_count} rate limits "
+            f"to {self.config.target_service} (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            # Rate Limit Tracker에 직접 기록 (CB 자동 OPEN 유발)
+            from selfhealing.services.circuit_breaker import (
+                get_rate_limit_tracker,
+            )
+            
+            tracker = get_rate_limit_tracker()
+            for _ in range(self.rate_limit_count):
+                tracker.record_rate_limit(
+                    service_name=self.config.target_service,
+                    retry_after=self.retry_after_seconds,
+                )
+            
+            # 설정 저장 (TTL용)
+            _apply_chaos_config({
+                "rate_limit_injection": {
+                    "enabled": True,
+                    "target_service": self.config.target_service,
+                    "count": self.rate_limit_count,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[RateLimitInjection] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Clear rate limit injection state."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[RateLimitInjection] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[RateLimitInjection] Rolling back {self.experiment_id}")
+            
+            try:
+                # Rate Limit Tracker 리셋은 어려우므로 설정만 해제
+                _apply_chaos_config({
+                    "rate_limit_injection": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[RateLimitInjection] Rollback failed: {e}")
+
+
+# =============================================================================
 # Experiment Factory
 # =============================================================================
 
@@ -423,11 +613,15 @@ def create_experiment(
         ChaosExperiment instance
     """
     experiment_classes = {
+        # Existing types
         ExperimentType.LATENCY_INJECTION.value: LatencyInjectionExperiment,
         ExperimentType.ERROR_5XX.value: Error5xxExperiment,
         ExperimentType.PACKET_LOSS.value: PacketLossExperiment,
         ExperimentType.TIMEOUT.value: TimeoutExperiment,
         ExperimentType.RESOURCE_EXHAUSTION.value: ResourceExhaustionExperiment,
+        # Phase 1: P1 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        ExperimentType.CIRCUIT_BREAKER_OPEN.value: CircuitBreakerOpenExperiment,
+        ExperimentType.RATE_LIMIT.value: RateLimitExperiment,
     }
     
     experiment_class = experiment_classes.get(experiment_type)
@@ -469,12 +663,15 @@ __all__ = [
     "SteadyStateHypothesis",
     # Base Class
     "ChaosExperiment",
-    # Concrete Experiments
+    # Concrete Experiments (Existing)
     "LatencyInjectionExperiment",
     "Error5xxExperiment",
     "PacketLossExperiment",
     "TimeoutExperiment",
     "ResourceExhaustionExperiment",
+    # Concrete Experiments (Phase 1 - P1 Priority)
+    "CircuitBreakerOpenExperiment",
+    "RateLimitExperiment",
     # Factory
     "create_experiment",
 ]
