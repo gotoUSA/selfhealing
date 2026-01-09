@@ -207,6 +207,10 @@ class GracefulDegradationManager:
         reason: str,
         activated_by: str,
         duration_minutes: Optional[int] = None,
+        # Chaos-Aware 메타데이터 (§14)
+        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §14.2
+        is_chaos_experiment: bool = False,
+        experiment_id: Optional[str] = None,
     ) -> EmergencyState:
         """
         수동 비상 모드 활성화.
@@ -216,6 +220,8 @@ class GracefulDegradationManager:
             reason: 활성화 사유 (필수)
             activated_by: 활성화한 사용자
             duration_minutes: 자동 만료 시간 (분), None이면 수동 해제 필요
+            is_chaos_experiment: 카오스 실험에 의한 활성화 여부
+            experiment_id: 관련 카오스 실험 ID
             
         Returns:
             새 상태
@@ -241,6 +247,19 @@ class GracefulDegradationManager:
             self._state.deactivated_at = None
             self._state.deactivated_by = None
             
+            # Chaos-Aware 메타데이터 설정 (§14)
+            if is_chaos_experiment:
+                self._state.metadata = {
+                    "is_chaos_experiment": True,
+                    "experiment_id": experiment_id,
+                    "classification": "chaos_induced_test",
+                }
+            else:
+                self._state.metadata = {
+                    "is_chaos_experiment": False,
+                    "classification": "infrastructure_incident",
+                }
+            
             if duration_minutes:
                 self._state.expires_at = (now + timedelta(minutes=duration_minutes)).isoformat()
             else:
@@ -262,6 +281,7 @@ class GracefulDegradationManager:
                 f"[EmergencyMode] ACTIVATED by {activated_by}: "
                 f"level={level.name}, reason={reason}, "
                 f"expires_at={self._state.expires_at or 'manual'}"
+                f"{', chaos_experiment=True' if is_chaos_experiment else ''}"
             )
             
             # Event Bus 발행: 다른 컴포넌트에 알림

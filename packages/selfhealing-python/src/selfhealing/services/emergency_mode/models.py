@@ -78,6 +78,20 @@ class EmergencyState:
     recovery_started_at: Optional[str] = None
     target_level: Optional[EmergencyLevel] = None
     
+    # Chaos-Aware 메타데이터 (§14)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §14.2
+    metadata: Optional[Dict[str, Any]] = None
+    """
+    추가 메타데이터.
+    
+    카오스 실험으로 인한 활성화 시:
+        {
+            "is_chaos_experiment": True,
+            "experiment_id": "exp-xxx",
+            "classification": "chaos_induced_test"
+        }
+    """
+    
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
         result["level"] = self.level.value

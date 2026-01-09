@@ -82,6 +82,11 @@ class ExperimentStatus(str, Enum):
     
     ROLLED_BACK = "rolled_back"
     """Experiment was rolled back due to issues."""
+    
+    # Phase 1: 비동기 복구 모니터링 (§15)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.2
+    RECOVERY_MONITORING = "recovery_monitoring"
+    """실험 완료 후 Canary 복구 모니터링 중."""
 
 
 class ExperimentType(str, Enum):
@@ -149,7 +154,25 @@ class ExperimentConfig:
     
     # TTL (Self-Expiration) configuration
     ttl_seconds: Optional[int] = None
-    """실험 자동 만료 시간 (초). None이면 기본값 사용."""
+    """Soft TTL: 장애 주입 종료 시간 (초). None이면 기본값 사용."""
+    
+    # Phase 1: Soft/Hard TTL 이중 구조 (§15.4)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
+    grace_period_seconds: int = 300
+    """Grace Period: Canary 복구 대기 시간 (기본 5분)."""
+    
+    @property
+    def hard_ttl_seconds(self) -> int:
+        """
+        Hard TTL: 실험 강제 종료 시간 (초).
+        
+        Soft TTL + Grace Period.
+        Canary 복구가 완료되지 않더라도 강제 종료.
+        
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
+        """
+        base_ttl = self.ttl_seconds or 600  # 기본 10분
+        return base_ttl + self.grace_period_seconds
     
     # Dry Run mode
     dry_run: bool = False

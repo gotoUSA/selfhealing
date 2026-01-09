@@ -14,7 +14,8 @@ Reference: Netflix ChAP, Gremlin, AWS FIS patterns
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -30,6 +31,187 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Failure Hypothesis (복구 기대 가설)
+# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.2
+# =============================================================================
+
+
+@dataclass
+class FailureHypothesis:
+    """
+    카오스 실험의 복구 기대 가설.
+    
+    LearningService가 실제 결과와 비교하여
+    "시스템 복구 성능 저하 추세"를 자동 감지하게 함.
+    
+    Reference:
+    - Architect 제안: "CB Open 실험 시, 30초 내에 Canary Stage 1이 시작되어야 함"
+    - 31_CHAOS_EXPERIMENT_EXPANSION.md §8
+    - 32_CHAOS_SYSTEM_INTEGRATION.md §20.2
+    
+    Example:
+        hypothesis = FailureHypothesis(
+            description="CB Open 실험 시, 30초 내에 Canary Stage 1이 시작되어야 함",
+            expected_recovery_time_seconds=60.0,
+            expected_canary_stage="canary_1",
+            expected_cb_state_after="half_open",
+        )
+        
+        passed, violations = hypothesis.validate(
+            actual_recovery_time=45.0,
+            actual_canary_stage="canary_1",
+            actual_cb_state="half_open",
+        )
+    """
+    
+    # 복구 관련 기대
+    expected_recovery_time_seconds: float = 30.0
+    """기대 복구 시간 (초). 이 시간 내에 복구되어야 함."""
+    
+    expected_canary_stage: Optional[str] = None
+    """기대 Canary 단계. 예: "canary_1" (10% 트래픽)."""
+    
+    expected_canary_start_within_seconds: Optional[float] = None
+    """Canary 시작까지 기대 시간 (초)."""
+    
+    # CB 관련 기대
+    expected_cb_state_after: Optional[str] = None
+    """실험 후 기대 CB 상태. 예: "open", "half_open"."""
+    
+    expected_cb_transition_within_seconds: Optional[float] = None
+    """CB 상태 전환까지 기대 시간 (초)."""
+    
+    # Fallback 관련 기대
+    expected_fallback_activated: bool = False
+    """Fallback 활성화 기대 여부."""
+    
+    expected_fallback_type: Optional[str] = None
+    """기대 Fallback 유형. 예: "cache", "dlq", "default"."""
+    
+    # 메타데이터
+    description: str = ""
+    """사람이 읽을 수 있는 가설 설명."""
+    
+    tolerance_percent: float = 20.0
+    """허용 오차 (%). 기대 시간의 ±20% 내면 정상."""
+    
+    def validate(
+        self,
+        actual_recovery_time: float,
+        actual_canary_stage: Optional[str] = None,
+        actual_cb_state: Optional[str] = None,
+        actual_fallback_activated: Optional[bool] = None,
+        actual_fallback_type: Optional[str] = None,
+    ) -> Tuple[bool, List[str]]:
+        """
+        가설 검증.
+        
+        Args:
+            actual_recovery_time: 실제 복구 시간 (초)
+            actual_canary_stage: 실제 Canary 단계
+            actual_cb_state: 실제 CB 상태
+            actual_fallback_activated: 실제 Fallback 활성화 여부
+            actual_fallback_type: 실제 Fallback 유형
+        
+        Returns:
+            (passed, violations) 튜플
+            - passed: True이면 가설 검증 통과
+            - violations: 위반 사항 목록
+        """
+        violations: List[str] = []
+        tolerance_factor = 1 + (self.tolerance_percent / 100)
+        
+        # 복구 시간 검증
+        max_allowed_time = self.expected_recovery_time_seconds * tolerance_factor
+        if actual_recovery_time > max_allowed_time:
+            violations.append(
+                f"Recovery time {actual_recovery_time:.1f}s > "
+                f"expected {self.expected_recovery_time_seconds:.1f}s "
+                f"(+{self.tolerance_percent}% tolerance = {max_allowed_time:.1f}s)"
+            )
+        
+        # Canary 단계 검증
+        if self.expected_canary_stage and actual_canary_stage != self.expected_canary_stage:
+            violations.append(
+                f"Canary stage '{actual_canary_stage}' != expected '{self.expected_canary_stage}'"
+            )
+        
+        # CB 상태 검증
+        if self.expected_cb_state_after and actual_cb_state != self.expected_cb_state_after:
+            violations.append(
+                f"CB state '{actual_cb_state}' != expected '{self.expected_cb_state_after}'"
+            )
+        
+        # Fallback 활성화 검증
+        if self.expected_fallback_activated:
+            if actual_fallback_activated is False:
+                violations.append(
+                    f"Fallback expected to be activated but was not"
+                )
+            # Fallback 유형 검증 (Fallback이 활성화된 경우에만)
+            if (
+                self.expected_fallback_type
+                and actual_fallback_activated
+                and actual_fallback_type != self.expected_fallback_type
+            ):
+                violations.append(
+                    f"Fallback type '{actual_fallback_type}' != expected '{self.expected_fallback_type}'"
+                )
+        
+        return len(violations) == 0, violations
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "expected_recovery_time_seconds": self.expected_recovery_time_seconds,
+            "expected_canary_stage": self.expected_canary_stage,
+            "expected_canary_start_within_seconds": self.expected_canary_start_within_seconds,
+            "expected_cb_state_after": self.expected_cb_state_after,
+            "expected_cb_transition_within_seconds": self.expected_cb_transition_within_seconds,
+            "expected_fallback_activated": self.expected_fallback_activated,
+            "expected_fallback_type": self.expected_fallback_type,
+            "description": self.description,
+            "tolerance_percent": self.tolerance_percent,
+        }
+
+
+# =============================================================================
+# 실험별 기대 가설 정의 (클래스 레벨 상수)
+# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
+# =============================================================================
+
+# CircuitBreakerOpenExperiment
+CB_OPEN_HYPOTHESIS = FailureHypothesis(
+    description="CB Open 실험 시, 30초 내에 Canary Stage 1이 시작되어야 함",
+    expected_recovery_time_seconds=60.0,
+    expected_canary_stage="canary_1",
+    expected_canary_start_within_seconds=30.0,
+    expected_cb_state_after="half_open",
+    expected_cb_transition_within_seconds=30.0,
+    expected_fallback_activated=True,
+    expected_fallback_type="cache",
+)
+
+# LatencyInjectionExperiment
+LATENCY_INJECTION_HYPOTHESIS = FailureHypothesis(
+    description="500ms 지연 주입 시, CB가 10초 내에 OPEN되어야 함",
+    expected_recovery_time_seconds=45.0,
+    expected_cb_state_after="open",
+    expected_cb_transition_within_seconds=10.0,
+    expected_fallback_activated=False,
+)
+
+# Error5xxExperiment
+ERROR_5XX_HYPOTHESIS = FailureHypothesis(
+    description="503 에러 주입 시, 5초 내에 CB OPEN 및 Fallback 활성화",
+    expected_recovery_time_seconds=30.0,
+    expected_cb_state_after="open",
+    expected_cb_transition_within_seconds=5.0,
+    expected_fallback_activated=True,
+)
+
+
+# =============================================================================
 # Latency Injection Experiment
 # =============================================================================
 
@@ -40,6 +222,16 @@ class LatencyInjectionExperiment(ChaosExperiment):
     
     Simulates network delays, slow database queries, or congested services.
     
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 500ms 지연 주입 시, CB가 10초 내에 OPEN되어야 함           │
+    │ • 45초 내에 복구 완료                                        │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
+    └─────────────────────────────────────────────────────────────┘
+    
     Config parameters:
         - latency_ms: Amount of latency to inject (default: 500ms)
         - latency_jitter_ms: Random jitter range (default: 100ms)
@@ -47,6 +239,10 @@ class LatencyInjectionExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.LATENCY_INJECTION.value
     requires_approval = False  # Low risk
+    
+    # 복구 기대 가설 (클래스 레벨)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
+    failure_hypothesis = LATENCY_INJECTION_HYPOTHESIS
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -124,6 +320,17 @@ class Error5xxExperiment(ChaosExperiment):
     
     Simulates server errors, service unavailability, or backend failures.
     
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 503 에러 주입 시, 5초 내에 CB OPEN                         │
+    │ • 30초 내에 복구 완료                                        │
+    │ • Fallback 활성화 필수                                       │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
+    └─────────────────────────────────────────────────────────────┘
+    
     Config parameters:
         - error_code: HTTP error code to inject (default: 503)
         - error_message: Error message (default: "Service Unavailable")
@@ -131,6 +338,10 @@ class Error5xxExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.ERROR_5XX.value
     requires_approval = False  # Medium risk
+    
+    # 복구 기대 가설 (클래스 레벨)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
+    failure_hypothesis = ERROR_5XX_HYPOTHESIS
     
     @property
     def error_code(self) -> int:
@@ -472,6 +683,17 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
     
     Tests fast-fail behavior, fallback strategies, and canary recovery.
     
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • CB Open 후 30초 내에 Canary Stage 1 시작                   │
+    │ • 60초 내에 복구 완료 (HALF_OPEN 전환)                        │
+    │ • Fallback(cache) 활성화 필수                                │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
+    └─────────────────────────────────────────────────────────────┘
+    
     Config parameters:
         - trigger_canary: Whether to wait for canary recovery (default: True)
         - fallback_type: Expected fallback type (cache, dlq, default)
@@ -479,6 +701,10 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.CIRCUIT_BREAKER_OPEN.value
     requires_approval = True  # High risk - blocks real traffic
+    
+    # 복구 기대 가설 (클래스 레벨)
+    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
+    failure_hypothesis = CB_OPEN_HYPOTHESIS
     
     @property
     def trigger_canary(self) -> bool:
