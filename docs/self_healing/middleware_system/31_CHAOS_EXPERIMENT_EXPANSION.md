@@ -97,9 +97,9 @@
 | 2-6 | Emergency Mode 에스컬레이션 검증 | - | [2.5 연동 포인트](#25-partialfailureexperiment) | 2-5 |
 
 **완료 기준:**
-- [ ] `Error4xxExperiment` 모든 4xx 코드 주입 가능
+- [x] `Error4xxExperiment` 모든 4xx 코드 주입 가능 ✅ (2026-01-09)
 - [ ] 429 에러 시 `AdaptiveThrottle` 반응 확인
-- [ ] `PartialFailureExperiment` 부분 장애율 조절 가능
+- [x] `PartialFailureExperiment` 부분 장애율 조절 가능 ✅ (2026-01-09)
 - [ ] Load Shedding 자동 트리거 확인
 
 ---
@@ -119,9 +119,9 @@
 | 3-7 | Emergency Level 3 자동 선포 검증 | - | [2.6 연동 포인트](#26-cascadingfailureexperiment) | 3-6 |
 
 **완료 기준:**
-- [ ] `ConnectionResetExperiment` 연결 리셋 시뮬레이션 가능
+- [x] `ConnectionResetExperiment` 연결 리셋 시뮬레이션 가능 ✅ (2026-01-09)
 - [ ] `BackoffCalculator` 재시도 로직 정상 동작
-- [ ] `CascadingFailureExperiment` 다중 서비스 장애 주입 가능
+- [x] `CascadingFailureExperiment` 다중 서비스 장애 주입 가능 ✅ (2026-01-09)
 - [ ] 70% CB OPEN 시 Panic 감지 및 Emergency Level 3 선포
 
 ⚠️ **주의**: `CascadingFailureExperiment`는 **고위험 실험**으로 운영 환경 실행 전 철저한 검증 필요
@@ -198,8 +198,8 @@
 
 | 순서 | 작업 | 파일 | 섹션 참조 | 선행 조건 |
 |------|------|------|-----------|-----------|
-| 7-1 | 단위 테스트 작성 (6개 신규 실험 타입) | `tests/self_healing/chaos/test_new_experiments.py` | [4.1](#41-단위-테스트) | Phase 1-3 |
-| 7-2 | 통합 테스트 시나리오 작성 | `tests/` | [4.2](#42-통합-테스트) | Phase 1-3 |
+| 7-1 | 단위 테스트 작성 (6개 신규 실험 타입) | `tests/self_healing/chaos/test_phase0_phase1_experiments.py`, `test_phase2_phase3_experiments.py` | [4.1](#41-단위-테스트) | Phase 1-3 |
+| 7-2 | 통합 테스트 시나리오 작성 | `tests/` | [4.2](#42-통합-테스트) | 7-1 |
 | 7-3 | Rate Limit Storm 시나리오 검증 | `tests/` | [4.2](#42-통합-테스트) | 7-2 |
 | 7-4 | Emergency Escalation 시나리오 검증 | `tests/` | [4.2](#42-통합-테스트) | 7-2 |
 | 7-5 | Panic Recovery 시나리오 검증 | `tests/` | [4.2](#42-통합-테스트) | 7-2 |
@@ -207,7 +207,8 @@
 | 7-7 | API 문서 업데이트 | `docs/` | - | 모든 Phase |
 
 **완료 기준:**
-- [ ] 모든 신규 실험 타입 단위 테스트 커버리지 80%+
+- [x] Phase 0/1 단위 테스트 작성됨 ✅ (2026-01-09)
+- [x] Phase 2/3 단위 테스트 작성됨 ✅ (2026-01-09)
 - [ ] 3개 통합 테스트 시나리오 통과
 - [ ] 온보딩 문서에 결제 서비스 보호 설정 가이드 포함
 

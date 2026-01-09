@@ -592,6 +592,402 @@ class RateLimitExperiment(ChaosExperiment):
 
 
 # =============================================================================
+# Phase 2: Error4xxExperiment (P2 Priority)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.1
+# =============================================================================
+
+
+class Error4xxExperiment(ChaosExperiment):
+    """
+    Inject HTTP 4xx errors into service responses.
+    
+    Simulates client errors, authentication failures, rate limiting.
+    Tests frontend error handling and throttle reaction.
+    
+    Config parameters:
+        - error_code: HTTP error code to inject (default: 400)
+        - error_codes: List of codes for random selection (optional)
+        - error_message: Error message (default: auto-generated based on code)
+    """
+    
+    experiment_type = ExperimentType.ERROR_4XX.value
+    requires_approval = False  # Low risk
+    
+    # Mapping of error codes to messages
+    ERROR_MESSAGES = {
+        400: "Bad Request (Chaos Experiment)",
+        401: "Unauthorized (Chaos Experiment)",
+        403: "Forbidden (Chaos Experiment)",
+        404: "Not Found (Chaos Experiment)",
+        429: "Too Many Requests (Chaos Experiment)",
+    }
+    
+    @property
+    def error_code(self) -> int:
+        """Get error code, optionally random from list."""
+        codes = self.config.parameters.get("error_codes")
+        if codes:
+            import random
+            return random.choice(codes)
+        return self.config.parameters.get("error_code", 400)
+    
+    @property
+    def error_message(self) -> str:
+        """Get error message for the error code."""
+        return self.config.parameters.get(
+            "error_message", 
+            self.ERROR_MESSAGES.get(self.error_code, "Client Error (Chaos Experiment)")
+        )
+    
+    def inject_chaos(self) -> bool:
+        """Inject 4xx errors into target service with TTL."""
+        logger.info(
+            f"[Error4xxInjection] Injecting {self.error_code} errors "
+            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
+            f"(TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "error_4xx_injection": {
+                    "enabled": True,
+                    "target_service": self.config.target_service,
+                    "error_code": self.error_code,
+                    "error_message": self.error_message,
+                    "rate": self.config.injection_rate,
+                    "traffic_type": self.config.traffic_type,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[Error4xxInjection] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Remove 4xx error injection with idempotency."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[Error4xxInjection] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[Error4xxInjection] Rolling back {self.experiment_id}")
+            
+            try:
+                _apply_chaos_config({
+                    "error_4xx_injection": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[Error4xxInjection] Rollback failed: {e}")
+
+
+# =============================================================================
+# Phase 2: PartialFailureExperiment (P2 Priority)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.5
+# =============================================================================
+
+
+class PartialFailureExperiment(ChaosExperiment):
+    """
+    Inject partial failures to test graceful degradation.
+    
+    Tests load shedding, emergency mode escalation.
+    
+    Config parameters:
+        - failure_rate: Percentage of requests to fail (default: 30%)
+        - affected_endpoints: List of endpoints to affect (optional)
+        - trigger_shedding: Whether to trigger load shedding (default: True)
+    """
+    
+    experiment_type = ExperimentType.PARTIAL_FAILURE.value
+    requires_approval = True  # High risk
+    
+    @property
+    def failure_rate(self) -> float:
+        return self.config.parameters.get("failure_rate", 0.30)
+    
+    @property
+    def affected_endpoints(self) -> list:
+        return self.config.parameters.get("affected_endpoints", [])
+    
+    @property
+    def trigger_shedding(self) -> bool:
+        return self.config.parameters.get("trigger_shedding", True)
+    
+    def inject_chaos(self) -> bool:
+        """Inject partial failures."""
+        logger.info(
+            f"[PartialFailure] Injecting {self.failure_rate*100}% failures "
+            f"to {self.config.target_service} (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "partial_failure": {
+                    "enabled": True,
+                    "target_service": self.config.target_service,
+                    "failure_rate": self.failure_rate,
+                    "affected_endpoints": self.affected_endpoints,
+                    "trigger_shedding": self.trigger_shedding,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[PartialFailure] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Remove partial failure injection."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[PartialFailure] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[PartialFailure] Rolling back {self.experiment_id}")
+            
+            try:
+                _apply_chaos_config({
+                    "partial_failure": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[PartialFailure] Rollback failed: {e}")
+
+
+# =============================================================================
+# Phase 3: ConnectionResetExperiment (P3 Priority)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.2
+# =============================================================================
+
+
+class ConnectionResetExperiment(ChaosExperiment):
+    """
+    Simulate network connection reset (TCP RST).
+    
+    Simulates sudden connection drops, network instability.
+    Tests retry/backoff logic and circuit breaker reaction.
+    
+    Config parameters:
+        - reset_after_bytes: Bytes to send before reset (0=immediate)
+        - reset_probability: Probability of reset per request (0-1)
+    """
+    
+    experiment_type = ExperimentType.CONNECTION_RESET.value
+    requires_approval = True  # Medium-High risk
+    
+    @property
+    def reset_after_bytes(self) -> int:
+        return self.config.parameters.get("reset_after_bytes", 0)
+    
+    @property
+    def reset_probability(self) -> float:
+        return self.config.parameters.get("reset_probability", 0.5)
+    
+    def inject_chaos(self) -> bool:
+        """Inject connection reset behavior with TTL."""
+        logger.info(
+            f"[ConnectionReset] Injecting connection resets "
+            f"to {self.config.target_service} at {self.reset_probability*100}% probability "
+            f"(TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "connection_reset": {
+                    "enabled": True,
+                    "target_service": self.config.target_service,
+                    "reset_after_bytes": self.reset_after_bytes,
+                    "reset_probability": self.reset_probability,
+                    "traffic_type": self.config.traffic_type,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[ConnectionReset] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Remove connection reset injection."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[ConnectionReset] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[ConnectionReset] Rolling back {self.experiment_id}")
+            
+            try:
+                _apply_chaos_config({
+                    "connection_reset": {
+                        "enabled": False,
+                        "target_service": self.config.target_service,
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+            except Exception as e:
+                logger.error(f"[ConnectionReset] Rollback failed: {e}")
+
+
+# =============================================================================
+# Phase 3: CascadingFailureExperiment (P3 Priority - CRITICAL RISK)
+# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.6
+# WARNING: This is a HIGH RISK experiment that requires manual approval
+# =============================================================================
+
+
+class CascadingFailureExperiment(ChaosExperiment):
+    """
+    Simulate cascading failures across multiple services.
+    
+    Tests panic threshold detection and Emergency Level 3 escalation.
+    
+    ⚠️ WARNING: This is a CRITICAL RISK experiment.
+    - Requires manual approval before execution
+    - Can trigger system-wide Emergency Level 3
+    - Should only be run in isolated test environments
+    
+    Config parameters:
+        - affected_services: List of services to fail
+        - cascade_delay_seconds: Delay between service failures (default: 5)
+        - target_open_percent: Target CB OPEN percentage (default: 75%)
+    """
+    
+    experiment_type = ExperimentType.CASCADING_FAILURE.value
+    requires_approval = True  # Critical risk - requires manual approval
+    
+    @property
+    def affected_services(self) -> list:
+        return self.config.parameters.get("affected_services", [])
+    
+    @property
+    def cascade_delay_seconds(self) -> int:
+        return self.config.parameters.get("cascade_delay_seconds", 5)
+    
+    @property
+    def target_open_percent(self) -> float:
+        return self.config.parameters.get("target_open_percent", 75.0)
+    
+    def _is_killed(self) -> bool:
+        """Check if kill switch was activated."""
+        return self._kill_requested
+    
+    def inject_chaos(self) -> bool:
+        """Inject cascading failures across services."""
+        import time
+        
+        logger.warning(
+            f"[CascadingFailure] ⚠️ CRITICAL: Injecting cascading failures to "
+            f"{len(self.affected_services)} services (TTL: {self._effective_ttl}s)"
+        )
+        
+        if not self.affected_services:
+            logger.error("[CascadingFailure] No affected_services specified")
+            return False
+        
+        try:
+            from selfhealing.services.circuit_breaker import (
+                get_circuit_breaker_service,
+            )
+            
+            cb_service = get_circuit_breaker_service()
+            opened_services = []
+            
+            for service in self.affected_services:
+                # Kill Switch 확인
+                if self._is_killed():
+                    logger.warning("[CascadingFailure] Kill switch activated, stopping cascade")
+                    break
+                
+                result = cb_service.force_open(
+                    service_name=service,
+                    reason=f"Cascading Failure Experiment: {self.experiment_id}",
+                    controlled_by="chaos_engine",
+                )
+                
+                if result.success:
+                    opened_services.append(service)
+                    logger.info(f"[CascadingFailure] Opened CB for {service}")
+                else:
+                    logger.warning(f"[CascadingFailure] Failed to open CB for {service}: {result.message}")
+                
+                # 연쇄 효과 시뮬레이션을 위한 지연
+                if service != self.affected_services[-1]:
+                    time.sleep(self.cascade_delay_seconds)
+            
+            _apply_chaos_config({
+                "cascading_failure": {
+                    "enabled": True,
+                    "affected_services": opened_services,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.warning(
+                f"[CascadingFailure] Cascade injection complete: "
+                f"{len(opened_services)}/{len(self.affected_services)} services affected"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[CascadingFailure] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Close all opened circuit breakers."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                logger.info(f"[CascadingFailure] Rollback already completed for {self.experiment_id}")
+                return
+            
+            logger.info(f"[CascadingFailure] Rolling back {self.experiment_id}")
+            
+            try:
+                from selfhealing.services.circuit_breaker import (
+                    get_circuit_breaker_service,
+                )
+                
+                cb_service = get_circuit_breaker_service()
+                
+                for service in self.affected_services:
+                    cb_service.force_close(
+                        service_name=service,
+                        reason=f"Cascading Failure Rollback: {self.experiment_id}",
+                        controlled_by="chaos_engine",
+                        trigger_replay=False,
+                    )
+                
+                _apply_chaos_config({
+                    "cascading_failure": {
+                        "enabled": False,
+                        "affected_services": [],
+                        "experiment_id": self.experiment_id,
+                    }
+                })
+                self._rollback_completed = True
+                logger.info(f"[CascadingFailure] Rollback complete for {len(self.affected_services)} services")
+            except Exception as e:
+                logger.error(f"[CascadingFailure] Rollback failed: {e}")
+
+
+# =============================================================================
 # Experiment Factory
 # =============================================================================
 
@@ -622,6 +1018,12 @@ def create_experiment(
         # Phase 1: P1 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
         ExperimentType.CIRCUIT_BREAKER_OPEN.value: CircuitBreakerOpenExperiment,
         ExperimentType.RATE_LIMIT.value: RateLimitExperiment,
+        # Phase 2: P2 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        ExperimentType.ERROR_4XX.value: Error4xxExperiment,
+        ExperimentType.PARTIAL_FAILURE.value: PartialFailureExperiment,
+        # Phase 3: P3 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        ExperimentType.CONNECTION_RESET.value: ConnectionResetExperiment,
+        ExperimentType.CASCADING_FAILURE.value: CascadingFailureExperiment,
     }
     
     experiment_class = experiment_classes.get(experiment_type)
@@ -672,6 +1074,12 @@ __all__ = [
     # Concrete Experiments (Phase 1 - P1 Priority)
     "CircuitBreakerOpenExperiment",
     "RateLimitExperiment",
+    # Concrete Experiments (Phase 2 - P2 Priority)
+    "Error4xxExperiment",
+    "PartialFailureExperiment",
+    # Concrete Experiments (Phase 3 - P3 Priority)
+    "ConnectionResetExperiment",
+    "CascadingFailureExperiment",
     # Factory
     "create_experiment",
 ]
