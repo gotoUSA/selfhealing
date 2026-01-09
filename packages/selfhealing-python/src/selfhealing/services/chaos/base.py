@@ -154,6 +154,20 @@ class ExperimentConfig:
     # Dry Run mode
     dry_run: bool = False
     """True이면 실제 장애 주입 없이 시뮬레이션만 수행."""
+    
+    # Phase 6: Resilience Expectation
+    # Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8.4
+    resilience_expectation: Optional[Any] = None
+    """
+    시스템이 이 장애에 대해 어떻게 반응해야 하는지 정의.
+    
+    예시:
+        ResilienceExpectation.expect_cb_open("payment-api", within_seconds=10)
+        → "지연 500ms 주입 시, CB가 10초 내에 OPEN되어야 함"
+    
+    None이면 Resilience 검증 스킵 (기존 동작 유지).
+    Type: ResilienceExpectation (from resilience_expectation module)
+    """
 
 
 @dataclass
@@ -206,6 +220,23 @@ class ExperimentResult:
     auto_expired: bool = False
     """TTL에 의해 자동 만료되었는지 여부."""
     
+    # Phase 6: Resilience Validation
+    # Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8.5
+    resilience_validation: Optional[Dict[str, Any]] = None
+    """
+    Resilience 기대값 검증 결과.
+    
+    {
+        "passed": True/False,
+        "resilience_score": 0.0 ~ 1.0,
+        "assertions": [...],
+        "summary": "Resilience: 2/3 (67%)"
+    }
+    """
+    
+    resilience_passed: bool = True
+    """Resilience 검증 통과 여부. expectation이 없으면 True."""
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -231,6 +262,8 @@ class ExperimentResult:
             "ttl_seconds": self.ttl_seconds,
             "expires_at": self.expires_at,
             "auto_expired": self.auto_expired,
+            "resilience_validation": self.resilience_validation,
+            "resilience_passed": self.resilience_passed,
         }
 
 

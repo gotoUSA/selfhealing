@@ -70,6 +70,17 @@ from .blast_radius_analyzer import (
     DependencyNode,
     get_blast_radius_analyzer,
 )
+# Phase 6: Resilience Expectation & Validation
+from .resilience_expectation import (
+    ExpectationType,
+    ResilienceAssertion,
+    ResilienceExpectation,
+    ResilienceValidationResult,
+)
+from .resilience_validator import (
+    ResilienceValidator,
+    get_resilience_validator,
+)
 
 __all__ = [
     # Experiments
@@ -119,4 +130,11 @@ __all__ = [
     "BlastRadiusLevel",
     "DependencyNode",
     "get_blast_radius_analyzer",
+    # Phase 6: Resilience Expectation & Validation
+    "ExpectationType",
+    "ResilienceAssertion",
+    "ResilienceExpectation",
+    "ResilienceValidationResult",
+    "ResilienceValidator",
+    "get_resilience_validator",
 ]
