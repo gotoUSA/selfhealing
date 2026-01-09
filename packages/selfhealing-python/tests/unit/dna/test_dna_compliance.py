@@ -16,7 +16,7 @@ from load_tests.utils.selfhealing.dna_compliance import (
     ComplianceEvidence,
     ComplianceResult,
     ComplianceStandard,
-    TestType,
+    ComplianceTestType,
 )
 
 
@@ -34,16 +34,16 @@ class TestComplianceStandard:
         assert ComplianceStandard.K_ISMS.value == "K-ISMS"
 
 
-class TestTestType:
-    """TestType 열거형 테스트"""
+class TestComplianceTestType:
+    """ComplianceTestType 열거형 테스트"""
     
     def test_test_type_values(self):
         """테스트 유형 값 테스트"""
-        assert TestType.RESILIENCE.value == "resilience"
-        assert TestType.SECURITY.value == "security"
-        assert TestType.AVAILABILITY.value == "availability"
-        assert TestType.AUDIT.value == "audit"
-        assert TestType.INCIDENT_RESPONSE.value == "incident_response"
+        assert ComplianceTestType.RESILIENCE.value == "resilience"
+        assert ComplianceTestType.SECURITY.value == "security"
+        assert ComplianceTestType.AVAILABILITY.value == "availability"
+        assert ComplianceTestType.AUDIT.value == "audit"
+        assert ComplianceTestType.INCIDENT_RESPONSE.value == "incident_response"
 
 
 class TestComplianceRequirement:
@@ -55,7 +55,7 @@ class TestComplianceRequirement:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-ICT-1",
             description="ICT risk management framework",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={"min_coverage": 90},
             evidence_required=["test_results", "documentation"],
             severity="high",
@@ -63,7 +63,7 @@ class TestComplianceRequirement:
         
         assert req.standard == ComplianceStandard.DORA_2025
         assert req.requirement_id == "DORA-ICT-1"
-        assert req.test_type == TestType.RESILIENCE
+        assert req.test_type == ComplianceTestType.RESILIENCE
         assert req.severity == "high"
     
     def test_to_dict(self):
@@ -72,7 +72,7 @@ class TestComplianceRequirement:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-3.4",
             description="Render PAN unreadable",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={"encryption": True},
             evidence_required=["encryption_logs"],
         )
@@ -129,7 +129,7 @@ class TestComplianceResult:
             standard=ComplianceStandard.SOC2_TYPE2,
             requirement_id="SOC2-CC6.1",
             description="Logical and physical access controls",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={},
             evidence_required=[],
         )
@@ -151,7 +151,7 @@ class TestComplianceResult:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-TEST-1",
             description="Test requirement",
-            test_type=TestType.AVAILABILITY,
+            test_type=ComplianceTestType.AVAILABILITY,
             pass_criteria={},
             evidence_required=[],
         )
@@ -207,7 +207,7 @@ class TestComplianceReport:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="REQ-1",
             description="Requirement 1",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={},
             evidence_required=[],
         )
@@ -215,7 +215,7 @@ class TestComplianceReport:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="REQ-2",
             description="Requirement 2",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={},
             evidence_required=[],
         )
@@ -293,7 +293,7 @@ class TestComplianceVerifier:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-TEST",
             description="Test requirement",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={"min_score": 80},
             evidence_required=["test_log"],
         )

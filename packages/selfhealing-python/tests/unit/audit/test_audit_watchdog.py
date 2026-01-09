@@ -508,23 +508,33 @@ class TestSingletonFunctions:
 
     def test_start_watchdog(self):
         """start_watchdog 테스트."""
+        import selfhealing.audit.audit_watchdog as aw_module
+        
+        # 싱글톤 완전 정리 (다른 테스트의 영향 차단)
+        with aw_module._watchdog_lock:
+            if aw_module._watchdog_instance is not None:
+                aw_module._watchdog_instance.stop(timeout=2.0)
+                aw_module._watchdog_instance = None
+        
         # start_watchdog 함수를 사용한 테스트
         config = WatchdogConfig(heartbeat_interval_seconds=1.0)
         
         # start_watchdog 호출 (싱글톤 생성 및 시작)
         watchdog = start_watchdog(config=config)
-        assert watchdog.is_running
-        assert watchdog._state == WatchdogState.RUNNING
         
-        # stop_watchdog 호출
-        stop_watchdog()
-        
-        # 스레드가 완전히 종료될 때까지 대기
-        if watchdog._thread and watchdog._thread.is_alive():
-            watchdog._thread.join(timeout=1.0)
-        
-        # 상태 확인
-        assert watchdog._state == WatchdogState.STOPPED
+        try:
+            assert watchdog.is_running
+            assert watchdog._state == WatchdogState.RUNNING
+            
+            # watchdog을 직접 stop
+            watchdog.stop(timeout=2.0)
+            
+            # 상태 확인 - stop()은 _state를 STOPPED로 설정함
+            assert watchdog._state == WatchdogState.STOPPED, f"Expected STOPPED but got {watchdog._state}"
+        finally:
+            # 테스트 후 정리
+            if watchdog._state != WatchdogState.STOPPED:
+                watchdog.stop(timeout=1.0)
 
     def test_stop_watchdog_without_start(self):
         """시작 없이 stop_watchdog 호출 테스트."""

@@ -46,8 +46,8 @@ class ComplianceStandard(Enum):
     K_ISMS = "K-ISMS"                 # 한국 정보보호관리체계
 
 
-class TestType(Enum):
-    """테스트 유형"""
+class ComplianceTestType(Enum):
+    """컴플라이언스 테스트 유형 (pytest 수집 방지를 위해 Test로 시작하지 않음)"""
     RESILIENCE = "resilience"          # 회복력 테스트
     SECURITY = "security"              # 보안 테스트
     AVAILABILITY = "availability"      # 가용성 테스트
@@ -66,7 +66,7 @@ class ComplianceRequirement:
     standard: ComplianceStandard
     requirement_id: str
     description: str
-    test_type: TestType
+    test_type: ComplianceTestType
     pass_criteria: Dict[str, Any]
     evidence_required: List[str]
     severity: str = "high"  # critical, high, medium, low
@@ -254,7 +254,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-17.1",
             description="ICT 시스템 회복력 테스트 수행",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={
                 "chaos_test_completed": True,
                 "recovery_time_minutes": 120,
@@ -266,7 +266,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-17.2",
             description="시나리오 기반 테스트 수행 (최소 5개 장애 시나리오)",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={
                 "scenarios_tested": 5,
                 "failure_modes_covered": ["network", "database", "external_api"],
@@ -278,7 +278,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-17.3",
             description="정기적인 회복력 테스트 (분기별)",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={
                 "test_frequency_days": 90,
                 "last_test_within_period": True,
@@ -290,7 +290,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-25.1",
             description="중대 인시던트 72시간 내 보고 체계",
-            test_type=TestType.INCIDENT_RESPONSE,
+            test_type=ComplianceTestType.INCIDENT_RESPONSE,
             pass_criteria={
                 "incident_response_plan_exists": True,
                 "notification_channel_tested": True,
@@ -303,7 +303,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.DORA_2025,
             requirement_id="DORA-28.1",
             description="써드파티 ICT 서비스 모니터링",
-            test_type=TestType.AVAILABILITY,
+            test_type=ComplianceTestType.AVAILABILITY,
             pass_criteria={
                 "third_party_monitoring_enabled": True,
                 "sla_tracking": True,
@@ -319,7 +319,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-12.10.1",
             description="인시던트 대응 계획 및 테스트",
-            test_type=TestType.INCIDENT_RESPONSE,
+            test_type=ComplianceTestType.INCIDENT_RESPONSE,
             pass_criteria={
                 "incident_response_plan_tested": True,
                 "response_time_minutes": 30,
@@ -331,7 +331,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-11.3.1",
             description="내부 취약점 스캔 (분기별)",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={
                 "vulnerability_scan_completed": True,
                 "critical_vulnerabilities": 0,
@@ -344,7 +344,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-11.4.1",
             description="침투 테스트 (연간)",
-            test_type=TestType.PENETRATION,
+            test_type=ComplianceTestType.PENETRATION,
             pass_criteria={
                 "penetration_test_completed": True,
                 "critical_findings_remediated": True,
@@ -356,7 +356,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.PCI_DSS_4_0,
             requirement_id="PCI-3.4.1",
             description="저장 데이터 암호화",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={
                 "data_encryption_enabled": True,
                 "encryption_algorithm": "AES-256",
@@ -372,7 +372,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.SOC2_TYPE2,
             requirement_id="SOC2-A1.1",
             description="가용성 SLA 달성 (99.9%)",
-            test_type=TestType.AVAILABILITY,
+            test_type=ComplianceTestType.AVAILABILITY,
             pass_criteria={
                 "availability_percentage": 99.9,
                 "max_unplanned_downtime_minutes": 525.6,  # 99.9% = 연간 ~8.76시간
@@ -384,7 +384,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.SOC2_TYPE2,
             requirement_id="SOC2-CC6.1",
             description="변경 관리 프로세스",
-            test_type=TestType.AUDIT,
+            test_type=ComplianceTestType.AUDIT,
             pass_criteria={
                 "change_management_enabled": True,
                 "approval_workflow_exists": True,
@@ -397,7 +397,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.SOC2_TYPE2,
             requirement_id="SOC2-CC7.2",
             description="보안 이벤트 모니터링",
-            test_type=TestType.SECURITY,
+            test_type=ComplianceTestType.SECURITY,
             pass_criteria={
                 "security_monitoring_enabled": True,
                 "alert_response_time_minutes": 15,
@@ -409,7 +409,7 @@ class ComplianceMapper:
             standard=ComplianceStandard.SOC2_TYPE2,
             requirement_id="SOC2-CC9.1",
             description="비즈니스 연속성 계획",
-            test_type=TestType.RESILIENCE,
+            test_type=ComplianceTestType.RESILIENCE,
             pass_criteria={
                 "bcp_exists": True,
                 "bcp_tested_annually": True,

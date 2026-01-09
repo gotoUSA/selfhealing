@@ -42,7 +42,8 @@ class TestSleepWithJitter:
         elapsed = time.monotonic() - start
 
         assert 0.05 <= waited <= 0.1
-        assert elapsed >= waited * 0.9  # Allow small margin
+        # Windows timer precision can cause slight undersleep, allow 20% margin
+        assert elapsed >= waited * 0.8
 
 
 class TestWithJitterDecorator:

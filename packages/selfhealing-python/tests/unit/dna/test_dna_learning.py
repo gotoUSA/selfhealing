@@ -8,7 +8,7 @@ import pytest
 from datetime import datetime, timedelta
 
 from load_tests.utils.selfhealing.dna_learning import (
-    TestSample,
+    DNATestSample,
     LearningInsight,
     LearningReport,
     DNALearner,
@@ -16,12 +16,12 @@ from load_tests.utils.selfhealing.dna_learning import (
 )
 
 
-class TestTestSample:
-    """TestSample 테스트"""
+class TestDNASample:
+    """DNATestSample 테스트"""
     
     def test_sample_creation(self):
         """샘플 생성"""
-        sample = TestSample(
+        sample = DNATestSample(
             timestamp="2025-01-01T00:00:00",
             stage_name="Test Stage",
             metrics={"p99": 200, "error_rate": 0.01},
@@ -80,7 +80,7 @@ class TestDNALearner:
     
     def _create_sample(self, p99=200, error_rate=0.005, passed=True, stage_name="Test"):
         """샘플 생성 헬퍼"""
-        return TestSample(
+        return DNATestSample(
             timestamp=datetime.now().isoformat(),
             stage_name=stage_name,
             metrics={
@@ -183,7 +183,7 @@ class TestDNALearner:
         """복구 시간 추세 분석"""
         # 복구 시간이 증가하는 추세
         for i in range(10):
-            sample = TestSample(
+            sample = DNATestSample(
                 timestamp=datetime.now().isoformat(),
                 stage_name="Test",
                 metrics={
@@ -320,7 +320,7 @@ class TestGenerateLearningReportSection:
         
         # 샘플 부족
         for i in range(3):
-            learner.record_sample(TestSample(
+            learner.record_sample(DNATestSample(
                 timestamp=datetime.now().isoformat(),
                 stage_name="Test",
                 metrics={"p99": 200},
@@ -338,7 +338,7 @@ class TestGenerateLearningReportSection:
         learner = DNALearner({"min_samples": 3})
         
         for i in range(5):
-            learner.record_sample(TestSample(
+            learner.record_sample(DNATestSample(
                 timestamp=datetime.now().isoformat(),
                 stage_name="Test",
                 metrics={"p99": 180 + i, "error_rate": 0.002},
@@ -359,7 +359,7 @@ class TestGenerateLearningReportSection:
         learner.last_adjustment = datetime.now()
         
         for i in range(6):
-            learner.record_sample(TestSample(
+            learner.record_sample(DNATestSample(
                 timestamp=datetime.now().isoformat(),
                 stage_name="Test",
                 metrics={"p99": 150 + i, "error_rate": 0.002},
@@ -394,7 +394,7 @@ class TestIntegration:
         
         # 1. 샘플 수집
         for i in range(10):
-            sample = TestSample(
+            sample = DNATestSample(
                 timestamp=datetime.now().isoformat(),
                 stage_name="Production",
                 metrics={

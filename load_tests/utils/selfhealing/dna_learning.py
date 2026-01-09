@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TestSample:
-    """테스트 샘플"""
+class DNATestSample:
+    """DNA 학습용 테스트 샘플 (pytest 수집 방지를 위해 Test로 시작하지 않음)"""
     timestamp: str
     stage_name: str
     metrics: Dict[str, float]
@@ -72,7 +72,7 @@ class DNALearner:
         self.last_adjustment: Optional[datetime] = None
         self.cooldown_hours = self.config.get("cooldown_hours", 24)
     
-    def record_sample(self, sample: TestSample):
+    def record_sample(self, sample: DNATestSample):
         """테스트 샘플 기록"""
         self.history.append(sample)
         logger.debug(f"Recorded sample: {sample.stage_name} @ {sample.timestamp}")
@@ -138,7 +138,7 @@ class DNALearner:
     
     def _analyze_p99(
         self,
-        samples: List[TestSample]
+        samples: List[DNATestSample]
     ) -> Optional[LearningInsight]:
         """P99 레이턴시 분석"""
         p99_values = [
@@ -195,7 +195,7 @@ class DNALearner:
     
     def _analyze_error_rate(
         self,
-        samples: List[TestSample]
+        samples: List[DNATestSample]
     ) -> Optional[LearningInsight]:
         """에러율 분석"""
         error_rates = [
@@ -250,7 +250,7 @@ class DNALearner:
     
     def _analyze_recovery_time(
         self,
-        samples: List[TestSample]
+        samples: List[DNATestSample]
     ) -> Optional[LearningInsight]:
         """복구 시간 분석"""
         recovery_times = [
@@ -292,7 +292,7 @@ class DNALearner:
     
     def _analyze_pass_rate(
         self,
-        samples: List[TestSample]
+        samples: List[DNATestSample]
     ) -> Optional[LearningInsight]:
         """테스트 통과율 분석"""
         if len(samples) < self.min_samples:
