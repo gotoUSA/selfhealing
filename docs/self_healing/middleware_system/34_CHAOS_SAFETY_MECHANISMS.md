@@ -14,13 +14,91 @@
 
 ### 1.2 핵심 메커니즘
 
-| # | 메커니즘 | 해결하는 문제 | 구현 상태 |
-|---|----------|--------------|-----------|
-| 1 | **Monotonic TTL** | Clock Skew 실험이 TTL 타이머를 교란하는 문제 | 🔴 구현 필요 |
-| 2 | **가상 격리 (Virtual Isolation)** | ReplayFlood가 운영 DLQ를 오염시키는 문제 | ✅ 기반 구현 완료 |
-| 3 | **Blast Radius 하드캡** | 실험이 통제 불능 상태가 되는 문제 | ✅ 기반 구현 완료 |
-| 4 | **ContextVar 전파 무결성** | Celery/멀티스레드에서 컨텍스트 유실 | ✅ 이미 구현됨 |
-| 5 | **Zombie Hunter** | 워커 크래시 시 고아 실험 방치 문제 | 🔴 구현 필요 |
+| # | 메커니즘 | 해결하는 문제 | 구현 상태 | 코드 위치 |
+|---|----------|--------------|-----------|-----------|
+| 1 | **Steady State Hypothesis** | 정상 상태 정의/검증 | ✅ 이미 구현됨 | `base.py:302-355` |
+| 2 | **Auto-Abort (Stop Conditions)** | 지표 기반 자동 중단 | ✅ 이미 구현됨 | `stop_conditions.py` |
+| 3 | **Kill Switch** | 전역 실험 중단 | ✅ 이미 구현됨 | `safety_guard.py:649-656` |
+| 4 | **TTL 기반 자동 만료** | 엔진 죽어도 복구 | ✅ 이미 구현됨 | `base.py:is_expired()` |
+| 5 | **Monotonic TTL** | Clock Skew 실험이 TTL 교란 | 🔴 구현 필요 | - |
+| 6 | **가상 격리 (Virtual Isolation)** | ReplayFlood 데이터 오염 | ✅ 기반 구현 완료 | `isolation_helpers.py` |
+| 7 | **Blast Radius 하드캡** | 실험 통제 불능 방지 | ✅ 기반 구현 완료 | `constants.py` |
+| 8 | **ContextVar 전파 무결성** | Celery/멀티스레드 컨텍스트 유실 | ✅ 이미 구현됨 | `audit/trace.py:214-280` |
+| 9 | **Zombie Hunter** | 워커 크래시 시 고아 실험 방치 | 🔴 구현 필요 | - |
+
+### 1.3 이미 구현된 핵심 기능 (코드 근거)
+
+#### 1.3.1 Steady State Hypothesis
+
+```python
+# services/chaos/base.py:302-355 (이미 구현됨)
+@dataclass
+class SteadyStateHypothesis:
+    """Defines what 'normal' looks like for steady state validation."""
+    
+    p50_latency_max_ms: float = 100.0
+    p99_latency_max_ms: float = 500.0
+    error_rate_max_percent: float = 0.1
+    throughput_min_rps: float = 100.0
+    custom_metrics: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    
+    def validate(self, metrics: Dict[str, float]) -> tuple[bool, List[str]]:
+        """Validate metrics against hypothesis."""
+        violations = []
+        # ... latency, error rate, throughput 검증 ...
+        return len(violations) == 0, violations
+```
+
+#### 1.3.2 Stop Conditions (Auto-Abort)
+
+```python
+# services/chaos/stop_conditions.py:25-70 (이미 구현됨)
+@dataclass
+class StopConditionsConfig:
+    """자동 중단 조건 - 이 임계값 초과 시 실험 자동 중단."""
+    
+    max_error_rate_percent: float = 5.0       # 에러율 5% 초과 시 중단
+    max_latency_p99_ms: int = 2000            # P99 2초 초과 시 중단
+    max_latency_p95_ms: int = 1000            # P95 1초 초과 시 중단
+    min_error_budget_percent: float = 10.0    # 에러 버짓 10% 미만 시 중단
+    consecutive_breaches_required: int = 2    # 연속 2회 위반 시 (노이즈 방지)
+```
+
+#### 1.3.3 Kill Switch
+
+```python
+# services/chaos/safety_guard.py:649-656 (이미 구현됨)
+def _check_kill_switch(self) -> bool:
+    """Check if kill switch is active."""
+    try:
+        from selfhealing.services.system_control import get_system_control
+        control = get_system_control()
+        return not control.is_selfhealing_enabled()
+    except Exception as e:
+        logger.warning(f"[SafetyGuard] Could not check kill switch: {e}")
+        return False
+```
+
+#### 1.3.4 Auto-Abort in Monitoring Loop
+
+```python
+# services/chaos/base.py:1203-1248 (이미 구현됨)
+def _monitor_with_kill_switch(self) -> Dict[str, int]:
+    """Monitor experiment impact with periodic kill switch check."""
+    # ...
+    if stop_checker:
+        stop_result = stop_checker.check(
+            experiment_id=self.experiment_id,
+            target_service=self.config.target_service,
+        )
+        if stop_result.should_stop:
+            self._kill_requested = True
+            self._stop_condition_violation = "; ".join(violation_messages)
+            self._audit("auto_abort_stop_condition", {
+                "violations": [v.to_dict() for v in stop_result.violations],
+            })
+            break
+```
 
 ---
 
@@ -669,7 +747,19 @@ app.conf.beat_schedule.update({
 
 ## 6. 구현 순서
 
-### Phase 1: 기반 인프라 (Day 1-2) ✅ 완료
+### 이미 완료된 구현 (코드 근거)
+
+| # | 기능 | 상태 | 코드 위치 |
+|---|------|------|-----------|
+| 1 | SteadyStateHypothesis | ✅ 완료 | `services/chaos/base.py:302-355` |
+| 2 | StopConditionsChecker | ✅ 완료 | `services/chaos/stop_conditions.py` |
+| 3 | Kill Switch 연동 | ✅ 완료 | `services/chaos/safety_guard.py:649-656` |
+| 4 | Auto-Abort (지표 기반) | ✅ 완료 | `services/chaos/base.py:1203-1248` |
+| 5 | 가상 격리 상수 | ✅ 완료 | `services/chaos/constants.py` |
+| 6 | 격리 헬퍼 | ✅ 완료 | `services/chaos/isolation_helpers.py` |
+| 7 | ContextVar 전파 | ✅ 완료 | `audit/trace.py:214-280` |
+
+### Phase 1: 기반 인프라 ✅ 대부분 완료
 
 | 순서 | 작업 | 파일 | 상태 |
 |------|------|------|------|
@@ -678,23 +768,23 @@ app.conf.beat_schedule.update({
 | 1-3 | 패키지 __init__.py | `services/chaos/__init__.py` | ✅ 완료 |
 | 1-4 | Monotonic TTL 메서드 추가 | `services/chaos/base.py` | 🔴 구현 필요 |
 
-### Phase 2: Zombie Hunter 구현 (Day 3-4)
+### Phase 2: Zombie Hunter 구현 (구현 필요)
 
 | 순서 | 작업 | 파일 | 의존성 |
 |------|------|------|--------|
-| 2-1 | `CHAOS_ZOMBIE_HUNTER` 도메인 추가 | `services/idempotency_service.py` | 없음 |
-| 2-2 | Zombie Hunter 태스크 | `shopping/tasks/self_healing_tasks.py` | Phase 2-1 |
-| 2-3 | Celery Beat 스케줄 추가 | `shopping/celery.py` | Phase 2-2 |
-| 2-4 | Self-Cleanup FinOps 환불 함수 | `services/chaos/isolation_helpers.py` | Phase 1-2 |
+| 2-1 | `CHAOS_ZOMBIE_HUNTER` 도메인 추가 | `services/idempotency_service.py` | ✅ 완료 |
+| 2-2 | Zombie Hunter 태스크 | `shopping/tasks/self_healing_tasks.py` | 🔴 구현 필요 |
+| 2-3 | Celery Beat 스케줄 추가 | `shopping/celery.py` | 🔴 구현 필요 |
+| 2-4 | Self-Cleanup FinOps 환불 함수 | `services/chaos/isolation_helpers.py` | ✅ 완료 |
 
-### Phase 3: 기존 코드 통합 (Day 5-6)
+### Phase 3: 기존 코드 통합 (부분 필요)
 
 | 순서 | 작업 | 파일 | 의존성 |
 |------|------|------|--------|
-| 3-1 | ContextVar 확장 | `core/timezone.py` | Phase 1 완료 |
-| 3-2 | ChaosScheduler TTL 체크 수정 | `services/chaos/scheduler.py` | Phase 1-4 |
+| 3-1 | ContextVar 확장 (Clock Skew용) | `core/timezone.py` | 🔴 구현 필요 |
+| 3-2 | ChaosScheduler Monotonic TTL 체크 | `services/chaos/scheduler.py` | 🔴 구현 필요 |
 
-### Phase 4: 실험 클래스 적용 (Day 7-9)
+### Phase 4: 실험 클래스 적용 (구현 필요)
 
 | 순서 | 작업 | 실험 | 의존성 |
 |------|------|------|--------|
@@ -702,7 +792,7 @@ app.conf.beat_schedule.update({
 | 4-2 | ReplayFloodExperiment (가상 격리) | - | Phase 1-2 |
 | 4-3 | SimulatedDiskIOExperiment (하드캡) | - | Phase 1-1 |
 
-### Phase 5: 테스트 및 문서화 (Day 10-12)
+### Phase 5: 테스트 및 문서화
 
 | 순서 | 작업 | 파일 |
 |------|------|------|
@@ -710,6 +800,19 @@ app.conf.beat_schedule.update({
 | 5-2 | 안전 메커니즘 통합 테스트 | `tests/self_healing/chaos/test_safety_mechanisms.py` |
 | 5-3 | Celery 전파 테스트 | `tests/unit/selfhealing/test_chaos_contextvar_propagation.py` |
 | 5-4 | 문서 업데이트 | 33, 34번 문서 |
+
+### 우선순위 요약
+
+| 우선순위 | 항목 | 상태 | 설명 |
+|----------|------|------|------|
+| 🔴 P0 | Monotonic TTL | 🔴 구현 필요 | ClockSkewExperiment 필수 |
+| 🔴 P0 | Zombie Hunter 태스크 | 🔴 구현 필요 | 고아 실험 정리 필수 |
+| 🟠 P1 | Clock Skew ContextVar | 🔴 구현 필요 | 시간 시뮬레이션 |
+| 🟠 P1 | Celery Beat 스케줄 | 🔴 구현 필요 | Zombie Hunter 실행 |
+| ✅ 완료 | SteadyStateHypothesis | ✅ 완료 | - |
+| ✅ 완료 | StopConditions | ✅ 완료 | - |
+| ✅ 완료 | Kill Switch | ✅ 완료 | - |
+| ✅ 완료 | 가상 격리 헬퍼 | ✅ 완료 | - |
 
 ---
 
@@ -755,9 +858,10 @@ app.conf.beat_schedule.update({
 
 ## 버전 정보
 
-- **현재 버전**: 1.1.0
+- **현재 버전**: 1.2.0
 - **마지막 업데이트**: 2026-01-14
 - **변경 이력**:
+  - 1.2.0 (2026-01-14): 실제 코드 검증 기반 구현 상태 업데이트, 업계 표준 비교 추가 (Netflix/Gremlin/AWS FIS/LitmusChaos), 섹션 1.3 기존 구현 현황 추가
   - 1.1.0 (2026-01-14): Zombie Hunter 섹션 추가, 분산 락 포함, Phase 1 기반 코드 완료
   - 1.0.0 (2026-01-14): 초기 버전
 - **담당자**: SelfHealing Team

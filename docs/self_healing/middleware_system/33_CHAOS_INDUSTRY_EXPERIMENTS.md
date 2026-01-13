@@ -1232,12 +1232,31 @@ config = ExperimentConfig(
 
 ## 11. 구현 순서 (Implementation Order)
 
-### Phase 1: 기반 안전 메커니즘 (P0)
+### 이미 완료된 구현 (코드 근거)
 
-| 순서 | 작업 | 파일 | 의존성 |
-|------|------|------|--------|
-| 1-1 | Monotonic TTL 헬퍼 추가 | `services/chaos/base.py` | 없음 |
-| 1-2 | 가상 격리 상수 정의 | `services/chaos/constants.py` (신규) | 없음 |
+> ⚠️ 아래 기능들은 이미 구현되어 있으므로, 새로운 실험 구현 시 재사용 가능합니다.
+
+| # | 기능 | 상태 | 코드 위치 |
+|---|------|------|-----------|
+| 1 | ChaosExperiment 기본 클래스 | ✅ 완료 | `services/chaos/base.py:362+` |
+| 2 | SteadyStateHypothesis | ✅ 완료 | `services/chaos/base.py:302-355` |
+| 3 | StopConditionsChecker | ✅ 완료 | `services/chaos/stop_conditions.py` |
+| 4 | SafetyGuard 연동 | ✅ 완료 | `services/chaos/safety_guard.py` |
+| 5 | Kill Switch 연동 | ✅ 완료 | `services/chaos/safety_guard.py:649-656` |
+| 6 | Auto-Abort (지표 기반) | ✅ 완료 | `services/chaos/base.py:1203-1248` |
+| 7 | 가상 격리 상수 | ✅ 완료 | `services/chaos/constants.py` |
+| 8 | 격리 헬퍼 | ✅ 완료 | `services/chaos/isolation_helpers.py` |
+| 9 | ContextVar 전파 | ✅ 완료 | `audit/trace.py:214-280` |
+| 10 | ExperimentHardCaps | ✅ 완료 | `services/chaos/constants.py` |
+
+### Phase 1: 기반 안전 메커니즘 (P0) ✅ 대부분 완료
+
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|------|
+| 1-1 | Monotonic TTL 헬퍼 추가 | `services/chaos/base.py` | 🔴 구현 필요 (ClockSkew용) |
+| 1-2 | 가상 격리 상수 정의 | `services/chaos/constants.py` | ✅ 완료 |
+| 1-3 | SteadyStateHypothesis | `services/chaos/base.py` | ✅ 완료 |
+| 1-4 | StopConditionsChecker | `services/chaos/stop_conditions.py` | ✅ 완료 |
 
 ### Phase 2: P1 실험 구현 (기존 코드 활용)
 
@@ -1261,7 +1280,7 @@ config = ExperimentConfig(
 | 4-1 | `NetworkBlackholeExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
 | 4-2 | `SimulatedDiskIOExperiment` | `services/chaos/experiment_impl.py` | Storage Adapter 확장 |
 | 4-3 | `SimulatedTLSFailureExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
-| 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | Phase 1-2 |
+| 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | Phase 1-2 ✅ |
 
 ### Phase 5: ExperimentType Enum 확장
 
@@ -1269,6 +1288,19 @@ config = ExperimentConfig(
 |------|------|------|--------|
 | 5-1 | Enum 값 추가 (10개) | `services/chaos/base.py` | Phase 2-4 완료 |
 | 5-2 | 테스트 작성 | `tests/self_healing/chaos/` | Phase 5-1 |
+
+### 우선순위 요약
+
+| 우선순위 | 항목 | 상태 | 설명 |
+|----------|------|------|------|
+| ✅ 완료 | SteadyStateHypothesis | ✅ 완료 | 정상 상태 가설 검증 |
+| ✅ 완료 | StopConditions | ✅ 완료 | 자동 중단 조건 |
+| ✅ 완료 | Kill Switch | ✅ 완료 | 전역 비상 정지 |
+| ✅ 완료 | 가상 격리 헬퍼 | ✅ 완료 | 테스트 데이터 격리 |
+| 🔴 P0 | Monotonic TTL | 🔴 구현 필요 | ClockSkewExperiment 필수 |
+| 🔴 P0 | Zombie Hunter 태스크 | 🔴 구현 필요 | 고아 실험 정리 |
+| 🟠 P1 | PoolExhaustionExperiment | 🔴 구현 필요 | 기존 모니터 활용 |
+| 🟠 P1 | CertificateExpiryExperiment | 🔴 구현 필요 | 기존 모니터 활용 |
 
 ---
 
@@ -1283,11 +1315,98 @@ config = ExperimentConfig(
 
 ---
 
+## 12. 업계 표준 비교 및 현재 구현 상태
+
+### 12.1 Netflix Chaos Engineering 원칙 대비
+
+| 원칙 | Netflix | 현재 구현 | 상태 |
+|------|---------|----------|------|
+| **Steady State 가설 수립** | SPS 기준 | ✅ `SteadyStateHypothesis` 클래스 | `base.py:302-355` |
+| **실제 이벤트 시뮬레이션** | 프로덕션 장애 재현 | ✅ 11개 실험 타입 | `experiment_impl.py` |
+| **프로덕션 실험** | 통제된 환경 | ✅ SafetyGuard | `safety_guard.py` |
+| **자동화 & 지속 실행** | 자동 스케줄링 | ✅ ChaosScheduler | 스케줄러 구현 |
+| **Blast Radius 최소화** | 점진적 확대 | ✅ 하드캡 상수 | `constants.py` |
+
+### 12.2 Gremlin Safety Net 대비
+
+| 기능 | Gremlin | 현재 구현 | 상태 | 코드 위치 |
+|------|---------|----------|------|-----------|
+| **Halt (Kill Switch)** | 모든 실험 즉시 중단 | ✅ | 구현됨 | `safety_guard.py:649-656` |
+| **Rollback** | 자동 복구 | ✅ | 구현됨 | `base.py:rollback()` |
+| **Targeting** | 영향 범위 제어 | ✅ | 구현됨 | `BlastRadiusPolicy` |
+| **Auto-Abort (지표 기반)** | error_rate, latency | ✅ | 구현됨 | `stop_conditions.py` |
+
+### 12.3 AWS FIS Stop Conditions 대비
+
+| 기능 | AWS FIS | 현재 구현 | 상태 | 코드 위치 |
+|------|---------|----------|------|-----------|
+| **CloudWatch Alarm 연동** | 알람 기반 중단 | ⚠️ | 부분 구현 | Prometheus 연동 가능 |
+| **% 기반 타겟팅** | 10%, 25%, 50% | ✅ | 하드캡 구현 | `constants.py:ExperimentHardCaps` |
+| **Error Rate 중단** | 5% 초과 시 | ✅ | 구현됨 | `stop_conditions.py:35` |
+| **Latency P99 중단** | 2초 초과 시 | ✅ | 구현됨 | `stop_conditions.py:38` |
+
+### 12.4 LitmusChaos Probes 대비
+
+| 기능 | LitmusChaos | 현재 구현 | 상태 | 코드 위치 |
+|------|-------------|----------|------|-----------|
+| **Steady State Probe** | HTTP/Cmd/K8s | ✅ | 구현됨 | `SteadyStateHypothesis.validate()` |
+| **Continuous Validation** | 실험 중 지속 검증 | ✅ | 구현됨 | `_monitor_with_kill_switch()` |
+| **Auto-Rollback** | 조건 위반 시 | ✅ | 구현됨 | `auto_abort_stop_condition` |
+
+### 12.5 Gap 분석 요약
+
+| # | 항목 | 업계 표준 | 현재 상태 | Gap |
+|---|------|----------|----------|-----|
+| 1 | Steady State Hypothesis | ✅ 필수 | ✅ 구현됨 | - |
+| 2 | Auto-Abort (지표 기반) | ✅ 필수 | ✅ 구현됨 | - |
+| 3 | Kill Switch (전역 중단) | ✅ 필수 | ✅ 구현됨 | - |
+| 4 | TTL 기반 자동 만료 | ✅ 필수 | ✅ 구현됨 | - |
+| 5 | Monotonic TTL (Clock Skew 보호) | ⚠️ 고급 | 🔴 구현 필요 | **34_CHAOS_SAFETY 참조** |
+| 6 | Zombie Hunter (고아 실험 정리) | ⚠️ 고급 | 🔴 구현 필요 | **34_CHAOS_SAFETY 참조** |
+| 7 | 점진적 확대 (Gradual Rollout) | ⚠️ 권장 | ⚠️ 하드캡만 | 추후 확장 |
+| 8 | 실험 전용 대시보드 | ⚠️ 권장 | ⚠️ Grafana 연동 가능 | 추후 확장 |
+
+### 12.6 이미 구현된 핵심 기능 (코드 근거)
+
+```python
+# 1. SteadyStateHypothesis (base.py:302-355)
+@dataclass
+class SteadyStateHypothesis:
+    p50_latency_max_ms: float = 100.0
+    p99_latency_max_ms: float = 500.0
+    error_rate_max_percent: float = 0.1
+    
+    def validate(self, metrics: Dict[str, float]) -> tuple[bool, List[str]]: ...
+
+# 2. StopConditionsConfig (stop_conditions.py:25-70)
+@dataclass
+class StopConditionsConfig:
+    max_error_rate_percent: float = 5.0      # 에러율 5% 초과 시 중단
+    max_latency_p99_ms: int = 2000           # P99 2초 초과 시 중단
+    consecutive_breaches_required: int = 2   # 연속 2회 위반 시
+
+# 3. KillSwitch (safety_guard.py:649-656)
+def _check_kill_switch(self) -> bool:
+    control = get_system_control()
+    return not control.is_selfhealing_enabled()
+
+# 4. Auto-Abort in Monitoring Loop (base.py:1203-1248)
+if stop_result.should_stop:
+    self._kill_requested = True
+    self._stop_condition_violation = "; ".join(violation_messages)
+    self._audit("auto_abort_stop_condition", {...})
+    break
+```
+
+---
+
 ## 버전 정보
 
-- **현재 버전**: 1.1.0
+- **현재 버전**: 1.3.0
 - **마지막 업데이트**: 2026-01-14
 - **변경 이력**:
+  - 1.3.0 (2026-01-14): 실제 코드 검증 기반 구현 상태 업데이트, 구현 순서 재정렬 (이미 완료된 기능 명시), 우선순위 요약 추가
+  - 1.2.0 (2026-01-14): 업계 표준 비교 섹션 추가, 구현 상태 코드 근거 명시
   - 1.1.0 (2026-01-14): 리뷰 피드백 반영 - 하드캡, Monotonic TTL, 가상 격리, Assertion Scoring
   - 1.0.0 (2026-01-09): 초기 버전
 - **담당자**: SelfHealing Team
