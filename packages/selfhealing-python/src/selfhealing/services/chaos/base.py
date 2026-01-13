@@ -126,6 +126,25 @@ class ExperimentType(str, Enum):
     
     CLOCK_SKEW = "clock_skew"
     """시스템 시간 불일치 시뮬레이션 실험."""
+    
+    # Phase 6: 추가 업계 표준 실험
+    # Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2-6
+    NETWORK_BLACKHOLE = "network_blackhole"
+    """네트워크 블랙홀 시뮬레이션 실험."""
+    
+    SIMULATED_DISK_IO = "simulated_disk_io"
+    """디스크 I/O 지연/실패 시뮬레이션 실험."""
+    
+    SIMULATED_TLS_FAILURE = "simulated_tls_failure"
+    """TLS 핸드셰이크 실패 시뮬레이션 실험."""
+    
+    # Phase 6: 시스템 고유 실험
+    # Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6
+    AUDIT_STORAGE_FAILURE = "audit_storage_failure"
+    """Audit 저장소 계층 장애 시뮬레이션 실험."""
+    
+    REPLAY_FLOOD = "replay_flood"
+    """DLQ Replay 폭풍 시뮬레이션 실험."""
 
 
 class TrafficType(str, Enum):

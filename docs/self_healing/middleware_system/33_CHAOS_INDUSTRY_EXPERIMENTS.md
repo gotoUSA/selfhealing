@@ -1,7 +1,7 @@
 # 33. 업계 표준 Chaos 실험 추가 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: Phase 1-2 구현 완료  
+> **상태**: Phase 1-5 구현 완료  
 > **관련 문서**: [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md), [32_CHAOS_SYSTEM_INTEGRATION.md](32_CHAOS_SYSTEM_INTEGRATION.md)
 
 ---
@@ -1251,6 +1251,12 @@ config = ExperimentConfig(
 | 11 | **MonotonicTTLHelper** | ✅ **2026-01-14 구현** | `services/chaos/base.py:359-473` |
 | 12 | **CertificateExpiryExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py:1810-1940` |
 | 13 | **ClockSkewExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py:1950-2100` |
+| 14 | **DNSFailureExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
+| 15 | **NetworkBlackholeExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
+| 16 | **SimulatedDiskIOExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
+| 17 | **SimulatedTLSFailureExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
+| 18 | **AuditStorageFailureExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
+| 19 | **ReplayFloodExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py` |
 
 ### Phase 1: 기반 안전 메커니즘 (P0) ✅ 완료
 
@@ -1269,28 +1275,28 @@ config = ExperimentConfig(
 | 2-2 | `CertificateExpiryExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
 | 2-3 | `ClockSkewExperiment` (Monotonic TTL 포함) | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
 
-### Phase 3: P2 실험 구현 (확장 필요)
-
-| 순서 | 작업 | 파일 | 의존성 |
-|------|------|------|--------|
-| 3-1 | `DNSFailureExperiment` | `services/chaos/experiment_impl.py` | `core/connection_health.py` 확장 |
-| 3-2 | `AuditStorageFailureExperiment` | `services/chaos/experiment_impl.py` | `audit/resilience.py` (이미 구현) |
-
-### Phase 4: P3 실험 구현 (시뮬레이션 레벨)
-
-| 순서 | 작업 | 파일 | 의존성 |
-|------|------|------|--------|
-| 4-1 | `NetworkBlackholeExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
-| 4-2 | `SimulatedDiskIOExperiment` | `services/chaos/experiment_impl.py` | Storage Adapter 확장 |
-| 4-3 | `SimulatedTLSFailureExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
-| 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | Phase 1-2 ✅ |
-
-### Phase 5: ExperimentType Enum 확장 ✅ 부분 완료
+### Phase 3: P2 실험 구현 (확장 필요) ✅ 완료
 
 | 순서 | 작업 | 파일 | 상태 |
 |------|------|------|--------|
-| 5-1 | Enum 값 추가 (CERTIFICATE_EXPIRY, CLOCK_SKEW, DNS_FAILURE) | `services/chaos/base.py` | ✅ **2026-01-14 구현** |
-| 5-2 | 테스트 작성 (44개) | `tests/self_healing/chaos/test_chaos_industry_experiments.py` | ✅ **2026-01-14 작성** |
+| 3-1 | `DNSFailureExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+| 3-2 | `AuditStorageFailureExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+
+### Phase 4: P3 실험 구현 (시뮬레이션 레벨) ✅ 완료
+
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|--------|
+| 4-1 | `NetworkBlackholeExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+| 4-2 | `SimulatedDiskIOExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+| 4-3 | `SimulatedTLSFailureExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+| 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+
+### Phase 5: ExperimentType Enum 확장 ✅ 완료
+
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|--------|
+| 5-1 | Enum 값 추가 (전체 6개 추가) | `services/chaos/base.py` | ✅ **2026-01-14 구현** |
+| 5-2 | 테스트 작성 (101개) | `tests/self_healing/chaos/test_chaos_industry_experiments.py` | ✅ **2026-01-14 작성 및 통과** |
 
 ### 우선순위 요약
 
@@ -1305,6 +1311,12 @@ config = ExperimentConfig(
 | ✅ 완료 | PoolExhaustionExperiment | ✅ 완료 | 기존 모니터 활용 |
 | ✅ 완료 | CertificateExpiryExperiment | ✅ **2026-01-14 구현** | 기존 모니터 활용 |
 | ✅ 완료 | ClockSkewExperiment | ✅ **2026-01-14 구현** | Monotonic TTL 보호 적용 |
+| ✅ 완료 | DNSFailureExperiment | ✅ **2026-01-14 구현** | DNS 장애 시뮬레이션 |
+| ✅ 완료 | NetworkBlackholeExperiment | ✅ **2026-01-14 구현** | 네트워크 블랙홀 |
+| ✅ 완료 | SimulatedDiskIOExperiment | ✅ **2026-01-14 구현** | 디스크 I/O 시뮬레이션 |
+| ✅ 완료 | SimulatedTLSFailureExperiment | ✅ **2026-01-14 구현** | TLS 실패 시뮬레이션 |
+| ✅ 완료 | AuditStorageFailureExperiment | ✅ **2026-01-14 구현** | Audit 저장소 장애 |
+| ✅ 완료 | ReplayFloodExperiment | ✅ **2026-01-14 구현** | DLQ Replay 폭풍 |
 
 ---
 
@@ -1326,7 +1338,7 @@ config = ExperimentConfig(
 | 원칙 | Netflix | 현재 구현 | 상태 |
 |------|---------|----------|------|
 | **Steady State 가설 수립** | SPS 기준 | ✅ `SteadyStateHypothesis` 클래스 | `base.py:302-355` |
-| **실제 이벤트 시뮬레이션** | 프로덕션 장애 재현 | ✅ 11개 실험 타입 | `experiment_impl.py` |
+| **실제 이벤트 시뮬레이션** | 프로덕션 장애 재현 | ✅ 21개 실험 타입 | `experiment_impl.py` |
 | **프로덕션 실험** | 통제된 환경 | ✅ SafetyGuard | `safety_guard.py` |
 | **자동화 & 지속 실행** | 자동 스케줄링 | ✅ ChaosScheduler | 스케줄러 구현 |
 | **Blast Radius 최소화** | 점진적 확대 | ✅ 하드캡 상수 | `constants.py` |
@@ -1365,7 +1377,7 @@ config = ExperimentConfig(
 | 2 | Auto-Abort (지표 기반) | ✅ 필수 | ✅ 구현됨 | - |
 | 3 | Kill Switch (전역 중단) | ✅ 필수 | ✅ 구현됨 | - |
 | 4 | TTL 기반 자동 만료 | ✅ 필수 | ✅ 구현됨 | - |
-| 5 | Monotonic TTL (Clock Skew 보호) | ⚠️ 고급 | 🔴 구현 필요 | **34_CHAOS_SAFETY 참조** |
+| 5 | Monotonic TTL (Clock Skew 보호) | ⚠️ 고급 | ✅ **2026-01-14 구현** | 완료 |
 | 6 | Zombie Hunter (고아 실험 정리) | ⚠️ 고급 | 🔴 구현 필요 | **34_CHAOS_SAFETY 참조** |
 | 7 | 점진적 확대 (Gradual Rollout) | ⚠️ 권장 | ⚠️ 하드캡만 | 추후 확장 |
 | 8 | 실험 전용 대시보드 | ⚠️ 권장 | ⚠️ Grafana 연동 가능 | 추후 확장 |
@@ -1406,13 +1418,13 @@ if stop_result.should_stop:
 
 ## 버전 정보
 
-- **현재 버전**: 1.4.0
+- **현재 버전**: 1.5.0
 - **마지막 업데이트**: 2026-01-14
 - **변경 이력**:
+  - 1.5.0 (2026-01-14): **Phase 3-5 구현 완료** - DNSFailureExperiment, NetworkBlackholeExperiment, SimulatedDiskIOExperiment, SimulatedTLSFailureExperiment, AuditStorageFailureExperiment, ReplayFloodExperiment 구현, ExperimentType Enum 확장 (6개 추가), 테스트 101개 작성 및 통과
   - 1.4.0 (2026-01-14): **Phase 1-2 구현 완료** - MonotonicTTLHelper, CertificateExpiryExperiment, ClockSkewExperiment 구현, ExperimentType Enum 확장 (CERTIFICATE_EXPIRY, CLOCK_SKEW, DNS_FAILURE), 테스트 44개 작성 및 통과
   - 1.3.0 (2026-01-14): 실제 코드 검증 기반 구현 상태 업데이트, 구현 순서 재정렬 (이미 완료된 기능 명시), 우선순위 요약 추가
   - 1.2.0 (2026-01-14): 업계 표준 비교 섹션 추가, 구현 상태 코드 근거 명시
   - 1.1.0 (2026-01-14): 리뷰 피드백 반영 - 하드캡, Monotonic TTL, 가상 격리, Assertion Scoring
   - 1.0.0 (2026-01-09): 초기 버전
-- **담당자**: SelfHealing Team
 - **담당자**: SelfHealing Team

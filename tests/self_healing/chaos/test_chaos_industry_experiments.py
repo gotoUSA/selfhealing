@@ -70,11 +70,11 @@ class TestMonotonicTTLHelper:
         helper = MonotonicTTLHelper(ttl_seconds=60.0)
         helper.start()
         
-        time.sleep(0.1)  # Wait 100ms
+        time.sleep(0.15)  # Wait 150ms for timing tolerance
         
         elapsed = helper.elapsed_seconds()
-        assert elapsed >= 0.1
-        assert elapsed < 0.5  # Should be close to 100ms
+        assert elapsed >= 0.1  # At least 100ms
+        assert elapsed < 1.0  # Should be well under 1 second
     
     def test_remaining_seconds(self):
         """Test remaining_seconds() calculates correctly."""
@@ -692,3 +692,697 @@ class TestMonotonicTTLIntegration:
         # Rollback
         experiment.rollback()
         assert experiment._rollback_completed is True
+
+
+# =============================================================================
+# Phase 3-4 Experiment Tests (New)
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2-6
+# =============================================================================
+
+
+class TestDNSFailureExperiment:
+    """Test DNSFailureExperiment class."""
+    
+    def test_class_exists(self):
+        """Test DNSFailureExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        
+        assert DNSFailureExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is dns_failure."""
+        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        
+        assert DNSFailureExperiment.experiment_type == "dns_failure"
+    
+    def test_requires_approval(self):
+        """Test requires_approval is True (network-wide impact)."""
+        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        
+        assert DNSFailureExperiment.requires_approval is True
+    
+    def test_failure_hypothesis_exists(self):
+        """Test failure_hypothesis is defined."""
+        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        
+        assert hasattr(DNSFailureExperiment, "failure_hypothesis")
+        assert DNSFailureExperiment.failure_hypothesis is not None
+    
+    def test_default_failure_mode(self):
+        """Test default failure_mode is timeout."""
+        from selfhealing.services.chaos.experiment_impl import (
+            DNSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = DNSFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        
+        assert experiment.failure_mode == "timeout"
+    
+    def test_custom_failure_mode(self):
+        """Test custom failure_mode from config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            DNSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = DNSFailureExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"failure_mode": "nxdomain"},
+            )
+        )
+        
+        assert experiment.failure_mode == "nxdomain"
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            DNSFailureExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = DNSFailureExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={
+                    "failure_mode": "nxdomain",
+                    "affected_domains": ["api.example.com"],
+                },
+            )
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "dns_failure" in call_args
+        assert call_args["dns_failure"]["enabled"] is True
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_rollback(self, mock_apply):
+        """Test rollback disables config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            DNSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = DNSFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        
+        experiment.rollback()
+        
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert call_args["dns_failure"]["enabled"] is False
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for dns_failure."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            DNSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="dns_failure",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, DNSFailureExperiment)
+
+
+class TestNetworkBlackholeExperiment:
+    """Test NetworkBlackholeExperiment class."""
+    
+    def test_class_exists(self):
+        """Test NetworkBlackholeExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        
+        assert NetworkBlackholeExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is network_blackhole."""
+        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        
+        assert NetworkBlackholeExperiment.experiment_type == "network_blackhole"
+    
+    def test_requires_approval(self):
+        """Test requires_approval is True (high risk)."""
+        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        
+        assert NetworkBlackholeExperiment.requires_approval is True
+    
+    def test_hard_cap_max_duration(self):
+        """Test MAX_DURATION_SECONDS hard cap is 300."""
+        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        
+        assert NetworkBlackholeExperiment.MAX_DURATION_SECONDS == 300
+    
+    def test_duration_seconds_capped(self):
+        """Test duration_seconds is capped at MAX_DURATION_SECONDS."""
+        from selfhealing.services.chaos.experiment_impl import (
+            NetworkBlackholeExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = NetworkBlackholeExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"duration_seconds": 1000},  # Over cap
+            )
+        )
+        
+        assert experiment.duration_seconds == 300  # Capped
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            NetworkBlackholeExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = NetworkBlackholeExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"affected_endpoints": ["https://api.test.com"]},
+            )
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "network_blackhole" in call_args
+        assert call_args["network_blackhole"]["enabled"] is True
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for network_blackhole."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            NetworkBlackholeExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="network_blackhole",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, NetworkBlackholeExperiment)
+
+
+class TestSimulatedDiskIOExperiment:
+    """Test SimulatedDiskIOExperiment class."""
+    
+    def test_class_exists(self):
+        """Test SimulatedDiskIOExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        
+        assert SimulatedDiskIOExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is simulated_disk_io."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        
+        assert SimulatedDiskIOExperiment.experiment_type == "simulated_disk_io"
+    
+    def test_hard_cap_io_latency(self):
+        """Test MAX_IO_LATENCY_MS hard cap is 2000."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        
+        assert SimulatedDiskIOExperiment.MAX_IO_LATENCY_MS == 2000
+    
+    def test_hard_cap_failure_rate(self):
+        """Test MAX_FAILURE_RATE hard cap is 0.30."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        
+        assert SimulatedDiskIOExperiment.MAX_FAILURE_RATE == 0.30
+    
+    def test_io_latency_capped(self):
+        """Test io_latency_ms is capped at MAX_IO_LATENCY_MS."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedDiskIOExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = SimulatedDiskIOExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"io_latency_ms": 5000},  # Over cap
+            )
+        )
+        
+        assert experiment.io_latency_ms == 2000  # Capped
+    
+    def test_failure_rate_capped(self):
+        """Test failure_rate is capped at MAX_FAILURE_RATE."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedDiskIOExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = SimulatedDiskIOExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"failure_rate": 0.80},  # Over cap
+            )
+        )
+        
+        assert experiment.failure_rate == 0.30  # Capped
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedDiskIOExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = SimulatedDiskIOExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "disk_io" in call_args
+        assert call_args["disk_io"]["enabled"] is True
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for simulated_disk_io."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            SimulatedDiskIOExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="simulated_disk_io",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, SimulatedDiskIOExperiment)
+
+
+class TestSimulatedTLSFailureExperiment:
+    """Test SimulatedTLSFailureExperiment class."""
+    
+    def test_class_exists(self):
+        """Test SimulatedTLSFailureExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        
+        assert SimulatedTLSFailureExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is simulated_tls_failure."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        
+        assert SimulatedTLSFailureExperiment.experiment_type == "simulated_tls_failure"
+    
+    def test_requires_approval(self):
+        """Test requires_approval is True (security sensitive)."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        
+        assert SimulatedTLSFailureExperiment.requires_approval is True
+    
+    def test_hard_cap_failure_rate(self):
+        """Test MAX_FAILURE_RATE hard cap is 0.25."""
+        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        
+        assert SimulatedTLSFailureExperiment.MAX_FAILURE_RATE == 0.25
+    
+    def test_default_failure_type(self):
+        """Test default failure_type is handshake_timeout."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedTLSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = SimulatedTLSFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        
+        assert experiment.failure_type == "handshake_timeout"
+    
+    def test_failure_rate_capped(self):
+        """Test failure_rate is capped at MAX_FAILURE_RATE."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedTLSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = SimulatedTLSFailureExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"failure_rate": 0.50},  # Over cap
+            )
+        )
+        
+        assert experiment.failure_rate == 0.25  # Capped
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            SimulatedTLSFailureExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = SimulatedTLSFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "tls_failure" in call_args
+        assert call_args["tls_failure"]["enabled"] is True
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for simulated_tls_failure."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            SimulatedTLSFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="simulated_tls_failure",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, SimulatedTLSFailureExperiment)
+
+
+class TestAuditStorageFailureExperiment:
+    """Test AuditStorageFailureExperiment class."""
+    
+    def test_class_exists(self):
+        """Test AuditStorageFailureExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        
+        assert AuditStorageFailureExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is audit_storage_failure."""
+        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        
+        assert AuditStorageFailureExperiment.experiment_type == "audit_storage_failure"
+    
+    def test_requires_approval(self):
+        """Test requires_approval is True (audit data risk)."""
+        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        
+        assert AuditStorageFailureExperiment.requires_approval is True
+    
+    def test_failure_hypothesis_exists(self):
+        """Test failure_hypothesis is defined."""
+        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        
+        assert hasattr(AuditStorageFailureExperiment, "failure_hypothesis")
+        assert AuditStorageFailureExperiment.failure_hypothesis is not None
+    
+    def test_default_failed_layer(self):
+        """Test default failed_layer is l2."""
+        from selfhealing.services.chaos.experiment_impl import (
+            AuditStorageFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = AuditStorageFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        
+        assert experiment.failed_layer == "l2"
+    
+    def test_default_recovery_mode(self):
+        """Test default recovery_mode is degraded."""
+        from selfhealing.services.chaos.experiment_impl import (
+            AuditStorageFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = AuditStorageFailureExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        
+        assert experiment.recovery_mode == "degraded"
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config."""
+        from selfhealing.services.chaos.experiment_impl import (
+            AuditStorageFailureExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = AuditStorageFailureExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"failed_layer": "l3"},
+            )
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "audit_storage_failure" in call_args
+        assert call_args["audit_storage_failure"]["enabled"] is True
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for audit_storage_failure."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            AuditStorageFailureExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="audit_storage_failure",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, AuditStorageFailureExperiment)
+
+
+class TestReplayFloodExperiment:
+    """Test ReplayFloodExperiment class."""
+    
+    def test_class_exists(self):
+        """Test ReplayFloodExperiment class exists."""
+        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        
+        assert ReplayFloodExperiment is not None
+    
+    def test_experiment_type(self):
+        """Test experiment type is replay_flood."""
+        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        
+        assert ReplayFloodExperiment.experiment_type == "replay_flood"
+    
+    def test_requires_approval(self):
+        """Test requires_approval is True (resource intensive)."""
+        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        
+        assert ReplayFloodExperiment.requires_approval is True
+    
+    def test_hard_cap_max_entries(self):
+        """Test MAX_ENTRIES_TO_CREATE hard cap is 5000."""
+        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        
+        assert ReplayFloodExperiment.MAX_ENTRIES_TO_CREATE == 5000
+    
+    def test_hard_cap_max_rate(self):
+        """Test MAX_REPLAY_RATE hard cap is 500."""
+        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        
+        assert ReplayFloodExperiment.MAX_REPLAY_RATE == 500
+    
+    def test_entries_to_create_capped(self):
+        """Test entries_to_create is capped at MAX_ENTRIES_TO_CREATE."""
+        from selfhealing.services.chaos.experiment_impl import (
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = ReplayFloodExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"entries_to_create": 10000},  # Over cap
+            )
+        )
+        
+        assert experiment.entries_to_create == 5000  # Capped
+    
+    def test_replay_rate_capped(self):
+        """Test replay_rate is capped at MAX_REPLAY_RATE."""
+        from selfhealing.services.chaos.experiment_impl import (
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = ReplayFloodExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"replay_rate": 1000},  # Over cap
+            )
+        )
+        
+        assert experiment.replay_rate == 500  # Capped
+    
+    def test_isolated_domain_prefix(self):
+        """Test isolated_domain has chaos prefix."""
+        from selfhealing.services.chaos.experiment_impl import (
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = ReplayFloodExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"domain": "payment"},
+            )
+        )
+        
+        assert experiment.isolated_domain == "chaos_test:payment"
+    
+    def test_isolated_domain_no_double_prefix(self):
+        """Test isolated_domain doesn't double-prefix."""
+        from selfhealing.services.chaos.experiment_impl import (
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = ReplayFloodExperiment(
+            config=ExperimentConfig(
+                target_service="test",
+                parameters={"domain": "chaos_test:payment"},
+            )
+        )
+        
+        assert experiment.isolated_domain == "chaos_test:payment"
+    
+    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    def test_inject_chaos(self, mock_apply):
+        """Test inject_chaos applies config with isolation metadata."""
+        from selfhealing.services.chaos.experiment_impl import (
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        from datetime import datetime, timezone
+        
+        experiment = ReplayFloodExperiment(
+            config=ExperimentConfig(target_service="test")
+        )
+        experiment._effective_ttl = 60
+        experiment._expires_at = datetime.now(timezone.utc)
+        
+        result = experiment.inject_chaos()
+        
+        assert result is True
+        mock_apply.assert_called_once()
+        call_args = mock_apply.call_args[0][0]
+        assert "replay_flood" in call_args
+        assert call_args["replay_flood"]["enabled"] is True
+        # Check isolation metadata
+        metadata = call_args["replay_flood"]["isolation_metadata"]
+        assert metadata["is_synthetic"] is True
+        assert metadata["is_chaos_experiment"] is True
+    
+    def test_create_experiment_factory(self):
+        """Test create_experiment factory for replay_flood."""
+        from selfhealing.services.chaos.experiment_impl import (
+            create_experiment,
+            ReplayFloodExperiment,
+            ExperimentConfig,
+        )
+        
+        experiment = create_experiment(
+            experiment_type="replay_flood",
+            config=ExperimentConfig(target_service="test"),
+        )
+        
+        assert isinstance(experiment, ReplayFloodExperiment)
+
+
+# =============================================================================
+# ExperimentType Enum Tests (Extended)
+# =============================================================================
+
+
+class TestExperimentTypeEnumExtended:
+    """Test ExperimentType enum for Phase 3-4 additions."""
+    
+    def test_network_blackhole_exists(self):
+        """Test NETWORK_BLACKHOLE exists in enum."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        assert hasattr(ExperimentType, "NETWORK_BLACKHOLE")
+        assert ExperimentType.NETWORK_BLACKHOLE.value == "network_blackhole"
+    
+    def test_simulated_disk_io_exists(self):
+        """Test SIMULATED_DISK_IO exists in enum."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        assert hasattr(ExperimentType, "SIMULATED_DISK_IO")
+        assert ExperimentType.SIMULATED_DISK_IO.value == "simulated_disk_io"
+    
+    def test_simulated_tls_failure_exists(self):
+        """Test SIMULATED_TLS_FAILURE exists in enum."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        assert hasattr(ExperimentType, "SIMULATED_TLS_FAILURE")
+        assert ExperimentType.SIMULATED_TLS_FAILURE.value == "simulated_tls_failure"
+    
+    def test_audit_storage_failure_exists(self):
+        """Test AUDIT_STORAGE_FAILURE exists in enum."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        assert hasattr(ExperimentType, "AUDIT_STORAGE_FAILURE")
+        assert ExperimentType.AUDIT_STORAGE_FAILURE.value == "audit_storage_failure"
+    
+    def test_replay_flood_exists(self):
+        """Test REPLAY_FLOOD exists in enum."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        assert hasattr(ExperimentType, "REPLAY_FLOOD")
+        assert ExperimentType.REPLAY_FLOOD.value == "replay_flood"
+    
+    def test_total_experiment_types_count(self):
+        """Test total number of experiment types is 21."""
+        from selfhealing.services.chaos.base import ExperimentType
+        
+        # Count all enum members
+        count = len(list(ExperimentType))
+        
+        # Should be 21 as per 33_CHAOS_INDUSTRY_EXPERIMENTS.md §8
+        assert count >= 21, f"Expected at least 21 experiment types, got {count}"

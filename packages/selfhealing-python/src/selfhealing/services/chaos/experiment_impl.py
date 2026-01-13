@@ -2103,6 +2103,656 @@ class ClockSkewExperiment(ChaosExperiment):
 
 
 # =============================================================================
+# Phase 6: DNSFailureExperiment
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.1
+# =============================================================================
+
+
+DNS_FAILURE_HYPOTHESIS = FailureHypothesis(
+    description="DNS 장애 시, ConnectionHealthMonitor가 10초 내에 UNHEALTHY 보고해야 함",
+    expected_recovery_time_seconds=30.0,
+    expected_cb_state_after="open",
+    expected_cb_transition_within_seconds=10.0,
+)
+
+
+class DNSFailureExperiment(ChaosExperiment):
+    """
+    DNS 해석 실패 시뮬레이션 실험.
+    
+    DNS 장애 시 캐시/폴백 동작 및 Circuit Breaker 동작 검증.
+    ConnectionHealthMonitor를 통해 시뮬레이션합니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • DNS 장애 시, 10초 내에 UNHEALTHY 상태 감지                 │
+    │ • Circuit Breaker OPEN 전환 검증                             │
+    │                                                              │
+    │ 시스템 연동:                                                  │
+    │ → ConnectionHealthMonitor: DNS 조회 실패 감지                 │
+    │ → Circuit Breaker: 외부 API 연결 실패 감지                    │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.1
+    
+    Config parameters:
+        - failure_mode: "timeout", "nxdomain", "servfail"
+        - affected_domains: 영향받는 도메인 목록
+        - cache_fallback: 캐시 폴백 허용 여부 (default: True)
+    
+    Usage:
+        experiment = DNSFailureExperiment(
+            config=ExperimentConfig(
+                target_service="external-payment-api",
+                parameters={
+                    "failure_mode": "nxdomain",
+                    "affected_domains": ["api.payment.com"],
+                },
+            )
+        )
+    """
+    
+    experiment_type = ExperimentType.DNS_FAILURE.value
+    requires_approval = True  # 네트워크 전역 영향
+    
+    failure_hypothesis = DNS_FAILURE_HYPOTHESIS
+    
+    @property
+    def failure_mode(self) -> str:
+        return self.config.parameters.get("failure_mode", "timeout")
+    
+    @property
+    def affected_domains(self) -> List[str]:
+        return self.config.parameters.get("affected_domains", [])
+    
+    @property
+    def cache_fallback(self) -> bool:
+        return self.config.parameters.get("cache_fallback", True)
+    
+    def inject_chaos(self) -> bool:
+        """DNS 실패 시뮬레이션 주입."""
+        logger.info(
+            f"[DNSFailure] Injecting DNS {self.failure_mode} for "
+            f"{len(self.affected_domains)} domains (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "dns_failure": {
+                    "enabled": True,
+                    "failure_mode": self.failure_mode,
+                    "affected_domains": self.affected_domains,
+                    "cache_fallback": self.cache_fallback,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[DNSFailure] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """DNS 실패 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(f"[DNSFailure] Rolling back {self.experiment_id}")
+            _apply_chaos_config({
+                "dns_failure": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
+# Phase 6: NetworkBlackholeExperiment
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.2
+# =============================================================================
+
+
+NETWORK_BLACKHOLE_HYPOTHESIS = FailureHypothesis(
+    description="네트워크 블랙홀 시, 타임아웃 후 CB가 OPEN 상태로 전환해야 함",
+    expected_recovery_time_seconds=60.0,
+    expected_cb_state_after="open",
+)
+
+
+class NetworkBlackholeExperiment(ChaosExperiment):
+    """
+    네트워크 블랙홀 시뮬레이션 실험.
+    
+    특정 엔드포인트로의 트래픽 완전 차단 (응답 없음).
+    타임아웃과 다르게 에러 응답도 없음.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 트래픽 흡수 (응답 없음) 시 타임아웃 감지                   │
+    │ • 60초 내에 Circuit Breaker OPEN                             │
+    │                                                              │
+    │ Blast Radius Hard Cap:                                       │
+    │ → 최대 지속 시간: 300초 (5분)                                 │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.2
+    
+    Config parameters:
+        - affected_endpoints: 블랙홀 처리할 엔드포인트 목록
+        - duration_seconds: 지속 시간 (max: 300초)
+    """
+    
+    experiment_type = ExperimentType.NETWORK_BLACKHOLE.value
+    requires_approval = True  # 고위험
+    
+    # Blast Radius Hard Cap
+    MAX_DURATION_SECONDS: int = 300
+    
+    failure_hypothesis = NETWORK_BLACKHOLE_HYPOTHESIS
+    
+    @property
+    def affected_endpoints(self) -> List[str]:
+        return self.config.parameters.get("affected_endpoints", [])
+    
+    @property
+    def duration_seconds(self) -> int:
+        raw = self.config.parameters.get("duration_seconds", 60)
+        return min(raw, self.MAX_DURATION_SECONDS)
+    
+    def inject_chaos(self) -> bool:
+        """네트워크 블랙홀 시뮬레이션 주입."""
+        logger.warning(
+            f"[NetworkBlackhole] Blackholing {len(self.affected_endpoints)} endpoints "
+            f"for {self.duration_seconds}s (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "network_blackhole": {
+                    "enabled": True,
+                    "affected_endpoints": self.affected_endpoints,
+                    "duration_seconds": self.duration_seconds,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[NetworkBlackhole] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """네트워크 블랙홀 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(f"[NetworkBlackhole] Rolling back {self.experiment_id}")
+            _apply_chaos_config({
+                "network_blackhole": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
+# Phase 6: SimulatedDiskIOExperiment
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §3.1
+# =============================================================================
+
+
+SIMULATED_DISK_IO_HYPOTHESIS = FailureHypothesis(
+    description="디스크 I/O 장애 시, DLQ가 메모리 폴백을 활성화해야 함",
+    expected_recovery_time_seconds=15.0,
+    expected_fallback_activated=True,
+    expected_fallback_type="memory",
+)
+
+
+class SimulatedDiskIOExperiment(ChaosExperiment):
+    """
+    디스크 I/O 지연/실패 애플리케이션 레벨 시뮬레이션 실험.
+    
+    NOTE: 이것은 애플리케이션 레벨 시뮬레이션입니다.
+    실제 OS 커널/디스크에 부하를 주는 것이 아닌, Storage Adapter에서
+    time.sleep() 방식으로 지연을 주입합니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 디스크 장애 시, 15초 내에 메모리 폴백 활성화               │
+    │ • DLQ가 L1(Memory) → L2(Disk) 폴백 검증                      │
+    │                                                              │
+    │ Blast Radius Hard Cap:                                       │
+    │ → 최대 지연: 2000ms                                          │
+    │ → 최대 실패율: 30%                                           │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §3.1
+    
+    Config parameters:
+        - io_latency_ms: I/O 지연 시간 (max: 2000ms)
+        - failure_rate: I/O 실패율 (max: 30%)
+        - affected_paths: 영향받는 경로 목록 (optional)
+    """
+    
+    experiment_type = ExperimentType.SIMULATED_DISK_IO.value
+    requires_approval = True  # 데이터 손실 위험
+    
+    # Blast Radius Hard Cap
+    MAX_IO_LATENCY_MS: int = 2000
+    MAX_FAILURE_RATE: float = 0.30
+    
+    failure_hypothesis = SIMULATED_DISK_IO_HYPOTHESIS
+    
+    @property
+    def io_latency_ms(self) -> int:
+        raw = self.config.parameters.get("io_latency_ms", 500)
+        return min(raw, self.MAX_IO_LATENCY_MS)
+    
+    @property
+    def failure_rate(self) -> float:
+        raw = self.config.parameters.get("failure_rate", 0.10)
+        return min(raw, self.MAX_FAILURE_RATE)
+    
+    @property
+    def affected_paths(self) -> List[str]:
+        return self.config.parameters.get("affected_paths", [])
+    
+    def inject_chaos(self) -> bool:
+        """디스크 I/O 시뮬레이션 주입."""
+        logger.warning(
+            f"[DiskIO] Injecting {self.io_latency_ms}ms latency + "
+            f"{self.failure_rate*100:.0f}% failures (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "disk_io": {
+                    "enabled": True,
+                    "io_latency_ms": self.io_latency_ms,
+                    "failure_rate": self.failure_rate,
+                    "affected_paths": self.affected_paths,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[DiskIO] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """디스크 I/O 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(f"[DiskIO] Rolling back {self.experiment_id}")
+            _apply_chaos_config({
+                "disk_io": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
+# Phase 6: SimulatedTLSFailureExperiment
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.2
+# =============================================================================
+
+
+SIMULATED_TLS_FAILURE_HYPOTHESIS = FailureHypothesis(
+    description="TLS 핸드셰이크 실패 시, 적절한 에러 처리 및 보안 로깅이 수행되어야 함",
+    expected_recovery_time_seconds=30.0,
+    expected_cb_state_after="open",
+)
+
+
+class SimulatedTLSFailureExperiment(ChaosExperiment):
+    """
+    TLS 핸드셰이크 실패 애플리케이션 레벨 시뮬레이션 실험.
+    
+    NOTE: 이것은 애플리케이션 레벨 시뮬레이션입니다.
+    실제 SSL/TLS 연결 조작이 아닌, HTTP Client에서
+    requests.exceptions.SSLError를 의도적으로 발생시킵니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • TLS 실패 시, 적절한 에러 처리                              │
+    │ • 보안 로깅 및 알림 발생                                     │
+    │ • 30초 내에 CB OPEN                                          │
+    │                                                              │
+    │ Blast Radius Hard Cap:                                       │
+    │ → 최대 지속 시간: 180초                                      │
+    │ → 최대 실패율: 25%                                           │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.2
+    
+    Config parameters:
+        - failure_type: "handshake_timeout", "cert_invalid", "protocol_mismatch"
+        - affected_endpoints: 영향받는 엔드포인트 목록
+        - failure_rate: 실패율 (max: 25%)
+    """
+    
+    experiment_type = ExperimentType.SIMULATED_TLS_FAILURE.value
+    requires_approval = True  # 보안 민감
+    
+    # Blast Radius Hard Cap
+    MAX_DURATION_SECONDS: int = 180
+    MAX_FAILURE_RATE: float = 0.25
+    
+    failure_hypothesis = SIMULATED_TLS_FAILURE_HYPOTHESIS
+    
+    @property
+    def failure_type(self) -> str:
+        return self.config.parameters.get("failure_type", "handshake_timeout")
+    
+    @property
+    def affected_endpoints(self) -> List[str]:
+        return self.config.parameters.get("affected_endpoints", [])
+    
+    @property
+    def failure_rate(self) -> float:
+        raw = self.config.parameters.get("failure_rate", 0.10)
+        return min(raw, self.MAX_FAILURE_RATE)
+    
+    def inject_chaos(self) -> bool:
+        """TLS 실패 시뮬레이션 주입."""
+        logger.warning(
+            f"[TLSFailure] Injecting TLS {self.failure_type} at "
+            f"{self.failure_rate*100:.0f}% rate (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "tls_failure": {
+                    "enabled": True,
+                    "failure_type": self.failure_type,
+                    "affected_endpoints": self.affected_endpoints,
+                    "failure_rate": self.failure_rate,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            return True
+        except Exception as e:
+            logger.error(f"[TLSFailure] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """TLS 실패 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(f"[TLSFailure] Rolling back {self.experiment_id}")
+            _apply_chaos_config({
+                "tls_failure": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
+# Phase 6: AuditStorageFailureExperiment (시스템 고유)
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.1
+# =============================================================================
+
+
+AUDIT_STORAGE_FAILURE_HYPOTHESIS = FailureHypothesis(
+    description="Audit 저장소 장애 시, L1→L2→L3 폴백이 자동 활성화되어야 함",
+    expected_recovery_time_seconds=10.0,
+    expected_fallback_activated=True,
+    expected_fallback_type="memory",
+)
+
+
+class AuditStorageFailureExperiment(ChaosExperiment):
+    """
+    Audit 저장소 계층 장애 시뮬레이션 실험.
+    
+    L1(Memory) → L2(Disk) → L3(Central) 폴백 체인 검증.
+    DegradedModeManager와 연동합니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • L2/L3 장애 시, 10초 내에 폴백 활성화                       │
+    │ • Degraded Mode 자동 진입                                    │
+    │ • 데이터 손실 없이 메모리 버퍼링                             │
+    │                                                              │
+    │ 시스템 연동:                                                  │
+    │ → DegradedModeManager: Audit 저장 모드 전환                   │
+    │ → 코드 위치: audit/resilience.py:697-750                      │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.1
+    
+    Config parameters:
+        - failed_layer: "l2", "l3", "all"
+        - recovery_mode: "degraded", "memory_only", "queue"
+    """
+    
+    experiment_type = ExperimentType.AUDIT_STORAGE_FAILURE.value
+    requires_approval = True  # Audit 데이터 위험
+    
+    failure_hypothesis = AUDIT_STORAGE_FAILURE_HYPOTHESIS
+    
+    @property
+    def failed_layer(self) -> str:
+        return self.config.parameters.get("failed_layer", "l2")
+    
+    @property
+    def recovery_mode(self) -> str:
+        return self.config.parameters.get("recovery_mode", "degraded")
+    
+    def inject_chaos(self) -> bool:
+        """Audit 저장소 장애 시뮬레이션 주입."""
+        logger.warning(
+            f"[AuditStorageFailure] Failing layer {self.failed_layer} "
+            f"with recovery mode '{self.recovery_mode}' (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            _apply_chaos_config({
+                "audit_storage_failure": {
+                    "enabled": True,
+                    "failed_layer": self.failed_layer,
+                    "recovery_mode": self.recovery_mode,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            # DegradedModeManager 연동 (선택적)
+            try:
+                from selfhealing.audit.resilience import DegradedModeManager
+                manager = DegradedModeManager()
+                manager.enter_degraded_mode(
+                    reason=f"Chaos Experiment: {self.experiment_id}, failed_layer={self.failed_layer}",
+                )
+                logger.info("[AuditStorageFailure] Entered degraded mode via manager")
+            except ImportError:
+                logger.debug("[AuditStorageFailure] DegradedModeManager not available, using config only")
+            except Exception as dm_error:
+                logger.debug(f"[AuditStorageFailure] DegradedModeManager failed: {dm_error}")
+            
+            return True
+        except Exception as e:
+            logger.error(f"[AuditStorageFailure] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Audit 저장소 장애 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(f"[AuditStorageFailure] Rolling back {self.experiment_id}")
+            
+            # DegradedModeManager 복구
+            try:
+                from selfhealing.audit.resilience import DegradedModeManager
+                manager = DegradedModeManager()
+                manager.exit_degraded_mode()
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning(f"[AuditStorageFailure] Failed to exit degraded mode: {e}")
+            
+            _apply_chaos_config({
+                "audit_storage_failure": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
+# Phase 6: ReplayFloodExperiment (시스템 고유)
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.2
+# =============================================================================
+
+
+REPLAY_FLOOD_HYPOTHESIS = FailureHypothesis(
+    description="DLQ Replay 폭풍 시, 쓰로틀링이 활성화되어야 함",
+    expected_recovery_time_seconds=30.0,
+    expected_fallback_activated=True,
+    expected_fallback_type="throttle",
+)
+
+
+class ReplayFloodExperiment(ChaosExperiment):
+    """
+    DLQ Replay 폭풍 시뮬레이션 실험.
+    
+    대량의 DLQ 엔트리 생성 후 Replay 트리거.
+    가상 격리를 사용하여 실제 비즈니스 지표를 오염시키지 않습니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • Replay 폭풍 시, 30초 내에 쓰로틀링 활성화                  │
+    │ • 리소스 관리 및 우선순위 조정                               │
+    │                                                              │
+    │ Blast Radius Hard Cap:                                       │
+    │ → 최대 엔트리 생성: 5,000건                                  │
+    │ → 최대 Replay 속도: 500/s                                    │
+    │                                                              │
+    │ 가상 격리 (Virtual Isolation):                               │
+    │ → domain: "chaos_test:*"                                     │
+    │ → metadata.is_chaos_experiment = True                        │
+    │ → 롤백 시 자동 정리                                          │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.2
+    
+    Config parameters:
+        - entries_to_create: 생성할 DLQ 엔트리 수 (max: 5000)
+        - replay_rate: 초당 Replay 속도 (max: 500)
+        - domain: 타겟 도메인
+    """
+    
+    experiment_type = ExperimentType.REPLAY_FLOOD.value
+    requires_approval = True  # 리소스 집약적
+    
+    # Blast Radius Hard Cap
+    MAX_ENTRIES_TO_CREATE: int = 5000
+    MAX_REPLAY_RATE: int = 500
+    CHAOS_DOMAIN_PREFIX: str = "chaos_test:"
+    
+    failure_hypothesis = REPLAY_FLOOD_HYPOTHESIS
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._created_entry_ids: List[str] = []
+    
+    @property
+    def entries_to_create(self) -> int:
+        raw = self.config.parameters.get("entries_to_create", 1000)
+        return min(raw, self.MAX_ENTRIES_TO_CREATE)
+    
+    @property
+    def replay_rate(self) -> int:
+        raw = self.config.parameters.get("replay_rate", 100)
+        return min(raw, self.MAX_REPLAY_RATE)
+    
+    @property
+    def isolated_domain(self) -> str:
+        """가상 격리를 위한 chaos 접두어 포함 도메인."""
+        base_domain = self.config.parameters.get("domain", "chaos")
+        if base_domain.startswith(self.CHAOS_DOMAIN_PREFIX):
+            return base_domain
+        return f"{self.CHAOS_DOMAIN_PREFIX}{base_domain}"
+    
+    def inject_chaos(self) -> bool:
+        """DLQ Replay 폭풍 시뮬레이션 주입."""
+        logger.warning(
+            f"[ReplayFlood] Creating {self.entries_to_create} DLQ entries "
+            f"in domain '{self.isolated_domain}' "
+            f"at {self.replay_rate}/s (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            # 가상 격리 메타데이터
+            isolation_metadata = {
+                "is_synthetic": True,
+                "is_chaos_experiment": True,
+                "chaos_experiment_id": self.experiment_id,
+                "chaos_experiment_type": self.experiment_type,
+                "chaos_domain_prefix": self.CHAOS_DOMAIN_PREFIX,
+            }
+            
+            _apply_chaos_config({
+                "replay_flood": {
+                    "enabled": True,
+                    "entries_to_create": self.entries_to_create,
+                    "replay_rate": self.replay_rate,
+                    "isolated_domain": self.isolated_domain,
+                    "isolation_metadata": isolation_metadata,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.info(
+                f"[ReplayFlood] Config applied with virtual isolation: "
+                f"domain={self.isolated_domain}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[ReplayFlood] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """Replay 폭풍 시뮬레이션 해제 및 chaos 엔트리 정리."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(
+                f"[ReplayFlood] Rolling back {self.experiment_id}, "
+                f"cleaning up entries in domain '{self.isolated_domain}'"
+            )
+            
+            # Chaos 엔트리 정리 로깅 (실제 정리는 DLQ 서비스에서 수행)
+            logger.info(
+                f"[ReplayFlood] Cleanup: entries with is_chaos_experiment=True "
+                f"and domain={self.isolated_domain} should be purged"
+            )
+            
+            _apply_chaos_config({
+                "replay_flood": {"enabled": False, "experiment_id": self.experiment_id}
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
 # Experiment Factory
 # =============================================================================
 
@@ -2145,6 +2795,13 @@ def create_experiment(
         # Phase 6: 업계 표준 실험 (33_CHAOS_INDUSTRY_EXPERIMENTS.md)
         ExperimentType.CERTIFICATE_EXPIRY.value: CertificateExpiryExperiment,
         ExperimentType.CLOCK_SKEW.value: ClockSkewExperiment,
+        ExperimentType.DNS_FAILURE.value: DNSFailureExperiment,
+        ExperimentType.NETWORK_BLACKHOLE.value: NetworkBlackholeExperiment,
+        ExperimentType.SIMULATED_DISK_IO.value: SimulatedDiskIOExperiment,
+        ExperimentType.SIMULATED_TLS_FAILURE.value: SimulatedTLSFailureExperiment,
+        # Phase 6: 시스템 고유 실험 (33_CHAOS_INDUSTRY_EXPERIMENTS.md)
+        ExperimentType.AUDIT_STORAGE_FAILURE.value: AuditStorageFailureExperiment,
+        ExperimentType.REPLAY_FLOOD.value: ReplayFloodExperiment,
     }
     
     experiment_class = experiment_classes.get(experiment_type)
@@ -2210,6 +2867,13 @@ __all__ = [
     # Concrete Experiments (Phase 6 - Industry Standard)
     "CertificateExpiryExperiment",
     "ClockSkewExperiment",
+    "DNSFailureExperiment",
+    "NetworkBlackholeExperiment",
+    "SimulatedDiskIOExperiment",
+    "SimulatedTLSFailureExperiment",
+    # Concrete Experiments (Phase 6 - System Specific)
+    "AuditStorageFailureExperiment",
+    "ReplayFloodExperiment",
     # Factory
     "create_experiment",
 ]
