@@ -39,6 +39,28 @@ DNS 장애 시 캐시/폴백 동작 및 Circuit Breaker 동작 검증
 - **Circuit Breaker**: 외부 API 연결 실패 감지
   - 코드 위치: `services/circuit_breaker/service.py:100-150`
 
+#### Resilience Expectation 예시
+
+```python
+# 기대: ConnectionHealthMonitor가 10초 이내에 UNHEALTHY 보고
+config = ExperimentConfig(
+    target_service="external-payment-api",
+    resilience_expectation=ResilienceExpectation(
+        assertions=[
+            ResilienceAssertion(
+                expectation_type=ExpectationType.CIRCUIT_BREAKER_OPEN,
+                target_service="external-payment-api",
+                expected_within_seconds=10.0,
+                description="ConnectionHealthMonitor should report UNHEALTHY within 10s",
+            ),
+        ],
+    ),
+)
+```
+
+> **Assertion Scoring**: 실험 완료 후 `ResilienceValidator`가 자동으로 채점
+> - Reference: `services/chaos/resilience_validator.py:211-320`
+
 #### 구현 명세
 
 ```python
@@ -200,7 +222,11 @@ class NetworkBlackholeExperiment(ChaosExperiment):
 
 ## 3. 리소스 카테고리 확장
 
-### 3.1 DiskIOExperiment (신규)
+### 3.1 SimulatedDiskIOExperiment (신규)
+
+> **네이밍 변경**: `DiskIOExperiment` → `SimulatedDiskIOExperiment`
+> - 실제 OS 커널/디스크 헤드에 부하를 주는 것이 아닌 **애플리케이션 레벨 시뮬레이션**임을 명시
+> - Storage Adapter에서 `time.sleep()` 방식으로 지연 주입
 
 #### 목적
 디스크 I/O 지연/실패 시뮬레이션으로 DB/로그 복원력 검증
@@ -211,31 +237,67 @@ class NetworkBlackholeExperiment(ChaosExperiment):
 - **Audit Resilience**: L1(Memory) → L2(Disk) 폴백 검증
   - 코드 위치: `audit/resilience.py:500-600`
 
+#### Blast Radius 하드캡
+
+```python
+# 운영 환경 통제 불능 방지를 위한 상수 정의
+MAX_IO_LATENCY_MS: int = 2000      # 최대 2초 지연
+MAX_FAILURE_RATE: float = 0.30     # 최대 30% 실패율
+```
+
+#### Resilience Expectation 예시
+
+```python
+# 기대: DLQ가 디스크 장애 시 메모리 폴백 활성화
+config = ExperimentConfig(
+    target_service="dlq-storage",
+    resilience_expectation=ResilienceExpectation(
+        assertions=[
+            ResilienceAssertion(
+                expectation_type=ExpectationType.FALLBACK_ACTIVATED,
+                target_service="dlq-storage",
+                expected_within_seconds=5.0,
+                description="DLQ should fallback to memory within 5s",
+            ),
+        ],
+    ),
+)
+```
+
 #### 구현 명세
 
 ```python
-class DiskIOExperiment(ChaosExperiment):
+class SimulatedDiskIOExperiment(ChaosExperiment):
     """
-    Simulate disk I/O latency or failures.
+    Simulate disk I/O latency or failures at application level.
+    
+    NOTE: This is APPLICATION-LEVEL simulation using time.sleep(),
+    NOT actual OS/kernel level disk stress (like fio).
     
     Tests fallback to memory storage, log buffering.
     
     Config parameters:
-        - io_latency_ms: Latency to add to I/O operations
-        - failure_rate: Percentage of I/O ops to fail
+        - io_latency_ms: Latency to add to I/O operations (max: 2000ms)
+        - failure_rate: Percentage of I/O ops to fail (max: 30%)
         - affected_paths: List of paths to affect (optional)
     """
     
-    experiment_type = "disk_io"
+    experiment_type = "simulated_disk_io"
     requires_approval = True  # Data loss risk
+    
+    # === Blast Radius 하드캡 ===
+    MAX_IO_LATENCY_MS: int = 2000
+    MAX_FAILURE_RATE: float = 0.30
     
     @property
     def io_latency_ms(self) -> int:
-        return self.config.parameters.get("io_latency_ms", 500)
+        raw = self.config.parameters.get("io_latency_ms", 500)
+        return min(raw, self.MAX_IO_LATENCY_MS)  # 하드캡 적용
     
     @property
     def failure_rate(self) -> float:
-        return self.config.parameters.get("failure_rate", 0.10)
+        raw = self.config.parameters.get("failure_rate", 0.10)
+        return min(raw, self.MAX_FAILURE_RATE)  # 하드캡 적용
     
     def inject_chaos(self) -> bool:
         """Inject disk I/O chaos."""
@@ -274,7 +336,9 @@ class DiskIOExperiment(ChaosExperiment):
 
 ---
 
-### 3.2 ConnectionPoolExhaustionExperiment (신규)
+### 3.2 PoolExhaustionExperiment (신규)
+
+> **네이밍 변경**: `ConnectionPoolExhaustionExperiment` → `PoolExhaustionExperiment` (간결화)
 
 #### 목적
 DB 커넥션 풀 고갈 시뮬레이션으로 풀 모니터링 및 폴백 검증
@@ -287,20 +351,38 @@ DB 커넥션 풀 고갈 시뮬레이션으로 풀 모니터링 및 폴백 검증
 
 #### 구현 명세
 
+#### Resilience Expectation 예시
+
 ```python
-class ConnectionPoolExhaustionExperiment(ChaosExperiment):
+# 기대: Pool 고갈 시 PoolMonitor가 EXHAUSTED 감지
+config = ExperimentConfig(
+    target_service="db-pool",
+    resilience_expectation=ResilienceExpectation.expect_cb_open(
+        target_service="db-pool",
+        within_seconds=10.0,
+    ),
+)
+```
+
+#### 구현 명세
+
+```python
+class PoolExhaustionExperiment(ChaosExperiment):
     """
     Simulate connection pool exhaustion.
+    
+    Uses PoolMonitor.set_simulation_override() - no actual connections held.
+    Reference: core/pool_monitor.py:131-160
     
     Tests pool monitoring, wait queue handling, graceful degradation.
     
     Config parameters:
         - pool_name: Name of pool to exhaust
-        - hold_connections: Number of connections to hold
+        - hold_connections: Number of connections to simulate holding
         - hold_duration_seconds: How long to hold
     """
     
-    experiment_type = "connection_pool_exhaustion"
+    experiment_type = "pool_exhaustion"
     requires_approval = True  # Service disruption
     
     @property
@@ -319,8 +401,21 @@ class ConnectionPoolExhaustionExperiment(ChaosExperiment):
         )
         
         try:
+            # PoolMonitor 시뮬레이션 오버라이드 사용
+            # Reference: core/pool_monitor.py:131-160
+            from selfhealing.core.pool_monitor import (
+                ConnectionPoolMonitor,
+                PoolHealthStatus,
+            )
+            
+            monitor = ConnectionPoolMonitor()
+            monitor.set_simulation_override(
+                health_status=PoolHealthStatus.EXHAUSTED,
+                experiment_id=self.experiment_id,
+            )
+            
             _apply_chaos_config({
-                "connection_pool_exhaustion": {
+                "pool_exhaustion": {
                     "enabled": True,
                     "pool_name": self.pool_name,
                     "hold_connections": self.hold_connections,
@@ -340,28 +435,48 @@ class ConnectionPoolExhaustionExperiment(ChaosExperiment):
                 return
             
             logger.info(f"[PoolExhaustion] Rolling back {self.experiment_id}")
+            
+            # 시뮬레이션 오버라이드 해제
+            try:
+                from selfhealing.core.pool_monitor import ConnectionPoolMonitor
+                monitor = ConnectionPoolMonitor()
+                monitor.clear_simulation_override()
+            except Exception as e:
+                logger.warning(f"[PoolExhaustion] Failed to clear override: {e}")
+            
             _apply_chaos_config({
-                "connection_pool_exhaustion": {"enabled": False, "experiment_id": self.experiment_id}
+                "pool_exhaustion": {"enabled": False, "experiment_id": self.experiment_id}
             })
             self._rollback_completed = True
 ```
 
 #### PoolMonitor 연동
 
+#### PoolMonitor 연동 (이미 구현됨)
+
+`core/pool_monitor.py:131-160`에 `set_simulation_override()` 메서드가 이미 구현되어 있습니다:
+
 ```python
-# core/pool_monitor.py 확장
-class ChaosAwareConnectionPoolMonitor(ConnectionPoolMonitor):
-    """카오스 실험 인식 풀 모니터."""
-    
-    def check_health(self) -> PoolHealthStatus:
-        chaos_config = _get_current_chaos_config()
-        pool_chaos = chaos_config.get("connection_pool_exhaustion", {})
+# core/pool_monitor.py (기존 구현)
+class ConnectionPoolMonitor:
+    def set_simulation_override(
+        self,
+        health_status: Optional[PoolHealthStatus] = None,
+        stats: Optional[PoolStats] = None,
+        experiment_id: Optional[str] = None,
+    ) -> None:
+        """
+        시뮬레이션 상태 오버라이드 설정.
         
-        if pool_chaos.get("enabled") and pool_chaos.get("pool_name") == self._pool_name:
-            # 풀 고갈 상태 시뮬레이션
-            return PoolHealthStatus.EXHAUSTED
+        실제 인프라를 변경하지 않고 모니터가 특정 상태를 보고하도록 강제.
+        카오스 실험에서 알림/복구 체인 검증에 사용.
         
-        return super().check_health()
+        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1, §22.2.2
+        """
+        with self._lock:
+            self._simulation_override = health_status
+            self._simulation_stats = stats
+            self._simulation_experiment_id = experiment_id
 ```
 
 ---
@@ -456,7 +571,11 @@ class CertificateExpiryExperiment(ChaosExperiment):
 
 ---
 
-### 4.2 TLSFailureExperiment (신규)
+### 4.2 SimulatedTLSFailureExperiment (신규)
+
+> **네이밍 변경**: `TLSFailureExperiment` → `SimulatedTLSFailureExperiment`
+> - 실제 SSL 핸드셰이크 조작이 아닌 **HTTP Client 레벨 응답 시뮬레이션**
+> - `requests.exceptions.SSLError`를 의도적으로 발생시키는 방식
 
 #### 목적
 TLS 핸드셰이크 실패 시뮬레이션으로 보안 연결 복원력 검증
@@ -464,9 +583,13 @@ TLS 핸드셰이크 실패 시뮬레이션으로 보안 연결 복원력 검증
 #### 구현 명세
 
 ```python
-class TLSFailureExperiment(ChaosExperiment):
+class SimulatedTLSFailureExperiment(ChaosExperiment):
     """
-    Simulate TLS handshake failures.
+    Simulate TLS handshake failures at application level.
+    
+    NOTE: This is APPLICATION-LEVEL simulation.
+    Does NOT manipulate actual SSL/TLS connections.
+    Intercepts HTTP client calls and raises SSLError.
     
     Tests TLS error handling, fallback behaviors, security logging.
     
@@ -475,7 +598,7 @@ class TLSFailureExperiment(ChaosExperiment):
         - affected_endpoints: Endpoints to affect
     """
     
-    experiment_type = "tls_failure"
+    experiment_type = "simulated_tls_failure"
     requires_approval = True  # Security sensitive
     
     @property
@@ -530,12 +653,22 @@ class TLSFailureExperiment(ChaosExperiment):
 - **IdempotencyService**: 시간 기반 중복 체크
 - **TTL 기반 만료**: 카오스 실험 TTL 자체도 영향 받음
 
-#### 구현 명세
+#### ⚠️ Recursive Failure 방지: Monotonic Clock 보호
+
+**문제**: 시스템 시간을 미래로 돌리면 카오스 엔진 자신의 TTL 타이머까지 영향받아 실험이 영원히 끝나지 않는 루프에 빠질 수 있음.
+
+**해결**: 롤백을 담당하는 타이머는 **Monotonic Clock** 사용 (시스템 시간 변화에 영향받지 않는 시계)
 
 ```python
+import time
+
 class ClockSkewExperiment(ChaosExperiment):
     """
     Simulate system clock skew/drift.
+    
+    SAFETY: Uses time.monotonic() for TTL to prevent recursive failure.
+    Even if system time is skewed 100 years into the future,
+    the experiment engine knows "60 real-world seconds" have passed.
     
     Tests time-sensitive logic, token expiry, TTL handling.
     
@@ -547,16 +680,49 @@ class ClockSkewExperiment(ChaosExperiment):
     experiment_type = "clock_skew"
     requires_approval = True  # Subtle, hard to debug issues
     
+    # === Monotonic TTL 보호 ===
+    _monotonic_start: float = 0.0
+    
     @property
     def skew_seconds(self) -> int:
         return self.config.parameters.get("skew_seconds", 300)  # 5 minutes
     
+    def _start_monotonic_timer(self) -> None:
+        """
+        Monotonic clock 기반 TTL 타이머 시작.
+        
+        time.monotonic()는 시스템 시간 변경에 영향받지 않음.
+        Reference: metrics/decorators.py:86-88 (기존 사용 패턴)
+        """
+        self._monotonic_start = time.monotonic()
+        logger.info(
+            f"[ClockSkew] Monotonic timer started at {self._monotonic_start:.2f}"
+        )
+    
+    def is_expired_monotonic(self) -> bool:
+        """
+        Monotonic clock 기반 TTL 만료 확인.
+        
+        시스템 시간(timezone.now())이 아닌 실제 경과 시간으로 판단.
+        Clock Skew 실험 중에도 안전하게 롤백 가능.
+        
+        Returns:
+            True if TTL expired based on monotonic clock
+        """
+        if self._monotonic_start == 0.0:
+            return False
+        elapsed = time.monotonic() - self._monotonic_start
+        return elapsed >= self._effective_ttl
+    
     def inject_chaos(self) -> bool:
-        """Inject clock skew."""
+        """Inject clock skew with monotonic TTL protection."""
         logger.warning(
             f"[ClockSkew] Skewing time by {self.skew_seconds}s "
-            f"(TTL: {self._effective_ttl}s)"
+            f"(TTL: {self._effective_ttl}s, protected by monotonic clock)"
         )
+        
+        # Monotonic 타이머 시작 (핵심!)
+        self._start_monotonic_timer()
         
         try:
             _apply_chaos_config({
@@ -564,6 +730,8 @@ class ClockSkewExperiment(ChaosExperiment):
                     "enabled": True,
                     "skew_seconds": self.skew_seconds,
                     "experiment_id": self.experiment_id,
+                    "monotonic_start": self._monotonic_start,
+                    # expires_at는 참고용으로만 사용 (monotonic이 진짜 TTL)
                     "expires_at": self._expires_at.isoformat() if self._expires_at else "",
                     "ttl_seconds": self._effective_ttl,
                 }
@@ -578,22 +746,41 @@ class ClockSkewExperiment(ChaosExperiment):
             if self._rollback_completed:
                 return
             
-            logger.info(f"[ClockSkew] Rolling back {self.experiment_id}")
+            elapsed = time.monotonic() - self._monotonic_start if self._monotonic_start else 0
+            logger.info(
+                f"[ClockSkew] Rolling back {self.experiment_id} "
+                f"(elapsed monotonic: {elapsed:.2f}s)"
+            )
             _apply_chaos_config({
                 "clock_skew": {"enabled": False, "experiment_id": self.experiment_id}
             })
             self._rollback_completed = True
 ```
 
-#### 애플리케이션 레벨 시뮬레이션
+#### 애플리케이션 레벨 시뮬레이션 (ContextVar 기반)
+
+> **ContextVar 전파 무결성**: 이미 `_is_chaos_request`, `_current_actor`, `_celery_context_var` 등으로 프로젝트 전반에서 사용 중
+> - Reference: `services/http_client.py:19`, `context/actor_context.py:48`, `audit/trace.py:214`
 
 ```python
 # core/timezone.py 확장
+from contextvars import ContextVar
+from datetime import timedelta
+
+# Clock Skew 시뮬레이션용 ContextVar (특정 요청에만 적용 가능)
+_clock_skew_seconds: ContextVar[int] = ContextVar("clock_skew_seconds", default=0)
+
 def now() -> datetime:
     """현재 시간 반환 (카오스 실험 시 skew 적용)."""
     current_time = datetime.now(timezone.utc)
     
-    # 카오스 설정 확인
+    # ContextVar 기반 skew (특정 요청에만 적용)
+    skew = _clock_skew_seconds.get()
+    if skew != 0:
+        current_time = current_time + timedelta(seconds=skew)
+        return current_time
+    
+    # 전역 카오스 설정 확인 (폴백)
     try:
         chaos_config = _get_current_chaos_config()
         clock_skew = chaos_config.get("clock_skew", {})
@@ -605,6 +792,14 @@ def now() -> datetime:
         pass
     
     return current_time
+
+def set_clock_skew_for_request(skew_seconds: int) -> None:
+    """현재 요청에만 Clock Skew 적용 (스레드 안전)."""
+    _clock_skew_seconds.set(skew_seconds)
+
+def clear_clock_skew_for_request() -> None:
+    """현재 요청의 Clock Skew 해제."""
+    _clock_skew_seconds.set(0)
 ```
 
 ---
@@ -704,6 +899,31 @@ DLQ Replay 폭풍 시뮬레이션으로 Replay 시스템 복원력 검증
 - **DLQ Service**: 대량 Replay 처리
 - **Throttle**: Replay 속도 제한
 
+#### Blast Radius 하드캡
+
+```python
+# 운영 환경 통제 불능 방지를 위한 상수 정의
+MAX_ENTRIES_TO_CREATE: int = 5000   # 최대 5,000건
+MAX_REPLAY_RATE: int = 500          # 초당 최대 500건
+```
+
+#### 가상 격리 (Virtual Isolation)
+
+**실험 데이터가 실제 비즈니스 지표(SLA)를 절대 건드리지 않도록 보장:**
+
+```python
+# DLQ 엔트리 생성 시 필수 필드
+CHAOS_DOMAIN_PREFIX = "chaos_test:"  # domain 필드 접두어
+METADATA_SYNTHETIC_FLAG = {
+    "is_synthetic": True,
+    "is_chaos_experiment": True,
+}
+```
+
+> **Reference**: `is_chaos_experiment` 패턴은 `chaos_context.py`에 이미 구현됨
+> - `services/chaos_context.py:220-240` - `attach_chaos_context()` 함수
+> - Error Budget 계산 시 자동 제외 (`metadata__is_chaos_experiment=True` 필터)
+
 #### 구현 명세
 
 ```python
@@ -713,27 +933,47 @@ class ReplayFloodExperiment(ChaosExperiment):
     
     Tests replay throttling, prioritization, resource management.
     
+    IMPORTANT: Uses Virtual Isolation to prevent data pollution:
+    - domain prefix: "chaos_test:"
+    - metadata.is_synthetic = True
+    - metadata.is_chaos_experiment = True
+    - Auto-cleanup on rollback via purge_archived()
+    
     Config parameters:
-        - entries_to_create: Number of DLQ entries to create
-        - replay_rate: Replays per second to trigger
+        - entries_to_create: Number of DLQ entries (max: 5000)
+        - replay_rate: Replays per second (max: 500)
         - domain: Target domain for entries
     """
     
     experiment_type = "replay_flood"
     requires_approval = True  # Resource intensive
     
+    # === Blast Radius 하드캡 ===
+    MAX_ENTRIES_TO_CREATE: int = 5000
+    MAX_REPLAY_RATE: int = 500
+    CHAOS_DOMAIN_PREFIX: str = "chaos_test:"
+    
     @property
     def entries_to_create(self) -> int:
-        return self.config.parameters.get("entries_to_create", 1000)
+        raw = self.config.parameters.get("entries_to_create", 1000)
+        return min(raw, self.MAX_ENTRIES_TO_CREATE)  # 하드캡 적용
     
     @property
     def replay_rate(self) -> int:
-        return self.config.parameters.get("replay_rate", 100)
+        raw = self.config.parameters.get("replay_rate", 100)
+        return min(raw, self.MAX_REPLAY_RATE)  # 하드캡 적용
+    
+    @property
+    def isolated_domain(self) -> str:
+        """Return domain with chaos prefix for virtual isolation."""
+        base_domain = self.config.parameters.get("domain", "chaos")
+        return f"{self.CHAOS_DOMAIN_PREFIX}{base_domain}"
     
     def inject_chaos(self) -> bool:
-        """Create DLQ entries and trigger mass replay."""
+        """Create DLQ entries with virtual isolation and trigger mass replay."""
         logger.warning(
             f"[ReplayFlood] Creating {self.entries_to_create} DLQ entries "
+            f"(domain: {self.isolated_domain}) "
             f"and replaying at {self.replay_rate}/s (TTL: {self._effective_ttl}s)"
         )
         
@@ -743,27 +983,36 @@ class ReplayFloodExperiment(ChaosExperiment):
             
             dlq = get_dlq_service()
             
-            # 카오스 컨텍스트와 함께 DLQ 엔트리 생성
+            # 카오스 컨텍스트 생성 (가상 격리 플래그 포함)
             chaos_context = create_chaos_context(
                 experiment_id=self.experiment_id,
                 experiment_type=self.experiment_type,
             )
+            
+            # 가상 격리 메타데이터
+            isolation_metadata = {
+                **chaos_context.to_dict(),
+                "is_synthetic": True,
+                "is_chaos_experiment": True,
+                "chaos_domain_prefix": self.CHAOS_DOMAIN_PREFIX,
+            }
             
             for i in range(self.entries_to_create):
                 dlq.store(
                     operation_type="chaos_test",
                     entity_type="test_entity",
                     entity_id=f"chaos_{self.experiment_id}_{i}",
-                    domain=self.config.parameters.get("domain", "chaos"),
+                    domain=self.isolated_domain,  # 격리된 도메인
                     failure_type="simulated",
                     error_message="Chaos experiment entry",
-                    metadata=chaos_context.to_dict(),
+                    metadata=isolation_metadata,
                 )
             
             _apply_chaos_config({
                 "replay_flood": {
                     "enabled": True,
                     "entries_created": self.entries_to_create,
+                    "isolated_domain": self.isolated_domain,
                     "experiment_id": self.experiment_id,
                     "expires_at": self._expires_at.isoformat() if self._expires_at else "",
                     "ttl_seconds": self._effective_ttl,
@@ -775,19 +1024,37 @@ class ReplayFloodExperiment(ChaosExperiment):
             return False
     
     def rollback(self) -> None:
+        """Cleanup chaos entries using virtual isolation filter."""
         with self._rollback_lock:
             if self._rollback_completed:
                 return
             
             logger.info(f"[ReplayFlood] Rolling back {self.experiment_id}")
             
-            # 생성된 DLQ 엔트리 정리
+            # 생성된 DLQ 엔트리 정리 (is_chaos_experiment 필터 활용)
             try:
                 from selfhealing.services.dlq import get_dlq_service
                 
                 dlq = get_dlq_service()
-                # 카오스 실험 엔트리 자동 해결
-                # (drift_detection_tasks.py:61-100 로직 활용)
+                repo = dlq.repository
+                
+                # chaos_test: 도메인 엔트리 자동 해결 및 purge
+                # Reference: adapters/redis/dlq.py:933-959 (purge_archived)
+                chaos_entries = repo.query(
+                    domain=self.isolated_domain,
+                    limit=self.entries_to_create + 100,
+                )
+                
+                purged_count = 0
+                for entry in chaos_entries:
+                    if entry.metadata and entry.metadata.get("is_chaos_experiment"):
+                        repo.delete(entry.id)
+                        purged_count += 1
+                
+                logger.info(
+                    f"[ReplayFlood] Purged {purged_count} chaos entries "
+                    f"for experiment {self.experiment_id}"
+                )
             except Exception as e:
                 logger.error(f"[ReplayFlood] Cleanup failed: {e}")
             
@@ -854,18 +1121,173 @@ class ExperimentType(str, Enum):
 
 ---
 
+## 9. 안전 메커니즘 요약
+
+### 9.1 Blast Radius 하드캡 (Hard Cap)
+
+각 실험 타입별 **운영 환경 통제 불능 방지**를 위한 상수:
+
+| 실험 타입 | 하드캡 | 값 | 코드 위치 |
+|-----------|--------|-----|-----------|
+| `SimulatedDiskIOExperiment` | `MAX_IO_LATENCY_MS` | 2,000ms | §3.1 |
+| `SimulatedDiskIOExperiment` | `MAX_FAILURE_RATE` | 30% | §3.1 |
+| `ReplayFloodExperiment` | `MAX_ENTRIES_TO_CREATE` | 5,000건 | §6.2 |
+| `ReplayFloodExperiment` | `MAX_REPLAY_RATE` | 500/s | §6.2 |
+
+> **기존 구현 참조**: `services/chaos/blast_radius.py`의 `BlastRadiusPolicy` 클래스
+> - `max_traffic_percent_region: float = 10.0`
+> - `region_max_concurrent: int = 1`
+
+### 9.2 Monotonic TTL (Clock Skew 보호)
+
+**문제**: `ClockSkewExperiment`가 시스템 시간을 100년 뒤로 돌리면, 실험 엔진 자신의 TTL 타이머도 미래로 인식되어 롤백 불가
+
+**해결**: `time.monotonic()` 기반 TTL
+
+```python
+# ClockSkewExperiment 전용
+def is_expired_monotonic(self) -> bool:
+    elapsed = time.monotonic() - self._monotonic_start
+    return elapsed >= self._effective_ttl
+```
+
+> **기존 사용 패턴**: `metrics/decorators.py:86-88`에서 `time.monotonic()` 이미 사용 중
+
+### 9.3 가상 격리 (Virtual Isolation)
+
+**문제**: `ReplayFloodExperiment`가 운영 DLQ에 5,000건 생성 시 데이터 오염 (Data Pollution)
+
+**해결**: 격리된 네임스페이스 + 자동 필터링
+
+```python
+CHAOS_DOMAIN_PREFIX = "chaos_test:"  # domain 필드 접두어
+METADATA_SYNTHETIC_FLAG = {
+    "is_synthetic": True,
+    "is_chaos_experiment": True,
+}
+```
+
+> **기존 구현 참조**: `chaos_context.py:220-240`의 `attach_chaos_context()` 함수
+> - Error Budget 계산 시 `metadata__is_chaos_experiment=True` 자동 제외
+
+### 9.4 Assertion Scoring (자동 채점)
+
+**문제**: "장애를 냈다"에서 끝나면 안 됨. "시스템이 예상대로 대응했는가" 판정 필요
+
+**해결**: `ResilienceExpectation` + `ResilienceValidator`
+
+```python
+# 이미 구현됨: services/chaos/resilience_expectation.py
+config = ExperimentConfig(
+    resilience_expectation=ResilienceExpectation.expect_cb_open(
+        target_service="payment-api",
+        within_seconds=10.0,  # 10초 내 CB OPEN 기대
+    ),
+)
+
+# 검증 결과 Audit 로그에 기록
+# {
+#     "resilience_passed": True,
+#     "resilience_score": 1.0,
+#     "summary": "Resilience: 1/1 (100%)"
+# }
+```
+
+> **기존 구현 위치**:
+> - `services/chaos/resilience_expectation.py:1-446`
+> - `services/chaos/resilience_validator.py:1-545`
+> - `services/chaos/base.py:182-200` (ExperimentConfig.resilience_expectation)
+
+---
+
+## 10. 기술 부채 점검 항목
+
+> **$500M를 위해 마지막으로 점검해야 할 항목**
+
+| # | 항목 | 현재 상태 | 상세 문서 |
+|---|------|----------|-----------|
+| 1 | **Monotonic Clock 사용 여부** | ClockSkewExperiment에 구현 필요 | [34_CHAOS_SAFETY_MECHANISMS.md](34_CHAOS_SAFETY_MECHANISMS.md) §2 |
+| 2 | **ContextVar 전파 무결성** | 이미 구현됨 (`_celery_context_var`, `_current_actor`) | §5.1 참조 |
+| 3 | **DLQ Cleanup 전략** | `purge_archived()` 이미 구현됨 + rollback에서 자동 정리 | §6.2 참조 |
+
+### 10.1 Monotonic Clock 사용 여부 (구현 필요)
+
+- **위험**: ClockSkewExperiment가 엔진 자폭 유발 가능
+- **해결**: `time.monotonic()` 기반 TTL 타이머
+- **구현 위치**: §5.1 ClockSkewExperiment
+
+### 10.2 ContextVar 전파 무결성 (이미 구현됨)
+
+- **현재 상태**: Celery 워커에서 `set_celery_context()` 자동 호출
+- **코드 위치**: `audit/trace.py:214-280`
+- **검증**: `tests/unit/selfhealing/test_celery_trace_standardization.py`
+
+### 10.3 DLQ Cleanup 전략 (이미 구현됨)
+
+- **현재 상태**: `purge_archived()` 함수로 archived 엔트리 삭제 가능
+- **코드 위치**: `adapters/redis/dlq.py:933-959`
+- **ReplayFlood 적용**: rollback 시 `is_chaos_experiment=True` 필터로 자동 정리
+
+---
+
+## 11. 구현 순서 (Implementation Order)
+
+### Phase 1: 기반 안전 메커니즘 (P0)
+
+| 순서 | 작업 | 파일 | 의존성 |
+|------|------|------|--------|
+| 1-1 | Monotonic TTL 헬퍼 추가 | `services/chaos/base.py` | 없음 |
+| 1-2 | 가상 격리 상수 정의 | `services/chaos/constants.py` (신규) | 없음 |
+
+### Phase 2: P1 실험 구현 (기존 코드 활용)
+
+| 순서 | 작업 | 파일 | 의존성 |
+|------|------|------|--------|
+| 2-1 | `PoolExhaustionExperiment` | `services/chaos/experiment_impl.py` | `core/pool_monitor.py` (이미 구현) |
+| 2-2 | `CertificateExpiryExperiment` | `services/chaos/experiment_impl.py` | `core/cert_monitor.py` (이미 구현) |
+
+### Phase 3: P2 실험 구현 (확장 필요)
+
+| 순서 | 작업 | 파일 | 의존성 |
+|------|------|------|--------|
+| 3-1 | `DNSFailureExperiment` | `services/chaos/experiment_impl.py` | `core/connection_health.py` 확장 |
+| 3-2 | `AuditStorageFailureExperiment` | `services/chaos/experiment_impl.py` | `audit/resilience.py` (이미 구현) |
+| 3-3 | `ClockSkewExperiment` (Monotonic TTL 포함) | `services/chaos/experiment_impl.py` | Phase 1-1 |
+
+### Phase 4: P3 실험 구현 (시뮬레이션 레벨)
+
+| 순서 | 작업 | 파일 | 의존성 |
+|------|------|------|--------|
+| 4-1 | `NetworkBlackholeExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
+| 4-2 | `SimulatedDiskIOExperiment` | `services/chaos/experiment_impl.py` | Storage Adapter 확장 |
+| 4-3 | `SimulatedTLSFailureExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
+| 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | Phase 1-2 |
+
+### Phase 5: ExperimentType Enum 확장
+
+| 순서 | 작업 | 파일 | 의존성 |
+|------|------|------|--------|
+| 5-1 | Enum 값 추가 (10개) | `services/chaos/base.py` | Phase 2-4 완료 |
+| 5-2 | 테스트 작성 | `tests/self_healing/chaos/` | Phase 5-1 |
+
+---
+
 ## 관련 문서
 
 | 문서 | 설명 |
 |------|------|
 | [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md) | 미구현 실험 타입 |
 | [32_CHAOS_SYSTEM_INTEGRATION.md](32_CHAOS_SYSTEM_INTEGRATION.md) | 힐링 시스템 연동 |
+| [34_CHAOS_SAFETY_MECHANISMS.md](34_CHAOS_SAFETY_MECHANISMS.md) | 안전 메커니즘 상세 구현 |
 | [24_CHAOS_INTEGRATION_PLAN.md](24_CHAOS_INTEGRATION_PLAN.md) | 기존 통합 계획 |
 
 ---
 
 ## 버전 정보
 
-- **현재 버전**: 1.0.0
-- **마지막 업데이트**: 2026-01-09
+- **현재 버전**: 1.1.0
+- **마지막 업데이트**: 2026-01-14
+- **변경 이력**:
+  - 1.1.0 (2026-01-14): 리뷰 피드백 반영 - 하드캡, Monotonic TTL, 가상 격리, Assertion Scoring
+  - 1.0.0 (2026-01-09): 초기 버전
 - **담당자**: SelfHealing Team

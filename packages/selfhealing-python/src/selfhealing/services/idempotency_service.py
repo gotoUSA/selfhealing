@@ -67,6 +67,12 @@ class IdempotencyDomain(Enum):
     CHAOS_EXPERIMENT = "chaos_experiment"
     """Chaos 실험 실행 (동일 실험 중복 실행 방지)."""
 
+    CHAOS_ZOMBIE_HUNTER = "chaos_zombie_hunter"
+    """Zombie Hunter 분산 락 (고아 실험 중복 rollback 방지).
+    
+    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
+    """
+
     # ═══════════════════════════════════════════════════════════════════════════
     # 설정 관리 관련 (순위 4 - v2.4.0)
     # ═══════════════════════════════════════════════════════════════════════════
