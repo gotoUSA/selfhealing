@@ -1,7 +1,7 @@
 # 33. 업계 표준 Chaos 실험 추가 계획
 
 > **작성일**: 2026-01-09  
-> **상태**: 계획 수립  
+> **상태**: Phase 1-2 구현 완료  
 > **관련 문서**: [31_CHAOS_EXPERIMENT_EXPANSION.md](31_CHAOS_EXPERIMENT_EXPANSION.md), [32_CHAOS_SYSTEM_INTEGRATION.md](32_CHAOS_SYSTEM_INTEGRATION.md)
 
 ---
@@ -12,11 +12,11 @@
 
 | 카테고리 | 업계 표준 실험 | 현재 구현 | Gap |
 |----------|---------------|-----------|-----|
-| **네트워크** | Latency, Packet Loss, DNS Failure, Blackhole, Bandwidth | ✅ 2/5 | 3개 |
+| **네트워크** | Latency, Packet Loss, DNS Failure, Blackhole, Bandwidth | ✅ 3/5 | 2개 |
 | **인프라** | Container Kill, Pod Restart, AZ Failover | ❌ 0/3 | 3개 (범위 외) |
-| **리소스** | CPU, Memory, Disk I/O, Process Kill, FD Exhaustion | ✅ 1/5 | 4개 |
-| **상태** | State Injection, Clock Skew, Dependency Failure | ❌ 0/3 | 3개 |
-| **보안** | Certificate Expiry, TLS Failure, Auth Failure | ❌ 0/3 | 3개 |
+| **리소스** | CPU, Memory, Disk I/O, Process Kill, FD Exhaustion | ✅ 2/5 | 3개 |
+| **상태** | State Injection, Clock Skew, Dependency Failure | ✅ 1/3 | 2개 |
+| **보안** | Certificate Expiry, TLS Failure, Auth Failure | ✅ 1/3 | 2개 |
 
 ### 1.2 구현 대상 선정 기준
 
@@ -1248,22 +1248,26 @@ config = ExperimentConfig(
 | 8 | 격리 헬퍼 | ✅ 완료 | `services/chaos/isolation_helpers.py` |
 | 9 | ContextVar 전파 | ✅ 완료 | `audit/trace.py:214-280` |
 | 10 | ExperimentHardCaps | ✅ 완료 | `services/chaos/constants.py` |
+| 11 | **MonotonicTTLHelper** | ✅ **2026-01-14 구현** | `services/chaos/base.py:359-473` |
+| 12 | **CertificateExpiryExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py:1810-1940` |
+| 13 | **ClockSkewExperiment** | ✅ **2026-01-14 구현** | `services/chaos/experiment_impl.py:1950-2100` |
 
-### Phase 1: 기반 안전 메커니즘 (P0) ✅ 대부분 완료
+### Phase 1: 기반 안전 메커니즘 (P0) ✅ 완료
 
 | 순서 | 작업 | 파일 | 상태 |
 |------|------|------|------|
-| 1-1 | Monotonic TTL 헬퍼 추가 | `services/chaos/base.py` | 🔴 구현 필요 (ClockSkew용) |
+| 1-1 | Monotonic TTL 헬퍼 추가 | `services/chaos/base.py` | ✅ **2026-01-14 구현** |
 | 1-2 | 가상 격리 상수 정의 | `services/chaos/constants.py` | ✅ 완료 |
 | 1-3 | SteadyStateHypothesis | `services/chaos/base.py` | ✅ 완료 |
 | 1-4 | StopConditionsChecker | `services/chaos/stop_conditions.py` | ✅ 완료 |
 
-### Phase 2: P1 실험 구현 (기존 코드 활용)
+### Phase 2: P1 실험 구현 (기존 코드 활용) ✅ 완료
 
-| 순서 | 작업 | 파일 | 의존성 |
+| 순서 | 작업 | 파일 | 상태 |
 |------|------|------|--------|
-| 2-1 | `PoolExhaustionExperiment` | `services/chaos/experiment_impl.py` | `core/pool_monitor.py` (이미 구현) |
-| 2-2 | `CertificateExpiryExperiment` | `services/chaos/experiment_impl.py` | `core/cert_monitor.py` (이미 구현) |
+| 2-1 | `PoolExhaustionExperiment` | `services/chaos/experiment_impl.py` | ✅ 이미 구현됨 (Phase 5-2) |
+| 2-2 | `CertificateExpiryExperiment` | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
+| 2-3 | `ClockSkewExperiment` (Monotonic TTL 포함) | `services/chaos/experiment_impl.py` | ✅ **2026-01-14 구현** |
 
 ### Phase 3: P2 실험 구현 (확장 필요)
 
@@ -1271,7 +1275,6 @@ config = ExperimentConfig(
 |------|------|------|--------|
 | 3-1 | `DNSFailureExperiment` | `services/chaos/experiment_impl.py` | `core/connection_health.py` 확장 |
 | 3-2 | `AuditStorageFailureExperiment` | `services/chaos/experiment_impl.py` | `audit/resilience.py` (이미 구현) |
-| 3-3 | `ClockSkewExperiment` (Monotonic TTL 포함) | `services/chaos/experiment_impl.py` | Phase 1-1 |
 
 ### Phase 4: P3 실험 구현 (시뮬레이션 레벨)
 
@@ -1282,12 +1285,12 @@ config = ExperimentConfig(
 | 4-3 | `SimulatedTLSFailureExperiment` | `services/chaos/experiment_impl.py` | HTTP Client 확장 |
 | 4-4 | `ReplayFloodExperiment` (가상 격리 포함) | `services/chaos/experiment_impl.py` | Phase 1-2 ✅ |
 
-### Phase 5: ExperimentType Enum 확장
+### Phase 5: ExperimentType Enum 확장 ✅ 부분 완료
 
-| 순서 | 작업 | 파일 | 의존성 |
+| 순서 | 작업 | 파일 | 상태 |
 |------|------|------|--------|
-| 5-1 | Enum 값 추가 (10개) | `services/chaos/base.py` | Phase 2-4 완료 |
-| 5-2 | 테스트 작성 | `tests/self_healing/chaos/` | Phase 5-1 |
+| 5-1 | Enum 값 추가 (CERTIFICATE_EXPIRY, CLOCK_SKEW, DNS_FAILURE) | `services/chaos/base.py` | ✅ **2026-01-14 구현** |
+| 5-2 | 테스트 작성 (44개) | `tests/self_healing/chaos/test_chaos_industry_experiments.py` | ✅ **2026-01-14 작성** |
 
 ### 우선순위 요약
 
@@ -1297,10 +1300,11 @@ config = ExperimentConfig(
 | ✅ 완료 | StopConditions | ✅ 완료 | 자동 중단 조건 |
 | ✅ 완료 | Kill Switch | ✅ 완료 | 전역 비상 정지 |
 | ✅ 완료 | 가상 격리 헬퍼 | ✅ 완료 | 테스트 데이터 격리 |
-| 🔴 P0 | Monotonic TTL | 🔴 구현 필요 | ClockSkewExperiment 필수 |
+| ✅ 완료 | Monotonic TTL | ✅ **2026-01-14 구현** | ClockSkewExperiment 필수 |
 | 🔴 P0 | Zombie Hunter 태스크 | 🔴 구현 필요 | 고아 실험 정리 |
-| 🟠 P1 | PoolExhaustionExperiment | 🔴 구현 필요 | 기존 모니터 활용 |
-| 🟠 P1 | CertificateExpiryExperiment | 🔴 구현 필요 | 기존 모니터 활용 |
+| ✅ 완료 | PoolExhaustionExperiment | ✅ 완료 | 기존 모니터 활용 |
+| ✅ 완료 | CertificateExpiryExperiment | ✅ **2026-01-14 구현** | 기존 모니터 활용 |
+| ✅ 완료 | ClockSkewExperiment | ✅ **2026-01-14 구현** | Monotonic TTL 보호 적용 |
 
 ---
 
@@ -1402,11 +1406,13 @@ if stop_result.should_stop:
 
 ## 버전 정보
 
-- **현재 버전**: 1.3.0
+- **현재 버전**: 1.4.0
 - **마지막 업데이트**: 2026-01-14
 - **변경 이력**:
+  - 1.4.0 (2026-01-14): **Phase 1-2 구현 완료** - MonotonicTTLHelper, CertificateExpiryExperiment, ClockSkewExperiment 구현, ExperimentType Enum 확장 (CERTIFICATE_EXPIRY, CLOCK_SKEW, DNS_FAILURE), 테스트 44개 작성 및 통과
   - 1.3.0 (2026-01-14): 실제 코드 검증 기반 구현 상태 업데이트, 구현 순서 재정렬 (이미 완료된 기능 명시), 우선순위 요약 추가
   - 1.2.0 (2026-01-14): 업계 표준 비교 섹션 추가, 구현 상태 코드 근거 명시
   - 1.1.0 (2026-01-14): 리뷰 피드백 반영 - 하드캡, Monotonic TTL, 가상 격리, Assertion Scoring
   - 1.0.0 (2026-01-09): 초기 버전
+- **담당자**: SelfHealing Team
 - **담당자**: SelfHealing Team

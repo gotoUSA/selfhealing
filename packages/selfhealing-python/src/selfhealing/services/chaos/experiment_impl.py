@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+from selfhealing.core.timezone import now
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
     ExperimentConfig,
@@ -1794,6 +1796,313 @@ class ConnectionPartitionExperiment(ChaosExperiment):
 
 
 # =============================================================================
+# Phase 6: CertificateExpiryExperiment
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.1
+# =============================================================================
+
+
+# 복구 기대 가설 (Certificate Expiry)
+CERTIFICATE_EXPIRY_HYPOTHESIS = FailureHypothesis(
+    description="인증서 만료 시뮬레이션 시, 알림이 즉시 발생해야 함",
+    expected_recovery_time_seconds=30.0,
+    expected_fallback_activated=False,  # 알림만 트리거
+    tolerance_percent=50.0,  # 알림 지연 허용
+)
+
+
+class CertificateExpiryExperiment(ChaosExperiment):
+    """
+    인증서 만료 시나리오 시뮬레이션 실험.
+    
+    CertificateExpiryMonitor를 통해 만료 임박 알림/자동 갱신 트리거 검증.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 인증서 만료 시뮬레이션 시, 알림이 즉시 발생해야 함          │
+    │ • 30초 내에 모니터링 시스템이 감지                            │
+    │                                                              │
+    │ LearningService 연동:                                        │
+    │ → 알림 발생 지연 시간 추적                                    │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.1
+    
+    Config parameters:
+        - simulated_days_remaining: 만료까지 남은 일수 시뮬레이션 (default: 5)
+        - affected_endpoints: 영향받는 엔드포인트 목록
+    
+    Usage:
+        experiment = CertificateExpiryExperiment(
+            config=ExperimentConfig(
+                target_service="api-gateway",
+                parameters={
+                    "simulated_days_remaining": 3,
+                    "affected_endpoints": ["https://api.example.com"],
+                },
+            )
+        )
+        result = experiment.execute()
+    """
+    
+    experiment_type = ExperimentType.CERTIFICATE_EXPIRY.value
+    requires_approval = False  # Read-only 시뮬레이션, 낮은 위험
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = CERTIFICATE_EXPIRY_HYPOTHESIS
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._alerts_triggered: List[Dict[str, Any]] = []
+    
+    @property
+    def simulated_days_remaining(self) -> int:
+        return self.config.parameters.get("simulated_days_remaining", 5)
+    
+    @property
+    def affected_endpoints(self) -> List[str]:
+        return self.config.parameters.get("affected_endpoints", [])
+    
+    def inject_chaos(self) -> bool:
+        """인증서 만료 시뮬레이션 주입."""
+        logger.info(
+            f"[CertExpiry] Simulating {self.simulated_days_remaining} days until expiry "
+            f"for {len(self.affected_endpoints)} endpoints (TTL: {self._effective_ttl}s)"
+        )
+        
+        try:
+            from selfhealing.core.cert_monitor import CertificateExpiryMonitor
+            
+            # 알림 수집 콜백
+            def collect_alert(cert_info):
+                self._alerts_triggered.append({
+                    "endpoint": cert_info.endpoint,
+                    "status": cert_info.status.value if hasattr(cert_info.status, 'value') else str(cert_info.status),
+                    "days_remaining": cert_info.days_remaining,
+                    "triggered_at": now().isoformat(),
+                })
+                logger.info(
+                    f"[CertExpiry] Alert triggered for {cert_info.endpoint}: "
+                    f"{cert_info.status.value if hasattr(cert_info.status, 'value') else cert_info.status}"
+                )
+            
+            monitor = CertificateExpiryMonitor(alert_callback=collect_alert)
+            
+            # 시뮬레이션된 만료일로 체크
+            simulated_not_after = now() + timedelta(days=self.simulated_days_remaining)
+            
+            for endpoint in self.affected_endpoints:
+                monitor.check_expiry(
+                    not_after=simulated_not_after,
+                    endpoint=endpoint,
+                    subject=f"chaos_test_{self.experiment_id}_{endpoint}",
+                    issuer="Chaos Experiment CA",
+                )
+            
+            _apply_chaos_config({
+                "certificate_expiry": {
+                    "enabled": True,
+                    "simulated_days_remaining": self.simulated_days_remaining,
+                    "affected_endpoints": self.affected_endpoints,
+                    "experiment_id": self.experiment_id,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.info(
+                f"[CertExpiry] Simulation complete, {len(self._alerts_triggered)} alerts triggered"
+            )
+            return True
+            
+        except ImportError as e:
+            logger.error(f"[CertExpiry] CertificateExpiryMonitor not available: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"[CertExpiry] Failed to inject: {e}")
+            return False
+    
+    def rollback(self) -> None:
+        """시뮬레이션 정리."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            logger.info(
+                f"[CertExpiry] Rolling back {self.experiment_id}, "
+                f"triggered {len(self._alerts_triggered)} alerts"
+            )
+            
+            _apply_chaos_config({
+                "certificate_expiry": {
+                    "enabled": False,
+                    "experiment_id": self.experiment_id,
+                }
+            })
+            self._rollback_completed = True
+    
+    def get_alerts_triggered(self) -> List[Dict[str, Any]]:
+        """트리거된 알림 목록 반환."""
+        return self._alerts_triggered.copy()
+
+
+# =============================================================================
+# Phase 6: ClockSkewExperiment (with Monotonic TTL Protection)
+# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §5.1
+# =============================================================================
+
+
+# 복구 기대 가설 (Clock Skew)
+CLOCK_SKEW_HYPOTHESIS = FailureHypothesis(
+    description="시간 왜곡 시뮬레이션 시, 시간 의존 로직이 graceful하게 처리해야 함",
+    expected_recovery_time_seconds=60.0,
+    tolerance_percent=30.0,
+)
+
+
+class ClockSkewExperiment(ChaosExperiment):
+    """
+    시스템 시간 불일치 시뮬레이션 실험.
+    
+    ⚠️ SAFETY: Monotonic Clock 기반 TTL 사용
+    시스템 시간을 100년 뒤로 조작해도, 실험 엔진은 실제 경과 시간으로
+    TTL을 판단하여 안전하게 롤백합니다.
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
+    ├─────────────────────────────────────────────────────────────┤
+    │ • 시간 왜곡 시 시간 의존 로직이 graceful하게 처리            │
+    │ • 60초 내에 정상 복구                                        │
+    │                                                              │
+    │ SAFETY MECHANISM:                                            │
+    │ → MonotonicTTLHelper 사용으로 자기 자폭 방지                 │
+    └─────────────────────────────────────────────────────────────┘
+    
+    Reference: 
+    - 33_CHAOS_INDUSTRY_EXPERIMENTS.md §5.1
+    - 34_CHAOS_SAFETY_MECHANISMS.md §2 Monotonic Clock 보호
+    
+    Config parameters:
+        - skew_seconds: 시간 왜곡량 (초, 양수=미래, 음수=과거)
+        - affected_modules: 영향받는 모듈 목록 (optional)
+    
+    Usage:
+        experiment = ClockSkewExperiment(
+            config=ExperimentConfig(
+                target_service="auth-service",
+                parameters={"skew_seconds": 300},  # 5분 미래로
+            )
+        )
+        result = experiment.execute()
+    """
+    
+    experiment_type = ExperimentType.CLOCK_SKEW.value
+    requires_approval = True  # 미묘하고 디버깅 어려운 문제 유발 가능
+    
+    # Blast Radius Hard Cap
+    MAX_SKEW_SECONDS: int = 86400  # 최대 1일
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = CLOCK_SKEW_HYPOTHESIS
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Monotonic TTL 헬퍼 (시스템 시간 조작에 영향받지 않음)
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
+        self._monotonic_ttl: Optional[MonotonicTTLHelper] = None
+    
+    @property
+    def skew_seconds(self) -> int:
+        raw = self.config.parameters.get("skew_seconds", 300)
+        # Hard cap 적용
+        capped = min(abs(raw), self.MAX_SKEW_SECONDS)
+        return capped if raw >= 0 else -capped
+    
+    @property
+    def affected_modules(self) -> List[str]:
+        return self.config.parameters.get("affected_modules", [])
+    
+    def inject_chaos(self) -> bool:
+        """Clock Skew 시뮬레이션 주입 (Monotonic TTL 보호 적용)."""
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
+        
+        logger.warning(
+            f"[ClockSkew] Injecting {self.skew_seconds}s time skew "
+            f"(TTL: {self._effective_ttl}s, protected by monotonic clock)"
+        )
+        
+        try:
+            # Monotonic TTL 헬퍼 시작 (핵심 안전 메커니즘!)
+            self._monotonic_ttl = MonotonicTTLHelper(ttl_seconds=float(self._effective_ttl))
+            self._monotonic_ttl.start()
+            
+            _apply_chaos_config({
+                "clock_skew": {
+                    "enabled": True,
+                    "skew_seconds": self.skew_seconds,
+                    "affected_modules": self.affected_modules,
+                    "experiment_id": self.experiment_id,
+                    "monotonic_start": self._monotonic_ttl._start_time,
+                    # expires_at는 참고용 (monotonic이 진짜 TTL)
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+                    "ttl_seconds": self._effective_ttl,
+                }
+            })
+            
+            logger.info(
+                f"[ClockSkew] Monotonic timer started: {self._monotonic_ttl.to_dict()}"
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(f"[ClockSkew] Failed to inject: {e}")
+            return False
+    
+    def is_expired_monotonic(self) -> bool:
+        """
+        Monotonic clock 기반 TTL 만료 확인.
+        
+        시스템 시간(timezone.now())이 아닌 실제 경과 시간으로 판단.
+        Clock Skew 실험 중에도 안전하게 롤백 가능.
+        
+        Returns:
+            True if TTL expired based on monotonic clock
+        """
+        if self._monotonic_ttl is None:
+            return self.is_expired()  # 폴백: 기본 TTL 체크
+        return self._monotonic_ttl.is_expired()
+    
+    def get_monotonic_remaining(self) -> float:
+        """Monotonic 기준 남은 시간 (초) 반환."""
+        if self._monotonic_ttl is None:
+            return 0.0
+        return self._monotonic_ttl.remaining_seconds()
+    
+    def rollback(self) -> None:
+        """Clock Skew 시뮬레이션 해제."""
+        with self._rollback_lock:
+            if self._rollback_completed:
+                return
+            
+            monotonic_elapsed = 0.0
+            if self._monotonic_ttl:
+                monotonic_elapsed = self._monotonic_ttl.elapsed_seconds()
+            
+            logger.info(
+                f"[ClockSkew] Rolling back {self.experiment_id} "
+                f"(monotonic elapsed: {monotonic_elapsed:.2f}s)"
+            )
+            
+            _apply_chaos_config({
+                "clock_skew": {
+                    "enabled": False,
+                    "experiment_id": self.experiment_id,
+                }
+            })
+            self._rollback_completed = True
+
+
+# =============================================================================
 # Experiment Factory
 # =============================================================================
 
@@ -1833,6 +2142,9 @@ def create_experiment(
         # Phase 5-2: Simulation experiments (32_CHAOS_SYSTEM_INTEGRATION.md)
         ExperimentType.POOL_EXHAUSTION.value: PoolExhaustionExperiment,
         ExperimentType.CONNECTION_PARTITION.value: ConnectionPartitionExperiment,
+        # Phase 6: 업계 표준 실험 (33_CHAOS_INDUSTRY_EXPERIMENTS.md)
+        ExperimentType.CERTIFICATE_EXPIRY.value: CertificateExpiryExperiment,
+        ExperimentType.CLOCK_SKEW.value: ClockSkewExperiment,
     }
     
     experiment_class = experiment_classes.get(experiment_type)
@@ -1857,6 +2169,7 @@ from selfhealing.services.chaos.base import (
     ExperimentResult,
     SteadyStateHypothesis,
     ChaosExperiment,
+    MonotonicTTLHelper,
 )
 
 
@@ -1873,6 +2186,7 @@ __all__ = [
     "ExperimentResult",
     "SteadyStateHypothesis",
     "FailureHypothesis",
+    "MonotonicTTLHelper",
     # Base Class
     "ChaosExperiment",
     # Concrete Experiments (Existing)
@@ -1893,6 +2207,9 @@ __all__ = [
     # Concrete Experiments (Phase 5-2 - Simulation)
     "PoolExhaustionExperiment",
     "ConnectionPartitionExperiment",
+    # Concrete Experiments (Phase 6 - Industry Standard)
+    "CertificateExpiryExperiment",
+    "ClockSkewExperiment",
     # Factory
     "create_experiment",
 ]
