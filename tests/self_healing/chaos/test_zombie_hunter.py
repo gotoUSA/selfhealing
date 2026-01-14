@@ -32,7 +32,7 @@ class TestHuntZombieExperimentsTask:
         """Test hunt_zombie_experiments Celery task has correct name."""
         from shopping.tasks.self_healing_tasks import hunt_zombie_experiments
         
-        assert hunt_zombie_experiments.name == "chaos.hunt_zombie_experiments"
+        assert hunt_zombie_experiments.name == "selfhealing.celery_tasks.hunt_zombie_experiments"
     
     def test_business_logic_function_exists(self):
         """Test hunt_zombie_experiments business logic function exists in selfhealing.tasks."""
@@ -333,7 +333,7 @@ class TestCeleryBeatScheduleZombieHunter:
         assert "chaos-hunt-zombie-experiments" in schedule
         task_config = schedule["chaos-hunt-zombie-experiments"]
         
-        assert task_config["task"] == "chaos.hunt_zombie_experiments"
+        assert task_config["task"] == "selfhealing.celery_tasks.hunt_zombie_experiments"
         assert task_config["schedule"] == 60.0  # 1 minute
         assert task_config["options"]["queue"] == "chaos"
 

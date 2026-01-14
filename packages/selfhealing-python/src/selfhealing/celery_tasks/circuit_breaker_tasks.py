@@ -1,0 +1,235 @@
+"""
+Circuit Breaker Celery Tasks
+
+Tasks for managing circuit breaker states and recovery.
+"""
+
+from celery import shared_task
+from celery.utils.log import get_task_logger
+
+logger = get_task_logger(__name__)
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.celery_tasks.check_circuit_breaker_recovery",
+    queue="maintenance",
+    max_retries=1,
+    time_limit=60,
+    soft_time_limit=55,
+)
+def check_circuit_breaker_recovery(self) -> dict:
+    """
+    Periodic task to check for circuit breaker state transitions.
+
+    Checks if any circuit breakers in OPEN state should transition
+    to HALF_OPEN based on recovery timeout.
+
+    This task should be scheduled to run every minute.
+
+    Returns:
+        Dictionary with check results
+    """
+    from selfhealing.services import get_circuit_breaker_service
+
+    logger.debug("[Circuit Check] Checking for circuit breakers to transition")
+
+    try:
+        service = get_circuit_breaker_service()
+        result = service.check_recovery_transitions()
+
+        if result.get("count", 0) > 0:
+            logger.info(
+                f"[Circuit Check] Transitioned {result['count']} circuit(s): "
+                f"{result.get('transitioned', [])}"
+            )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[Circuit Check] Error: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.celery_tasks.expire_manual_overrides",
+    queue="maintenance",
+    max_retries=1,
+    time_limit=60,
+    soft_time_limit=55,
+)
+def expire_manual_overrides(self) -> dict:
+    """
+    Periodic task to expire manual circuit breaker overrides.
+
+    Manual overrides have a TTL to prevent "forgotten" blocks.
+    When expired:
+    - OPEN circuits transition to HALF_OPEN for gradual recovery
+    - The manually_controlled flag is cleared
+
+    This ensures operators cannot accidentally leave services blocked
+    indefinitely. Default TTL is 90 minutes.
+
+    This task should be scheduled to run every 5 minutes.
+
+    Returns:
+        Dictionary with expiration results
+    """
+    from selfhealing.services import get_circuit_breaker_service
+
+    logger.debug("[Circuit Breaker] Checking for expired manual overrides")
+
+    try:
+        service = get_circuit_breaker_service()
+        expired = service.check_and_expire_manual_overrides()
+
+        if expired:
+            logger.warning(f"[Circuit Breaker] Expired manual overrides: {expired}")
+
+        return {
+            "success": True,
+            "expired_services": expired,
+            "count": len(expired),
+        }
+
+    except Exception as e:
+        logger.error(f"[Circuit Breaker] Error expiring overrides: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.celery_tasks.force_open_circuit_breaker",
+    queue="critical",
+    max_retries=0,
+    time_limit=30,
+    soft_time_limit=25,
+)
+def force_open_circuit_breaker(
+    self,
+    service_name: str,
+    reason: str = "",
+    controlled_by: object = None,
+) -> dict:
+    """
+    Force open a circuit breaker (block all requests).
+
+    This task can be triggered programmatically or via admin actions.
+
+    Args:
+        service_name: Name of the service to block
+        reason: Reason for opening the circuit
+        controlled_by: Object representing the user who initiated the action (optional)
+
+    Returns:
+        Dictionary with operation result
+    """
+    from selfhealing.services import get_circuit_breaker_service
+
+    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
+
+    try:
+        service = get_circuit_breaker_service()
+        result = service.force_open(
+            service_name=service_name,
+            reason=reason,
+            controlled_by=controlled_by,
+        )
+
+        if result.success:
+            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
+            return {
+                "success": True,
+                "service_name": service_name,
+                "previous_state": result.previous_state,
+                "new_state": result.new_state,
+                "message": result.message,
+            }
+        else:
+            return {
+                "success": False,
+                "service_name": service_name,
+                "error": result.error,
+            }
+
+    except Exception as e:
+        logger.error(f"[Circuit Breaker] Error opening circuit: {e}", exc_info=True)
+        return {
+            "success": False,
+            "service_name": service_name,
+            "error": str(e),
+        }
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.celery_tasks.force_close_circuit_breaker",
+    queue="critical",
+    max_retries=0,
+    time_limit=30,
+    soft_time_limit=25,
+)
+def force_close_circuit_breaker(
+    self,
+    service_name: str,
+    reason: str = "",
+    controlled_by: object = None,
+    trigger_replay: bool = False,
+) -> dict:
+    """
+    Force close a circuit breaker (allow all requests).
+
+    This task can be triggered programmatically or via admin actions.
+
+    Args:
+        service_name: Name of the service to unblock
+        reason: Reason for closing the circuit
+        controlled_by: Object representing the user who initiated the action (optional)
+        trigger_replay: Whether to trigger conditional replay
+
+    Returns:
+        Dictionary with operation result
+    """
+    from selfhealing.services import get_circuit_breaker_service
+
+    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
+
+    try:
+        service = get_circuit_breaker_service()
+        result = service.force_close(
+            service_name=service_name,
+            reason=reason,
+            controlled_by=controlled_by,
+            trigger_replay=trigger_replay,
+        )
+
+        if result.success:
+            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
+            return {
+                "success": True,
+                "service_name": service_name,
+                "previous_state": result.previous_state,
+                "new_state": result.new_state,
+                "message": result.message,
+            }
+        else:
+            return {
+                "success": False,
+                "service_name": service_name,
+                "error": result.error,
+            }
+
+    except Exception as e:
+        logger.error(f"[Circuit Breaker] Error closing circuit: {e}", exc_info=True)
+        return {
+            "success": False,
+            "service_name": service_name,
+            "error": str(e),
+        }

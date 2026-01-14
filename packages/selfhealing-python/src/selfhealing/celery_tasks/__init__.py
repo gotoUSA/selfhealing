@@ -1,37 +1,45 @@
 """
-Self-Healing Tasks - Django Adapter
+SelfHealing Celery Tasks
 
-This module re-exports all selfhealing Celery tasks for backward compatibility.
-All task definitions live in the selfhealing package (selfhealing.celery_tasks).
+All Celery tasks for the selfhealing package are defined here.
+This module can be autodiscovered by Celery and used in any Django project.
 
-Usage:
-    # These work the same:
-    from shopping.tasks.self_healing_tasks import hunt_zombie_experiments
-    from selfhealing.celery_tasks import hunt_zombie_experiments
+Usage in your Django project's celery.py:
+    app.autodiscover_tasks(['selfhealing.celery_tasks'])
 
-For new code, prefer importing directly from selfhealing.celery_tasks.
+Or simply import all tasks in your host application's tasks.py:
+    from selfhealing.celery_tasks import *  # noqa
+
+Tasks are grouped by domain:
+- circuit_breaker_tasks: Circuit breaker management
+- dlq_tasks: DLQ replay operations  
+- chaos_tasks: Chaos engineering safety
+- metrics_tasks: Observability and SLA monitoring
+- drift_detection_tasks: SLA drift detection
 """
 
-# Re-export all tasks from selfhealing package
-from selfhealing.celery_tasks import (
-    # Circuit Breaker
+from selfhealing.celery_tasks.circuit_breaker_tasks import (
     check_circuit_breaker_recovery,
     expire_manual_overrides,
     force_close_circuit_breaker,
     force_open_circuit_breaker,
-    # DLQ
+)
+from selfhealing.celery_tasks.dlq_tasks import (
     cleanup_resolved_dlq_entries,
     conditional_replay_on_circuit_close,
     replay_batch_by_domain,
     replay_batch_by_failure_type,
     replay_single_dlq_entry,
-    # Chaos
+)
+from selfhealing.celery_tasks.chaos_tasks import (
     check_recovery_monitoring_experiments,
     hunt_zombie_experiments,
-    # Metrics
+)
+from selfhealing.celery_tasks.metrics_tasks import (
     check_and_report_sla_breaches,
     collect_self_healing_metrics,
-    # Drift Detection
+)
+from selfhealing.celery_tasks.drift_detection_tasks import (
     check_sla_drift,
     cleanup_expired_chaos_experiments,
 )

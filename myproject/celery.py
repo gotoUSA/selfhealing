@@ -31,6 +31,9 @@ if hasattr(settings, "CELERY_RESULT_BACKEND"):
 # 등록된 Django 앱에서 tasks.py 자동 로드
 app.autodiscover_tasks()
 
+# selfhealing 패키지의 Celery tasks 자동 로드
+app.autodiscover_tasks(['selfhealing.celery_tasks'])
+
 # =============================================================================
 # Self-Healing Signal Hooks (Zero-Code Integration)
 # =============================================================================
@@ -138,7 +141,7 @@ app.conf.beat_schedule = {
     # ==========================================================================
     # Circuit breaker recovery check - 매분
     "check-circuit-breaker-recovery": {
-        "task": "selfhealing.adapters.celery.tasks.check_circuit_breaker_recovery",
+        "task": "selfhealing.celery_tasks.check_circuit_breaker_recovery",
         "schedule": 60.0,  # 매분
         "options": {
             "expires": 55,
@@ -146,7 +149,7 @@ app.conf.beat_schedule = {
     },
     # Manual override expiration - 5분마다
     "expire-manual-overrides": {
-        "task": "selfhealing.adapters.celery.tasks.expire_manual_overrides",
+        "task": "selfhealing.celery_tasks.expire_manual_overrides",
         "schedule": 300.0,  # 5분마다
         "options": {
             "expires": 290,
@@ -154,7 +157,7 @@ app.conf.beat_schedule = {
     },
     # Self-healing metrics collection - 매분
     "collect-self-healing-metrics": {
-        "task": "selfhealing.adapters.celery.tasks.collect_self_healing_metrics",
+        "task": "selfhealing.celery_tasks.collect_self_healing_metrics",
         "schedule": 60.0,  # 매분
         "options": {
             "expires": 55,
@@ -162,7 +165,7 @@ app.conf.beat_schedule = {
     },
     # SLA breach check - 5분마다
     "check-sla-breaches": {
-        "task": "selfhealing.adapters.celery.tasks.check_and_report_sla_breaches",
+        "task": "selfhealing.celery_tasks.check_and_report_sla_breaches",
         "schedule": 300.0,  # 5분마다
         "options": {
             "expires": 290,
@@ -170,7 +173,7 @@ app.conf.beat_schedule = {
     },
     # DLQ cleanup - 매일 새벽 5시
     "cleanup-dlq-entries": {
-        "task": "selfhealing.adapters.celery.tasks.cleanup_resolved_dlq_entries",
+        "task": "selfhealing.celery_tasks.cleanup_resolved_dlq_entries",
         "schedule": crontab(hour=5, minute=0),  # 매일 05:00
         "options": {
             "expires": 3600,
@@ -179,7 +182,7 @@ app.conf.beat_schedule = {
     # Phase 6: Chaos Recovery Monitoring (32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3)
     # Check RECOVERY_MONITORING experiments - 30초마다
     "check-chaos-recovery-monitoring": {
-        "task": "chaos.check_recovery_monitoring",
+        "task": "selfhealing.celery_tasks.check_recovery_monitoring",
         "schedule": 30.0,  # 30초마다
         "options": {
             "expires": 25,
@@ -189,7 +192,7 @@ app.conf.beat_schedule = {
     # Phase 7: Zombie Hunter (34_CHAOS_SAFETY_MECHANISMS.md §5)
     # Hunt orphaned experiments (worker crash recovery) - 60초마다
     "chaos-hunt-zombie-experiments": {
-        "task": "chaos.hunt_zombie_experiments",
+        "task": "selfhealing.celery_tasks.hunt_zombie_experiments",
         "schedule": 60.0,  # 매 1분
         "options": {
             "expires": 55,
