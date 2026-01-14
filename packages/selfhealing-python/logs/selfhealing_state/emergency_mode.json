@@ -10,5 +10,6 @@
   "is_auto_triggered": false,
   "is_recovering": false,
   "recovery_started_at": null,
-  "target_level": null
+  "target_level": null,
+  "metadata": null
 }
