@@ -531,3 +531,32 @@ def check_recovery_monitoring_experiments(self) -> dict:
             "success": False,
             "error": str(e),
         }
+
+
+# =============================================================================
+# Phase 7: Zombie Hunter Adapter (34_CHAOS_SAFETY_MECHANISMS.md §5)
+# =============================================================================
+
+
+@shared_task(
+    bind=True,
+    name="chaos.hunt_zombie_experiments",
+    queue="chaos",
+    max_retries=0,
+    time_limit=120,
+    soft_time_limit=110,
+)
+def hunt_zombie_experiments(self) -> dict:
+    """
+    Zombie Hunter: Celery Task 어댑터.
+    
+    실제 비즈니스 로직은 selfhealing.tasks.chaos_scheduler.hunt_zombie_experiments()에서 처리.
+    
+    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
+    
+    Returns:
+        Dictionary with hunt results
+    """
+    from selfhealing.tasks.chaos_scheduler import hunt_zombie_experiments as hunt_zombies
+    
+    return hunt_zombies()

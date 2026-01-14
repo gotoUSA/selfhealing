@@ -186,6 +186,16 @@ app.conf.beat_schedule = {
             "queue": "chaos_monitoring",
         },
     },
+    # Phase 7: Zombie Hunter (34_CHAOS_SAFETY_MECHANISMS.md §5)
+    # Hunt orphaned experiments (worker crash recovery) - 60초마다
+    "chaos-hunt-zombie-experiments": {
+        "task": "chaos.hunt_zombie_experiments",
+        "schedule": 60.0,  # 매 1분
+        "options": {
+            "expires": 55,
+            "queue": "chaos",
+        },
+    },
     # 테스트용: 5분마다 실행 (개발 환경에서만 사용)
     # 'test-periodic-task': {
     #     'task': 'shopping.tasks.test_periodic_task',

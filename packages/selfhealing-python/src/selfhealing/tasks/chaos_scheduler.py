@@ -357,4 +357,133 @@ def get_beat_schedule_for_celery():
             "schedule": 1800.0,  # Every 30 minutes
             "options": {"queue": "maintenance"},
         },
+        # Zombie Hunter: Hunt orphaned experiments every 1 minute
+        # Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
+        "chaos-hunt-zombie-experiments": {
+            "task": "selfhealing.tasks.chaos_scheduler.hunt_zombie_experiments_task",
+            "schedule": 60.0,  # Every 1 minute
+            "options": {"queue": "chaos"},
+        },
     }
+
+
+# =============================================================================
+# Phase 7: Zombie Hunter (34_CHAOS_SAFETY_MECHANISMS.md §5)
+# =============================================================================
+
+
+def hunt_zombie_experiments() -> Dict[str, Any]:
+    """
+    Zombie Hunter: 고아 실험 정리 함수.
+    
+    RUNNING 상태인데 TTL이 만료된 실험 = 워커 크래시로 간주
+    → 분산 락 획득 후 강제 rollback → ABORTED 처리
+    
+    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
+    
+    Fail-Safe 보장:
+    - 워커가 크래시해도 주입된 장애가 운영 환경에 남지 않도록 보장
+    - 분산 락으로 중복 rollback 방지
+    
+    Returns:
+        Dictionary with hunt results:
+        - success: bool
+        - hunted: int (처리된 좀비 수)
+        - skipped: int (락 경쟁으로 스킵된 수)
+        - errors: List[Dict] (에러 발생한 실험 정보)
+    """
+    logger.info("[ZombieHunter] Starting zombie experiment hunt")
+    
+    try:
+        from selfhealing.services.chaos import get_chaos_scheduler
+        from selfhealing.services.chaos.base import ExperimentStatus
+        from selfhealing.services.idempotency_service import (
+            IdempotencyService,
+            IdempotencyKey,
+            IdempotencyDomain,
+        )
+        
+        scheduler = get_chaos_scheduler()
+        idempotency = IdempotencyService()
+        
+        # RUNNING 상태 실험 조회
+        running_experiments = scheduler.get_experiments_by_status(
+            ExperimentStatus.RUNNING.value
+        )
+        
+        hunted = 0
+        skipped = 0
+        errors = []
+        
+        for experiment in running_experiments:
+            exp_id = getattr(experiment, 'experiment_id', 'unknown')
+            
+            try:
+                # TTL 만료 체크 (Monotonic 지원)
+                is_expired = False
+                
+                # Monotonic TTL 우선 체크 (ClockSkew 실험 보호)
+                if hasattr(experiment, '_is_expired_monotonic'):
+                    is_expired = experiment._is_expired_monotonic()
+                elif hasattr(experiment, 'is_expired'):
+                    is_expired = experiment.is_expired()
+                
+                if not is_expired:
+                    continue  # TTL 아직 유효 → 스킵
+                
+                # === 분산 락 획득 (레이스 컨디션 방지) ===
+                lock_key = IdempotencyKey(
+                    domain=IdempotencyDomain.CHAOS_ZOMBIE_HUNTER,
+                    key=f"zombie_rollback:{exp_id}",
+                    components={"experiment_id": exp_id},
+                )
+                
+                if not idempotency.acquire_lock(lock_key, ttl_seconds=120):
+                    # 다른 스케줄러가 이미 처리 중
+                    skipped += 1
+                    logger.debug(f"[ZombieHunter] {exp_id} already being handled")
+                    continue
+                
+                try:
+                    logger.warning(f"[ZombieHunter] Zombie detected: {exp_id}")
+                    
+                    # 강제 rollback
+                    if hasattr(experiment, 'rollback'):
+                        experiment.rollback()
+                    
+                    # 상태 변경
+                    experiment.status = ExperimentStatus.ABORTED
+                    
+                    # 스케줄러에서 등록 해제
+                    scheduler.unregister_experiment_instance(exp_id)
+                    
+                    hunted += 1
+                    logger.info(f"[ZombieHunter] Aborted zombie experiment {exp_id}")
+                    
+                finally:
+                    # 락 해제
+                    idempotency.release_lock(lock_key)
+                    
+            except Exception as e:
+                logger.error(f"[ZombieHunter] Failed to abort {exp_id}: {e}")
+                errors.append({"experiment_id": exp_id, "error": str(e)})
+        
+        result = {
+            "success": True,
+            "hunted": hunted,
+            "skipped": skipped,
+            "errors": errors,
+        }
+        
+        if hunted > 0:
+            logger.warning(f"[ZombieHunter] Hunted {hunted} zombie experiments")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"[ZombieHunter] Task failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+        }
+

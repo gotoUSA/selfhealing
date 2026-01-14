@@ -594,6 +594,68 @@ class ChaosExperiment(abc.ABC):
         return now() > self._expires_at
     
     # =========================================================================
+    # Monotonic TTL Methods (ClockSkew 보호용)
+    # Reference: 34_CHAOS_SAFETY_MECHANISMS.md §2
+    # =========================================================================
+    
+    def _start_monotonic_timer(self) -> None:
+        """
+        Monotonic clock 기반 TTL 타이머 시작.
+        
+        ClockSkewExperiment 등 시스템 시간 관련 실험에서 사용합니다.
+        time.monotonic()는 시스템 시간 변경에 영향받지 않으므로,
+        시간 조작 실험에서도 TTL이 정확하게 작동합니다.
+        
+        Reference: 34_CHAOS_SAFETY_MECHANISMS.md §2.3
+        """
+        self._monotonic_ttl_helper: Optional[MonotonicTTLHelper] = MonotonicTTLHelper(
+            ttl_seconds=float(self._effective_ttl)
+        )
+        self._monotonic_ttl_helper.start()
+        
+        logger.debug(
+            f"[ChaosExperiment] Monotonic timer started for {self.experiment_id}: "
+            f"ttl={self._effective_ttl}s"
+        )
+    
+    def _is_expired_monotonic(self) -> bool:
+        """
+        Monotonic clock 기반 TTL 만료 확인.
+        
+        ClockSkewExperiment 등에서 시스템 시간 조작에도 불구하고
+        실제 경과 시간 기준으로 만료 여부를 판정합니다.
+        
+        Returns:
+            True if TTL 만료됨 (monotonic clock 기준), False otherwise
+        """
+        if not hasattr(self, '_monotonic_ttl_helper') or self._monotonic_ttl_helper is None:
+            # Monotonic TTL 사용 안 함 → 기존 방식 fallback
+            return self.is_expired()
+        return self._monotonic_ttl_helper.is_expired()
+    
+    def get_elapsed_monotonic(self) -> float:
+        """
+        Monotonic clock 기반 경과 시간 반환 (초).
+        
+        Returns:
+            시작 후 경과한 시간 (초). Monotonic 타이머 미사용 시 0.0 반환.
+        """
+        if not hasattr(self, '_monotonic_ttl_helper') or self._monotonic_ttl_helper is None:
+            return 0.0
+        return self._monotonic_ttl_helper.elapsed_seconds()
+    
+    def get_remaining_monotonic(self) -> float:
+        """
+        Monotonic clock 기반 남은 시간 반환 (초).
+        
+        Returns:
+            TTL까지 남은 시간 (초). Monotonic 타이머 미사용 시 effective_ttl 반환.
+        """
+        if not hasattr(self, '_monotonic_ttl_helper') or self._monotonic_ttl_helper is None:
+            return float(self._effective_ttl)
+        return self._monotonic_ttl_helper.remaining_seconds()
+    
+    # =========================================================================
     # Phase 5-1: 비동기 복구 모니터링 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §15, §22.2.3)
     # =========================================================================
     
