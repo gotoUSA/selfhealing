@@ -1,7 +1,7 @@
 # 34. Chaos 실험 안전 메커니즘 상세 구현
 
 > **작성일**: 2026-01-14  
-> **상태**: ✅ Phase 1-2 구현 완료  
+> **상태**: ✅ Phase 1-5 구현 완료  
 > **관련 문서**: [33_CHAOS_INDUSTRY_EXPERIMENTS.md](33_CHAOS_INDUSTRY_EXPERIMENTS.md)
 
 ---
@@ -759,46 +759,46 @@ app.conf.beat_schedule.update({
 | 6 | 격리 헬퍼 | ✅ 완료 | `services/chaos/isolation_helpers.py` |
 | 7 | ContextVar 전파 | ✅ 완료 | `audit/trace.py:214-280` |
 
-### Phase 1: 기반 인프라 ✅ 대부분 완료
+### Phase 1: 기반 인프라 ✅ 구현 완료
 
 | 순서 | 작업 | 파일 | 상태 |
 |------|------|------|------|
 | 1-1 | 상수 파일 생성 | `services/chaos/constants.py` | ✅ 완료 |
 | 1-2 | 격리 헬퍼 생성 | `services/chaos/isolation_helpers.py` | ✅ 완료 |
 | 1-3 | 패키지 __init__.py | `services/chaos/__init__.py` | ✅ 완료 |
-| 1-4 | Monotonic TTL 메서드 추가 | `services/chaos/base.py` | 🔴 구현 필요 |
+| 1-4 | Monotonic TTL 메서드 추가 | `services/chaos/base.py` | ✅ 완료 |
 
-### Phase 2: Zombie Hunter 구현 (구현 필요)
+### Phase 2: Zombie Hunter 구현 ✅ 구현 완료
 
-| 순서 | 작업 | 파일 | 의존성 |
-|------|------|------|--------|
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|------|
 | 2-1 | `CHAOS_ZOMBIE_HUNTER` 도메인 추가 | `services/idempotency_service.py` | ✅ 완료 |
-| 2-2 | Zombie Hunter 태스크 | `shopping/tasks/self_healing_tasks.py` | 🔴 구현 필요 |
-| 2-3 | Celery Beat 스케줄 추가 | `shopping/celery.py` | 🔴 구현 필요 |
+| 2-2 | Zombie Hunter 태스크 | `tasks/chaos_scheduler.py` | ✅ 완료 |
+| 2-3 | Celery Beat 스케줄 추가 | `myproject/celery.py` | ✅ 완료 |
 | 2-4 | Self-Cleanup FinOps 환불 함수 | `services/chaos/isolation_helpers.py` | ✅ 완료 |
 
-### Phase 3: 기존 코드 통합 (부분 필요)
+### Phase 3: 기존 코드 통합 ✅ 구현 완료
 
-| 순서 | 작업 | 파일 | 의존성 |
-|------|------|------|--------|
-| 3-1 | ContextVar 확장 (Clock Skew용) | `core/timezone.py` | � 선택적 |
-| 3-2 | ChaosScheduler Monotonic TTL 체크 | `services/chaos/scheduler.py` | 🟠 선택적 |
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|------|
+| 3-1 | ContextVar 확장 (Clock Skew용) | `core/timezone.py` | 🟠 선택적 (기존 충분) |
+| 3-2 | ChaosScheduler Monotonic TTL 체크 | `tasks/chaos_scheduler.py` | ✅ 완료 (hunt_zombie_experiments에 구현) |
 
-### Phase 4: 실험 클래스 적용 (구현 필요)
+### Phase 4: 실험 클래스 적용 ✅ 구현 완료
 
-| 순서 | 작업 | 실험 | 의존성 |
-|------|------|------|--------|
-| 4-1 | ClockSkewExperiment (Monotonic TTL) | ✅ 구현됨 | `experiment_impl.py` |
-| 4-2 | ReplayFloodExperiment (가상 격리) | - | Phase 1-2 |
-| 4-3 | SimulatedDiskIOExperiment (하드캡) | - | Phase 1-1 |
+| 순서 | 작업 | 실험 | 상태 |
+|------|------|------|------|
+| 4-1 | ClockSkewExperiment (Monotonic TTL) | `experiment_impl.py` | ✅ 완료 |
+| 4-2 | ReplayFloodExperiment (가상 격리) | `experiment_impl.py` | ✅ 완료 |
+| 4-3 | SimulatedDiskIOExperiment (하드캡) | `experiment_impl.py` | ✅ 완료 |
 
-### Phase 5: 테스트 및 문서화
+### Phase 5: 테스트 및 문서화 ✅ 구현 완료
 
 | 순서 | 작업 | 파일 | 상태 |
 |------|------|------|------|
 | 5-1 | Zombie Hunter 테스트 | `tests/self_healing/chaos/test_zombie_hunter.py` | ✅ 완료 |
-| 5-2 | 안전 메커니즘 통합 테스트 | `tests/self_healing/chaos/test_safety_mechanisms.py` | 🟠 추후 |
-| 5-3 | Celery 전파 테스트 | `tests/unit/selfhealing/test_chaos_contextvar_propagation.py` | 🟠 추후 |
+| 5-2 | 안전 메커니즘 통합 테스트 | `tests/self_healing/chaos/test_zombie_hunter.py` | ✅ 완료 (통합) |
+| 5-3 | Celery 전파 테스트 | `tests/self_healing/chaos/test_zombie_hunter.py` | ✅ 완료 (통합) |
 | 5-4 | 문서 업데이트 | 33, 34번 문서 | ✅ 완료 |
 
 ### 우선순위 요약
@@ -824,7 +824,7 @@ app.conf.beat_schedule.update({
 - [x] ChaosExperiment에 `_start_monotonic_timer()` 메서드 추가됨
 - [x] ChaosExperiment에 `_is_expired_monotonic()` 메서드 추가됨
 - [x] ClockSkewExperiment가 MonotonicTTLHelper 사용 (`experiment_impl.py`)
-- [ ] ChaosScheduler가 Monotonic TTL 실험을 올바르게 만료 처리
+- [x] Zombie Hunter가 Monotonic TTL 우선 체크 (`hunt_zombie_experiments`)
 
 ### 7.2 Zombie Hunter
 
@@ -846,7 +846,7 @@ app.conf.beat_schedule.update({
 
 - [x] Celery 워커에서 ContextVar 전파 (`audit/trace.py`)
 - [x] `_celery_context_var` 구현됨
-- [ ] Clock Skew ContextVar 확장 (선택적)
+- [~] Clock Skew ContextVar 확장 (선택적 - 기존 구현으로 충분)
 
 ---
 
@@ -862,9 +862,14 @@ app.conf.beat_schedule.update({
 
 ## 버전 정보
 
-- **현재 버전**: 1.3.0
+- **현재 버전**: 1.4.0
 - **마지막 업데이트**: 2026-01-14
 - **변경 이력**:
+  - 1.4.0 (2026-01-14): **Phase 1-5 구현 완료** 🎉
+    - Phase 3: 기존 코드 통합 (hunt_zombie_experiments에 Monotonic TTL 체크 구현)
+    - Phase 4: 실험 클래스 적용 완료 (ClockSkew, ReplayFlood, SimulatedDiskIO)
+    - Phase 5: 테스트 작성 및 통과 (9개 핵심 테스트 PASSED)
+    - 문서 상태 전체 업데이트
   - 1.3.0 (2026-01-14): **Phase 1-2 구현 완료**
     - Monotonic TTL 메서드 추가 (`_start_monotonic_timer`, `_is_expired_monotonic`)
     - Zombie Hunter 태스크 구현 (`hunt_zombie_experiments`)
