@@ -4,7 +4,7 @@ Self-Learning DNA Service - 자가 학습 서비스
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from threading import Lock
 from collections import defaultdict
@@ -99,14 +99,14 @@ class ParameterBlacklist:
         
         expires_at = None
         if ttl_hours:
-            expires_at = datetime.now() + timedelta(hours=ttl_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
         
         entry = BlacklistedParameter(
             module=module,
             parameter=parameter,
             blocked_values=blocked_values,
             reason=reason,
-            registered_at=datetime.now(),
+            registered_at=datetime.now(timezone.utc),
             registered_by=registered_by,
             incident_id=incident_id,
             expires_at=expires_at,
@@ -146,7 +146,7 @@ class ParameterBlacklist:
             return False, None
         
         # 만료 확인
-        if entry.expires_at and datetime.now() > entry.expires_at:
+        if entry.expires_at and datetime.now(timezone.utc) > entry.expires_at:
             with self._lock:
                 del self._blacklist[key]
             self._save_to_storage()
@@ -159,7 +159,7 @@ class ParameterBlacklist:
     
     def get_all(self) -> List[BlacklistedParameter]:
         """모든 블랙리스트 항목 조회 (만료 제거 후)."""
-        now_time = datetime.now()
+        now_time = datetime.now(timezone.utc)
         
         with self._lock:
             # 만료된 항목 제거
@@ -303,7 +303,7 @@ class LearningService:
         """
         session = self._sessions.get(session_id)
         if session:
-            session.ended_at = datetime.now()
+            session.ended_at = datetime.now(timezone.utc)
             session.status = "completed"
             logger.info(
                 f"Learning session completed: {session_id}, "
@@ -347,7 +347,7 @@ class LearningService:
         if existing:
             # 기존 패턴 업데이트
             existing.occurrence_count += 1
-            existing.last_seen = datetime.now()
+            existing.last_seen = datetime.now(timezone.utc)
             existing.confidence = (existing.confidence + confidence) / 2  # 평균
             pattern = existing
         else:
@@ -520,7 +520,7 @@ class LearningService:
         for suggestion in self._suggestions:
             if suggestion.suggestion_id == suggestion_id:
                 suggestion.applied = True
-                suggestion.applied_at = datetime.now()
+                suggestion.applied_at = datetime.now(timezone.utc)
                 logger.info(f"Suggestion applied: {suggestion_id}")
                 return True
         return False

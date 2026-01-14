@@ -3,7 +3,7 @@ FinOps DNA Service - 비용 관리 서비스
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 from threading import Lock
@@ -268,7 +268,7 @@ class FinOpsService:
         Returns:
             CostReport: 비용 리포트
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         if period == "daily":
             start_date = now - timedelta(days=1)
@@ -344,7 +344,7 @@ class FinOpsService:
         budget = self._budgets.get(stage_name)
         if budget:
             budget.current_spent = Decimal("0.00")
-            budget.last_reset = datetime.now()
+            budget.last_reset = datetime.now(timezone.utc)
             logger.info(f"Budget reset for {stage_name}")
             return True
         return False

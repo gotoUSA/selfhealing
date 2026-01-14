@@ -5,7 +5,7 @@ This module provides Prometheus metric definitions and collection utilities.
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import contextmanager
 from functools import wraps
 import logging
@@ -476,12 +476,12 @@ class SelfHealingMetrics:
     @contextmanager
     def timer(self, domain: str, metric_type: str = "replay"):
         """Context manager for timing operations."""
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         try:
             yield
         finally:
             if self._initialized:
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
                 if metric_type == "replay":
                     self.replay_duration_seconds.labels(domain=domain).observe(duration)
 

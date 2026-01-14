@@ -248,7 +248,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
             
             return {
                 "success": True,
-                "report_id": f"finops-{period}-{datetime.now():%Y%m%d}",
+                "report_id": f"finops-{period}-{datetime.now(timezone.utc):%Y%m%d}",
                 "period": period,
                 "total_cost": float(report.total_cost),
                 "savings": savings,

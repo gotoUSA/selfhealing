@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, Generator
 
@@ -285,5 +285,5 @@ def collect_all_metrics() -> dict:
         "dlq_by_status": status,
         "circuit_breaker_states": cb_states,
         "retry_success_rates": success_rates,
-        "collected_at": datetime.now().isoformat(),
+        "collected_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -4,7 +4,7 @@ Compliance DNA Service - 규정 준수 관리 서비스
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Callable, Any
 from threading import Lock
 
@@ -526,7 +526,7 @@ class ComplianceService:
         for violation in self._violations:
             if violation.violation_id == violation_id:
                 violation.resolved = True
-                violation.resolved_at = datetime.now()
+                violation.resolved_at = datetime.now(timezone.utc)
                 logger.info(f"Violation resolved: {violation_id}")
                 return True
         return False

@@ -4,7 +4,7 @@ Rollback DNA Service - 롤백 관리 서비스
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Callable, Any
 from threading import Lock
 import time
@@ -228,7 +228,7 @@ class RollbackService:
         
         result = self._results[request_id]
         result.state = RollbackState.IN_PROGRESS
-        result.started_at = datetime.now()
+        result.started_at = datetime.now(timezone.utc)
         
         policy = self._policies.get(request.stage_name)
         timeout = policy.timeout_seconds if policy else 120
@@ -278,7 +278,7 @@ class RollbackService:
             logger.error(f"Rollback failed: {e}")
         
         finally:
-            result.completed_at = datetime.now()
+            result.completed_at = datetime.now(timezone.utc)
             
             # Audit 기록: 롤백 완료/실패
             self._log_audit(
@@ -310,7 +310,7 @@ class RollbackService:
         if result and result.state == RollbackState.PENDING:
             result.state = RollbackState.CANCELLED
             result.message = "Rollback cancelled"
-            result.completed_at = datetime.now()
+            result.completed_at = datetime.now(timezone.utc)
             logger.info(f"Rollback cancelled: {request_id}")
             return True
         return False

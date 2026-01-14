@@ -172,7 +172,7 @@ class ControlAuditView(APIView):
 
     def get(self, request):
         """Get audit logs from AuditLogger."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from selfhealing.audit import get_audit_logger
         
         page = int(request.query_params.get("page", 1))
@@ -183,7 +183,7 @@ class ControlAuditView(APIView):
         
         try:
             audit_logger = get_audit_logger()
-            end_time = datetime.now()
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
             
             # Query logs with filters

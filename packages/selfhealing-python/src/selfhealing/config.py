@@ -272,7 +272,7 @@ class EventLoggingConfig:
         Returns:
             Updated configuration as dict
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         updates = {}
 
@@ -299,7 +299,7 @@ class EventLoggingConfig:
 
             if updates:
                 self._last_updated = {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "updated_by": updated_by,
                     "changes": updates,
                 }
@@ -601,7 +601,7 @@ class L2StorageRuntimeConfig:
         Returns:
             Updated configuration as dict
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Build field update map
         field_updates = {
@@ -626,7 +626,7 @@ class L2StorageRuntimeConfig:
 
             if updates:
                 self._last_updated = {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "updated_by": updated_by,
                     "changes": updates,
                 }
