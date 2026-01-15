@@ -71,13 +71,22 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "dj_rest_auth",
     "dj_rest_auth.registration",
+    # Prometheus HTTP metrics (RED metrics auto-instrumentation)
+    "django_prometheus",
 ]
 
 AUTH_USER_MODEL = "shopping.User"
 
 MIDDLEWARE = [
     # ==========================================================================
-    # [1] Trace ID Middleware (최상단 - 분산 추적의 시작점)
+    # [0] Prometheus Before Middleware (HTTP 요청 계측 시작)
+    # ==========================================================================
+    # RED Metrics: Rate, Errors, Duration 자동 수집
+    # Reference: https://github.com/korfuri/django-prometheus
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    
+    # ==========================================================================
+    # [1] Trace ID Middleware (분산 추적의 시작점)
     # ==========================================================================
     # 모든 요청에 trace_id 부여, X-Request-ID 헤더 전파
     # Reference: load_tests/scenarios/integration/stage08_observability.py
@@ -160,6 +169,13 @@ MIDDLEWARE = [
     # 비활성화: SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = False
     # CRITICAL: 반드시 마지막 위치!
     "selfhealing.api.django.audit_middleware.AuditMiddleware",
+    
+    # ==========================================================================
+    # [12] Prometheus After Middleware (HTTP 요청 계측 완료)
+    # ==========================================================================
+    # RED Metrics 수집 완료 및 /metrics 엔드포인트 노출
+    # 자동 수집 메트릭: django_http_requests_total, django_http_request_duration_seconds 등
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 # ==========================================================================
