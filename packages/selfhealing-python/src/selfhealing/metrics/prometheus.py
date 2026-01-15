@@ -228,6 +228,74 @@ class SelfHealingMetrics:
             ["incident_type", "severity"],
         )
 
+        # =============================================================================
+        # RED Metrics (Rate, Errors, Duration)
+        # =============================================================================
+        # Reference: https://www.weave.works/blog/the-red-method-key-metrics-for-microservices/
+
+        self.http_requests_total = Counter(
+            f"{prefix}_http_requests_total",
+            "Total HTTP requests (Rate)",
+            ["method", "endpoint", "status_code"],
+        )
+
+        self.http_request_duration_seconds = Histogram(
+            f"{prefix}_http_request_duration_seconds",
+            "HTTP request duration in seconds (Duration)",
+            ["method", "endpoint"],
+            buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+        )
+
+        self.http_request_errors_total = Counter(
+            f"{prefix}_http_request_errors_total",
+            "Total HTTP request errors (Errors)",
+            ["method", "endpoint", "error_type"],
+        )
+
+        # =============================================================================
+        # Four Golden Signals
+        # =============================================================================
+        # Reference: https://sre.google/sre-book/monitoring-distributed-systems/
+        # 1. Latency - covered by http_request_duration_seconds (with percentiles)
+        # 2. Traffic - covered by http_requests_total
+        # 3. Errors - covered by http_request_errors_total
+        # 4. Saturation - queue depth, resource utilization
+
+        # Saturation Metrics
+        self.request_queue_depth = Gauge(
+            f"{prefix}_request_queue_depth",
+            "Current request queue depth (Saturation)",
+            ["service"],
+        )
+
+        self.worker_utilization_ratio = Gauge(
+            f"{prefix}_worker_utilization_ratio",
+            "Worker pool utilization ratio 0.0-1.0 (Saturation)",
+            ["pool_name"],
+        )
+
+        self.active_connections = Gauge(
+            f"{prefix}_active_connections",
+            "Number of active connections (Saturation)",
+            ["connection_type"],
+        )
+
+        # Latency Percentile Support (Summary for p50/p90/p99)
+        # Note: Histogram also provides percentiles via histogram_quantile() in PromQL
+        # This is an additional explicit percentile gauge for real-time dashboards
+        self.request_latency_percentiles = Gauge(
+            f"{prefix}_request_latency_percentile_seconds",
+            "Request latency percentiles (Latency)",
+            ["percentile", "endpoint"],
+        )
+
+        # Error Rate Gauge (calculated metric for alerting)
+        self.error_rate_percent = Gauge(
+            f"{prefix}_error_rate_percent",
+            "Current error rate percentage (Errors)",
+            ["service"],
+        )
+
         # Info metric
         self.info = Info(
             f"{prefix}_info",
@@ -461,6 +529,211 @@ class SelfHealingMetrics:
             logger.warning(f"[Metrics] Failed to record security incident: {e}")
 
     # =========================================================================
+    # RED Metrics Recording Methods
+    # =========================================================================
+
+    def record_http_request(
+        self,
+        method: str,
+        endpoint: str,
+        status_code: int,
+        duration_seconds: float,
+    ) -> None:
+        """
+        Record an HTTP request (RED metrics: Rate + Duration).
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: Request endpoint path
+            status_code: HTTP response status code
+            duration_seconds: Request duration in seconds
+        """
+        if not self._initialized:
+            return
+        try:
+            # Rate: increment request counter
+            self.http_requests_total.labels(
+                method=method,
+                endpoint=endpoint,
+                status_code=str(status_code),
+            ).inc()
+
+            # Duration: observe request latency
+            self.http_request_duration_seconds.labels(
+                method=method,
+                endpoint=endpoint,
+            ).observe(duration_seconds)
+
+            logger.debug(
+                f"[Metrics] HTTP request: {method} {endpoint} "
+                f"status={status_code} duration={duration_seconds:.3f}s"
+            )
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to record HTTP request: {e}")
+
+    def record_http_error(
+        self,
+        method: str,
+        endpoint: str,
+        error_type: str,
+    ) -> None:
+        """
+        Record an HTTP request error (RED metrics: Errors).
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: Request endpoint path
+            error_type: Type of error (e.g., "timeout", "connection_error", "500")
+        """
+        if not self._initialized:
+            return
+        try:
+            self.http_request_errors_total.labels(
+                method=method,
+                endpoint=endpoint,
+                error_type=error_type,
+            ).inc()
+            logger.debug(f"[Metrics] HTTP error: {method} {endpoint} error={error_type}")
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to record HTTP error: {e}")
+
+    # =========================================================================
+    # Four Golden Signals Recording Methods
+    # =========================================================================
+
+    def set_request_queue_depth(self, service: str, depth: int) -> None:
+        """
+        Set current request queue depth (Saturation signal).
+
+        Args:
+            service: Service name
+            depth: Current queue depth
+        """
+        if not self._initialized:
+            return
+        try:
+            safe_depth = clamp_non_negative(depth, f"request_queue_depth[{service}]")
+            self.request_queue_depth.labels(service=service).set(safe_depth)
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to set queue depth: {e}")
+
+    def set_worker_utilization(self, pool_name: str, ratio: float) -> None:
+        """
+        Set worker pool utilization ratio (Saturation signal).
+
+        Args:
+            pool_name: Worker pool name
+            ratio: Utilization ratio (0.0 to 1.0)
+        """
+        if not self._initialized:
+            return
+        try:
+            # Clamp to 0.0-1.0 range
+            safe_ratio = max(0.0, min(1.0, ratio))
+            if ratio < 0.0 or ratio > 1.0:
+                logger.warning(
+                    f"[Metrics] worker_utilization_ratio[{pool_name}] clamped: "
+                    f"{ratio} -> {safe_ratio}"
+                )
+            self.worker_utilization_ratio.labels(pool_name=pool_name).set(safe_ratio)
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to set worker utilization: {e}")
+
+    def set_active_connections(self, connection_type: str, count: int) -> None:
+        """
+        Set number of active connections (Saturation signal).
+
+        Args:
+            connection_type: Type of connection (e.g., "db", "redis", "http")
+            count: Number of active connections
+        """
+        if not self._initialized:
+            return
+        try:
+            safe_count = clamp_non_negative(count, f"active_connections[{connection_type}]")
+            self.active_connections.labels(connection_type=connection_type).set(safe_count)
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to set active connections: {e}")
+
+    def set_latency_percentile(
+        self,
+        endpoint: str,
+        percentile: str,
+        value_seconds: float,
+    ) -> None:
+        """
+        Set request latency percentile (Latency signal).
+
+        Args:
+            endpoint: Endpoint path
+            percentile: Percentile label (e.g., "p50", "p90", "p99")
+            value_seconds: Latency value in seconds
+        """
+        if not self._initialized:
+            return
+        try:
+            safe_value = max(0.0, value_seconds)
+            self.request_latency_percentiles.labels(
+                percentile=percentile,
+                endpoint=endpoint,
+            ).set(safe_value)
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to set latency percentile: {e}")
+
+    def set_error_rate(self, service: str, rate_percent: float) -> None:
+        """
+        Set current error rate percentage (Errors signal).
+
+        Args:
+            service: Service name
+            rate_percent: Error rate as percentage (0-100)
+        """
+        if not self._initialized:
+            return
+        try:
+            safe_rate = clamp_percentage(rate_percent, f"error_rate_percent[{service}]")
+            self.error_rate_percent.labels(service=service).set(safe_rate)
+        except Exception as e:
+            logger.warning(f"[Metrics] Failed to set error rate: {e}")
+
+    @contextmanager
+    def http_request_timer(self, method: str, endpoint: str):
+        """
+        Context manager for timing HTTP requests.
+
+        Usage:
+            with metrics.http_request_timer("GET", "/api/users"):
+                response = make_request()
+            # duration automatically recorded
+
+        Args:
+            method: HTTP method
+            endpoint: Request endpoint
+        """
+        start_time = datetime.now(timezone.utc)
+        status_code = 200
+        error_occurred = False
+        error_type = None
+
+        try:
+            yield
+        except Exception as e:
+            error_occurred = True
+            error_type = type(e).__name__
+            raise
+        finally:
+            if self._initialized:
+                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+                # Record duration
+                self.http_request_duration_seconds.labels(
+                    method=method,
+                    endpoint=endpoint,
+                ).observe(duration)
+
+                if error_occurred and error_type:
+                    self.record_http_error(method, endpoint, error_type)
+
+    # =========================================================================
     # Info and Utility Methods
     # =========================================================================
 
@@ -551,3 +824,53 @@ def record_circuit_breaker_open_duration(service_name: str, duration_seconds: fl
 def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
     """Record a replay attempt."""
     get_metrics().record_replay_attempt(domain, replay_type, success)
+
+
+# =============================================================================
+# RED Metrics Convenience Functions
+# =============================================================================
+
+
+def record_http_request(
+    method: str,
+    endpoint: str,
+    status_code: int,
+    duration_seconds: float,
+) -> None:
+    """Record an HTTP request (Rate + Duration)."""
+    get_metrics().record_http_request(method, endpoint, status_code, duration_seconds)
+
+
+def record_http_error(method: str, endpoint: str, error_type: str) -> None:
+    """Record an HTTP request error (Errors)."""
+    get_metrics().record_http_error(method, endpoint, error_type)
+
+
+# =============================================================================
+# Four Golden Signals Convenience Functions
+# =============================================================================
+
+
+def set_request_queue_depth(service: str, depth: int) -> None:
+    """Set current request queue depth (Saturation)."""
+    get_metrics().set_request_queue_depth(service, depth)
+
+
+def set_worker_utilization(pool_name: str, ratio: float) -> None:
+    """Set worker pool utilization ratio (Saturation)."""
+    get_metrics().set_worker_utilization(pool_name, ratio)
+
+
+def set_active_connections(connection_type: str, count: int) -> None:
+    """Set number of active connections (Saturation)."""
+    get_metrics().set_active_connections(connection_type, count)
+
+
+def set_latency_percentile(endpoint: str, percentile: str, value_seconds: float) -> None:
+    """Set request latency percentile (Latency)."""
+    get_metrics().set_latency_percentile(endpoint, percentile, value_seconds)
+
+
+def set_error_rate(service: str, rate_percent: float) -> None:
+    """Set current error rate percentage (Errors)."""
+    get_metrics().set_error_rate(service, rate_percent)
