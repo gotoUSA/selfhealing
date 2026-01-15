@@ -27,6 +27,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
 from selfhealing.services.error_budget_service import (
     get_error_budget_service,
     get_failsafe_verdict_response,
@@ -55,7 +56,7 @@ class DeploymentVerdictView(APIView):
     Note: This is an ADVISORY endpoint. It does not block deployments.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -103,7 +104,7 @@ class DeploymentFreezeAcknowledgeView(APIView):
     Records that the operator has acknowledged the freeze recommendation.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsOperator]
 
     def post(self, request: Request) -> Response:
         try:
@@ -165,7 +166,7 @@ class DeploymentOverrideView(APIView):
     enable deployments. CI/CD systems should check for active overrides.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         try:
@@ -258,7 +259,7 @@ class DeploymentFreezeLiftView(APIView):
     Records that the deployment freeze has been lifted.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsOperator]
 
     def post(self, request: Request) -> Response:
         try:
@@ -312,7 +313,7 @@ class ActiveOverrideView(APIView):
     despite the freeze recommendation.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:

@@ -10,12 +10,14 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from typing import List, Type
+
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
 
-from selfhealing.api.django.permissions import IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +94,9 @@ class AutoTuningStatusView(APIView):
     """
     GET /api/self-healing/auto-tuning/status/
     
-    자율 조정 시스템 상태 조회
+    자율 조정 시스템 상태 조회 (Viewer)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request):
         service = get_service()
@@ -207,12 +209,16 @@ class AutoTuningModuleDisableView(APIView):
 
 class AutoTuningBoundsView(APIView):
     """
-    GET  /api/self-healing/auto-tuning/bounds/
-    PUT  /api/self-healing/auto-tuning/bounds/
+    GET  /api/self-healing/auto-tuning/bounds/     (Viewer)
+    PUT  /api/self-healing/auto-tuning/bounds/     (Admin)
     
     안전 한계 조회/수정
     """
-    permission_classes = [IsSelfHealingAdmin]
+
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request):
         service = get_service()
@@ -251,9 +257,9 @@ class AutoTuningHistoryView(APIView):
     GET /api/self-healing/auto-tuning/history/
     GET /api/self-healing/auto-tuning/history/{id}/
     
-    조정 이력 조회
+    조정 이력 조회 (Viewer)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request, history_id: Optional[str] = None):
         service = get_service()
@@ -368,9 +374,9 @@ class AutoTuningMetricsView(APIView):
     """
     GET /api/self-healing/auto-tuning/metrics/
     
-    현재 메트릭 조회
+    현재 메트릭 조회 (Viewer)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request):
         service = get_service()

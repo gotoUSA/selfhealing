@@ -14,11 +14,11 @@ import logging
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
 from selfhealing.api.django.views.l2_storage_utils import (
     get_layered_repository,
     get_shadow_logger,
@@ -31,10 +31,10 @@ class ShadowLogListView(APIView):
     """
     Shadow Log List API.
 
-    GET /api/self-healing/l2-storage/shadow-log/ - Get shadow log entries
+    GET /api/self-healing/l2-storage/shadow-log/ - Get shadow log entries (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get shadow log entries."""
@@ -96,10 +96,10 @@ class ShadowLogStatsView(APIView):
     """
     Shadow Log Statistics API.
 
-    GET /api/self-healing/l2-storage/shadow-log/stats/ - Get shadow log stats
+    GET /api/self-healing/l2-storage/shadow-log/stats/ - Get shadow log stats (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get shadow log statistics."""
@@ -134,10 +134,10 @@ class ShadowLogClearView(APIView):
     """
     Shadow Log Clear API.
 
-    POST /api/self-healing/l2-storage/shadow-log/clear/ - Clear shadow log
+    POST /api/self-healing/l2-storage/shadow-log/clear/ - Clear shadow log (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Clear all shadow log entries."""
@@ -181,10 +181,10 @@ class ShadowLogAnalyzeView(APIView):
     """
     Shadow Log Forensic Analysis API.
 
-    GET /api/self-healing/l2-storage/shadow-log/analyze/ - Analyze L2 failures
+    GET /api/self-healing/l2-storage/shadow-log/analyze/ - Analyze L2 failures (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """
@@ -229,10 +229,10 @@ class ShadowLogReplayView(APIView):
     """
     Shadow Log Replay API.
 
-    POST /api/self-healing/l2-storage/shadow-log/replay/ - Replay unsynced records
+    POST /api/self-healing/l2-storage/shadow-log/replay/ - Replay unsynced records (Operator)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsOperator]
 
     def post(self, request: Request) -> Response:
         """
@@ -332,10 +332,10 @@ class ShadowLogByServiceView(APIView):
     """
     Shadow Log by Service API.
 
-    GET /api/self-healing/l2-storage/shadow-log/service/<service_name>/ - Get logs by service
+    GET /api/self-healing/l2-storage/shadow-log/service/<service_name>/ - Get logs by service (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request, service_name: str) -> Response:
         """Get shadow log entries for a specific service."""

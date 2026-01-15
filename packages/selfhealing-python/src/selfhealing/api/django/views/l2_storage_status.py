@@ -2,23 +2,25 @@
 L2 Storage Status and Health API Views.
 
 Endpoints:
-- GET  /api/self-healing/l2-storage/status/      - Get L2 storage status
-- GET  /api/self-healing/l2-storage/health/      - Get L2 health status
-- POST /api/self-healing/l2-storage/health/reset - Reset L2 health status
-- POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2
-- POST /api/self-healing/l2-storage/sync/to-l2   - Force sync to L2
-- GET  /api/self-healing/l2-storage/metrics/     - Get L2 storage metrics
+- GET  /api/self-healing/l2-storage/status/      - Get L2 storage status (Viewer)
+- GET  /api/self-healing/l2-storage/health/      - Get L2 health status (Viewer)
+- POST /api/self-healing/l2-storage/health/reset - Reset L2 health status (Admin)
+- POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2 (Admin)
+- POST /api/self-healing/l2-storage/sync/to-l2   - Force sync to L2 (Admin)
+- GET  /api/self-healing/l2-storage/metrics/     - Get L2 storage metrics (Viewer)
 """
 
 import logging
+from typing import List
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
 
 logger = logging.getLogger(__name__)
@@ -28,10 +30,10 @@ class L2StorageStatusView(APIView):
     """
     L2 Storage Status API.
 
-    GET /api/self-healing/l2-storage/status/ - Get storage status
+    GET /api/self-healing/l2-storage/status/ - Get storage status (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get L2 storage status including metrics."""
@@ -71,10 +73,10 @@ class L2StorageHealthView(APIView):
     """
     L2 Storage Health API.
 
-    GET /api/self-healing/l2-storage/health/ - Get health status
+    GET /api/self-healing/l2-storage/health/ - Get health status (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get L2 health status."""
@@ -116,10 +118,10 @@ class L2StorageHealthResetView(APIView):
     """
     L2 Storage Health Reset API.
 
-    POST /api/self-healing/l2-storage/health/reset/ - Reset health status
+    POST /api/self-healing/l2-storage/health/reset/ - Reset health status (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Reset L2 health status (mark as healthy)."""
@@ -160,10 +162,10 @@ class L2StorageSyncFromL2View(APIView):
     """
     L2 Storage Sync From L2 API.
 
-    POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2
+    POST /api/self-healing/l2-storage/sync/from-l2 - Force sync from L2 (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Force sync from L2 to L1."""
@@ -212,10 +214,10 @@ class L2StorageSyncToL2View(APIView):
     """
     L2 Storage Sync To L2 API.
 
-    POST /api/self-healing/l2-storage/sync/to-l2 - Force sync to L2
+    POST /api/self-healing/l2-storage/sync/to-l2 - Force sync to L2 (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Force sync from L1 to L2."""
@@ -258,10 +260,10 @@ class L2StorageMetricsView(APIView):
     """
     L2 Storage Metrics API.
 
-    GET /api/self-healing/l2-storage/metrics/ - Get L2 storage metrics
+    GET /api/self-healing/l2-storage/metrics/ - Get L2 storage metrics (Viewer)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get L2 storage metrics."""

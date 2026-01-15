@@ -30,6 +30,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +48,7 @@ class ReconciliationStatusView(APIView):
     - Configuration
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -81,7 +83,7 @@ class FailSafePeriodsView(APIView):
     - limit: Maximum records (default: 50)
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -128,7 +130,7 @@ class ShadowBudgetsView(APIView):
     }
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -205,7 +207,7 @@ class ShadowBudgetDetailView(APIView):
     GET /api/self-healing/reconciliation/shadow-budgets/{calculation_id}/
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request, calculation_id: str) -> Response:
         try:
@@ -245,7 +247,7 @@ class ShadowBudgetApproveView(APIView):
     승인 시 Primary Budget에 반영됩니다 (Capped 모드: 최대 10%p/cycle).
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, calculation_id: str) -> Response:
         try:
@@ -297,7 +299,7 @@ class ShadowBudgetRejectView(APIView):
     POST /api/self-healing/reconciliation/shadow-budgets/{calculation_id}/reject/
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, calculation_id: str) -> Response:
         try:
@@ -361,7 +363,7 @@ class ExcludedPeriodsView(APIView):
     }
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -443,7 +445,7 @@ class ExcludedPeriodDetailView(APIView):
     제외된 기간을 다시 Budget 계산에 포함시킵니다.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def delete(self, request: Request, exclusion_id: str) -> Response:
         try:
@@ -490,7 +492,7 @@ class ReconciliationConfigView(APIView):
     }
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def get(self, request: Request) -> Response:
         try:

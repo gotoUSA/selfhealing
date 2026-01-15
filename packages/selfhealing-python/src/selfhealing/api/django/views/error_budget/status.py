@@ -28,6 +28,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.services.error_budget_service import (
     get_error_budget_service,
     get_failsafe_status_response,
@@ -55,7 +56,7 @@ class ErrorBudgetStatusView(APIView):
     V3 Optimization: Uses multi-tier cache for P95 < 20ms target.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -99,7 +100,7 @@ class ErrorBudgetHistoryView(APIView):
     - decision_type: Filter by type (freeze_acknowledged, override_approved, freeze_lifted)
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         try:
@@ -145,7 +146,7 @@ class ErrorBudgetRecordView(APIView):
     실제 운영 환경에서는 사용하지 마십시오.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         try:
@@ -225,7 +226,7 @@ class ErrorBudgetExhaustView(APIView):
     ⚠️ WARNING: 이 API는 테스트/Chaos 환경에서만 사용해야 합니다.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         try:
@@ -273,7 +274,7 @@ class ErrorBudgetResetSimulationView(APIView):
     시뮬레이션으로 기록된 에러/요청 통계를 초기화합니다.
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         try:

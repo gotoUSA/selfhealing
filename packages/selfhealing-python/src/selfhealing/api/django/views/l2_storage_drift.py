@@ -19,6 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
 
 logger = logging.getLogger(__name__)
@@ -28,12 +29,12 @@ class DriftReconciliationStatsView(APIView):
     """
     Drift Reconciliation Statistics API.
 
-    GET /api/self-healing/l2-storage/drift/stats/ - Get drift reconciliation stats
+    GET /api/self-healing/l2-storage/drift/stats/ - Get drift reconciliation stats (Viewer)
     
     Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get drift reconciliation statistics."""
@@ -76,12 +77,12 @@ class DriftReconciliationHistoryView(APIView):
     """
     Drift Reconciliation History API.
 
-    GET /api/self-healing/l2-storage/drift/history/ - Get drift reconciliation history
+    GET /api/self-healing/l2-storage/drift/history/ - Get drift reconciliation history (Viewer)
     
     Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
         """Get drift reconciliation history."""
@@ -132,12 +133,12 @@ class DriftReconciliationTriggerView(APIView):
     """
     Drift Reconciliation Trigger API.
 
-    POST /api/self-healing/l2-storage/drift/reconcile/ - Force drift reconciliation
+    POST /api/self-healing/l2-storage/drift/reconcile/ - Force drift reconciliation (Admin)
     
     Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """
@@ -197,12 +198,12 @@ class DriftReconciliationServiceView(APIView):
     Drift Reconciliation for Single Service API.
 
     POST /api/self-healing/l2-storage/drift/reconcile/<service_name>/ 
-        - Reconcile single service
+        - Reconcile single service (Admin)
     
     Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, service_name: str) -> Response:
         """

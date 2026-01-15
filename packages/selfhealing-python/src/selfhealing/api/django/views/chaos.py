@@ -20,14 +20,16 @@ Endpoints:
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Type
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 
 from selfhealing.api.django.serializers.chaos import (
     SafetyGuardConfigSerializer,
@@ -65,11 +67,14 @@ class SafetyGuardConfigView(APIView):
     """
     API for SafetyGuard configuration.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current SafetyGuard configuration."""
@@ -109,11 +114,14 @@ class BlastRadiusPolicyView(APIView):
     """
     API for BlastRadius policy configuration.
     
-    GET: Retrieve current policy
-    PATCH: Update policy
+    GET: Retrieve current policy (Viewer)
+    PATCH: Update policy (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current BlastRadius policy."""
@@ -153,11 +161,14 @@ class SchedulerConfigView(APIView):
     """
     API for ChaosScheduler configuration.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current scheduler configuration."""
@@ -197,11 +208,14 @@ class ReportConfigView(APIView):
     """
     API for ResilienceReport configuration.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current report configuration."""
@@ -246,11 +260,14 @@ class ScheduleListView(APIView):
     """
     API for listing and creating scheduled experiments.
     
-    GET: List schedules
-    POST: Create new schedule
+    GET: List schedules (Viewer)
+    POST: Create new schedule (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """List scheduled experiments."""
@@ -313,12 +330,15 @@ class ScheduleDetailView(APIView):
     """
     API for individual schedule operations.
     
-    GET: Retrieve schedule
-    PATCH: Update schedule
-    DELETE: Delete schedule
+    GET: Retrieve schedule (Viewer)
+    PATCH: Update schedule (Admin)
+    DELETE: Delete schedule (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request, schedule_id: str) -> Response:
         """Get schedule details."""
@@ -383,10 +403,10 @@ class ScheduleApprovalView(APIView):
     """
     API for approving/denying scheduled experiments.
     
-    POST: Approve or deny a schedule
+    POST: Approve or deny a schedule (Admin only)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request, schedule_id: str) -> Response:
         """Approve or deny a schedule."""
@@ -426,10 +446,10 @@ class ScheduleExecuteView(APIView):
     """
     API for executing a schedule immediately.
     
-    POST: Execute schedule now
+    POST: Execute schedule now (Admin only - dangerous operation)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request, schedule_id: str) -> Response:
         """Execute schedule immediately."""
@@ -460,11 +480,14 @@ class KillSwitchView(APIView):
     """
     API for kill switch controls.
     
-    GET: Get current status
-    POST: Activate kill switch
+    GET: Get current status (Viewer)
+    POST: Activate kill switch (Admin only - emergency control)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get kill switch status."""
@@ -539,10 +562,10 @@ class SafetyCheckView(APIView):
     """
     API for running safety checks.
     
-    POST: Run safety check
+    POST: Run safety check (Viewer - read-only analysis)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def post(self, request: Request) -> Response:
         """Run safety check."""
@@ -572,10 +595,10 @@ class BlastRadiusCheckView(APIView):
     """
     API for checking blast radius policies.
     
-    POST: Check blast radius
+    POST: Check blast radius (Viewer - read-only analysis)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def post(self, request: Request) -> Response:
         """Check blast radius."""
@@ -608,10 +631,10 @@ class ReportListView(APIView):
     """
     API for resilience reports.
     
-    GET: List reports
+    GET: List reports (Viewer)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request: Request) -> Response:
         """List resilience reports."""
@@ -635,10 +658,10 @@ class ReportDetailView(APIView):
     """
     API for individual report.
     
-    GET: Get report by ID or date
+    GET: Get report by ID or date (Viewer)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request: Request, report_id: str) -> Response:
         """Get report details."""
@@ -668,10 +691,10 @@ class ReportGenerateView(APIView):
     """
     API for generating reports on demand.
     
-    POST: Generate report now
+    POST: Generate report now (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         """Generate report now."""
@@ -701,10 +724,10 @@ class GradeHistoryView(APIView):
     """
     API for grade history.
     
-    GET: Get grade history for trending
+    GET: Get grade history for trending (Viewer)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request: Request) -> Response:
         """Get grade history."""
@@ -730,10 +753,10 @@ class PendingApprovalsView(APIView):
     """
     API for pending approvals.
     
-    GET: List pending approvals
+    GET: List pending approvals (Viewer)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
     
     def get(self, request: Request) -> Response:
         """List pending approvals."""
@@ -769,11 +792,14 @@ class StopConditionsConfigView(APIView):
     자동 중단 조건 설정을 관리합니다.
     에러율, 지연시간, 에러 버짓 임계값을 초과하면 실험이 자동 중단됩니다.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current Stop Conditions configuration."""
@@ -815,11 +841,14 @@ class TTLConfigView(APIView):
     카오스 실험의 자동 만료 설정을 관리합니다.
     엔진이 죽어도 타겟 시스템이 자동 복구됩니다.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current TTL configuration."""
@@ -861,11 +890,14 @@ class DryRunConfigView(APIView):
     Dry Run 모드에서는 실제 장애 주입 없이
     전체 워크플로우만 검증합니다.
     
-    GET: Retrieve current configuration
-    PATCH: Update configuration
+    GET: Retrieve current configuration (Viewer)
+    PATCH: Update configuration (Admin)
     """
     
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
     
     def get(self, request: Request) -> Response:
         """Get current Dry Run configuration."""
@@ -907,10 +939,10 @@ class KillAllView(APIView):
     모든 실행 중인 카오스 실험을 즉시 중단하고 롤백합니다.
     긴급 상황에서 사용합니다.
     
-    POST: Kill all running experiments
+    POST: Kill all running experiments (Admin only - emergency control)
     """
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSelfHealingAdmin]
     
     def post(self, request: Request) -> Response:
         """Kill all running experiments and initiate rollbacks."""
@@ -975,7 +1007,7 @@ class DryRunAnalysisView(APIView):
     Dry Run 모드에서 실험의 예상 결과와 영향 범위를 분석합니다.
     실제 장애 주입 없이 안전하게 실험 계획을 검증할 수 있습니다.
 
-    POST: Analyze experiment with predictions
+    POST: Analyze experiment with predictions (Viewer - read-only analysis)
 
     Design Reference:
     - 24_CHAOS_INTEGRATION_PLAN.md Phase 2
@@ -983,7 +1015,7 @@ class DryRunAnalysisView(APIView):
     - BlastRadiusAnalyzer: services/chaos/blast_radius_analyzer.py
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsViewer]
 
     def post(self, request: Request) -> Response:
         """

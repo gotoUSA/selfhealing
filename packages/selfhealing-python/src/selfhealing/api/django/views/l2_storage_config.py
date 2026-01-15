@@ -8,14 +8,16 @@ Endpoints:
 """
 
 import logging
+from typing import List
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
 from selfhealing.api.django.serializers.config import L2StorageConfigSerializer
 from selfhealing.config import get_l2_storage_runtime_config
 
@@ -26,11 +28,14 @@ class L2StorageConfigView(APIView):
     """
     L2 Storage Configuration API.
 
-    GET  /api/self-healing/l2-storage/config/ - Get current config
-    PUT  /api/self-healing/l2-storage/config/ - Update config
+    GET  /api/self-healing/l2-storage/config/ - Get current config (Viewer)
+    PUT  /api/self-healing/l2-storage/config/ - Update config (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
 
     def get(self, request: Request) -> Response:
         """Get current L2 storage configuration."""
@@ -107,10 +112,10 @@ class L2StorageConfigResetView(APIView):
     """
     L2 Storage Configuration Reset API.
 
-    POST /api/self-healing/l2-storage/config/reset - Reset to defaults
+    POST /api/self-healing/l2-storage/config/reset - Reset to defaults (Admin)
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
         """Reset L2 storage configuration to defaults."""

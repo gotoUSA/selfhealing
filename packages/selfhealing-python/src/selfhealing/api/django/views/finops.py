@@ -6,11 +6,14 @@ FinOps DNA 서비스의 REST API 엔드포인트
 
 from decimal import Decimal
 import logging
+from typing import List
 
-from django.http import JsonResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import BasePermission
+
+from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -25,35 +28,53 @@ def get_finops_service():
         return None
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class FinOpsBudgetView(View):
-    """FinOps 예산 관리 API"""
+class FinOpsBudgetView(APIView):
+    """
+    FinOps 예산 관리 API
+
+    GET    /api/self-healing/finops/budget/              - 예산 조회 (Viewer)
+    GET    /api/self-healing/finops/budget/<stage_name>/ - 예산 조회 (Viewer)
+    POST   /api/self-healing/finops/budget/<stage_name>/ - 예산 설정 (Admin)
+    DELETE /api/self-healing/finops/budget/<stage_name>/ - 예산 리셋 (Admin)
+    """
+
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsSelfHealingAdmin()]
 
     def get(self, request, stage_name: str = None):
         """예산 조회"""
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         if stage_name:
             budget = service.get_budget(stage_name)
             if budget:
-                return JsonResponse(budget.to_dict())
-            return JsonResponse({"error": "Budget not found"}, status=404)
+                return Response(budget.to_dict())
+            return Response(
+                {"error": "Budget not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         else:
             budgets = service.get_all_budgets()
-            return JsonResponse({"budgets": budgets})
+            return Response({"budgets": budgets})
 
     def post(self, request, stage_name: str):
         """예산 설정"""
-        import json
-
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         try:
-            data = json.loads(request.body)
+            data = request.data
             budget = service.set_budget(
                 stage_name=stage_name,
                 max_budget=Decimal(str(data.get("max_budget", "10.00"))),
@@ -61,35 +82,47 @@ class FinOpsBudgetView(View):
                 hard_limit=data.get("hard_limit", True),
                 reset_period=data.get("reset_period", "daily"),
             )
-            return JsonResponse(budget.to_dict(), status=201)
+            return Response(budget.to_dict(), status=status.HTTP_201_CREATED)
         except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, stage_name: str):
         """예산 리셋"""
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         if service.reset_budget(stage_name):
-            return JsonResponse({"message": "Budget reset successfully"})
-        return JsonResponse({"error": "Budget not found"}, status=404)
+            return Response({"message": "Budget reset successfully"})
+        return Response(
+            {"error": "Budget not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class FinOpsCostView(View):
-    """FinOps 비용 기록 API"""
+class FinOpsCostView(APIView):
+    """
+    FinOps 비용 기록 API
+
+    POST /api/self-healing/finops/cost/ - 비용 기록 (Operator)
+    """
+
+    permission_classes = [IsOperator]
 
     def post(self, request):
         """비용 기록"""
-        import json
-
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         try:
-            data = json.loads(request.body)
+            data = request.data
             cost = data.get("cost")
             record = service.record_cost(
                 operation=data.get("operation"),
@@ -98,55 +131,86 @@ class FinOpsCostView(View):
                 success=data.get("success", True),
                 metadata=data.get("metadata", {}),
             )
-            return JsonResponse(record.to_dict(), status=201)
+            return Response(record.to_dict(), status=status.HTTP_201_CREATED)
         except ValueError as e:
-            return JsonResponse({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class FinOpsReportView(View):
-    """FinOps 리포트 API"""
+class FinOpsReportView(APIView):
+    """
+    FinOps 리포트 API
+
+    GET /api/self-healing/finops/report/ - 리포트 생성 (Viewer)
+    """
+
+    permission_classes = [IsViewer]
 
     def get(self, request):
         """리포트 생성"""
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        period = request.GET.get("period", "daily")
-        stage_name = request.GET.get("stage_name")
+        period = request.query_params.get("period", "daily")
+        stage_name = request.query_params.get("stage_name")
 
         report = service.generate_report(period=period, stage_name=stage_name)
-        return JsonResponse(report.to_dict())
+        return Response(report.to_dict())
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class FinOpsAlertsView(View):
-    """FinOps 알림 API"""
+class FinOpsAlertsView(APIView):
+    """
+    FinOps 알림 API
+
+    GET  /api/self-healing/finops/alerts/                - 알림 조회 (Viewer)
+    POST /api/self-healing/finops/alerts/<alert_index>/  - 알림 확인 처리 (Operator)
+    """
+
+    def get_permissions(self) -> List[BasePermission]:
+        if self.request.method == "GET":
+            return [IsViewer()]
+        return [IsOperator()]
 
     def get(self, request):
         """알림 조회"""
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        stage_name = request.GET.get("stage_name")
-        unacknowledged = request.GET.get("unacknowledged", "false").lower() == "true"
+        stage_name = request.query_params.get("stage_name")
+        unacknowledged = (
+            request.query_params.get("unacknowledged", "false").lower() == "true"
+        )
 
         alerts = service.get_alerts(
             stage_name=stage_name,
             unacknowledged_only=unacknowledged,
         )
-        return JsonResponse({"alerts": [a.to_dict() for a in alerts]})
+        return Response({"alerts": [a.to_dict() for a in alerts]})
 
     def post(self, request, alert_index: int):
         """알림 확인 처리"""
         service = get_finops_service()
         if not service:
-            return JsonResponse({"error": "FinOps service not available"}, status=503)
+            return Response(
+                {"error": "FinOps service not available"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         if service.acknowledge_alert(alert_index):
-            return JsonResponse({"message": "Alert acknowledged"})
-        return JsonResponse({"error": "Alert not found"}, status=404)
+            return Response({"message": "Alert acknowledged"})
+        return Response(
+            {"error": "Alert not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
