@@ -52,7 +52,6 @@ class StorageMode(str, Enum):
     MEMORY = "memory"      # 기본값: 메모리만 사용
     LAYERED = "layered"    # L1(Memory) + L2(Redis)
     DJANGO = "django"      # Django ORM (opt-in)
-    FASTAPI = "fastapi"    # SQLAlchemy (미구현)
 
 
 # =============================================================================
@@ -64,8 +63,6 @@ class FrameworkType(str, Enum):
     """Supported frameworks for adapter selection."""
 
     DJANGO = "django"
-    FASTAPI = "fastapi"
-    FLASK = "flask"
     STANDALONE = "standalone"  # In-memory, no framework
 
 
@@ -167,8 +164,6 @@ class ServiceFactory:
             return self._create_django_repository(repo_type)
         elif self._storage_mode == StorageMode.LAYERED:
             return self._create_layered_repository(repo_type)
-        elif self._storage_mode == StorageMode.FASTAPI:
-            return self._create_fastapi_repository(repo_type)
         else:
             # 기본값: Memory (외부 의존성 없음)
             return self._create_inmemory_repository(repo_type)
@@ -213,61 +208,6 @@ class ServiceFactory:
         else:
             # 다른 타입은 일단 Memory
             return self._create_inmemory_repository(repo_type)
-
-    def _create_fastapi_repository(self, repo_type: str) -> Any:
-        """
-        Create SQLAlchemy based repository for FastAPI.
-        
-        Requires SQLALCHEMY_DATABASE_URL environment variable.
-        If not set, falls back to in-memory storage.
-        
-        For production:
-        - Set SQLALCHEMY_DATABASE_URL to PostgreSQL/MySQL connection string
-        - Or use SELFHEALING_STORAGE=layered with Redis for distributed setup
-        """
-        import os
-        database_url = os.environ.get("SQLALCHEMY_DATABASE_URL")
-        
-        if not database_url:
-            logger.info(
-                "[ServiceFactory] SQLALCHEMY_DATABASE_URL not set, "
-                "falling back to in-memory storage."
-            )
-            return self._create_inmemory_repository(repo_type)
-        
-        try:
-            from sqlalchemy import create_engine
-            from selfhealing.adapters.sqlalchemy import (
-                SQLAlchemyFailedOperationRepository,
-                SQLAlchemyCircuitBreakerStateRepository,
-                SQLAlchemySecurityIncidentRepository,
-                create_session_factory,
-                Base,
-            )
-            
-            # Create engine and session factory (cached per database URL)
-            if not hasattr(self, "_sqlalchemy_session_factory"):
-                engine = create_engine(database_url)
-                Base.metadata.create_all(engine)
-                self._sqlalchemy_session_factory = create_session_factory(engine)
-            
-            mapping = {
-                "failed_operation": SQLAlchemyFailedOperationRepository,
-                "circuit_breaker": SQLAlchemyCircuitBreakerStateRepository,
-                "security_incident": SQLAlchemySecurityIncidentRepository,
-            }
-            return mapping[repo_type](self._sqlalchemy_session_factory)
-        except ImportError as e:
-            logger.warning(
-                f"[ServiceFactory] SQLAlchemy not available: {e}. "
-                "Install with: pip install sqlalchemy"
-            )
-            return self._create_inmemory_repository(repo_type)
-
-    def _create_flask_repository(self, repo_type: str) -> Any:
-        """Create Flask-SQLAlchemy based repository."""
-        # Flask also uses SQLAlchemy
-        return self._create_fastapi_repository(repo_type)
 
     def _create_inmemory_repository(self, repo_type: str) -> Any:
         """Create in-memory repository for testing/standalone."""
