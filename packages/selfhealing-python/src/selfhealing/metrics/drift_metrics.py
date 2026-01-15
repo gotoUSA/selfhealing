@@ -212,6 +212,133 @@ else:
 
 
 # =============================================================================
+# Phase 4: WAL Sync Metrics
+# =============================================================================
+
+if PROMETHEUS_AVAILABLE:
+    # WAL 동기화 Drift 메트릭
+    wal_entries_written_total = Counter(
+        f"{METRIC_PREFIX}_wal_entries_written_total",
+        "Total WAL entries written",
+    )
+
+    wal_entries_recovered_total = Counter(
+        f"{METRIC_PREFIX}_wal_entries_recovered_total",
+        "Total WAL entries recovered",
+    )
+
+    wal_corruption_detected_total = Counter(
+        f"{METRIC_PREFIX}_wal_corruption_detected_total",
+        "Number of WAL corruption events detected",
+    )
+
+    wal_rotation_total = Counter(
+        f"{METRIC_PREFIX}_wal_rotation_total",
+        "Number of WAL file rotations",
+    )
+
+    wal_sync_lag_entries = Gauge(
+        f"{METRIC_PREFIX}_wal_sync_lag_entries",
+        "Number of WAL entries pending sync to central storage",
+    )
+
+    wal_last_sequence = Gauge(
+        f"{METRIC_PREFIX}_wal_last_sequence",
+        "Last WAL sequence number written",
+    )
+else:
+    wal_entries_written_total = None
+    wal_entries_recovered_total = None
+    wal_corruption_detected_total = None
+    wal_rotation_total = None
+    wal_sync_lag_entries = None
+    wal_last_sequence = None
+
+
+# =============================================================================
+# Phase 4: ShadowLogger Metrics
+# =============================================================================
+
+if PROMETHEUS_AVAILABLE:
+    # ShadowLogger L2 동기화 Drift 메트릭
+    shadow_log_sync_failures_total = Counter(
+        f"{METRIC_PREFIX}_shadow_log_sync_failures_total",
+        "Total L2 sync failures recorded in shadow log",
+        ["adapter_type", "operation"],  # operation: sync, update, delete
+    )
+
+    shadow_log_unsynced_count = Gauge(
+        f"{METRIC_PREFIX}_shadow_log_unsynced_count",
+        "Number of shadow log records not yet synced to L2",
+    )
+
+    shadow_log_recovered_total = Counter(
+        f"{METRIC_PREFIX}_shadow_log_recovered_total",
+        "Total shadow log records recovered after L2 recovery",
+        ["service_name"],
+    )
+
+    shadow_log_affected_services = Gauge(
+        f"{METRIC_PREFIX}_shadow_log_affected_services",
+        "Number of services affected by L2 sync failures",
+    )
+
+    shadow_log_oldest_unsynced_age_seconds = Gauge(
+        f"{METRIC_PREFIX}_shadow_log_oldest_unsynced_age_seconds",
+        "Age of oldest unsynced shadow log record in seconds",
+    )
+else:
+    shadow_log_sync_failures_total = None
+    shadow_log_unsynced_count = None
+    shadow_log_recovered_total = None
+    shadow_log_affected_services = None
+    shadow_log_oldest_unsynced_age_seconds = None
+
+
+# =============================================================================
+# Phase 4: TTLCache Metrics
+# =============================================================================
+
+if PROMETHEUS_AVAILABLE:
+    # TTLCache Strategy Drift 메트릭
+    cache_ttl_expired_total = Counter(
+        f"{METRIC_PREFIX}_cache_ttl_expired_total",
+        "Total cache entries expired by TTL",
+        ["cache_name"],
+    )
+
+    cache_ttl_evicted_total = Counter(
+        f"{METRIC_PREFIX}_cache_ttl_evicted_total",
+        "Total cache entries evicted (capacity limit)",
+        ["cache_name"],
+    )
+
+    cache_entries_count = Gauge(
+        f"{METRIC_PREFIX}_cache_entries_count",
+        "Current number of entries in cache",
+        ["cache_name"],
+    )
+
+    cache_get_total = Counter(
+        f"{METRIC_PREFIX}_cache_get_total",
+        "Total cache get operations",
+        ["cache_name", "result"],  # result: hit, miss, expired
+    )
+
+    cache_set_total = Counter(
+        f"{METRIC_PREFIX}_cache_set_total",
+        "Total cache set operations",
+        ["cache_name"],
+    )
+else:
+    cache_ttl_expired_total = None
+    cache_ttl_evicted_total = None
+    cache_entries_count = None
+    cache_get_total = None
+    cache_set_total = None
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -342,6 +469,120 @@ def record_config_cache_miss(config_type: str) -> None:
 
 
 # =============================================================================
+# Phase 4 Helper Functions: WAL Sync
+# =============================================================================
+
+
+def record_wal_entry_written() -> None:
+    """Record a WAL entry written."""
+    if wal_entries_written_total is not None:
+        wal_entries_written_total.inc()
+
+
+def record_wal_entries_recovered(count: int) -> None:
+    """Record WAL entries recovered."""
+    if wal_entries_recovered_total is not None:
+        wal_entries_recovered_total.inc(count)
+
+
+def record_wal_corruption() -> None:
+    """Record a WAL corruption event."""
+    if wal_corruption_detected_total is not None:
+        wal_corruption_detected_total.inc()
+
+
+def record_wal_rotation() -> None:
+    """Record a WAL file rotation."""
+    if wal_rotation_total is not None:
+        wal_rotation_total.inc()
+
+
+def update_wal_sync_lag(lag: int) -> None:
+    """Update WAL sync lag (pending entries)."""
+    if wal_sync_lag_entries is not None:
+        wal_sync_lag_entries.set(lag)
+
+
+def update_wal_last_sequence(seq: int) -> None:
+    """Update last WAL sequence number."""
+    if wal_last_sequence is not None:
+        wal_last_sequence.set(seq)
+
+
+# =============================================================================
+# Phase 4 Helper Functions: ShadowLogger
+# =============================================================================
+
+
+def record_shadow_log_sync_failure(adapter_type: str, operation: str) -> None:
+    """Record an L2 sync failure in shadow log."""
+    if shadow_log_sync_failures_total is not None:
+        shadow_log_sync_failures_total.labels(
+            adapter_type=adapter_type,
+            operation=operation,
+        ).inc()
+
+
+def update_shadow_log_unsynced_count(count: int) -> None:
+    """Update count of unsynced shadow log records."""
+    if shadow_log_unsynced_count is not None:
+        shadow_log_unsynced_count.set(count)
+
+
+def record_shadow_log_recovered(service_name: str, count: int) -> None:
+    """Record shadow log records recovered."""
+    if shadow_log_recovered_total is not None:
+        shadow_log_recovered_total.labels(service_name=service_name).inc(count)
+
+
+def update_shadow_log_affected_services(count: int) -> None:
+    """Update count of affected services."""
+    if shadow_log_affected_services is not None:
+        shadow_log_affected_services.set(count)
+
+
+def update_shadow_log_oldest_unsynced_age(age_seconds: float) -> None:
+    """Update age of oldest unsynced record."""
+    if shadow_log_oldest_unsynced_age_seconds is not None:
+        shadow_log_oldest_unsynced_age_seconds.set(age_seconds)
+
+
+# =============================================================================
+# Phase 4 Helper Functions: TTLCache
+# =============================================================================
+
+
+def record_cache_ttl_expired(cache_name: str) -> None:
+    """Record a cache entry expired by TTL."""
+    if cache_ttl_expired_total is not None:
+        cache_ttl_expired_total.labels(cache_name=cache_name).inc()
+
+
+def record_cache_ttl_evicted(cache_name: str) -> None:
+    """Record a cache entry evicted due to capacity."""
+    if cache_ttl_evicted_total is not None:
+        cache_ttl_evicted_total.labels(cache_name=cache_name).inc()
+
+
+def update_cache_entries_count(cache_name: str, count: int) -> None:
+    """Update current cache entry count."""
+    if cache_entries_count is not None:
+        cache_entries_count.labels(cache_name=cache_name).set(count)
+
+
+def record_cache_get(cache_name: str, result: str) -> None:
+    """Record a cache get operation. result: hit, miss, expired"""
+    if cache_get_total is not None:
+        cache_get_total.labels(cache_name=cache_name, result=result).inc()
+
+
+def record_cache_set(cache_name: str) -> None:
+    """Record a cache set operation."""
+    if cache_set_total is not None:
+        cache_set_total.labels(cache_name=cache_name).inc()
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -391,6 +632,41 @@ __all__ = [
     "record_config_cache_invalidated",
     "record_config_cache_hit",
     "record_config_cache_miss",
+    # Phase 4: WAL Sync
+    "wal_entries_written_total",
+    "wal_entries_recovered_total",
+    "wal_corruption_detected_total",
+    "wal_rotation_total",
+    "wal_sync_lag_entries",
+    "wal_last_sequence",
+    "record_wal_entry_written",
+    "record_wal_entries_recovered",
+    "record_wal_corruption",
+    "record_wal_rotation",
+    "update_wal_sync_lag",
+    "update_wal_last_sequence",
+    # Phase 4: ShadowLogger
+    "shadow_log_sync_failures_total",
+    "shadow_log_unsynced_count",
+    "shadow_log_recovered_total",
+    "shadow_log_affected_services",
+    "shadow_log_oldest_unsynced_age_seconds",
+    "record_shadow_log_sync_failure",
+    "update_shadow_log_unsynced_count",
+    "record_shadow_log_recovered",
+    "update_shadow_log_affected_services",
+    "update_shadow_log_oldest_unsynced_age",
+    # Phase 4: TTLCache
+    "cache_ttl_expired_total",
+    "cache_ttl_evicted_total",
+    "cache_entries_count",
+    "cache_get_total",
+    "cache_set_total",
+    "record_cache_ttl_expired",
+    "record_cache_ttl_evicted",
+    "update_cache_entries_count",
+    "record_cache_get",
+    "record_cache_set",
     # Utils
     "PROMETHEUS_AVAILABLE",
 ]

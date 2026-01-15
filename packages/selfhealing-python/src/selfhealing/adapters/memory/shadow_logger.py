@@ -5,6 +5,8 @@ L2 장애 동안의 상태 변화를 로컬에 기록합니다.
 Shadow Log는 L2 복구 후 재동기화 및 Forensic 분석에 활용됩니다.
 
 Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
+
+Version: 6.4.0 - Drift Detection 메트릭 추가
 """
 
 from __future__ import annotations
@@ -14,6 +16,19 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+# Drift Detection 메트릭 (Phase 4)
+try:
+    from selfhealing.metrics.drift_metrics import (
+        record_shadow_log_sync_failure,
+        update_shadow_log_unsynced_count,
+        record_shadow_log_recovered,
+        update_shadow_log_affected_services,
+        update_shadow_log_oldest_unsynced_age,
+    )
+    HAS_DRIFT_METRICS = True
+except ImportError:
+    HAS_DRIFT_METRICS = False
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +130,11 @@ class ShadowLogger:
             if len(self._failure_log) > self._max_entries:
                 self._failure_log = self._failure_log[-self._max_entries:]
 
+            # Phase 4: Drift Detection 메트릭 기록
+            if HAS_DRIFT_METRICS:
+                record_shadow_log_sync_failure(adapter_type, operation)
+                self._update_drift_metrics()
+
             # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
             self._record_audit_event(
                 event_type="SHADOW_LOG_SYNC_FAILED",
@@ -161,6 +181,11 @@ class ShadowLogger:
                     record.recovery_time = recovery_time
                     count += 1
         if count > 0:
+            # Phase 4: Drift Detection 메트릭 기록
+            if HAS_DRIFT_METRICS:
+                record_shadow_log_recovered(service_name, count)
+                with self._lock:
+                    self._update_drift_metrics()
             # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
             self._record_audit_event(
                 event_type="SHADOW_LOG_RECOVERED",
@@ -183,15 +208,49 @@ class ShadowLogger:
                     record.synced_after_recovery = True
                     record.recovery_time = now_time
                     count += 1
+            # Phase 4: Drift Detection 메트릭 업데이트
+            if HAS_DRIFT_METRICS and count > 0:
+                self._update_drift_metrics()
         if count > 0:
             logger.info(f"[ShadowLog] Marked all {count} records as synced")
         return count
+
+    def _update_drift_metrics(self) -> None:
+        """
+        Phase 4: Drift Detection 메트릭 업데이트.
+        
+        Note: 이 메서드는 _lock이 이미 획득된 상태에서 호출되어야 함.
+        """
+        if not HAS_DRIFT_METRICS:
+            return
+        
+        unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
+        services = set(r.service_name for r in self._failure_log)
+        
+        # 미동기화 레코드 수
+        update_shadow_log_unsynced_count(len(unsynced))
+        
+        # 영향받은 서비스 수
+        update_shadow_log_affected_services(len(services))
+        
+        # 가장 오래된 미동기화 레코드 age
+        if unsynced:
+            oldest = min(r.failure_time for r in unsynced)
+            age_seconds = (datetime.now(timezone.utc) - oldest).total_seconds()
+            update_shadow_log_oldest_unsynced_age(age_seconds)
+        else:
+            update_shadow_log_oldest_unsynced_age(0)
 
     def get_stats(self) -> Dict[str, Any]:
         """Shadow Log 통계 조회."""
         with self._lock:
             unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
             services = set(r.service_name for r in self._failure_log)
+            
+            # Phase 4: Drift Detection 메트릭 업데이트
+            if HAS_DRIFT_METRICS:
+                self._update_drift_metrics()
+            
             return {
                 "total_records": len(self._failure_log),
                 "unsynced_count": len(unsynced),

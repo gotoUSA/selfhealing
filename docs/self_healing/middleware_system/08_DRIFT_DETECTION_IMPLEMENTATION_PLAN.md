@@ -1,9 +1,9 @@
 # 08. Drift Detection 구현 계획
 
-> **Version**: 1.1.0
+> **Version**: 1.2.0
 > **Created**: 2026-01-15
 > **Updated**: 2026-01-15
-> **Status**: ✅ 구현 완료
+> **Status**: ✅ 구현 완료 (Phase 1-4)
 > **Author**: AI Assistant
 > **Reference**: 14_METRIC_COLLECTION_CORE.md, 15_METRIC_COLLECTION_ADVANCED.md
 
@@ -15,13 +15,14 @@
 
 Self-Healing 시스템에는 다양한 **캐시**, **계층형 저장소**, **복제 상태**가 존재합니다. 이들 간의 불일치(Drift)를 감지하고 추적해야 운영 안정성을 보장할 수 있습니다.
 
-### 1.2 구현 현황 (v1.1.0)
+### 1.2 구현 현황 (v1.2.0)
 
 | Phase | 컴포넌트 | 상태 |
 |-------|----------|------|
 | Phase 1 | PoolCircuitBreaker, PrecomputedCache | ✅ 완료 |
 | Phase 2 | EmergencyMode Cache, RateLimiter | ✅ 완료 |
 | Phase 3 | Config lru_cache | ✅ 완료 |
+| Phase 4 | WAL Sync, ShadowLogger, TTLCache | ✅ 완료 |
 
 ### 1.3 Drift 필요 조건 (업계 표준)
 
@@ -473,7 +474,9 @@ def get_circuit_breaker_settings_safe() -> CircuitBreakerSettings:
 
 ## 4. 신규 Prometheus 메트릭 요약
 
-### 4.1 추가될 메트릭 목록
+### 4.1 추가된 메트릭 목록
+
+#### Phase 1-3 메트릭
 
 | 메트릭 이름 | 타입 | 레이블 | 설명 |
 |------------|------|--------|------|
@@ -491,6 +494,27 @@ def get_circuit_breaker_settings_safe() -> CircuitBreakerSettings:
 | `selfhealing_ratelimit_fallback_active` | Gauge | - | Fallback 모드 여부 |
 | `selfhealing_config_env_changed_total` | Counter | config_type | 환경변수 변경 감지 횟수 |
 | `selfhealing_config_cache_invalidated_total` | Counter | config_type | 캐시 무효화 횟수 |
+
+#### Phase 4 메트릭 (v1.2.0 추가)
+
+| 메트릭 이름 | 타입 | 레이블 | 설명 |
+|------------|------|--------|------|
+| `selfhealing_wal_entries_written_total` | Counter | - | WAL 기록 엔트리 수 |
+| `selfhealing_wal_entries_recovered_total` | Counter | - | WAL 복구 엔트리 수 |
+| `selfhealing_wal_corruption_detected_total` | Counter | - | WAL 손상 감지 횟수 |
+| `selfhealing_wal_rotation_total` | Counter | - | WAL 파일 로테이션 횟수 |
+| `selfhealing_wal_sync_lag_entries` | Gauge | - | WAL 미동기화 엔트리 수 |
+| `selfhealing_wal_last_sequence` | Gauge | - | 마지막 WAL 시퀀스 번호 |
+| `selfhealing_shadow_log_sync_failures_total` | Counter | adapter_type, operation | L2 동기화 실패 횟수 |
+| `selfhealing_shadow_log_unsynced_count` | Gauge | - | 미동기화 레코드 수 |
+| `selfhealing_shadow_log_recovered_total` | Counter | service_name | 복구된 레코드 수 |
+| `selfhealing_shadow_log_affected_services` | Gauge | - | 영향받은 서비스 수 |
+| `selfhealing_shadow_log_oldest_unsynced_age_seconds` | Gauge | - | 가장 오래된 미동기화 레코드 age |
+| `selfhealing_cache_ttl_expired_total` | Counter | cache_name | TTL 만료 엔트리 수 |
+| `selfhealing_cache_ttl_evicted_total` | Counter | cache_name | 용량 초과 제거 엔트리 수 |
+| `selfhealing_cache_entries_count` | Gauge | cache_name | 현재 캐시 엔트리 수 |
+| `selfhealing_cache_get_total` | Counter | cache_name, result | 캐시 조회 횟수 (hit/miss/expired) |
+| `selfhealing_cache_set_total` | Counter | cache_name | 캐시 저장 횟수 |
 
 ---
 
@@ -515,6 +539,14 @@ def get_circuit_breaker_settings_safe() -> CircuitBreakerSettings:
 | 순서 | 컴포넌트 | 상태 | 구현 내용 |
 |------|----------|------|----------|
 | 5 | **Config lru_cache** | ✅ 완료 | ConfigDriftMonitor, 환경변수 변경 감지 |
+
+### 5.4 Phase 4: 추가 컴포넌트 ✅ 완료 (v1.2.0)
+
+| 순서 | 컴포넌트 | 상태 | 구현 내용 |
+|------|----------|------|----------|
+| 6 | **WAL Sync** | ✅ 완료 | 엔트리 기록/복구 메트릭, 손상 감지, sync lag 추적 |
+| 7 | **ShadowLogger** | ✅ 완료 | L2 동기화 실패 추적, 복구 메트릭, 미동기화 age |
+| 8 | **TTLCache** | ✅ 완료 | TTL 만료/제거 추적, 캐시 hit/miss/expired 메트릭 |
 
 ---
 
@@ -590,15 +622,15 @@ class TestDriftDetectionE2E:
 
 ## 7. 추가 구현 필요 여부 검토
 
-### 7.1 추가로 확인된 누락 컴포넌트
+### 7.1 추가로 확인된 누락 컴포넌트 → ✅ 모두 구현 완료
 
 코드 분석 결과, 추가로 확인된 drift 가능 영역:
 
-| 컴포넌트 | 파일 | Drift 유형 | 권장 |
-|----------|------|------------|------|
-| **WAL Sync** | `audit/wal.py` | WAL↔중앙저장소 | ⚠️ 이미 Reconciler 있음, 메트릭만 추가 |
-| **ShadowLogger** | `adapters/memory/shadow_logger.py` | 동기화 기록 | ⚠️ 부분 구현, 메트릭 보강 필요 |
-| **TTLCacheStrategy** | `adapters/cache/` | 캐시 TTL | 🟢 추가 권장 |
+| 컴포넌트 | 파일 | Drift 유형 | 상태 | 구현 버전 |
+|----------|------|------------|------|----------|
+| **WAL Sync** | `audit/wal.py` | WAL↔중앙저장소 | ✅ 완료 | v6.4.0 |
+| **ShadowLogger** | `adapters/memory/shadow_logger.py` | 동기화 기록 | ✅ 완료 | v6.4.0 |
+| **TTLCacheStrategy** | `adapters/cache/memory_adapter.py` | 캐시 TTL | ✅ 완료 | v6.4.0 |
 
 ### 7.2 구현 권장 여부
 
@@ -631,7 +663,7 @@ class TestDriftDetectionE2E:
 
 ### 9.2 구현 후 확인 ✅
 
-- [x] 모든 테스트 통과 (20개 drift 테스트, 278개 전체)
+- [x] 모든 테스트 통과 (35개 drift 테스트)
 - [ ] Grafana 대시보드에 새 메트릭 추가 (운영팀)
 - [ ] 알림 규칙 설정 (drift 임계값 초과 시) (운영팀)
 - [ ] 운영 가이드 업데이트 (운영팀)
@@ -645,6 +677,7 @@ class TestDriftDetectionE2E:
 |------|------|--------|----------|
 | 1.0.0 | 2026-01-15 | AI Assistant | 최초 작성 |
 | 1.1.0 | 2026-01-15 | AI Assistant | Phase 1,2,3 전체 구현 완료, 테스트 통과 |
+| 1.2.0 | 2026-01-15 | AI Assistant | Phase 4 구현 완료 (WAL, ShadowLogger, TTLCache), 35개 테스트 |
 
 ---
 
@@ -654,16 +687,19 @@ class TestDriftDetectionE2E:
 
 | 파일 경로 | 설명 |
 |----------|------|
-| `selfhealing/metrics/drift_metrics.py` | Drift Detection Prometheus 메트릭 정의 |
+| `selfhealing/metrics/drift_metrics.py` | Drift Detection Prometheus 메트릭 정의 (Phase 1-4) |
 | `tests/unit/drift/__init__.py` | 테스트 패키지 |
-| `tests/unit/drift/test_drift_detection.py` | Drift Detection 단위 테스트 (20개) |
+| `tests/unit/drift/test_drift_detection.py` | Drift Detection 단위 테스트 (35개) |
 
 ### 11.2 수정된 파일
 
-| 파일 경로 | 변경 내용 |
-|----------|----------|
-| `api/django/pool_circuit_breaker.py` | Stale cache Prometheus 메트릭 연동 |
-| `services/precomputed_cache.py` | L1/L2 drift 감지 및 hit rate 추적 |
-| `services/emergency_mode/manager.py` | 캐시 drift 감지 및 age 추적 |
-| `adapters/rate_limit/redis_adapter.py` | Fallback 모드 및 reconciliation 추적 |
-| `config.py` | ConfigDriftMonitor 클래스 추가 |
+| 파일 경로 | 변경 내용 | Phase |
+|----------|----------|-------|
+| `api/django/pool_circuit_breaker.py` | Stale cache Prometheus 메트릭 연동 | 1 |
+| `services/precomputed_cache.py` | L1/L2 drift 감지 및 hit rate 추적 | 1 |
+| `services/emergency_mode/manager.py` | 캐시 drift 감지 및 age 추적 | 2 |
+| `adapters/rate_limit/redis_adapter.py` | Fallback 모드 및 reconciliation 추적 | 2 |
+| `config.py` | ConfigDriftMonitor 클래스 추가 | 3 |
+| `audit/wal.py` | WAL 동기화 메트릭, get_sync_lag() 추가 | 4 |
+| `adapters/memory/shadow_logger.py` | L2 동기화 실패/복구 메트릭 추가 | 4 |
+| `adapters/cache/memory_adapter.py` | TTL 만료/hit-miss 메트릭 추가 | 4 |

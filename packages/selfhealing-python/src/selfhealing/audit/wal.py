@@ -22,6 +22,8 @@ Usage:
 
     # 정리
     wal.cleanup_processed(last_processed_seq=500)
+
+Version: 6.4.0 - Drift Detection 메트릭 추가
 """
 
 import json
@@ -35,6 +37,20 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+# Drift Detection 메트릭 (Phase 4)
+try:
+    from selfhealing.metrics.drift_metrics import (
+        record_wal_entry_written,
+        record_wal_entries_recovered,
+        record_wal_corruption,
+        record_wal_rotation,
+        update_wal_sync_lag,
+        update_wal_last_sequence,
+    )
+    HAS_DRIFT_METRICS = True
+except ImportError:
+    HAS_DRIFT_METRICS = False
 
 
 class WALState(Enum):
@@ -250,6 +266,9 @@ class WriteAheadLog:
                 
                 # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
                 if old_file:
+                    # Phase 4: Drift Detection 메트릭 기록
+                    if HAS_DRIFT_METRICS:
+                        record_wal_rotation()
                     self._record_audit_event(
                         event_type="WAL_ROTATED",
                         details={
@@ -336,6 +355,11 @@ class WriteAheadLog:
                 # 파일 크기 확인 및 로테이션
                 if self._current_handle.tell() > self._config.max_file_size_bytes:
                     self._rotate_file()
+            
+            # Phase 4: Drift Detection 메트릭 기록
+            if HAS_DRIFT_METRICS:
+                record_wal_entry_written()
+                update_wal_last_sequence(current_seq)
             
             return current_seq
     
@@ -469,6 +493,9 @@ class WriteAheadLog:
                             expected=checksum,
                             computed=computed_checksum,
                         )
+                        # Phase 4: Drift Detection 메트릭 기록
+                        if HAS_DRIFT_METRICS:
+                            record_wal_corruption()
                         # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
                         self._record_audit_event(
                             event_type="WAL_CORRUPTION_DETECTED",
@@ -520,6 +547,10 @@ class WriteAheadLog:
                         self._recovered_entries += 1
         
         sorted_entries = sorted(entries, key=lambda e: e.sequence)
+        
+        # Phase 4: Drift Detection 메트릭 기록
+        if HAS_DRIFT_METRICS and sorted_entries:
+            record_wal_entries_recovered(len(sorted_entries))
         
         # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
         if sorted_entries:
@@ -594,6 +625,23 @@ class WriteAheadLog:
                 corrupted_entries=self._corrupted_entries,
                 recovered_entries=self._recovered_entries,
             )
+    
+    def get_sync_lag(self, last_synced_seq: int = 0) -> int:
+        """
+        중앙 저장소와의 동기화 지연 계산.
+        
+        Args:
+            last_synced_seq: 마지막으로 중앙 저장소에 동기화된 시퀀스
+            
+        Returns:
+            미동기화된 엔트리 수
+        """
+        with self._lock:
+            lag = max(0, self._sequence - last_synced_seq)
+            # Phase 4: Drift Detection 메트릭 업데이트
+            if HAS_DRIFT_METRICS:
+                update_wal_sync_lag(lag)
+            return lag
     
     def flush(self) -> None:
         """버퍼 플러시."""

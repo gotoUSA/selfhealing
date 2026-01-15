@@ -13,6 +13,8 @@ Features:
 Warning:
     This adapter is for TESTING ONLY. It does not persist data
     and locks are only effective within a single process.
+
+Version: 6.4.0 - Drift Detection 메트릭 추가
 """
 
 from __future__ import annotations
@@ -31,6 +33,19 @@ from selfhealing.interfaces.cache_provider import (
     LockAcquisitionError,
     LockNotOwnedError,
 )
+
+# Drift Detection 메트릭 (Phase 4)
+try:
+    from selfhealing.metrics.drift_metrics import (
+        record_cache_ttl_expired,
+        record_cache_ttl_evicted,
+        update_cache_entries_count,
+        record_cache_get,
+        record_cache_set,
+    )
+    HAS_DRIFT_METRICS = True
+except ImportError:
+    HAS_DRIFT_METRICS = False
 
 logger = logging.getLogger(__name__)
 
@@ -213,14 +228,16 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         locks only work within a single process.
     """
 
-    def __init__(self, key_prefix: str = "test:") -> None:
+    def __init__(self, key_prefix: str = "test:", cache_name: str = "memory") -> None:
         """
         Initialize in-memory cache.
 
         Args:
             key_prefix: Prefix for all cache keys
+            cache_name: Name for metrics identification
         """
         self._key_prefix = key_prefix
+        self._cache_name = cache_name
         self._store: dict[str, CacheEntry] = {}
         self._lock = threading.Lock()
         self._healthy = True
@@ -235,6 +252,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         expired_keys = [k for k, v in self._store.items() if v.expires_at is not None and v.expires_at < current_time]
         for key in expired_keys:
             del self._store[key]
+            # Phase 4: Drift Detection 메트릭 기록
+            if HAS_DRIFT_METRICS:
+                record_cache_ttl_expired(self._cache_name)
+        # 엔트리 수 메트릭 업데이트
+        if HAS_DRIFT_METRICS:
+            update_cache_entries_count(self._cache_name, len(self._store))
 
     @property
     def provider_name(self) -> str:
@@ -252,12 +275,23 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             entry = self._store.get(full_key)
 
             if entry is None:
+                # Phase 4: Drift Detection 메트릭 - miss
+                if HAS_DRIFT_METRICS:
+                    record_cache_get(self._cache_name, "miss")
                 return None
 
             if entry.is_expired():
                 del self._store[full_key]
+                # Phase 4: Drift Detection 메트릭 - expired
+                if HAS_DRIFT_METRICS:
+                    record_cache_get(self._cache_name, "expired")
+                    record_cache_ttl_expired(self._cache_name)
+                    update_cache_entries_count(self._cache_name, len(self._store))
                 return None
 
+            # Phase 4: Drift Detection 메트릭 - hit
+            if HAS_DRIFT_METRICS:
+                record_cache_get(self._cache_name, "hit")
             return entry.value
 
     def set(
@@ -274,6 +308,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
                 expires_at = time.time() + ttl.total_seconds()
 
             self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
+            
+            # Phase 4: Drift Detection 메트릭
+            if HAS_DRIFT_METRICS:
+                record_cache_set(self._cache_name)
+                update_cache_entries_count(self._cache_name, len(self._store))
+            
             return True
 
     def delete(self, key: str) -> bool:

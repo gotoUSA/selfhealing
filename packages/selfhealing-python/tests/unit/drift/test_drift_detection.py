@@ -1,10 +1,11 @@
 """
 Unit tests for Drift Detection Metrics.
 
-Tests for Phase 1, 2, 3 drift detection implementations:
+Tests for Phase 1, 2, 3, 4 drift detection implementations:
 - Phase 1: PoolCircuitBreaker, PrecomputedCache
 - Phase 2: EmergencyMode, RateLimiter
 - Phase 3: Config lru_cache
+- Phase 4: WAL Sync, ShadowLogger, TTLCache
 """
 
 import pytest
@@ -395,3 +396,281 @@ class TestSafeFunctions:
         assert config is not None
         assert hasattr(config, 'redis_timeout_ms')
         assert config.redis_timeout_ms > 0
+
+
+# =============================================================================
+# Phase 4: WAL Sync Drift Tests
+# =============================================================================
+
+
+class TestWALSyncDrift:
+    """Test WAL Sync drift metrics."""
+    
+    def test_wal_metrics_import(self):
+        """WAL 관련 메트릭 함수들이 import 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_wal_entry_written,
+            record_wal_entries_recovered,
+            record_wal_corruption,
+            record_wal_rotation,
+            update_wal_sync_lag,
+            update_wal_last_sequence,
+        )
+        
+        assert callable(record_wal_entry_written)
+        assert callable(record_wal_entries_recovered)
+        assert callable(record_wal_corruption)
+        assert callable(record_wal_rotation)
+        assert callable(update_wal_sync_lag)
+        assert callable(update_wal_last_sequence)
+    
+    def test_wal_helper_functions_dont_raise(self):
+        """WAL helper 함수들이 예외 없이 호출 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_wal_entry_written,
+            record_wal_entries_recovered,
+            record_wal_corruption,
+            record_wal_rotation,
+            update_wal_sync_lag,
+            update_wal_last_sequence,
+        )
+        
+        # 예외 없이 호출
+        record_wal_entry_written()
+        record_wal_entries_recovered(5)
+        record_wal_corruption()
+        record_wal_rotation()
+        update_wal_sync_lag(10)
+        update_wal_last_sequence(100)
+    
+    def test_wal_has_drift_metrics_flag(self):
+        """WAL 모듈이 HAS_DRIFT_METRICS 플래그를 가져야 함."""
+        from selfhealing.audit import wal
+        
+        assert hasattr(wal, 'HAS_DRIFT_METRICS')
+    
+    def test_wal_get_sync_lag_method(self):
+        """WAL get_sync_lag 메서드 동작 확인."""
+        import tempfile
+        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = WALConfig(wal_dir=tmpdir, sync_on_write=False)
+            wal = WriteAheadLog(config=config)
+            
+            try:
+                # 몇 개의 엔트리 기록
+                wal.write({"test": "entry1"})
+                wal.write({"test": "entry2"})
+                wal.write({"test": "entry3"})
+                
+                # sync lag 확인
+                lag = wal.get_sync_lag(last_synced_seq=1)
+                assert lag == 2  # 3 - 1 = 2
+                
+                lag_all = wal.get_sync_lag(last_synced_seq=0)
+                assert lag_all == 3  # 3 - 0 = 3
+            finally:
+                wal.close()
+
+
+# =============================================================================
+# Phase 4: ShadowLogger Drift Tests
+# =============================================================================
+
+
+class TestShadowLoggerDrift:
+    """Test ShadowLogger drift metrics."""
+    
+    def test_shadow_log_metrics_import(self):
+        """ShadowLogger 관련 메트릭 함수들이 import 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_shadow_log_sync_failure,
+            update_shadow_log_unsynced_count,
+            record_shadow_log_recovered,
+            update_shadow_log_affected_services,
+            update_shadow_log_oldest_unsynced_age,
+        )
+        
+        assert callable(record_shadow_log_sync_failure)
+        assert callable(update_shadow_log_unsynced_count)
+        assert callable(record_shadow_log_recovered)
+        assert callable(update_shadow_log_affected_services)
+        assert callable(update_shadow_log_oldest_unsynced_age)
+    
+    def test_shadow_log_helper_functions_dont_raise(self):
+        """ShadowLogger helper 함수들이 예외 없이 호출 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_shadow_log_sync_failure,
+            update_shadow_log_unsynced_count,
+            record_shadow_log_recovered,
+            update_shadow_log_affected_services,
+            update_shadow_log_oldest_unsynced_age,
+        )
+        
+        record_shadow_log_sync_failure("redis", "sync")
+        update_shadow_log_unsynced_count(5)
+        record_shadow_log_recovered("test_service", 3)
+        update_shadow_log_affected_services(2)
+        update_shadow_log_oldest_unsynced_age(60.0)
+    
+    def test_shadow_logger_has_drift_metrics_flag(self):
+        """ShadowLogger 모듈이 HAS_DRIFT_METRICS 플래그를 가져야 함."""
+        from selfhealing.adapters.memory import shadow_logger
+        
+        assert hasattr(shadow_logger, 'HAS_DRIFT_METRICS')
+    
+    def test_shadow_logger_record_sync_failure(self):
+        """ShadowLogger record_sync_failure 동작 확인."""
+        from selfhealing.adapters.memory.shadow_logger import ShadowLogger
+        
+        # 싱글톤 인스턴스 가져오기
+        logger = ShadowLogger()
+        logger.clear()  # 이전 기록 정리
+        
+        # 실패 기록
+        logger.record_sync_failure(
+            service_name="test_service",
+            intended_state="active",
+            error=Exception("Test error"),
+            adapter_type="redis",
+            operation="sync",
+        )
+        
+        # 기록 확인
+        stats = logger.get_stats()
+        assert stats["total_records"] == 1
+        assert stats["unsynced_count"] == 1
+        assert "test_service" in stats["affected_services"]
+        
+        # 정리
+        logger.clear()
+    
+    def test_shadow_logger_mark_as_synced(self):
+        """ShadowLogger mark_as_synced 동작 확인."""
+        from selfhealing.adapters.memory.shadow_logger import ShadowLogger
+        
+        logger = ShadowLogger()
+        logger.clear()
+        
+        # 실패 기록
+        logger.record_sync_failure(
+            service_name="service_a",
+            intended_state="active",
+            error=Exception("Test"),
+            adapter_type="redis",
+        )
+        
+        # 동기화 완료 마킹
+        count = logger.mark_as_synced("service_a")
+        assert count == 1
+        
+        # 미동기화 레코드 수 확인
+        stats = logger.get_stats()
+        assert stats["unsynced_count"] == 0
+        
+        # 정리
+        logger.clear()
+
+
+# =============================================================================
+# Phase 4: TTLCache Drift Tests
+# =============================================================================
+
+
+class TestTTLCacheDrift:
+    """Test TTLCache drift metrics."""
+    
+    def test_ttl_cache_metrics_import(self):
+        """TTLCache 관련 메트릭 함수들이 import 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_cache_ttl_expired,
+            record_cache_ttl_evicted,
+            update_cache_entries_count,
+            record_cache_get,
+            record_cache_set,
+        )
+        
+        assert callable(record_cache_ttl_expired)
+        assert callable(record_cache_ttl_evicted)
+        assert callable(update_cache_entries_count)
+        assert callable(record_cache_get)
+        assert callable(record_cache_set)
+    
+    def test_ttl_cache_helper_functions_dont_raise(self):
+        """TTLCache helper 함수들이 예외 없이 호출 가능해야 함."""
+        from selfhealing.metrics.drift_metrics import (
+            record_cache_ttl_expired,
+            record_cache_ttl_evicted,
+            update_cache_entries_count,
+            record_cache_get,
+            record_cache_set,
+        )
+        
+        record_cache_ttl_expired("test_cache")
+        record_cache_ttl_evicted("test_cache")
+        update_cache_entries_count("test_cache", 100)
+        record_cache_get("test_cache", "hit")
+        record_cache_get("test_cache", "miss")
+        record_cache_get("test_cache", "expired")
+        record_cache_set("test_cache")
+    
+    def test_inmemory_cache_has_drift_metrics_flag(self):
+        """InMemoryCacheAdapter 모듈이 HAS_DRIFT_METRICS 플래그를 가져야 함."""
+        from selfhealing.adapters.cache import memory_adapter
+        
+        assert hasattr(memory_adapter, 'HAS_DRIFT_METRICS')
+    
+    def test_inmemory_cache_get_set_with_metrics(self):
+        """InMemoryCacheAdapter get/set이 메트릭과 함께 동작해야 함."""
+        from datetime import timedelta
+        from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+        
+        cache = InMemoryCacheAdapter(key_prefix="test:", cache_name="test_cache")
+        
+        # set
+        result = cache.set("key1", "value1", ttl=timedelta(minutes=5))
+        assert result is True
+        
+        # get (hit)
+        value = cache.get("key1")
+        assert value == "value1"
+        
+        # get (miss)
+        value = cache.get("nonexistent")
+        assert value is None
+        
+        # 정리
+        cache.clear_all()
+    
+    def test_inmemory_cache_ttl_expiration(self):
+        """InMemoryCacheAdapter TTL 만료 시 메트릭 기록."""
+        import time
+        from datetime import timedelta
+        from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+        
+        cache = InMemoryCacheAdapter(key_prefix="test:", cache_name="ttl_test")
+        
+        # 매우 짧은 TTL로 설정
+        cache.set("short_ttl", "value", ttl=timedelta(milliseconds=50))
+        
+        # TTL 만료 대기
+        time.sleep(0.1)
+        
+        # 만료된 키 조회 시 None 반환
+        value = cache.get("short_ttl")
+        assert value is None
+        
+        # 정리
+        cache.clear_all()
+    
+    def test_inmemory_cache_cache_name_parameter(self):
+        """InMemoryCacheAdapter cache_name 파라미터 동작."""
+        from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+        
+        cache = InMemoryCacheAdapter(key_prefix="custom:", cache_name="custom_cache")
+        
+        assert cache._cache_name == "custom_cache"
+        
+        # 정리
+        cache.clear_all()
