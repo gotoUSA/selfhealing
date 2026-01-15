@@ -15,6 +15,22 @@ from .enums import EmergencyLevel, EMERGENCY_LEVEL_RULES
 from .models import EmergencyState, RecoveryGateConfig
 from .recovery_gate import RecoveryGate
 
+# Drift Detection Metrics (Phase 2)
+try:
+    from selfhealing.metrics.drift_metrics import (
+        record_emergency_cache_stale,
+        record_emergency_cache_drift,
+        update_emergency_cache_age,
+        record_emergency_cache_load,
+    )
+    HAS_DRIFT_METRICS = True
+except ImportError:
+    HAS_DRIFT_METRICS = False
+    record_emergency_cache_stale = lambda: None
+    record_emergency_cache_drift = lambda: None
+    update_emergency_cache_age = lambda *args: None
+    record_emergency_cache_load = lambda *args: None
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +87,7 @@ class GracefulDegradationManager:
         self._register_event_handlers()
         
         # 백엔드에서 상태 로드 시도
-        self._load_state()
+        self._load_state(reason="startup")
     
     def _register_event_handlers(self):
         """이벤트 버스 핸들러 등록 (캐시 무효화용)."""
@@ -92,6 +108,8 @@ class GracefulDegradationManager:
         # 자신이 발행한 이벤트가 아닌 경우에만 캐시 무효화
         if event.source != "emergency_manager":
             self._invalidate_cache()
+            # v6.3.0: 다음 로드 시 reason 설정을 위해 플래그 설정 필요 없음
+            # _load_state에서 "invalidated" reason으로 로드됨
             logger.debug("[EmergencyMode] Cache invalidated by external event")
     
     def _invalidate_cache(self) -> None:
@@ -104,14 +122,66 @@ class GracefulDegradationManager:
         if self._last_load_time is None:
             return False
         elapsed = (datetime.now(timezone.utc) - self._last_load_time).total_seconds()
+        # v6.3.0: 캐시 age 메트릭 업데이트
+        update_emergency_cache_age(elapsed)
         return elapsed < self._cache_ttl_seconds
     
     def _ensure_fresh_state(self) -> None:
         """캐시 TTL 확인 후 필요시 StateBackend 재조회 (Check on Use 패턴)."""
         if not self._is_cache_valid():
+            # v6.3.0: Stale 메트릭 기록
+            if self._last_load_time is not None:
+                record_emergency_cache_stale()
             self._load_state()
     
-    def _load_state(self):
+    def _check_cache_drift(self) -> bool:
+        """
+        캐시와 백엔드 상태 비교 후 drift 감지.
+        
+        v6.3.0: Drift Detection Phase 2 구현
+        
+        Returns:
+            True if drift detected, False otherwise
+        """
+        try:
+            from selfhealing.core.state_backend import get_state_backend
+            backend = get_state_backend()
+            backend_data = backend.get("emergency_mode")
+            
+            if backend_data is None:
+                return False
+            
+            backend_state = EmergencyState.from_dict(backend_data)
+            
+            # 캐시된 상태와 백엔드 상태 비교
+            if self._state.level != backend_state.level:
+                record_emergency_cache_drift()
+                logger.warning(
+                    f"[EmergencyMode] Drift detected: "
+                    f"cached={self._state.level.name}, backend={backend_state.level.name}"
+                )
+                # 자동 동기화: 백엔드 상태로 업데이트
+                self._state = backend_state
+                self._last_load_time = datetime.now(timezone.utc)
+                return True
+            
+            if self._state.is_active != backend_state.is_active:
+                record_emergency_cache_drift()
+                logger.warning(
+                    f"[EmergencyMode] Drift detected: "
+                    f"cached.is_active={self._state.is_active}, "
+                    f"backend.is_active={backend_state.is_active}"
+                )
+                self._state = backend_state
+                self._last_load_time = datetime.now(timezone.utc)
+                return True
+                
+        except Exception as e:
+            logger.debug(f"[EmergencyMode] Drift check failed: {e}")
+        
+        return False
+    
+    def _load_state(self, reason: str = "expired"):
         """백엔드에서 상태 로드."""
         try:
             from selfhealing.core.state_backend import get_state_backend
@@ -125,6 +195,8 @@ class GracefulDegradationManager:
                 )
             # 로드 시간 기록 (TTL 캐시용)
             self._last_load_time = datetime.now(timezone.utc)
+            # v6.3.0: 로드 메트릭 기록
+            record_emergency_cache_load(reason)
         except Exception as e:
             logger.warning(f"[EmergencyMode] Could not load state: {e}")
     
@@ -144,6 +216,11 @@ class GracefulDegradationManager:
     def get_state(self) -> EmergencyState:
         """현재 상태 조회."""
         with self._state_lock:
+            # v6.3.0: 캐시 age 메트릭 업데이트
+            if self._last_load_time:
+                age = (datetime.now(timezone.utc) - self._last_load_time).total_seconds()
+                update_emergency_cache_age(age)
+            
             # TTL 확인 및 필요시 StateBackend 재조회 (Check on Use 패턴)
             self._ensure_fresh_state()
             # 만료 확인

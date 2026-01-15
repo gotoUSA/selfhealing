@@ -31,6 +31,14 @@ from django.http import JsonResponse
 from django.db import connections
 from django.conf import settings
 
+# Drift Detection Metrics (Phase 1)
+from selfhealing.metrics.drift_metrics import (
+    record_pool_cb_stale,
+    record_pool_cb_cache_age,
+    update_pool_cb_hit_rate,
+    record_pool_cb_background_restart,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -227,6 +235,7 @@ class PoolCircuitBreaker:
 
         v6.2.0: 매 요청에서 이 메서드를 호출하여 블로킹 방지.
         v6.2.1: Stale 캐시 감지 및 안전 폴백 처리 추가.
+        v6.2.2: Prometheus 메트릭 연동 (Drift Detection Phase 1)
 
         Stale 처리 정책:
         - 경고 (stale_threshold_multiplier 초과): 로그 경고, 캐시 데이터 사용
@@ -241,11 +250,22 @@ class PoolCircuitBreaker:
         if not self._background_thread or not self._background_thread.is_alive():
             logger.error("[PoolCircuitBreaker] Background thread died! Restarting...")
             self._stats["background_thread_restarts"] += 1
+            # v6.2.2: Prometheus 메트릭 기록
+            record_pool_cb_background_restart()
             self._start_background_refresh()
 
         # v6.2.1: 캐시 유효성 검사 (단계별 처리)
         cache_age_ms = (time.time() - status.get("_cache_time", 0)) * 1000
         stale_warning_threshold = self._cache_interval_ms * self._stale_threshold_multiplier
+
+        # v6.2.2: 캐시 age 히스토그램 기록
+        record_pool_cb_cache_age(cache_age_ms)
+
+        # v6.2.2: 캐시 히트율 업데이트
+        total_accesses = self._stats.get("cache_hits", 0) + self._stats.get("cache_misses", 0)
+        if total_accesses > 0:
+            hit_rate = self._stats.get("cache_hits", 0) / total_accesses
+            update_pool_cb_hit_rate(hit_rate)
 
         if cache_age_ms > self._critical_stale_ms:
             # 🔴 Critical Stale: 완전히 오래된 캐시 → 안전하게 CLOSED로 폴백
@@ -254,6 +274,8 @@ class PoolCircuitBreaker:
                 f"(threshold: {self._critical_stale_ms}ms). Falling back to SAFE mode (allow requests)."
             )
             self._stats["stale_cache_fallbacks"] += 1
+            # v6.2.2: Prometheus 메트릭 기록
+            record_pool_cb_stale("critical")
             # 안전 폴백: Pool 정상으로 가정 (요청 허용)
             return {
                 "available": True,
@@ -272,6 +294,8 @@ class PoolCircuitBreaker:
                 f"(warning threshold: {stale_warning_threshold:.0f}ms)"
             )
             self._stats["stale_cache_warnings"] += 1
+            # v6.2.2: Prometheus 메트릭 기록
+            record_pool_cb_stale("warning")
             status["_is_stale"] = True
             status["_cache_age_ms"] = cache_age_ms
 

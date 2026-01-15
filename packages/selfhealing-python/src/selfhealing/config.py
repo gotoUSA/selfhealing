@@ -7,13 +7,36 @@ the appropriate configuration source.
 
 For Django applications, configuration is loaded from Django settings.
 For other frameworks, uses environment variables or defaults.
+
+v6.3.0: Drift Detection Phase 3
+- ConfigDriftMonitor: 환경변수 변경 감지 및 캐시 무효화
+- lru_cache 함수들에 대한 메트릭 추적
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
+import threading
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Dict, Optional
+
+# Drift Detection Metrics (Phase 3)
+try:
+    from selfhealing.metrics.drift_metrics import (
+        record_config_env_changed,
+        record_config_cache_invalidated,
+        record_config_cache_hit,
+        record_config_cache_miss,
+    )
+    HAS_DRIFT_METRICS = True
+except ImportError:
+    HAS_DRIFT_METRICS = False
+    record_config_env_changed = lambda *args: None
+    record_config_cache_invalidated = lambda *args: None
+    record_config_cache_hit = lambda *args: None
+    record_config_cache_miss = lambda *args: None
 
 
 # =============================================================================
@@ -729,6 +752,169 @@ def get_l2_storage_runtime_config() -> L2StorageRuntimeConfig:
 # =============================================================================
 
 
+# =============================================================================
+# Config Drift Monitor (Phase 3)
+# =============================================================================
+
+
+class ConfigDriftMonitor:
+    """
+    환경변수 변경 감지 및 lru_cache 무효화.
+    
+    v6.3.0: Drift Detection Phase 3 구현
+    
+    환경변수가 변경되면 관련 lru_cache를 무효화하고
+    Prometheus 메트릭을 기록합니다.
+    
+    Usage:
+        monitor = get_config_drift_monitor()
+        
+        # 환경변수 변경 확인 후 필요시 캐시 무효화
+        if monitor.check_and_invalidate("circuit_breaker", "SELFHEALING_CB_"):
+            logger.info("Config changed, cache invalidated")
+        
+        # 설정 조회 (drift 체크 포함)
+        settings = get_circuit_breaker_settings_safe()
+    """
+    
+    _instance: Optional["ConfigDriftMonitor"] = None
+    _lock = threading.Lock()
+    
+    def __new__(cls) -> "ConfigDriftMonitor":
+        """Singleton pattern."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._init()
+                    cls._instance = instance
+        return cls._instance
+    
+    def _init(self) -> None:
+        """Initialize internal state."""
+        self._env_hashes: Dict[str, str] = {}
+        self._hash_lock = threading.Lock()
+        self._cache_functions: Dict[str, callable] = {}
+    
+    def register_cache_function(self, config_type: str, func: callable) -> None:
+        """
+        config_type에 해당하는 lru_cache 함수 등록.
+        
+        Args:
+            config_type: 설정 타입 (예: "notification_limits")
+            func: lru_cache 데코레이터가 적용된 함수
+        """
+        with self._hash_lock:
+            self._cache_functions[config_type] = func
+    
+    def _compute_env_hash(self, prefix: str) -> str:
+        """해당 prefix로 시작하는 환경변수들의 해시 계산."""
+        relevant_vars = {
+            k: v for k, v in os.environ.items() 
+            if k.startswith(prefix)
+        }
+        content = str(sorted(relevant_vars.items()))
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def check_and_invalidate(self, config_type: str, prefix: str) -> bool:
+        """
+        환경변수 변경 확인 후 필요시 캐시 무효화.
+        
+        Args:
+            config_type: 설정 타입
+            prefix: 환경변수 prefix (예: "SELFHEALING_CB_")
+            
+        Returns:
+            True if cache was invalidated, False otherwise
+        """
+        with self._hash_lock:
+            current_hash = self._compute_env_hash(prefix)
+            previous_hash = self._env_hashes.get(config_type)
+            
+            if previous_hash and current_hash != previous_hash:
+                # 환경변수 변경 감지
+                record_config_env_changed(config_type)
+                self._invalidate_cache(config_type)
+                self._env_hashes[config_type] = current_hash
+                return True
+            
+            self._env_hashes[config_type] = current_hash
+            return False
+    
+    def _invalidate_cache(self, config_type: str) -> None:
+        """해당 config 타입의 lru_cache 무효화."""
+        record_config_cache_invalidated(config_type)
+        
+        # 등록된 함수가 있으면 cache_clear 호출
+        func = self._cache_functions.get(config_type)
+        if func and hasattr(func, "cache_clear"):
+            func.cache_clear()
+    
+    def get_stats(self) -> Dict[str, str]:
+        """현재 저장된 해시값들 반환."""
+        with self._hash_lock:
+            return self._env_hashes.copy()
+
+
+# 싱글톤 인스턴스
+_config_drift_monitor: Optional[ConfigDriftMonitor] = None
+
+
+def get_config_drift_monitor() -> ConfigDriftMonitor:
+    """
+    Get the singleton ConfigDriftMonitor instance.
+    
+    Returns:
+        ConfigDriftMonitor singleton
+    """
+    return ConfigDriftMonitor()
+
+
+def get_notification_limits_safe() -> NotificationLimits:
+    """환경변수 변경 감지 후 설정 반환."""
+    monitor = get_config_drift_monitor()
+    monitor.check_and_invalidate("notification_limits", "SELFHEALING_")
+    return get_notification_limits()
+
+
+def get_forensic_settings_safe() -> ForensicSettings:
+    """환경변수 변경 감지 후 설정 반환."""
+    monitor = get_config_drift_monitor()
+    monitor.check_and_invalidate("forensic_settings", "SELFHEALING_")
+    return get_forensic_settings()
+
+
+def get_metric_collection_settings_safe() -> MetricCollectionSettings:
+    """환경변수 변경 감지 후 설정 반환."""
+    monitor = get_config_drift_monitor()
+    monitor.check_and_invalidate("metric_collection", "SELFHEALING_METRICS_")
+    return get_metric_collection_settings()
+
+
+def get_l2_storage_config_safe() -> L2StorageConfig:
+    """환경변수 변경 감지 후 설정 반환."""
+    monitor = get_config_drift_monitor()
+    monitor.check_and_invalidate("l2_storage", "SELFHEALING_L2_")
+    return get_l2_storage_config()
+
+
+# 캐시 함수 등록
+def _register_cache_functions() -> None:
+    """lru_cache 함수들을 ConfigDriftMonitor에 등록."""
+    monitor = get_config_drift_monitor()
+    monitor.register_cache_function("notification_limits", get_notification_limits)
+    monitor.register_cache_function("forensic_settings", get_forensic_settings)
+    monitor.register_cache_function("metric_collection", get_metric_collection_settings)
+    monitor.register_cache_function("l2_storage", get_l2_storage_config)
+
+
+# 모듈 로드 시 등록
+try:
+    _register_cache_functions()
+except Exception:
+    pass  # 초기화 실패해도 모듈 로드는 성공
+
+
 __all__ = [
     "NotificationLimits",
     "ForensicSettings",
@@ -736,10 +922,16 @@ __all__ = [
     "EventLoggingConfig",
     "L2StorageConfig",
     "L2StorageRuntimeConfig",
+    "ConfigDriftMonitor",
     "get_notification_limits",
     "get_forensic_settings",
     "get_metric_collection_settings",
     "get_event_logging_config",
     "get_l2_storage_config",
     "get_l2_storage_runtime_config",
+    "get_config_drift_monitor",
+    "get_notification_limits_safe",
+    "get_forensic_settings_safe",
+    "get_metric_collection_settings_safe",
+    "get_l2_storage_config_safe",
 ]
