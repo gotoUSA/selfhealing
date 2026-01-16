@@ -8,9 +8,11 @@ import pytest
 from unittest import mock
 
 
-@pytest.mark.django_db
 class TestAppConfigIntegration:
-    """Integration tests for AppConfig.ready() and post_migrate signal."""
+    """Integration tests for AppConfig.ready() and post_migrate signal.
+    
+    Note: These tests mock all DB-related calls, so no actual DB connection is needed.
+    """
 
     def test_ready_logs_env_snapshot(self):
         """ready()에서 환경변수 스냅샷이 기록된다."""
@@ -48,9 +50,13 @@ class TestAppConfigIntegration:
         from selfhealing.adapters.django.apps import create_selfhealing_groups
 
         with mock.patch("selfhealing.audit.env_snapshot.log_env_snapshot_to_audit") as mock_log:
-            # 시그널 핸들러 직접 호출
-            create_selfhealing_groups(sender=mock.Mock())
+            # Mock Django Group model to avoid DB connection
+            with mock.patch("django.contrib.auth.models.Group.objects.get_or_create") as mock_group:
+                mock_group.return_value = (mock.Mock(), True)
+                
+                # 시그널 핸들러 직접 호출
+                create_selfhealing_groups(sender=mock.Mock())
 
-            # 환경변수 스냅샷은 post_migrate에서 호출되지 않아야 함
-            # (ready()에서만 호출됨)
-            mock_log.assert_not_called()
+                # 환경변수 스냅샷은 post_migrate에서 호출되지 않아야 함
+                # (ready()에서만 호출됨)
+                mock_log.assert_not_called()
