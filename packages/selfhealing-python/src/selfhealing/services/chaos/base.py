@@ -1204,12 +1204,120 @@ class ChaosExperiment(abc.ABC):
             logger.warning(f"[Chaos] Throttle stats failed: {e}")
             return {}
     
+    # =========================================================================
+    # Phase 6: 추가 스냅샷 메서드 - Emergency, Tiering, RateLimit
+    # =========================================================================
+    
+    def _get_emergency_state_snapshot(self) -> Dict[str, Any]:
+        """
+        Emergency Mode 상태 스냅샷 캡처.
+        
+        비상 레벨, 활성화 여부, 자동 트리거 여부 등을 캡처.
+        카오스 실험 중 비상 모드 발동 시 is_chaos_experiment 메타데이터 확인 가능.
+        
+        Returns:
+            Dict with emergency mode state
+        """
+        try:
+            from selfhealing.services.emergency_mode import get_emergency_manager
+            
+            manager = get_emergency_manager()
+            state = manager.get_state()
+            return state.to_dict()
+        except ImportError:
+            logger.debug("[Chaos] EmergencyModeManager not available (import failed)")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Emergency state snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _get_tiering_cb_snapshot(self) -> Dict[str, Any]:
+        """
+        Tiering Circuit Breaker 상태 스냅샷 캡처.
+        
+        TieringCircuitBreaker OPEN 시 전체 Tiering 우회 상태 추적.
+        
+        Returns:
+            Dict with tiering circuit breaker state
+        """
+        try:
+            from selfhealing.api.django.tiering.circuit_breaker import (
+                get_tiering_circuit_breaker,
+            )
+            
+            cb = get_tiering_circuit_breaker()
+            return {
+                "state": cb._state,
+                "failure_count": cb._failure_count,
+                "slow_count": cb._slow_count,
+                "timestamp": now().isoformat(),
+            }
+        except ImportError:
+            logger.debug("[Chaos] TieringCircuitBreaker not available (import failed)")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Tiering CB snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _get_rate_limit_snapshot(self) -> Dict[str, Any]:
+        """
+        Rate Limit 상태 스냅샷 캡처.
+        
+        Redis 상태 (healthy/degraded), 로컬 fallback 상태 추적.
+        
+        Returns:
+            Dict with rate limit state
+        """
+        try:
+            from selfhealing.api.django.rate_limit import get_current_state
+            
+            return get_current_state()
+        except ImportError:
+            logger.debug("[Chaos] Rate limit module not available (import failed)")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Rate limit snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
+    
+    def _get_tiering_registry_snapshot(self) -> Dict[str, Any]:
+        """
+        Tiering Registry 상태 스냅샷 캡처.
+        
+        현재 등록된 티어, 매핑, 오버라이드 정보 추적.
+        동적 티어 변경 추적에 사용.
+        
+        Returns:
+            Dict with tiering registry state
+        """
+        try:
+            from selfhealing.api.django.tiering.registry import get_tier_registry
+            
+            registry = get_tier_registry()
+            tiers = registry.get_all_tiers()
+            mappings = registry.get_all_mappings()
+            overrides = registry.get_all_overrides()
+            
+            return {
+                "tier_count": len(tiers),
+                "mapping_count": len(mappings),
+                "override_count": len(overrides),
+                "tier_ids": [t.id for t in tiers],
+                "timestamp": now().isoformat(),
+            }
+        except ImportError:
+            logger.debug("[Chaos] TierRegistry not available (import failed)")
+            return {"available": False, "reason": "module_not_available"}
+        except Exception as e:
+            logger.warning(f"[Chaos] Tiering registry snapshot failed: {e}")
+            return {"available": False, "error": str(e)}
+    
     def capture_comprehensive_snapshot(self) -> Dict[str, Any]:
         """
         모든 관련 서비스의 종합 스냅샷 캡처.
         
         CB, Corruption Shield, DLQ, Throttle 상태를 모두 포함.
         Phase 5-4: Pool, Cert, Connection Health 스냅샷 추가.
+        Phase 6: Emergency, Tiering CB, Rate Limit, Tiering Registry 스냅샷 추가.
         
         Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4, Phase 5-4 (§13, §22.2.4)
         
@@ -1225,6 +1333,11 @@ class ChaosExperiment(abc.ABC):
             "pool": self._get_pool_state_snapshot(),
             "cert": self._get_cert_state_snapshot(),
             "connection_health": self._get_connection_health_snapshot(),
+            # Phase 6: Additional snapshots
+            "emergency": self._get_emergency_state_snapshot(),
+            "tiering_cb": self._get_tiering_cb_snapshot(),
+            "rate_limit": self._get_rate_limit_snapshot(),
+            "tiering_registry": self._get_tiering_registry_snapshot(),
             "timestamp": now().isoformat(),
         }
     
