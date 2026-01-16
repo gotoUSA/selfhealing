@@ -572,19 +572,26 @@ class TestCircuitBreakerSettings:
 - 싱글톤 패턴 검증
 - JSON Schema 생성 검증
 
-### Phase 2: 나머지 설정 (12개)
-- [ ] `SLASettings`
-- [ ] `SLOSettings`
-- [ ] `IdempotencySettings`
-- [ ] `ForensicSettings`
-- [ ] `LoggingSettings`
-- [ ] `MetricsSettings`
-- [ ] `NotificationSettings`
-- [ ] `ErrorBudgetSettings`
-- [ ] `GovernanceSettings`
-- [ ] `ChaosSettings`
-- [ ] `DriftThresholdSettings`
-- [ ] `L2StorageSettings`
+### Phase 2: 나머지 설정 (12개) ✅ (2026-01-16 완료)
+- [x] `SLASettings` 구현 - `settings/sla.py`
+- [x] `SLOSettings` 구현 - `settings/slo.py`
+- [x] `IdempotencySettings` 구현 - `settings/idempotency.py`
+- [x] `ForensicSettings` 구현 - `settings/forensic.py`
+- [x] `LoggingSettings` 구현 - `settings/logging_config.py`
+- [x] `MetricsSettings` 구현 - `settings/metrics.py`
+- [x] `NotificationSettings` 구현 - `settings/notification.py`
+- [x] `ErrorBudgetSettings` 구현 - `settings/error_budget.py`
+- [x] `GovernanceSettings` 구현 - `settings/governance.py`
+- [x] `ChaosSettings` 구현 - `settings/chaos.py`
+- [x] `DriftThresholdSettings` 구현 - `settings/drift_threshold.py`
+- [x] `L2StorageSettings` 구현 - `settings/l2_storage.py`
+
+**테스트 결과**: 100개 테스트 전체 통과 (Phase 1: 40개 + Phase 2: 60개)
+- 기본값 검증 (Legacy dataclass와 일치 확인)
+- 환경변수 오버라이드 검증
+- 범위 검증 (VALIDATION_RULES와 일치)
+- 싱글톤 패턴 검증
+- Legacy dataclass와 Pydantic Settings 일관성 검증
 
 ### Phase 3: DRF 통합
 - [ ] Serializer 자동 생성 헬퍼 구현
