@@ -440,12 +440,12 @@ class EmergencyEscalationPermission(BasePermission):
 │                                                             │
 │   오차율 (Discrepancy)         필요 권한                    │
 │   ─────────────────────────────────────────                 │
-│   0% ~ 5%                      Operator (자동 승인 가능)    │
-│   5% ~ 15%                     Operator (수동 확인 필요)    │
-│   15% ~ 30%                    Admin (승인 필요)            │
-│   30% 초과                     Admin 2인 승인 (4-Eyes)      │
+│   0% ~ 15%                     Operator 승인                │
+│   15% ~ 30%                    Admin 승인                   │
+│   30% ~ 50%                    Admin + 경고 로그            │
+│   50% 초과                     듀얼 승인 강제 (4-Eyes) ✅   │
 │                                                             │
-│   ⚠️ 핵심: 임계값은 설정 파일로 관리, 하드코딩 금지        │
+│   ⚠️ 핵심: 임계값은 설정 파일/환경변수로 관리              │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -455,11 +455,15 @@ class EmergencyEscalationPermission(BasePermission):
 ```python
 # 기본 임계값 (환경변수로 오버라이드 가능)
 THRESHOLD_SETTINGS = {
-    "auto_approve": 0.05,      # 5% 이하: 자동 승인
-    "operator_approve": 0.15,  # 15% 이하: Operator 승인
-    "admin_approve": 0.30,     # 30% 이하: Admin 승인
-    # 30% 초과: 4-Eyes 원칙 (별도 워크플로우)
+    "operator_approve": 0.15,      # 15% 이하: Operator 승인
+    "admin_approve": 0.30,         # 30% 이하: Admin 승인
+    "dual_approval": 0.50,         # 50% 초과: 듀얼 승인 강제
 }
+
+# 환경변수
+# SELFHEALING_THRESHOLD_OPERATOR=0.15
+# SELFHEALING_THRESHOLD_ADMIN=0.30
+# SELFHEALING_THRESHOLD_DUAL_APPROVAL=0.50
 ```
 
 ### 1.6.4 구현
@@ -472,62 +476,108 @@ class ThresholdBasedPermission(BasePermission):
     임계값 기반 동적 권한 (Risk-Based Access Control).
 
     오차율(discrepancy_rate)에 따라 필요 권한 레벨 결정:
-    - 5% 이하: Operator 자동 승인
-    - 15% 이하: Operator 수동 승인
+    - 15% 이하: Operator 승인
     - 30% 이하: Admin 승인
-    - 30% 초과: Admin 2인 승인 (4-Eyes)
+    - 30% ~ 50%: Admin + 경고 로그
+    - 50% 초과: 4-Eyes 듀얼 승인 필수 ✅
 
-    사용처:
-    - 정합성 조정 승인
-    - 대규모 변경 승인
-
-    Reference:
-    - 은행권 거래 승인 레벨
-    - GitHub PR 리뷰어 수 조정
+    임계값 우선순위:
+    1. RuntimeConfigManager (governance config)
+    2. 환경변수 (SELFHEALING_THRESHOLD_*)
+    3. 기본값 (0.15, 0.30, 0.50)
     """
 
     message = "해당 작업의 임계값이 권한 레벨을 초과합니다."
 
-    # 환경변수로 오버라이드 가능
-    THRESHOLDS = {
-        "auto_approve": float(os.environ.get("SELFHEALING_THRESHOLD_AUTO", "0.05")),
-        "operator_approve": float(os.environ.get("SELFHEALING_THRESHOLD_OPERATOR", "0.15")),
-        "admin_approve": float(os.environ.get("SELFHEALING_THRESHOLD_ADMIN", "0.30")),
-    }
+    DUAL_APPROVAL_REQUIRED_MSG = (
+        "고위험 작업입니다. 4-Eyes 듀얼 승인이 필요합니다. "
+        "approval_id를 제공하거나, 먼저 승인 요청을 생성해주세요."
+    )
+
+    def _get_thresholds(self) -> Dict[str, float]:
+        """임계값 조회 (RuntimeConfig > 환경변수 > 기본값)."""
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+            manager = get_runtime_config_manager()
+            governance = manager.get_governance_config()
+            if governance:
+                return {
+                    "operator_approve": governance.get("threshold_operator", 0.15),
+                    "admin_approve": governance.get("threshold_admin", 0.30),
+                    "dual_approval": governance.get("threshold_dual_approval", 0.50),
+                }
+        except Exception:
+            pass
+
+        return {
+            "operator_approve": float(os.environ.get("SELFHEALING_THRESHOLD_OPERATOR", "0.15")),
+            "admin_approve": float(os.environ.get("SELFHEALING_THRESHOLD_ADMIN", "0.30")),
+            "dual_approval": float(os.environ.get("SELFHEALING_THRESHOLD_DUAL_APPROVAL", "0.50")),
+        }
 
     def has_permission(self, request: Request, view: APIView) -> bool:
-        if not request.user or not request.user.is_authenticated:
-            return False
+        discrepancy = float(request.data.get("discrepancy_rate", 0))
+        thresholds = self.thresholds
 
-        discrepancy = request.data.get("discrepancy_rate", 0)
-
-        try:
-            discrepancy = float(discrepancy)
-        except (TypeError, ValueError):
-            discrepancy = 0
-
-        # 임계값별 권한 체크
-        if discrepancy <= self.THRESHOLDS["operator_approve"]:
+        if discrepancy <= thresholds["operator_approve"]:
             return IsOperator().has_permission(request, view)
 
-        if discrepancy <= self.THRESHOLDS["admin_approve"]:
+        if discrepancy <= thresholds["admin_approve"]:
             return IsSelfHealingAdmin().has_permission(request, view)
 
-        # 30% 초과: 4-Eyes 원칙 (현재는 Admin만 허용, 추후 듀얼 승인 구현)
-        return self._check_dual_approval(request, discrepancy)
+        # 30% ~ 50%: Admin + 경고 로그
+        if discrepancy <= thresholds["dual_approval"]:
+            return self._check_high_risk_approval(request, view, discrepancy, thresholds)
 
-    def _check_dual_approval(self, request: Request, discrepancy: float) -> bool:
+        # 50% 초과: 듀얼 승인 강제
+        return self._check_dual_approval_required(request, view, discrepancy, thresholds)
+
+    def _check_dual_approval_required(
+        self, request: Request, view: APIView, discrepancy: float, thresholds: Dict[str, float]
+    ) -> bool:
         """
-        4-Eyes 원칙: 고위험 작업은 2인 승인 필요.
-        현재는 Admin + 경고 로그, 추후 듀얼 승인 워크플로우 구현.
+        4-Eyes 듀얼 승인 강제.
+
+        approval_id가 제공되고 해당 요청이 APPROVED 상태인 경우에만 허용.
+        승인되지 않은 경우 403 Forbidden + 알림 발송.
         """
-        if IsSelfHealingAdmin().has_permission(request, Mock()):
-            logger.warning(
-                f"[RBAC] High-risk operation approved by single admin: "
-                f"discrepancy={discrepancy:.1%}, user={request.user}"
-            )
-            return True
+        if not IsSelfHealingAdmin().has_permission(request, view):
+            return False
+
+        approval_id = request.data.get("approval_id")
+        if not approval_id:
+            self.message = self.DUAL_APPROVAL_REQUIRED_MSG
+            self._notify_dual_approval_needed(request.user.username, discrepancy, request)
+            return False
+
+        # approval_id 검증
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        manager = get_runtime_config_manager()
+        for approval_request in manager.get_approval_requests():
+            if approval_request["id"] == approval_id:
+                if approval_request["status"] != "APPROVED":
+                    self.message = f"승인 요청이 아직 승인되지 않았습니다. 현재 상태: {approval_request['status']}"
+                    return False
+                logger.info(f"[RBAC] Dual approval verified: approval_id={approval_id}")
+                return True
+
+        self.message = f"승인 요청 '{approval_id}'을(를) 찾을 수 없습니다."
         return False
+
+    def _notify_dual_approval_needed(self, actor: str, discrepancy: float, request: Request) -> None:
+        """듀얼 승인 필요 시 Admin들에게 알림 발송 (SecurityNotificationService 사용)."""
+        try:
+            from selfhealing.services.security_notification_service import SecurityNotificationService
+            service = SecurityNotificationService()
+            if service.config.enabled:
+                service.notify_security_incident_by_id(
+                    incident_id=0,
+                    incident_type="dual_approval_required",
+                    severity="high",
+                    description=f"[4-Eyes Required] 고위험 작업에 듀얼 승인이 필요합니다.\n요청자: {actor}\n오차율: {discrepancy:.1%}",
+                )
+        except Exception as e:
+            logger.warning(f"[RBAC] Failed to send dual approval notification: {e}")
 ```
 
 ---
