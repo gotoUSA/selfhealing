@@ -363,7 +363,7 @@ class TestLogEmergencyModeAudit:
         ), patch(
             "selfhealing.audit.log_config_change",
         ), patch(
-            "selfhealing.services.audit.emergency_audit.logger"
+            "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
             
