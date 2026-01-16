@@ -16,7 +16,7 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from selfhealing.core.config import DriftThresholdConfig
+from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
 
 from .constants import DEFAULT_SLO_CONFIG
 

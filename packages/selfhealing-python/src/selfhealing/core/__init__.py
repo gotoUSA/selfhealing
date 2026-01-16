@@ -34,25 +34,25 @@ from selfhealing.core.backoff import (
     LegacyBackoffCalculator as BackoffCalculator,  # Config-based calculator
     calculate_backoff,
 )
-from selfhealing.core.config import (
-    SelfHealingConfig,
-    CircuitBreakerConfig,
-    DLQConfig,
-    RetryConfig,
-    SLAConfig,
-    SLAConfig as SLAThresholds,  # Legacy alias
-    IdempotencyConfig,
-    SecurityConfig,
-    SecurityConfig as SecurityThresholds,  # Legacy alias
-    ForensicConfig,
-    MetricsConfig,
-    NotificationConfig,
-    NotificationConfig as NotificationLimits,  # Legacy alias
+from selfhealing.settings import (
+    SelfHealingSettings as SelfHealingConfig,
+    CircuitBreakerSettings as CircuitBreakerConfig,
+    DLQSettings as DLQConfig,
+    RetrySettings as RetryConfig,
+    SLASettings as SLAConfig,
+    SLASettings as SLAThresholds,  # Legacy alias
+    IdempotencySettings as IdempotencyConfig,
+    SecuritySettings as SecurityConfig,
+    SecuritySettings as SecurityThresholds,  # Legacy alias
+    ForensicSettings as ForensicConfig,
+    MetricsSettings as MetricsConfig,
+    NotificationSettings as NotificationConfig,
+    NotificationSettings as NotificationLimits,  # Legacy alias
     get_config,
     set_config,
     configure,
     reload_config,
-    get_circuit_breaker_settings,
+    get_circuit_breaker_config as get_circuit_breaker_settings,
     get_dlq_settings,
     get_retry_settings,
     get_sla_thresholds,

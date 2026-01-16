@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 from .models import (
     NotificationConfig,

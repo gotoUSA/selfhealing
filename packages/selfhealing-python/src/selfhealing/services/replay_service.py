@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Callable
 
 from selfhealing.core.timezone import now
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 from selfhealing.services.governance_checks import (
     check_all_governance,
     GovernanceCheckResult,

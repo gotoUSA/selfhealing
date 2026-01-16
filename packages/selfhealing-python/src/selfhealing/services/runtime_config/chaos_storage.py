@@ -12,7 +12,7 @@ import logging
 from dataclasses import asdict, fields
 from typing import Any, Dict, Optional
 
-from selfhealing.core.config import L2StorageConfig
+from selfhealing.settings import L2StorageSettings as L2StorageConfig
 
 from .constants import STORAGE_KEYS
 

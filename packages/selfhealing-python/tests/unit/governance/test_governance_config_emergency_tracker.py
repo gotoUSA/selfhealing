@@ -61,12 +61,12 @@ class TestGovernanceConfig:
         assert config.default_mode == "STRICT"
 
     def test_dataclass_conversion(self):
-        """Test dataclass can be converted to dict."""
-        from dataclasses import asdict
+        """Test Pydantic model can be converted to dict using model_dump()."""
         from selfhealing.core.config import GovernanceConfig
 
         config = GovernanceConfig()
-        config_dict = asdict(config)
+        # Pydantic v2: model_dump() replaces dataclasses.asdict()
+        config_dict = config.model_dump()
 
         assert isinstance(config_dict, dict)
         assert "threshold_operator" in config_dict

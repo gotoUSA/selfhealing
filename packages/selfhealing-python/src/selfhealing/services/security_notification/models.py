@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 logger = logging.getLogger(__name__)
 

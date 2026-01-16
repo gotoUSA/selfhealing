@@ -8,14 +8,40 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import asdict, fields
+from dataclasses import is_dataclass, asdict as dataclass_asdict, fields
 from typing import Any, Dict, Optional
+
+from pydantic import BaseModel
 
 from selfhealing.core.state_backend import get_state_backend
 
 from .constants import STORAGE_KEYS, CONFIG_CLASSES, DEFAULT_SLO_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+def get_field_names(config_class: type) -> set:
+    """Get field names from config class, handling both Pydantic and dataclass."""
+    if hasattr(config_class, "model_fields"):
+        # Pydantic v2
+        return set(config_class.model_fields.keys())
+    elif is_dataclass(config_class):
+        # dataclass
+        return {f.name for f in fields(config_class)}
+    else:
+        raise TypeError(f"Cannot get fields from {config_class}")
+
+
+def to_dict(obj: Any) -> Dict[str, Any]:
+    """Convert config object to dict, handling both Pydantic and dataclass."""
+    if hasattr(obj, "model_dump"):
+        # Pydantic v2
+        return obj.model_dump()
+    elif is_dataclass(obj) and not isinstance(obj, type):
+        # dataclass instance
+        return dataclass_asdict(obj)
+    else:
+        raise TypeError(f"Cannot convert {type(obj)} to dict")
 
 
 class BaseConfigManager:
@@ -49,7 +75,7 @@ class BaseConfigManager:
                     # Use defaults
                     config_class = CONFIG_CLASSES[config_type]
                     if config_class is not None:
-                        self._cache[config_type] = asdict(config_class())
+                        self._cache[config_type] = to_dict(config_class())
                     else:
                         # SLO는 별도 기본값 사용
                         self._cache[config_type] = DEFAULT_SLO_CONFIG.copy()
@@ -71,7 +97,7 @@ class BaseConfigManager:
             
             # Get defaults
             if config_class is not None:
-                defaults = asdict(config_class())
+                defaults = to_dict(config_class())
             elif config_type == "slo":
                 defaults = DEFAULT_SLO_CONFIG.copy()
             else:
@@ -113,7 +139,7 @@ class BaseConfigManager:
             
             # Get valid field names from config class (if available)
             if config_class is not None:
-                valid_fields = {f.name for f in fields(config_class)}
+                valid_fields = get_field_names(config_class)
             else:
                 valid_fields = set(current.keys())
 
@@ -218,7 +244,7 @@ class BaseConfigManager:
         with self._lock:
             for config_type, config_class in CONFIG_CLASSES.items():
                 if config_class is not None:
-                    default_config = asdict(config_class())
+                    default_config = to_dict(config_class())
                 else:
                     # SLO는 별도 기본값 사용
                     default_config = DEFAULT_SLO_CONFIG.copy()

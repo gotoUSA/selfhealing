@@ -266,7 +266,7 @@ class ShadowBudgetCalculator:
         Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.2
         """
         try:
-            from selfhealing.core.config import get_config
+            from selfhealing.settings import get_config
             
             sla_config = get_config().sla
             domain_hours = sla_config.thresholds_by_domain.get(

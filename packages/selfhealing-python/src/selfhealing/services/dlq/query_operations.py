@@ -84,7 +84,7 @@ class QueryOperationsMixin:
         Returns:
             List of SLA-breached FailedOperationData entries
         """
-        from selfhealing.core.config import get_config
+        from selfhealing.settings import get_config
 
         current_time = now()
         sla_config = get_config().sla

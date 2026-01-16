@@ -21,6 +21,12 @@ from selfhealing.settings.circuit_breaker import (
     get_circuit_breaker_settings,
     reset_circuit_breaker_settings,
 )
+from selfhealing.settings.circuit_breaker_advanced import (
+    CircuitBreakerAdvancedSettings,
+    CircuitBreakerAdvancedConfig,  # Legacy alias
+    get_circuit_breaker_advanced_settings,
+    reset_circuit_breaker_advanced_settings,
+)
 from selfhealing.settings.dlq import (
     DLQSettings,
     get_dlq_settings,
@@ -103,36 +109,85 @@ from selfhealing.settings.l2_storage import (
     get_l2_storage_settings,
     reset_l2_storage_settings,
 )
+from selfhealing.settings.replay_automation import (
+    ReplayAutomationSettings,
+    ReplayAutomationConfig,  # Legacy alias
+    get_replay_automation_settings,
+    reset_replay_automation_settings,
+)
+
+# Root Settings (SelfHealingSettings)
+from selfhealing.settings.root import (
+    SelfHealingSettings,
+    SelfHealingConfig,  # Legacy alias
+    get_config,
+    set_config,
+    reset_config,
+    reload_config,
+    configure,
+    # Convenience getters
+    get_circuit_breaker_config,
+    get_dlq_config,
+    get_retry_config,
+    get_sla_thresholds,
+    get_security_thresholds,
+    get_forensic_config,
+    get_notification_config,
+    get_rate_limit_config,
+    # Legacy function aliases
+    get_dlq_settings,
+    get_retry_settings,
+    get_forensic_settings,
+    get_notification_settings,
+    get_rate_limit_settings,
+)
+
+# Re-export get_circuit_breaker_advanced_settings from circuit_breaker_advanced module
+from selfhealing.settings.circuit_breaker_advanced import (
+    get_circuit_breaker_advanced_settings,
+)
 
 # =============================================================================
 # Backward Compatibility Aliases
-# Phase 4: Legacy dataclass aliases for migration
+# Legacy dataclass aliases - keeping for external packages
 # =============================================================================
 
-# Legacy aliases (deprecated, use new names)
-CircuitBreakerConfig = CircuitBreakerSettings  # deprecated
-DLQConfig = DLQSettings  # deprecated
-RetryConfig = RetrySettings  # deprecated
-RateLimitConfig = RateLimitSettings  # deprecated
-SecurityConfig = SecuritySettings  # deprecated
-SLAConfig = SLASettings  # deprecated
-IdempotencyConfig = IdempotencySettings  # deprecated
-ForensicConfig = ForensicSettings  # deprecated
-LoggingConfig = LoggingSettings  # deprecated
-MetricsConfig = MetricsSettings  # deprecated
-NotificationConfig = NotificationSettings  # deprecated
-ErrorBudgetConfig = ErrorBudgetSettings  # deprecated
-GovernanceConfig = GovernanceSettings  # deprecated
-ChaosConfig = ChaosSettings  # deprecated
-DriftThresholdConfig = DriftThresholdSettings  # deprecated
-L2StorageConfig = L2StorageSettings  # deprecated
+CircuitBreakerConfig = CircuitBreakerSettings
+DLQConfig = DLQSettings
+RetryConfig = RetrySettings
+RateLimitConfig = RateLimitSettings
+SecurityConfig = SecuritySettings
+SLAConfig = SLASettings
+IdempotencyConfig = IdempotencySettings
+ForensicConfig = ForensicSettings
+LoggingConfig = LoggingSettings
+MetricsConfig = MetricsSettings
+NotificationConfig = NotificationSettings
+ErrorBudgetConfig = ErrorBudgetSettings
+GovernanceConfig = GovernanceSettings
+ChaosConfig = ChaosSettings
+DriftThresholdConfig = DriftThresholdSettings
+L2StorageConfig = L2StorageSettings
 
 __all__ = [
+    # Root Settings
+    "SelfHealingSettings",
+    "SelfHealingConfig",  # Legacy alias
+    "get_config",
+    "set_config",
+    "reset_config",
+    "reload_config",
+    "configure",
     # Phase 1: Core Settings (5)
     # Circuit Breaker
     "CircuitBreakerSettings",
     "get_circuit_breaker_settings",
     "reset_circuit_breaker_settings",
+    # Circuit Breaker Advanced
+    "CircuitBreakerAdvancedSettings",
+    "CircuitBreakerAdvancedConfig",  # Legacy alias
+    "get_circuit_breaker_advanced_settings",
+    "reset_circuit_breaker_advanced_settings",
     # DLQ
     "DLQSettings",
     "get_dlq_settings",
@@ -198,6 +253,11 @@ __all__ = [
     "L2StorageSettings",
     "get_l2_storage_settings",
     "reset_l2_storage_settings",
+    # Replay Automation
+    "ReplayAutomationSettings",
+    "ReplayAutomationConfig",  # Legacy alias
+    "get_replay_automation_settings",
+    "reset_replay_automation_settings",
     # Legacy aliases (deprecated)
     "CircuitBreakerConfig",
     "DLQConfig",

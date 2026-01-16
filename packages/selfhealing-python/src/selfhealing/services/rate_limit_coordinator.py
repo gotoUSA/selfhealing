@@ -33,7 +33,7 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
     RateLimitStorageInterface,
 )
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 logger = logging.getLogger(__name__)
 

@@ -4,25 +4,44 @@ Runtime Configuration Constants.
 Storage keys and config class mappings for all configuration types.
 """
 
-from selfhealing.core.config import (
-    CircuitBreakerConfig,
-    DLQConfig,
-    RetryConfig,
-    SLAConfig,
-    RateLimitConfig,
-    SecurityConfig,
-    IdempotencyConfig,
-    NotificationConfig,
-    ForensicConfig,
-    LoggingConfig,
-    MetricsConfig,
-    ErrorBudgetConfig,
-    GovernanceConfig,
-    DriftThresholdConfig,
-    L2StorageConfig,
-    ChaosConfig,
-    ReplayAutomationConfig,
+from selfhealing.settings import (
+    CircuitBreakerSettings,
+    DLQSettings,
+    RetrySettings,
+    SLASettings,
+    RateLimitSettings,
+    SecuritySettings,
+    IdempotencySettings,
+    NotificationSettings,
+    ForensicSettings,
+    LoggingSettings,
+    MetricsSettings,
+    ErrorBudgetSettings,
+    GovernanceSettings,
+    DriftThresholdSettings,
+    L2StorageSettings,
+    ChaosSettings,
+    ReplayAutomationSettings,
 )
+
+# Legacy aliases for backward compatibility
+CircuitBreakerConfig = CircuitBreakerSettings
+DLQConfig = DLQSettings
+RetryConfig = RetrySettings
+SLAConfig = SLASettings
+RateLimitConfig = RateLimitSettings
+SecurityConfig = SecuritySettings
+IdempotencyConfig = IdempotencySettings
+NotificationConfig = NotificationSettings
+ForensicConfig = ForensicSettings
+LoggingConfig = LoggingSettings
+MetricsConfig = MetricsSettings
+ErrorBudgetConfig = ErrorBudgetSettings
+GovernanceConfig = GovernanceSettings
+DriftThresholdConfig = DriftThresholdSettings
+L2StorageConfig = L2StorageSettings
+ChaosConfig = ChaosSettings
+ReplayAutomationConfig = ReplayAutomationSettings
 
 # Storage keys for each config type
 STORAGE_KEYS = {

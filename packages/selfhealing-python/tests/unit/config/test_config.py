@@ -20,6 +20,7 @@ class TestSelfHealingConfig:
         assert config.retry.backoff_strategy == "exponential"
 
     def test_from_dict(self):
+        """Test creating config from dict using model_validate (Pydantic v2)."""
         from selfhealing.core.config import SelfHealingConfig
 
         config_dict = {
@@ -33,17 +34,20 @@ class TestSelfHealingConfig:
             "auto_replay_enabled": False,
         }
 
-        config = SelfHealingConfig.from_dict(config_dict)
+        # Pydantic v2: model_validate() replaces from_dict
+        config = SelfHealingConfig.model_validate(config_dict)
 
         assert config.circuit_breaker.failure_threshold == 10
         assert config.dlq.max_retries == 5
         assert config.auto_replay_enabled is False
 
     def test_to_dict(self):
+        """Test converting config to dict using model_dump (Pydantic v2)."""
         from selfhealing.core.config import SelfHealingConfig
 
         config = SelfHealingConfig()
-        config_dict = config.to_dict()
+        # Pydantic v2: model_dump() replaces to_dict
+        config_dict = config.model_dump()
 
         assert "circuit_breaker" in config_dict
         assert "dlq" in config_dict

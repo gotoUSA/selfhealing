@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 
 # =============================================================================

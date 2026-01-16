@@ -21,7 +21,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
 
 from selfhealing.core.timezone import now
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 from .backoff_calculator import BackoffCalculator, BackoffConfig
 

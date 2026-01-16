@@ -19,7 +19,7 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 if TYPE_CHECKING:
     pass

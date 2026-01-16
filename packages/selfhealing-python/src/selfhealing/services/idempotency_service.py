@@ -27,7 +27,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Optional, Callable
 
 from selfhealing.core.timezone import now
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 from selfhealing.core.time_provider import TimeProvider, get_time_provider
 
 if TYPE_CHECKING:
@@ -504,7 +504,7 @@ class IdempotencyService:
             time_provider: TimeProvider for testable time operations
             clock_skew_tolerance_seconds: Clock skew tolerance for distributed checks
         """
-        from selfhealing.core.config import get_config
+        from selfhealing.settings import get_config
         from selfhealing.core.time_provider import TimeProvider, get_time_provider
 
         config = get_config()

@@ -26,7 +26,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
 from selfhealing.core.timezone import now
-from selfhealing.core.config import get_config
+from selfhealing.settings import get_config
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
