@@ -83,6 +83,60 @@ def reset_watchdog_singleton():
 
 
 # =============================================================================
+# Audit Module Reload Fixture (테스트 격리용)
+# =============================================================================
+
+@pytest.fixture(autouse=True, scope="function")
+def reset_audit_modules():
+    """
+    각 테스트 전후에 audit 관련 모듈을 sys.modules에서 제거하여 
+    mock이 올바르게 적용되도록 함.
+    
+    이 fixture는 테스트 간 모듈 캐싱으로 인해 mock이 적용되지 않는 문제를 해결합니다.
+    
+    문제 원인:
+    - Python에서 `from X import Y`로 import된 객체는 로컬 바인딩됨
+    - 모듈이 이미 import된 상태에서 patch하면 원본 참조에 영향 없음
+    - 테스트 간 모듈 캐싱으로 이전 테스트의 import 상태가 유지됨
+    
+    해결:
+    - 테스트 전/후에 audit 관련 모듈을 sys.modules에서 제거
+    - 각 테스트에서 fresh import + patch 적용 가능
+    """
+    import sys
+    
+    # 제거할 모듈 목록 (의존성 역순으로 정렬)
+    modules_to_clear = [
+        "selfhealing.services.audit_helpers",
+        "selfhealing.services.audit",
+        "selfhealing.services.audit.retry_audit",
+        "selfhealing.services.audit.chaos_audit",
+        "selfhealing.services.audit.dlq_audit",
+        "selfhealing.services.audit.compliance_audit",
+        "selfhealing.services.audit.storage_audit",
+        "selfhealing.services.audit.cb_audit",
+        "selfhealing.services.audit.base",
+    ]
+    
+    def clear_modules():
+        for mod_name in modules_to_clear:
+            if mod_name in sys.modules:
+                try:
+                    del sys.modules[mod_name]
+                except KeyError:
+                    pass
+    
+    # Setup: 테스트 전에 모듈 캐시 정리
+    clear_modules()
+    
+    # 테스트 실행
+    yield
+    
+    # Teardown: 테스트 후에도 정리 (다음 테스트를 위해)
+    clear_modules()
+
+
+# =============================================================================
 # DB 연결 필요 테스트 자동 Skip 설정
 # =============================================================================
 
