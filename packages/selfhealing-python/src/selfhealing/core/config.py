@@ -1,13 +1,41 @@
 """
 Configuration management for the self-healing system.
 
+DEPRECATED: This module is deprecated. Use selfhealing.settings instead.
+
+This module is kept for backward compatibility and will be removed in v2.0.
+All new code should use the Pydantic-based settings from selfhealing.settings.
+
+Migration Guide:
+    # Before (deprecated):
+    from selfhealing.core.config import CircuitBreakerConfig
+    config = CircuitBreakerConfig(failure_threshold=10)
+    
+    # After (recommended):
+    from selfhealing.settings import CircuitBreakerSettings
+    settings = CircuitBreakerSettings(failure_threshold=10)
+    # Or use the singleton:
+    from selfhealing.settings import get_circuit_breaker_settings
+    settings = get_circuit_breaker_settings()
+
 This module provides a framework-agnostic configuration system
 that can be populated from various sources (Django settings, env vars, etc.)
+
+Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
+import warnings
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Dict, Any, Optional, List
+
+# Emit deprecation warning on module import
+warnings.warn(
+    "selfhealing.core.config is deprecated and will be removed in v2.0. "
+    "Use selfhealing.settings instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 @dataclass
@@ -924,3 +952,47 @@ def get_notification_settings() -> NotificationConfig:
 def get_rate_limit_settings() -> RateLimitConfig:
     """Get rate limit configuration."""
     return get_config().rate_limit
+
+
+# =============================================================================
+# Backward Compatibility Aliases for Pydantic Settings
+# Phase 4: These aliases provide migration path to new Pydantic settings
+# =============================================================================
+
+def _create_pydantic_alias(legacy_name: str, pydantic_class_name: str):
+    """
+    Create a lazy import alias that warns about deprecation.
+    
+    This allows existing code to continue working while encouraging
+    migration to the new Pydantic-based settings.
+    """
+    def get_pydantic_class():
+        warnings.warn(
+            f"{legacy_name} is deprecated. Use selfhealing.settings.{pydantic_class_name} instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        from selfhealing import settings
+        return getattr(settings, pydantic_class_name)
+    return get_pydantic_class
+
+
+# Export mapping for IDE support and documentation
+__pydantic_aliases__ = {
+    "CircuitBreakerConfig": "CircuitBreakerSettings",
+    "DLQConfig": "DLQSettings",
+    "RetryConfig": "RetrySettings",
+    "RateLimitConfig": "RateLimitSettings",
+    "SecurityConfig": "SecuritySettings",
+    "SLAConfig": "SLASettings",
+    "IdempotencyConfig": "IdempotencySettings",
+    "ForensicConfig": "ForensicSettings",
+    "LoggingConfig": "LoggingSettings",
+    "MetricsConfig": "MetricsSettings",
+    "NotificationConfig": "NotificationSettings",
+    "ErrorBudgetConfig": "ErrorBudgetSettings",
+    "GovernanceConfig": "GovernanceSettings",
+    "ChaosConfig": "ChaosSettings",
+    "DriftThresholdConfig": "DriftThresholdSettings",
+    "L2StorageConfig": "L2StorageSettings",
+}

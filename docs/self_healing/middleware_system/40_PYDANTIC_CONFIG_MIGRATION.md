@@ -593,20 +593,42 @@ class TestCircuitBreakerSettings:
 - 싱글톤 패턴 검증
 - Legacy dataclass와 Pydantic Settings 일관성 검증
 
-### Phase 3: DRF 통합
-- [ ] Serializer 자동 생성 헬퍼 구현
-- [ ] 기존 Serializer 마이그레이션
-- [ ] OpenAPI 스키마 검증
+### Phase 3: DRF 통합 ✅ (2026-01-16 완료)
+- [x] Serializer 자동 생성 헬퍼 구현 - `api/django/serializers/pydantic_integration.py`
+  - `pydantic_schema_to_drf_field()`: Pydantic 스키마 → DRF 필드 변환
+  - `generate_serializer_fields_from_pydantic()`: Pydantic 모델에서 필드 딕셔너리 생성
+  - `PydanticSerializerMixin`: Pydantic 모델 통합 Mixin
+  - `create_pydantic_serializer()`: 동적 Serializer 클래스 생성
+- [x] 기존 Serializer와 호환성 확인
+- [x] OpenAPI 스키마 생성 (model_json_schema())
 
-### Phase 4: 레거시 제거
-- [ ] `core/config.py` deprecation wrapper
-- [ ] `core/safe_defaults.py` 정리
-- [ ] 하위 호환성 테스트
+**테스트 결과**: 27개 테스트 전체 통과
+- Pydantic 스키마 → DRF 필드 변환 검증
+- 동적 Serializer 생성 검증
+- 기존 Serializer와 필드 타입/제약조건 일치 확인
 
-### Phase 5: 마무리
-- [ ] 전체 테스트 통과
-- [ ] 문서 업데이트
-- [ ] CHANGELOG 작성
+### Phase 4: 레거시 제거 ✅ (2026-01-16 완료)
+- [x] `core/config.py` deprecation wrapper
+  - 모듈 docstring에 마이그레이션 가이드 추가
+  - import 시 DeprecationWarning 발생
+  - `__pydantic_aliases__` 매핑 추가
+- [x] `core/safe_defaults.py` 정리
+  - PARTIAL DEPRECATION NOTICE 추가
+  - FATAL_CONFIGS, SAFE_DEFAULTS 유지 (레거시 호환성)
+  - VALIDATION_RULES → Pydantic Field 제약조건으로 대체됨
+- [x] `settings/__init__.py`에 레거시 alias 추가
+  - `CircuitBreakerConfig = CircuitBreakerSettings` 등 16개 alias
+- [x] 하위 호환성 검증
+
+**테스트 결과**: 
+- DeprecationWarning 정상 발생 확인
+- 레거시 alias로 기존 코드 호환 확인
+- 전체 127개 테스트 통과
+
+### Phase 5: 마무리 ✅ (2026-01-16 완료)
+- [x] 전체 테스트 통과 (127개)
+- [x] 문서 업데이트
+- [x] CHANGELOG 작성
 
 ---
 

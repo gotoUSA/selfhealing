@@ -104,6 +104,29 @@ from selfhealing.settings.l2_storage import (
     reset_l2_storage_settings,
 )
 
+# =============================================================================
+# Backward Compatibility Aliases
+# Phase 4: Legacy dataclass aliases for migration
+# =============================================================================
+
+# Legacy aliases (deprecated, use new names)
+CircuitBreakerConfig = CircuitBreakerSettings  # deprecated
+DLQConfig = DLQSettings  # deprecated
+RetryConfig = RetrySettings  # deprecated
+RateLimitConfig = RateLimitSettings  # deprecated
+SecurityConfig = SecuritySettings  # deprecated
+SLAConfig = SLASettings  # deprecated
+IdempotencyConfig = IdempotencySettings  # deprecated
+ForensicConfig = ForensicSettings  # deprecated
+LoggingConfig = LoggingSettings  # deprecated
+MetricsConfig = MetricsSettings  # deprecated
+NotificationConfig = NotificationSettings  # deprecated
+ErrorBudgetConfig = ErrorBudgetSettings  # deprecated
+GovernanceConfig = GovernanceSettings  # deprecated
+ChaosConfig = ChaosSettings  # deprecated
+DriftThresholdConfig = DriftThresholdSettings  # deprecated
+L2StorageConfig = L2StorageSettings  # deprecated
+
 __all__ = [
     # Phase 1: Core Settings (5)
     # Circuit Breaker
@@ -175,4 +198,21 @@ __all__ = [
     "L2StorageSettings",
     "get_l2_storage_settings",
     "reset_l2_storage_settings",
+    # Legacy aliases (deprecated)
+    "CircuitBreakerConfig",
+    "DLQConfig",
+    "RetryConfig",
+    "RateLimitConfig",
+    "SecurityConfig",
+    "SLAConfig",
+    "IdempotencyConfig",
+    "ForensicConfig",
+    "LoggingConfig",
+    "MetricsConfig",
+    "NotificationConfig",
+    "ErrorBudgetConfig",
+    "GovernanceConfig",
+    "ChaosConfig",
+    "DriftThresholdConfig",
+    "L2StorageConfig",
 ]
