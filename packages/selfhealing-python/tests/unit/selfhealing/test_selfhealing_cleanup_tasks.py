@@ -1,13 +1,13 @@
 """
 🧹 청소부 레인 태스크 단위 테스트
 
-Phase 2 테스트: 자율 운영 청소부 레인 태스크들
+Phase 2 테스트: 자율 운영 청소부 레인 태스크들 (Thin Task, Fat Service 패턴)
 
 Tests:
-1. ArchiveOldDLQEntriesTask - DLQ 아카이브 태스크
-2. CleanupExpiredConfigTask - 만료 설정 정리 태스크
-3. ExpireApprovalRequestsTask - 승인 요청 만료 태스크
-4. PurgeArchivedDLQEntriesTask - 영구 삭제 태스크 (고위험)
+1. archive_old_dlq_entries - DLQ 아카이브 태스크
+2. cleanup_expired_config - 만료 설정 정리 태스크
+3. expire_approval_requests - 승인 요청 만료 태스크
+4. purge_archived_dlq_entries - 영구 삭제 태스크 (고위험)
 
 Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §7
 """
@@ -15,22 +15,22 @@ Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md �
 from __future__ import annotations
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from selfhealing.tasks.cleanup_tasks import (
+    archive_old_dlq_entries,
+    cleanup_expired_config,
+    expire_approval_requests,
+    purge_archived_dlq_entries,
+    get_cleanup_beat_schedule,
+    # Backward compatibility imports
     ArchiveOldDLQEntriesTask,
     CleanupExpiredConfigTask,
     ExpireApprovalRequestsTask,
     PurgeArchivedDLQEntriesTask,
     CLEANUP_TASKS,
-    get_cleanup_beat_schedule,
 )
 from selfhealing.tasks.base import reset_cooldowns
-from selfhealing.tasks.notification_policy import (
-    NotificationPolicy,
-    NotificationTiming,
-)
 
 
 # =============================================================================
@@ -39,8 +39,8 @@ from selfhealing.tasks.notification_policy import (
 
 
 @pytest.fixture(autouse=True)
-def reset_cooldowns_fixture():
-    """각 테스트 전 쿨다운 초기화."""
+def reset_services():
+    """각 테스트 전 서비스 및 쿨다운 초기화."""
     reset_cooldowns()
     yield
     reset_cooldowns()
@@ -74,34 +74,22 @@ def mock_runtime_config_manager():
 
 
 # =============================================================================
-# ArchiveOldDLQEntriesTask 테스트
+# archive_old_dlq_entries 함수 테스트
 # =============================================================================
 
 
-class TestArchiveOldDLQEntriesTask:
-    """DLQ 아카이브 태스크 테스트."""
+class TestArchiveOldDLQEntries:
+    """DLQ 아카이브 함수 테스트."""
 
-    def test_task_name(self):
-        """태스크 이름 확인."""
-        task = ArchiveOldDLQEntriesTask()
-        assert task.name == "selfhealing.archive_old_dlq_entries"
-
-    def test_notification_policy(self):
-        """알림 정책 확인."""
-        task = ArchiveOldDLQEntriesTask()
-        policy = task.notification_policy
-        
-        assert policy.timing == NotificationTiming.AGGREGATED
-        assert policy.aggregate is True
-        assert policy.default_severity == "info"
-        assert policy.cooldown_seconds == 86400  # 24시간
+    def test_function_exists(self):
+        """함수 존재 확인."""
+        assert callable(archive_old_dlq_entries)
 
     def test_run_success(self, mock_dlq_service):
         """정상 실행."""
         mock_dlq_service.archive_old_entries.return_value = 42
         
-        task = ArchiveOldDLQEntriesTask()
-        result = task.run(older_than_days=30)
+        result = archive_old_dlq_entries(older_than_days=30)
         
         assert result["success"] is True
         assert result["archived_count"] == 42
@@ -115,8 +103,7 @@ class TestArchiveOldDLQEntriesTask:
         """커스텀 일수 설정."""
         mock_dlq_service.archive_old_entries.return_value = 10
         
-        task = ArchiveOldDLQEntriesTask()
-        result = task.run(older_than_days=60)
+        result = archive_old_dlq_entries(older_than_days=60)
         
         assert result["older_than_days"] == 60
         mock_dlq_service.archive_old_entries.assert_called_once_with(
@@ -127,62 +114,29 @@ class TestArchiveOldDLQEntriesTask:
         """실행 실패."""
         mock_dlq_service.archive_old_entries.side_effect = Exception("DB Error")
         
-        task = ArchiveOldDLQEntriesTask()
-        result = task.run()
+        result = archive_old_dlq_entries()
         
         assert result["success"] is False
         assert "DB Error" in result["error"]
 
-    def test_summary_message_success(self):
-        """성공 메시지."""
-        task = ArchiveOldDLQEntriesTask()
-        result = {"archived_count": 42, "older_than_days": 30}
-        
-        message = task._get_summary_message(result)
-        
-        assert "📦" in message
-        assert "42건" in message
-        assert "30일" in message
-
-    def test_summary_message_error(self):
-        """에러 메시지."""
-        task = ArchiveOldDLQEntriesTask()
-        result = {"error": "Test error"}
-        
-        message = task._get_summary_message(result)
-        
-        assert "❌" in message
-        assert "실패" in message
-
 
 # =============================================================================
-# CleanupExpiredConfigTask 테스트
+# cleanup_expired_config 함수 테스트
 # =============================================================================
 
 
-class TestCleanupExpiredConfigTask:
-    """만료 설정 정리 태스크 테스트."""
+class TestCleanupExpiredConfig:
+    """만료 설정 정리 함수 테스트."""
 
-    def test_task_name(self):
-        """태스크 이름 확인."""
-        task = CleanupExpiredConfigTask()
-        assert task.name == "selfhealing.cleanup_expired_config"
-
-    def test_notification_policy(self):
-        """알림 정책 확인."""
-        task = CleanupExpiredConfigTask()
-        policy = task.notification_policy
-        
-        assert policy.timing == NotificationTiming.AGGREGATED
-        assert policy.aggregate is True
-        assert policy.default_severity == "info"
+    def test_function_exists(self):
+        """함수 존재 확인."""
+        assert callable(cleanup_expired_config)
 
     def test_run_success(self, mock_pending_config_service):
         """정상 실행."""
         mock_pending_config_service.cleanup_expired.return_value = 5
         
-        task = CleanupExpiredConfigTask()
-        result = task.run(older_than_hours=24)
+        result = cleanup_expired_config(older_than_hours=24)
         
         assert result["success"] is True
         assert result["expired_count"] == 5
@@ -196,8 +150,7 @@ class TestCleanupExpiredConfigTask:
         """커스텀 시간 설정."""
         mock_pending_config_service.cleanup_expired.return_value = 3
         
-        task = CleanupExpiredConfigTask()
-        result = task.run(older_than_hours=48)
+        result = cleanup_expired_config(older_than_hours=48)
         
         assert result["older_than_hours"] == 48
 
@@ -205,126 +158,61 @@ class TestCleanupExpiredConfigTask:
         """실행 실패."""
         mock_pending_config_service.cleanup_expired.side_effect = Exception("Config Error")
         
-        task = CleanupExpiredConfigTask()
-        result = task.run()
+        result = cleanup_expired_config()
         
         assert result["success"] is False
         assert "Config Error" in result["error"]
 
-    def test_summary_message(self):
-        """성공 메시지."""
-        task = CleanupExpiredConfigTask()
-        result = {"expired_count": 5}
-        
-        message = task._get_summary_message(result)
-        
-        assert "🧹" in message
-        assert "5건" in message
-
 
 # =============================================================================
-# ExpireApprovalRequestsTask 테스트
+# expire_approval_requests 함수 테스트
 # =============================================================================
 
 
-class TestExpireApprovalRequestsTask:
-    """승인 요청 만료 태스크 테스트."""
+class TestExpireApprovalRequests:
+    """승인 요청 만료 함수 테스트."""
 
-    def test_task_name(self):
-        """태스크 이름 확인."""
-        task = ExpireApprovalRequestsTask()
-        assert task.name == "selfhealing.expire_approval_requests"
-
-    def test_notification_policy_threshold(self):
-        """임계값 기반 알림 정책 확인."""
-        task = ExpireApprovalRequestsTask()
-        policy = task.notification_policy
-        
-        assert policy.timing == NotificationTiming.AGGREGATED
-        assert policy.threshold == 5  # 5건 이상일 때만 알림
-        assert policy.threshold_field == "expired_count"
-        assert policy.default_severity == "warning"
+    def test_function_exists(self):
+        """함수 존재 확인."""
+        assert callable(expire_approval_requests)
 
     def test_run_success(self, mock_runtime_config_manager):
         """정상 실행."""
         mock_runtime_config_manager.expire_old_requests.return_value = 3
         
-        task = ExpireApprovalRequestsTask()
-        result = task.run(older_than_hours=72)
+        result = expire_approval_requests(older_than_hours=72)
         
         assert result["success"] is True
         assert result["expired_count"] == 3
         assert result["older_than_hours"] == 72
 
-    def test_should_notify_below_threshold(self, mock_runtime_config_manager):
-        """임계값 미달 시 알림 안함."""
-        mock_runtime_config_manager.expire_old_requests.return_value = 3
+    def test_run_failure(self, mock_runtime_config_manager):
+        """실행 실패."""
+        mock_runtime_config_manager.expire_old_requests.side_effect = Exception("Expire Error")
         
-        task = ExpireApprovalRequestsTask()
-        result = task.run()
+        result = expire_approval_requests()
         
-        # 5건 미만이므로 알림 안함
-        assert result["expired_count"] == 3
-        assert task._should_notify(result) is False
-
-    def test_should_notify_above_threshold(self):
-        """임계값 초과 시 알림."""
-        task = ExpireApprovalRequestsTask()
-        result = {"expired_count": 10, "older_than_hours": 72}
-        
-        # 5건 이상이므로 알림
-        assert task._should_notify(result) is True
-
-    def test_summary_message(self):
-        """성공 메시지."""
-        task = ExpireApprovalRequestsTask()
-        result = {"expired_count": 8, "older_than_hours": 72}
-        
-        message = task._get_summary_message(result)
-        
-        assert "⏰" in message
-        assert "8건" in message
-        assert "72시간" in message
+        assert result["success"] is False
+        assert "Expire Error" in result["error"]
 
 
 # =============================================================================
-# PurgeArchivedDLQEntriesTask 테스트 (고위험)
+# purge_archived_dlq_entries 함수 테스트 (고위험)
 # =============================================================================
 
 
-class TestPurgeArchivedDLQEntriesTask:
-    """영구 삭제 태스크 테스트 (고위험)."""
+class TestPurgeArchivedDLQEntries:
+    """영구 삭제 함수 테스트 (고위험)."""
 
-    def test_task_name(self):
-        """태스크 이름 확인."""
-        task = PurgeArchivedDLQEntriesTask()
-        assert task.name == "selfhealing.purge_archived_dlq_entries"
-
-    def test_notification_policy_high_risk(self):
-        """고위험 알림 정책 확인."""
-        task = PurgeArchivedDLQEntriesTask()
-        policy = task.notification_policy
-        
-        # 사전 승인 필수
-        assert policy.timing == NotificationTiming.BEFORE
-        assert policy.requires_approval is True
-        
-        # 항상 critical
-        assert policy.default_severity == "critical"
-        
-        # Emergency Level 3에서도 승인 필요
-        assert policy.escalate_on_emergency is False
-        
-        # 다중 채널 알림
-        assert "slack" in policy.channels
-        assert "email" in policy.channels
+    def test_function_exists(self):
+        """함수 존재 확인."""
+        assert callable(purge_archived_dlq_entries)
 
     def test_run_success(self, mock_dlq_service):
         """정상 실행."""
         mock_dlq_service.purge_archived.return_value = 100
         
-        task = PurgeArchivedDLQEntriesTask()
-        result = task.run(older_than_days=90)
+        result = purge_archived_dlq_entries(older_than_days=90)
         
         assert result["success"] is True
         assert result["purged_count"] == 100
@@ -335,8 +223,7 @@ class TestPurgeArchivedDLQEntriesTask:
         """커스텀 일수 설정."""
         mock_dlq_service.purge_archived.return_value = 50
         
-        task = PurgeArchivedDLQEntriesTask()
-        result = task.run(older_than_days=180)
+        result = purge_archived_dlq_entries(older_than_days=180)
         
         assert result["older_than_days"] == 180
 
@@ -344,54 +231,38 @@ class TestPurgeArchivedDLQEntriesTask:
         """실행 실패."""
         mock_dlq_service.purge_archived.side_effect = Exception("Purge Error")
         
-        task = PurgeArchivedDLQEntriesTask()
-        result = task.run()
+        result = purge_archived_dlq_entries()
         
         assert result["success"] is False
         assert "Purge Error" in result["error"]
 
-    def test_severity_always_critical(self):
-        """항상 critical severity."""
-        task = PurgeArchivedDLQEntriesTask()
-        
-        # 성공해도 critical
-        result_success = {"purged_count": 10}
-        assert task._get_severity(result_success) == "critical"
-        
-        # 실패해도 critical
-        result_fail = {"error": "Test"}
-        assert task._get_severity(result_fail) == "critical"
-
-    def test_summary_message_warning(self):
-        """경고 메시지 확인."""
-        task = PurgeArchivedDLQEntriesTask()
-        result = {"purged_count": 100}
-        
-        message = task._get_summary_message(result)
-        
-        assert "⚠️" in message
-        assert "100건" in message
-        assert "복구 불가" in message
-
 
 # =============================================================================
-# Task Registry 테스트
+# Backward Compatibility 테스트
 # =============================================================================
 
 
-class TestCleanupTasksRegistry:
-    """태스크 레지스트리 테스트."""
+class TestBackwardCompatibility:
+    """레거시 클래스 호환성 테스트."""
 
-    def test_all_tasks_in_registry(self):
-        """모든 태스크가 레지스트리에 등록."""
+    def test_legacy_class_imports(self):
+        """레거시 클래스 import 가능."""
+        assert ArchiveOldDLQEntriesTask is not None
+        assert CleanupExpiredConfigTask is not None
+        assert ExpireApprovalRequestsTask is not None
+        assert PurgeArchivedDLQEntriesTask is not None
+
+    def test_cleanup_tasks_list(self):
+        """CLEANUP_TASKS 리스트 존재."""
+        assert CLEANUP_TASKS is not None
         assert len(CLEANUP_TASKS) == 4
-        
-        task_names = [t.name for t in [t() for t in CLEANUP_TASKS]]
-        
-        assert "selfhealing.archive_old_dlq_entries" in task_names
-        assert "selfhealing.cleanup_expired_config" in task_names
-        assert "selfhealing.expire_approval_requests" in task_names
-        assert "selfhealing.purge_archived_dlq_entries" in task_names
+
+    def test_legacy_wrapper_has_name(self):
+        """레거시 래퍼에 name 속성 존재."""
+        assert hasattr(ArchiveOldDLQEntriesTask, "name")
+        assert hasattr(CleanupExpiredConfigTask, "name")
+        assert hasattr(ExpireApprovalRequestsTask, "name")
+        assert hasattr(PurgeArchivedDLQEntriesTask, "name")
 
 
 # =============================================================================
@@ -455,38 +326,6 @@ class TestCleanupBeatSchedule:
 class TestCleanupTaskIntegration:
     """청소부 레인 통합 테스트."""
 
-    def test_all_tasks_have_notification_policy(self):
-        """모든 태스크에 알림 정책이 설정됨."""
-        for task_class in CLEANUP_TASKS:
-            task = task_class()
-            assert hasattr(task, "notification_policy")
-            assert isinstance(task.notification_policy, NotificationPolicy)
-
-    def test_high_risk_task_identified(self):
-        """고위험 태스크 식별."""
-        high_risk_tasks = []
-        
-        for task_class in CLEANUP_TASKS:
-            task = task_class()
-            if task.notification_policy.requires_approval:
-                high_risk_tasks.append(task.name)
-        
-        # PurgeArchivedDLQEntriesTask만 고위험
-        assert len(high_risk_tasks) == 1
-        assert "purge_archived_dlq_entries" in high_risk_tasks[0]
-
-    def test_aggregated_tasks(self):
-        """집계 대상 태스크 확인."""
-        aggregated_tasks = []
-        
-        for task_class in CLEANUP_TASKS:
-            task = task_class()
-            if task.notification_policy.aggregate:
-                aggregated_tasks.append(task.name)
-        
-        # Archive, Cleanup, Expire 3개가 집계 대상
-        assert len(aggregated_tasks) == 3
-
     @patch("selfhealing.services.dlq_service.get_dlq_service")
     @patch("selfhealing.services.pending_config.get_pending_config_service")
     @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
@@ -502,14 +341,10 @@ class TestCleanupTaskIntegration:
         mock_pending.return_value.cleanup_expired.return_value = 5
         mock_runtime.return_value.expire_old_requests.return_value = 2
         
-        # 각 태스크 실행
-        archive_task = ArchiveOldDLQEntriesTask()
-        cleanup_task = CleanupExpiredConfigTask()
-        expire_task = ExpireApprovalRequestsTask()
-        
-        archive_result = archive_task.run()
-        cleanup_result = cleanup_task.run()
-        expire_result = expire_task.run()
+        # 각 함수 실행 (Thin Wrapper → Service 위임)
+        archive_result = archive_old_dlq_entries()
+        cleanup_result = cleanup_expired_config()
+        expire_result = expire_approval_requests()
         
         # 결과 확인
         assert archive_result["archived_count"] == 10

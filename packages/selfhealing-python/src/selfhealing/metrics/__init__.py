@@ -17,9 +17,16 @@ from selfhealing.metrics.event_handlers import (
     ReplayEventHandler,
     reset_event_handler_cache,
 )
+# Import from the refactored safe_gauge package
 from selfhealing.metrics.safe_gauge import (
     SafeGauge,
     SafeGaugeChild,
+    SyncStatus,
+    SyncInfo,
+    clamp_non_negative,
+    clamp_percentage,
+    safe_set_gauge,
+    NoOpGaugeChild,
 )
 from selfhealing.metrics.decorators import (
     track_dlq_creation,
@@ -55,9 +62,18 @@ __all__ = [
     "CircuitBreakerEventHandler",
     "ReplayEventHandler",
     "reset_event_handler_cache",
-    # Safe Gauge
+    # Safe Gauge (core)
     "SafeGauge",
     "SafeGaugeChild",
+    # Safe Gauge (sync)
+    "SyncStatus",
+    "SyncInfo",
+    # Safe Gauge (clamping)
+    "clamp_non_negative",
+    "clamp_percentage",
+    "safe_set_gauge",
+    # Safe Gauge (noop)
+    "NoOpGaugeChild",
     # Decorators
     "track_dlq_creation",
     "track_dlq_resolution",

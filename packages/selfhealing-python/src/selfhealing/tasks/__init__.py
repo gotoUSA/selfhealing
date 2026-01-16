@@ -41,15 +41,12 @@ from .drift_detection import (
 )
 
 from .daily_report import (
-    DailyReportData,
-    DailyReportCollector,
-    DailyAutonomousReport,  # Main export from daily_report.py (per 09_AUTONOMOUS_TASK_EXPANSION.md)
     GenerateDailyAutonomousReportTask,  # Phase 5 - daily_report.py (per 09_AUTONOMOUS_TASK_EXPANSION.md §6.2)
-    TaskResultEntry,
-    get_daily_report_collector,
     generate_daily_autonomous_report,
     get_daily_report_beat_schedule,
 )
+
+# Lazy import를 위한 daily_report 타입들은 __getattr__에서 처리
 
 from .cleanup_tasks import (
     ArchiveOldDLQEntriesTask,
@@ -140,3 +137,24 @@ __all__ = [
     "register_traffic_aware_tasks_with_celery",
     "get_traffic_aware_beat_schedule",
 ]
+
+
+# =============================================================================
+# Lazy Imports for Daily Report Types
+# =============================================================================
+
+
+def __getattr__(name: str):
+    """Lazy import for daily report types to avoid circular imports."""
+    _lazy_daily_report_imports = {
+        "DailyReportData",
+        "DailyReportCollector",
+        "DailyAutonomousReport",
+        "TaskResultEntry",
+        "get_daily_report_collector",
+        "DAILY_REPORT_CACHE_KEY_PREFIX",
+    }
+    if name in _lazy_daily_report_imports:
+        from selfhealing.services import daily_report as dr_module
+        return getattr(dr_module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
