@@ -103,6 +103,40 @@ groups:
           description: "{{ $labels.service }}의 실패율이 {{ $value | printf \"%.1f\" }}%입니다. (임계값: 30%)"
 
   # =========================================================================
+  # Tiering Circuit Breaker 알림
+  # =========================================================================
+  - name: tiering_circuit_breaker_alerts
+    interval: 30s
+    rules:
+      # Tiering Circuit Breaker 반복 OPEN (성능 조사 필요)
+      # 단일 OPEN은 자동 복구되므로 무시, 반복 발생 시에만 알림
+      - alert: TieringCircuitBreakerRepeated
+        expr: |
+          increase(selfhealing_tiering_circuit_open[10m]) > 3
+        for: 1m
+        labels:
+          severity: warning
+          category: tiering
+        annotations:
+          summary: "⚠️ Tiering Circuit Breaker 반복 OPEN"
+          description: "Tiering CB가 10분간 {{ $value | printf \"%.0f\" }}회 OPEN되었습니다. RegEx 엔진 성능 저하 가능성이 있습니다."
+          runbook_url: "https://docs.example.com/runbooks/tiering-cb-repeated"
+          dashboard_url: "/d/self-healing-overview/self-healing-overview"
+
+      # Tiering Circuit Breaker 장기간 OPEN (자동 복구 실패)
+      - alert: TieringCircuitBreakerStuck
+        expr: selfhealing_tiering_circuit_open == 1
+        for: 5m
+        labels:
+          severity: critical
+          category: tiering
+        annotations:
+          summary: "🔴 Tiering Circuit Breaker 장기간 OPEN"
+          description: "Tiering CB가 5분 이상 OPEN 상태입니다. 자동 복구 실패, 즉시 조사가 필요합니다."
+          runbook_url: "https://docs.example.com/runbooks/tiering-cb-stuck"
+          dashboard_url: "/d/self-healing-overview/self-healing-overview"
+
+  # =========================================================================
   # 재시도 (Retry) 알림
   # =========================================================================
   - name: retry_alerts
