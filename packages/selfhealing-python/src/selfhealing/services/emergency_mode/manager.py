@@ -79,6 +79,9 @@ class GracefulDegradationManager:
         self._stop_recovery = threading.Event()
         self._history: List[Dict[str, Any]] = []
         
+        # Before Mutation Snapshot: 롤백용 이전 상태 저장 (최대 10개)
+        self._previous_states: List[Dict[str, Any]] = []
+        
         # TTL 기반 캐시 설정 (Check on Use 패턴)
         self._cache_ttl_seconds: int = 30  # 캐시 유효 시간
         self._last_load_time: Optional[datetime] = None
@@ -255,6 +258,78 @@ class GracefulDegradationManager:
             logger.error(f"[EmergencyMode] Expiration check failed: {e}")
     
     # -------------------------------------------------------------------------
+    # Before Mutation Snapshot (롤백 지원)
+    # -------------------------------------------------------------------------
+    
+    def _save_previous_state(self, action: str):
+        """
+        상태 변경 전 스냅샷 저장.
+        
+        롤백 가능하도록 이전 상태를 저장합니다.
+        최대 10개까지 유지합니다.
+        """
+        snapshot = {
+            "state": self._state.to_dict(),
+            "action": action,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._previous_states.append(snapshot)
+        
+        # 최대 10개 유지
+        if len(self._previous_states) > 10:
+            self._previous_states = self._previous_states[-10:]
+        
+        logger.debug(f"[EmergencyMode] Saved pre-mutation snapshot: action={action}")
+    
+    def get_previous_states(self) -> List[Dict[str, Any]]:
+        """
+        이전 상태 스냅샷 목록 조회.
+        
+        Returns:
+            스냅샷 목록 (최신순)
+        """
+        with self._state_lock:
+            return list(reversed(self._previous_states))
+    
+    def rollback_to_previous(self, index: int = 0) -> Optional[EmergencyState]:
+        """
+        이전 상태로 롤백.
+        
+        Args:
+            index: 롤백할 스냅샷 인덱스 (0=가장 최근, 1=그 이전...)
+            
+        Returns:
+            롤백된 상태, 실패 시 None
+        """
+        with self._state_lock:
+            if not self._previous_states:
+                logger.warning("[EmergencyMode] No previous state to rollback")
+                return None
+            
+            # 역순 인덱스 (0=가장 최근)
+            actual_index = len(self._previous_states) - 1 - index
+            if actual_index < 0:
+                logger.warning(f"[EmergencyMode] Invalid rollback index: {index}")
+                return None
+            
+            snapshot = self._previous_states[actual_index]
+            old_state_dict = snapshot["state"]
+            
+            # 현재 상태를 스냅샷에 저장 (롤백의 롤백 가능)
+            self._save_previous_state("rollback")
+            
+            # 상태 복원
+            self._state = EmergencyState.from_dict(old_state_dict)
+            self._save_state()
+            
+            logger.warning(
+                f"[EmergencyMode] Rolled back to snapshot at {snapshot['timestamp']}, "
+                f"original action={snapshot['action']}"
+            )
+            
+            return self.get_state()
+    
+    # -------------------------------------------------------------------------
     # Tier Multiplier
     # -------------------------------------------------------------------------
     
@@ -312,6 +387,9 @@ class GracefulDegradationManager:
         
         with self._state_lock:
             now = datetime.now(timezone.utc)
+            
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_state("activate_manual")
             
             old_state = EmergencyState.from_dict(self._state.to_dict())
             
@@ -398,6 +476,9 @@ class GracefulDegradationManager:
                 )
                 return self.get_state()
             
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_state("activate_auto")
+            
             old_state = EmergencyState.from_dict(self._state.to_dict())
             
             self._state.level = level
@@ -469,6 +550,9 @@ class GracefulDegradationManager:
     
     def _do_deactivate(self, deactivated_by: str, reason: str) -> EmergencyState:
         """실제 비상 모드 해제 수행."""
+        # Before Mutation Snapshot: 변경 전 상태 저장
+        self._save_previous_state("deactivate")
+        
         now = datetime.now(timezone.utc)
         old_state = EmergencyState.from_dict(self._state.to_dict())
         

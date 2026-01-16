@@ -1239,3 +1239,210 @@ class TestResolveTierWithFallback:
             assert result.is_fallback is True
         finally:
             registry.resolve_tier = original_resolve
+
+
+# =============================================================================
+# Before Mutation Snapshot Tests
+# =============================================================================
+
+
+class TestTierRegistrySnapshot:
+    """TierRegistry Before Mutation Snapshot Tests."""
+    
+    def test_previous_configs_initialized_empty(self):
+        """_previous_configs는 초기에 빈 리스트여야 함."""
+        from selfhealing.api.django.tiering import TierRegistry
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        assert registry._previous_configs == []
+    
+    def test_set_tiers_saves_previous_config(self):
+        """set_tiers() 호출 시 이전 설정을 스냅샷으로 저장해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierDefinition
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        initial_count = len(registry._previous_configs)
+        
+        # Tier 설정 변경
+        new_tiers = [
+            TierDefinition(id="critical", name="Critical", multiplier=0.5, priority=100),
+            TierDefinition(id="standard", name="Standard", multiplier=0.7, priority=50),
+        ]
+        registry.set_tiers(new_tiers)
+        
+        # 스냅샷이 저장되어야 함
+        assert len(registry._previous_configs) == initial_count + 1
+        
+        snapshot = registry._previous_configs[-1]
+        assert "config" in snapshot
+        assert "action" in snapshot
+        assert "timestamp" in snapshot
+        assert snapshot["action"] == "set_tiers"
+    
+    def test_set_mappings_saves_previous_config(self):
+        """set_mappings() 호출 시 이전 설정을 스냅샷으로 저장해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierMapping
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        initial_count = len(registry._previous_configs)
+        
+        # Mapping 설정 변경
+        new_mappings = [
+            TierMapping(pattern="/api/test/", tier_id="standard"),
+        ]
+        registry.set_mappings(new_mappings)
+        
+        # 스냅샷이 저장되어야 함
+        assert len(registry._previous_configs) == initial_count + 1
+        
+        snapshot = registry._previous_configs[-1]
+        assert snapshot["action"] == "set_mappings"
+    
+    def test_set_overrides_saves_previous_config(self):
+        """set_overrides() 호출 시 이전 설정을 스냅샷으로 저장해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierOverride, OverrideIdentifierType
+        from datetime import datetime, timezone, timedelta
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        initial_count = len(registry._previous_configs)
+        
+        # Override 설정 변경
+        new_overrides = [
+            TierOverride(
+                identifier="192.168.1.1",
+                identifier_type=OverrideIdentifierType.IP,
+                tier_id="critical",
+                reason="Test override",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            ),
+        ]
+        registry.set_overrides(new_overrides)
+        
+        # 스냅샷이 저장되어야 함
+        assert len(registry._previous_configs) == initial_count + 1
+        
+        snapshot = registry._previous_configs[-1]
+        assert snapshot["action"] == "set_overrides"
+    
+    def test_import_config_saves_previous_config(self):
+        """import_config() 호출 시 이전 설정을 스냅샷으로 저장해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        initial_count = len(registry._previous_configs)
+        
+        # 현재 설정을 export하고 다시 import
+        config = registry.export_config()
+        registry.import_config(config)
+        
+        # 스냅샷이 저장되어야 함
+        assert len(registry._previous_configs) == initial_count + 1
+        
+        snapshot = registry._previous_configs[-1]
+        assert snapshot["action"] == "import_config"
+    
+    def test_reset_to_defaults_saves_previous_config(self):
+        """reset_to_defaults() 호출 시 이전 설정을 스냅샷으로 저장해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierMapping
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        # 먼저 커스텀 설정 적용
+        registry.set_mappings([TierMapping(pattern="/custom/", tier_id="critical")])
+        initial_count = len(registry._previous_configs)
+        
+        # 기본값으로 리셋
+        registry.reset_to_defaults()
+        
+        # 스냅샷이 저장되어야 함
+        assert len(registry._previous_configs) == initial_count + 1
+        
+        snapshot = registry._previous_configs[-1]
+        assert snapshot["action"] == "reset_to_defaults"
+    
+    def test_get_previous_configs_returns_newest_first(self):
+        """get_previous_configs()는 최신 순으로 반환해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierMapping
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        # 여러 번 설정 변경
+        registry.set_mappings([TierMapping(pattern="/first/", tier_id="critical")])
+        registry.set_mappings([TierMapping(pattern="/second/", tier_id="standard")])
+        registry.set_mappings([TierMapping(pattern="/third/", tier_id="non_essential")])
+        
+        # 최신 순으로 반환되어야 함
+        configs = registry.get_previous_configs()
+        
+        assert len(configs) >= 3
+        # 최신이 먼저 (가장 최근 set_mappings가 첫 번째)
+        assert configs[0]["action"] == "set_mappings"
+    
+    def test_rollback_to_previous_restores_config(self):
+        """rollback_to_previous()는 이전 설정을 복원해야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierMapping
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        # 초기 설정 기록
+        original_config = registry.export_config()
+        original_mapping_count = len(registry._mappings)
+        
+        # 설정 변경 (스냅샷 저장됨)
+        registry.set_mappings([
+            TierMapping(pattern="/new/path/", tier_id="critical"),
+        ])
+        
+        # 새 매핑 추가되었는지 확인
+        assert len(registry._mappings) == 1
+        assert registry._mappings[0].pattern == "/new/path/"
+        
+        # 롤백 (index=0 = 가장 최근 스냅샷 = 변경 전 상태)
+        result = registry.rollback_to_previous(0)
+        
+        # ValidationResult 반환, is_valid가 True여야 함
+        assert result is not None
+        assert result.is_valid is True
+        # 원래 매핑 개수로 복원되어야 함
+        assert len(registry._mappings) == original_mapping_count
+    
+    def test_rollback_invalid_index_returns_none(self):
+        """잘못된 index로 rollback 시 None 반환."""
+        from selfhealing.api.django.tiering import TierRegistry
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        # 존재하지 않는 인덱스
+        result = registry.rollback_to_previous(999)
+        
+        assert result is None
+    
+    def test_snapshot_limit_10(self):
+        """스냅샷은 최대 10개로 제한되어야 함."""
+        from selfhealing.api.django.tiering import TierRegistry, TierMapping
+        
+        registry = TierRegistry.__new__(TierRegistry)
+        registry._init()
+        
+        # 15번 설정 변경
+        for i in range(15):
+            registry.set_mappings([
+                TierMapping(pattern=f"/path{i}/", tier_id="critical"),
+            ])
+        
+        # 최대 10개까지만 유지
+        assert len(registry._previous_configs) <= 10

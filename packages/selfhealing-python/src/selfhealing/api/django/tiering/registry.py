@@ -54,6 +54,9 @@ class TierRegistry:
         self._validator = TierConfigValidator()
         self._data_lock = threading.RLock()
         
+        # Before Mutation Snapshot: 롤백용 이전 상태 저장 (최대 10개)
+        self._previous_configs: List[Dict[str, Any]] = []
+        
         # Load defaults
         self._load_defaults()
     
@@ -68,6 +71,86 @@ class TierRegistry:
         
         # Sort mappings by priority (descending)
         self._mappings.sort(key=lambda m: m.priority, reverse=True)
+    
+    # -------------------------------------------------------------------------
+    # Before Mutation Snapshot (롤백 지원)
+    # -------------------------------------------------------------------------
+    
+    def _save_previous_config(self, action: str):
+        """
+        설정 변경 전 스냅샷 저장.
+        
+        롤백 가능하도록 이전 설정을 저장합니다.
+        최대 10개까지 유지합니다.
+        """
+        from datetime import datetime, timezone
+        
+        snapshot = {
+            "config": self.export_config(),
+            "action": action,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._previous_configs.append(snapshot)
+        
+        # 최대 10개 유지
+        if len(self._previous_configs) > 10:
+            self._previous_configs = self._previous_configs[-10:]
+        
+        logger.debug(f"[TierRegistry] Saved pre-mutation snapshot: action={action}")
+    
+    def get_previous_configs(self) -> List[Dict[str, Any]]:
+        """
+        이전 설정 스냅샷 목록 조회.
+        
+        Returns:
+            스냅샷 목록 (최신순)
+        """
+        with self._data_lock:
+            return list(reversed(self._previous_configs))
+    
+    def rollback_to_previous(self, index: int = 0) -> Optional[ValidationResult]:
+        """
+        이전 설정으로 롤백.
+        
+        Args:
+            index: 롤백할 스냅샷 인덱스 (0=가장 최근, 1=그 이전...)
+            
+        Returns:
+            ValidationResult (성공 시), 실패 시 None
+        """
+        with self._data_lock:
+            if not self._previous_configs:
+                logger.warning("[TierRegistry] No previous config to rollback")
+                return None
+            
+            # 역순 인덱스 (0=가장 최근)
+            actual_index = len(self._previous_configs) - 1 - index
+            if actual_index < 0:
+                logger.warning(f"[TierRegistry] Invalid rollback index: {index}")
+                return None
+            
+            snapshot = self._previous_configs[actual_index]
+            old_config = snapshot["config"]
+            
+            # 현재 상태를 스냅샷에 저장 (롤백의 롤백 가능)
+            self._save_previous_config("rollback")
+            
+            # 설정 복원 (import_config 사용)
+            logger.warning(
+                f"[TierRegistry] Rolling back to snapshot at {snapshot['timestamp']}, "
+                f"original action={snapshot['action']}"
+            )
+            
+            # 직접 복원 (import_config 호출 시 무한 루프 방지)
+            tiers = [TierDefinition.from_dict(t) for t in old_config.get("tiers", [])]
+            mappings = [TierMapping.from_dict(m) for m in old_config.get("mappings", [])]
+            overrides = [TierOverride.from_dict(o) for o in old_config.get("overrides", [])]
+            
+            self._tiers = {t.id: t for t in tiers}
+            self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+            self._overrides = overrides
+            
+            return ValidationResult(is_valid=True, errors=[], warnings=["Rolled back"])
     
     # -------------------------------------------------------------------------
     # Tier Definition Methods
@@ -98,6 +181,9 @@ class TierRegistry:
             return result
         
         with self._data_lock:
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_config("set_tiers")
+            
             self._tiers = {t.id: t for t in tiers}
             self._log_change("tiers", [t.to_dict() for t in tiers])
         
@@ -130,6 +216,9 @@ class TierRegistry:
             return result
         
         with self._data_lock:
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_config("set_mappings")
+            
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
             self._log_change("mappings", [m.to_dict() for m in mappings])
         
@@ -178,6 +267,9 @@ class TierRegistry:
             return result
         
         with self._data_lock:
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_config("set_overrides")
+            
             self._overrides = list(overrides)
             self._log_change("overrides", [o.to_dict() for o in overrides])
         
@@ -559,6 +651,9 @@ class TierRegistry:
             return result
         
         with self._data_lock:
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_config("import_config")
+            
             self._tiers = {t.id: t for t in tiers}
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
             self._overrides = overrides
@@ -569,6 +664,9 @@ class TierRegistry:
     def reset_to_defaults(self):
         """Reset to default configuration."""
         with self._data_lock:
+            # Before Mutation Snapshot: 변경 전 상태 저장
+            self._save_previous_config("reset_to_defaults")
+            
             self._load_defaults()
             self._log_change("reset", {"action": "reset_to_defaults"})
 
