@@ -1,7 +1,7 @@
 # 41. Wrapper 시스템 리팩토링 계획
 
 > **작성일**: 2026-01-16  
-> **상태**: Phase 2 완료 ✅  
+> **상태**: Phase 3 완료 ✅ (전체 완료)  
 > **관련 문서**: PART1~PART3 상세 문서 참조
 
 ---
@@ -147,10 +147,20 @@ Phase 2: Task Wrapper 일관성 (PART2) ✅ COMPLETED
       - service.py: DailyReportService
     - tasks/daily_report.py: 638줄 → 166줄 (74% 감소)
 
-Phase 3: Decorator 통합 (PART3) ❌ PENDING
-├── Week 7: 데코레이터 통합 모듈 생성
-├── Week 8: TLS/기타 Wrapper 정리
-└── Week 9: 문서화 및 테스트 보완
+Phase 3: Decorator 통합 (PART3) ✅ COMPLETED
+├── track_replay 중복 제거 ✅
+│   - metrics/decorators.py에 통합 (domain + replay_type 지원)
+│   - services/metrics/updaters.py deprecated 처리
+├── automation_gate 개선 ✅
+│   - @functools.wraps 적용
+│   - 수동 __name__/__doc__ 복사 제거
+├── with_jitter 위치 이동 ✅
+│   - metrics/jitter.py → utils/jitter.py 이동
+│   - 기존 위치 backward compatibility 유지 (DeprecationWarning)
+│   - utils/__init__.py에 export 추가
+└── MetricsProviderWrapper 분리 ✅
+    - services/auto_tuning/metrics_provider.py 생성
+    - service.py 내부 클래스 → 외부 클래스로 분리
 ```
 
 ---
@@ -162,7 +172,9 @@ Phase 3: Decorator 통합 (PART3) ❌ PENDING
 | safe_gauge.py 줄 수 | 565 | < 150 (core.py) | ✅ 완료 |
 | Task 패턴 일관성 | 60% | 100% | ✅ 완료 (cleanup_tasks, daily_report) |
 | 테스트 커버리지 (metrics/) | - | > 90% | ✅ 180개 테스트 통과 |
-| 데코레이터 모듈 수 | 6개 파일 | 3개 파일 | ❌ PART3 대기 |
+| 데코레이터 중복 | 2개 (track_replay) | 1개 | ✅ 완료 |
+| with_jitter 위치 | metrics/ | utils/ | ✅ 완료 |
+| MetricsProviderWrapper 위치 | 내부 클래스 | 외부 파일 | ✅ 완료 |
 
 ---
 

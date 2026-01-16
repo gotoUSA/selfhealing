@@ -56,7 +56,8 @@ class TestAuditAccountability:
         self.admin_user = MockUser(id=1, username="admin", is_staff=True, is_superuser=True)
         
         # Create circuit breaker service
-        from selfhealing.services import CircuitBreakerService, CircuitBreakerConfig
+        from selfhealing.services import CircuitBreakerService
+        from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
         self.circuit_breaker_service = CircuitBreakerService(
             config=CircuitBreakerConfig(enabled=True),
             repository=self.cb_repository,

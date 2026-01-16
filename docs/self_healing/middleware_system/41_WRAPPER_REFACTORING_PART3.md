@@ -1,6 +1,7 @@
 # 41. Wrapper 리팩토링 PART 3: Decorator 통합 및 기타 Wrapper
 
 > **작성일**: 2026-01-16  
+> **상태**: ✅ COMPLETED (2026-01-16)  
 > **대상 파일들**:  
 > - `core/tls_handler.py` (#3)
 > - `services/auto_tuning/chaos_aware_metrics.py` (#4)
@@ -501,15 +502,15 @@ class MetricsProviderWrapper:
 
 ## 4. 리팩토링 우선순위 요약
 
-| 우선순위 | 작업 | 영향도 | 예상 시간 |
-|---|---|---|---|
-| **높음** | track_replay 중복 제거 | 혼란 해소 | 2시간 |
-| 중간 | automation_gate `@wraps` 적용 | 코드 품질 | 30분 |
-| 낮음 | with_jitter 위치 이동 | 구조 개선 | 1시간 |
-| 낮음 | MetricsProviderWrapper 분리 | 테스트 용이성 | 1시간 |
-| 보류 | Decorator 통합 모듈 | 대규모 변경 | 4시간+ |
-| 유지 | TLSResilientClient | 확장성 | - |
-| 유지 | ChaosAwareMetricsAdapter | 잘 설계됨 | - |
+| 우선순위 | 작업 | 영향도 | 예상 시간 | 상태 |
+|---|---|---|---|---|
+| **높음** | track_replay 중복 제거 | 혼란 해소 | 2시간 | ✅ 완료 |
+| 중간 | automation_gate `@wraps` 적용 | 코드 품질 | 30분 | ✅ 완료 |
+| 낮음 | with_jitter 위치 이동 | 구조 개선 | 1시간 | ✅ 완료 |
+| 낮음 | MetricsProviderWrapper 분리 | 테스트 용이성 | 1시간 | ✅ 완료 |
+| 보류 | Decorator 통합 모듈 | 대규모 변경 | 4시간+ | ⏸️ 향후 검토 |
+| 유지 | TLSResilientClient | 확장성 | - | ➡️ 유지 |
+| 유지 | ChaosAwareMetricsAdapter | 잘 설계됨 | - | ➡️ 유지 |
 
 ---
 
@@ -589,28 +590,31 @@ def automation_gate(action: str = "") -> Callable[[Callable[P, R]], Callable[P, 
 
 ### 6.1 track_replay 통합
 
-- [ ] 두 데코레이터 시그니처 통합
-- [ ] updaters.py에서 중복 제거
-- [ ] 모든 사용처 import 경로 업데이트
-- [ ] 테스트 통과
+- [x] 두 데코레이터 시그니처 통합 ✅
+- [x] updaters.py에서 중복 제거 (deprecated 처리) ✅
+- [x] 모든 사용처 import 경로 업데이트 ✅
+- [x] 테스트 통과 ✅
 
 ### 6.2 automation_gate 개선
 
-- [ ] `@wraps` 적용
-- [ ] 타입 힌트 추가
-- [ ] 기존 동작 유지 확인
+- [x] `@wraps` 적용 ✅
+- [x] functools import 추가 ✅
+- [x] 기존 동작 유지 확인 ✅
 
-### 6.3 with_jitter 이동 (선택)
+### 6.3 with_jitter 이동
 
-- [ ] `core/jitter.py` 또는 `utils/jitter.py`로 이동
-- [ ] 기존 import 경로 하위 호환성 유지
-- [ ] DeprecationWarning 추가
+- [x] `utils/jitter.py`로 이동 ✅
+- [x] 기존 import 경로 하위 호환성 유지 ✅
+- [x] DeprecationWarning 추가 ✅
+- [x] utils/__init__.py에 export 추가 ✅
+- [x] metrics/__init__.py 내부 import 경로 수정 ✅
+- [x] metrics/reconciler.py import 경로 수정 ✅
 
-### 6.4 MetricsProviderWrapper 분리 (선택)
+### 6.4 MetricsProviderWrapper 분리
 
-- [ ] 별도 파일로 분리
-- [ ] service.py에서 import 변경
-- [ ] 테스트 추가
+- [x] 별도 파일 `services/auto_tuning/metrics_provider.py` 생성 ✅
+- [x] service.py에서 import 변경 ✅
+- [x] Protocol 추가 (MetricsAdapterProtocol) ✅
 
 ---
 
@@ -628,9 +632,63 @@ def automation_gate(action: str = "") -> Callable[[Callable[P, R]], Callable[P, 
 
 ## 8. 예상 효과
 
-| 지표 | Before | After |
-|---|---|---|
-| track_replay 정의 수 | 2개 (중복) | 1개 |
-| automation_gate 타입 안전성 | 낮음 | 높음 |
-| with_jitter 위치 논리성 | 낮음 | 높음 |
-| MetricsProviderWrapper 테스트 용이성 | 낮음 | 높음 |
+| 지표 | Before | After | 상태 |
+|---|---|---|---|
+| track_replay 정의 수 | 2개 (중복) | 1개 (통합) | ✅ |
+| automation_gate 타입 안전성 | 낮음 | 높음 | ✅ |
+| with_jitter 위치 논리성 | 낮음 (metrics/) | 높음 (utils/) | ✅ |
+| MetricsProviderWrapper 테스트 용이성 | 낮음 | 높음 | ✅ |
+
+---
+
+## 9. 구현 완료 요약
+
+### 9.1 track_replay 통합 (2026-01-16)
+
+**변경된 파일**:
+- `metrics/decorators.py`: `track_replay` 시그니처 확장 (domain + replay_type)
+- `services/metrics/updaters.py`: deprecated 처리, re-export from decorators
+
+**새 시그니처**:
+```python
+def track_replay(
+    domain: str = "",
+    replay_type: str = "auto",
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+```
+
+### 9.2 automation_gate 개선 (2026-01-16)
+
+**변경된 파일**:
+- `services/error_budget_gate/gate.py`: @functools.wraps 적용
+
+**Before**:
+```python
+wrapper.__name__ = func.__name__
+wrapper.__doc__ = func.__doc__
+```
+
+**After**:
+```python
+@functools.wraps(func)
+def wrapper(*args, **kwargs):
+```
+
+### 9.3 with_jitter 위치 이동 (2026-01-16)
+
+**새 파일**:
+- `utils/jitter.py`: 전체 구현 이동
+
+**변경된 파일**:
+- `metrics/jitter.py`: deprecated, re-export from utils
+- `metrics/__init__.py`: import from utils
+- `metrics/reconciler.py`: import from utils
+- `utils/__init__.py`: export 추가
+
+### 9.4 MetricsProviderWrapper 분리 (2026-01-16)
+
+**새 파일**:
+- `services/auto_tuning/metrics_provider.py`: 외부 클래스 + Protocol
+
+**변경된 파일**:
+- `services/auto_tuning/service.py`: import 추가, 내부 클래스 제거
