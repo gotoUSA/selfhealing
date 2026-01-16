@@ -840,7 +840,7 @@ class TestEmergencyModeSnapshot:
         manager._previous_states = []  # 테스트를 위해 초기화
         
         # 비활성 상태에서 활성화
-        manager.deactivate()
+        manager.deactivate(deactivated_by="test_user")
         initial_state_count = len(manager._previous_states)
         
         manager.activate_manual(
@@ -876,7 +876,7 @@ class TestEmergencyModeSnapshot:
         count_before_deactivate = len(manager._previous_states)
         
         # 비활성화
-        manager.deactivate()
+        manager.deactivate(deactivated_by="test_user")
         
         # deactivate에서도 스냅샷 저장되어야 함
         assert len(manager._previous_states) == count_before_deactivate + 1
@@ -899,7 +899,7 @@ class TestEmergencyModeSnapshot:
             reason="First",
             activated_by="admin",
         )
-        manager.deactivate()
+        manager.deactivate(deactivated_by="test_user")
         manager.activate_manual(
             level=EmergencyLevel.LEVEL_2,
             reason="Second",
@@ -923,7 +923,7 @@ class TestEmergencyModeSnapshot:
         manager._previous_states = []  # 테스트를 위해 초기화
         
         # 먼저 비활성 상태 확인
-        manager.deactivate()
+        manager.deactivate(deactivated_by="test_user")
         
         # LEVEL_1 활성화 (이전 비활성 상태 저장됨)
         manager.activate_manual(
@@ -938,13 +938,14 @@ class TestEmergencyModeSnapshot:
         # 롤백 (index=0 = 가장 최근 스냅샷 = 활성화 전 상태)
         result = manager.rollback_to_previous(0)
         
-        assert result is True
+        # rollback_to_previous returns EmergencyState on success, None on failure
+        assert result is not None
         # 비활성 상태로 복원되어야 함
         assert manager.get_state().is_active is False
     
     @patch("selfhealing.services.config_history.get_config_history_service")
-    def test_rollback_invalid_index_returns_false(self, mock_get_service):
-        """잘못된 index로 rollback 시 False 반환."""
+    def test_rollback_invalid_index_returns_none(self, mock_get_service):
+        """잘못된 index로 rollback 시 None 반환."""
         mock_service = MagicMock()
         mock_get_service.return_value = mock_service
         
@@ -954,7 +955,7 @@ class TestEmergencyModeSnapshot:
         # 존재하지 않는 인덱스
         result = manager.rollback_to_previous(999)
         
-        assert result is False
+        assert result is None
     
     @patch("selfhealing.services.config_history.get_config_history_service")
     def test_snapshot_limit_10(self, mock_get_service):
@@ -974,7 +975,7 @@ class TestEmergencyModeSnapshot:
                     activated_by="admin",
                 )
             else:
-                manager.deactivate()
+                manager.deactivate(deactivated_by="test_user")
         
         # 최대 10개까지만 유지
         assert len(manager._previous_states) <= 10

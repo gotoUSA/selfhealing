@@ -8,7 +8,7 @@ ParameterBlacklist 및 LearningService 확장 테스트
 Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -168,14 +168,14 @@ class TestParameterBlacklist:
         Purpose:
             만료된 항목은 차단하지 않는지 확인.
         """
-        # 과거 만료 시간으로 직접 등록
+        # 과거 만료 시간으로 직접 등록 (timezone-aware)
         entry = BlacklistedParameter(
             module="test",
             parameter="param",
             blocked_values={"blocked"},
             reason=BlacklistReason.MANUAL_BLOCK,
-            registered_at=datetime.now() - timedelta(days=10),
-            expires_at=datetime.now() - timedelta(days=1),
+            registered_at=datetime.now(timezone.utc) - timedelta(days=10),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         blacklist._blacklist["test:param"] = entry
 
@@ -196,14 +196,14 @@ class TestParameterBlacklist:
             reason=BlacklistReason.RECOVERY_LOOP,
         )
 
-        # 만료된 항목
+        # 만료된 항목 (timezone-aware)
         expired_entry = BlacklistedParameter(
             module="expired",
             parameter="param",
             blocked_values={"value"},
             reason=BlacklistReason.FLAPPING,
-            registered_at=datetime.now() - timedelta(days=10),
-            expires_at=datetime.now() - timedelta(days=1),
+            registered_at=datetime.now(timezone.utc) - timedelta(days=10),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         blacklist._blacklist["expired:param"] = expired_entry
 

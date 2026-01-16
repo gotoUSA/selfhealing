@@ -238,27 +238,24 @@ def track_replay(replay_type: str = "single"):
     """
     Decorator to track replay attempts.
 
+    .. deprecated:: 2.0.0
+        Use :func:`selfhealing.metrics.decorators.track_replay` instead.
+        This function will be removed in version 3.0.0.
+
     Usage:
         @track_replay("batch")
         def batch_replay(...)
     """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            domain = kwargs.get("domain", "unknown")
-            try:
-                result = func(*args, **kwargs)
-                success = getattr(result, "success", True) if result else False
-                record_replay_attempt(domain, replay_type, success)
-                return result
-            except Exception:
-                record_replay_attempt(domain, replay_type, success=False)
-                raise
-
-        return wrapper
-
-    return decorator
+    import warnings
+    warnings.warn(
+        "track_replay from selfhealing.services.metrics.updaters is deprecated. "
+        "Use selfhealing.metrics.decorators.track_replay instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    # Re-export from the canonical location
+    from selfhealing.metrics.decorators import track_replay as _track_replay
+    return _track_replay(replay_type=replay_type)
 
 
 # =============================================================================

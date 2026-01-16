@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from selfhealing.adapters.metrics.base import MetricSourceAdapter, NullMetricSourceAdapter
 from selfhealing.adapters.metrics.factory import get_metric_adapter
-from selfhealing.metrics.jitter import with_jitter, JitterConfig
+from selfhealing.utils.jitter import with_jitter, JitterConfig
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
 if TYPE_CHECKING:

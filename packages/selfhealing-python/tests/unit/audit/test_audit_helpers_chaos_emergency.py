@@ -178,23 +178,26 @@ class TestLogChaosExperimentAudit:
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["details"]["dry_run"] is True
 
-    def test_logs_to_standard_logger_fallback(self, caplog):
+    def test_logs_to_standard_logger_fallback(self):
         """Should log to standard logger when no request/buffer available."""
         with patch(
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
-        ):
+        ), patch(
+            "selfhealing.services.audit.chaos_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
             
-            with caplog.at_level(logging.INFO):
-                log_chaos_experiment_audit(
-                    experiment_id="chaos-log123",
-                    event_type="experiment_started",
-                )
+            log_chaos_experiment_audit(
+                experiment_id="chaos-log123",
+                event_type="experiment_started",
+            )
             
-            assert "[ChaosAudit]" in caplog.text
-            assert "chaos-log123" in caplog.text
-            assert "experiment_started" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[ChaosAudit]" in call_args
+            assert "chaos-log123" in call_args
+            assert "experiment_started" in call_args
 
     def test_removes_none_values_from_details(self):
         """Should remove None values from details dict."""
@@ -352,28 +355,31 @@ class TestLogEmergencyModeAudit:
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["details"]["tag"] == "EMERGENCY_ESCALATE"
 
-    def test_logs_to_standard_logger_fallback(self, caplog):
+    def test_logs_to_standard_logger_fallback(self):
         """Should log to standard logger when no request/buffer available."""
         with patch(
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
         ), patch(
             "selfhealing.audit.log_config_change",
-        ):
+        ), patch(
+            "selfhealing.services.audit.emergency_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
             
-            with caplog.at_level(logging.INFO):
-                log_emergency_mode_audit(
-                    action="activate",
-                    level="LEVEL_1",
-                    is_active=True,
-                    activated_by="admin",
-                    reason="Test reason",
-                )
+            log_emergency_mode_audit(
+                action="activate",
+                level="LEVEL_1",
+                is_active=True,
+                activated_by="admin",
+                reason="Test reason",
+            )
             
-            assert "[EmergencyModeAudit]" in caplog.text
-            assert "ACTIVATE" in caplog.text
-            assert "level=LEVEL_1" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[EmergencyModeAudit]" in call_args
+            assert "ACTIVATE" in call_args
+            assert "level=LEVEL_1" in call_args
 
     def test_calls_log_config_change_for_compatibility(self):
         """Should also call log_config_change for backward compatibility."""
@@ -477,46 +483,52 @@ class TestLogErrorBudgetBlockedAudit:
             assert details["gate_status"] == "fail_open_rate_limited"
             assert "error_budget_percent" not in details  # None values removed
 
-    def test_logs_to_standard_logger_fallback(self, caplog):
+    def test_logs_to_standard_logger_fallback(self):
         """Should log to standard logger when no request/buffer available."""
         with patch(
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=4,
-        ):
+        ), patch(
+            "selfhealing.services.audit.chaos_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
             
-            with caplog.at_level(logging.WARNING):
-                log_error_budget_blocked_audit(
-                    action="chaos_experiment",
-                    gate_status="blocked",
-                    error_budget_percent=5.5,
-                    threshold_percent=10.0,
-                    reason="Budget low",
-                )
+            log_error_budget_blocked_audit(
+                action="chaos_experiment",
+                gate_status="blocked",
+                error_budget_percent=5.5,
+                threshold_percent=10.0,
+                reason="Budget low",
+            )
             
-            assert "[ErrorBudgetAudit]" in caplog.text
-            assert "BLOCKED" in caplog.text
-            assert "chaos_experiment" in caplog.text
-            assert "5.5%" in caplog.text
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "[ErrorBudgetAudit]" in call_args
+            assert "BLOCKED" in call_args
+            assert "chaos_experiment" in call_args
+            assert "5.5%" in call_args
 
-    def test_handles_none_error_budget_percent(self, caplog):
+    def test_handles_none_error_budget_percent(self):
         """Should handle None error_budget_percent gracefully."""
         with patch(
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=5,
-        ):
+        ), patch(
+            "selfhealing.services.audit.chaos_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
             
-            with caplog.at_level(logging.WARNING):
-                log_error_budget_blocked_audit(
-                    action="test_action",
-                    gate_status="blocked",
-                    error_budget_percent=None,
-                    threshold_percent=10.0,
-                    reason="Budget unavailable",
-                )
+            log_error_budget_blocked_audit(
+                action="test_action",
+                gate_status="blocked",
+                error_budget_percent=None,
+                threshold_percent=10.0,
+                reason="Budget unavailable",
+            )
             
-            assert "N/A" in caplog.text  # None displayed as N/A
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "N/A" in call_args  # None displayed as N/A
 
 
 # =============================================================================
@@ -680,12 +692,14 @@ class TestErrorBudgetGateMigration:
             assert call_kwargs["error_budget_percent"] == 5.5
             assert call_kwargs["threshold_percent"] == 10.0
 
-    def test_audit_block_handles_exceptions_gracefully(self, caplog):
+    def test_audit_block_handles_exceptions_gracefully(self):
         """Should not raise exception if audit helper fails."""
         with patch(
             "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
             side_effect=Exception("Audit failed"),
-        ):
+        ), patch(
+            "selfhealing.services.error_budget_gate.gate.logger"
+        ) as mock_logger:
             from selfhealing.services.error_budget_gate.gate import ErrorBudgetGate
             from selfhealing.services.error_budget_gate.config import GateCheckResult, GateStatus
             
@@ -699,11 +713,12 @@ class TestErrorBudgetGateMigration:
                 reason="Test",
             )
             
-            with caplog.at_level(logging.WARNING):
-                # Should not raise
-                gate._audit_block("test_action", result)
+            # Should not raise
+            gate._audit_block("test_action", result)
             
-            assert "Failed to audit block" in caplog.text
+            mock_logger.warning.assert_called()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "Failed to audit block" in call_args
 
 
 # =============================================================================

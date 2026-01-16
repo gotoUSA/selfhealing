@@ -124,12 +124,72 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
 from .circuit_breaker_service import (
     get_circuit_breaker_service,
     CircuitBreakerService,
+    # Backward compatibility - commonly used in tests
+    CircuitBreakerConfig,
+    CircuitBreakerResult,
+    CircuitState,
+    # Convenience functions
+    should_allow_request,
+    force_open_circuit,
+    force_close_circuit,
 )
 from .dlq_service import (
     get_dlq_service,
     DLQService,
+    # Backward compatibility - commonly used in tests
+    DLQConfig,
+    DLQEntryResult,
+    ReplayResult,
+    store_to_dlq,
 )
-from .replay_service import get_replay_service
+from .replay_service import get_replay_service, ReplayService, BatchReplayResult
+
+# --- Backward Compatibility - Idempotency ---
+from .idempotency_service import (
+    IdempotencyKey,
+    IdempotencyService,
+    IdempotencyDomain,
+    get_idempotency_service,
+)
+
+# --- Backward Compatibility - Retry ---
+from .retry_handler import (
+    RetryHandler,
+    RetryConfig,
+    RetryResult,
+    RetryAction,
+    MaxRetriesExceededError,
+)
+
+# --- Backward Compatibility - Control API ---
+from .control_api_service import (
+    ControlAPIService,
+    ControlRequest,
+    ControlResponse,
+)
+
+# --- Backward Compatibility - Security ---
+from .security_violation_service import (
+    SecurityViolationService,
+    SecurityViolationResult,
+    SecurityConfig,
+    ViolationType,
+    Severity,
+    SEVERITY_BY_VIOLATION_TYPE,
+    get_security_violation_service,
+    handle_security_violation,
+)
+
+# --- Backward Compatibility - Security Notification ---
+from .security_notification_service import (
+    SecurityNotificationService,
+    SecurityNotificationResult,
+    NotificationConfig,
+    NotificationChannel,
+    NotificationResult,
+    get_security_notification_service,
+    notify_security_incident,
+)
 
 # --- Configuration ---
 from ..core.config import get_sla_thresholds
@@ -142,10 +202,6 @@ from .metrics.alerting_rules import ALERTING_RULES
 
 # Alias for backward compatibility
 DOMAINS = DEFAULT_DOMAINS
-
-# --- Context & Security (자주 사용) ---
-# ForensicContext has been removed from the system.
-from .security_violation_service import SecurityViolationService
 
 
 # =============================================================================
@@ -162,14 +218,63 @@ __all__ = [
     # === Core Service Classes ===
     "CircuitBreakerService",
     "DLQService",
+    "ReplayService",
+    "BatchReplayResult",
+    
+    # === Backward Compatibility - Circuit Breaker ===
+    "CircuitBreakerConfig",
+    "CircuitBreakerResult",
+    "CircuitState",
+    "should_allow_request",
+    "force_open_circuit",
+    "force_close_circuit",
+    
+    # === Backward Compatibility - DLQ ===
+    "DLQConfig",
+    "DLQEntryResult",
+    "ReplayResult",
+    "store_to_dlq",
+    
+    # === Backward Compatibility - Idempotency ===
+    "IdempotencyKey",
+    "IdempotencyService",
+    "IdempotencyDomain",
+    "get_idempotency_service",
+    
+    # === Backward Compatibility - Retry ===
+    "RetryHandler",
+    "RetryConfig",
+    "RetryResult",
+    "RetryAction",
+    "MaxRetriesExceededError",
+    
+    # === Backward Compatibility - Control API ===
+    "ControlAPIService",
+    "ControlRequest",
+    "ControlResponse",
+    
+    # === Backward Compatibility - Security ===
+    "SecurityViolationService",
+    "SecurityViolationResult",
+    "SecurityConfig",
+    "ViolationType",
+    "Severity",
+    "SEVERITY_BY_VIOLATION_TYPE",
+    "get_security_violation_service",
+    "handle_security_violation",
+    
+    # === Backward Compatibility - Security Notification ===
+    "SecurityNotificationService",
+    "SecurityNotificationResult",
+    "NotificationConfig",
+    "NotificationChannel",
+    "NotificationResult",
+    "get_security_notification_service",
+    "notify_security_incident",
     
     # === Metrics ===
     "record_sla_breach",
     "collect_all_metrics",
     "DOMAINS",
     "ALERTING_RULES",
-    
-    # === Context & Security ===
-    # ForensicContext removed
-    "SecurityViolationService",
 ]

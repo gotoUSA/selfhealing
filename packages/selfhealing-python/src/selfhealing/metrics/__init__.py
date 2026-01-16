@@ -35,7 +35,8 @@ from selfhealing.metrics.decorators import (
     track_execution_time,
     track_counter,
 )
-from selfhealing.metrics.jitter import (
+# Import from new location to avoid DeprecationWarning internally
+from selfhealing.utils.jitter import (
     with_jitter,
     calculate_jitter,
     sleep_with_jitter,

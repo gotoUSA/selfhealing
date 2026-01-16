@@ -166,24 +166,27 @@ class TestLogComplianceAudit:
             
             mock_buffer.assert_called_once()
 
-    def test_fallback_logging_without_request(self, caplog):
+    def test_fallback_logging_without_request(self):
         """Should fallback to logger when no request."""
         with patch(
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.compliance_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_compliance_audit
             
-            with caplog.at_level(logging.INFO):
-                log_compliance_audit(
-                    stage_name="test-stage",
-                    standard="DORA_2025",
-                    check_id="DORA-001",
-                    passed=True,
-                )
+            log_compliance_audit(
+                stage_name="test-stage",
+                standard="DORA_2025",
+                check_id="DORA-001",
+                passed=True,
+            )
             
-            assert "ComplianceAudit" in caplog.text
-            assert "PASSED" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "ComplianceAudit" in call_args
+            assert "PASSED" in call_args
 
 
 # =============================================================================
@@ -269,26 +272,29 @@ class TestLogBlastRadiusAudit:
             assert "Region level requires approval" in call_kwargs["error_message"]
             assert call_kwargs["details"]["violations"] == violations
 
-    def test_fallback_logging_for_violation(self, caplog):
+    def test_fallback_logging_for_violation(self):
         """Should fallback to logger for violations."""
         with patch(
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.compliance_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
             
-            with caplog.at_level(logging.WARNING):
-                log_blast_radius_audit(
-                    experiment_id="exp-blocked",
-                    blast_radius="region",
-                    target_service="test-service",
-                    action="check",
-                    allowed=False,
-                    violations=["Test violation"],
-                )
+            log_blast_radius_audit(
+                experiment_id="exp-blocked",
+                blast_radius="region",
+                target_service="test-service",
+                action="check",
+                allowed=False,
+                violations=["Test violation"],
+            )
             
-            assert "BlastRadiusAudit" in caplog.text
-            assert "VIOLATION" in caplog.text
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "BlastRadiusAudit" in call_args
+            assert "VIOLATION" in call_args
 
 
 # =============================================================================
@@ -367,24 +373,27 @@ class TestLogFinopsAudit:
             assert call_kwargs["event_type"] == "FINOPS_BUDGET_EXCEEDED"
             assert call_kwargs["success"] is False  # over_budget is critical
 
-    def test_fallback_logging_for_critical(self, caplog):
+    def test_fallback_logging_for_critical(self):
         """Should use critical log level for over_budget."""
         with patch(
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.compliance_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_finops_audit
             
-            with caplog.at_level(logging.WARNING):
-                log_finops_audit(
-                    stage_name="production",
-                    alert_type="over_budget",
-                    current_cost=15.00,
-                    budget_limit=10.00,
-                )
+            log_finops_audit(
+                stage_name="production",
+                alert_type="over_budget",
+                current_cost=15.00,
+                budget_limit=10.00,
+            )
             
-            assert "FinOpsAudit" in caplog.text
-            assert "OVER_BUDGET" in caplog.text
+            mock_logger.critical.assert_called_once()
+            call_args = mock_logger.critical.call_args[0][0]
+            assert "FinOpsAudit" in call_args
+            assert "OVER_BUDGET" in call_args
 
 
 # =============================================================================

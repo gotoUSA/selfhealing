@@ -18,6 +18,7 @@ from enum import Enum
 
 from .adjustment_recorder import AdjustmentRecorder
 from .models import TuningState, AdjustmentRecord
+from .metrics_provider import MetricsProviderWrapper
 
 # Governance integration
 from selfhealing.services.governance_checks import (
@@ -967,22 +968,6 @@ class AutoTuningService:
     
     def _create_metrics_provider(self, metrics_adapter):
         """MetricsProvider 래퍼 생성"""
-        class MetricsProviderWrapper:
-            def __init__(self, adapter):
-                self.adapter = adapter
-            
-            def get_error_rate(self) -> float:
-                metrics = self.adapter.fetch_current_metrics()
-                return metrics.get("error_rate", 0.0)
-            
-            def get_latency_p99(self) -> float:
-                metrics = self.adapter.fetch_current_metrics()
-                return metrics.get("p99_latency_ms", 0.0)
-            
-            def get_throughput(self) -> float:
-                metrics = self.adapter.fetch_current_metrics()
-                return metrics.get("throughput_rps", 0.0)
-        
         return MetricsProviderWrapper(metrics_adapter)
     
     def _handle_guard_alert(self, alert_type: str, message: str):

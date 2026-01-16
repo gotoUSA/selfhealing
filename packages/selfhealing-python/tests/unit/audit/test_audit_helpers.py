@@ -38,7 +38,7 @@ class TestLogDlqStoreAudit:
                 error_message="Connection timed out",
             )
 
-    def test_logs_to_standard_logger_when_adapter_unavailable(self, caplog):
+    def test_logs_to_standard_logger_when_adapter_unavailable(self):
         """Should log to standard logger when adapter is not available."""
         with patch(
             "selfhealing.services.audit.dlq_audit._get_audit_adapter",
@@ -46,22 +46,24 @@ class TestLogDlqStoreAudit:
         ), patch(
             "selfhealing.services.audit.dlq_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.dlq_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_dlq_store_audit
-            import logging
             
-            with caplog.at_level(logging.INFO):
-                log_dlq_store_audit(
-                    dlq_id=456,
-                    domain="point",
-                    failure_type="AMOUNT_MISMATCH",
-                )
+            log_dlq_store_audit(
+                dlq_id=456,
+                domain="point",
+                failure_type="AMOUNT_MISMATCH",
+            )
             
-            assert "[DLQAudit] STORE" in caplog.text
-            assert "id=456" in caplog.text
-            assert "domain=point" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[DLQAudit] STORE" in call_args
+            assert "id=456" in call_args
+            assert "domain=point" in call_args
 
-    def test_handles_adapter_exception_gracefully(self, caplog):
+    def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_store fails."""
         mock_adapter = MagicMock()
         mock_adapter.log_dlq_store.side_effect = Exception("Adapter error")
@@ -72,19 +74,21 @@ class TestLogDlqStoreAudit:
         ), patch(
             "selfhealing.services.audit.dlq_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.dlq_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_dlq_store_audit
-            import logging
             
-            with caplog.at_level(logging.WARNING):
-                # Should not raise
-                log_dlq_store_audit(
-                    dlq_id=789,
-                    domain="webhook",
-                    failure_type="SIGNATURE_INVALID",
-                )
+            # Should not raise
+            log_dlq_store_audit(
+                dlq_id=789,
+                domain="webhook",
+                failure_type="SIGNATURE_INVALID",
+            )
             
-            assert "[DLQAudit] Failed to log store" in caplog.text
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "[DLQAudit] Failed to log store" in call_args
 
 
 class TestLogDlqReplayAudit:
@@ -146,7 +150,7 @@ class TestLogDlqReplayAudit:
                 error_message="Max retries exceeded",
             )
 
-    def test_logs_success_to_standard_logger_when_adapter_unavailable(self, caplog):
+    def test_logs_success_to_standard_logger_when_adapter_unavailable(self):
         """Should log SUCCESS to standard logger when adapter is unavailable."""
         with patch(
             "selfhealing.services.audit.dlq_audit._get_audit_adapter",
@@ -154,21 +158,23 @@ class TestLogDlqReplayAudit:
         ), patch(
             "selfhealing.services.audit.dlq_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.dlq_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
-            import logging
             
-            with caplog.at_level(logging.INFO):
-                log_dlq_replay_audit(
-                    dlq_id=789,
-                    domain="webhook",
-                    success=True,
-                )
+            log_dlq_replay_audit(
+                dlq_id=789,
+                domain="webhook",
+                success=True,
+            )
             
-            assert "[DLQAudit] REPLAY_SUCCESS" in caplog.text
-            assert "id=789" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[DLQAudit] REPLAY_SUCCESS" in call_args
+            assert "id=789" in call_args
 
-    def test_logs_failure_to_standard_logger_when_adapter_unavailable(self, caplog):
+    def test_logs_failure_to_standard_logger_when_adapter_unavailable(self):
         """Should log FAILED to standard logger when adapter is unavailable."""
         with patch(
             "selfhealing.services.audit.dlq_audit._get_audit_adapter",
@@ -176,23 +182,25 @@ class TestLogDlqReplayAudit:
         ), patch(
             "selfhealing.services.audit.dlq_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.dlq_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
-            import logging
             
-            with caplog.at_level(logging.INFO):
-                log_dlq_replay_audit(
-                    dlq_id=101,
-                    domain="notification",
-                    success=False,
-                    error_message="Handler crashed",
-                )
+            log_dlq_replay_audit(
+                dlq_id=101,
+                domain="notification",
+                success=False,
+                error_message="Handler crashed",
+            )
             
-            assert "[DLQAudit] REPLAY_FAILED" in caplog.text
-            assert "id=101" in caplog.text
-            assert "error=Handler crashed" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[DLQAudit] REPLAY_FAILED" in call_args
+            assert "id=101" in call_args
+            assert "error=Handler crashed" in call_args
 
-    def test_handles_adapter_exception_gracefully(self, caplog):
+    def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_replay fails."""
         mock_adapter = MagicMock()
         mock_adapter.log_dlq_replay.side_effect = Exception("Adapter error")
@@ -203,19 +211,21 @@ class TestLogDlqReplayAudit:
         ), patch(
             "selfhealing.services.audit.dlq_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.dlq_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
-            import logging
             
-            with caplog.at_level(logging.WARNING):
-                # Should not raise
-                log_dlq_replay_audit(
-                    dlq_id=202,
-                    domain="payment",
-                    success=True,
-                )
+            # Should not raise
+            log_dlq_replay_audit(
+                dlq_id=202,
+                domain="payment",
+                success=True,
+            )
             
-            assert "[DLQAudit] Failed to log replay" in caplog.text
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args[0][0]
+            assert "[DLQAudit] Failed to log replay" in call_args
 
 
 class TestGetAuditAdapter:

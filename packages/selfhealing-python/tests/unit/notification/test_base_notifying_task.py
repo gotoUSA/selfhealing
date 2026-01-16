@@ -169,32 +169,6 @@ class TestDailyAutonomousReport:
         assert report.drift_warnings_count == 0
         assert report.custom_counts == {}
 
-    def test_to_slack_message(self):
-        """Slack 메시지 포맷팅 확인."""
-        report = DailyAutonomousReport(
-            archived_count=10,
-            expired_count=5,
-            purged_count=2,
-            approval_expired_count=1,
-            recovered_count=3,
-            drift_warnings_count=0,
-        )
-        message = report.to_slack_message()
-        assert "자율 운영 일일 리포트" in message
-        assert "아카이브: 10건" in message
-        assert "만료 처리: 5건" in message
-        assert "영구 삭제: 2건" in message
-        assert "승인 만료: 1건" in message
-        assert "복구 완료: 3건" in message
-
-    def test_to_slack_message_with_custom_counts(self):
-        """커스텀 카운트 포함 메시지."""
-        report = DailyAutonomousReport(
-            custom_counts={"특수작업": 42},
-        )
-        message = report.to_slack_message()
-        assert "특수작업: 42건" in message
-
     def test_to_dict(self):
         """딕셔너리 변환 확인."""
         report = DailyAutonomousReport(
@@ -205,6 +179,33 @@ class TestDailyAutonomousReport:
         assert data["archived_count"] == 10
         assert data["expired_count"] == 5
         assert "date" in data
+
+    def test_merge_reports(self):
+        """리포트 병합 확인 - to_slack_message가 제거되었으므로 대체 테스트."""
+        report1 = DailyAutonomousReport(
+            archived_count=10,
+            expired_count=5,
+            purged_count=2,
+        )
+        report2 = DailyAutonomousReport(
+            archived_count=5,
+            expired_count=3,
+            recovered_count=7,
+        )
+        report1.merge(report2)
+        
+        assert report1.archived_count == 15
+        assert report1.expired_count == 8
+        assert report1.purged_count == 2
+        assert report1.recovered_count == 7
+
+    def test_custom_counts_in_to_dict(self):
+        """커스텀 카운트가 to_dict에 포함되는지 확인."""
+        report = DailyAutonomousReport(
+            custom_counts={"특수작업": 42},
+        )
+        data = report.to_dict()
+        assert data["custom_counts"]["특수작업"] == 42
 
 
 # =============================================================================

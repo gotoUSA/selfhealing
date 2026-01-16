@@ -18,6 +18,13 @@ from selfhealing.utils.async_logger import (
     AsyncHealingLogger,
     EventSeverity,
 )
+from selfhealing.utils.jitter import (
+    with_jitter,
+    calculate_jitter,
+    sleep_with_jitter,
+    async_sleep_with_jitter,
+    JitterConfig,
+)
 
 __all__ = [
     "utc_now",
@@ -31,4 +38,10 @@ __all__ = [
     # Platinum SLA Optimization
     "AsyncHealingLogger",
     "EventSeverity",
+    # Jitter utilities (Thundering Herd prevention)
+    "with_jitter",
+    "calculate_jitter",
+    "sleep_with_jitter",
+    "async_sleep_with_jitter",
+    "JitterConfig",
 ]

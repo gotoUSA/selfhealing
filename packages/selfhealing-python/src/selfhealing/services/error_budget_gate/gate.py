@@ -10,6 +10,7 @@ Reference:
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 from datetime import datetime, timezone
@@ -741,12 +742,10 @@ def automation_gate(action: str = ""):
             ...
     """
     def decorator(func: Callable):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             require_automation_allowed(action=action or func.__name__)
             return func(*args, **kwargs)
-        
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
         return wrapper
     
     return decorator

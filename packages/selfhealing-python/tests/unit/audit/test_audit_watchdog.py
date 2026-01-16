@@ -526,15 +526,18 @@ class TestSingletonFunctions:
             assert watchdog.is_running
             assert watchdog._state == WatchdogState.RUNNING
             
-            # watchdog을 직접 stop
+            # 직접 watchdog 인스턴스 중지 (stop_watchdog 대신)
             watchdog.stop(timeout=2.0)
             
-            # 상태 확인 - stop()은 _state를 STOPPED로 설정함
-            assert watchdog._state == WatchdogState.STOPPED, f"Expected STOPPED but got {watchdog._state}"
+            # 명시적으로 상태 확인
+            assert watchdog._state == WatchdogState.STOPPED, \
+                f"Expected STOPPED but got {watchdog._state}"
         finally:
-            # 테스트 후 정리
-            if watchdog._state != WatchdogState.STOPPED:
-                watchdog.stop(timeout=1.0)
+            # 테스트 후 정리 - 싱글톤도 정리
+            with aw_module._watchdog_lock:
+                if aw_module._watchdog_instance is not None:
+                    aw_module._watchdog_instance.stop(timeout=1.0)
+                    aw_module._watchdog_instance = None
 
     def test_stop_watchdog_without_start(self):
         """시작 없이 stop_watchdog 호출 테스트."""

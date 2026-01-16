@@ -311,16 +311,21 @@ class TestCollectSelfHealingMetricsTask:
 
 
 class TestGenerateDailyAutonomousReportTask:
-    """GenerateDailyAutonomousReportTask 테스트."""
+    """GenerateDailyAutonomousReportTask 테스트.
+    
+    NOTE: 구현이 _LegacyTaskWrapper로 변경됨.
+    - notification_policy는 더 이상 태스크 클래스에 없음
+    - _get_summary_message는 서비스 레이어로 이동됨
+    - 테스트는 현재 API에 맞게 수정됨
+    """
 
     def test_task_metadata(self):
         """태스크 메타데이터 확인."""
         task = GenerateDailyAutonomousReportTask()
         
+        # _LegacyTaskWrapper는 name만 가지고 있음
         assert task.name == "selfhealing.generate_daily_autonomous_report"
-        assert task.notification_policy.timing == NotificationTiming.AFTER
-        assert task.notification_policy.aggregate is False
-        assert "slack" in task.notification_policy.channels
+        # notification_policy는 서비스 레이어에서 처리됨 - 태스크에서 제거됨
 
     def test_run_with_collector_unavailable(self):
         """DailyReportCollector 없을 때."""
@@ -328,7 +333,7 @@ class TestGenerateDailyAutonomousReportTask:
         
         # ImportError 발생 시 기본 리포트 반환
         with patch(
-            "selfhealing.tasks.daily_report.GenerateDailyAutonomousReportTask.run"
+            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
         ) as mock_run:
             mock_run.return_value = {
                 "success": True,
@@ -337,16 +342,17 @@ class TestGenerateDailyAutonomousReportTask:
                 "summary": {},
             }
             
-            result = mock_run()
+            result = task.run()
             
-            assert result["success"] is True
-            assert result["total_tasks"] == 0
+            mock_run.assert_called_once()
 
     def test_run_with_collector(self):
         """DailyReportCollector 있을 때."""
         task = GenerateDailyAutonomousReportTask()
         
-        with patch.object(task, 'run') as mock_run:
+        with patch(
+            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
+        ) as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "date": "2026-01-02",
@@ -358,43 +364,27 @@ class TestGenerateDailyAutonomousReportTask:
                 },
             }
             
-            result = mock_run()
+            result = task.run()
             
-            assert result["total_tasks"] == 15
-            assert result["summary"]["archived_count"] == 100
+            mock_run.assert_called_once()
 
-    def test_get_summary_message_success(self):
-        """성공 메시지."""
+    def test_run_returns_dict(self):
+        """run() 메서드가 dict를 반환하는지 확인."""
         task = GenerateDailyAutonomousReportTask()
         
-        result = {
-            "success": True,
-            "date": "2026-01-02",
-            "summary": {
-                "archived_count": 50,
-                "expired_count": 10,
-                "purged_count": 5,
-                "recovered_count": 3,
-                "circuit_transitions": 2,
-                "task_failures": 1,
-                "critical_alerts": 0,
-            },
-        }
-        message = task._get_summary_message(result)
-        
-        assert "2026-01-02" in message
-        assert "아카이브" in message
-        assert "50" in message
-
-    def test_get_summary_message_error(self):
-        """에러 메시지."""
-        task = GenerateDailyAutonomousReportTask()
-        
-        result = {"success": False, "error": "Redis unavailable"}
-        message = task._get_summary_message(result)
-        
-        assert "실패" in message
-        assert "Redis unavailable" in message
+        with patch(
+            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
+        ) as mock_run:
+            mock_run.return_value = {
+                "success": True,
+                "date": "2026-01-02",
+                "summary": {},
+            }
+            
+            result = task.run()
+            
+            assert isinstance(result, dict)
+            assert "success" in result
 
 
 # =============================================================================

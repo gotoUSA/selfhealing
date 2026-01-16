@@ -101,14 +101,19 @@ def track_dlq_resolution(domain: str) -> Callable[[Callable[P, R]], Callable[P, 
     return decorator
 
 
-def track_replay(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def track_replay(
+    domain: str = "",
+    replay_type: str = "auto",
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Replay 함수에 메트릭 추적을 추가하는 데코레이터.
 
     Replay 시작/완료를 자동으로 추적하고 소요 시간을 기록합니다.
+    또한 replay 시도를 기록합니다.
 
     Args:
-        domain: 도메인 이름
+        domain: 도메인 이름 (빈 문자열이면 kwargs에서 추출)
+        replay_type: Replay 유형 (auto, manual, batch)
 
     Example:
         >>> @track_replay(domain="payment")
@@ -116,13 +121,19 @@ def track_replay(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
         ...     # Replay 로직
         ...     await process_payment(dlq_item.payload)
         ...     return True
+        
+        >>> @track_replay(replay_type="batch")
+        ... def batch_replay(items, domain="payment"):
+        ...     # Batch replay 로직
+        ...     pass
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            replay_type = kwargs.get("replay_type", "auto")
-            ReplayEventHandler.on_replay_started(domain, replay_type)
+            _domain = domain or kwargs.get("domain", "unknown")
+            _replay_type = kwargs.get("replay_type", replay_type)
+            ReplayEventHandler.on_replay_started(_domain, _replay_type)
 
             start_time = time.monotonic()
             success = False
@@ -136,7 +147,7 @@ def track_replay(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
                 raise
             finally:
                 duration = time.monotonic() - start_time
-                ReplayEventHandler.on_replay_completed(domain, success, duration)
+                ReplayEventHandler.on_replay_completed(_domain, success, duration)
 
         return wrapper
 

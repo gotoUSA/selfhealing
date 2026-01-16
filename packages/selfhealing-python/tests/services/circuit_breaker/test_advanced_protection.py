@@ -564,18 +564,23 @@ class TestFreezeModeState:
 
 
 class TestCoreConfigIntegration:
-    """core/config.py 통합 테스트."""
+    """core/config.py 통합 테스트.
+    
+    NOTE: Pydantic v2 마이그레이션 후 API 변경됨.
+    - circuit_breaker_advanced는 분리된 설정으로 관리
+    - get_circuit_breaker_advanced_settings()로 접근
+    - model_dump(), model_validate() 사용
+    """
 
-    def test_circuit_breaker_advanced_config_in_self_healing_config(self):
-        """SelfHealingConfig에 circuit_breaker_advanced 포함."""
-        config = SelfHealingConfig()
-        assert hasattr(config, 'circuit_breaker_advanced')
-        assert isinstance(config.circuit_breaker_advanced, CoreCBAdvancedConfig)
+    def test_circuit_breaker_advanced_config_available(self):
+        """CircuitBreakerAdvancedSettings 독립적으로 접근 가능."""
+        settings = get_circuit_breaker_advanced_settings()
+        assert settings is not None
+        assert isinstance(settings, CoreCBAdvancedConfig)
 
     def test_default_values(self):
         """기본값 확인."""
-        config = SelfHealingConfig()
-        cb_advanced = config.circuit_breaker_advanced
+        cb_advanced = get_circuit_breaker_advanced_settings()
         
         assert cb_advanced.enabled is True
         assert cb_advanced.load_shedding_enabled is True
@@ -585,27 +590,25 @@ class TestCoreConfigIntegration:
         assert cb_advanced.freeze_on_lockdown is True
         assert cb_advanced.panic_threshold_enabled is True
 
-    def test_from_dict(self):
-        """from_dict로 설정 로드."""
+    def test_model_validate(self):
+        """Pydantic v2 model_validate로 설정 로드."""
         config_dict = {
-            "circuit_breaker_advanced": {
-                "enabled": False,
-                "panic_threshold_percent": 80.0,
-            }
+            "enabled": False,
+            "panic_threshold_percent": 80.0,
         }
-        config = SelfHealingConfig.from_dict(config_dict)
+        config = CoreCBAdvancedConfig.model_validate(config_dict)
         
-        assert config.circuit_breaker_advanced.enabled is False
-        assert config.circuit_breaker_advanced.panic_threshold_percent == 80.0
+        assert config.enabled is False
+        assert config.panic_threshold_percent == 80.0
 
-    def test_to_dict(self):
-        """to_dict로 설정 직렬화."""
-        config = SelfHealingConfig()
-        config_dict = config.to_dict()
+    def test_model_dump(self):
+        """Pydantic v2 model_dump로 설정 직렬화."""
+        config = CoreCBAdvancedConfig()
+        config_dict = config.model_dump()
         
-        assert "circuit_breaker_advanced" in config_dict
-        assert config_dict["circuit_breaker_advanced"]["enabled"] is True
-        assert config_dict["circuit_breaker_advanced"]["panic_threshold_percent"] == 70.0
+        assert "enabled" in config_dict
+        assert config_dict["enabled"] is True
+        assert config_dict["panic_threshold_percent"] == 70.0
 
     def test_get_circuit_breaker_advanced_settings(self):
         """convenience getter 함수 테스트."""

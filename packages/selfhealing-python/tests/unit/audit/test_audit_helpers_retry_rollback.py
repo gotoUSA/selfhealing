@@ -13,7 +13,7 @@ import logging
 class TestLogRetryAudit:
     """Tests for log_retry_audit function."""
 
-    def test_logs_retry_attempted_to_standard_logger(self, caplog):
+    def test_logs_retry_attempted_to_standard_logger(self):
         """Should log RETRY status when attempt < max_attempts."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -21,26 +21,29 @@ class TestLogRetryAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=1,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_retry_audit
             
-            with caplog.at_level(logging.INFO):
-                result = log_retry_audit(
-                    domain="payment",
-                    attempt=1,
-                    max_attempts=3,
-                    success=False,
-                    error_type="ConnectionError",
-                    error_message="Connection refused",
-                    wait_time=4.0,
-                )
+            result = log_retry_audit(
+                domain="payment",
+                attempt=1,
+                max_attempts=3,
+                success=False,
+                error_type="ConnectionError",
+                error_message="Connection refused",
+                wait_time=4.0,
+            )
             
             assert result == 1  # WAL sequence number
-            assert "[RetryAudit] RETRY" in caplog.text
-            assert "domain=payment" in caplog.text
-            assert "attempt=1/3" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RetryAudit] RETRY" in call_args
+            assert "domain=payment" in call_args
+            assert "attempt=1/3" in call_args
 
-    def test_logs_retry_exhausted_when_max_attempts_reached(self, caplog):
+    def test_logs_retry_exhausted_when_max_attempts_reached(self):
         """Should log EXHAUSTED status when attempt >= max_attempts."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -48,24 +51,27 @@ class TestLogRetryAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=2,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_retry_audit
             
-            with caplog.at_level(logging.INFO):
-                result = log_retry_audit(
-                    domain="payment",
-                    attempt=3,
-                    max_attempts=3,
-                    success=False,
-                    error_type="TimeoutError",
-                    error_message="Request timed out",
-                )
+            result = log_retry_audit(
+                domain="payment",
+                attempt=3,
+                max_attempts=3,
+                success=False,
+                error_type="TimeoutError",
+                error_message="Request timed out",
+            )
             
             assert result == 2
-            assert "[RetryAudit] EXHAUSTED" in caplog.text
-            assert "attempt=3/3" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RetryAudit] EXHAUSTED" in call_args
+            assert "attempt=3/3" in call_args
 
-    def test_logs_retry_success(self, caplog):
+    def test_logs_retry_success(self):
         """Should log SUCCESS status when retry succeeds."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -73,18 +79,21 @@ class TestLogRetryAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=3,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_retry_audit
             
-            with caplog.at_level(logging.INFO):
-                log_retry_audit(
-                    domain="payment",
-                    attempt=2,
-                    max_attempts=3,
-                    success=True,
-                )
+            log_retry_audit(
+                domain="payment",
+                attempt=2,
+                max_attempts=3,
+                success=True,
+            )
             
-            assert "[RetryAudit] SUCCESS" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RetryAudit] SUCCESS" in call_args
 
     def test_wal_event_type_is_retry_exhausted(self):
         """Should use RETRY_EXHAUSTED event type when exhausted."""
@@ -179,7 +188,7 @@ class TestLogRetryAudit:
 class TestLogSystemControlAudit:
     """Tests for log_system_control_audit function."""
 
-    def test_logs_enable_action(self, caplog):
+    def test_logs_enable_action(self):
         """Should log ENABLE action."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -187,24 +196,27 @@ class TestLogSystemControlAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=10,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_system_control_audit
             
-            with caplog.at_level(logging.INFO):
-                result = log_system_control_audit(
-                    action="enable",
-                    actor="admin",
-                    old_state={"enabled": False},
-                    new_state={"enabled": True},
-                    reason="Maintenance completed",
-                )
+            result = log_system_control_audit(
+                action="enable",
+                actor="admin",
+                old_state={"enabled": False},
+                new_state={"enabled": True},
+                reason="Maintenance completed",
+            )
             
             assert result == 10
-            assert "[SystemControlAudit] ENABLE" in caplog.text
-            assert "actor=admin" in caplog.text
-            assert "reason=Maintenance completed" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[SystemControlAudit] ENABLE" in call_args
+            assert "actor=admin" in call_args
+            assert "reason=Maintenance completed" in call_args
 
-    def test_logs_disable_action(self, caplog):
+    def test_logs_disable_action(self):
         """Should log DISABLE action."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -212,17 +224,20 @@ class TestLogSystemControlAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=11,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_system_control_audit
             
-            with caplog.at_level(logging.INFO):
-                log_system_control_audit(
-                    action="disable",
-                    actor="system",
-                    reason="Emergency shutdown",
-                )
+            log_system_control_audit(
+                action="disable",
+                actor="system",
+                reason="Emergency shutdown",
+            )
             
-            assert "[SystemControlAudit] DISABLE" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[SystemControlAudit] DISABLE" in call_args
 
     def test_wal_event_type_is_system_control_changed(self):
         """Should use SYSTEM_CONTROL_CHANGED event type."""
@@ -271,7 +286,7 @@ class TestLogSystemControlAudit:
 class TestLogRollbackAudit:
     """Tests for log_rollback_audit function."""
 
-    def test_logs_pending_state(self, caplog):
+    def test_logs_pending_state(self):
         """Should log PENDING status when rollback is requested."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -279,24 +294,27 @@ class TestLogRollbackAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=20,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_rollback_audit
             
-            with caplog.at_level(logging.INFO):
-                result = log_rollback_audit(
-                    request_id="rb-001",
-                    stage_name="production",
-                    state="pending",
-                    triggered_by="system",
-                    reason="Error rate exceeded threshold",
-                )
+            result = log_rollback_audit(
+                request_id="rb-001",
+                stage_name="production",
+                state="pending",
+                triggered_by="system",
+                reason="Error rate exceeded threshold",
+            )
             
             assert result == 20
-            assert "[RollbackAudit] PENDING" in caplog.text
-            assert "request=rb-001" in caplog.text
-            assert "stage=production" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RollbackAudit] PENDING" in call_args
+            assert "request=rb-001" in call_args
+            assert "stage=production" in call_args
 
-    def test_logs_completed_state(self, caplog):
+    def test_logs_completed_state(self):
         """Should log COMPLETED status when rollback succeeds."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -304,23 +322,26 @@ class TestLogRollbackAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=21,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_rollback_audit
             
-            with caplog.at_level(logging.INFO):
-                log_rollback_audit(
-                    request_id="rb-002",
-                    stage_name="staging",
-                    state="completed",
-                    triggered_by="admin",
-                    affected_components=["api", "worker"],
-                    duration_seconds=45.5,
-                )
+            log_rollback_audit(
+                request_id="rb-002",
+                stage_name="staging",
+                state="completed",
+                triggered_by="admin",
+                affected_components=["api", "worker"],
+                duration_seconds=45.5,
+            )
             
-            assert "[RollbackAudit] COMPLETED" in caplog.text
-            assert "duration=45.50s" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RollbackAudit] COMPLETED" in call_args
+            assert "duration=45.50s" in call_args
 
-    def test_logs_failed_state_with_errors(self, caplog):
+    def test_logs_failed_state_with_errors(self):
         """Should log FAILED status with errors."""
         with patch(
             "selfhealing.services.audit.base._get_audit_adapter",
@@ -328,19 +349,22 @@ class TestLogRollbackAudit:
         ), patch(
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=22,
-        ):
+        ), patch(
+            "selfhealing.services.audit.retry_audit.logger"
+        ) as mock_logger:
             from selfhealing.services.audit_helpers import log_rollback_audit
             
-            with caplog.at_level(logging.INFO):
-                log_rollback_audit(
-                    request_id="rb-003",
-                    stage_name="production",
-                    state="failed",
-                    triggered_by="system",
-                    errors=["Timeout exceeded", "Handler crashed"],
-                )
+            log_rollback_audit(
+                request_id="rb-003",
+                stage_name="production",
+                state="failed",
+                triggered_by="system",
+                errors=["Timeout exceeded", "Handler crashed"],
+            )
             
-            assert "[RollbackAudit] FAILED" in caplog.text
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            assert "[RollbackAudit] FAILED" in call_args
 
     def test_wal_event_type_is_rollback_performed(self):
         """Should use ROLLBACK_PERFORMED event type."""

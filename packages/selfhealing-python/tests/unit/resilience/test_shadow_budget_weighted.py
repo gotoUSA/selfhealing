@@ -410,8 +410,9 @@ class TestDomainWeighting:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
@@ -436,8 +437,9 @@ class TestDomainWeighting:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
@@ -450,8 +452,9 @@ class TestDomainWeighting:
         def raise_error():
             raise RuntimeError("Config unavailable")
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             raise_error,
         )
         
@@ -474,8 +477,9 @@ class TestDomainWeightIntegration:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
@@ -696,8 +700,9 @@ class TestMultiplierCap:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
@@ -747,8 +752,9 @@ class TestMultiplierCap:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
@@ -808,8 +814,9 @@ class TestCalculateShadowBudgetWithDomainAndPattern:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
         
+        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.core.config.get_config",
+            "selfhealing.settings.get_config",
             lambda: MockConfig(),
         )
         
