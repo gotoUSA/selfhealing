@@ -2,7 +2,7 @@
 Tests for Emergency Escalation Permission (Break Glass Pattern).
 
 Tests the one-way emergency escalation for Self-Healing API:
-- Operator can escalate to STRICT mode (emergency)
+- Operator can escalate to STRICT mode (emergency) with reason required
 - Only Admin can restore to NORMAL mode
 - Proper audit logging for emergency actions
 
@@ -31,7 +31,7 @@ class TestEmergencyEscalationPermission:
         permission = EmergencyEscalationPermission()
         request = Mock()
         request.user = None
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": "test"}
         view = Mock()
 
         assert permission.has_permission(request, view) is False
@@ -42,17 +42,17 @@ class TestEmergencyEscalationPermission:
         request = Mock()
         request.user = Mock()
         request.user.is_authenticated = False
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": "test"}
         view = Mock()
 
         assert permission.has_permission(request, view) is False
 
 
 class TestEmergencyEscalationToStrict:
-    """Tests for STRICT mode escalation (Operator allowed)."""
+    """Tests for STRICT mode escalation (Operator allowed + reason required)."""
 
-    def test_operator_can_escalate_to_strict(self):
-        """Operator should be able to escalate to STRICT mode."""
+    def test_operator_can_escalate_to_strict_with_reason(self):
+        """Operator should be able to escalate to STRICT mode with reason."""
         permission = EmergencyEscalationPermission()
         request = Mock()
         request.user = Mock()
@@ -60,19 +60,57 @@ class TestEmergencyEscalationToStrict:
         request.user.is_staff = False
         request.user.is_superuser = False
         request.user.groups.filter.return_value.exists.return_value = True
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": "High error rate detected"}
         view = Mock()
 
         assert permission.has_permission(request, view) is True
 
-    def test_admin_can_escalate_to_strict(self):
-        """Admin should be able to escalate to STRICT mode."""
+    def test_operator_cannot_escalate_to_strict_without_reason(self):
+        """Operator should NOT be able to escalate to STRICT without reason."""
+        permission = EmergencyEscalationPermission()
+        request = Mock()
+        request.user = Mock()
+        request.user.is_authenticated = True
+        request.user.is_staff = False
+        request.user.is_superuser = False
+        request.user.groups.filter.return_value.exists.return_value = True
+        request.data = {"mode": "STRICT"}  # No reason
+        view = Mock()
+
+        assert permission.has_permission(request, view) is False
+
+    def test_strict_denied_with_empty_reason(self):
+        """STRICT escalation should be denied with empty reason."""
         permission = EmergencyEscalationPermission()
         request = Mock()
         request.user = Mock()
         request.user.is_authenticated = True
         request.user.is_superuser = True
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": ""}  # Empty reason
+        view = Mock()
+
+        assert permission.has_permission(request, view) is False
+
+    def test_strict_denied_with_whitespace_only_reason(self):
+        """STRICT escalation should be denied with whitespace-only reason."""
+        permission = EmergencyEscalationPermission()
+        request = Mock()
+        request.user = Mock()
+        request.user.is_authenticated = True
+        request.user.is_superuser = True
+        request.data = {"mode": "STRICT", "reason": "   "}  # Whitespace only
+        view = Mock()
+
+        assert permission.has_permission(request, view) is False
+
+    def test_admin_can_escalate_to_strict_with_reason(self):
+        """Admin should be able to escalate to STRICT mode with reason."""
+        permission = EmergencyEscalationPermission()
+        request = Mock()
+        request.user = Mock()
+        request.user.is_authenticated = True
+        request.user.is_superuser = True
+        request.data = {"mode": "STRICT", "reason": "Emergency maintenance"}
         view = Mock()
 
         assert permission.has_permission(request, view) is True
@@ -87,7 +125,7 @@ class TestEmergencyEscalationToStrict:
         request.user.is_superuser = False
         # Viewer only - not in operator/admin groups
         request.user.groups.filter.return_value.exists.return_value = False
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": "test"}
         view = Mock()
 
         assert permission.has_permission(request, view) is False
@@ -100,14 +138,14 @@ class TestEmergencyEscalationToStrict:
         request.user.is_authenticated = True
         request.user.is_staff = True
         request.user.is_superuser = True
-        request.data = {"mode": "strict"}  # lowercase
+        request.data = {"mode": "strict", "reason": "Test reason"}  # lowercase
         view = Mock()
 
         assert permission.has_permission(request, view) is True
 
     @patch("selfhealing.api.django.permissions.logger")
-    def test_strict_escalation_logs_warning(self, mock_logger):
-        """STRICT escalation by operator should log a warning."""
+    def test_strict_escalation_logs_warning_with_reason(self, mock_logger):
+        """STRICT escalation by operator should log a warning with reason."""
         permission = EmergencyEscalationPermission()
         request = Mock()
         request.user = Mock()
@@ -115,7 +153,7 @@ class TestEmergencyEscalationToStrict:
         request.user.is_staff = False
         request.user.is_superuser = False
         request.user.groups.filter.return_value.exists.return_value = True
-        request.data = {"mode": "STRICT"}
+        request.data = {"mode": "STRICT", "reason": "High error rate"}
         view = Mock()
 
         permission.has_permission(request, view)
@@ -123,6 +161,25 @@ class TestEmergencyEscalationToStrict:
         mock_logger.warning.assert_called()
         call_args = mock_logger.warning.call_args[0][0]
         assert "Emergency escalation to STRICT" in call_args
+        assert "reason=" in call_args
+
+    @patch("selfhealing.api.django.permissions.logger")
+    def test_strict_without_reason_logs_warning(self, mock_logger):
+        """STRICT escalation without reason should log a denial warning."""
+        permission = EmergencyEscalationPermission()
+        request = Mock()
+        request.user = Mock()
+        request.user.is_authenticated = True
+        request.user.is_superuser = True
+        request.data = {"mode": "STRICT"}  # No reason
+        view = Mock()
+
+        result = permission.has_permission(request, view)
+
+        assert result is False
+        mock_logger.warning.assert_called()
+        call_args = mock_logger.warning.call_args[0][0]
+        assert "reason required" in call_args
 
 
 class TestEmergencyRestoreToNormal:
@@ -257,7 +314,7 @@ class TestEmergencyExpiryHours:
             request.user.is_staff = False
             request.user.is_superuser = False
             request.user.groups.filter.return_value.exists.return_value = True
-            request.data = {"mode": "STRICT"}
+            request.data = {"mode": "STRICT", "reason": "Test reason"}
             view = Mock()
 
             permission.has_permission(request, view)
@@ -276,3 +333,81 @@ class TestEmergencyPermissionMessage:
         assert "NORMAL" in permission.message
         assert "Operator" in permission.message
         assert "Admin" in permission.message
+
+    def test_reason_required_message_on_strict_without_reason(self):
+        """Permission message should indicate reason is required for STRICT."""
+        permission = EmergencyEscalationPermission()
+        request = Mock()
+        request.user = Mock()
+        request.user.is_authenticated = True
+        request.user.is_superuser = True
+        request.data = {"mode": "STRICT"}  # No reason
+        view = Mock()
+
+        permission.has_permission(request, view)
+        
+        # After failed check, message should be updated
+        assert "reason" in permission.message.lower()
+        assert "필수" in permission.message or "required" in permission.message.lower()
+
+
+class TestEmergencyTrackerIntegration:
+    """Tests for EmergencyModeTracker integration."""
+
+    @patch("selfhealing.services.governance.get_emergency_tracker")
+    def test_strict_mode_activates_tracker(self, mock_get_tracker):
+        """STRICT mode change should activate EmergencyModeTracker."""
+        from selfhealing.api.django.views.governance.service import GovernanceService
+        
+        mock_tracker = Mock()
+        mock_tracker.record_emergency_activation.return_value = {
+            "status": "activated",
+            "expiry_hours": 8,
+        }
+        mock_get_tracker.return_value = mock_tracker
+        
+        service = GovernanceService()
+        
+        with patch.object(service, '_log_mode_change'):
+            with patch(
+                "selfhealing.metrics.reliability_manager.get_reliability_manager"
+            ) as mock_manager:
+                mock_manager.return_value.get_global_mode.return_value = Mock(value="normal")
+                mock_manager.return_value.force_global_mode.return_value = None
+                
+                result = service.set_mode("STRICT", actor="test_operator", reason="Test")
+        
+        mock_tracker.record_emergency_activation.assert_called_once_with(
+            activated_by="test_operator",
+            reason="Test",
+            mode="STRICT",
+        )
+        assert "expires_at" in result
+
+    @patch("selfhealing.services.governance.get_emergency_tracker")
+    def test_normal_mode_deactivates_tracker_from_strict(self, mock_get_tracker):
+        """NORMAL mode from STRICT should deactivate EmergencyModeTracker."""
+        from selfhealing.api.django.views.governance.service import GovernanceService
+        
+        mock_tracker = Mock()
+        mock_tracker.record_normal_restoration.return_value = {
+            "status": "restored",
+        }
+        mock_get_tracker.return_value = mock_tracker
+        
+        service = GovernanceService()
+        
+        with patch.object(service, '_log_mode_change'):
+            with patch(
+                "selfhealing.metrics.reliability_manager.get_reliability_manager"
+            ) as mock_manager:
+                # Previous mode was STRICT
+                mock_manager.return_value.get_global_mode.return_value = Mock(value="strict")
+                mock_manager.return_value.force_global_mode.return_value = None
+                
+                service.set_mode("NORMAL", actor="test_admin", reason="Recovery")
+        
+        mock_tracker.record_normal_restoration.assert_called_once_with(
+            restored_by="test_admin",
+            reason="Recovery",
+        )

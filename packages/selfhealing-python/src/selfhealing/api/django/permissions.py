@@ -204,12 +204,16 @@ class EmergencyEscalationPermission(BasePermission):
     긴급 에스컬레이션 권한 (Break Glass Pattern).
 
     일방향 긴급권:
-    - STRICT 전환: Operator도 가능 (긴급 상황)
+    - STRICT 전환: Operator도 가능 (긴급 상황) + 사유 필수
     - NORMAL 복구: Admin만 가능 (승인 필요)
 
     사용 시나리오:
     - Admin 부재 중 시스템 폭주
     - 운영자가 긴급히 STRICT 모드로 전환 필요
+
+    강제 Audit:
+    - STRICT 전환 시 reason 필수 (사후 검토 보장)
+    - 모든 전환은 EmergencyModeTracker에 기록됨
 
     Reference:
     - AWS Break Glass Pattern
@@ -219,14 +223,16 @@ class EmergencyEscalationPermission(BasePermission):
     """
 
     message = "긴급 에스컬레이션 권한이 없습니다. STRICT 전환은 Operator 이상, NORMAL 복구는 Admin만 가능합니다."
-    EMERGENCY_EXPIRY_HOURS = 4  # 긴급 모드 자동 만료 시간
+    EMERGENCY_EXPIRY_HOURS = 4  # 긴급 모드 자동 만료 시간 (governance config로 오버라이드 가능)
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
         모드 전환에 대한 권한 체크.
 
+        STRICT 전환 시 reason 필수 검증 (강제 Audit).
+
         Args:
-            request: HTTP 요청 객체 (data.mode 필드 사용)
+            request: HTTP 요청 객체 (data.mode, data.reason 필드 사용)
             view: 뷰 객체
 
         Returns:
@@ -236,14 +242,25 @@ class EmergencyEscalationPermission(BasePermission):
             return False
 
         target_mode = request.data.get("mode", "").upper()
+        reason = request.data.get("reason", "").strip()
 
-        # STRICT 전환 = Operator도 가능 (일방향 긴급권)
+        # STRICT 전환 = Operator도 가능 (일방향 긴급권) + 사유 필수
         if target_mode == "STRICT":
+            # 강제 Audit: 사유 필수 검증
+            if not reason:
+                self.message = "STRICT 모드 전환 시 reason(사유)은 필수입니다. 사후 감사를 위해 전환 사유를 입력해주세요."
+                logger.warning(
+                    f"[RBAC] STRICT escalation denied - reason required: "
+                    f"user={request.user}"
+                )
+                return False
+
             has_perm = IsOperator().has_permission(request, view)
             if has_perm:
                 logger.warning(
                     f"[RBAC] Emergency escalation to STRICT by operator: "
-                    f"user={request.user}, expiry_hours={self.EMERGENCY_EXPIRY_HOURS}"
+                    f"user={request.user}, reason={reason[:50]}, "
+                    f"expiry_hours={self.EMERGENCY_EXPIRY_HOURS}"
                 )
             return has_perm
 

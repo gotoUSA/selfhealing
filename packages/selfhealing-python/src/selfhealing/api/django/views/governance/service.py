@@ -4,7 +4,12 @@ Governance Service Layer.
 거버넌스 비즈니스 로직을 담당하는 서비스 클래스입니다.
 메트릭 상태 조회, 정합성 조정, 모드 전환 기능을 제공합니다.
 
+Break Glass Pattern:
+- STRICT 전환: EmergencyModeTracker에 기록 (자동 만료 추적)
+- NORMAL 복귀: EmergencyModeTracker에서 해제
+
 Reference:
+- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 1.5)
 - docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
 """
@@ -12,7 +17,7 @@ Reference:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -133,13 +138,17 @@ class GovernanceService:
         """
         운영 모드 강제 전환.
         
+        Break Glass Pattern 연동:
+        - STRICT 전환: EmergencyModeTracker에 기록 (자동 만료 추적 시작)
+        - NORMAL 복귀: EmergencyModeTracker에서 해제
+        
         Args:
             mode: "NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"
             actor: 수행자
-            reason: 사유
+            reason: 사유 (STRICT 전환 시 필수)
             
         Returns:
-            전환 결과
+            전환 결과 (expires_at 포함)
         """
         from selfhealing.metrics.reliability_manager import (
             get_reliability_manager,
@@ -161,10 +170,13 @@ class GovernanceService:
         # 모드 강제 설정
         manager.force_global_mode(target_mode, reason=reason or f"Forced by {actor}")
         
+        # EmergencyModeTracker 연동 (자동 만료 기능)
+        tracker_result = self._sync_emergency_tracker(mode_upper, actor, reason, old_mode)
+        
         # Audit 로깅
         self._log_mode_change(actor, old_mode, target_mode, reason)
         
-        return {
+        result = {
             "status": "mode_changed",
             "changed_at": datetime.now(timezone.utc).isoformat(),
             "actor": actor,
@@ -173,6 +185,78 @@ class GovernanceService:
             "reason": reason,
             "warning": self._get_mode_warning(target_mode),
         }
+        
+        # STRICT 모드인 경우 만료 정보 추가
+        if tracker_result and tracker_result.get("expires_at"):
+            result["expires_at"] = tracker_result["expires_at"]
+            result["expiry_hours"] = tracker_result.get("expiry_hours", 8)
+        
+        return result
+    
+    def _sync_emergency_tracker(
+        self,
+        mode: str,
+        actor: str,
+        reason: Optional[str],
+        old_mode,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        EmergencyModeTracker와 동기화 (자동 만료 기능).
+        
+        - STRICT 전환: 긴급 모드 활성화 기록
+        - NORMAL 복귀: 긴급 모드 해제 기록
+        
+        Args:
+            mode: 대상 모드
+            actor: 수행자
+            reason: 사유
+            old_mode: 이전 모드
+            
+        Returns:
+            Tracker 결과 또는 None
+        """
+        try:
+            from selfhealing.services.governance import get_emergency_tracker
+            tracker = get_emergency_tracker()
+            
+            old_mode_str = old_mode.value if hasattr(old_mode, 'value') else str(old_mode)
+            
+            if mode == "STRICT":
+                # 긴급 모드 활성화 (자동 만료 추적 시작)
+                result = tracker.record_emergency_activation(
+                    activated_by=actor,
+                    reason=reason or "Mode forced to STRICT",
+                    mode="STRICT",
+                )
+                logger.info(
+                    f"[Governance] Emergency tracker activated: "
+                    f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
+                )
+                
+                # 만료 시각 계산
+                expiry_hours = result.get("expiry_hours", 8)
+                expires_at = datetime.now(timezone.utc) + timedelta(hours=expiry_hours)
+                result["expires_at"] = expires_at.isoformat()
+                
+                return result
+                
+            elif mode == "NORMAL" and old_mode_str.upper() in ("STRICT", "EMERGENCY"):
+                # 긴급 모드에서 NORMAL로 복귀 시 해제
+                result = tracker.record_normal_restoration(
+                    restored_by=actor,
+                    reason=reason or "Mode restored to NORMAL",
+                )
+                logger.info(
+                    f"[Governance] Emergency tracker deactivated: actor={actor}"
+                )
+                return result
+                
+        except ImportError:
+            logger.debug("[Governance] EmergencyModeTracker not available")
+        except Exception as e:
+            logger.warning(f"[Governance] Failed to sync emergency tracker: {e}")
+        
+        return None
     
     def _get_reliability_states(self) -> Dict[str, Any]:
         """ReliabilityManager에서 모든 도메인 상태 조회."""

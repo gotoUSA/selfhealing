@@ -17,7 +17,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsSelfHealingAdmin
+from selfhealing.api.django.permissions import (
+    IsSelfHealingAdmin,
+    EmergencyEscalationPermission,
+)
 from selfhealing.api.django.views.governance.service import get_governance_service
 
 logger = logging.getLogger(__name__)
@@ -107,13 +110,18 @@ class GovernanceModeView(APIView):
     
     엔진의 지능(Operating Mode)을 수동으로 제어합니다.
     
-    Permissions:
-        - IsAdmin: selfhealing_admin 그룹 또는 superuser만 접근 가능
-        - 권장: IsSuperUser (비상 기능이므로 더 높은 권한 권장)
+    Break Glass Pattern (긴급 에스컬레이션):
+        - STRICT 전환: Operator도 가능 (일방향 긴급권) + reason 필수
+        - NORMAL 복구: Admin만 가능
+        - 기타 모드: Admin만 가능
+    
+    자동 만료:
+        - STRICT 모드는 governance config의 emergency_expiry_hours 후 자동 만료
+        - Celery Beat 태스크(check_emergency_mode_expiry)가 15분 주기로 체크
     
     Request Body:
         - mode (str, required): "NORMAL" | "CAUTIOUS" | "STRICT" | "EMERGENCY"
-        - reason (str, optional): 전환 사유 (Audit용)
+        - reason (str, required for STRICT): 전환 사유 (강제 Audit)
     
     Response:
         - status: "mode_changed"
@@ -123,11 +131,14 @@ class GovernanceModeView(APIView):
         - current_mode: 현재 모드
         - reason: 사유
         - warning: 모드별 경고 메시지
+        - expires_at: 자동 만료 시각 (STRICT 모드인 경우)
     
-    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    Reference:
+        - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 1.5)
+        - docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     """
     
-    permission_classes = [IsSelfHealingAdmin]
+    permission_classes = [EmergencyEscalationPermission]
     
     def post(self, request: Request) -> Response:
         """운영 모드 전환."""
