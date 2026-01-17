@@ -1,8 +1,8 @@
 # 분산 해시 체인 강화 설계서 (Enhanced Implementation)
 
-> **Version**: 1.2.0  
+> **Version**: 1.3.0  
 > **Created**: 2026-01-17  
-> **Updated**: 2026-01-17 (3차 리뷰 반영)  
+> **Updated**: 2026-01-17 (4차 리뷰 반영 - 성능 최적화/장애 대비책)  
 > **Category**: Audit/무결성 보장  
 > **구현 상태**: 📋 설계 완료  
 > **선행 문서**: [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md)  
@@ -34,6 +34,22 @@
     - [11.9 Atomic Swap (전역 락)](#119-atomic-swap-전역-락-촩돌-방지)
     - [11.10 Audit Trail of Integrity](#1110-audit-trail-of-integrity-무결성-복구-이벤트)
 12. [재사용 패턴 요약 (업데이트)](#12-재사용-패턴-요약-업데이트)
+13. [성능 최적화 전략 (4차 리뷰 반영)](#13-성능-최적화-전략-4차-리뷰-반영)
+    - [13.1 단점-최적화 매핑 총괄표](#131-단점-최적화-매핑-총괄표)
+    - [13.2 Redis RTT 최적화](#132-redis-rtt-최적화)
+    - [13.3 I/O 최적화](#133-io-최적화)
+    - [13.4 메모리 최적화](#134-메모리-최적화)
+    - [13.5 검증 최적화](#135-검증-최적화)
+    - [13.6 최적화 불가능한 본질적 Trade-off](#136-최적화-불가능한-본질적-trade-off)
+    - [13.6.1 완화 효과 정량 분석](#1361-완화-효과-정량-분석)
+14. [장애 대비책 (Graceful Degradation)](#14-장애-대비책-graceful-degradation)
+    - [14.1 장애 시나리오별 대응 전략](#141-장애-시나리오별-대응-전략)
+    - [14.2 Redis → Local Fallback](#142-redis--local-fallback)
+    - [14.3 degraded=True 마킹](#143-degradedtrue-마킹)
+    - [14.4 WAL Recovery](#144-wal-recovery)
+    - [14.5 GracefulDegradationManager](#145-gracefuldegradationmanager)
+    - [14.6 Self-Healing 통합](#146-self-healing-통합)
+    - [14.7 복구 우선순위](#147-복구-우선순위)
 
 ---
 
@@ -2745,6 +2761,445 @@ class HashChainReconciler:
 | `PendingSequenceManager` (Monotonic) | `MonotonicTTLHelper` | `chaos/base.py#L382-475` |
 | `HashChainReconciler` (Atomic Swap) | `RedisDistributedLock` | `redis_adapter.py#L34-155` |
 | Audit Trail | `SelfAuditEvent` + `self_audit()` | `self_audit.py#L65-165` |
+
+---
+
+## 13. 성능 최적화 전략 (4차 리뷰 반영)
+
+> **목적**: 11장에서 제안한 기능들의 성능 단점을 코드베이스 내 기존 패턴으로 최적화
+
+### 13.1 단점-최적화 매핑 총괄표
+
+| 제안 기능 | 단점 | 최적화 기법 | 효과 | 코드 근거 |
+|----------|-----|------------|------|----------|
+| 기대 해시 등록 | +2 Redis RTT | **Lua Script** | 5 RTT → 1 RTT | `redis_adapter.py#L137-143` |
+| Orphaned 검증 | O(n) 체인 순회 | **Sampling 검증** | 전체 n → 샘플 k | `throttle/config.py#L26` |
+| 오프라인 앵커 | `fsync()` 오버헤드 | **Batch + Async** | n×fsync → 1×fsync | `audit/config.py#L69-73` |
+| 날짜별 샤딩 락 | 동일 날짜 경합 | **이미 샤딩됨** | - | Section 11.4 |
+| Self-Cleanup 워치독 | daemon 스레드 비용 | **Lazy 초기화** | 필요 시만 생성 | `middleware.py#L647` |
+| Monotonic Timer | float 메모리 | **LRU Cache** | maxsize 제한 | `precomputed_cache.py#L111` |
+| Atomic Swap (Global Lock) | 병합 시 병목 | **샤딩 + Pipeline** | 날짜별 분리 | Section 11.4 |
+| Audit Trail | 로그 파일 증가 | **Batch Flush** | 개별 → 배치 | `audit/config.py#L69` |
+
+### 13.2 Redis RTT 최적화
+
+#### 13.2.1 Lua Script (원자적 다중 연산)
+
+**문제**: 기대 해시 등록 시 GET → SET → INCR 등 5회 RTT
+
+**해결**: Lua Script로 서버 측 원자 실행
+
+```python
+# 기존 패턴: redis_adapter.py#L137-143
+LUA_CHECK_AND_DELETE = """
+local current = redis.call('GET', KEYS[1])
+if current == ARGV[1] then
+    return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
+# 적용 예시: add_integrity() 전체를 Lua로
+LUA_ADD_INTEGRITY_WITH_EXPECTED = """
+-- KEYS[1] = pending_key, KEYS[2] = chain_key, KEYS[3] = anchor_key
+-- ARGV[1] = expected_hash, ARGV[2] = new_entry, ARGV[3] = anchor_value
+local expected = redis.call('GET', KEYS[1])
+if expected and expected ~= ARGV[1] then
+    return {err='HASH_MISMATCH'}
+end
+redis.call('RPUSH', KEYS[2], ARGV[2])
+redis.call('SET', KEYS[3], ARGV[3])
+redis.call('DEL', KEYS[1])
+return 'OK'
+"""
+```
+
+**효과**: 5 RTT → 1 RTT (80% 감소)
+
+#### 13.2.2 Pipeline (비원자적 배치)
+
+**문제**: 여러 키 조회/설정 시 개별 RTT
+
+**해결**: Pipeline으로 단일 왕복
+
+```python
+# 기존 패턴: rate_limit/redis_adapter.py#L149-153
+with self._client.pipeline(transaction=False) as pipe:
+    pipe.incr(key)
+    pipe.expire(key, window_seconds)
+    pipe.get(key)
+    results = pipe.execute()
+```
+
+**적용**: Orphaned 검증 시 다중 체인 상태 일괄 조회
+
+### 13.3 I/O 최적화
+
+#### 13.3.1 Batch Flush
+
+**문제**: 오프라인 앵커 저장 시 매번 `fsync()`
+
+**해결**: 배치 수집 후 일괄 저장
+
+```python
+# 기존 패턴: audit/config.py#L69-73
+batch_size: int = 100
+batch_flush_interval_seconds: float = 10.0
+
+# 적용
+class BatchedAnchorWriter:
+    def __init__(self, batch_size=100, flush_interval=10):
+        self._buffer = []
+        self._last_flush = time.monotonic()
+    
+    def add(self, anchor: DailyHashAnchor):
+        self._buffer.append(anchor)
+        if len(self._buffer) >= self.batch_size or \
+           time.monotonic() - self._last_flush > self.flush_interval:
+            self._flush()
+    
+    def _flush(self):
+        if not self._buffer:
+            return
+        with open(self.path, 'a') as f:
+            for anchor in self._buffer:
+                f.write(anchor.to_json() + '\n')
+            f.flush()
+            os.fsync(f.fileno())  # 1회 fsync
+        self._buffer.clear()
+        self._last_flush = time.monotonic()
+```
+
+**효과**: n×fsync → 1×fsync (99% 감소, batch_size=100 기준)
+
+#### 13.3.2 Async 저장
+
+**문제**: 앵커 저장이 요청 응답을 블로킹
+
+**해결**: 별도 스레드/asyncio로 비동기 처리
+
+```python
+# 기존 패턴: AsyncHealingLogger (test_utils_async_logger.py)
+class AsyncAnchorWriter:
+    def __init__(self):
+        self._queue = queue.Queue()
+        self._worker = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker.start()
+    
+    def save_async(self, anchor: DailyHashAnchor):
+        self._queue.put(anchor)  # Non-blocking
+    
+    def _worker_loop(self):
+        while True:
+            anchor = self._queue.get()
+            self._sync_save(anchor)
+```
+
+**효과**: 요청 응답 시간에서 I/O 제거
+
+### 13.4 메모리 최적화
+
+#### 13.4.1 LRU Cache (자동 Eviction)
+
+**문제**: `PendingSequenceManager._expected_hashes` 무한 증가 가능
+
+**해결**: TTLCache + maxsize 제한
+
+```python
+# 기존 패턴: precomputed_cache.py#L111-144
+from cachetools import TTLCache
+
+class PendingSequenceManager:
+    def __init__(self, maxsize: int = 10000, ttl: int = 3600):
+        # maxsize 초과 시 LRU 방식으로 자동 제거
+        self._expected_hashes = TTLCache(maxsize=maxsize, ttl=ttl)
+```
+
+**효과**: 메모리 상한 보장 (O(maxsize))
+
+#### 13.4.2 Lazy 초기화
+
+**문제**: `PendingSequenceWatchdog` 항상 생성
+
+**해결**: 필요 시에만 초기화
+
+```python
+# 기존 패턴: middleware.py#L647-648
+class HashChainManager:
+    _watchdog: Optional[PendingSequenceWatchdog] = None
+    
+    def _lazy_init_watchdog(self):
+        if self._watchdog is None:
+            self._watchdog = PendingSequenceWatchdog()
+            self._watchdog.start()
+```
+
+**효과**: 사용하지 않는 환경에서 오버헤드 제거
+
+### 13.5 검증 최적화
+
+#### 13.5.1 Sampling 검증
+
+**문제**: Orphaned 검증 시 O(n) 체인 순회
+
+**해결**: 확률적 샘플링으로 비용 감소
+
+```python
+# 기존 패턴: throttle/config.py#L26, runtime_config/core_configs.py#L215
+@dataclass
+class VerificationConfig:
+    sample_rate: float = 0.1  # 10% 샘플링
+    sample_interval_ms: int = 500
+
+def verify_orphaned_chains_sampled(chains: List[str], config: VerificationConfig):
+    """확률적 샘플링 검증"""
+    import random
+    sample_size = max(1, int(len(chains) * config.sample_rate))
+    sampled = random.sample(chains, sample_size)
+    
+    for chain_key in sampled:
+        if not verify_single_chain(chain_key):
+            # 하나라도 실패 시 전체 검증으로 전환
+            return verify_all_chains(chains)
+    return True
+```
+
+**효과**: 평균 O(k) where k = n × sample_rate
+
+### 13.6 최적화 불가능한 본질적 Trade-off
+
+| 단점 | 최적화 불가 이유 | 완화 방법 |
+|-----|----------------|----------|
+| `fsync()` 오버헤드 | **내구성(Durability) 필수** - 배터리 유실 시 데이터 손실 방지 | Batch fsync로 빈도 감소 |
+| 전역 락 병목 | **일관성(Consistency) 필수** - 동시 병합 시 충돌 방지 | 날짜별 샤딩으로 경합 분산 |
+| 메모리 사용량 증가 | **정확성 필수** - 기대 해시 추적에 필요 | LRU eviction으로 상한 제한 |
+
+#### 13.6.1 완화 효과 정량 분석
+
+완화 방법은 "제거"가 아닌 "감소"이므로, 정량적 효과를 명시합니다:
+
+| 단점 | 완화 전 | 완화 후 | 개선율 | 비고 |
+|-----|--------|--------|-------|------|
+| **fsync() 오버헤드** | 매 요청 1회 (1~10ms/call) | 100개당 1회 | **~99% 감소** | batch_size=100 기준 |
+| **전역 락 병목** | 단일 락 (경합률 100%) | 365개 샤드 | **~99.7% 분산** | 날짜별 샤딩, 경합률 = 1/365 |
+| **메모리 증가** | O(n) 무한 증가 | O(10000) 고정 | **상한 고정** | maxsize=10000 기준 |
+
+**세부 분석**:
+
+1. **fsync() Batch 효과**
+   ```
+   Before: 1000 req/s × 5ms/fsync = 5000ms 블로킹/초
+   After:  1000 req/s ÷ 100 batch × 5ms = 50ms 블로킹/초
+   
+   개선: (5000 - 50) / 5000 = 99% 감소
+   ```
+
+2. **샤딩 락 경합 분산**
+   ```
+   Before: 모든 병합 요청이 1개 락 경합
+           동시 10개 요청 시 대기시간 = 9 × lock_time
+   
+   After:  365개 샤드 (날짜별)
+           동일 날짜 경합 확률 = 1/365 ≈ 0.27%
+           평균 대기시간 = 0.027 × lock_time
+   ```
+
+3. **LRU 메모리 상한**
+   ```
+   Before: 24시간 × 3600 req/h = 86,400개 항목 (무제한)
+   After:  maxsize=10000 고정
+           초과 시 LRU 자동 제거 (가장 오래된 것부터)
+   
+   메모리: ~10000 × 64 bytes = ~640KB 상한
+   ```
+
+**Trade-off 한계**:
+
+| 완화 방법 | 얻는 것 | 잃는 것 |
+|----------|--------|--------|
+| Batch fsync | 처리량 99% 향상 | 배치 윈도우 내 데이터 손실 가능 (최대 10초) |
+| 날짜별 샤딩 | 경합 99.7% 감소 | 날짜 경계 정확한 시간 동기화 필요 |
+| LRU eviction | 메모리 상한 보장 | 오래된 기대 해시 조기 제거 → 검증 스킵 가능 |
+
+> **결론**: CAP 정리처럼, 무결성(Integrity) 시스템에서 **I-O Trade-off** (Integrity vs Overhead)는 피할 수 없음.
+> 완화 방법으로 **90~99%** 수준의 개선이 가능하나, **완전 제거는 불가능**하며 각 완화 방법의 부작용도 인지해야 함.
+
+---
+
+## 14. 장애 대비책 (Graceful Degradation)
+
+> **목적**: Redis/파일시스템 장애 시에도 시스템이 데이터 손실 없이 동작
+
+### 14.1 장애 시나리오별 대응 전략
+
+| 장애 시나리오 | 탐지 방법 | 대응 전략 | 복구 방법 | 코드 근거 |
+|-------------|----------|----------|----------|----------|
+| Redis 연결 실패 | `ConnectionError` | Local Fallback | 재연결 시 병합 | `integrity.py#L413-417` |
+| Redis 응답 지연 | Timeout | `degraded=True` 마킹 | Reconciler 정합성 복구 | `integrity.py#L484-503` |
+| 파일시스템 가득 참 | `IOError` | 메모리 버퍼 유지 | 공간 확보 후 flush | `backend.py#L183-230` |
+| 네트워크 파티션 | 다중 노드 분리 | Split-Brain 방지 락 | 네트워크 복구 대기 | Section 11.9 |
+
+### 14.2 Redis → Local Fallback
+
+**트리거**: Redis 연결 실패 또는 응답 없음
+
+```python
+# 기존 패턴: integrity.py#L413-417
+try:
+    chain = redis_manager.get_chain(chain_key)
+except (RedisConnectionError, RedisTimeoutError):
+    logger.warning("[Fallback] Redis unavailable, using local chain")
+    chain = local_file_backend.get_chain(chain_key)
+```
+
+**Fallback 체인**:
+```
+1. Redis Primary
+   ↓ (실패)
+2. Redis Replica (읽기 전용)
+   ↓ (실패)
+3. Local File Backend
+   ↓ (실패)
+4. 메모리 버퍼 (휘발성)
+```
+
+### 14.3 `degraded=True` 마킹
+
+**목적**: 장애 중 기록된 데이터를 나중에 정합성 검증
+
+```python
+# 기존 패턴: integrity.py#L484-503
+def add_integrity_degraded(entry: IntegrityEntry) -> None:
+    """장애 상황에서의 무결성 추가"""
+    entry.metadata["degraded"] = True
+    entry.metadata["degraded_at"] = datetime.utcnow().isoformat()
+    entry.metadata["degraded_reason"] = "redis_timeout"
+    
+    # 로컬에 임시 저장
+    local_buffer.append(entry)
+    
+    # 나중에 Reconciler가 처리
+    # - degraded=True 항목 찾기
+    # - Redis 복구 후 체인에 병합
+    # - 해시 체인 재검증
+```
+
+**Reconciler 복구 로직**:
+```python
+def reconcile_degraded_entries():
+    """degraded 항목 복구"""
+    degraded = [e for e in entries if e.metadata.get("degraded")]
+    for entry in degraded:
+        if redis_available():
+            # 1. Redis에 정식 등록
+            redis_manager.add_integrity(entry)
+            # 2. degraded 마킹 제거
+            entry.metadata["degraded"] = False
+            entry.metadata["reconciled_at"] = datetime.utcnow().isoformat()
+```
+
+### 14.4 WAL Recovery
+
+**목적**: 프로세스 크래시 시 데이터 손실 방지
+
+```python
+# 기존 패턴: backend.py#L183-230
+class ResilientStorageBackend:
+    def __init__(self):
+        self._wal = WriteAheadLog(path="integrity_wal.log")
+    
+    def startup_recovery(self):
+        """시작 시 WAL에서 미완료 항목 복구"""
+        pending_entries = self._wal.read_uncommitted()
+        for entry in pending_entries:
+            try:
+                self._commit_to_redis(entry)
+                self._wal.mark_committed(entry.id)
+            except RedisError:
+                logger.warning(f"[WAL] Deferred recovery for {entry.id}")
+                # 다음 시작 시 재시도
+```
+
+**WAL 구조**:
+```
+[SEQ=1] PREPARE  | entry_id=abc | hash=sha256:... | timestamp=...
+[SEQ=2] COMMIT   | entry_id=abc
+[SEQ=3] PREPARE  | entry_id=def | hash=sha256:... | timestamp=...
+                   ← 여기서 크래시 발생 시 def 복구
+```
+
+### 14.5 GracefulDegradationManager
+
+**목적**: 시스템 전체의 Graceful Degradation 조율
+
+```python
+# 기존 패턴: emergency_mode/manager.py#L37
+class GracefulDegradationManager:
+    """시스템 장애 시 점진적 기능 축소"""
+    
+    LEVELS = {
+        "NORMAL": 0,      # 모든 기능 정상
+        "DEGRADED": 1,    # 부가 기능 중단 (무결성 검증 유지)
+        "EMERGENCY": 2,   # 필수 기능만 (무결성 기록만)
+        "READONLY": 3,    # 읽기 전용
+    }
+    
+    def on_redis_failure(self):
+        """Redis 장애 시"""
+        self.set_level("DEGRADED")
+        # - 기대 해시 검증 스킵 (단, 기록은 계속)
+        # - Orphaned 검증 스킵
+        # - 오프라인 앵커만 기록
+    
+    def on_filesystem_failure(self):
+        """파일시스템 장애 시"""
+        self.set_level("EMERGENCY")
+        # - 메모리 버퍼로 전환
+        # - 최소 기록만 유지
+    
+    def on_recovery(self):
+        """복구 시"""
+        self.set_level("NORMAL")
+        # - Reconciler 트리거
+        # - degraded 항목 처리
+```
+
+### 14.6 Self-Healing 통합
+
+**기존 Self-Healing 패턴과 연동**:
+
+```python
+# selfhealing 패키지의 CircuitBreaker 연동
+from selfhealing.services.circuit_breaker import CircuitBreaker
+
+class IntegrityCircuitBreaker:
+    def __init__(self):
+        self._cb = CircuitBreaker(
+            name="integrity_redis",
+            failure_threshold=5,
+            recovery_timeout=30,
+            half_open_requests=3
+        )
+    
+    def add_integrity_safe(self, entry: IntegrityEntry):
+        if self._cb.is_open:
+            return self._add_degraded(entry)
+        
+        try:
+            with self._cb:
+                return redis_manager.add_integrity(entry)
+        except CircuitOpenError:
+            return self._add_degraded(entry)
+```
+
+### 14.7 복구 우선순위
+
+| 우선순위 | 복구 대상 | 복구 방법 | 담당 |
+|---------|----------|----------|-----|
+| P0 | 미커밋 WAL 항목 | `startup_recovery()` | `ResilientStorageBackend` |
+| P1 | degraded 마킹 항목 | `reconcile_degraded_entries()` | `HashChainReconciler` |
+| P2 | Orphaned 체인 | `verify_and_merge_orphaned()` | `PendingSequenceWatchdog` |
+| P3 | 앵커 정합성 | `verify_daily_anchors()` | 일일 배치 작업 |
 
 ---
 
