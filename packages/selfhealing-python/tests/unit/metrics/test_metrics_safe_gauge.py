@@ -220,3 +220,119 @@ class TestSafeGaugeIntegration:
 
         assert info.is_synced is True
         # After this, safe decrements would work from 5 down to 2
+
+
+class TestSafeGaugeLRUCache:
+    """LRU 캐시 기능 테스트."""
+
+    @pytest.fixture
+    def mock_gauge(self):
+        """Create mock prometheus gauge."""
+        gauge = Mock()
+        gauge.labels = MagicMock(side_effect=lambda **kwargs: Mock())
+        return gauge
+
+    def test_max_label_combinations_default(self, mock_gauge):
+        """기본 max_label_combinations 값 확인."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge)
+        assert safe.max_size == 1000
+
+    def test_custom_max_label_combinations(self, mock_gauge):
+        """커스텀 max_label_combinations 설정."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge, max_label_combinations=500)
+        assert safe.max_size == 500
+
+    def test_lru_eviction_when_exceeds_max(self, mock_gauge):
+        """max_label_combinations 초과 시 가장 오래된 항목 제거."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge, max_label_combinations=3)
+        
+        # 3개 생성
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")
+        assert safe.current_size == 3
+        assert safe.eviction_count == 0
+        
+        # 4번째 생성 - eviction 발생
+        safe.labels(domain="d")
+        assert safe.current_size == 3
+        assert safe.eviction_count == 1
+        
+        # "a"는 제거되어야 함
+        assert safe.get_child(domain="a") is None
+        assert safe.get_child(domain="b") is not None
+
+    def test_lru_order_updated_on_access(self, mock_gauge):
+        """접근 시 LRU 순서 업데이트."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge, max_label_combinations=3)
+        
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")
+        
+        # "a" 재접근 - 가장 최근으로 이동
+        safe.labels(domain="a")
+        
+        # "d" 추가 - "b"가 제거되어야 함 (a는 방금 접근)
+        safe.labels(domain="d")
+        
+        assert safe.get_child(domain="a") is not None
+        assert safe.get_child(domain="b") is None
+        assert safe.get_child(domain="c") is not None
+        assert safe.get_child(domain="d") is not None
+
+    def test_on_eviction_callback(self, mock_gauge):
+        """eviction 콜백 호출 확인."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        evicted_items = []
+        
+        def on_eviction(key, child):
+            evicted_items.append((key, child))
+        
+        safe = SafeGauge(
+            mock_gauge, 
+            max_label_combinations=2,
+            on_eviction=on_eviction
+        )
+        
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")  # eviction 발생
+        
+        assert len(evicted_items) == 1
+        assert ("domain", "a") in evicted_items[0][0]
+
+    def test_get_cache_stats(self, mock_gauge):
+        """캐시 통계 반환."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge, max_label_combinations=100)
+        
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        
+        stats = safe.get_cache_stats()
+        
+        assert stats["current_size"] == 2
+        assert stats["max_size"] == 100
+        assert stats["eviction_count"] == 0
+        assert stats["utilization_percent"] == 2.0
+
+    def test_noop_when_gauge_is_none(self):
+        """gauge가 None일 때 NoOp 반환."""
+        from selfhealing.metrics.safe_gauge import SafeGauge, NoOpGaugeChild
+
+        safe = SafeGauge(None)
+        child = safe.labels(domain="a")
+        
+        assert isinstance(child, NoOpGaugeChild)
+        assert safe.current_size == 0

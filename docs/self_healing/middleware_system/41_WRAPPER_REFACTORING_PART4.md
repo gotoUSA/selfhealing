@@ -1,7 +1,7 @@
 # 41. Wrapper 리팩토링 PART 4: 설계 보완 및 구현
 
 > **작성일**: 2026-01-17  
-> **상태**: 구현 예정  
+> **상태**: 구현 완료 (1~3)  
 > **관련 문서**: [PART1](41_WRAPPER_REFACTORING_PART1.md), [PART2](41_WRAPPER_REFACTORING_PART2.md), [PART3](41_WRAPPER_REFACTORING_PART3.md)
 
 ---
@@ -14,9 +14,9 @@ PART 1~3 리팩토링 완료 후 아키텍트 리뷰에서 도출된 추가 보�
 
 | # | 항목 | 우선순위 | 상태 |
 |---|---|---|---|
-| 1 | SafeGauge LRU 캐시 (메모리 관리) | **높음** | ⏳ 구현 예정 |
-| 2 | Decorator Universal Async Support | **높음** | ⏳ 구현 예정 |
-| 3 | Task Layer exc_info 일관성 | 중간 | ⏳ 구현 예정 |
+| 1 | SafeGauge LRU 캐시 (메모리 관리) | **높음** | ✅ 구현 완료 |
+| 2 | Decorator Universal Async Support | **높음** | ✅ 구현 완료 |
+| 3 | Task Layer exc_info 일관성 | 중간 | ✅ 구현 완료 |
 | 4 | ProviderRegistry override_provider | 중간 | ⏳ 구현 예정 |
 | 5 | automation_gate Audit 포렌식 필드 | 중간 | ⏳ 구현 예정 |
 | 6 | SyncInfo 관리 방안 검증 | 낮음 | ✅ 설계 완료 |

@@ -2,10 +2,16 @@
 Metric Tracking Decorators.
 
 Provides decorators for automatic metric tracking.
+
+Universal Async Support:
+- 모든 데코레이터가 동기/비동기 함수 모두 지원
+- asyncio.iscoroutinefunction()으로 자동 분기
+- with_jitter 패턴과 동일한 구조
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from functools import wraps
@@ -24,7 +30,7 @@ R = TypeVar("R")
 
 def track_dlq_creation(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    DLQ 생성 함수에 메트릭 추적을 추가하는 데코레이터.
+    DLQ 생성 함수에 메트릭 추적을 추가하는 데코레이터 (동기/비동기 지원).
 
     데코레이터가 적용된 함수가 성공적으로 실행되면
     DLQ 생성 메트릭을 자동으로 기록합니다.
@@ -35,34 +41,38 @@ def track_dlq_creation(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]
     Example:
         >>> @track_dlq_creation(domain="payment")
         ... def create_payment_dlq(failure_type: str, payload: dict):
-        ...     return DLQItem.objects.create(
-        ...         domain="payment",
-        ...         failure_type=failure_type,
-        ...         payload=payload,
-        ...     )
-        >>>
-        >>> item = create_payment_dlq(failure_type="PG_TIMEOUT", payload={"order_id": "123"})
+        ...     return DLQItem.objects.create(...)
+        
+        >>> @track_dlq_creation(domain="payment")
+        ... async def async_create_dlq(failure_type: str, payload: dict):
+        ...     return await DLQItem.objects.acreate(...)
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             result = func(*args, **kwargs)
-
-            # failure_type은 키워드 인자에서 추출
             failure_type = kwargs.get("failure_type", "unknown")
-
             DLQMetricEventHandler.on_item_created(domain, failure_type)
             return result
 
-        return wrapper
+        @wraps(func)
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            result = await func(*args, **kwargs)
+            failure_type = kwargs.get("failure_type", "unknown")
+            DLQMetricEventHandler.on_item_created(domain, failure_type)
+            return result
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper  # type: ignore
+        return sync_wrapper
 
     return decorator
 
 
 def track_dlq_resolution(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    DLQ 해결 함수에 메트릭 추적을 추가하는 데코레이터.
+    DLQ 해결 함수에 메트릭 추적을 추가하는 데코레이터 (동기/비동기 지원).
 
     데코레이터가 적용된 함수가 성공적으로 실행되면
     DLQ 해결 메트릭을 자동으로 기록합니다.
@@ -75,18 +85,20 @@ def track_dlq_resolution(domain: str) -> Callable[[Callable[P, R]], Callable[P, 
         ... def resolve_payment_dlq(dlq_item, resolution_type: str = "auto_replay"):
         ...     dlq_item.status = "resolved"
         ...     dlq_item.save()
-        ...     return dlq_item
+        
+        >>> @track_dlq_resolution(domain="payment")
+        ... async def async_resolve_dlq(dlq_item, resolution_type: str = "auto_replay"):
+        ...     dlq_item.status = "resolved"
+        ...     await dlq_item.asave()
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             start_time = time.monotonic()
             result = func(*args, **kwargs)
             duration = time.monotonic() - start_time
-
             resolution_type = kwargs.get("resolution_type", "auto_replay")
-
             DLQMetricEventHandler.on_item_resolved(
                 domain=domain,
                 resolution_type=resolution_type,
@@ -94,7 +106,22 @@ def track_dlq_resolution(domain: str) -> Callable[[Callable[P, R]], Callable[P, 
             )
             return result
 
-        return wrapper
+        @wraps(func)
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            start_time = time.monotonic()
+            result = await func(*args, **kwargs)
+            duration = time.monotonic() - start_time
+            resolution_type = kwargs.get("resolution_type", "auto_replay")
+            DLQMetricEventHandler.on_item_resolved(
+                domain=domain,
+                resolution_type=resolution_type,
+                duration_seconds=duration,
+            )
+            return result
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper  # type: ignore
+        return sync_wrapper
 
     return decorator
 
@@ -104,10 +131,9 @@ def track_replay(
     replay_type: str = "auto",
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    Replay 함수에 메트릭 추적을 추가하는 데코레이터.
+    Replay 함수에 메트릭 추적을 추가하는 데코레이터 (동기/비동기 지원).
 
     Replay 시작/완료를 자동으로 추적하고 소요 시간을 기록합니다.
-    또한 replay 시도를 기록합니다.
 
     Args:
         domain: 도메인 이름 (빈 문자열이면 kwargs에서 추출)
@@ -115,20 +141,19 @@ def track_replay(
 
     Example:
         >>> @track_replay(domain="payment")
-        ... async def replay_payment(dlq_item):
-        ...     # Replay 로직
-        ...     await process_payment(dlq_item.payload)
+        ... def sync_replay(dlq_item):
+        ...     process_payment(dlq_item.payload)
         ...     return True
         
-        >>> @track_replay(replay_type="batch")
-        ... def batch_replay(items, domain="payment"):
-        ...     # Batch replay 로직
-        ...     pass
+        >>> @track_replay(domain="payment")
+        ... async def async_replay(dlq_item):
+        ...     await process_payment(dlq_item.payload)
+        ...     return True
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             _domain = domain or kwargs.get("domain", "unknown")
             _replay_type = kwargs.get("replay_type", replay_type)
             ReplayEventHandler.on_replay_started(_domain, _replay_type)
@@ -137,7 +162,6 @@ def track_replay(
             success = False
             try:
                 result = func(*args, **kwargs)
-                # 결과가 boolean이면 그대로 사용, 아니면 성공으로 간주
                 success = result if isinstance(result, bool) else True
                 return result
             except Exception:
@@ -147,7 +171,28 @@ def track_replay(
                 duration = time.monotonic() - start_time
                 ReplayEventHandler.on_replay_completed(_domain, success, duration)
 
-        return wrapper
+        @wraps(func)
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            _domain = domain or kwargs.get("domain", "unknown")
+            _replay_type = kwargs.get("replay_type", replay_type)
+            ReplayEventHandler.on_replay_started(_domain, _replay_type)
+
+            start_time = time.monotonic()
+            success = False
+            try:
+                result = await func(*args, **kwargs)
+                success = result if isinstance(result, bool) else True
+                return result
+            except Exception:
+                success = False
+                raise
+            finally:
+                duration = time.monotonic() - start_time
+                ReplayEventHandler.on_replay_completed(_domain, success, duration)
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper  # type: ignore
+        return sync_wrapper
 
     return decorator
 

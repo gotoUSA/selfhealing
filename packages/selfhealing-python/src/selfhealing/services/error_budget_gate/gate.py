@@ -728,22 +728,45 @@ def is_automation_allowed() -> bool:
 
 def automation_gate(action: str = ""):
     """
-    자동화 게이트 데코레이터.
+    자동화 게이트 데코레이터 (동기/비동기 모두 지원).
     
     에러 예산이 부족하면 함수 실행을 차단합니다.
+    asyncio.iscoroutinefunction()으로 자동 분기하여
+    sync/async 함수 모두 동일하게 사용 가능합니다.
+    
+    Args:
+        action: 게이트 체크에 사용될 액션 이름.
+                생략 시 함수 이름 사용.
     
     Usage:
-        @automation_gate(action="dlq_auto_replay")
-        def auto_replay_dlq():
-            # 에러 예산이 충분할 때만 실행됨
-            ...
+        >>> @automation_gate(action="dlq_auto_replay")
+        ... def auto_replay_dlq():
+        ...     # 에러 예산이 충분할 때만 실행됨
+        ...     pass
+        
+        >>> @automation_gate(action="async_cleanup")
+        ... async def async_cleanup():
+        ...     # 비동기 함수도 동일하게 사용
+        ...     await do_cleanup()
     """
+    import asyncio
+    
     def decorator(func: Callable):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def sync_wrapper(*args, **kwargs):
             require_automation_allowed(action=action or func.__name__)
             return func(*args, **kwargs)
-        return wrapper
+        
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            # require_automation_allowed는 sync 함수지만
+            # I/O 없는 빠른 체크이므로 직접 호출해도 무방
+            require_automation_allowed(action=action or func.__name__)
+            return await func(*args, **kwargs)
+        
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        return sync_wrapper
     
     return decorator
 

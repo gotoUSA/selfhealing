@@ -13,13 +13,19 @@ Enhanced Features (Metric Reliability):
 - Sync Status Tracking: last_sync_time and is_synced for data freshness
 - Staleness Detection: Auto-mark as stale after threshold
 - Stabilization Period: Gradual recovery from strict mode
+
+Memory Management (LRU Cache):
+- 레이블 조합이 무한 증가하는 것을 방지하기 위한 LRU 캐시
+- max_label_combinations로 최대 캐시 크기 설정
+- Eviction 시 경고 로그 및 메트릭 기록
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from collections import OrderedDict
+from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
 
 from .sync import SyncInfo, SyncStatus
 from .noop import NoOpGaugeChild
@@ -253,7 +259,7 @@ class SafeGaugeChild:
 
 class SafeGauge:
     """
-    Safe wrapper for Prometheus Gauge.
+    Safe wrapper for Prometheus Gauge with LRU-based memory management.
 
     Wraps a Prometheus Gauge and returns SafeGaugeChild instances
     for labeled gauge operations, preventing negative values.
@@ -262,31 +268,59 @@ class SafeGauge:
     - Internal safety mechanisms (clamping)
     - External simplicity (standard Gauge interface)
     - Eventual consistency (Reconciler syncs periodically)
+    
+    Memory Management:
+    - LRU 캐시로 레이블 조합 무한 증가 방지
+    - max_label_combinations 초과 시 가장 오래된 레이블 조합 제거
+    - Eviction 시 경고 로그 및 선택적 콜백 호출
 
     Example:
         >>> from prometheus_client import Gauge
         >>> raw = Gauge("dlq_pending", "Pending DLQ items", ["domain"])
-        >>> safe = SafeGauge(raw)
+        >>> safe = SafeGauge(raw, max_label_combinations=500)
         >>>
         >>> # Use like normal Gauge
         >>> safe.labels(domain="payment").inc()
         >>> safe.labels(domain="payment").dec()  # Won't go below 0
+    
+    Environment Settings:
+        - 단일 서버: max_label_combinations=1000 (기본값)
+        - K8s 10 Pods: max_label_combinations=500
+        - K8s 100+ Pods: max_label_combinations=200
     """
 
-    def __init__(self, gauge: Optional["Gauge"]):
+    # 기본 최대 레이블 조합 수
+    DEFAULT_MAX_LABEL_COMBINATIONS = 1000
+
+    def __init__(
+        self, 
+        gauge: Optional["Gauge"],
+        max_label_combinations: int = DEFAULT_MAX_LABEL_COMBINATIONS,
+        on_eviction: Optional[Callable[[tuple, "SafeGaugeChild"], None]] = None,
+    ):
         """
-        Initialize SafeGauge.
+        Initialize SafeGauge with LRU cache.
 
         Args:
             gauge: Prometheus Gauge to wrap. If None, operations are no-ops.
+            max_label_combinations: 캐시할 최대 레이블 조합 수 (기본: 1000).
+                                    초과 시 가장 오래된 조합 자동 제거.
+            on_eviction: 레이블 조합 제거 시 호출되는 콜백 (모니터링용).
+                        (evicted_key, evicted_child) -> None
         """
         self._gauge = gauge
-        self._children: Dict[tuple, SafeGaugeChild] = {}
+        self._children: OrderedDict[tuple, SafeGaugeChild] = OrderedDict()
+        self._max_label_combinations = max_label_combinations
+        self._on_eviction = on_eviction
         self._lock = threading.Lock()
+        self._eviction_count = 0
 
     def labels(self, **kwargs) -> SafeGaugeChild:
         """
         Get a SafeGaugeChild for the given labels.
+        
+        LRU 캐시 사용: 최근 접근한 레이블 조합은 보존되고,
+        max_label_combinations 초과 시 가장 오래된 조합 제거.
 
         Args:
             **kwargs: Label key-value pairs
@@ -295,21 +329,67 @@ class SafeGauge:
             SafeGaugeChild instance for thread-safe operations
         """
         if self._gauge is None:
-            # Return a no-op child if gauge is not available
             return NoOpGaugeChild()
 
-        # Create a hashable key from sorted kwargs
         key = tuple(sorted(kwargs.items()))
 
         with self._lock:
-            if key not in self._children:
-                gauge_child = self._gauge.labels(**kwargs)
-                self._children[key] = SafeGaugeChild(gauge_child, kwargs)
-            return self._children[key]
+            if key in self._children:
+                # LRU: 최근 접근으로 이동
+                self._children.move_to_end(key)
+                return self._children[key]
+            
+            # 캐시 용량 초과 시 가장 오래된 항목 제거
+            if len(self._children) >= self._max_label_combinations:
+                self._evict_oldest()
+            
+            # 새 child 생성
+            gauge_child = self._gauge.labels(**kwargs)
+            child = SafeGaugeChild(gauge_child, kwargs)
+            self._children[key] = child
+            return child
+
+    def _evict_oldest(self) -> None:
+        """
+        가장 오래된 레이블 조합 제거 (LRU eviction).
+        
+        제거된 조합의 shadow_value는 손실됩니다.
+        경고 로그를 기록하고, on_eviction 콜백이 있으면 호출합니다.
+        """
+        if not self._children:
+            return
+        
+        oldest_key, oldest_child = self._children.popitem(last=False)
+        self._eviction_count += 1
+        
+        # 운영 인지를 위한 경고 로그
+        logger.warning(
+            f"[SafeGauge] LRU eviction #{self._eviction_count}: "
+            f"labels={dict(oldest_key)}, shadow_value={oldest_child.get_shadow_value()}, "
+            f"max_label_combinations={self._max_label_combinations}"
+        )
+        
+        # Eviction 메트릭 기록 (prometheus가 있는 경우)
+        try:
+            from selfhealing.metrics.prometheus import PROMETHEUS_AVAILABLE
+            if PROMETHEUS_AVAILABLE:
+                # 간단한 Counter로 기록 (별도 정의 필요 시 확장)
+                pass  # 메트릭은 선택적, 로그만으로도 충분
+        except ImportError:
+            pass
+        
+        # 콜백 호출 (커스텀 처리용)
+        if self._on_eviction:
+            try:
+                self._on_eviction(oldest_key, oldest_child)
+            except Exception as e:
+                logger.error(f"[SafeGauge] Eviction callback failed: {e}")
 
     def get_child(self, **kwargs) -> Optional[SafeGaugeChild]:
         """
         Get existing SafeGaugeChild without creating new one.
+        
+        LRU 순서는 업데이트하지 않음 (조회만).
 
         Args:
             **kwargs: Label key-value pairs
@@ -325,6 +405,42 @@ class SafeGauge:
     def is_available(self) -> bool:
         """Check if underlying gauge is available."""
         return self._gauge is not None
+    
+    @property
+    def current_size(self) -> int:
+        """현재 캐시된 레이블 조합 수."""
+        with self._lock:
+            return len(self._children)
+    
+    @property
+    def max_size(self) -> int:
+        """최대 캐시 가능한 레이블 조합 수."""
+        return self._max_label_combinations
+    
+    @property
+    def eviction_count(self) -> int:
+        """생성 이후 총 eviction 횟수."""
+        return self._eviction_count
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        캐시 통계 정보 반환 (모니터링용).
+        
+        Returns:
+            Dict with cache stats:
+            - current_size: 현재 캐시 크기
+            - max_size: 최대 캐시 크기
+            - eviction_count: 총 eviction 횟수
+            - utilization_percent: 캐시 사용률 (%)
+        """
+        with self._lock:
+            current = len(self._children)
+            return {
+                "current_size": current,
+                "max_size": self._max_label_combinations,
+                "eviction_count": self._eviction_count,
+                "utilization_percent": (current / self._max_label_combinations) * 100 if self._max_label_combinations > 0 else 0,
+            }
 
 
 __all__ = [

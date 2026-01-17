@@ -138,3 +138,85 @@ class TestTrackCounter:
 
         with pytest.raises(RuntimeError):
             failing_api_call()
+
+
+# =============================================================================
+# Async Decorator Tests
+# =============================================================================
+
+
+class TestAsyncTrackDLQCreation:
+    """Tests for async track_dlq_creation decorator."""
+
+    @pytest.mark.asyncio
+    @patch("selfhealing.metrics.decorators.DLQMetricEventHandler")
+    async def test_async_calls_event_handler(self, mock_handler):
+        """Async decorator should call on_item_created after function succeeds."""
+
+        @track_dlq_creation(domain="payment")
+        async def async_create_dlq(failure_type: str, payload: dict):
+            return {"id": 1, "failure_type": failure_type}
+
+        result = await async_create_dlq(failure_type="PG_TIMEOUT", payload={"order_id": "123"})
+
+        assert result["id"] == 1
+        mock_handler.on_item_created.assert_called_once_with("payment", "PG_TIMEOUT")
+
+
+class TestAsyncTrackDLQResolution:
+    """Tests for async track_dlq_resolution decorator."""
+
+    @pytest.mark.asyncio
+    @patch("selfhealing.metrics.decorators.DLQMetricEventHandler")
+    async def test_async_calls_event_handler_with_duration(self, mock_handler):
+        """Async decorator should measure duration and call on_item_resolved."""
+
+        @track_dlq_resolution(domain="payment")
+        async def async_resolve_dlq(dlq_item, resolution_type: str = "auto_replay"):
+            return dlq_item
+
+        result = await async_resolve_dlq({"id": 1}, resolution_type="manual")
+
+        mock_handler.on_item_resolved.assert_called_once()
+        call_args = mock_handler.on_item_resolved.call_args
+        assert call_args.kwargs["domain"] == "payment"
+        assert call_args.kwargs["resolution_type"] == "manual"
+        assert call_args.kwargs["duration_seconds"] >= 0
+
+
+class TestAsyncTrackReplay:
+    """Tests for async track_replay decorator."""
+
+    @pytest.mark.asyncio
+    @patch("selfhealing.metrics.decorators.ReplayEventHandler")
+    async def test_async_tracks_successful_replay(self, mock_handler):
+        """Should track successful async replay completion."""
+
+        @track_replay(domain="payment")
+        async def async_replay_item(item):
+            return True
+
+        result = await async_replay_item({"id": 1})
+
+        assert result is True
+        mock_handler.on_replay_started.assert_called_once()
+        mock_handler.on_replay_completed.assert_called_once()
+        call_args = mock_handler.on_replay_completed.call_args
+        assert call_args[0][1] is True  # success=True
+
+    @pytest.mark.asyncio
+    @patch("selfhealing.metrics.decorators.ReplayEventHandler")
+    async def test_async_tracks_failed_replay(self, mock_handler):
+        """Should track failed async replay when exception is raised."""
+
+        @track_replay(domain="payment")
+        async def async_replay_item(item):
+            raise ValueError("Async replay failed")
+
+        with pytest.raises(ValueError):
+            await async_replay_item({"id": 1})
+
+        mock_handler.on_replay_started.assert_called_once()
+        mock_handler.on_replay_completed.assert_called_once()
+        call_args = mock_handler.on_replay_completed.call_args
+        assert call_args[0][1] is False  # success=False
