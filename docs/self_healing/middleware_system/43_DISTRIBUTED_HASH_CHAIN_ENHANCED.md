@@ -1,10 +1,10 @@
 # 분산 해시 체인 강화 설계서 (Enhanced Implementation)
 
-> **Version**: 1.4.0  
+> **Version**: 1.5.0  
 > **Created**: 2026-01-17  
-> **Updated**: 2026-01-18 (5차 리뷰 반영 - Phase별 구현 로드맵)  
+> **Updated**: 2026-01-18 (Phase 1 구현 완료)  
 > **Category**: Audit/무결성 보장  
-> **구현 상태**: 📋 설계 완료  
+> **구현 상태**: ✅ Phase 1 구현 완료  
 > **선행 문서**: [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md)  
 > **근거 코드**: 실제 소스 코드 분석 기반
 
@@ -1191,20 +1191,23 @@ def _reconcile_hash_chain(self) -> None:
 
 ---
 
-### 9.1 Phase 1: Core 기능 (P0 - 필수)
+### 9.1 Phase 1: Core 기능 (P0 - 필수) ✅ 완료
 
 > **목표**: 기본 분산 해시 체인 동작
 > **예상 기간**: 2-3일
 > **선행 조건**: 없음
+> **상태**: ✅ 2026-01-18 구현 완료
 
-| # | 태스크 | 구현 내용 | 파일 | 시간 |
+| # | 태스크 | 구현 내용 | 파일 | 상태 |
 |---|--------|----------|-----|------|
-| 1.1 | `PendingSequenceManager` | 시퀀스 PENDING 상태 관리, 기대 해시 등록 (11.1) | `audit/integrity.py` | 3h |
-| 1.2 | `LocalFileBackend` 확장 | 오프라인 앵커 백업 쓰기 (11.3) | `audit/backends/local.py` | 2h |
-| 1.3 | `StartupHashChainSync` | 시작 시 Redis ↔ Local 동기화 | `audit/integrity.py` | 2h |
-| 1.4 | `HashChainReconciler` | Orphaned 로그 병합 (11.2) | `audit/integrity.py` | 3h |
-| 1.5 | `DailyHashAnchor` | 일일 앵커 생성/검증 | `audit/integrity.py` | 2h |
-| 1.6 | `apps.py` 통합 | Django ready()에서 StartupSync 호출 | `adapters/django/apps.py` | 1h |
+| 1.1 | `PendingSequenceManager` | 시퀀스 PENDING 상태 관리, 기대 해시 등록 | `audit/integrity.py` | ✅ |
+| 1.2 | `LocalFileBackend` 확장 | Write-Ahead Checkpoint, 오프라인 앵커 백업 | `audit/backends/local.py` | ✅ |
+| 1.3 | `StartupHashChainSync` | 시작 시 Redis ↔ Local 동기화 | `audit/integrity.py` | ✅ |
+| 1.4 | `HashChainReconciler` | Orphaned/degraded 로그 병합 | `audit/integrity.py` | ✅ |
+| 1.5 | `DailyHashAnchor` | 일일 앵커 생성/검증 | `audit/integrity.py` | ✅ |
+| 1.6 | `apps.py` 통합 | Django ready()에서 StartupSync 호출 | `adapters/django/apps.py` | ✅ |
+
+**테스트**: `tests/unit/audit/test_phase1_hash_chain_enhanced.py` (30개 통과)
 
 **완료 기준**:
 - [x] 단일 노드에서 해시 체인 정상 동작

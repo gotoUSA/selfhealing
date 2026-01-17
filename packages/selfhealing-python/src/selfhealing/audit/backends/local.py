@@ -19,6 +19,8 @@ from selfhealing.audit.integrity import (
     RedisHashChainManager,
     HashChainManagerProtocol,
     create_hash_chain_manager,
+    PendingSequenceManager,
+    DailyHashAnchor,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,8 @@ class LocalFileBackend(AuditBackend):
         distributed_hash_chain: bool = False,
         redis_client: Optional[Any] = None,
         redis_key_prefix: str = "selfhealing:",
+        enable_pending_manager: bool = True,
+        enable_anchor_backup: bool = True,
     ):
         """
         Initialize local file backend.
@@ -59,6 +63,8 @@ class LocalFileBackend(AuditBackend):
             distributed_hash_chain: Use Redis-based distributed hash chain
             redis_client: Redis client for distributed mode
             redis_key_prefix: Key prefix for Redis keys
+            enable_pending_manager: Enable PENDING state tracking for atomicity
+            enable_anchor_backup: Enable offline anchor backup writes
         """
         self._log_dir = Path(log_dir or self.DEFAULT_LOG_DIR)
         self._filename_pattern = filename_pattern or self.DEFAULT_FILENAME_PATTERN
@@ -69,6 +75,10 @@ class LocalFileBackend(AuditBackend):
         self._file_handle = None
         self._last_success: Optional[datetime] = None
         self._last_error: Optional[str] = None
+        self._redis_client = redis_client
+        self._redis_key_prefix = redis_key_prefix
+        self._enable_anchor_backup = enable_anchor_backup
+        self._last_anchor_date: Optional[str] = None
 
         # Initialize hash chain manager
         if enable_hash_chain:
@@ -93,6 +103,25 @@ class LocalFileBackend(AuditBackend):
                     )
         else:
             self._hash_chain = None
+
+        # Initialize PendingSequenceManager for atomicity (Write-Ahead Checkpoint)
+        if enable_pending_manager and distributed_hash_chain and redis_client is not None:
+            self._pending_manager: Optional[PendingSequenceManager] = PendingSequenceManager(
+                redis_client=redis_client,
+                key_prefix=redis_key_prefix,
+            )
+            logger.info("[LocalFileBackend] PendingSequenceManager enabled")
+        else:
+            self._pending_manager = None
+
+        # Initialize DailyHashAnchor for offline backup
+        if enable_anchor_backup and redis_client is not None:
+            self._anchor_manager: Optional[DailyHashAnchor] = DailyHashAnchor(
+                redis_client=redis_client,
+                key_prefix=redis_key_prefix,
+            )
+        else:
+            self._anchor_manager = None
 
         # Ensure directory exists
         self._log_dir.mkdir(parents=True, exist_ok=True)
@@ -142,7 +171,16 @@ class LocalFileBackend(AuditBackend):
 
     def write(self, entry: Dict[str, Any]) -> bool:
         """
-        Write an audit log entry.
+        Write an audit log entry with Write-Ahead Checkpoint pattern.
+
+        Lifecycle:
+        1. Add hash chain integrity (reserves sequence)
+        2. Reserve PENDING state (if enabled)
+        3. Write to file
+        4. Success: Commit sequence (remove PENDING)
+        5. Failure: Abort sequence (mark as ORPHANED)
+
+        Also handles day boundary for anchor backup.
 
         Args:
             entry: The audit log entry
@@ -151,13 +189,29 @@ class LocalFileBackend(AuditBackend):
             True if successful
         """
         with self._lock:
+            sequence = None
+            expected_hash = None
+
             try:
                 # Add hash chain integrity if enabled
                 if self._hash_chain:
                     entry = self._hash_chain.add_integrity(entry)
+                    integrity = entry.get("integrity", {})
+                    sequence = integrity.get("sequence")
+                    expected_hash = integrity.get("current_hash")
+
+                # Reserve PENDING state for atomicity
+                if sequence and expected_hash and self._pending_manager:
+                    self._pending_manager.reserve_sequence(sequence, expected_hash)
+
+                # Check for day boundary and create anchor backup
+                self._check_anchor_backup()
 
                 # Ensure file is open
                 if not self._ensure_file_open():
+                    # File open failed - abort sequence
+                    if sequence and self._pending_manager:
+                        self._pending_manager.abort_sequence(sequence)
                     return False
 
                 # Write as JSON line
@@ -165,13 +219,46 @@ class LocalFileBackend(AuditBackend):
                 self._file_handle.write(json_line + "\n")
                 self._file_handle.flush()  # Ensure immediate write
 
+                # Commit sequence (remove PENDING)
+                if sequence and self._pending_manager:
+                    self._pending_manager.commit_sequence(sequence)
+
                 self._last_success = datetime.now(timezone.utc)
                 return True
 
             except Exception as e:
                 self._last_error = str(e)
                 logger.error(f"[LocalFileBackend] Failed to write entry: {e}")
+
+                # Abort sequence on failure
+                if sequence and self._pending_manager:
+                    self._pending_manager.abort_sequence(sequence)
+
                 return False
+
+    def _check_anchor_backup(self) -> None:
+        """
+        Create anchor backup at day boundary.
+
+        Called during write to capture end-of-day state before first write of new day.
+        """
+        if not self._anchor_manager or not self._enable_anchor_backup:
+            return
+
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+            # First write of a new day - create anchor for previous day
+            if self._last_anchor_date is not None and self._last_anchor_date != today:
+                # Create anchor for yesterday (the day that just ended)
+                self._anchor_manager.create_anchor(date=self._last_anchor_date)
+                logger.info(f"[LocalFileBackend] Created anchor backup for {self._last_anchor_date}")
+
+            self._last_anchor_date = today
+
+        except Exception as e:
+            # Anchor backup failure should not block writes
+            logger.warning(f"[LocalFileBackend] Anchor backup failed: {e}")
 
     def health_check(self) -> BackendHealth:
         """Check backend health."""

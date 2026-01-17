@@ -136,6 +136,10 @@ class SelfHealingConfig(AppConfig):
         # between restarts (e.g., Docker container restart with new env)
         self._log_env_snapshot()
 
+        # Sync hash chain state (Redis ↔ Local file)
+        # Ensures consistency after server restarts or Redis recovery
+        self._sync_hash_chain_on_startup()
+
         # Validate config with Safe Defaults (Fail-Safe Default 강화)
         self._validate_startup_config()
 
@@ -161,6 +165,123 @@ class SelfHealingConfig(AppConfig):
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
             logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
+
+    def _sync_hash_chain_on_startup(self):
+        """
+        Synchronize hash chain state between Redis and local files on startup.
+
+        Handles recovery scenarios:
+        - Redis behind file: Sync Redis to file state
+        - File behind Redis: Normal, some writes may be pending
+        - PENDING sequences: Cleanup from previous crashes
+
+        Best-effort: If sync fails, system continues normally.
+        Hash chain will be recovered on next successful write.
+
+        Reference:
+            docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+        """
+        try:
+            # Check if distributed hash chain is enabled
+            if not getattr(settings, "SELFHEALING_DISTRIBUTED_HASH_CHAIN", False):
+                logger.debug("[SelfHealing] Distributed hash chain not enabled, skipping sync")
+                return
+
+            from pathlib import Path
+            from selfhealing.audit.integrity import StartupHashChainSync
+
+            # Get Redis client
+            redis_client = self._get_redis_client_for_hash_chain()
+            if redis_client is None:
+                logger.debug("[SelfHealing] Redis client not available for hash chain sync")
+                return
+
+            # Get log directory from settings
+            log_dir = Path(getattr(settings, "SELFHEALING_AUDIT_LOG_DIR", "logs/audit"))
+
+            # Perform sync
+            sync = StartupHashChainSync(
+                redis_client=redis_client,
+                log_dir=log_dir,
+                key_prefix=getattr(settings, "SELFHEALING_REDIS_KEY_PREFIX", "selfhealing:"),
+            )
+            result = sync.sync()
+
+            # Log result
+            if result.get("status") == "success":
+                action = result.get("action", "none")
+                pending_cleaned = result.get("pending_cleaned", 0)
+
+                if action == "synced_redis_to_file":
+                    logger.warning(
+                        f"[SelfHealing] Hash chain sync: Redis was behind, "
+                        f"synced to file (seq {result.get('file_sequence')})"
+                    )
+                elif action == "fresh_start":
+                    logger.info("[SelfHealing] Hash chain sync: Fresh start (no prior state)")
+                else:
+                    logger.info(f"[SelfHealing] Hash chain sync: {action}")
+
+                if pending_cleaned > 0:
+                    logger.info(
+                        f"[SelfHealing] Hash chain sync: Cleaned {pending_cleaned} "
+                        "pending sequences from previous crash"
+                    )
+            else:
+                logger.warning(
+                    f"[SelfHealing] Hash chain sync failed: {result.get('error', 'unknown')}"
+                )
+
+        except ImportError:
+            logger.debug("[SelfHealing] integrity module not available for hash chain sync")
+        except Exception as e:
+            # Best-effort: 실패해도 시스템은 시작
+            logger.warning(f"[SelfHealing] Failed to sync hash chain on startup: {e}")
+
+    def _get_redis_client_for_hash_chain(self):
+        """
+        Get Redis client for hash chain operations.
+
+        Attempts multiple strategies:
+        1. From ResilientStorageBackend if available
+        2. From django_redis cache
+        3. Direct redis-py connection
+
+        Returns:
+            Redis client instance or None if unavailable
+        """
+        try:
+            # Strategy 1: Try ResilientStorageBackend
+            try:
+                from selfhealing.adapters.resilient.backend import ResilientStorageBackend
+
+                backend = ResilientStorageBackend()
+                return backend.get_redis_client()
+            except (ImportError, Exception):
+                pass
+
+            # Strategy 2: Try django_redis
+            try:
+                from django_redis import get_redis_connection
+
+                return get_redis_connection("default")
+            except (ImportError, Exception):
+                pass
+
+            # Strategy 3: Try direct redis connection from settings
+            try:
+                import redis
+
+                redis_url = getattr(settings, "SELFHEALING_REDIS_URL", None)
+                if redis_url:
+                    return redis.from_url(redis_url)
+            except (ImportError, Exception):
+                pass
+
+            return None
+
+        except Exception:
+            return None
 
     def _validate_startup_config(self):
         """
