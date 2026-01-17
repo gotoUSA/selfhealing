@@ -180,6 +180,9 @@ class BaseConfigManager:
                 )
                 return current.copy()
 
+            # Compute diff for audit
+            diff = self._compute_diff(previous, current)
+
             self._save_config(config_type, current)
 
             # Build final reason with Safe Default marker
@@ -198,7 +201,86 @@ class BaseConfigManager:
                 reason=final_reason,
             )
 
+            # Emit CONFIG_CHANGE audit event (Phase 6)
+            if diff:
+                self._emit_config_change_audit(
+                    config_type=config_type,
+                    changed_by=changed_by,
+                    reason=final_reason,
+                    old_values=diff["old"],
+                    new_values=diff["new"],
+                )
+
             return current.copy()
+
+    def _compute_diff(
+        self,
+        old: Dict[str, Any],
+        new: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        변경된 필드만 추출.
+        
+        Args:
+            old: 이전 설정 딕셔너리
+            new: 새 설정 딕셔너리
+            
+        Returns:
+            {"old": {changed_fields}, "new": {changed_fields}} 또는 None
+        """
+        old_diff = {}
+        new_diff = {}
+        
+        for key in set(old.keys()) | set(new.keys()):
+            if old.get(key) != new.get(key):
+                old_diff[key] = old.get(key)
+                new_diff[key] = new.get(key)
+        
+        if old_diff:
+            return {"old": old_diff, "new": new_diff}
+        return None
+
+    def _emit_config_change_audit(
+        self,
+        config_type: str,
+        changed_by: str,
+        reason: str,
+        old_values: Dict[str, Any],
+        new_values: Dict[str, Any],
+    ) -> None:
+        """
+        AuditEventType.CONFIG_CHANGE 발행.
+        
+        Best-effort: 실패해도 설정 업데이트에 영향 없음.
+        
+        Args:
+            config_type: 설정 타입
+            changed_by: 변경자
+            reason: 변경 사유
+            old_values: 변경 전 값들
+            new_values: 변경 후 값들
+        """
+        try:
+            from selfhealing.audit import log_config_change
+            
+            # 각 변경된 필드에 대해 audit 로그 기록
+            for key in new_values:
+                log_config_change(
+                    config_type=config_type.upper(),
+                    config_key=key,
+                    old_value=old_values.get(key),
+                    new_value=new_values[key],
+                    user=changed_by,
+                    reason=reason,
+                )
+            
+            logger.info(
+                f"[RuntimeConfig] Audit logged: {config_type} "
+                f"changed by {changed_by}, fields: {list(new_values.keys())}"
+            )
+        except Exception as e:
+            # Graceful degradation - audit failure should not break config update
+            logger.warning(f"[RuntimeConfig] Failed to emit audit: {e}")
 
     def _save_to_history(
         self,

@@ -1159,18 +1159,48 @@ class Command(BaseCommand):
 
 ---
 
-### 8.6 Phase 6 체크리스트 (예정)
+### 8.6 Phase 6 체크리스트 ✅ (2026-01-17 완료)
 
-| 기능 | 상태 | 우선순위 | 예상 시간 |
-|------|------|---------|----------|
-| Layered Provider | 📋 설계 완료 | 높음 | 1일 |
-| Push-based Refresh (Redis) | 📋 인프라 존재 | 중간 | 0.5일 |
-| SecretStr 도입 | 📋 설계 완료 | 중간 | 0.5일 |
-| Partial Update 지원 | 📋 설계 완료 | 높음 | 0.5일 |
-| Config Drift Audit | 📋 부분 구현됨 | 높음 | 0.5일 |
-| CLI 도구 | 📋 설계 완료 | 낮음 | 0.5일 |
+| 기능 | 상태 | 구현 파일 | 테스트 |
+|------|------|---------|--------|
+| Layered Provider | ✅ 완료 | `settings/layered_provider.py` | 9개 통과 |
+| SecretStr 도입 | ✅ 완료 | `settings/secrets.py` | 7개 통과 |
+| Partial Update 지원 | ✅ 완료 | `pydantic_integration.py` | 4개 통과 |
+| Config Drift Audit | ✅ 완료 | `runtime_config/base.py` | 5개 통과 |
+| CLI 도구 | ✅ 완료 | `shopping/management/commands/selfhealing_config.py` | Django 통합 |
+| Push-based Refresh (Redis) | 📋 인프라 존재 | 향후 확장 가능 | - |
 
-**총 예상: 3.5일**
+**구현 내용:**
+
+1. **Layered Provider** (`settings/layered_provider.py`)
+   - `contextvars` 기반 Request-scoped 설정 오버라이드
+   - 4-Level 설정 계층: DEFAULT < ENV < RUNTIME < REQUEST
+   - `get_layered_settings()`, `set_request_override()`, `RequestOverrideContext`
+   - `detect_config_source()`: 설정값 출처 추적
+
+2. **SecretStr 도입** (`settings/secrets.py`)
+   - `pydantic.SecretStr` 기반 민감 정보 자동 마스킹
+   - `get_masked_summary()`: 시크릿 설정 상태 확인
+   - 로깅/print 시 자동 마스킹 (`**********`)
+
+3. **Partial Update 지원** (`pydantic_integration.py`)
+   - `validate_with_pydantic_partial()`: PATCH 요청 시 부분 업데이트
+   - 현재 설정과 병합 후 변경된 필드만 반환
+
+4. **Config Drift Audit** (`runtime_config/base.py`)
+   - `_compute_diff()`: Old vs New 값 비교
+   - `_emit_config_change_audit()`: `log_config_change()` 호출
+   - 필드별 상세 변경 이력 Audit 로그
+
+5. **CLI 도구** (`shopping/management/commands/selfhealing_config.py`)
+   - `--inspect`: 모든 설정값 출력 (text/json/table)
+   - `--validate`: 설정 유효성 검증
+   - `--export`: JSON Schema 내보내기
+   - `--sources`: 설정값 출처 분석
+   - `--secrets`: SecretsSettings 상태 확인
+
+**테스트 결과:** 27개 테스트 전체 통과
+- `test_phase6_advanced_features.py`
 
 ---
 

@@ -116,6 +116,27 @@ from selfhealing.settings.replay_automation import (
     reset_replay_automation_settings,
 )
 
+# Phase 6: Advanced Features
+from selfhealing.settings.layered_provider import (
+    get_layered_settings,
+    set_request_override,
+    get_request_override,
+    clear_request_overrides,
+    get_all_request_overrides,
+    detect_config_source,
+    get_config_with_sources,
+    RequestOverrideContext,
+    get_circuit_breaker_layered,
+    get_retry_layered,
+    get_dlq_layered,
+    get_rate_limit_layered,
+)
+from selfhealing.settings.secrets import (
+    SecretsSettings,
+    get_secrets,
+    reset_secrets,
+)
+
 # Root Settings (SelfHealingSettings)
 from selfhealing.settings.root import (
     SelfHealingSettings,
@@ -258,6 +279,23 @@ __all__ = [
     "ReplayAutomationConfig",  # Legacy alias
     "get_replay_automation_settings",
     "reset_replay_automation_settings",
+    # Phase 6: Layered Provider
+    "get_layered_settings",
+    "set_request_override",
+    "get_request_override",
+    "clear_request_overrides",
+    "get_all_request_overrides",
+    "detect_config_source",
+    "get_config_with_sources",
+    "RequestOverrideContext",
+    "get_circuit_breaker_layered",
+    "get_retry_layered",
+    "get_dlq_layered",
+    "get_rate_limit_layered",
+    # Phase 6: Secrets
+    "SecretsSettings",
+    "get_secrets",
+    "reset_secrets",
     # Legacy aliases (deprecated)
     "CircuitBreakerConfig",
     "DLQConfig",

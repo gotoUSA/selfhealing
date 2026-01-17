@@ -192,6 +192,58 @@ class PydanticSerializerMixin:
         except Exception as e:
             # Pydantic ValidationError → DRF ValidationError
             raise serializers.ValidationError(str(e))
+    
+    def validate_with_pydantic_partial(
+        self,
+        data: dict,
+        current_settings: Optional[BaseModel] = None,
+    ) -> dict:
+        """
+        부분 업데이트를 지원하는 Pydantic 검증.
+        
+        PATCH 요청 시 변경된 필드만 검증하고 현재 값과 병합합니다.
+        
+        Args:
+            data: 변경할 필드만 포함된 dict
+            current_settings: 현재 설정 인스턴스 (없으면 기본값 사용)
+            
+        Returns:
+            병합된 검증 완료 데이터 (변경된 필드만)
+            
+        Raises:
+            serializers.ValidationError: 검증 실패 시
+            
+        Example:
+            # PATCH /api/v1/config/circuit-breaker/
+            # Body: {"failure_threshold": 10}
+            
+            current = CircuitBreakerSettings()  # 현재 설정 로드
+            changes = serializer.validate_with_pydantic_partial(
+                data={"failure_threshold": 10},
+                current_settings=current,
+            )
+            # changes = {"failure_threshold": 10}  # 변경된 것만
+        """
+        if not self._pydantic_model:
+            return data
+        
+        try:
+            if current_settings:
+                # 현재 값과 병합 후 검증
+                current_dict = current_settings.model_dump()
+                current_dict.update(data)
+                validated = self._pydantic_model.model_validate(current_dict)
+            else:
+                # 기본값과 병합 (전체 모델 생성 후 전달된 데이터만 오버라이드)
+                defaults = self._pydantic_model()
+                merged = defaults.model_dump()
+                merged.update(data)
+                validated = self._pydantic_model.model_validate(merged)
+            
+            # 실제로 변경된 필드만 반환
+            return {k: v for k, v in validated.model_dump().items() if k in data}
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
 
 
 def create_pydantic_serializer(
