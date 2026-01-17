@@ -13,7 +13,6 @@ Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
 
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import asdict
 
 
 # =============================================================================
@@ -63,11 +62,11 @@ class TestReplayAutomationConfig:
         assert config.adaptive_enabled is True
 
     def test_asdict_serialization(self):
-        """dataclass를 dict로 변환 가능 확인."""
+        """config를 dict로 변환 가능 확인 (Pydantic model_dump)."""
         from selfhealing.core.config import ReplayAutomationConfig
 
         config = ReplayAutomationConfig()
-        config_dict = asdict(config)
+        config_dict = config.model_dump()
 
         assert isinstance(config_dict, dict)
         assert "track1_enabled" in config_dict
@@ -102,10 +101,9 @@ class TestRuntimeConfigManagerReplayAutomation:
     def test_default_config_structure(self):
         """기본 설정 구조 확인."""
         from selfhealing.core.config import ReplayAutomationConfig
-        from dataclasses import asdict
         
         config = ReplayAutomationConfig()
-        config_dict = asdict(config)
+        config_dict = config.model_dump()
         
         # 필수 필드 확인
         assert "track1_enabled" in config_dict

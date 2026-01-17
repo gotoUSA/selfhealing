@@ -42,8 +42,8 @@ DATABASES = {
         # Health checks 비활성화하여 연결 절약
         "CONN_HEALTH_CHECKS": False,
         "OPTIONS": {
-            "connect_timeout": 10,
-            "options": "-c statement_timeout=30000",
+            "connect_timeout": 30,
+            # statement_timeout 제거 - CREATE DATABASE 시 타임아웃 방지
             "client_encoding": "UTF8",  # Windows 인코딩 문제 해결
         },
         # 테스트 DB 이름 설정

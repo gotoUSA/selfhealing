@@ -65,11 +65,11 @@ class ReplayOperationsMixin:
             request: Django HttpRequest 객체 (있으면 버퍼에 적재)
 
         Returns:
-            ReplayResult with operation statistics
+            DLQBatchReplayStats with operation statistics
         """
-        from selfhealing.services.dlq_models import ReplayResult
+        from selfhealing.services.dlq_models import DLQBatchReplayStats
 
-        result = ReplayResult()
+        result = DLQBatchReplayStats()
 
         try:
             entries = self.get_pending_entries(domain=domain, limit=batch_size)

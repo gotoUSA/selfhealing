@@ -24,7 +24,7 @@ from typing import Any, Optional
 from selfhealing.services.dlq_models import (
     DLQConfig,
     DLQEntryResult,
-    ReplayResult,
+    DLQBatchReplayStats,
 )
 
 # Import base and mixins
@@ -124,7 +124,7 @@ __all__ = [
     # Models
     "DLQConfig",
     "DLQEntryResult",
-    "ReplayResult",
+    "DLQBatchReplayStats",
     # Service
     "DLQService",
     "DLQServiceBase",

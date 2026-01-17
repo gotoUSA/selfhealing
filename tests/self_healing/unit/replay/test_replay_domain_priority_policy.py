@@ -14,7 +14,6 @@ Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §
 
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import asdict
 
 
 # =============================================================================
@@ -53,7 +52,7 @@ class TestReplayAutomationConfigPhase4:
         assert config.domain_on_circuit_close == {"payment": True, "analytics": False}
 
     def test_config_to_dict_includes_phase4_fields(self):
-        """asdict()가 Phase 4 필드를 포함하는지 확인."""
+        """model_dump()가 Phase 4 필드를 포함하는지 확인."""
         from selfhealing.core.config import ReplayAutomationConfig
 
         config = ReplayAutomationConfig(
@@ -61,7 +60,7 @@ class TestReplayAutomationConfigPhase4:
             domain_priorities={"payment": "critical"},
         )
 
-        config_dict = asdict(config)
+        config_dict = config.model_dump()
 
         assert "priority_enabled" in config_dict
         assert "domain_priorities" in config_dict

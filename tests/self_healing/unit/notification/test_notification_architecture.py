@@ -155,7 +155,9 @@ class TestDailyReportData:
         assert report1.purged_count == 3
 
     def test_to_slack_message(self):
-        """Test Slack message formatting."""
+        """Test Slack message formatting using format_report_for_slack."""
+        from selfhealing.services.daily_report import format_report_for_slack
+        
         report = DailyReportData(
             date=datetime(2026, 1, 2, tzinfo=timezone.utc),
             archived_count=100,
@@ -163,7 +165,7 @@ class TestDailyReportData:
             recovered_count=5,
         )
         
-        message = report.to_slack_message()
+        message = format_report_for_slack(report)
         
         assert "2026-01-02" in message
         assert "100" in message

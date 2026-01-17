@@ -14,7 +14,6 @@ Reference:
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
-from dataclasses import asdict
 
 
 # =============================================================================
@@ -54,11 +53,11 @@ class TestDriftThresholdConfig:
         assert config.alert_enabled is False
 
     def test_dataclass_conversion(self):
-        """Test dataclass can be converted to dict."""
+        """Test config can be converted to dict (uses Pydantic model_dump)."""
         from selfhealing.core.config import DriftThresholdConfig
 
         config = DriftThresholdConfig()
-        config_dict = asdict(config)
+        config_dict = config.model_dump()
 
         assert isinstance(config_dict, dict)
         assert "warning_threshold" in config_dict

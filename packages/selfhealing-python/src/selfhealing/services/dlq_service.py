@@ -28,7 +28,7 @@ from selfhealing.services.dlq import (
     # Models
     DLQConfig,
     DLQEntryResult,
-    ReplayResult,
+    DLQBatchReplayStats,
     # Module-level convenience functions
     get_dlq_service,
     store_to_dlq,
@@ -48,7 +48,7 @@ __all__ = [
     # Models
     "DLQConfig",
     "DLQEntryResult",
-    "ReplayResult",
+    "DLQBatchReplayStats",
     # Module-level convenience functions
     "get_dlq_service",
     "store_to_dlq",

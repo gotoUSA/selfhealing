@@ -13,7 +13,6 @@ Provides get/update methods for advanced configuration types:
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
@@ -496,7 +495,7 @@ class AdvancedConfigMixin:
         Returns:
             dict: 기본값으로 리셋된 설정
         """
-        default_config = asdict(DriftThresholdConfig())
+        default_config = DriftThresholdConfig().model_dump()
         self._save_config("drift_threshold", default_config)
         
         self._save_to_history(

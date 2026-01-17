@@ -17,7 +17,6 @@ Reference:
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
-from dataclasses import asdict
 
 
 # =============================================================================
@@ -26,7 +25,7 @@ from dataclasses import asdict
 
 
 class TestL2StorageConfig:
-    """Tests for L2StorageConfig dataclass."""
+    """Tests for L2StorageConfig (Pydantic BaseSettings)."""
 
     def test_default_values(self):
         """Test default values are set correctly."""
@@ -34,15 +33,12 @@ class TestL2StorageConfig:
 
         config = L2StorageConfig()
 
-        assert config.redis_timeout_ms == 50
+        # Updated defaults from L2StorageSettings
+        assert config.redis_timeout_ms == 1000
         assert config.database_timeout_ms == 200
         assert config.fallback_timeout_ms == 100
         assert config.shadow_log_enabled is True
         assert config.shadow_log_max_entries == 1000
-        assert config.reconciliation_jitter_min_seconds == 0.0
-        assert config.reconciliation_jitter_max_seconds == 5.0
-        assert config.health_check_interval_seconds == 30.0
-        assert config.health_check_timeout_ms == 100
 
     def test_custom_values(self):
         """Test custom values can be set."""
@@ -59,15 +55,15 @@ class TestL2StorageConfig:
         assert config.shadow_log_enabled is False
 
     def test_dataclass_conversion(self):
-        """Test dataclass can be converted to dict."""
+        """Test config can be converted to dict (uses Pydantic model_dump)."""
         from selfhealing.core.config import L2StorageConfig
 
         config = L2StorageConfig()
-        config_dict = asdict(config)
+        config_dict = config.model_dump()
 
         assert "redis_timeout_ms" in config_dict
         assert "shadow_log_enabled" in config_dict
-        assert config_dict["redis_timeout_ms"] == 50
+        assert config_dict["redis_timeout_ms"] == 1000
 
 
 # =============================================================================

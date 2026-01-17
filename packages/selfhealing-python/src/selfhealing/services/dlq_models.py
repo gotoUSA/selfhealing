@@ -88,14 +88,22 @@ class DLQEntryResult:
 
 
 @dataclass
-class ReplayResult:
-    """Result of a batch replay operation."""
+class DLQBatchReplayStats:
+    """Result of a batch replay operation (statistics).
+    
+    Note: This is for batch DLQ replay statistics, not to be confused with
+    ReplayResult in replay_service.py which is for single replay outcomes.
+    """
 
     processed: int = 0
     success: int = 0
     failed: int = 0
     skipped: int = 0
     errors: List[str] = field(default_factory=list)
+
+
+# Backward compatibility alias
+ReplayResult = DLQBatchReplayStats
 
 
 @dataclass

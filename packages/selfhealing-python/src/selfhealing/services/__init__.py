@@ -139,10 +139,9 @@ from .dlq_service import (
     # Backward compatibility - commonly used in tests
     DLQConfig,
     DLQEntryResult,
-    ReplayResult,
     store_to_dlq,
 )
-from .replay_service import get_replay_service, ReplayService, BatchReplayResult
+from .replay_service import get_replay_service, ReplayService, BatchReplayResult, ReplayResult
 
 # --- Backward Compatibility - Idempotency ---
 from .idempotency_service import (
