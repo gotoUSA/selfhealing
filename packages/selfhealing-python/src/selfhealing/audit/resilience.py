@@ -316,7 +316,7 @@ class AuditMetrics:
         # Histogram-like data (simplified)
         self._write_durations: Dict[str, List[float]] = {}  # {backend: [durations]}
         
-        # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+        # WAL 관련 메트릭 (누락 0 보장)
         self._wal_writes_total: int = 0
         self._wal_write_failures_total: int = 0
         self._central_writes_total: int = 0
@@ -333,7 +333,7 @@ class AuditMetrics:
         return cls._instance
     
     # =========================================================================
-    # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+    # WAL 관련 메트릭 (누락 0 보장)
     # =========================================================================
     
     def record_wal_write(self, success: bool = True) -> None:
@@ -434,7 +434,7 @@ class AuditMetrics:
                 "audit_degraded_since": (
                     self._degraded_since.isoformat() if self._degraded_since else None
                 ),
-                # WAL 관련 메트릭 (Phase 0: 누락 0 보장)
+                # WAL 관련 메트릭 (누락 0 보장)
                 "audit_wal_writes_total": self._wal_writes_total,
                 "audit_wal_write_failures_total": self._wal_write_failures_total,
                 "audit_central_writes_total": self._central_writes_total,
@@ -492,7 +492,7 @@ class AuditMetrics:
         lines.append("# TYPE audit_degraded_mode gauge")
         lines.append(f'audit_degraded_mode {metrics["audit_degraded_mode"]}')
         
-        # WAL metrics (Phase 0: 누락 0 보장)
+        # WAL metrics (누락 0 보장)
         lines.append("# HELP audit_wal_writes_total Total WAL writes")
         lines.append("# TYPE audit_wal_writes_total counter")
         lines.append(f'audit_wal_writes_total {metrics["audit_wal_writes_total"]}')
@@ -876,7 +876,7 @@ def log_critical_to_syslog(
 
 
 # =============================================================================
-# InMemoryAuditBuffer - Phase 4
+# InMemoryAuditBuffer
 # =============================================================================
 
 
@@ -887,7 +887,7 @@ class InMemoryAuditBuffer:
     디스크 장애 시 중요 로그를 메모리에 임시 보관하고,
     시스템 정상화 시 파일로 플러시합니다.
     
-    설계 원칙 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md §8.2.1):
+    설계 원칙:
     - 최대 10,000개 엔트리 보관 (메모리 고갈 방지)
     - FIFO: 용량 초과 시 가장 오래된 엔트리 삭제
     - 주기적 플러시 시도 (30초 간격)

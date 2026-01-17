@@ -156,19 +156,19 @@ class AuditMiddleware:
         if self._should_skip(request):
             return self.get_response(request)
         
-        # === Phase 1: 버퍼 초기화 ===
+        # === 버퍼 초기화 ===
         buffer = self._init_buffer(request)
         
-        # === Phase 1.5: ADR-002 조회 기록 (설정된 경로의 GET 요청) ===
+        # === ADR-002 조회 기록 (설정된 경로의 GET 요청) ===
         self._capture_read_access(request, buffer)
         
-        # === Phase 2: 요청 처리 ===
+        # === 요청 처리 ===
         response = self.get_response(request)
         
-        # === Phase 3: 응답 메타 수집 ===
+        # === 응답 메타 수집 ===
         self._capture_response_meta(request, response, buffer)
         
-        # === Phase 4: 이벤트 기록 (버퍼 낚아채기) ===
+        # === 이벤트 기록 (버퍼 낚아채기) ===
         if buffer.has_events():
             self._record_events(buffer, request, response)
         

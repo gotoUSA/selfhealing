@@ -11,9 +11,6 @@ Thin Task, Fat Service Architecture:
 Tasks:
 - apply_pending_config_changes: Apply all due pending changes
 - apply_graceful_config_change: Wait for in-progress ops, then apply
-
-Reference:
-- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8
 """
 
 import logging
@@ -37,7 +34,7 @@ def apply_pending_config_changes(self):
     This task is a thin wrapper that delegates to ConfigApplyService.
     All governance checks (Emergency Mode) are performed in the service layer.
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - 설정 적용 성공/실패/차단 시 CONFIG_CHANGE 이벤트 기록
 
     Note:
@@ -59,7 +56,7 @@ def apply_pending_config_changes(self):
         if status == "blocked":
             logger.warning(f"[ConfigTask] Blocked: {result.get('reason')}")
         
-        # === Audit 기록 (Phase 4) ===
+        # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_config_apply_audit
             
@@ -109,7 +106,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
     This task is a thin wrapper that delegates to ConfigApplyService.
     Waits for in-progress operations to complete before applying.
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - 설정 적용 성공/실패/차단 시 CONFIG_CHANGE 이벤트 기록
 
     Args:

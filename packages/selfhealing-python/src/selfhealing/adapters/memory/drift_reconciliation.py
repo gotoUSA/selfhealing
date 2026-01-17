@@ -3,8 +3,6 @@ Drift Reconciliation Module
 
 L2 복구 시 L1과 L2 간 상태 불일치(드리프트)를 해결합니다.
 "Most Restrictive Wins" 전략으로 안전 우선 복구를 수행합니다.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
 """
 
 from __future__ import annotations
@@ -39,8 +37,6 @@ class DriftReconciliationRecord:
     드리프트 복구 기록.
     
     L2 복구 후 L1과 L2 간 상태 불일치 해결 기록.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
     service_name: str
     l1_state: str
@@ -67,8 +63,6 @@ class DriftReconciler:
     Thundering Herd 방지:
     - L2 복구 시 모든 Pod가 동시에 쓰기 요청을 보내면 L2 과부하 발생
     - Jitter를 적용하여 순차적으로 동기화
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
     
     # 상태 우선순위: 높을수록 더 제한적

@@ -422,8 +422,6 @@ class LoggingConfigView(BaseConfigView):
 
     각 Self-Healing 컨포넌트별 로깅 레벨을 동적으로 변경할 수 있습니다.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
-    
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5)
     """
 
     serializer_class = LoggingConfigSerializer
@@ -563,8 +561,6 @@ class ReplayAutomationConfigView(BaseConfigView):
     - Track 2: Scheduled batch replay (5-minute interval)
     - Track 3: Traffic-aware replay (future implementation)
     - Adaptive mode for dynamic batch sizing
-
-    Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
     """
 
     serializer_class = ReplayAutomationConfigSerializer

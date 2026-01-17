@@ -128,7 +128,6 @@ from selfhealing.api.django.views.chaos import (
 )
 
 # Governance API Views (New Unified Hub)
-# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 from selfhealing.api.django.views.governance import (
     # Service
     GovernanceService,
@@ -144,7 +143,6 @@ from selfhealing.api.django.views.governance import (
 )
 
 # X-Test-Mode Views (Stage 48: Chaos Proof)
-# Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
 from selfhealing.api.django.views.xtest_mode import (
     XTestModeMixin,
     InjectCBFailureView,
@@ -156,7 +154,6 @@ from selfhealing.api.django.views.xtest_mode import (
 )
 
 # Auto Tuning Views
-# Reference: docs/self_healing/38_AUTO_TUNING_API.md
 from selfhealing.api.django.views.auto_tuning import (
     AutoTuningStatusView,
     AutoTuningEnableView,

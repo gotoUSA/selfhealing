@@ -8,7 +8,6 @@ Features:
 - SensitiveEndpointAccessLogger: Logs access to sensitive endpoints
 - Log data masking for privacy protection
 
-Reference: docs/self_healing/07_CONTROL_API.md (Access Logging section)
 Stage 50: Observability - Middleware Early Return for /health/l3
 """
 
@@ -84,14 +83,14 @@ class HealthBridgeMiddleware:
         """Process request/response."""
         from django.http import JsonResponse
 
-        # === Phase 1: Early Return for Bridge Paths ===
+        # === Early Return for Bridge Paths ===
         if request.path in self.BRIDGE_PATHS:
             return self._serve_bridge_response(request)
 
-        # === Phase 2: Normal Request Processing ===
+        # === Normal Request Processing ===
         response = self.get_response(request)
 
-        # === Phase 3: Update CB Snapshot (best-effort) ===
+        # === Update CB Snapshot (best-effort) ===
         # Non-blocking: 실패해도 요청은 정상 처리
         self._try_update_snapshot()
 
@@ -602,7 +601,7 @@ class SelfHealingMiddleware:
     - 502/503 에러 발생 시 DLQ 자동 적재
     - 복구 후 자동 리플레이 트리거
 
-    Stage 16 v6.1.0 (HEALING PROOF - Phase 3/4/5 Fix):
+    Stage 16 v6.1.0 (HEALING PROOF Fix):
     - stress 엔드포인트 503 에러를 인프라 장애로 인식 (신호 통합)
     - CB OPEN 시 선제적 DLQ 적재 (자동 라우팅)
     - 완전한 자율 치유 사이클 달성
@@ -758,7 +757,7 @@ class SelfHealingMiddleware:
                 f"request queued (dlq_id={dlq_id}, path={request.path})"
             )
 
-            # Audit 로그 기록 (Phase 3: 버퍼 패턴)
+            # Audit 로그 기록 (버퍼 패턴)
             self._log_audit_event(
                 "preemptive_dlq_stored",
                 {
@@ -800,10 +799,10 @@ class SelfHealingMiddleware:
                     "method": request.method,
                 }
 
-                # CircuitBreaker에 실패 기록 (Phase 3: request 전달)
+                # CircuitBreaker에 실패 기록
                 self._record_cb_failure(db_error_context, request=request)
 
-                # DLQ에 적재 (복구 가능한 요청인 경우, Phase 3: request 전달)
+                # DLQ에 적재 (복구 가능한 요청인 경우)
                 if self._is_dlq_eligible(request):
                     self._store_to_dlq(request_data, db_error_context, request=request)
 
@@ -836,7 +835,6 @@ class SelfHealingMiddleware:
 
             # CircuitBreaker에 실패 기록
             # v6.1.0: 인프라 장애 경로에서는 반드시 CB 실패로 기록
-            # Phase 3: request 전달
             self._record_cb_failure(error_context, request=request)
 
             if is_infra_failure_path:
@@ -845,7 +843,7 @@ class SelfHealingMiddleware:
                     f"path={request.path}, status={response.status_code}"
                 )
 
-            # DLQ에 적재 (복구 가능한 요청인 경우, Phase 3: request 전달)
+            # DLQ에 적재 (복구 가능한 요청인 경우)
             if self._is_dlq_eligible(request):
                 self._store_to_dlq(request_data, error_context, request=request)
 
@@ -970,7 +968,7 @@ class SelfHealingMiddleware:
         v6.1.0: PoolCircuitBreaker도 함께 업데이트하여
         테스트에서 /circuit-breaker/pool/status/ API로 상태 확인 가능
 
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
         try:
             if self._cb_service and self._cb_service.is_enabled:
@@ -984,7 +982,7 @@ class SelfHealingMiddleware:
                     f"error_type={error_context.get('error_type')}"
                 )
 
-                # Audit 로그 기록 (Phase 3: 버퍼 패턴)
+                # Audit 로그 기록 (버퍼 패턴)
                 self._log_audit_event(
                     "cb_failure_recorded",
                     {
@@ -1025,7 +1023,7 @@ class SelfHealingMiddleware:
     ) -> Optional[int]:
         """Store failed request to DLQ.
 
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
         try:
             from selfhealing.services.dlq_service import store_to_dlq
@@ -1060,7 +1058,7 @@ class SelfHealingMiddleware:
                     f"path={request_data.get('path')}"
                 )
 
-                # Audit 로그 기록 (Phase 3: 버퍼 패턴)
+                # Audit 로그 기록 (버퍼 패턴)
                 self._log_audit_event(
                     "dlq_auto_stored",
                     {
@@ -1104,7 +1102,6 @@ class SelfHealingMiddleware:
         """
         Log event to audit system.
 
-        Phase 3 변경:
         - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
         - request가 없으면 → 기존 방식 유지 (직접 로깅)
 
@@ -1113,7 +1110,7 @@ class SelfHealingMiddleware:
             data: 이벤트 데이터
             request: Django HttpRequest 객체 (있으면 버퍼에 적재)
         """
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
@@ -1255,7 +1252,7 @@ class SelfHealingRecoveryLogger:
         """
         Log an event to the recovery chain.
 
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         (복구 체인은 대부분 비동기 컨텍스트에서 실행되므로 request가 없는 경우가 많음)
         """
         self._lazy_init()
@@ -1275,7 +1272,7 @@ class SelfHealingRecoveryLogger:
 
             chain["events"].append(event)
 
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType

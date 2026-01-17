@@ -1,9 +1,7 @@
 """
-Phase 3: Pydantic-DRF Serializer Integration Tests.
+Pydantic-DRF Serializer Integration Tests.
 
 Pydantic 모델에서 DRF Serializer 자동 생성 및 검증 테스트.
-
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 import os

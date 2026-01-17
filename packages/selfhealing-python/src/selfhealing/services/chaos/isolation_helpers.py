@@ -214,8 +214,7 @@ def _record_cleanup_cost_refund(
     "우리는 실험이 끝나면 자원만 치우는 게 아니라, 
     재무적 비용 지표까지도 정확히 원복시킨다"
     
-    Reference: FinOpsService.record_cost()는 Decimal 타입이므로 음수 기록 가능
-    코드 근거: finops/service.py:97-130
+    FinOpsService.record_cost()는 Decimal 타입이므로 음수 기록 가능합니다.
     
     Args:
         experiment_id: 정리된 실험 ID

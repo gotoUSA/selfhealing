@@ -10,8 +10,6 @@ Key Features:
 - ReauthenticationProvider interface for custom implementations
 - Configurable idle timeout and session limits
 - PCI-DSS compliant design (minimum privilege principle)
-
-Reference: docs/self_healing/07_CONTROL_API.md (Security Reauthentication section)
 """
 
 from __future__ import annotations

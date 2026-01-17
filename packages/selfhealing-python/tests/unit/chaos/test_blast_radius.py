@@ -1,7 +1,5 @@
 """
-Phase 1 DNA Safety 단위 테스트 - Blast Radius DNA
-
-Reference: docs/self_healing/33_DNA_SAFETY_FEATURES.md
+Blast Radius DNA 테스트
 """
 import pytest
 from load_tests.utils.selfhealing.dna_safety import (

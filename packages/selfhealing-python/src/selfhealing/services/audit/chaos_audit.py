@@ -36,9 +36,6 @@ def log_kill_switch_override_audit(
     
     LOCKDOWN 상태에서 운영자가 수동으로 Kill Switch를 무시하고
     CB 상태를 변경할 때 기록합니다.
-    
-    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-    Section 13.3.3 - Kill Switch Override 수정
     """
     details = {
         "service_name": service_name,
@@ -97,9 +94,6 @@ def log_panic_threshold_audit(
     
     전체 CB 중 70% 이상이 OPEN 상태일 때 시스템 전체 붕괴로 판단하고
     Emergency Level 3를 자동 선포할 때 기록합니다.
-    
-    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-    Section 14 - Panic Threshold
     """
     details = {
         "open_rate": open_rate,
@@ -159,9 +153,6 @@ def log_freeze_mode_audit(
     Freeze Mode 활성화/비활성화 이벤트를 Audit 로그에 기록.
     
     LOCKDOWN 상태에서 모든 CB 자동 변경을 금지할 때 기록합니다.
-    
-    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-    Section 6 - LOCKDOWN Freeze Mode
     """
     action = "activated" if active else "deactivated"
     

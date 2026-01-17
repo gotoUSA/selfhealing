@@ -99,8 +99,7 @@ class ShadowBudget:
     reviewed_at: Optional[datetime] = None
     review_justification: Optional[str] = None
     
-    # 정확도 검증 (Phase 8: Accuracy Audit)
-    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+    # 정확도 검증 (Accuracy Audit)
     verified_at: Optional[datetime] = None
     accuracy_variance_percent: Optional[float] = None
     
@@ -153,8 +152,7 @@ class ExcludedPeriod:
     # 연관 Fail-Safe 기간
     failsafe_period_id: Optional[str] = None
     
-    # 투명성 강화: 제외 당시 원본 데이터 (Phase 7)
-    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.1
+    # 투명성 강화: 제외 당시 원본 데이터
     original_estimated_errors: Optional[int] = None
     original_log_source: Optional[str] = None
     original_adjustment_percent: Optional[float] = None

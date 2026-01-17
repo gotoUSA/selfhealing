@@ -3,8 +3,7 @@ Core Self-Healing Configuration Serializers.
 
 CircuitBreaker, DLQ, Retry, RateLimit, Idempotency config serializers.
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -15,7 +14,7 @@ class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Circuit Breaker configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "circuit_breaker"
@@ -43,7 +42,7 @@ class DLQConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for DLQ configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "dlq"
@@ -66,7 +65,7 @@ class RetryConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Retry configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "retry"
@@ -93,7 +92,7 @@ class RateLimitConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Rate Limit configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "rate_limit"
@@ -114,7 +113,7 @@ class IdempotencyConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Idempotency configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "idempotency"

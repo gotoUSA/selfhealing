@@ -7,8 +7,6 @@ RuntimeFeedbackLoop에서 사용하는 메트릭 수집 어댑터들
 - InternalMetricsAdapter: DB/캐시 기반 내부 메트릭
 - PrometheusMetricsAdapter: Prometheus 연동
 - MockMetricsAdapter: 테스트용
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 from __future__ import annotations

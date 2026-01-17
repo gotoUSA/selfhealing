@@ -4,8 +4,6 @@ Redis Air-Gap Storage Adapter.
 Provides Air-Gap storage using Redis as the intermediate layer
 between Self-Healing engine and business database.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 4)
-
 Architecture:
     Business DB → (Business Layer writes) → Redis Air-Gap → (Engine reads) → Self-Healing
 """

@@ -48,8 +48,6 @@ class GovernanceReconcileView(APIView):
         - actor: 수행자
         - results: 도메인별 조정 결과
         - summary: 요약 정보
-    
-    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     """
     
     permission_classes = [IsSelfHealingAdmin]

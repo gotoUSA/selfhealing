@@ -1,7 +1,7 @@
 """
-Phase 25: RBAC-Audit 연동 Phase 1 테스트
+RBAC-Audit Actor Roles 테스트
 
-Phase 1 구현 사항:
+구현 사항:
 - Actor 클래스에 roles 필드 추가
 - set_actor()에 roles 파라미터 추가
 - set_actor_from_django_request()에서 RBAC 역할 추출
@@ -30,7 +30,7 @@ from selfhealing.interfaces.audit_adapter import (
 
 
 class TestActorRolesField:
-    """Phase 1.1: Actor 클래스 roles 필드 테스트."""
+    """Actor 클래스 roles 필드 테스트."""
     
     def test_actor_has_roles_field(self):
         """Actor 클래스에 roles 필드가 있는지 확인."""
@@ -110,7 +110,7 @@ class TestRBACRolePriority:
 
 
 class TestSetActorWithRoles:
-    """Phase 1.3: set_actor() roles 파라미터 테스트."""
+    """set_actor() roles 파라미터 테스트."""
     
     def test_set_actor_with_roles(self):
         """set_actor()로 roles를 설정할 수 있는지 확인."""
@@ -139,7 +139,7 @@ class TestSetActorWithRoles:
 
 
 class TestExtractSelfhealingRoles:
-    """Phase 1.2: _extract_selfhealing_roles() 테스트."""
+    """_extract_selfhealing_roles() 테스트."""
     
     def test_extract_roles_from_django_user(self):
         """Django User에서 selfhealing_ 역할이 추출되는지 확인."""
@@ -172,7 +172,7 @@ class TestExtractSelfhealingRoles:
 
 
 class TestGetHighestRole:
-    """Phase 1.2: _get_highest_role() 테스트."""
+    """_get_highest_role() 테스트."""
     
     def test_get_highest_role_admin(self):
         """admin이 가장 높은 역할로 반환되는지 확인."""
@@ -200,7 +200,7 @@ class TestGetHighestRole:
 
 
 class TestSetActorFromDjangoRequest:
-    """Phase 1.2: set_actor_from_django_request() RBAC 역할 추출 테스트."""
+    """set_actor_from_django_request() RBAC 역할 추출 테스트."""
     
     def test_extracts_roles_from_authenticated_user(self):
         """인증된 사용자에서 RBAC 역할이 추출되는지 확인."""
@@ -267,7 +267,7 @@ class TestSetActorFromDjangoRequest:
 
 
 class TestAuditEntryActorRoles:
-    """Phase 1.4: AuditEntry actor_roles 필드 테스트."""
+    """AuditEntry actor_roles 필드 테스트."""
     
     def test_audit_entry_has_actor_roles_field(self):
         """AuditEntry에 actor_roles 필드가 있는지 확인."""

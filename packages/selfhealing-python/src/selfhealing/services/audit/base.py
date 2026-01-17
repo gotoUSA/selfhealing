@@ -135,13 +135,13 @@ def _write_to_wal(
     error_message: Optional[str] = None,
     domain: Optional[str] = None,
     target_id: Optional[str] = None,
-    actor_roles: Optional[list[str]] = None,  # Phase 25: RBAC 역할 정보
-    trace_id: Optional[str] = None,  # Phase 25: trace_id 일관성 확보
+    actor_roles: Optional[list[str]] = None,
+    trace_id: Optional[str] = None,
 ) -> Optional[int]:
     """
     WAL에 audit 이벤트 기록.
     
-    Phase 25: actor_roles와 trace_id를 자동으로 컨텍스트에서 가져옴.
+    actor_roles와 trace_id를 자동으로 컨텍스트에서 가져옴.
     
     Args:
         event_type: 이벤트 유형 (e.g., "CB_STATE_CHANGE")
@@ -196,7 +196,7 @@ def _write_to_wal(
         if metrics:
             metrics.record_write("wal", success=True)
         
-        # Phase 4: 성공 시 메모리 버퍼 플러시 시도
+        # 성공 시 메모리 버퍼 플러시 시도
         _try_flush_memory_buffer()
         
         logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={final_trace_id}")
@@ -215,7 +215,7 @@ def _try_flush_memory_buffer() -> int:
     """
     메모리 버퍼 플러시 시도.
     
-    Phase 4: WAL 정상화 후 버퍼에 쌓인 엔트리들을 WAL로 플러시.
+    WAL 정상화 후 버퍼에 쌓인 엔트리들을 WAL로 플러시.
     
     Returns:
         플러시된 엔트리 수
@@ -306,12 +306,12 @@ def _try_add_to_buffer(
     error_message: Optional[str] = None,
     domain: Optional[str] = None,
     target_id: Optional[str] = None,
-    actor_roles: Optional[list[str]] = None,  # Phase 25: RBAC 역할 정보
+    actor_roles: Optional[list[str]] = None,
 ) -> bool:
     """
     request의 버퍼에 이벤트 추가 시도.
     
-    Phase 25: actor_roles를 자동으로 ActorContext에서 가져옴.
+    actor_roles를 자동으로 ActorContext에서 가져옴.
     
     Args:
         request: Django HttpRequest 객체
@@ -331,7 +331,7 @@ def _try_add_to_buffer(
     if request is None:
         return False
     
-    # Phase 25: ActorContext에서 actor_roles 자동 추출
+    # ActorContext에서 actor_roles 자동 추출
     if actor_roles is None:
         try:
             from selfhealing.context.actor_context import ActorContext

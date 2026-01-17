@@ -602,8 +602,7 @@ class LearningService:
         self._metrics.clear()
 
     # =========================================================================
-    # 순위 5.5: Escape Strategy - ParameterBlacklist 메서드
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
+    # Escape Strategy - ParameterBlacklist 메서드
     # =========================================================================
 
     def register_dangerous_parameter(

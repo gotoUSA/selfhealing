@@ -6,8 +6,6 @@ This file is kept for backward compatibility.
 
 Provides random delay mechanisms to prevent all instances from
 hitting the database simultaneously during startup.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 import warnings

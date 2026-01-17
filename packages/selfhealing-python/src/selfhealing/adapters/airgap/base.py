@@ -4,8 +4,6 @@ Air-Gap Storage Adapter Base Interface.
 Provides an abstract interface for Air-Gap storage between
 Self-Healing engine and business database.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 4)
-
 Design Principles:
 - Complete DB isolation: Engine never touches business DB
 - Plug & Play: Enable/disable via configuration

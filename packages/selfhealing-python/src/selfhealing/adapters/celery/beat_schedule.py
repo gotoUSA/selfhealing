@@ -6,8 +6,6 @@ Consolidates all autonomous task schedules from 3 lanes:
 - 🧠 지능 레인 (Analyze & Learn)  
 - 📋 증명 레인 (Compliance & Report)
 
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §5
-
 Usage:
     # In your celery.py or Django settings:
     from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule

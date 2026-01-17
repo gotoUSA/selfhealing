@@ -1,5 +1,5 @@
 """
-Metric Sync Views - Phase 1: Poll 제거 + Manual API.
+Metric Sync Views - Poll 제거 + Manual API.
 
 비침습적 Drift 관리를 위한 수동 동기화 API.
 주기적 DB 폴링을 제거하고, 운영자의 명시적 요청만 허용합니다.
@@ -7,8 +7,6 @@ Metric Sync Views - Phase 1: Poll 제거 + Manual API.
 Endpoints:
 - POST /api/self-healing/metrics/sync/ - 수동 메트릭 동기화
 - GET /api/self-healing/metrics/drift-report/ - Drift 상태 조회
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 """
 
 from __future__ import annotations
@@ -441,8 +439,6 @@ class MetricSyncView(APIView):
         - actor: 수행자
         - results: 도메인별 동기화 결과
         - summary: 요약 정보
-    
-    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     """
     
     permission_classes = [IsSelfHealingAdmin]
@@ -514,8 +510,6 @@ class DriftReportView(APIView):
         - overall_health: 전반적 상태 (healthy/warning/critical/incident)
         - max_drift_percent: 최대 Drift 퍼센트
         - recommendation: 권장 조치
-    
-    Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     """
     
     permission_classes = [IsSelfHealingAdmin]

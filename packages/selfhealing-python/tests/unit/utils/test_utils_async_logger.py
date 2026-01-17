@@ -1,7 +1,5 @@
 """
 Tests for Async Healing Logger.
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import queue

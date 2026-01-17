@@ -7,8 +7,6 @@ Contains specific experiment types:
 - PacketLossExperiment
 - TimeoutExperiment
 - ResourceExhaustionExperiment
-
-Reference: Netflix ChAP, Gremlin, AWS FIS patterns
 """
 
 from __future__ import annotations
@@ -34,7 +32,6 @@ logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Failure Hypothesis (복구 기대 가설)
-# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.2
 # =============================================================================
 
 
@@ -45,11 +42,6 @@ class FailureHypothesis:
     
     LearningService가 실제 결과와 비교하여
     "시스템 복구 성능 저하 추세"를 자동 감지하게 함.
-    
-    Reference:
-    - Architect 제안: "CB Open 실험 시, 30초 내에 Canary Stage 1이 시작되어야 함"
-    - 31_CHAOS_EXPERIMENT_EXPANSION.md §8
-    - 32_CHAOS_SYSTEM_INTEGRATION.md §20.2
     
     Example:
         hypothesis = FailureHypothesis(
@@ -179,7 +171,6 @@ class FailureHypothesis:
 
 # =============================================================================
 # 실험별 기대 가설 정의 (클래스 레벨 상수)
-# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
 # =============================================================================
 
 # CircuitBreakerOpenExperiment
@@ -243,7 +234,6 @@ class LatencyInjectionExperiment(ChaosExperiment):
     requires_approval = False  # Low risk
     
     # 복구 기대 가설 (클래스 레벨)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
     failure_hypothesis = LATENCY_INJECTION_HYPOTHESIS
     
     def __init__(self, *args, **kwargs):
@@ -342,7 +332,6 @@ class Error5xxExperiment(ChaosExperiment):
     requires_approval = False  # Medium risk
     
     # 복구 기대 가설 (클래스 레벨)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
     failure_hypothesis = ERROR_5XX_HYPOTHESIS
     
     @property
@@ -558,9 +547,6 @@ class ResourceExhaustionExperiment(ChaosExperiment):
     Safety Features:
         - Cgroup-aware memory limit (15% safety margin)
         - OOM Killer 방지를 위한 자동 캡핑
-        
-    Reference:
-        31_CHAOS_EXPERIMENT_EXPANSION.md §7.3 (Q3: Cgroup-Aware Limit)
     """
     
     experiment_type = ExperimentType.RESOURCE_EXHAUSTION.value
@@ -674,8 +660,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 1: CircuitBreakerOpenExperiment (P1 Priority)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.4
+# CircuitBreakerOpenExperiment (P1 Priority)
 # =============================================================================
 
 
@@ -705,7 +690,6 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
     requires_approval = True  # High risk - blocks real traffic
     
     # 복구 기대 가설 (클래스 레벨)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.3
     failure_hypothesis = CB_OPEN_HYPOTHESIS
     
     @property
@@ -790,14 +774,12 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 logger.error(f"[CBOpenInjection] Rollback failed: {e}")
     
     # =========================================================================
-    # Phase 3: Canary Recovery 검증 (32_CHAOS_SYSTEM_INTEGRATION.md §4)
+    # Canary Recovery 검증
     # =========================================================================
     
     def _verify_canary_recovery(self) -> Dict[str, Any]:
         """
         Canary 복구 단계 검증.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.1
         
         Returns:
             Dict with:
@@ -847,8 +829,6 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
     def _check_canary_started(self, timeout_seconds: float = 30.0) -> bool:
         """
         Canary 복구 시작 확인 (비동기 폴링용).
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.2
         
         Args:
             timeout_seconds: 대기 시간 (초)
@@ -909,10 +889,8 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 1: RateLimitExperiment (P1 Priority)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.3
+# RateLimitExperiment (P1 Priority)
 # =============================================================================
-
 
 class RateLimitExperiment(ChaosExperiment):
     """
@@ -997,8 +975,7 @@ class RateLimitExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 2: Error4xxExperiment (P2 Priority)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.1
+# Error4xxExperiment (P2 Priority)
 # =============================================================================
 
 
@@ -1094,10 +1071,8 @@ class Error4xxExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 2: PartialFailureExperiment (P2 Priority)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.5
+# PartialFailureExperiment (P2 Priority)
 # =============================================================================
-
 
 class PartialFailureExperiment(ChaosExperiment):
     """
@@ -1173,14 +1148,12 @@ class PartialFailureExperiment(ChaosExperiment):
                 logger.error(f"[PartialFailure] Rollback failed: {e}")
     
     # =========================================================================
-    # Phase 5-3: Load Shedding 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1)
+    # Load Shedding 연동
     # =========================================================================
     
     def _trigger_load_shedding(self) -> Dict[str, Any]:
         """
         Load Shedding 강제 트리거 시뮬레이션.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
         
         Returns:
             Dict with before/after status and whether shedding was triggered
@@ -1224,8 +1197,6 @@ class PartialFailureExperiment(ChaosExperiment):
         """
         Load Shedding 동작 검증.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
-        
         Returns:
             Dict with shedding status information
         """
@@ -1256,8 +1227,6 @@ class PartialFailureExperiment(ChaosExperiment):
     def _deactivate_load_shedding(self) -> None:
         """
         Load Shedding 비활성화 (rollback 시 호출).
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §6, §22.2.1
         """
         try:
             from selfhealing.services.circuit_breaker.load_shedding import (
@@ -1277,10 +1246,8 @@ class PartialFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 3: ConnectionResetExperiment (P3 Priority)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.2
+# ConnectionResetExperiment (P3 Priority)
 # =============================================================================
-
 
 class ConnectionResetExperiment(ChaosExperiment):
     """
@@ -1354,11 +1321,9 @@ class ConnectionResetExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 3: CascadingFailureExperiment (P3 Priority - CRITICAL RISK)
-# Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §2.6
+# CascadingFailureExperiment (P3 Priority - CRITICAL RISK)
 # WARNING: This is a HIGH RISK experiment that requires manual approval
 # =============================================================================
-
 
 class CascadingFailureExperiment(ChaosExperiment):
     """
@@ -1496,8 +1461,7 @@ class CascadingFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 5-2: Pool Exhaustion Simulation Experiment
-# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
+# Pool Exhaustion Simulation Experiment
 # =============================================================================
 
 
@@ -1529,8 +1493,6 @@ class PoolExhaustionExperiment(ChaosExperiment):
     │ LearningService 연동:                                        │
     │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
     
     Config parameters:
         - simulated_status: 시뮬레이션할 Pool 상태 (default: "exhausted")
@@ -1643,8 +1605,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 5-2: Connection Partition Simulation Experiment
-# Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
+# Connection Partition Simulation Experiment
 # =============================================================================
 
 
@@ -1675,8 +1636,6 @@ class ConnectionPartitionExperiment(ChaosExperiment):
     │ LearningService 연동:                                        │
     │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
     
     Config parameters:
         - partition_type: "partial" or "full" (default: "partial")
@@ -1796,8 +1755,7 @@ class ConnectionPartitionExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: CertificateExpiryExperiment
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.1
+# CertificateExpiryExperiment
 # =============================================================================
 
 
@@ -1825,8 +1783,6 @@ class CertificateExpiryExperiment(ChaosExperiment):
     │ LearningService 연동:                                        │
     │ → 알림 발생 지연 시간 추적                                    │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.1
     
     Config parameters:
         - simulated_days_remaining: 만료까지 남은 일수 시뮬레이션 (default: 5)
@@ -1947,8 +1903,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: ClockSkewExperiment (with Monotonic TTL Protection)
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §5.1
+# ClockSkewExperiment (with Monotonic TTL Protection)
 # =============================================================================
 
 
@@ -1977,10 +1932,6 @@ class ClockSkewExperiment(ChaosExperiment):
     │ SAFETY MECHANISM:                                            │
     │ → MonotonicTTLHelper 사용으로 자기 자폭 방지                 │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 
-    - 33_CHAOS_INDUSTRY_EXPERIMENTS.md §5.1
-    - 34_CHAOS_SAFETY_MECHANISMS.md §2 Monotonic Clock 보호
     
     Config parameters:
         - skew_seconds: 시간 왜곡량 (초, 양수=미래, 음수=과거)
@@ -2103,8 +2054,7 @@ class ClockSkewExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: DNSFailureExperiment
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.1
+# DNSFailureExperiment
 # =============================================================================
 
 
@@ -2133,8 +2083,6 @@ class DNSFailureExperiment(ChaosExperiment):
     │ → ConnectionHealthMonitor: DNS 조회 실패 감지                 │
     │ → Circuit Breaker: 외부 API 연결 실패 감지                    │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.1
     
     Config parameters:
         - failure_mode: "timeout", "nxdomain", "servfail"
@@ -2208,8 +2156,7 @@ class DNSFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: NetworkBlackholeExperiment
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.2
+# NetworkBlackholeExperiment
 # =============================================================================
 
 
@@ -2236,8 +2183,6 @@ class NetworkBlackholeExperiment(ChaosExperiment):
     │ Blast Radius Hard Cap:                                       │
     │ → 최대 지속 시간: 300초 (5분)                                 │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2.2
     
     Config parameters:
         - affected_endpoints: 블랙홀 처리할 엔드포인트 목록
@@ -2298,8 +2243,7 @@ class NetworkBlackholeExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: SimulatedDiskIOExperiment
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §3.1
+# SimulatedDiskIOExperiment
 # =============================================================================
 
 
@@ -2329,8 +2273,6 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
     │ → 최대 지연: 2000ms                                          │
     │ → 최대 실패율: 30%                                           │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §3.1
     
     Config parameters:
         - io_latency_ms: I/O 지연 시간 (max: 2000ms)
@@ -2399,8 +2341,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: SimulatedTLSFailureExperiment
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.2
+# SimulatedTLSFailureExperiment
 # =============================================================================
 
 
@@ -2430,8 +2371,6 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
     │ → 최대 지속 시간: 180초                                      │
     │ → 최대 실패율: 25%                                           │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4.2
     
     Config parameters:
         - failure_type: "handshake_timeout", "cert_invalid", "protocol_mismatch"
@@ -2499,8 +2438,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: AuditStorageFailureExperiment (시스템 고유)
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.1
+# AuditStorageFailureExperiment (시스템 고유)
 # =============================================================================
 
 
@@ -2530,8 +2468,6 @@ class AuditStorageFailureExperiment(ChaosExperiment):
     │ → DegradedModeManager: Audit 저장 모드 전환                   │
     │ → 코드 위치: audit/resilience.py:697-750                      │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.1
     
     Config parameters:
         - failed_layer: "l2", "l3", "all"
@@ -2613,8 +2549,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
 
 
 # =============================================================================
-# Phase 6: ReplayFloodExperiment (시스템 고유)
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.2
+# ReplayFloodExperiment (시스템 고유)
 # =============================================================================
 
 
@@ -2648,8 +2583,6 @@ class ReplayFloodExperiment(ChaosExperiment):
     │ → metadata.is_chaos_experiment = True                        │
     │ → 롤백 시 자동 정리                                          │
     └─────────────────────────────────────────────────────────────┘
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6.2
     
     Config parameters:
         - entries_to_create: 생성할 DLQ 엔트리 수 (max: 5000)
@@ -2780,26 +2713,26 @@ def create_experiment(
         ExperimentType.PACKET_LOSS.value: PacketLossExperiment,
         ExperimentType.TIMEOUT.value: TimeoutExperiment,
         ExperimentType.RESOURCE_EXHAUSTION.value: ResourceExhaustionExperiment,
-        # Phase 1: P1 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        # P1 Priority experiments
         ExperimentType.CIRCUIT_BREAKER_OPEN.value: CircuitBreakerOpenExperiment,
         ExperimentType.RATE_LIMIT.value: RateLimitExperiment,
-        # Phase 2: P2 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        # P2 Priority experiments
         ExperimentType.ERROR_4XX.value: Error4xxExperiment,
         ExperimentType.PARTIAL_FAILURE.value: PartialFailureExperiment,
-        # Phase 3: P3 Priority experiments (31_CHAOS_EXPERIMENT_EXPANSION.md)
+        # P3 Priority experiments
         ExperimentType.CONNECTION_RESET.value: ConnectionResetExperiment,
         ExperimentType.CASCADING_FAILURE.value: CascadingFailureExperiment,
-        # Phase 5-2: Simulation experiments (32_CHAOS_SYSTEM_INTEGRATION.md)
+        # Simulation experiments
         ExperimentType.POOL_EXHAUSTION.value: PoolExhaustionExperiment,
         ExperimentType.CONNECTION_PARTITION.value: ConnectionPartitionExperiment,
-        # Phase 6: 업계 표준 실험 (33_CHAOS_INDUSTRY_EXPERIMENTS.md)
+        # 업계 표준 실험
         ExperimentType.CERTIFICATE_EXPIRY.value: CertificateExpiryExperiment,
         ExperimentType.CLOCK_SKEW.value: ClockSkewExperiment,
         ExperimentType.DNS_FAILURE.value: DNSFailureExperiment,
         ExperimentType.NETWORK_BLACKHOLE.value: NetworkBlackholeExperiment,
         ExperimentType.SIMULATED_DISK_IO.value: SimulatedDiskIOExperiment,
         ExperimentType.SIMULATED_TLS_FAILURE.value: SimulatedTLSFailureExperiment,
-        # Phase 6: 시스템 고유 실험 (33_CHAOS_INDUSTRY_EXPERIMENTS.md)
+        # 시스템 고유 실험
         ExperimentType.AUDIT_STORAGE_FAILURE.value: AuditStorageFailureExperiment,
         ExperimentType.REPLAY_FLOOD.value: ReplayFloodExperiment,
     }
@@ -2852,26 +2785,26 @@ __all__ = [
     "PacketLossExperiment",
     "TimeoutExperiment",
     "ResourceExhaustionExperiment",
-    # Concrete Experiments (Phase 1 - P1 Priority)
+    # Concrete Experiments (P1 Priority)
     "CircuitBreakerOpenExperiment",
     "RateLimitExperiment",
-    # Concrete Experiments (Phase 2 - P2 Priority)
+    # Concrete Experiments (P2 Priority)
     "Error4xxExperiment",
     "PartialFailureExperiment",
-    # Concrete Experiments (Phase 3 - P3 Priority)
+    # Concrete Experiments (P3 Priority)
     "ConnectionResetExperiment",
     "CascadingFailureExperiment",
-    # Concrete Experiments (Phase 5-2 - Simulation)
+    # Concrete Experiments (Simulation)
     "PoolExhaustionExperiment",
     "ConnectionPartitionExperiment",
-    # Concrete Experiments (Phase 6 - Industry Standard)
+    # Concrete Experiments (Industry Standard)
     "CertificateExpiryExperiment",
     "ClockSkewExperiment",
     "DNSFailureExperiment",
     "NetworkBlackholeExperiment",
     "SimulatedDiskIOExperiment",
     "SimulatedTLSFailureExperiment",
-    # Concrete Experiments (Phase 6 - System Specific)
+    # Concrete Experiments (System Specific)
     "AuditStorageFailureExperiment",
     "ReplayFloodExperiment",
     # Factory

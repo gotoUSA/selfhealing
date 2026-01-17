@@ -1,10 +1,8 @@
 """
-Canary Recovery - Phase 4.1
+Canary Recovery
 
 HALF_OPEN 상태에서 즉시 100% 트래픽을 보내는 대신,
 점진적으로 트래픽을 늘려 Thundering Herd를 방지합니다.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md Section 4
 
 상태 머신:
     OPEN → HALF_OPEN → CANARY_1(10%) → CANARY_2(30%) → CANARY_3(60%) → CLOSED(100%)

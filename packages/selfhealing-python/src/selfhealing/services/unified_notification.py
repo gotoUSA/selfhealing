@@ -307,7 +307,7 @@ class UnifiedNotificationManager:
         """
         Get effective priority considering emergency level.
 
-        Dynamic escalation rules (23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md §7.1):
+        Dynamic escalation rules:
         - Level 2+: LOW/INFO → MEDIUM
         - Level 3+: LOW/INFO/MEDIUM → HIGH
         - CRITICAL은 최고 우선순위이므로 에스컬레이션 불필요
@@ -601,7 +601,7 @@ def notify_error(
 
 
 # =============================================================================
-# Slack Block Kit Formatters - Phase 3: Actionable Alert
+# Slack Block Kit Formatters - Actionable Alert
 # =============================================================================
 
 
@@ -612,7 +612,7 @@ def format_cb_slack_blocks(
     """
     Circuit Breaker 알림용 Slack Block Kit 메시지 포맷.
     
-    Actionable Alert 설계 원칙 (문서 §7.2 ⑥):
+Actionable Alert 설계 원칙:
     - 거버넌스 유지: 원클릭 해제 대신 Admin 제어판으로 이동
     - 컨텍스트 유지: 쿼리 파라미터로 해당 서비스 즉시 조회
     - 안전성: 운영자가 상태 확인 후 판단 가능
@@ -623,9 +623,6 @@ def format_cb_slack_blocks(
         
     Returns:
         Slack Block Kit 형식의 메시지 딕셔너리
-        
-    Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-    Section 9.3 - Phase 3: Actionable Alert
     """
     severity_emoji = {
         NotificationPriority.CRITICAL: "🔴",

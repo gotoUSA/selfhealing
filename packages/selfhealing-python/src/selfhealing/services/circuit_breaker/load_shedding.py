@@ -1,11 +1,8 @@
 """
-Load Shedding (부분적 차단) - Phase 5
+Load Shedding (부분적 차단)
 
 핵심 서비스에 장애 조짐이 보이면, 비핵심 서비스 트래픽을 먼저 제한하여
 핵심 서비스에 리소스를 집중시킵니다.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 3 - Load Shedding (부분적 차단)
 
 사용 예시:
     manager = LoadSheddingManager()

@@ -8,7 +8,6 @@ Scenarios:
 4. All connections healthy → normal operation
 5. All connections dead → graceful failure
 
-Reference: docs/STAGE_24_PARTIAL_PARTITION.md
 """
 
 from __future__ import annotations

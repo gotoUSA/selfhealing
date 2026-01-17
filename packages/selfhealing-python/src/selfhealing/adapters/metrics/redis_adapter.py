@@ -2,8 +2,6 @@
 Redis-based Metric Source Adapter.
 
 Provides metrics from Redis cache using Write-Through pattern.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

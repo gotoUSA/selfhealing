@@ -1,5 +1,5 @@
 """
-Phase 0 테스트: WAL 기반 누락 0 보장
+WAL 기반 Zero-Loss 테스트
 
 테스트 범위:
 1. audit_helpers.py WAL 연동

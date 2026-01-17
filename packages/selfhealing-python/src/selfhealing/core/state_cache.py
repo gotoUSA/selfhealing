@@ -4,8 +4,6 @@ Circuit Breaker 상태 캐시 (Platinum SLA 최적화)
 
 TTL 기반 로컬 캐싱으로 네트워크 호출 최소화
 Polling Jitter로 Thundering Herd 방지
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import time

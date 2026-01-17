@@ -226,9 +226,8 @@ class CorruptionShield:
         request가 있으면 RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 처리)
         request가 없으면 _write_to_wal()을 통해 직접 기록
         
-        Phase 1 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
-        - 배칭: 단일 이벤트에 모든 violations 포함 (개별 이벤트 대신)
-        - 10개 필드 위반 시 10개 로그 → 1개 로그로 최적화
+        배칭: 단일 이벤트에 모든 violations 포함 (개별 이벤트 대신)
+        10개 필드 위반 시 10개 로그 → 1개 로그로 최적화
         """
         # 이벤트 유형 결정
         if result.blocked:
@@ -260,7 +259,7 @@ class CorruptionShield:
             },
         }
         
-        # Phase 3 패턴: 버퍼 우선
+        # 버퍼 우선 패턴
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import (
@@ -331,8 +330,7 @@ class CorruptionShield:
         """
         Create security incident for critical violations.
 
-        순위 3 - v2.3.0: 표준 ViolationType 매핑 적용
-        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.3
+        표준 ViolationType 매핑 적용
         """
         critical_violations = [
             v for v in result.violations
@@ -371,7 +369,7 @@ class CorruptionShield:
         """
         Corruption 위반을 표준 ViolationType으로 매핑.
 
-        순위 3 - v2.3.0:
+        레이어별 매핑:
         - L1 → SCHEMA_VIOLATION
         - L2 → BUSINESS_RULE_VIOLATION
         - L3 → ANOMALY_STATISTICAL 또는 ANOMALY_BEHAVIORAL
@@ -381,8 +379,6 @@ class CorruptionShield:
 
         Returns:
             ViolationType enum 값 (문자열)
-
-        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.3
         """
         try:
             from selfhealing.services.security_violation_service import ViolationType

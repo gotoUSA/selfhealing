@@ -223,8 +223,6 @@ class ErrorBudgetReconciliationService:
         
         승인 후 Primary Budget에 반영됩니다.
         Capped 모드인 경우 최대 N%까지만 반영됩니다.
-        
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2
         """
         with self._lock:
             shadow = self._shadow_budgets.get(calculation_id)
@@ -242,7 +240,7 @@ class ErrorBudgetReconciliationService:
             shadow.reviewed_at = now()
             shadow.review_justification = justification
             
-            # Audit 이벤트 기록 (Phase 7)
+            # Audit 이벤트 기록
             self._record_audit_event(
                 event_type="reconciliation_approved",
                 details={
@@ -256,7 +254,7 @@ class ErrorBudgetReconciliationService:
                 },
             )
             
-            # Pending Freeze 해제 (Phase 6)
+            # Pending Freeze 해제
             self._shadow_calculator._deactivate_pending_freeze(
                 calculation_id, f"approved: {justification}"
             )
@@ -345,7 +343,6 @@ class ErrorBudgetReconciliationService:
         Shadow Budget 거부 (Excluded Period로 처리).
         
         투명성 강화: 원본 에러 데이터를 ExcludedPeriod에 기록.
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.1
         """
         with self._lock:
             shadow = self._shadow_budgets.get(calculation_id)
@@ -370,14 +367,14 @@ class ErrorBudgetReconciliationService:
                 excluded_by=rejected_by,
                 excluded_at=now(),
                 failsafe_period_id=shadow.failsafe_period_id,
-                # 투명성 강화: 제외 당시 원본 데이터 (Phase 7)
+                # 투명성 강화: 제외 당시 원본 데이터
                 original_estimated_errors=shadow.estimated_errors,
                 original_log_source=shadow.log_source,
                 original_adjustment_percent=shadow.adjustment_percent,
             )
             self._excluded_periods[exclusion.exclusion_id] = exclusion
             
-            # Audit 이벤트 기록 (Phase 7)
+            # Audit 이벤트 기록
             self._record_audit_event(
                 event_type="reconciliation_rejected",
                 details={
@@ -393,7 +390,7 @@ class ErrorBudgetReconciliationService:
                 },
             )
             
-            # Pending Freeze 해제 (Phase 6)
+            # Pending Freeze 해제
             self._shadow_calculator._deactivate_pending_freeze(
                 calculation_id, f"rejected: {reason}"
             )
@@ -490,8 +487,7 @@ class ErrorBudgetReconciliationService:
             }
     
     # =========================================================================
-    # Audit 이벤트 기록 (Phase 7)
-    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5
+    # Audit 이벤트 기록
     # =========================================================================
     
     def _record_audit_event(

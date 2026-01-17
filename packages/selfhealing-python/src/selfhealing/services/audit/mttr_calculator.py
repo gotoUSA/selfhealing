@@ -1,8 +1,6 @@
 """
 MTTR (Mean Time To Recovery) Calculator.
 
-27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md §8.3.1
-
 Audit 로그 기반으로 장애 복구 시간을 자동 계산합니다.
 
 비즈니스 가치:

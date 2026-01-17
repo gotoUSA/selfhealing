@@ -30,8 +30,6 @@ def collect_self_healing_metrics(self) -> dict:
 
     This task should be scheduled to run every minute.
 
-    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
-
     Returns:
         Dictionary with collected metric values
     """
@@ -76,8 +74,6 @@ def check_and_report_sla_breaches(self) -> dict:
     See SLAThresholds class for default values and customization.
 
     This task should be scheduled to run every 5 minutes.
-
-    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §3 (Recovery SLA)
 
     Returns:
         Dictionary with SLA breach information

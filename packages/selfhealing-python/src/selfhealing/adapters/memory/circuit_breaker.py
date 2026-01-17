@@ -8,8 +8,6 @@ Note: This module has been refactored for better maintainability:
 - DriftReconciler, DriftReconciliationResult → drift_reconciliation.py
 - ShadowLogger, L2SyncFailureRecord → shadow_logger.py  
 - LayeredCircuitBreakerStateRepository → layered_repository.py
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

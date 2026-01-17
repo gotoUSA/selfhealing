@@ -2,15 +2,12 @@
 Exponential Backoff Calculator
 
 Provides configurable exponential backoff with jitter for retry logic.
-Implements the retry strategy defined in L3 Architecture §8.
 
 Features:
 - Exponential backoff: base^attempt (4, 16, 64, ...)
 - Maximum delay cap to prevent excessive wait times
 - Jitter (±25%) to prevent thundering herd problem
 - Per-domain configuration support
-
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §8
 """
 
 from __future__ import annotations

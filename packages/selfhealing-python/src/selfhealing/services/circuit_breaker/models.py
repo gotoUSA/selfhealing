@@ -1,8 +1,7 @@
 """
 Circuit Breaker Advanced Protection Models
 
-데이터 모델 정의 - Phase 0.1
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
+데이터 모델 정의.
 
 이 모듈은 Circuit Breaker 고급 보호 시스템의 모든 데이터 모델을 정의합니다.
 """

@@ -1,7 +1,5 @@
 """
 Tests for Chaos Scheduler Tasks.
-
-Reference: docs/self_healing/CHAOS_ENGINEERING.md
 """
 
 from unittest.mock import Mock, patch, MagicMock

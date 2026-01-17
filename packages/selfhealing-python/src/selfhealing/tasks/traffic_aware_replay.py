@@ -1,7 +1,7 @@
 """
 🚦 Traffic-Aware Replay Task (Track 3)
 
-Phase 2 구현: 트래픽 상태 인식 DLQ Replay
+트래픽 상태 인식 DLQ Replay
 
 트래픽이 정상화되었을 때만 DLQ Replay를 수행합니다.
 매 1분마다 Beat Schedule로 실행되며, 다음 조건을 모두 만족할 때만 replay:
@@ -10,9 +10,6 @@ Health Checks:
 1. Circuit Breaker State == CLOSED
 2. Error Budget > critical_threshold
 3. Governance 체크 통과 (Kill Switch, Emergency Mode)
-
-Reference:
-- docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §5
 """
 
 from __future__ import annotations
@@ -157,7 +154,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
     트래픽이 정상일 때만 DLQ Replay를 수행합니다.
     RuntimeConfig의 track3_enabled 설정에 따라 활성화/비활성화됩니다.
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - DLQ_REPLAY 이벤트 기록 (실행 결과와 함께)
 
     스케줄: 1분마다
@@ -200,7 +197,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         1. RuntimeConfig에서 Track 3 설정 로드
         2. Traffic Health Check 수행
         3. 모든 체크 통과 시 Replay 실행
-        4. Audit 기록 (Phase 4)
+        4. Audit 기록
 
         Args:
             domain: 특정 도메인만 replay
@@ -296,7 +293,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         task_id: Optional[str],
         error_message: Optional[str] = None,
     ) -> None:
-        """Audit 로그 기록 (Phase 4)."""
+        """Audit 로그 기록."""
         try:
             from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
             

@@ -65,7 +65,7 @@ class ForensicSettings(BaseSettings):
     )
 
     # ==========================================================================
-    # Phase 5 Settings (from core/config.py lines 205-211)
+    # Stack Frame Settings
     # ==========================================================================
     max_stack_frames: int = Field(
         default=50,

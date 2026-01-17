@@ -9,8 +9,6 @@ Design Principles:
 2. ABC for provider contracts
 3. Context manager support for locks
 4. Atomic operations for counters
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md Section 3.2
 """
 
 from __future__ import annotations

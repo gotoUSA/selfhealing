@@ -11,8 +11,6 @@ IMPORTANT:
     - These adapters are OPTIONAL extensions
     - The core system works identically without them
     - Prometheus/Grafana integration remains the primary observability layer
-
-Reference: docs/capability-audit/capablitity_정의/06-OBSERVABILITY-FORENSICS.md
 """
 
 from selfhealing.adapters.observability.opentelemetry import (

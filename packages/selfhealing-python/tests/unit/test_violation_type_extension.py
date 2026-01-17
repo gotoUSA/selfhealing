@@ -6,8 +6,6 @@ ViolationType 확장 및 Severity/ActionPolicy 매핑 테스트
 - Severity 매핑 (순위 2)
 - ActionPolicy 매핑 (순위 2)
 - CRITICAL → EventBus 연동 (순위 2.5)
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2, §4
 """
 
 from unittest.mock import MagicMock, patch

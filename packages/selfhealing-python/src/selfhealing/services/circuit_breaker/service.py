@@ -14,8 +14,6 @@ Features:
 - Minimum calls check (prevents false positives with low traffic)
 - Fallback strategies (cache, DLQ, default response)
 - Error Budget burn rate integration
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §9 (Runbook: Circuit Breaker)
 """
 
 from __future__ import annotations
@@ -393,7 +391,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             # Apply burn rate multiplier to Error Budget
             self._apply_burn_rate_multiplier(service_name)
             
-            # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+            # Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
                 from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
                 CircuitBreakerEventHandler.on_state_changed(
@@ -646,7 +644,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 )
             except Exception as e:
                 logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
-            # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+            # Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
                 from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
                 CircuitBreakerEventHandler.on_state_changed(

@@ -5,8 +5,6 @@ IdempotencyDomain 및 IdempotencyKey 확장 테스트
 - IdempotencyDomain 신규 추가 (CHAOS_EXPERIMENT, CONFIG_CHANGE, L2_SYNC, WAL_RECOVERY, AUTO_ADJUSTMENT)
 - IdempotencyKey 팩토리 메서드 (for_chaos_experiment, for_config_change, for_l2_sync, for_wal_recovery, for_auto_adjustment)
 - AntiFlappingWindow (메모리 기반, Redis 분산 캐싱)
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3, §8.3.3
 """
 
 import time

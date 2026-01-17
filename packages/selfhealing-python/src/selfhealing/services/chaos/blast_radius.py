@@ -8,8 +8,6 @@ Levels:
 - INSTANCE: Single pod/instance (lowest risk)
 - SERVICE: Entire service (medium risk)
 - REGION: Full region/availability zone (highest risk, requires approval)
-
-Reference: Netflix Chaos Engineering principles, AWS FIS blast radius controls
 """
 
 from __future__ import annotations
@@ -149,9 +147,6 @@ class BlastRadiusPolicy:
             CHAOS_EXCLUDED_SERVICES=payment-core,toss-payment,iamport
             CHAOS_EXCLUDED_DOMAINS=payment,billing,settlement
             CHAOS_MAX_FAILURE_PERCENT=5.0
-            
-        Reference:
-            31_CHAOS_EXPERIMENT_EXPANSION.md §7.5 (Q5: Default Payment Blacklist)
         """
         import os
         
@@ -512,7 +507,7 @@ class BlastRadiusManager:
             within_allowed_window=within_window,
         )
         
-        # Audit 로깅 (Phase 3)
+        # Audit 로깅
         self._log_blast_radius_audit(
             experiment_id=experiment_id,
             blast_radius=blast_radius.value,

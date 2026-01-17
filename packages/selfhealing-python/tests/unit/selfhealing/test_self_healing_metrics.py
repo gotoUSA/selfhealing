@@ -2,8 +2,6 @@
 Unit Tests for Self-Healing Observability Metrics
 
 Tests for Prometheus metrics recording, gauge updates, and metric collection.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
 """
 
 from datetime import datetime, timedelta, timezone

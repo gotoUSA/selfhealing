@@ -9,10 +9,6 @@ Algorithm:
 - If failure rate >= threshold (20%): reduce batch size by 20%
 - If 3 consecutive perfect batches: increase batch size by 5
 - Bounded by min_items and max_items
-
-Reference:
-- services/throttle/adaptive.py (Netflix Gradient Throttle)
-- docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §6
 """
 
 from __future__ import annotations

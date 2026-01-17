@@ -3,8 +3,6 @@ Circuit Breaker Advanced Protection Settings - Pydantic v2.
 
 Single Source of Truth for circuit breaker advanced protection.
 Replaces: core/config.py:CircuitBreakerAdvancedConfig (lines 540-605)
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
 """
 
 from typing import Optional
@@ -16,8 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class CircuitBreakerAdvancedSettings(BaseSettings):
     """
     Circuit Breaker 고급 보호 설정.
-    
-    Phase 0.2: Config 스키마 추가
     
     이 설정은 RuntimeConfigManager를 통해 중앙 관리됩니다.
     서버 재시작 없이 API로 변경 가능합니다.

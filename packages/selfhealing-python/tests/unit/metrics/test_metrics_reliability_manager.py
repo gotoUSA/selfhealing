@@ -1,7 +1,5 @@
 """
 Tests for Metric Reliability Manager.
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 """
 
 import time

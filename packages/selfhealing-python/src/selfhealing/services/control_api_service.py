@@ -230,8 +230,6 @@ class ControlAPIService:
         """
         Execute a control API action.
 
-        Based on: CONTROL_API_EXECUTION.md §2 (Execution Lifecycle)
-
         Args:
             request: Control request
 

@@ -5,8 +5,6 @@ NOTE: This module re-exports from selfhealing.settings for backward compatibilit
 New code should use selfhealing.settings directly.
 
 Data models like ApprovalRequest remain here as they are not configuration.
-
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 from dataclasses import dataclass, field
@@ -67,9 +65,7 @@ class ApprovalRequest:
         3. Admin B: 24시간 내 APPROVED/REJECTED
         4. 만료 시: EXPIRED
 
-    Reference:
-    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
-    - PCI-DSS Dual Control Requirements
+    PCI-DSS Dual Control Requirements 준수.
     """
 
     id: str = ""

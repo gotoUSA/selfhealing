@@ -44,7 +44,7 @@ from selfhealing.api.django.serializers.config import (
     MetricsConfigSerializer,
 )
 
-# Metric Sync Serializers (Phase 1: Poll 제거 + Manual API)
+# Metric Sync Serializers
 from selfhealing.api.django.serializers.metric_sync import (
     MetricSyncRequestSerializer,
     MetricSyncResponseSerializer,
@@ -85,7 +85,7 @@ __all__ = [
     "ForensicConfigSerializer",
     "LoggingConfigSerializer",
     "MetricsConfigSerializer",
-    # Metric Sync Serializers (Phase 1)
+    # Metric Sync Serializers
     "MetricSyncRequestSerializer",
     "MetricSyncResponseSerializer",
     "DriftReportResponseSerializer",

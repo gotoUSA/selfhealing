@@ -29,8 +29,6 @@ Usage:
         class Meta(AbstractFailedOperation.Meta):
             abstract = False
             db_table = "failed_operations"
-
-Reference: docs/self_healing/04_DEAD_LETTER_QUEUE.md
 """
 
 from __future__ import annotations

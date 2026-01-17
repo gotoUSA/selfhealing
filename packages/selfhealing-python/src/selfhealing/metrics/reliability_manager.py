@@ -10,8 +10,6 @@ Coordinates metric data reliability across all fallback layers:
 
 Implements Conservative Fallback with gradual stabilization.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 5)
-
 Design Philosophy:
 - "모르면 일단 막아라" (Unknown = Conservative)
 - Gradual recovery from strict mode

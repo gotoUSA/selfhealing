@@ -3,8 +3,6 @@ Certificate Expiry Monitor
 
 Proactive monitoring of certificate expiration.
 Can be run as scheduled task to alert before expiry.
-
-Reference: docs/STAGE_25_TLS_FAILURE.md
 """
 
 from __future__ import annotations

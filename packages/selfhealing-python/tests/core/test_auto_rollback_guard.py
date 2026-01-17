@@ -1,7 +1,5 @@
 """
 Tests for Auto Rollback Guard - 자율 조정 실패 대비 안전장치
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 import pytest

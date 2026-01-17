@@ -38,7 +38,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-# Drift Detection 메트릭 (Phase 4)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_wal_entry_written,
@@ -264,9 +264,9 @@ class WriteAheadLog:
                 
                 self._current_file = None
                 
-                # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+                # Audit 기록
                 if old_file:
-                    # Phase 4: Drift Detection 메트릭 기록
+                    # Drift Detection 메트릭 기록
                     if HAS_DRIFT_METRICS:
                         record_wal_rotation()
                     self._record_audit_event(
@@ -356,7 +356,7 @@ class WriteAheadLog:
                 if self._current_handle.tell() > self._config.max_file_size_bytes:
                     self._rotate_file()
             
-            # Phase 4: Drift Detection 메트릭 기록
+            # Drift Detection 메트릭 기록
             if HAS_DRIFT_METRICS:
                 record_wal_entry_written()
                 update_wal_last_sequence(current_seq)
@@ -493,10 +493,10 @@ class WriteAheadLog:
                             expected=checksum,
                             computed=computed_checksum,
                         )
-                        # Phase 4: Drift Detection 메트릭 기록
+                        # Drift Detection 메트릭 기록
                         if HAS_DRIFT_METRICS:
                             record_wal_corruption()
-                        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+                        # Audit 기록
                         self._record_audit_event(
                             event_type="WAL_CORRUPTION_DETECTED",
                             details={
@@ -548,11 +548,11 @@ class WriteAheadLog:
         
         sorted_entries = sorted(entries, key=lambda e: e.sequence)
         
-        # Phase 4: Drift Detection 메트릭 기록
+        # Drift Detection 메트릭 기록
         if HAS_DRIFT_METRICS and sorted_entries:
             record_wal_entries_recovered(len(sorted_entries))
         
-        # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+        # Audit 기록
         if sorted_entries:
             self._record_audit_event(
                 event_type="WAL_RECOVERED",
@@ -638,7 +638,7 @@ class WriteAheadLog:
         """
         with self._lock:
             lag = max(0, self._sequence - last_synced_seq)
-            # Phase 4: Drift Detection 메트릭 업데이트
+            # Drift Detection 메트릭 업데이트
             if HAS_DRIFT_METRICS:
                 update_wal_sync_lag(lag)
             return lag
@@ -678,7 +678,7 @@ class WriteAheadLog:
         """
         Audit 이벤트 기록.
         
-        Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+        Audit 통합 개선:
         - _write_to_wal() 직접 호출로 ActorContext/TraceContext 자동 결합
         - 순환 참조 방지: audit_adapter 우선 사용, 없으면 _write_to_wal() 사용
         - WAL 로테이션/손상/복구 이벤트도 중앙 추적 가능

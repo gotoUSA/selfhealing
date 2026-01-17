@@ -10,8 +10,6 @@ These tasks ONLY generate warnings - they NEVER auto-adjust settings.
 NOTE: This module provides task functions that can be registered with
 any task queue system (Celery, RQ, etc.). The actual task registration
 is done in the framework-specific adapter layer.
-
-Reference: docs/self_healing/middleware_system/02_LOGIC_ENGINE.md
 """
 
 from __future__ import annotations

@@ -4,7 +4,6 @@ Backoff Jitter Distribution Tests
 Tests for G-02: Jitter distribution is statistically random.
 Validates that jitter produces statistically varied delays to prevent thundering herd.
 
-Reference: docs/l3_auto_self_healing/testing/L3_TEST_GAP_REPORT.md
 Risk Covered: R-015 (Thundering herd from identical retry times)
 """
 

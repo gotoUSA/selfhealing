@@ -2,8 +2,6 @@
 DLQ Service Base Class.
 
 Provides the base DLQService class with initialization and common utilities.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
 """
 
 from __future__ import annotations
@@ -70,7 +68,7 @@ class DLQServiceBase:
         """
         DLQ 작업을 Audit 로그에 기록.
         
-        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        하이브리드 로직:
         - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
         - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
         
@@ -96,7 +94,7 @@ class DLQServiceBase:
                     domain=domain,
                     failure_type=failure_type,
                     error_message=error_message,
-                    request=request,  # Phase 2: 버퍼 패턴 지원
+                    request=request,  # 버퍼 패턴 지원
                 )
             elif action == "replay":
                 log_dlq_replay_audit(
@@ -105,7 +103,7 @@ class DLQServiceBase:
                     success=success,
                     actor_id=actor_id,
                     error_message=error_message if not success else None,
-                    request=request,  # Phase 2: 버퍼 패턴 지원
+                    request=request,  # 버퍼 패턴 지원
                 )
         except Exception as e:
             # Audit logging should never break the main flow

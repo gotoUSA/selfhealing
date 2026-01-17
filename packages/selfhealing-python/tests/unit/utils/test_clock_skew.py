@@ -1,10 +1,8 @@
 """
-Stage 23: Clock Skew / TimeProvider Tests
+Clock Skew / TimeProvider Tests
 
 Tests for the TimeProvider abstraction and clock skew tolerance
 in distributed systems.
-
-Reference: docs/STAGE_23_CLOCK_SKEW.md
 """
 
 from __future__ import annotations

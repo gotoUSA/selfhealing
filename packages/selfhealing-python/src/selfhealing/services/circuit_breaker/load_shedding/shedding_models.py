@@ -1,8 +1,5 @@
 """
 Load Shedding Data Models.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 3 - Load Shedding (부분적 차단)
 """
 
 from __future__ import annotations

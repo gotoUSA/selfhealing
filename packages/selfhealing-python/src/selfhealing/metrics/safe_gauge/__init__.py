@@ -3,8 +3,6 @@ SafeGauge - Thread-safe Prometheus Gauge Wrapper.
 
 Prevents negative gauge values after server restarts.
 
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
-
 Usage:
     >>> from selfhealing.metrics.safe_gauge import SafeGauge
     >>> from prometheus_client import Gauge

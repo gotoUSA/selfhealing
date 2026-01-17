@@ -6,8 +6,6 @@ Self-Learning DNA Service - 자가 학습 및 최적화
 - 자동 파라미터 튜닝
 - 예측 기반 최적화
 - 성능 개선 제안
-
-Reference: docs/self_healing/32_DNA_ENTERPRISE_FEATURES.md
 """
 
 from .service import LearningService

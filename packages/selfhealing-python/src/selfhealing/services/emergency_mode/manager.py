@@ -15,7 +15,7 @@ from .enums import EmergencyLevel, EMERGENCY_LEVEL_RULES
 from .models import EmergencyState, RecoveryGateConfig
 from .recovery_gate import RecoveryGate
 
-# Drift Detection Metrics (Phase 2)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_emergency_cache_stale,
@@ -141,7 +141,7 @@ class GracefulDegradationManager:
         """
         캐시와 백엔드 상태 비교 후 drift 감지.
         
-        v6.3.0: Drift Detection Phase 2 구현
+        v6.3.0: Drift Detection 구현
         
         Returns:
             True if drift detected, False otherwise
@@ -359,8 +359,7 @@ class GracefulDegradationManager:
         reason: str,
         activated_by: str,
         duration_minutes: Optional[int] = None,
-        # Chaos-Aware 메타데이터 (§14)
-        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §14.2
+        # Chaos-Aware 메타데이터
         is_chaos_experiment: bool = False,
         experiment_id: Optional[str] = None,
     ) -> EmergencyState:
@@ -402,7 +401,7 @@ class GracefulDegradationManager:
             self._state.deactivated_at = None
             self._state.deactivated_by = None
             
-            # Chaos-Aware 메타데이터 설정 (§14)
+            # Chaos-Aware 메타데이터 설정
             if is_chaos_experiment:
                 self._state.metadata = {
                     "is_chaos_experiment": True,
@@ -822,7 +821,7 @@ class GracefulDegradationManager:
         """
         Audit 기록.
         
-        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        audit_helpers 통합:
         - 기존: selfhealing.audit.log_config_change 직접 호출
         - 변경: log_emergency_mode_audit 헬퍼 사용 (WAL + 해시 체인 연결)
         """

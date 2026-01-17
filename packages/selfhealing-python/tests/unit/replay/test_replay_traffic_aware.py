@@ -1,5 +1,5 @@
 """
-Phase 2 Tests - Traffic-Aware Replay (Track 3).
+Traffic-Aware Replay Tests (Track 3).
 
 Tests for:
 1. TrafficHealthStatus dataclass
@@ -7,8 +7,6 @@ Tests for:
 3. TrafficAwareReplayTask
 4. Beat schedule integration
 5. RuntimeConfig integration
-
-Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §5
 """
 
 import pytest

@@ -4,16 +4,13 @@ Chaos Impact Predictor.
 LearningService의 과거 패턴을 활용하여
 Dry Run 시 예상 결과를 예측합니다.
 
-Reference:
+Related Modules:
 - LearningService.get_patterns(): services/learning/service.py:309-328
 - PatternType enum: services/learning/models.py:10-15
 
-Design Principle (24_CHAOS_INTEGRATION_PLAN.md §6.2):
+Design Principle:
 - ExpectedRecoveryScenario를 활용한 예측
 - 예측 정확도를 LearningService에 피드백
-
-Related Docs:
-- 24_CHAOS_INTEGRATION_PLAN.md §6.2
 """
 
 from __future__ import annotations

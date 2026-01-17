@@ -17,8 +17,6 @@ Usage:
     class EnvConfigProvider(ConfigProviderInterface):
         def get(self, key: str, default=None) -> Any:
             return os.environ.get(key, default)
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md
 """
 
 from __future__ import annotations

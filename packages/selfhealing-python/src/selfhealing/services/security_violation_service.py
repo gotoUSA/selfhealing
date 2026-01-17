@@ -103,7 +103,6 @@ class ViolationType(str, Enum):
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Governance 위반 관련 (순위 1 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
     # ═══════════════════════════════════════════════════════════════════════════
     UNAUTHORIZED_OVERRIDE = "unauthorized_override"
     """권한 없는 설정 변경 시도."""
@@ -141,7 +140,6 @@ SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
     ViolationType.FLAPPING_DETECTED: Severity.HIGH,
     # ═══════════════════════════════════════════════════════════════════════════
     # 신규 ViolationType Severity (순위 2 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
     # ═══════════════════════════════════════════════════════════════════════════
     # Audit 무결성 - 가장 심각 (즉시 차단)
     ViolationType.AUDIT_TAMPERING: Severity.CRITICAL,
@@ -162,7 +160,6 @@ SEVERITY_BY_VIOLATION_TYPE: dict[str, Severity] = {
 
 # =============================================================================
 # ActionPolicy Enum and Mapping (순위 0 - v2.0.0)
-# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
 # =============================================================================
 
 
@@ -264,7 +261,6 @@ ACTION_POLICY_BY_VIOLATION_TYPE: dict[ViolationType, list[ActionPolicy]] = {
     ],
     # ═══════════════════════════════════════════════════════════════════════════
     # 신규 ViolationType ActionPolicy 매핑 (순위 2 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
     # ═══════════════════════════════════════════════════════════════════════════
     # Governance 위반 - 가장 심각 (다중 정책)
     ViolationType.PRIVILEGE_ESCALATION: [
@@ -323,8 +319,6 @@ class ProtectionResult:
     v2.1.0: 롤백 관련 필드 추가 (순위 0.3)
     v2.2.0: triggering_trace_id 추가 - 대시보드에서 "어떤 요청 때문에
     이 사용자의 세션이 무효화되었는가"를 원클릭으로 추적 가능.
-
-    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
     """
 
     success: bool
@@ -570,7 +564,6 @@ class SecurityViolationService:
 
             # ═══════════════════════════════════════════════════════════════════
             # 순위 2.5: CRITICAL 보안 위반 시 EventBus 연동 (v2.3.0)
-            # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
             # ═══════════════════════════════════════════════════════════════════
             if severity == Severity.CRITICAL:
                 self._emit_critical_violation_event(
@@ -954,8 +947,6 @@ class SecurityViolationService:
             incident_id: 인시던트 ID
             source_ip: 소스 IP
             user_id: 사용자 ID
-
-        Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
         """
         try:
             from selfhealing.services.event_bus import get_event_bus, EventType
@@ -1032,7 +1023,6 @@ def handle_security_violation(
 
 # =============================================================================
 # ProtectionOrchestrator (순위 0, 0.3 - v2.0.0, v2.1.0)
-# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.1
 # =============================================================================
 
 

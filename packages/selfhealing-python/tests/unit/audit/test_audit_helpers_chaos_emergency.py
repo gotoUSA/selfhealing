@@ -1,10 +1,9 @@
 """
-Tests for Phase 2 audit helpers.
+Tests for chaos and emergency audit helpers.
 
 Tests chaos experiment, emergency mode, and error budget gate audit logging.
-Reference: docs/self_healing/middleware_system/20_AUDIT_UNIFICATION_PLAN.md
 
-Phase 2 goals:
+Goals:
 - Chaos experiment audit integration (ChaosExperiment._audit → log_chaos_experiment_audit)
 - Emergency mode audit integration (EmergencyModeManager._log_audit → log_emergency_mode_audit)
 - Error budget gate audit integration (ErrorBudgetGate._audit_block → log_error_budget_blocked_audit)
@@ -20,8 +19,8 @@ import logging
 # =============================================================================
 
 
-class TestAuditEventTypePhase2:
-    """Tests for Phase 2 AuditEventType additions."""
+class TestAuditEventTypeChaosEmergency:
+    """Tests for chaos and emergency AuditEventType additions."""
 
     def test_chaos_event_types_exist(self):
         """Should have Chaos-related event types."""

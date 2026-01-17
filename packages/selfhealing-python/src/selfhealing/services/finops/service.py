@@ -199,7 +199,7 @@ class FinOpsService:
         self._alerts.append(alert)
         logger.warning(f"Cost alert: {message}")
         
-        # Audit 로깅 (Phase 3)
+        # Audit 로깅
         self._log_finops_audit(
             stage_name=stage_name,
             alert_type=alert_type,

@@ -4,8 +4,6 @@ Time Utilities with Timezone Awareness.
 Provides timezone-aware datetime utilities for the self-healing system.
 All time operations should use these utilities to ensure consistency.
 
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
-
 Note:
     datetime.utcnow() is deprecated in Python 3.12.
     Always use datetime.now(timezone.utc) instead.

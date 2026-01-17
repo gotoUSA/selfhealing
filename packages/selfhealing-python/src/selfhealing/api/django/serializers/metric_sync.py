@@ -1,8 +1,7 @@
 """
 Metric Sync API Serializers.
 
-Serializers for Phase 1: Poll 제거 + Manual API
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+Serializers for Poll 제거 + Manual API
 
 POST /api/self-healing/metrics/sync/ - 수동 메트릭 동기화
 GET /api/self-healing/metrics/drift-report/ - Drift 상태 조회

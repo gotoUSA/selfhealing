@@ -9,8 +9,6 @@ Redis Key Structure:
 - dlq:pending → Sorted Set (pending queue, score=timestamp)
 - dlq:id_seq → String (ID sequence counter)
 - dlq:by_domain:{domain} → Set (items by domain for filtering)
-
-Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
 """
 
 from __future__ import annotations
@@ -44,8 +42,6 @@ class RedisDLQRepository(FailedOperationRepository):
     - dlq:{id} → Hash with entry data
     - dlq:pending → Sorted Set for pending entries (score = timestamp)
     - dlq:id_seq → Counter for ID generation
-    
-    Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
     """
     
     KEY_PREFIX = "dlq:"

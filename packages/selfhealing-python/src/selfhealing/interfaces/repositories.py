@@ -10,8 +10,6 @@ Design Principles:
 2. Data classes for transfer objects
 3. ABC for repository contracts
 4. Optional fields use None, not Django's blank=True
-
-Reference: docs/SELF_HEALING_EXTRACTION_PLAN.md Phase 1
 """
 
 from __future__ import annotations

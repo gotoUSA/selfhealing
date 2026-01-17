@@ -12,10 +12,6 @@ Features:
 - Resolution rate and retry count statistics
 - **Redis caching for high-traffic scenarios**
 - **Hybrid storage support via ProviderRegistry**
-
-Reference: docs/SERVICE_LAYER_EXTRACTION_PLAN.md Phase 2
-Reference: docs/self_healing/07_CONTROL_API.md (Performance section)
-Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 from __future__ import annotations

@@ -30,8 +30,6 @@ DESIGN PRINCIPLES:
     - Event-based emission, not request-based
     - No PII or sensitive data export
     - Coarse-grained decision spans only
-
-Reference: docs/capability-audit/capablitity_정의/06-OBSERVABILITY-FORENSICS.md
 """
 
 from __future__ import annotations

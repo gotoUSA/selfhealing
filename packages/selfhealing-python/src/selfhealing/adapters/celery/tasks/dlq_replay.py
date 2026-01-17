@@ -3,7 +3,7 @@ DLQ Replay Celery Tasks.
 
 These tasks handle replay of failed operations from the Dead Letter Queue.
 
-Phase 25: actor_info 파라미터를 통해 RBAC 역할 정보가 전파됩니다.
+actor_info 파라미터를 통해 RBAC 역할 정보가 전파됩니다.
 
 Usage in CELERY_BEAT_SCHEDULE:
     'cleanup-dlq-entries': {
@@ -32,8 +32,8 @@ logger = get_task_logger(__name__)
 def replay_single_dlq_entry(
     self,
     dlq_id: int,
-    actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
-    trace_info: Optional[dict[str, Any]] = None,  # Phase 25: trace_id 전파
+    actor_info: Optional[dict[str, Any]] = None,  # RBAC 역할 전달
+    trace_info: Optional[dict[str, Any]] = None,  # trace_id 전파
 ) -> dict:
     """
     Replay a single DLQ entry.
@@ -43,7 +43,7 @@ def replay_single_dlq_entry(
     - Emergency Level (LEVEL_2+)
     - ErrorBudgetGate
 
-    Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
+    actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
     trace_info를 통해 원본 요청의 trace_id가 전파됩니다.
     
     - actor_info가 None이면 자동(Beat) 호출로 간주하여 SYSTEM_ACTOR가 사용됩니다.
@@ -63,8 +63,8 @@ def replay_single_dlq_entry(
         from selfhealing.context.actor_context import restore_actor_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 28: trace_id는 task_prerun 시그널에서 자동 주입됨
-        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        # trace_id는 task_prerun 시그널에서 자동 주입됨
+        # actor_info 있으면 ActorContext 복원 (수동 호출)
         # actor_info 없으면 SYSTEM_ACTOR 사용 (Beat 자동 호출)
         with restore_actor_from_celery(actor_info or {}):
             service = ReplayService()
@@ -100,8 +100,8 @@ def replay_batch_by_domain(
     self,
     domain: str,
     max_items: int = 100,
-    actor_info: Optional[dict[str, Any]] = None,  # Phase 25: RBAC 역할 전달
-    trace_info: Optional[dict[str, Any]] = None,  # Phase 25: trace_id 전파
+    actor_info: Optional[dict[str, Any]] = None,  # RBAC 역할 전달
+    trace_info: Optional[dict[str, Any]] = None,  # trace_id 전파
 ) -> dict:
     """
     Replay all pending DLQ entries for a specific domain.
@@ -111,7 +111,7 @@ def replay_batch_by_domain(
     - Emergency Level (LEVEL_2+)
     - ErrorBudgetGate
 
-    Phase 25: actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
+    actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
     trace_info를 통해 원본 요청의 trace_id가 전파됩니다.
 
     Args:
@@ -131,8 +131,8 @@ def replay_batch_by_domain(
         from selfhealing.context.actor_context import restore_actor_from_celery
         from selfhealing.services.replay_service import ReplayService
 
-        # Phase 28: trace_id는 task_prerun 시그널에서 자동 주입됨
-        # Phase 25: actor_info 있으면 ActorContext 복원 (수동 호출)
+        # trace_id는 task_prerun 시그널에서 자동 주입됨
+        # actor_info 있으면 ActorContext 복원 (수동 호출)
         with restore_actor_from_celery(actor_info or {}):
             service = ReplayService()
             result = service.replay_batch(domain=domain, max_items=max_items)

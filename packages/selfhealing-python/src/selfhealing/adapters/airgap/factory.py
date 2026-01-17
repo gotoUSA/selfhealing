@@ -4,8 +4,6 @@ Air-Gap Adapter Factory.
 Creates the appropriate Air-Gap storage adapter based on configuration.
 Default is NullAirGapAdapter (disabled).
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 4)
-
 Configuration:
     SELFHEALING_AIRGAP_ENABLED: "true" or "false" (default: "false")
     SELFHEALING_AIRGAP_REDIS_URL: Redis connection URL

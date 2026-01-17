@@ -7,8 +7,6 @@ Safety Bounds - 자율 조정 안전 한계
 - 파라미터별 min/max 범위 검증
 - 한 번에 변경 가능한 최대 비율 제한
 - 런타임 한계 업데이트 (관리자 전용)
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 from __future__ import annotations

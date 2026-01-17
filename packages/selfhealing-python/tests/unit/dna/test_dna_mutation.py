@@ -1,7 +1,7 @@
 """
 Mutation DNA 단위 테스트
 
-Phase 3 테스트
+DNA Mutation 테스트
 """
 
 import pytest

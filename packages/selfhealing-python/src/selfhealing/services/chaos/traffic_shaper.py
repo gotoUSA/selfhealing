@@ -4,18 +4,14 @@ Traffic Shaper.
 요청 비율과 동시 사용자를 조절하여 부하를 형성합니다.
 SyntheticLoadGenerator와 함께 사용하여 정교한 부하 패턴을 생성합니다.
 
-Reference:
+Related Modules:
 - SyntheticLoadGenerator: services/chaos/synthetic_load.py
 - TrafficType enum: services/chaos/base.py
 
-Design Principle (24_CHAOS_INTEGRATION_PLAN.md §7 Phase 3):
+Design Principle:
 - 요청 비율 조절 (TrafficShaper)
 - 동시 사용자 조절
 - 트래픽 분배
-
-Related Docs:
-- 24_CHAOS_INTEGRATION_PLAN.md §6.1
-- 24_CHAOS_INTEGRATION_PLAN.md §8.4
 """
 
 from __future__ import annotations

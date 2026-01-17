@@ -2,8 +2,6 @@
 Report Formatting for Various Channels.
 
 Provides formatting functions for Slack and email output.
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
 """
 
 from __future__ import annotations

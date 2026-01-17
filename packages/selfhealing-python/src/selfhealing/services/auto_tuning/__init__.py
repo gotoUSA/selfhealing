@@ -2,8 +2,6 @@
 Auto Tuning Service - 자율 조정 서비스
 
 services/auto_tuning/ 패키지
-
-Reference: docs/self_healing/38_AUTO_TUNING_API.md
 """
 
 from selfhealing.services.auto_tuning.service import (

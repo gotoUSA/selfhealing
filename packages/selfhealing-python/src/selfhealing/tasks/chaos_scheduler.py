@@ -14,9 +14,6 @@ Features:
 - Daily resilience report generation
 - Pending approval cleanup
 
-Reference:
-- docs/self_healing/CHAOS_ENGINEERING.md
-- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8
 """
 
 from __future__ import annotations
@@ -39,10 +36,10 @@ def run_scheduled_experiments() -> Dict[str, Any]:
     This function is a thin wrapper that delegates to ChaosExecutionService.
     All governance checks and safety validations are performed in the service layer.
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - CHAOS_EXPERIMENT_STARTED/COMPLETED 이벤트 기록
     
-    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
+    Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Called at regular intervals (default: every 5 minutes) via Celery Beat.
     
@@ -56,7 +53,7 @@ def run_scheduled_experiments() -> Dict[str, Any]:
         result = service.run_scheduled_experiments()
         result_dict = result.to_dict()
         
-        # === Audit 기록 (Phase 4) ===
+        # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
             
@@ -97,10 +94,10 @@ def generate_daily_resilience_report() -> Dict[str, Any]:
     This function is a thin wrapper that delegates to ChaosExecutionService.
     Called once per day (default: 6 AM UTC).
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - 리포트 생성 결과 기록
     
-    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
+    Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Report summary
@@ -112,7 +109,7 @@ def generate_daily_resilience_report() -> Dict[str, Any]:
         result = service.generate_daily_report()
         result_dict = result.to_dict()
         
-        # === Audit 기록 (Phase 4) ===
+        # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
             
@@ -147,10 +144,10 @@ def cleanup_expired_approvals() -> Dict[str, Any]:
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - 만료된 승인 정리 결과 기록
     
-    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
+    Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Cleanup summary
@@ -162,7 +159,7 @@ def cleanup_expired_approvals() -> Dict[str, Any]:
         result = service.cleanup_expired_approvals()
         result_dict = result.to_dict()
         
-        # === Audit 기록 (Phase 4) ===
+        # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
             
@@ -199,7 +196,7 @@ def check_and_alert_pending_approvals() -> Dict[str, Any]:
     
     This function is a thin wrapper that delegates to ChaosExecutionService.
     
-    Phase 28: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
+    Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
     
     Returns:
         Alert summary
@@ -358,7 +355,6 @@ def get_beat_schedule_for_celery():
             "options": {"queue": "maintenance"},
         },
         # Zombie Hunter: Hunt orphaned experiments every 1 minute
-        # Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
         "chaos-hunt-zombie-experiments": {
             "task": "selfhealing.tasks.chaos_scheduler.hunt_zombie_experiments_task",
             "schedule": 60.0,  # Every 1 minute
@@ -368,7 +364,7 @@ def get_beat_schedule_for_celery():
 
 
 # =============================================================================
-# Phase 7: Zombie Hunter (34_CHAOS_SAFETY_MECHANISMS.md §5)
+# Zombie Hunter
 # =============================================================================
 
 
@@ -378,8 +374,6 @@ def hunt_zombie_experiments() -> Dict[str, Any]:
     
     RUNNING 상태인데 TTL이 만료된 실험 = 워커 크래시로 간주
     → 분산 락 획득 후 강제 rollback → ABORTED 처리
-    
-    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
     
     Fail-Safe 보장:
     - 워커가 크래시해도 주입된 장애가 운영 환경에 남지 않도록 보장

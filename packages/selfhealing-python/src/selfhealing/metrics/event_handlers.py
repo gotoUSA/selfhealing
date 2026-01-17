@@ -6,8 +6,6 @@ Provides event-driven metric updates without DB queries.
 Key Features:
 - SafeGauge: 음수 방지 래퍼로 서버 재시작 후에도 Gauge가 -1이 되지 않음
 - Dynamic Logging: API 레벨에서 런타임 로깅 레벨 조절 가능
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

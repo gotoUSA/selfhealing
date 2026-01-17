@@ -18,8 +18,6 @@ This package has been refactored from a single 1,700-line file into:
 - validator.py: ValidationResult, TierConfigValidator
 - registry.py: TierRegistry
 - middleware.py: TieringMiddleware
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md (Section 3)
 """
 
 from __future__ import annotations

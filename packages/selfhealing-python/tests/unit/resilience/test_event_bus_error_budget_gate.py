@@ -1,5 +1,5 @@
 """
-Phase B Tests - Event Bus & ErrorBudgetGate Integration.
+Event Bus & ErrorBudgetGate Integration Tests.
 
 Tests for:
 1. SelfHealingEventBus - 이벤트 발행/구독 시스템
@@ -7,8 +7,6 @@ Tests for:
 3. ErrorBudgetGate 이벤트 발행
 4. RetryHandler ErrorBudgetGate 체크
 5. Conditional Replay ErrorBudgetGate 체크
-
-Reference: docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md (Phase B)
 """
 
 import pytest

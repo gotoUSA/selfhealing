@@ -1,7 +1,5 @@
 """
 Tests for Metric Snapshot Storage.
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 """
 
 import json

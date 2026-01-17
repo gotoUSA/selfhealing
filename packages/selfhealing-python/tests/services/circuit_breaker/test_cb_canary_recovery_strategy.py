@@ -1,8 +1,5 @@
 """
-Phase 4 Advanced Protection Tests - 복구 전략
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Phase 4: 복구 전략 (Day 6-7)
+Circuit Breaker 복구 전략 테스트
 
 Test Coverage:
 - 4.1 CanaryRecoveryManager: 단계적 복구, 성공률 추적, 단계 전이
@@ -853,8 +850,8 @@ class TestRecoveryStrategySelector:
 # =============================================================================
 
 
-class TestPhase4Integration:
-    """Phase 4 통합 테스트."""
+class TestRecoveryStrategyIntegration:
+    """복구 전략 통합 테스트."""
     
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""

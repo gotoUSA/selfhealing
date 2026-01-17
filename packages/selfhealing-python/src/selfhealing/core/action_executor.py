@@ -22,8 +22,6 @@ Usage:
         # 실제 실행됨
     else:
         # Shadow/Evaluation 모드로 로깅만 됨
-
-Reference: docs/capability-audit/capablitity_정의/03-PROTECTION-MECHANISMS.md
 """
 
 from __future__ import annotations

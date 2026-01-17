@@ -1,5 +1,5 @@
 """
-Phase 2 Tests - Dynamic Escalation.
+Dynamic Escalation Tests.
 
 Tests for:
 1. Level 2 escalation: LOW/INFO -> MEDIUM
@@ -7,8 +7,7 @@ Tests for:
 3. Ceiling check: CRITICAL does not escalate
 4. Channel variability: Level 3 adds SMS/PagerDuty
 
-Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-Phase 2: Dynamic Escalation
+Dynamic Escalation
 
 Review points:
 - Dynamic Escalation: Priority escalation based on Level 2/3

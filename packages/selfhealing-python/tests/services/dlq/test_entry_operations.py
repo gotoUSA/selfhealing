@@ -7,7 +7,7 @@ Tests for the Repository pattern implementation of:
 - EntryOperationsMixin.get_entry()
 
 These methods use Repository pattern instead of direct Django ORM access
-(domain-free architecture, Phase 5+).
+(domain-free architecture).
 """
 
 from datetime import datetime, timezone

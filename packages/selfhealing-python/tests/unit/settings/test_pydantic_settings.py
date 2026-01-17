@@ -1,5 +1,5 @@
 """
-Tests for Pydantic Settings Module - Phase 1.
+Tests for Pydantic Settings Module.
 
 Tests for the 5 core settings classes:
 - CircuitBreakerSettings
@@ -7,9 +7,6 @@ Tests for the 5 core settings classes:
 - RetrySettings
 - RateLimitSettings
 - SecuritySettings
-
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 import pytest

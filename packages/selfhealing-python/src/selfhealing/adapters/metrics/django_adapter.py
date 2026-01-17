@@ -2,8 +2,6 @@
 Django ORM-based Metric Source Adapter.
 
 Provides metrics from Django models for the self-healing system.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

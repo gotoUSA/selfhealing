@@ -429,17 +429,15 @@ class ReplayService:
         2. Emergency Level - LEVEL_2+ 시 자원 보호를 위해 차단
         3. ErrorBudgetGate - 에러 예산 고갈 시 자동화 차단
 
-        Adaptive Mode (Phase 3):
+        Adaptive Mode:
         - When adaptive_enabled=True in RuntimeConfig, batch size is dynamic
         - High failure rate (>=20%) reduces batch size by 20%
         - 3 consecutive perfect batches increases batch size by 5
-        - See: services/adaptive_replay.py
 
-        Priority Mode (Phase 4):
+        Priority Mode:
         - When priority_enabled=True in RuntimeConfig, domains are processed by priority
         - Critical domains are processed first, then normal, then low
         - Respects domain-specific max_retries overrides
-        - See: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §7
 
         Audit Logging:
         - 차단 발생 시 자동으로 AuditLog에 기록됨
@@ -490,7 +488,7 @@ class ReplayService:
 
         max_replays = self.config["max_replay_attempts"]
 
-        # Check if priority mode is enabled (Phase 4)
+        # Check if priority mode is enabled
         priority_enabled = use_priority
         if priority_enabled is None:
             priority_enabled = self._is_priority_enabled()

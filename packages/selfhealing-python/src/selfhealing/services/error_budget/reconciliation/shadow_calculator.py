@@ -2,8 +2,6 @@
 Shadow Budget Calculator.
 
 Calculates shadow budget by estimating missed errors from logs.
-
-Reference: docs/self_healing/middleware_system/30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md
 """
 
 from __future__ import annotations
@@ -22,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Phase 0: 핵심 설계 원칙
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0
+# 핵심 설계 원칙
 # =============================================================================
 
 # 4.0.1 Multiplier Cap - 가중치 폭발 방지
@@ -41,8 +38,7 @@ SOURCE_RELIABILITY: Dict[str, float] = {
 
 
 # =============================================================================
-# Phase 1: Severity 기반 가중치
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.1
+# Severity 기반 가중치
 # =============================================================================
 
 # 에러 심각도별 가중치 (분 단위)
@@ -58,8 +54,7 @@ SEVERITY_WEIGHT: Dict[str, float] = {
 BASE_WEIGHT_MINUTES: float = 0.001
 
 # =============================================================================
-# Phase 2: Domain SLA 기반 가중치
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.2
+# Domain SLA 기반 가중치
 # =============================================================================
 
 # 기본 SLA 시간 (도메인이 설정되지 않은 경우)
@@ -67,8 +62,7 @@ DEFAULT_SLA_HOURS: int = 24
 
 
 # =============================================================================
-# Phase 3: Learning 패턴 기반 가중치
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.3
+# Learning 패턴 기반 가중치
 # =============================================================================
 
 # 패턴 발생 횟수별 가중치 배수
@@ -124,9 +118,9 @@ class ShadowBudgetCalculator:
             primary_remaining_percent: 현재 Primary Budget 잔여율
             primary_consumed_minutes: 현재 Primary Budget 소진량 (분)
             budget_total_minutes: 전체 Budget (분)
-            errors_by_severity: 심각도별 에러 수 (Phase 1 가중치 계산용)
-            domain: 도메인 (Phase 2 가중치 계산용, 예: "payment", "order")
-            failure_type: 실패 유형 (Phase 3 가중치 계산용, 예: "timeout")
+            errors_by_severity: 심각도별 에러 수 (가중치 계산용)
+            domain: 도메인 (가중치 계산용, 예: "payment", "order")
+            failure_type: 실패 유형 (가중치 계산용, 예: "timeout")
             
         Returns:
             ShadowBudget 계산 결과
@@ -137,7 +131,7 @@ class ShadowBudgetCalculator:
         # 에러 수 추정 (여러 소스에서)
         estimated_errors, log_source = self._estimate_errors(period_start, period_end)
         
-        # Phase 1~3: 가중치 기반 에러 계산
+        # 가중치 기반 에러 계산
         # errors_by_severity가 제공되면 가중치 적용, 아니면 기본값 사용
         if errors_by_severity:
             additional_consumed = self._calculate_weighted_errors(
@@ -200,10 +194,10 @@ class ShadowBudgetCalculator:
         """
         가중치 기반 Budget 소진량 계산.
         
-        Phase 0: Source Reliability Weight 적용
-        Phase 1: Severity Weight 적용
-        Phase 2: Domain SLA Weight 적용
-        Phase 3: Learning Pattern Weight 적용
+        Source Reliability Weight 적용
+        Severity Weight 적용
+        Domain SLA Weight 적용
+        Learning Pattern Weight 적용
         
         Args:
             errors_by_severity: 심각도별 에러 수 {"critical": 5, "high": 10, ...}
@@ -213,28 +207,26 @@ class ShadowBudgetCalculator:
             
         Returns:
             가중치 적용된 Budget 소진량 (분)
-            
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0, §4.1, §4.2, §4.3
         """
         total_weighted = 0.0
         
         for severity, count in errors_by_severity.items():
-            # Phase 1: Severity 가중치 적용
+            # Severity 가중치 적용
             severity_weight = SEVERITY_WEIGHT.get(severity.lower(), BASE_WEIGHT_MINUTES)
             total_weighted += count * severity_weight
         
-        # Phase 0: Source Reliability 적용
+        # Source Reliability 적용
         source_reliability = SOURCE_RELIABILITY.get(log_source, 1.0)
         
-        # Phase 2: Domain SLA 가중치 적용
+        # Domain SLA 가중치 적용
         domain_multiplier = self._get_domain_weight(domain)
         
-        # Phase 3: Learning 패턴 가중치 적용
+        # Learning 패턴 가중치 적용
         pattern_multiplier = self._get_pattern_weight(domain, failure_type)
         
         # 최종 가중치 계산 (Cap 적용)
         final_multiplier = source_reliability * domain_multiplier * pattern_multiplier
-        final_multiplier = min(final_multiplier, MAX_WEIGHT_MULTIPLIER)  # Phase 0: Cap 적용
+        final_multiplier = min(final_multiplier, MAX_WEIGHT_MULTIPLIER)  # Cap 적용
         
         total_weighted *= final_multiplier
         
@@ -262,8 +254,6 @@ class ShadowBudgetCalculator:
             
         Returns:
             도메인 가중치 배수 (1.0 ~ 24.0)
-            
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.2
         """
         try:
             from selfhealing.settings import get_config
@@ -307,8 +297,6 @@ class ShadowBudgetCalculator:
             
         Returns:
             패턴 가중치 배수 (1.0 ~ 2.0)
-            
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.3
         """
         try:
             from selfhealing.services.learning import LearningService
@@ -399,8 +387,7 @@ class ShadowBudgetCalculator:
         return 0, "none_available"
     
     # =========================================================================
-    # Phase 6: Pending Reconciliation Freeze
-    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
+    # Pending Reconciliation Freeze
     # =========================================================================
     
     def _notify_pending_freeze(self, shadow: ShadowBudget) -> None:
@@ -408,8 +395,6 @@ class ShadowBudgetCalculator:
         대규모 조정(>5%) 시 배포 동결 신호.
         
         Pending Reconciliation 승인 대기 중 배포/자동 튜닝 동결.
-        
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
         """
         if shadow.adjustment_percent <= 5.0:
             return  # 소규모 조정은 무시
@@ -449,8 +434,6 @@ class ShadowBudgetCalculator:
     def _deactivate_pending_freeze(self, calculation_id: str, reason: str) -> None:
         """
         Pending Reconciliation 완료(승인/거부) 시 동결 해제.
-        
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
         """
         try:
             from selfhealing.services.circuit_breaker.freeze_mode import (
@@ -472,15 +455,12 @@ class ShadowBudgetCalculator:
             logger.warning(f"[ShadowBudget] Failed to deactivate freeze: {e}")
     
     # =========================================================================
-    # Phase 9: 알림 연동
-    # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §6
+    # 알림 연동
     # =========================================================================
     
     def _notify_shadow_budget_calculated(self, shadow: ShadowBudget) -> None:
         """
         Shadow Budget 계산 완료 알림.
-        
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §6.3
         """
         try:
             from selfhealing.services.unified_notification import (
@@ -536,8 +516,6 @@ class ShadowBudgetCalculator:
     ) -> None:
         """
         Audit 이벤트 기록.
-        
-        Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5
         """
         try:
             from selfhealing.audit.event_buffer import AuditEventType, AuditEvent

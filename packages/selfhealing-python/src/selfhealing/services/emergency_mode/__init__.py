@@ -16,8 +16,6 @@ This package has been refactored from a single 1,043-line file into:
 
 All exports are maintained for backward compatibility.
 
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md (Section 4)
-
 Usage:
     from selfhealing.services.emergency_mode import (
         get_emergency_manager,

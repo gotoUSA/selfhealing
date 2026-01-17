@@ -7,8 +7,6 @@ Features:
 - Redis Pub/Sub 기반 분산 이벤트 전파
 - 기존 SelfHealingEventBus와 동일한 인터페이스
 - Graceful fallback (Redis 연결 실패 시 로컬 처리)
-
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §6.1 (Redis Pub/Sub 실시간 동기화)
 """
 
 from __future__ import annotations

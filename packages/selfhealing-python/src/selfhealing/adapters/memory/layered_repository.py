@@ -8,8 +8,6 @@ Layered Circuit Breaker State Repository
 - L2 (Shared Storage): Redis나 DB는 백그라운드에서 비동기적으로 동기화
 - 타임아웃 적용: L2 응답이 늦으면 즉시 포기하고 L1만으로 동작 (Fail-Fast)
 - Shadow Logging: L2 장애 시 발생한 변경사항을 로컬에 기록
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

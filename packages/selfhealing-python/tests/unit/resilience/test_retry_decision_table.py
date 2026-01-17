@@ -4,7 +4,6 @@ Unit Tests for Retry Decision Table
 Tests for retry policy decisions based on error types,
 attempt counts, and configuration.
 
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md
 Risk Covered: R-015 (Retry storm overwhelming PG)
 """
 
@@ -385,9 +384,6 @@ class TestRetryDecisionTable:
 
     Purpose:
         Validate all decision combinations.
-
-    Reference:
-        docs/testing/SELF_HEALING_TEST_MATRICES.md §2.1
     """
 
     @pytest.mark.parametrize(

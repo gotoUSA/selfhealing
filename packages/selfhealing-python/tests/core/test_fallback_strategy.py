@@ -1,7 +1,5 @@
 """
 Tests for Fallback Strategy - Partial Partition Fallback
-
-Reference: docs/STAGE_24_PARTIAL_PARTITION.md
 """
 
 import pytest

@@ -101,7 +101,7 @@ class ConnectionPoolMonitor:
         # Get leak report
         leaks = monitor.detect_leaks(threshold_seconds=300)
         
-        # Phase 5-2: Simulation override for chaos testing
+        # Simulation override for chaos testing
         monitor.set_simulation_override(
             health_status=PoolHealthStatus.EXHAUSTED,
             experiment_id="exp-123",
@@ -128,8 +128,7 @@ class ConnectionPoolMonitor:
         self._stats_history: List[PoolStats] = []
         self._max_history = 100
         
-        # Phase 5-2: Simulation override for chaos testing
-        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1, §22.2.2
+        # Simulation override for chaos testing
         self._simulation_override: Optional[PoolHealthStatus] = None
         self._simulation_stats: Optional[PoolStats] = None
         self._simulation_experiment_id: Optional[str] = None
@@ -145,8 +144,6 @@ class ConnectionPoolMonitor:
         
         실제 인프라를 변경하지 않고 모니터가 특정 상태를 보고하도록 강제.
         카오스 실험에서 알림/복구 체인 검증에 사용.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1, §22.2.2
         
         Args:
             health_status: 강제할 건강 상태 (None이면 해제)
@@ -175,11 +172,7 @@ class ConnectionPoolMonitor:
                 logging.getLogger(__name__).info("[PoolMonitor] Simulation override cleared")
     
     def clear_simulation_override(self) -> None:
-        """
-        시뮬레이션 오버라이드 해제.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1
-        """
+        """시뮬레이션 오버라이드 해제."""
         self.set_simulation_override(None, None, None)
     
     def is_simulation_active(self) -> bool:
@@ -235,10 +228,9 @@ class ConnectionPoolMonitor:
         Check pool health status.
         Returns (status, stats)
         
-        Phase 5-2: 시뮬레이션 오버라이드 지원
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.1
+        시뮬레이션 오버라이드 지원
         """
-        # Phase 5-2: 시뮬레이션 모드 체크
+        # 시뮬레이션 모드 체크
         if self._simulation_override is not None:
             import logging
             logging.getLogger(__name__).debug(

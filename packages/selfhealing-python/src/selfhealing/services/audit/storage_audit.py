@@ -46,8 +46,6 @@ def log_storage_failure_audit(
     
     L2 저장소(Redis/Django)가 timeout이나 error로 실패할 때 호출됩니다.
     WAL 기반 누락 0 보장.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
     """
     details = {
         "storage_type": storage_type,
@@ -109,8 +107,6 @@ def log_storage_recovery_audit(
     
     L2 저장소가 장애에서 복구되었을 때 호출됩니다.
     WAL 기반 누락 0 보장.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
     """
     details = {
         "storage_type": storage_type,
@@ -172,8 +168,6 @@ def log_drift_reconciliation_audit(
     
     L2 복구 시 L1과 L2 간의 데이터 불일치를 조정했을 때 호출됩니다.
     WAL 기반 누락 0 보장.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
     """
     details = {
         "adapter_type": adapter_type,

@@ -4,8 +4,6 @@ CorruptionShield ViolationType 매핑 테스트
 순위 3 구현 테스트:
 - _map_to_violation_type 메서드 테스트
 - L1/L2/L3 → 표준 ViolationType 매핑
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.3
 """
 
 from dataclasses import dataclass

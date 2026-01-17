@@ -4,8 +4,6 @@
 
 시스템 상태에 따라 Jitter 범위를 동적으로 조절
 P99 안정화 및 불필요한 지연 제거
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import random

@@ -185,9 +185,9 @@ class ConfigChangeTracker:
         """
         Log configuration change to audit adapter.
         
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
@@ -241,9 +241,9 @@ class ConfigChangeTracker:
 
         Use this for one-off overrides that bypass normal config flow.
         
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType

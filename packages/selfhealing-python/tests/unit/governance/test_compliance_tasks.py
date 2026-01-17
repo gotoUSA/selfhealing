@@ -1,13 +1,11 @@
 """
 📋 증명 레인 (Compliance Tasks) 단위 테스트
 
-Tests for Phase 4 implementation:
+Tests for compliance tasks implementation:
 - RunComplianceCheckTask
 - GenerateFinOpsReportTask
 - CollectSelfHealingMetricsTask
 - GenerateDailyAutonomousReportTask
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §7
 """
 
 import pytest
@@ -22,7 +20,6 @@ from selfhealing.tasks.compliance_tasks import (
     COMPLIANCE_TASKS,
     get_compliance_beat_schedule,
 )
-# GenerateDailyAutonomousReportTask는 문서 §6.2 Phase 5에 따라 daily_report.py에 위치
 from selfhealing.tasks.daily_report import GenerateDailyAutonomousReportTask
 from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
@@ -400,7 +397,6 @@ class TestComplianceBeatSchedule:
         schedule = get_compliance_beat_schedule()
         
         # compliance_tasks.py에는 3개 태스크만 포함
-        # GenerateDailyAutonomousReportTask는 daily_report.py에 있음 (문서 §6.2 Phase 5)
         assert "run-compliance-check" in schedule
         assert "generate-finops-report" in schedule
         assert "collect-self-healing-metrics" in schedule
@@ -443,7 +439,6 @@ class TestComplianceTaskRegistry:
     def test_all_tasks_in_registry(self):
         """모든 태스크가 레지스트리에 있는지 확인."""
         # compliance_tasks.py에는 3개 태스크만 포함
-        # GenerateDailyAutonomousReportTask는 daily_report.py에 있음 (문서 §6.2 Phase 5)
         assert len(COMPLIANCE_TASKS) == 3
         
         task_classes = [t.__name__ for t in COMPLIANCE_TASKS]

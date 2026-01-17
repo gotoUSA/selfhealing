@@ -2,8 +2,6 @@
 Value Clamping Utilities for Metrics.
 
 Prevents invalid metric values (negative counts, out-of-range percentages).
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

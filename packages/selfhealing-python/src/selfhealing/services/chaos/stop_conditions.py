@@ -3,8 +3,6 @@ Stop Conditions Service
 
 실시간 메트릭 기반 자동 중단 조건 관리.
 SLA 위반 시 즉시 실험을 중단하고 롤백을 트리거합니다.
-
-Reference: Netflix ChAP, AWS FIS Stop Conditions
 """
 
 from __future__ import annotations

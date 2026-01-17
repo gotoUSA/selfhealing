@@ -7,8 +7,6 @@ Error Budget Reconciliation 단위 테스트.
 - ErrorBudgetReconciliationService: 통합 Reconciliation 서비스
 
 핵심 원칙: "시스템은 계산하고, 반영은 사람이 결정한다."
-
-Reference: docs/self_healing/12_ERROR_BUDGET.md (Section 13)
 """
 
 import pytest
@@ -801,7 +799,7 @@ class TestReconciliationHistoryIntegration:
     """
     Reconciliation과 ConfigHistory 연동 테스트.
     
-    Phase 2: Shadow Budget 승인 시 ConfigHistory에 자동 저장.
+    Shadow Budget 승인 시 ConfigHistory에 자동 저장.
     """
 
     def test_approve_saves_to_history(self, mock_current_budget):

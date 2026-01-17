@@ -7,7 +7,7 @@ dependency injection. This factory pattern allows:
 1. Easy testing with mock repositories
 2. Consistent service instantiation
 3. Future-proof for package extraction
-4. Pluggable provider architecture (Phase 2)
+4. Pluggable provider architecture
 
 Key Components:
     - ServiceFactory: Framework-aware service creation
@@ -15,11 +15,6 @@ Key Components:
     - Repository Factory Functions: Create repository adapters
     - Service Factory Functions: Create service instances with DI
     - Singleton Accessors: Manage service lifecycle
-
-Reference:
-    - docs/SELF_HEALING_EXTRACTION_WORK_PLAN.md Sprint 6
-    - docs/PLUGGABLE_ARCHITECTURE.md Section 5
-    - docs/STAGE_28_PACKAGE_CLEANUP.md Phase 28-1
 """
 
 # Framework types and ServiceFactory

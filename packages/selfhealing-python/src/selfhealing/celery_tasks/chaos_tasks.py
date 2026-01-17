@@ -30,8 +30,6 @@ def hunt_zombie_experiments(self) -> dict:
     Uses distributed lock (IdempotencyDomain.CHAOS_ZOMBIE_HUNTER) to
     prevent race conditions between multiple workers.
     
-    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
-    
     Returns:
         Dictionary with hunt results
     """
@@ -51,8 +49,6 @@ def hunt_zombie_experiments(self) -> dict:
 def check_recovery_monitoring_experiments(self) -> dict:
     """
     Check RECOVERY_MONITORING state experiments for Canary recovery completion.
-    
-    Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3
     
     This task should be scheduled via Celery Beat every 30 seconds.
     It polls experiments in RECOVERY_MONITORING state and:

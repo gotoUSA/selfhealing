@@ -1,7 +1,7 @@
 """
 Self-Learning DNA 단위 테스트
 
-Phase 3 테스트
+DNA Learning 테스트
 """
 
 import pytest

@@ -6,8 +6,6 @@ FinOps DNA Service - 복구 비용 최적화 및 예산 관리
 - 비용 예산 관리
 - 비용 효율성 리포트
 - CFO 대시보드 데이터
-
-Reference: docs/self_healing/32_DNA_ENTERPRISE_FEATURES.md
 """
 
 from .service import FinOpsService

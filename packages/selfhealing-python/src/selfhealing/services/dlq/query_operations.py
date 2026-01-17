@@ -2,8 +2,6 @@
 DLQ Query Operations Mixin.
 
 Provides methods for querying DLQ entries.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
 """
 
 from __future__ import annotations

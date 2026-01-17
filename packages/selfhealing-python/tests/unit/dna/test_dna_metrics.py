@@ -1,7 +1,7 @@
 """
 DNA-Metrics Conflict Detection 단위 테스트
 
-Phase 3 테스트
+DNA Metrics 테스트
 """
 
 import pytest

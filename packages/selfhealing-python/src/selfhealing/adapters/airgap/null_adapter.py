@@ -3,8 +3,6 @@ Null Air-Gap Storage Adapter.
 
 No-op implementation used when Air-Gap feature is disabled.
 All operations are pass-through with no side effects.
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 4)
 """
 
 from __future__ import annotations
@@ -23,7 +21,7 @@ class NullAirGapAdapter(BaseAirGapAdapter):
 
     Air-Gap 기능이 비활성화된 경우 사용됩니다.
     모든 쓰기 작업은 무시되고, 읽기 작업은 None을 반환합니다.
-    기존 로직(Phase 1~3)이 그대로 동작합니다.
+    기존 로직이 그대로 동작합니다.
 
     Example:
         >>> adapter = NullAirGapAdapter()

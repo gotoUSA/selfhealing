@@ -1,7 +1,5 @@
 """
-Phase 1 DNA Safety 단위 테스트 - Stage DNA Strict Mode
-
-Reference: docs/self_healing/30_DNA_DRIFT_DISCOVERY.md
+Stage DNA Strict Mode 테스트
 """
 import pytest
 from load_tests.utils.selfhealing.stage_dna import (

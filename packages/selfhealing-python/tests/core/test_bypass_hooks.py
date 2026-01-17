@@ -6,8 +6,6 @@ Tests cover:
 2. Environment-conditional registration
 3. Hook registration/unregistration lifecycle
 4. Production environment blocking
-
-Reference: docs/self_healing/52_HOOK_REGISTRY_ARCHITECTURE.md
 """
 
 import os

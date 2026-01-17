@@ -1,9 +1,6 @@
 """
 Circuit Breaker Advanced Protection Tests
 
-Phase 0.3: 테스트 기반 작성
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-
 이 모듈은 Circuit Breaker 고급 보호 시스템의 데이터 모델과 설정을 테스트합니다.
 """
 

@@ -2,8 +2,6 @@
 Drift Reconciliation Operations Mixin.
 
 Provides methods for drift detection and reconciliation.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

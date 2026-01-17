@@ -3,8 +3,6 @@ Auto Tuning Service - 자율 조정 서비스
 
 RuntimeFeedbackLoop, DecisionEngine, SafetyBounds를 조합하여
 완전한 자율 조정 서비스를 제공합니다.
-
-Reference: docs/self_healing/38_AUTO_TUNING_API.md
 """
 
 from __future__ import annotations
@@ -57,8 +55,6 @@ class AutoTuningService:
     - 수동 조정 (Override)
     - 조정 이력 조회
     - 메트릭 조회
-    
-    Reference: docs/self_healing/38_AUTO_TUNING_API.md
     
     사용 예:
         service = AutoTuningService(

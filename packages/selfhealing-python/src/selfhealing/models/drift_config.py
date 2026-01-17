@@ -2,8 +2,6 @@
 Drift Threshold Configuration Model.
 
 Provides dynamic configuration for metric drift thresholds.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

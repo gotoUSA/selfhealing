@@ -4,8 +4,7 @@ Safe Default Values for Self-Healing Configuration.
 모든 설정에 대해 안전한 기본값 정의.
 설정 오류 시 이 값으로 폴백.
 
-Phase 6: Fail-Safe Default 강화
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화
 
 PARTIAL DEPRECATION NOTICE:
 - SAFE_DEFAULTS: 유지됨 (레거시 호환성)
@@ -13,7 +12,6 @@ PARTIAL DEPRECATION NOTICE:
 - FATAL_CONFIGS: 유지됨 (위험한 설정 변경 방지)
 
 새 코드에서는 selfhealing.settings 모듈의 Pydantic Settings를 사용하세요.
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 import logging

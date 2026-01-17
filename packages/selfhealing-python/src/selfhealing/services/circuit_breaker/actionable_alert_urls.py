@@ -12,10 +12,6 @@ Environment Variables:
 - CB_DASHBOARD_URL: Grafana 대시보드 기본 URL (예: https://grafana.internal/d/circuit-breaker)
 - CB_ADMIN_BASE_URL: Admin 제어판 기본 URL (예: /admin/selfhealing/circuitbreaker/)
 - CB_RUNBOOK_URL: Runbook 기본 URL (예: https://docs.internal/runbooks/circuit-breaker-recovery)
-
-Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-Section 7.2 ⑥ - Actionable Alert: 신중한 보수주의
-Section 9.3 - Phase 3: Actionable Alert
 """
 
 from __future__ import annotations
@@ -63,7 +59,7 @@ class ActionableAlertUrlBuilder:
     
     환경변수에서 기본 URL을 읽어와서 서비스별/상황별 URL을 생성합니다.
     
-    설계 원칙 (문서 §7.2 ⑥):
+    설계 원칙:
     - 거버넌스 유지: 모든 조작이 Admin을 통해 감사 기록
     - 컨텍스트 유지: 쿼리 파라미터로 해당 서비스 즉시 조회
     - 안전성: 운영자가 상태 확인 후 판단 가능

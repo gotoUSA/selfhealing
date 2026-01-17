@@ -160,8 +160,7 @@ class BlacklistedParameter:
     """
     블랙리스트된 파라미터.
     
-    순위 5.5: Escape Strategy - 위험한 파라미터 조합 학습
-    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
+    Escape Strategy - 위험한 파라미터 조합 학습
     """
     module: str
     """모듈 이름 (예: circuit_breaker, retry)."""

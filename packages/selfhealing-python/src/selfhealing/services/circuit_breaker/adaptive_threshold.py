@@ -4,9 +4,6 @@ Adaptive Threshold for Circuit Breaker
 Emergency Level에 따른 CB 임계값 자동 조정.
 위기 상황일수록 더 보수적(느슨하게) 설정하여 자가 유도 블랙아웃을 방지합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 5 - Adaptive Threshold (Emergency Level 연동)
-
 설계 근거:
 - NORMAL: 5회 / 60초 (표준 감지 속도)
 - ELEVATED: 7.5회 / 90초 (약간 보수적)

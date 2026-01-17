@@ -407,8 +407,7 @@ class AdvancedConfigMixin:
         return self._update_config("governance", **updates)
 
     # =========================================================================
-    # Drift Threshold Config (Phase 2 통합)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # Drift Threshold Config
     # =========================================================================
 
     def get_drift_threshold_config(self) -> Dict[str, Any]:

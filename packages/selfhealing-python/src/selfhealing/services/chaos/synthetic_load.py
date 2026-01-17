@@ -4,17 +4,13 @@ Synthetic Load Generator.
 카오스 실험용 합성 트래픽 생성기.
 실제 프로덕션 요청과 분리하여 SLA 통계에서 제외합니다.
 
-Reference:
+Related Modules:
 - XTestModeMixin 패턴: api/django/views/xtest/base.py
 - TrafficType enum: services/chaos/base.py
 
-Design Principle (23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md §7.2 ⑥):
+Design Principle:
 - Admin Deep Link 방식으로 거버넌스 유지
 - 모든 조작이 감사(Audit) 기록
-
-Related Docs:
-- 24_CHAOS_INTEGRATION_PLAN.md §6.1
-- 24_CHAOS_INTEGRATION_PLAN.md §7 Phase 3
 """
 
 from __future__ import annotations

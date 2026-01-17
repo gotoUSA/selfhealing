@@ -143,7 +143,6 @@ class SelfHealingConfig(AppConfig):
         self._schedule_gauge_hydration()
 
         # V3: Start pre-computed cache worker for L3 observability endpoints
-        # Reference: load_tests/results/stage1_l3_baseline_2025-12-25.md
         self._start_precomputed_cache_worker()
 
     def _log_env_snapshot(self):
@@ -331,7 +330,6 @@ class SelfHealingConfig(AppConfig):
 
     # =========================================================================
     # V3: Pre-computed Cache Worker
-    # Reference: load_tests/results/stage1_l3_baseline_2025-12-25.md
     # =========================================================================
 
     def _start_precomputed_cache_worker(self):

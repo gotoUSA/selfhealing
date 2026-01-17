@@ -19,7 +19,7 @@ class ReplayAutomationSettings(BaseSettings):
     Track 1: CB 복구 시 이벤트 기반 자동 Replay
     Track 2: Scheduled Batch (기존 5분 주기)
     Track 3: Traffic-Aware Replay (향후 구현)
-    Phase 4: 도메인별 차등 정책
+    도메인별 차등 정책
     
     Environment variables:
         SELFHEALING_REPLAY_TRACK1_ENABLED=true
@@ -102,7 +102,7 @@ class ReplayAutomationSettings(BaseSettings):
     )
     
     # =========================================================================
-    # Phase 4: Domain Priority Policy (도메인별 차등 정책)
+    # Domain Priority Policy (도메인별 차등 정책)
     # =========================================================================
     priority_enabled: bool = Field(
         default=False,

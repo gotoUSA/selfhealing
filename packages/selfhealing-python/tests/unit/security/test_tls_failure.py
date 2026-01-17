@@ -8,8 +8,6 @@ Scenarios:
 4. Self-signed certificate
 5. Handshake timeout (retryable)
 6. Connection reset (retryable)
-
-Reference: docs/STAGE_25_TLS_FAILURE.md
 """
 
 from __future__ import annotations

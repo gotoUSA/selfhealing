@@ -11,9 +11,7 @@ Features:
 
 Note: Admin/Dashboard operations (cleanup, archive, purge, list, entry management)
       should be implemented in the host application using Django ORM directly.
-      This package follows domain-free principles (Phase 5+).
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
+      This package follows domain-free principles.
 """
 
 from __future__ import annotations

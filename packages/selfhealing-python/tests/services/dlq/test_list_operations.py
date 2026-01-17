@@ -5,7 +5,7 @@ Tests for the Repository pattern implementation of:
 - ListOperationsMixin.list_entries()
 
 Uses Repository pattern instead of direct Django ORM access
-(domain-free architecture, Phase 5+).
+(domain-free architecture).
 """
 
 from datetime import datetime, timezone

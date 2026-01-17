@@ -1,5 +1,5 @@
 """
-Phase 3 Tests - Actionable Alert.
+Actionable Alert Tests.
 
 Tests for:
 1. ActionableAlertUrlBuilder - URL 생성 로직
@@ -7,9 +7,7 @@ Tests for:
 3. Slack Block Kit 포맷터 테스트
 4. 환경변수 설정에 따른 동작 확인
 
-Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-Section 7.2 ⑥ - Actionable Alert: 신중한 보수주의
-Section 9.3 - Phase 3: Actionable Alert
+Actionable Alert: 신중한 보수주의
 """
 
 import os

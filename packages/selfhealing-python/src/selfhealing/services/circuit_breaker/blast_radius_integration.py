@@ -4,9 +4,6 @@ Blast Radius Integration for Circuit Breaker
 CB가 자동 OPEN되기 전에 연쇄 장애 영향을 분석하여,
 CRITICAL 수준이면 OPEN을 보류합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 7 - Blast Radius 연동
-
 통합 플로우:
     record_failure() 호출
             │

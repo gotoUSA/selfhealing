@@ -2,8 +2,6 @@
 Auto Tuning API Views
 
 자율 조정 제어 API 엔드포인트
-
-Reference: docs/self_healing/38_AUTO_TUNING_API.md
 """
 
 import logging

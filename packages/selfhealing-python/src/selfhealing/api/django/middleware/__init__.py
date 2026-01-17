@@ -9,8 +9,6 @@ Features:
 - SelfHealingMiddleware: Automatic failure detection and DLQ storage
 - SelfHealingRecoveryLogger: Recovery event chain logging
 - Fail-Secure Permission Classes
-
-Reference: docs/self_healing/07_CONTROL_API.md
 """
 
 from __future__ import annotations

@@ -1,8 +1,6 @@
 """
 X-Test-Mode Observability & Blast Radius Views (Stage 51)
 
-Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
-
 Stage 51 Observability 관련 API:
 - HealingTimelineView: 힐링 타임라인 조회
 - BlastRadiusTestView: 단일 서비스 Blast Radius 격리 테스트

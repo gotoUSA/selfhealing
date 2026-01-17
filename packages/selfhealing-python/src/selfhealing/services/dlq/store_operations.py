@@ -2,8 +2,6 @@
 DLQ Store Operations Mixin.
 
 Provides methods for storing failed operations in the DLQ.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
 """
 
 from __future__ import annotations
@@ -37,7 +35,7 @@ class StoreOperationsMixin:
         """
         Store a failed operation in the DLQ.
 
-        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        하이브리드 로직:
         - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
         - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
 
@@ -85,14 +83,14 @@ class StoreOperationsMixin:
 
             logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
 
-            # Phase 3: Push 이벤트 - Gauge 증가 (SafeGauge 사용)
+            # Push 이벤트 - Gauge 증가 (SafeGauge 사용)
             try:
                 from selfhealing.metrics.event_handlers import DLQMetricEventHandler
                 DLQMetricEventHandler.on_item_created(domain, failure_type)
             except ImportError:
                 pass  # Metrics not available
 
-            # Audit 로깅: DLQ 저장 기록 (Phase 2: 버퍼 패턴 지원)
+            # Audit 로깅: DLQ 저장 기록 (버퍼 패턴 지원)
             self._log_dlq_audit(
                 action="store",
                 dlq_id=failed_op.id,

@@ -7,8 +7,6 @@ Tests cover:
 3. Audit logging integration
 4. Hook registration/unregistration
 5. Statistics tracking
-
-Reference: docs/self_healing/52_HOOK_REGISTRY_ARCHITECTURE.md
 """
 
 import pytest

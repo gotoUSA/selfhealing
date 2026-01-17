@@ -1,7 +1,7 @@
 """
 Unit Tests for Statistics Repository Implementations.
 
-Phase 7: Hybrid Storage Architecture - Unit Tests
+Hybrid Storage Architecture - Unit Tests
 
 Tests for:
 - NullStatisticsRepository (Null Object Pattern)

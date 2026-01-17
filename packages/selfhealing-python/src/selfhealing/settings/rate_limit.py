@@ -82,7 +82,7 @@ class RateLimitSettings(BaseSettings):
     )
 
     # ==========================================================================
-    # Control API Rate Limiting (Phase 3 - HybridRateLimitMiddleware)
+    # Control API Rate Limiting (HybridRateLimitMiddleware)
     # From core/config.py lines 152-156
     # Validation rules from core/safe_defaults.py lines 258-260
     # ==========================================================================

@@ -28,9 +28,6 @@ Usage:
         def run(self, *args, **kwargs):
             # Task implementation
             return {"count": 42}
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.1
 """
 
 from __future__ import annotations

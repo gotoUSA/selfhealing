@@ -2,8 +2,6 @@
 DLQ Replay Operations Mixin.
 
 Provides methods for replaying DLQ entries.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
 """
 
 from __future__ import annotations
@@ -55,7 +53,7 @@ class ReplayOperationsMixin:
         """
         Execute batch replay of pending DLQ entries.
 
-        Phase 2 하이브리드 로직 (56_AUDIT_MIDDLEWARE_DESIGN.md):
+        하이브리드 로직:
         - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
         - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
 
@@ -87,7 +85,7 @@ class ReplayOperationsMixin:
                             f"[DLQService] Successfully replayed entry {entry.id}: "
                             f"{entry.domain}/{entry.failure_type}"
                         )
-                        # Audit 로깅: Replay 성공 (Phase 2: 버퍼 패턴 지원)
+                        # Audit 로깅: Replay 성공 (버퍼 패턴 지원)
                         self._log_dlq_audit(
                             action="replay",
                             dlq_id=entry.id,
@@ -98,7 +96,7 @@ class ReplayOperationsMixin:
                     else:
                         result.failed += 1
                         result.errors.append(f"Entry {entry.id}: Replay handler returned failure")
-                        # Audit 로깅: Replay 실패 (Phase 2: 버퍼 패턴 지원)
+                        # Audit 로깅: Replay 실패 (버퍼 패턴 지원)
                         self._log_dlq_audit(
                             action="replay",
                             dlq_id=entry.id,
@@ -113,7 +111,7 @@ class ReplayOperationsMixin:
                     logger.warning(
                         f"[DLQService] Replay failed for entry {entry.id}: {e}"
                     )
-                    # Audit 로깅: Replay 예외 (Phase 2: 버퍼 패턴 지원)
+                    # Audit 로깅: Replay 예외 (버퍼 패턴 지원)
                     self._log_dlq_audit(
                         action="replay",
                         dlq_id=entry.id,

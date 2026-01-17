@@ -1,8 +1,5 @@
 """
-Phase 3 Advanced Protection Tests - 연쇄 장애 방지
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Phase 3: 연쇄 장애 방지 (Day 4-5)
+Circuit Breaker 연쇄 장애 방지 테스트
 
 Test Coverage:
 - 3.1 ServiceConfigManager: 서비스 등록, criticality 조회, Load Shedding 대상 선택
@@ -834,8 +831,8 @@ class TestServiceDependencyGraph:
 # =============================================================================
 
 
-class TestPhase3Integration:
-    """Phase 3 ServiceConfig + BlastRadius 통합 테스트."""
+class TestCascadePreventionIntegration:
+    """ServiceConfig + BlastRadius 통합 테스트."""
     
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""
@@ -1048,10 +1045,10 @@ class TestModuleLevelConvenienceFunctions:
 class TestExportsFromInit:
     """__init__.py exports 테스트."""
     
-    def test_phase3_exports_available(self):
-        """Phase 3 exports가 __init__.py에서 사용 가능한지 확인."""
+    def test_cascade_prevention_exports_available(self):
+        """연쇄 장애 방지 exports가 __init__.py에서 사용 가능한지 확인."""
         from selfhealing.services.circuit_breaker import (
-            # Service Config (Phase 3)
+            # Service Config
             ServiceConfigManager,
             get_service_config_manager,
             reset_service_config_manager,
@@ -1060,7 +1057,7 @@ class TestExportsFromInit:
             get_services_by_criticality,
             get_shedding_targets,
             is_critical_service,
-            # Blast Radius (Phase 3)
+            # Blast Radius
             BlastRadiusLevel,
             BlastRadiusAssessment,
             ServiceDependency,

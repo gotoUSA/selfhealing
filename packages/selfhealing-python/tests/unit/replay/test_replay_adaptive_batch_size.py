@@ -1,5 +1,5 @@
 """
-Phase 3 Tests - Adaptive max_items (동적 배치 크기 조정).
+Adaptive Batch Size Tests (동적 배치 크기 조정).
 
 Tests for:
 1. AdaptiveReplayConfig dataclass
@@ -7,8 +7,6 @@ Tests for:
 3. Batch size adjustment logic
 4. ReplayService adaptive mode integration
 5. RuntimeConfig integration
-
-Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §6
 """
 
 import pytest

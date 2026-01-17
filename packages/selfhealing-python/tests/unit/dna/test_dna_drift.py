@@ -1,7 +1,7 @@
 """
 DNA Drift Detection 단위 테스트
 
-Phase 2: dna_drift.py 모듈 테스트
+dna_drift.py 모듈 테스트
 """
 
 import pytest

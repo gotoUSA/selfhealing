@@ -71,7 +71,7 @@ from .convenience import (
     get_protection_status,
 )
 
-# Advanced Protection Models (Phase 0)
+# Advanced Protection Models
 from .models import (
     ServiceConfig,
     SheddingLevel,
@@ -86,7 +86,7 @@ from .models import (
     FreezeModeState,
 )
 
-# Adaptive Threshold (Phase 1)
+# Adaptive Threshold
 from .adaptive_threshold import (
     AdaptiveThresholdManager,
     AdjustedThreshold,
@@ -95,7 +95,7 @@ from .adaptive_threshold import (
     should_allow_cb_auto_open,
 )
 
-# Freeze Mode (Phase 1)
+# Freeze Mode
 from .freeze_mode import (
     FreezeModeManager,
     FreezeReason,
@@ -104,7 +104,7 @@ from .freeze_mode import (
     should_allow_cb_state_change,
 )
 
-# Panic Threshold (Phase 1)
+# Panic Threshold
 from .panic_threshold import (
     PanicThresholdMonitor,
     PanicThresholdResult,
@@ -113,7 +113,7 @@ from .panic_threshold import (
     is_panic_threshold_triggered,
 )
 
-# Distributed Tracing (Phase 2)
+# Distributed Tracing
 from .tracing import (
     TracingConfig,
     TriggeringRequestInfo,
@@ -125,7 +125,7 @@ from .tracing import (
     log_state_change_with_trace,
 )
 
-# Service Config Manager (Phase 3)
+# Service Config Manager
 from .service_config import (
     ServiceConfigManager,
     get_service_config_manager,
@@ -137,7 +137,7 @@ from .service_config import (
     is_critical_service,
 )
 
-# Blast Radius Integration (Phase 3)
+# Blast Radius Integration
 from .blast_radius_integration import (
     BlastRadiusLevel,
     BlastRadiusAssessment,
@@ -152,7 +152,7 @@ from .blast_radius_integration import (
     register_service_dependency,
 )
 
-# Canary Recovery (Phase 4)
+# Canary Recovery
 from .canary_recovery import (
     CanaryState,
     CanaryStageMetrics,
@@ -171,7 +171,7 @@ from .canary_recovery import (
     get_canary_recovery_state,
 )
 
-# Stale Cache Integration (Phase 4)
+# Stale Cache Integration
 from .stale_cache_integration import (
     CanaryWithStaleCacheConfig,
     StaleCacheEntry,
@@ -186,7 +186,7 @@ from .stale_cache_integration import (
     record_canary_failure,
 )
 
-# Recovery Strategy Selector (Phase 4)
+# Recovery Strategy Selector
 from .recovery_strategy import (
     RecoveryStrategySelection,
     RecoveryDecision,
@@ -201,7 +201,7 @@ from .recovery_strategy import (
     record_recovery_failure,
 )
 
-# Load Shedding (Phase 5)
+# Load Shedding
 from .load_shedding import (
     # Data Models
     SheddingState,
@@ -252,7 +252,7 @@ __all__ = [
     "record_rate_limit",
     "should_allow_with_protection",
     "get_protection_status",
-    # Advanced Protection Models (Phase 0)
+    # Advanced Protection Models
     "ServiceConfig",
     "SheddingLevel",
     "LoadSheddingPolicy",
@@ -264,25 +264,25 @@ __all__ = [
     "CircuitBreakerAdvancedConfig",
     "PanicThresholdConfig",
     "FreezeModeState",
-    # Adaptive Threshold (Phase 1)
+    # Adaptive Threshold
     "AdaptiveThresholdManager",
     "AdjustedThreshold",
     "get_adaptive_threshold_manager",
     "get_adjusted_cb_threshold",
     "should_allow_cb_auto_open",
-    # Freeze Mode (Phase 1)
+    # Freeze Mode
     "FreezeModeManager",
     "FreezeReason",
     "get_freeze_mode_manager",
     "is_freeze_mode_active",
     "should_allow_cb_state_change",
-    # Panic Threshold (Phase 1)
+    # Panic Threshold
     "PanicThresholdMonitor",
     "PanicThresholdResult",
     "get_panic_threshold_monitor",
     "check_panic_threshold",
     "is_panic_threshold_triggered",
-    # Distributed Tracing (Phase 2)
+    # Distributed Tracing
     "TracingConfig",
     "TriggeringRequestInfo",
     "TraceContextProvider",
@@ -291,7 +291,7 @@ __all__ = [
     "record_failure_with_trace",
     "get_triggering_request",
     "log_state_change_with_trace",
-    # Service Config Manager (Phase 3)
+    # Service Config Manager
     "ServiceConfigManager",
     "get_service_config_manager",
     "reset_service_config_manager",
@@ -300,7 +300,7 @@ __all__ = [
     "get_services_by_criticality",
     "get_shedding_targets",
     "is_critical_service",
-    # Blast Radius Integration (Phase 3)
+    # Blast Radius Integration
     "BlastRadiusLevel",
     "BlastRadiusAssessment",
     "ServiceDependency",
@@ -312,7 +312,7 @@ __all__ = [
     "assess_cb_open_impact",
     "should_allow_cb_auto_open_blast",
     "register_service_dependency",
-    # Canary Recovery (Phase 4)
+    # Canary Recovery
     "CanaryState",
     "CanaryStageMetrics",
     "CanaryRecoveryState",
@@ -328,7 +328,7 @@ __all__ = [
     "canary_record_success",
     "canary_record_failure",
     "get_canary_recovery_state",
-    # Stale Cache Integration (Phase 4)
+    # Stale Cache Integration
     "CanaryWithStaleCacheConfig",
     "StaleCacheEntry",
     "CanaryWithStaleDecision",
@@ -340,7 +340,7 @@ __all__ = [
     "update_stale_cache",
     "record_canary_success",
     "record_canary_failure",
-    # Recovery Strategy Selector (Phase 4)
+    # Recovery Strategy Selector
     "RecoveryStrategySelection",
     "RecoveryDecision",
     "RecoveryStrategySelector",
@@ -352,7 +352,7 @@ __all__ = [
     "handle_half_open",
     "record_recovery_success",
     "record_recovery_failure",
-    # Load Shedding (Phase 5)
+    # Load Shedding
     "SheddingState",
     "SheddingDecision",
     "SheddingStatus",

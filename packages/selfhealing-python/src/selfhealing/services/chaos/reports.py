@@ -9,8 +9,6 @@ Features:
 - SLA compliance tracking
 - Metrics recording
 - Audit trail integration
-
-Reference: Google DiRT reports, Netflix ChAP outcomes
 """
 
 from __future__ import annotations

@@ -4,8 +4,6 @@
 
 OS별 최적 성능 자동 선택
 추상화 레이어 + 자동 Fallback
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import platform

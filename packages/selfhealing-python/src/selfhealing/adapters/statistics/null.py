@@ -9,8 +9,6 @@ Features:
 - No errors thrown
 - Runtime functionality continues to work
 - Dashboards show "Statistics not available" message
-
-Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 from __future__ import annotations

@@ -13,8 +13,6 @@ This module has been refactored for better maintainability:
 - experiment_impl.py: Concrete experiment implementations
 
 All exports remain available from this module for backward compatibility.
-
-Reference: Netflix ChAP, Gremlin, AWS FIS patterns
 """
 
 # Re-export everything from refactored modules for backward compatibility

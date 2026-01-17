@@ -1,7 +1,5 @@
 """
 Tests for Governance Tasks.
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
 """
 
 from unittest.mock import Mock, patch, MagicMock

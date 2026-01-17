@@ -218,11 +218,11 @@ class ForensicAuditBridge:
     2. 주기적 메모리 스냅샷
     3. 이상 패턴 감지 시 컨텍스트 캡처
     
-    Phase 3 개선:
+    개선 사항:
     - 실제 민감정보 마스킹 수행 (GDPR/ISMS 준수)
     - ForensicSettings.sensitive_field_patterns 연동
     
-    Phase 5 개선:
+    추가 개선:
     - Rate Limiter 통합 (에러 폭풍 방지)
     - SlidingWindow 알고리즘으로 분당 제한
     """
@@ -274,7 +274,7 @@ class ForensicAuditBridge:
         """
         컨텍스트의 민감 정보 마스킹.
         
-        Phase 3: masking.py의 mask_sensitive_fields() 사용
+        masking.py의 mask_sensitive_fields() 사용
         
         Args:
             context: 원본 컨텍스트
@@ -318,8 +318,8 @@ class ForensicAuditBridge:
         """
         예외 캡처 시 Audit 기록.
         
-        Phase 3 개선: sanitized=True일 때 실제 마스킹 수행
-        Phase 5 개선: Rate Limiter 적용
+        개선: sanitized=True일 때 실제 마스킹 수행
+        추가 개선: Rate Limiter 적용
         
         Args:
             exception: 캡처된 예외
@@ -330,12 +330,12 @@ class ForensicAuditBridge:
         Returns:
             True if recorded, False if rate limited
         """
-        # Phase 5: Rate Limiting 적용
+        # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_exception():
             logger.debug("[ForensicAuditBridge] Exception capture rate limited")
             return False
         
-        # Phase 3: 실제 마스킹 수행
+        # 실제 마스킹 수행
         masked_context = context
         if sanitized:
             masked_context = self._mask_context(context)
@@ -363,7 +363,7 @@ class ForensicAuditBridge:
         """
         이상 패턴 감지 시 Audit 기록.
         
-        Phase 5 개선: Rate Limiter 적용
+        개선: Rate Limiter 적용
         
         Args:
             anomaly_type: 이상 유형 (statistical, behavioral 등)
@@ -374,7 +374,7 @@ class ForensicAuditBridge:
         Returns:
             True if recorded, False if rate limited
         """
-        # Phase 5: Rate Limiting 적용
+        # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_anomaly():
             logger.debug("[ForensicAuditBridge] Anomaly capture rate limited")
             return False
@@ -400,7 +400,7 @@ class ForensicAuditBridge:
         """
         메모리 스냅샷 시 Audit 기록 (설정에서 활성화된 경우).
         
-        Phase 5 개선: Rate Limiter 적용
+        개선: Rate Limiter 적용
         
         Args:
             snapshot_id: 스냅샷 ID
@@ -410,7 +410,7 @@ class ForensicAuditBridge:
         Returns:
             True if recorded, False if rate limited
         """
-        # Phase 5: Rate Limiting 적용
+        # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_snapshot():
             logger.debug("[ForensicAuditBridge] Snapshot capture rate limited")
             return False

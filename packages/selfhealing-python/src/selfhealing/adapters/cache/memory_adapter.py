@@ -34,7 +34,7 @@ from selfhealing.interfaces.cache_provider import (
     LockNotOwnedError,
 )
 
-# Drift Detection 메트릭 (Phase 4)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_cache_ttl_expired,
@@ -252,7 +252,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         expired_keys = [k for k, v in self._store.items() if v.expires_at is not None and v.expires_at < current_time]
         for key in expired_keys:
             del self._store[key]
-            # Phase 4: Drift Detection 메트릭 기록
+            # Drift Detection 메트릭 기록
             if HAS_DRIFT_METRICS:
                 record_cache_ttl_expired(self._cache_name)
         # 엔트리 수 메트릭 업데이트
@@ -275,21 +275,21 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             entry = self._store.get(full_key)
 
             if entry is None:
-                # Phase 4: Drift Detection 메트릭 - miss
+                # Drift Detection 메트릭 - miss
                 if HAS_DRIFT_METRICS:
                     record_cache_get(self._cache_name, "miss")
                 return None
 
             if entry.is_expired():
                 del self._store[full_key]
-                # Phase 4: Drift Detection 메트릭 - expired
+                # Drift Detection 메트릭 - expired
                 if HAS_DRIFT_METRICS:
                     record_cache_get(self._cache_name, "expired")
                     record_cache_ttl_expired(self._cache_name)
                     update_cache_entries_count(self._cache_name, len(self._store))
                 return None
 
-            # Phase 4: Drift Detection 메트릭 - hit
+            # Drift Detection 메트릭 - hit
             if HAS_DRIFT_METRICS:
                 record_cache_get(self._cache_name, "hit")
             return entry.value
@@ -309,7 +309,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
 
             self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
             
-            # Phase 4: Drift Detection 메트릭
+            # Drift Detection 메트릭
             if HAS_DRIFT_METRICS:
                 record_cache_set(self._cache_name)
                 update_cache_entries_count(self._cache_name, len(self._store))

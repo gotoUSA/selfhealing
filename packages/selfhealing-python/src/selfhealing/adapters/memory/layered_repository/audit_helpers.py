@@ -2,8 +2,6 @@
 Audit and Notification Helpers Mixin.
 
 Provides methods for audit logging and notifications with Fail-Open principle.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

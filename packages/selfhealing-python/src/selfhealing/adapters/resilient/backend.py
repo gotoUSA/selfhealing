@@ -4,8 +4,6 @@ Resilient Storage Backend Implementation.
 Redis-First + Graceful Degradation + WAL architecture
 for zero data loss guarantees.
 
-Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
-
 Key Principles:
 - WAL-First: In degraded mode, WAL is written BEFORE memory (server crash safe)
 - Zero Data Loss: WAL enables recovery after server restart
@@ -64,8 +62,6 @@ class ResilientStorageBackend:
         2. Memory[key] = value  - then memory
         
         This ensures server crash at any point is recoverable.
-    
-    Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
     """
     
     def __init__(self, config: Optional[ResilientStorageConfig] = None):

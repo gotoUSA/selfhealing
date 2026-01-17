@@ -3,8 +3,6 @@ Metrics collection and export for the self-healing system.
 
 This module provides Prometheus metrics, event handlers, and other
 observability tools.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from selfhealing.metrics.prometheus import (

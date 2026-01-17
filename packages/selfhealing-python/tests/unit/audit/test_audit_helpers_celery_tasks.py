@@ -1,7 +1,7 @@
 """
-Phase 4 Unit Tests: Celery Tasks Audit Integration
+Celery Tasks Audit Integration Tests
 
-20_AUDIT_UNIFICATION_PLAN.md Phase 4에서 추가된 Celery task audit 헬퍼 함수 테스트.
+추가된 Celery task audit 헬퍼 함수 테스트.
 
 테스트 대상:
 1. log_config_apply_audit() - 설정 적용 audit
@@ -9,8 +9,6 @@ Phase 4 Unit Tests: Celery Tasks Audit Integration
 3. log_governance_task_audit() - Governance task audit
 4. log_traffic_aware_replay_audit() - Traffic-Aware Replay audit
 5. log_drift_detection_audit() - Drift Detection audit
-
-Reference: docs/self_healing/middleware_system/20_AUDIT_UNIFICATION_PLAN.md
 """
 
 from __future__ import annotations

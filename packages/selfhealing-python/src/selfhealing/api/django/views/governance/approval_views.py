@@ -1,11 +1,7 @@
 """
 Governance Approval Views.
 
-4-Eyes Approval 관련 View 클래스들입니다 (Phase 3).
-
-Reference:
-- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
-- PCI-DSS Dual Control Requirements
+4-Eyes Approval 관련 View 클래스들입니다.
 """
 
 from __future__ import annotations
@@ -25,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ApprovalRequestListView(APIView):
     """
-    4-Eyes Approval Request List API (Phase 3).
+    4-Eyes Approval Request List API.
 
     GET  /api/self-healing/governance/approval-requests/
     POST /api/self-healing/governance/approval-requests/
@@ -35,10 +31,6 @@ class ApprovalRequestListView(APIView):
     - Admin B receives notification
     - Admin B approves/rejects within 24 hours
     - Expired requests are auto-cleaned
-
-    Reference:
-    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
-    - PCI-DSS Dual Control Requirements
     """
 
     permission_classes = [IsSelfHealingAdmin]
@@ -151,7 +143,7 @@ class ApprovalRequestListView(APIView):
 
 class ApprovalRequestApproveView(APIView):
     """
-    4-Eyes Approval Request Approve API (Phase 3).
+    4-Eyes Approval Request Approve API.
 
     POST /api/self-healing/governance/approval-requests/{id}/approve/
 
@@ -201,7 +193,7 @@ class ApprovalRequestApproveView(APIView):
 
 class ApprovalRequestRejectView(APIView):
     """
-    4-Eyes Approval Request Reject API (Phase 3).
+    4-Eyes Approval Request Reject API.
 
     POST /api/self-healing/governance/approval-requests/{id}/reject/
     """

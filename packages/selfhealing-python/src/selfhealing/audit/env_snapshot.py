@@ -20,8 +20,6 @@ Defense-in-Depth Strategy:
 Usage:
     This module is called automatically by SelfHealingConfig.ready()
     on every server start.
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 from __future__ import annotations

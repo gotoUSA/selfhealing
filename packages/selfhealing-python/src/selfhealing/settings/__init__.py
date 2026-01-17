@@ -10,12 +10,9 @@ Single Source of Truth for all configuration:
 Replaces:
 - core/config.py (dataclass definitions)
 - core/safe_defaults.py (SAFE_DEFAULTS, VALIDATION_RULES)
-
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
-# Phase 1: Core Settings (5)
+# 핵심 설정 (5)
 from selfhealing.settings.circuit_breaker import (
     CircuitBreakerSettings,
     get_circuit_breaker_settings,
@@ -48,7 +45,7 @@ from selfhealing.settings.security import (
     reset_security_settings,
 )
 
-# Phase 2: Additional Settings (12)
+# 확장 설정 (12)
 from selfhealing.settings.sla import (
     SLASettings,
     get_sla_settings,
@@ -116,7 +113,7 @@ from selfhealing.settings.replay_automation import (
     reset_replay_automation_settings,
 )
 
-# Phase 6: Advanced Features
+# 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
     set_request_override,
@@ -199,7 +196,7 @@ __all__ = [
     "reset_config",
     "reload_config",
     "configure",
-    # Phase 1: Core Settings (5)
+    # 핵심 설정 (5)
     # Circuit Breaker
     "CircuitBreakerSettings",
     "get_circuit_breaker_settings",
@@ -225,7 +222,7 @@ __all__ = [
     "SecuritySettings",
     "get_security_settings",
     "reset_security_settings",
-    # Phase 2: Additional Settings (12)
+    # 확장 설정 (12)
     # SLA
     "SLASettings",
     "get_sla_settings",
@@ -279,7 +276,7 @@ __all__ = [
     "ReplayAutomationConfig",  # Legacy alias
     "get_replay_automation_settings",
     "reset_replay_automation_settings",
-    # Phase 6: Layered Provider
+    # 계층형 Provider
     "get_layered_settings",
     "set_request_override",
     "get_request_override",
@@ -292,7 +289,7 @@ __all__ = [
     "get_retry_layered",
     "get_dlq_layered",
     "get_rate_limit_layered",
-    # Phase 6: Secrets
+    # 보안 설정
     "SecretsSettings",
     "get_secrets",
     "reset_secrets",

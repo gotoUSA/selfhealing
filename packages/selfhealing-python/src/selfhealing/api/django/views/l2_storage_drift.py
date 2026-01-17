@@ -6,8 +6,6 @@ Endpoints:
 - GET  /api/self-healing/l2-storage/drift/history/                   - Get drift reconciliation history
 - POST /api/self-healing/l2-storage/drift/reconcile/                 - Force drift reconciliation
 - POST /api/self-healing/l2-storage/drift/reconcile/<service_name>/  - Reconcile single service
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
 """
 
 import logging
@@ -30,8 +28,6 @@ class DriftReconciliationStatsView(APIView):
     Drift Reconciliation Statistics API.
 
     GET /api/self-healing/l2-storage/drift/stats/ - Get drift reconciliation stats (Viewer)
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
     permission_classes = [IsViewer]
@@ -78,8 +74,6 @@ class DriftReconciliationHistoryView(APIView):
     Drift Reconciliation History API.
 
     GET /api/self-healing/l2-storage/drift/history/ - Get drift reconciliation history (Viewer)
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
     permission_classes = [IsViewer]
@@ -134,8 +128,6 @@ class DriftReconciliationTriggerView(APIView):
     Drift Reconciliation Trigger API.
 
     POST /api/self-healing/l2-storage/drift/reconcile/ - Force drift reconciliation (Admin)
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
     permission_classes = [IsSelfHealingAdmin]
@@ -199,8 +191,6 @@ class DriftReconciliationServiceView(APIView):
 
     POST /api/self-healing/l2-storage/drift/reconcile/<service_name>/ 
         - Reconcile single service (Admin)
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
     """
 
     permission_classes = [IsSelfHealingAdmin]

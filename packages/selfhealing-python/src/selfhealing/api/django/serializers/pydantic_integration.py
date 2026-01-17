@@ -311,7 +311,7 @@ def create_pydantic_serializer(
 
 # =============================================================================
 # Pre-generated Pydantic-based Serializers
-# Phase 3: 기존 Serializer를 Pydantic 기반으로 대체
+# 기존 Serializer를 Pydantic 기반으로 대체
 # =============================================================================
 
 # 이 섹션에서는 settings 모듈의 Pydantic 모델을 사용하여

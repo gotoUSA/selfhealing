@@ -8,8 +8,6 @@ Tests for:
 - defaults.py (DegradedModeHandler)
 - adaptive_jitter.py (AdaptiveJitter)
 - health_checker.py (PortableHealthChecker)
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import os

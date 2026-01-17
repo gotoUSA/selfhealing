@@ -11,8 +11,6 @@ Features:
 - Shadow audit logging for forensic analysis
 - Prometheus metrics for observability
 - Runtime-configurable via API (RateLimitConfig)
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 3)
 """
 
 from __future__ import annotations
@@ -57,7 +55,7 @@ FALLBACK_LOG_PATH = Path("logs/rate_limit_fallback.jsonl")
 
 
 # =============================================================================
-# Runtime Config Reader (Phase 3 API Control)
+# Runtime Config Reader (API Control)
 # =============================================================================
 
 
@@ -486,7 +484,7 @@ class HybridRateLimitMiddleware:
             response["X-RateLimit-Bypass-Reason"] = bypass_result.hook_name
             return response
         
-        # Get runtime config (Phase 3 API Control)
+        # Get runtime config (API Control)
         config = get_rate_limit_config()
         rate_limit = config["control_api_rate_limit"]
         window_seconds = config["control_api_window_seconds"]

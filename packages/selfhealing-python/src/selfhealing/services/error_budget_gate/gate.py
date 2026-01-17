@@ -467,7 +467,7 @@ class ErrorBudgetGate:
         """
         차단 이벤트 감사 로깅.
         
-        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        audit_helpers 통합:
         - 기존: AuditAdapter.log 직접 호출
         - 변경: log_error_budget_blocked_audit 헬퍼 사용 (WAL + 해시 체인 연결)
         """

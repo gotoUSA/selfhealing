@@ -2,8 +2,6 @@
 No-op Gauge Implementation.
 
 Used when Prometheus gauge is not available (e.g., metrics disabled).
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

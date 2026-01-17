@@ -1,7 +1,5 @@
 """
 Tests for Safe Gauge Wrapper.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 import time

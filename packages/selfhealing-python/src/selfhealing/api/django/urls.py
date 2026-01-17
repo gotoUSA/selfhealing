@@ -102,15 +102,13 @@ from selfhealing.api.django.views.drift_threshold import (
     DriftThresholdResetView,
 )
 
-# Metric Sync Views (Phase 1: Poll 제거 + Manual API)
-# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+# Metric Sync Views
 from selfhealing.api.django.views.metric_sync import (
     MetricSyncView,
     DriftReportView,
 )
 
 # Governance API Views (New Unified Hub)
-# Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 from selfhealing.api.django.views.governance import (
     MetricStatusView,
     GovernanceReconcileView,
@@ -119,7 +117,7 @@ from selfhealing.api.django.views.governance import (
     GovernanceConfigView,
     DeprecatedMetricSyncView,
     DeprecatedDriftReportView,
-    # Phase 3: 4-Eyes Approval & L2 Storage
+    # 4-Eyes Approval & L2 Storage
     ApprovalRequestListView,
     ApprovalRequestApproveView,
     ApprovalRequestRejectView,
@@ -179,12 +177,12 @@ from selfhealing.api.django.views.chaos import (
     ReportGenerateView,
     GradeHistoryView,
     PendingApprovalsView,
-    # Phase 2: Safety Mechanism Views
+    # Safety Mechanism Views
     StopConditionsConfigView,
     TTLConfigView,
     DryRunConfigView,
     KillAllView,
-    # Phase 2: Impact Prediction Views
+    # Impact Prediction Views
     DryRunAnalysisView,
 )
 
@@ -204,14 +202,14 @@ from selfhealing.api.django.views.l2_storage import (
     ShadowLogAnalyzeView,
     ShadowLogReplayView,
     ShadowLogByServiceView,
-    # Drift Reconciliation Views (Phase 3)
+    # Drift Reconciliation Views
     DriftReconciliationStatsView,
     DriftReconciliationHistoryView,
     DriftReconciliationTriggerView,
     DriftReconciliationServiceView,
 )
 
-# API Tiering Views (Phase 4)
+# API Tiering Views
 from selfhealing.api.django.views.tiering import (
     TierDefinitionsView,
     TierMappingsView,
@@ -223,7 +221,7 @@ from selfhealing.api.django.views.tiering import (
     TierResolveLookupView,
 )
 
-# Emergency Mode Views (Phase 4 - Advanced)
+# Emergency Mode Views
 from selfhealing.api.django.views.emergency import (
     EmergencyStatusView,
     EmergencyTriggerView,
@@ -236,7 +234,6 @@ from selfhealing.api.django.views.emergency import (
 )
 
 # Auto Tuning Views
-# Reference: docs/self_healing/38_AUTO_TUNING_API.md
 from selfhealing.api.django.views.auto_tuning import (
     AutoTuningStatusView,
     AutoTuningEnableView,
@@ -314,19 +311,16 @@ urlpatterns = [
     path("config/gate/", ErrorBudgetGateConfigView.as_view(), name="config-gate"),
     # =========================================================================
     # Replay Automation Configuration (DLQ Replay Tracks)
-    # Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
     # =========================================================================
     path("config/replay-automation/", ReplayAutomationConfigView.as_view(), name="config-replay-automation"),
     # =========================================================================
     # Drift Threshold Configuration (Metric Collection Strategy)
-    # Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
     # =========================================================================
     path("config/drift-thresholds/", DriftThresholdConfigView.as_view(), name="config-drift-thresholds"),
     path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
     # =========================================================================
-    # Metric Sync API (Phase 1: Poll 제거 + Manual API) - DEPRECATED
+    # Metric Sync API - DEPRECATED
     # 새로운 API: /metrics/status/, /governance/reconcile/, /governance/mode/
-    # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     # =========================================================================
     # Deprecated endpoints (with Warning headers + redirect to new endpoints)
     path("metrics/sync/", DeprecatedMetricSyncView.as_view(), name="metrics-sync"),
@@ -335,7 +329,6 @@ urlpatterns = [
     # Governance API (New Unified Hub)
     # 관찰(Observability): GET /metrics/status/
     # 제어(Control): POST /governance/reconcile/, POST /governance/mode/
-    # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
     # =========================================================================
     # Observability - 통합 상태 조회
     path("metrics/status/", MetricStatusView.as_view(), name="metrics-status"),
@@ -343,14 +336,12 @@ urlpatterns = [
     path("governance/reconcile/", GovernanceReconcileView.as_view(), name="governance-reconcile"),
     path("governance/mode/", GovernanceModeView.as_view(), name="governance-mode"),
     # =========================================================================
-    # Governance RBAC Status & Config API (Phase 2)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # Governance RBAC Status & Config API
     # =========================================================================
     path("governance/status/", GovernanceRBACStatusView.as_view(), name="governance-status"),
     path("config/governance/", GovernanceConfigView.as_view(), name="config-governance"),
     # =========================================================================
-    # 4-Eyes Approval Workflow API (Phase 3)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # 4-Eyes Approval Workflow API
     # =========================================================================
     path("governance/approval-requests/", ApprovalRequestListView.as_view(), name="approval-requests-list"),
     path(
@@ -364,21 +355,18 @@ urlpatterns = [
         name="approval-request-reject",
     ),
     # =========================================================================
-    # L2 Storage Config API (Phase 3 - RuntimeConfigManager Integration)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
+    # L2 Storage Config API (RuntimeConfigManager Integration)
     # =========================================================================
     path("config/l2-storage/", L2StorageConfigManagedView.as_view(), name="config-l2-storage"),
     # =========================================================================
-    # Config Versioning & Rollback (Phase 4 - Governance Part 2)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    # Config Versioning & Rollback
     # =========================================================================
     path("config/<str:config_type>/history/", ConfigHistoryView.as_view(), name="config-history"),
     path("config/<str:config_type>/history/<int:version>/", ConfigVersionDetailView.as_view(), name="config-version-detail"),
     path("config/<str:config_type>/rollback/", ConfigRollbackView.as_view(), name="config-rollback"),
     path("config/<str:config_type>/compare/", ConfigCompareView.as_view(), name="config-compare"),
     # =========================================================================
-    # API Tiering Configuration (Phase 4)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
+    # API Tiering Configuration
     # =========================================================================
     path("config/tiers/", TierDefinitionsView.as_view(), name="config-tiers"),
     path("config/tiers/reset/", TierResetView.as_view(), name="config-tiers-reset"),
@@ -389,8 +377,7 @@ urlpatterns = [
     path("config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"),
     path("config/tier-overrides/", TierOverridesView.as_view(), name="config-tier-overrides"),
     # =========================================================================
-    # Emergency Mode API (Phase 4 - Advanced)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md
+    # Emergency Mode API
     # =========================================================================
     path("emergency/status/", EmergencyStatusView.as_view(), name="emergency-status"),
     path("emergency/trigger/", EmergencyTriggerView.as_view(), name="emergency-trigger"),
@@ -402,7 +389,6 @@ urlpatterns = [
     path("emergency/levels/", EmergencyLevelsView.as_view(), name="emergency-levels"),
     # =========================================================================
     # Auto Tuning API - 자율 조정 제어
-    # Reference: docs/self_healing/38_AUTO_TUNING_API.md
     # =========================================================================
     # Status
     path("auto-tuning/status/", AutoTuningStatusView.as_view(), name="auto-tuning-status"),
@@ -439,7 +425,6 @@ urlpatterns = [
     path("deployment-policy/active-override/", ActiveOverrideView.as_view(), name="deployment-active-override"),
     # =========================================================================
     # Reconciliation API (Shadow Budget)
-    # Reference: docs/self_healing/12_ERROR_BUDGET.md (Section 13)
     # "시스템은 계산하고, 반영은 사람이 결정한다."
     # =========================================================================
     path("reconciliation/status/", ReconciliationStatusView.as_view(), name="reconciliation-status"),
@@ -475,11 +460,11 @@ urlpatterns = [
     path("chaos/config/blast-radius/", BlastRadiusPolicyView.as_view(), name="chaos-config-blast-radius"),
     path("chaos/config/scheduler/", SchedulerConfigView.as_view(), name="chaos-config-scheduler"),
     path("chaos/config/reports/", ReportConfigView.as_view(), name="chaos-config-reports"),
-    # Phase 2: Safety Mechanism Configuration
+    # Safety Mechanism Configuration
     path("chaos/config/stop-conditions/", StopConditionsConfigView.as_view(), name="chaos-config-stop-conditions"),
     path("chaos/config/ttl/", TTLConfigView.as_view(), name="chaos-config-ttl"),
     path("chaos/config/dry-run/", DryRunConfigView.as_view(), name="chaos-config-dry-run"),
-    # Phase 2: Dry Run Analysis with Impact Prediction
+    # Dry Run Analysis with Impact Prediction
     path("chaos/dry-run/analyze/", DryRunAnalysisView.as_view(), name="chaos-dry-run-analyze"),
     # Scheduled Experiments CRUD
     path("chaos/schedules/", ScheduleListView.as_view(), name="chaos-schedules-list"),
@@ -488,7 +473,7 @@ urlpatterns = [
     path("chaos/schedules/<str:schedule_id>/execute/", ScheduleExecuteView.as_view(), name="chaos-schedule-execute"),
     # Kill Switch
     path("chaos/kill-switch/", KillSwitchView.as_view(), name="chaos-kill-switch"),
-    # Phase 2: Kill All Control
+    # Kill All Control
     path("chaos/control/kill-all/", KillAllView.as_view(), name="chaos-control-kill-all"),
     # Safety & Blast Radius Checks
     path("chaos/safety-check/", SafetyCheckView.as_view(), name="chaos-safety-check"),
@@ -502,7 +487,6 @@ urlpatterns = [
     path("chaos/pending-approvals/", PendingApprovalsView.as_view(), name="chaos-pending-approvals"),
     # =========================================================================
     # L2 Storage Resilience API
-    # Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
     # =========================================================================
     # Configuration
     path("l2-storage/config/", L2StorageConfigView.as_view(), name="l2-storage-config"),
@@ -525,7 +509,7 @@ urlpatterns = [
     # Sync Operations
     path("l2-storage/sync/from-l2/", L2StorageSyncFromL2View.as_view(), name="l2-storage-sync-from-l2"),
     path("l2-storage/sync/to-l2/", L2StorageSyncToL2View.as_view(), name="l2-storage-sync-to-l2"),
-    # Drift Reconciliation (Phase 3)
+    # Drift Reconciliation
     path("l2-storage/drift/stats/", DriftReconciliationStatsView.as_view(), name="l2-storage-drift-stats"),
     path("l2-storage/drift/history/", DriftReconciliationHistoryView.as_view(), name="l2-storage-drift-history"),
     path("l2-storage/drift/reconcile/", DriftReconciliationTriggerView.as_view(), name="l2-storage-drift-reconcile"),
@@ -540,7 +524,6 @@ urlpatterns = [
 
 # =============================================================================
 # Stage DNA API Endpoints (Enterprise DNA Features)
-# Reference: docs/self_healing/29_STAGE_DNA_EVOLUTION_MASTER.md
 # =============================================================================
 try:
     from selfhealing.api.django.views.finops import (
@@ -650,8 +633,7 @@ except ImportError:
     pass
 
 # =============================================================================
-# X-Test-Mode Endpoints (Stage 48: Chaos Proof)
-# Reference: docs/self_healing/19_CHAOS_PROOF_ROADMAP.md
+# X-Test-Mode Endpoints (Chaos Proof)
 # =============================================================================
 # Always available but protected by X-Test-Mode header + environment checks
 from selfhealing.api.django.views.xtest_mode import (

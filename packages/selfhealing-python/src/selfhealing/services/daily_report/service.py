@@ -3,8 +3,6 @@ Daily Report Service
 
 Thin Task, Fat Service 원칙:
 - 모든 일일 리포트 비즈니스 로직을 담당
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
 """
 
 from __future__ import annotations

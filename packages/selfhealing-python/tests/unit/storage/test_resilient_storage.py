@@ -5,8 +5,6 @@ Tests for:
 - ResilientStorageBackend (normal mode, degraded mode, recovery)
 - RedisCircuitBreakerStateRepository
 - RedisDLQRepository
-
-Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
 """
 
 import pytest

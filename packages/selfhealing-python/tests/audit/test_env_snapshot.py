@@ -8,8 +8,6 @@ Tests:
 - Hash generation for change detection
 - L1 Fallback (local file)
 - Prometheus metrics
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 from __future__ import annotations

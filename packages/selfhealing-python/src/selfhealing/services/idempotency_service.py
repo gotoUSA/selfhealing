@@ -221,7 +221,6 @@ class IdempotencyKey:
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 신규 팩토리 메서드 (순위 5 - v2.4.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.2
     # ═══════════════════════════════════════════════════════════════════════════
 
     @classmethod
@@ -297,8 +296,6 @@ class IdempotencyKey:
                 # 4. 서비스 락만 해제 (스케줄 락은 TTL 유지)
                 idempotency.release_lock(service_lock)
         
-        Reference:
-            31_CHAOS_EXPERIMENT_EXPANSION.md §7.4 (Q4: Domain-Level Lock)
         """
         key = f"chaos:service_lock:{target_service}"
         return cls(
@@ -747,7 +744,6 @@ def get_idempotency_service() -> IdempotencyService:
 
 # =============================================================================
 # AntiFlappingWindow (순위 5, 5.3 - v2.4.0)
-# Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.3
 # =============================================================================
 
 

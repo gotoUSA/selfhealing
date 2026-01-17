@@ -20,9 +20,6 @@ Usage:
         },
     }
 
-Reference:
-- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
-- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8
 """
 
 from __future__ import annotations
@@ -42,7 +39,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
 
     This should be scheduled via Celery Beat (every 15 minutes).
     
-    Audit 기록 (Phase 4: 20_AUDIT_UNIFICATION_PLAN.md):
+    Audit 기록:
     - EMERGENCY_MODE_ACTIVATED/DEACTIVATED 이벤트 기록
 
     Actions (handled by GovernanceService):
@@ -64,7 +61,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
         result = service.check_emergency_mode_expiry()
         result_dict = result.to_dict()
         
-        # === Audit 기록 (Phase 4) ===
+        # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_governance_task_audit
             

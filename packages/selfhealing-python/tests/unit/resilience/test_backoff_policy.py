@@ -4,7 +4,6 @@ Unit Tests for Backoff Policy
 Tests for exponential backoff calculation, jitter application,
 and policy boundary conditions.
 
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md
 Risk Covered: R-015 (Retry storm overwhelming PG)
 """
 

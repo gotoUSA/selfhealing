@@ -6,8 +6,6 @@ ProtectionOrchestrator 단위 테스트
 - ProtectionOrchestrator 정책 실행
 - 롤백 로직
 - Self-Healing ViolationType 추가
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8, §9
 """
 
 from unittest.mock import MagicMock, patch

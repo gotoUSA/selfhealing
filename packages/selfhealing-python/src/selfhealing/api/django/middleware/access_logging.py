@@ -9,8 +9,6 @@ Features:
 - Log data masking for privacy protection
 - FAIL-OPEN design: Logging failure does not block requests
 - Fallback logging to stdout
-
-Reference: docs/self_healing/07_CONTROL_API.md (Access Logging section)
 """
 
 from __future__ import annotations

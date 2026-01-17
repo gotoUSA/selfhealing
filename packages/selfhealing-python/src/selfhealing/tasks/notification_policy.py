@@ -23,9 +23,6 @@ Usage:
         threshold=10,
         threshold_field="count",
     )
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.1
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 BaseNotifyingTask 단위 테스트
 
-Phase 1 기반 구조 테스트:
+기반 구조 테스트:
 - NotificationPolicy 기본값 및 설정
 - NotificationTiming 동작
 - NotificationThreshold 임계값 체크
@@ -9,8 +9,6 @@ Phase 1 기반 구조 테스트:
 - BaseNotifyingTask._get_effective_timing() 검증
 - BaseNotifyingTask._record_audit_trail() 검증
 - DailyAutonomousReport 집계
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6, §7
 """
 
 from __future__ import annotations

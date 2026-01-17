@@ -4,8 +4,6 @@ Resilience Expectation - 가설 기반 자동 채점 시스템.
 시스템이 Chaos 장애에 대해 어떻게 반응해야 하는지 정의하고,
 실험 후 Resilience Score를 자동으로 계산합니다.
 
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8 (Phase 6: Resilience 검증 시스템)
-
 Usage:
     # 간단한 사용: CB OPEN 기대
     config = ExperimentConfig(

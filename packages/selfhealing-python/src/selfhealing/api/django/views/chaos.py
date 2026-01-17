@@ -781,7 +781,7 @@ class PendingApprovalsView(APIView):
 
 
 # =============================================================================
-# Phase 2: Safety Mechanism Configuration Views
+# 안전 메커니즘 설정 Views
 # =============================================================================
 
 
@@ -996,7 +996,7 @@ class KillAllView(APIView):
 
 
 # =============================================================================
-# Phase 2: Dry Run Analysis Views
+# Dry Run 분석 Views
 # =============================================================================
 
 
@@ -1008,11 +1008,6 @@ class DryRunAnalysisView(APIView):
     실제 장애 주입 없이 안전하게 실험 계획을 검증할 수 있습니다.
 
     POST: Analyze experiment with predictions (Viewer - read-only analysis)
-
-    Design Reference:
-    - 24_CHAOS_INTEGRATION_PLAN.md Phase 2
-    - ImpactPredictor: services/chaos/impact_predictor.py
-    - BlastRadiusAnalyzer: services/chaos/blast_radius_analyzer.py
     """
 
     permission_classes = [IsViewer]

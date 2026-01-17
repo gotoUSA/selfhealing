@@ -19,8 +19,6 @@ Usage:
                     failed_operation_model=FailedOperation,
                 )
             )
-
-Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 from __future__ import annotations

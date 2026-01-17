@@ -69,7 +69,7 @@ class Actor:
         session_id: 세션 ID (같은 세션 내 작업 연결)
         set_at: Actor가 설정된 시점
         metadata: 추가 정보 (user-agent, request_id 등)
-        roles: RBAC 역할 목록 (Phase 25: RBAC-Audit 연동)
+        roles: RBAC 역할 목록 (RBAC-Audit 연동)
     """
 
     actor_id: str
@@ -174,13 +174,13 @@ class ActorContext:
 
         Extracts user info, IP address, session ID, and RBAC roles automatically.
         
-        Phase 25: RBAC 역할도 함께 추출하여 actor_type에 가장 높은 권한을 설정.
+        RBAC: 역할도 함께 추출하여 actor_type에 가장 높은 권한을 설정.
         """
         # Extract user info
         if hasattr(request, "user") and request.user.is_authenticated:
             actor_id = getattr(request.user, "email", None) or str(request.user.pk)
             
-            # Phase 25: RBAC 역할 추출
+            # RBAC 역할 추출
             roles = cls._extract_selfhealing_roles(request.user)
             
             # actor_type을 가장 높은 RBAC 역할로 설정 (있는 경우)
@@ -221,7 +221,7 @@ class ActorContext:
         """
         사용자의 selfhealing RBAC 그룹 추출.
         
-        Phase 25: Django User의 groups에서 selfhealing_ 접두사 그룹만 필터링.
+        Django User의 groups에서 selfhealing_ 접두사 그룹만 필터링.
         
         Args:
             user: Django User 객체
@@ -245,7 +245,7 @@ class ActorContext:
         """
         RBAC 역할 중 가장 높은 권한 반환.
         
-        Phase 25: selfhealing_admin > selfhealing_operator > selfhealing_viewer 순.
+        selfhealing_admin > selfhealing_operator > selfhealing_viewer 순.
         
         Args:
             roles: RBAC 역할 리스트
@@ -386,7 +386,7 @@ def get_audit_actor_info() -> dict[str, Any]:
 
     Returns dict with actor_id, actor_type, actor_roles that can be unpacked into AuditEntry.
     
-    Phase 25: actor_roles도 포함하여 RBAC-Audit 연동 지원.
+    actor_roles도 포함하여 RBAC-Audit 연동 지원.
 
     Usage:
         entry = AuditEntry(
@@ -412,7 +412,7 @@ def get_actor_for_celery() -> dict[str, Any]:
     """
     Get current actor info for passing to Celery task.
     
-    Phase 25: roles 정보도 함께 전달하여 Celery Task에서 RBAC 역할 유지.
+    roles 정보도 함께 전달하여 Celery Task에서 RBAC 역할 유지.
 
     Usage (in view/api):
         from selfhealing.context import get_actor_for_celery
@@ -437,7 +437,7 @@ def get_actor_for_celery() -> dict[str, Any]:
         "ip_address": actor.ip_address,
         "session_id": actor.session_id,
         "original_set_at": actor.set_at.isoformat(),
-        "roles": actor.roles,  # Phase 25: RBAC 역할 전달
+        "roles": actor.roles,  # RBAC 역할 전달
     }
 
 
@@ -446,7 +446,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
     """
     Restore actor context in Celery task from passed info.
     
-    Phase 25: roles 정보도 함께 복원하여 RBAC 역할 유지.
+    roles 정보도 함께 복원하여 RBAC 역할 유지.
 
     Usage:
         @app.task
@@ -468,7 +468,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
         source=actor_info.get("source", "celery"),
         ip_address=actor_info.get("ip_address"),
         session_id=actor_info.get("session_id"),
-        roles=actor_info.get("roles", []),  # Phase 25: RBAC 역할 복원
+        roles=actor_info.get("roles", []),  # RBAC 역할 복원
         original_request_time=actor_info.get("original_set_at"),
     ) as actor:
         yield actor

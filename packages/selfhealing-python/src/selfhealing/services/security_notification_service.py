@@ -16,8 +16,6 @@ Message Truncation:
 - Slack API has a 3000 character limit per block
 - Description is truncated to 500 characters
 - Action taken is truncated to 200 characters
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
 """
 
 from __future__ import annotations

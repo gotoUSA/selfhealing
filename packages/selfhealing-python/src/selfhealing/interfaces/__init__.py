@@ -26,12 +26,10 @@ Usage:
         RequestContext,
         ResponseContext,
     )
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md
 """
 
 # =============================================================================
-# Repository Interfaces (Phase 0 - Already implemented)
+# Repository Interfaces
 # =============================================================================
 from selfhealing.interfaces.repositories import (
     # Enums
@@ -52,7 +50,7 @@ from selfhealing.interfaces.repositories import (
 )
 
 # =============================================================================
-# Cache Provider Interface (Phase 1)
+# Cache Provider Interface
 # =============================================================================
 from selfhealing.interfaces.cache_provider import (
     # Lock interface
@@ -65,7 +63,7 @@ from selfhealing.interfaces.cache_provider import (
 )
 
 # =============================================================================
-# Task Queue Interface (Phase 1)
+# Task Queue Interface
 # =============================================================================
 from selfhealing.interfaces.task_queue import (
     # Enums
@@ -85,7 +83,7 @@ from selfhealing.interfaces.task_queue import (
 )
 
 # =============================================================================
-# Web Framework Interface (Phase 1)
+# Web Framework Interface
 # =============================================================================
 from selfhealing.interfaces.web_framework import (
     # Enums
@@ -106,7 +104,7 @@ from selfhealing.interfaces.web_framework import (
 )
 
 # =============================================================================
-# Configuration Provider Interface (Phase 2)
+# Configuration Provider Interface
 # =============================================================================
 from selfhealing.interfaces.config_provider import (
     # Interface

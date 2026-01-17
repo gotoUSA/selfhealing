@@ -9,8 +9,6 @@ This module provides:
 - SafetyGuard: Error budget pre-flight checks
 - ChaosSchedulerService: Celery Beat-based scheduling
 - DailyResilienceReport: Automated reporting
-
-Reference: docs/self_healing/CHAOS_ENGINEERING.md
 """
 
 from .experiments import (
@@ -56,7 +54,7 @@ from .stop_conditions import (
     get_dry_run_config,
     get_stop_conditions_config,
 )
-# Phase 2: Impact Prediction
+# Impact Prediction
 from .impact_predictor import (
     ImpactPredictor,
     PredictedOutcome,
@@ -70,7 +68,7 @@ from .blast_radius_analyzer import (
     DependencyNode,
     get_blast_radius_analyzer,
 )
-# Phase 6: Resilience Expectation & Validation
+# Resilience Expectation & Validation
 from .resilience_expectation import (
     ExpectationType,
     ResilienceAssertion,
@@ -109,7 +107,7 @@ __all__ = [
     "DailyResilienceReport",
     "ResilienceReportGenerator",
     "get_report_generator",
-    # Stop Conditions & Safety Mechanisms (Phase 1)
+    # Stop Conditions & Safety Mechanisms
     "StopConditionsConfig",
     "StopConditionsChecker",
     "StopConditionCheckResult",
@@ -120,7 +118,7 @@ __all__ = [
     "get_ttl_config",
     "get_dry_run_config",
     "get_stop_conditions_config",
-    # Phase 2: Impact Prediction
+    # Impact Prediction
     "ImpactPredictor",
     "PredictedOutcome",
     "ServiceImpact",
@@ -130,7 +128,7 @@ __all__ = [
     "BlastRadiusLevel",
     "DependencyNode",
     "get_blast_radius_analyzer",
-    # Phase 6: Resilience Expectation & Validation
+    # Resilience Expectation & Validation
     "ExpectationType",
     "ResilienceAssertion",
     "ResilienceExpectation",

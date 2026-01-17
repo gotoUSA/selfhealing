@@ -4,8 +4,6 @@ Resilience Validator - Resilience 기대값 자동 검증.
 Chaos 실험 후 시스템이 예상대로 반응했는지 자동으로 검증합니다.
 CB 상태, Fallback 이벤트, Retry 이벤트 등을 수집하여 Resilience Score를 계산합니다.
 
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8.3 (Phase 6: 구현 계획)
-
 Usage:
     validator = ResilienceValidator()
     result = validator.validate(

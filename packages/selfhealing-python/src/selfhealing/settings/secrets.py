@@ -10,8 +10,6 @@ Pydantic SecretStr 특징:
 - print(settings) 시 자동 마스킹
 - JSON 로깅 시 자동 마스킹
 - 감사(Audit) 로그 안전
-
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md §8.2
 """
 
 from typing import Optional

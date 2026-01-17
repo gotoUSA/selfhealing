@@ -6,8 +6,6 @@ hitting the database simultaneously during startup.
 
 Note: This module was moved from metrics/jitter.py since jitter
 utilities are general-purpose and not metrics-specific.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

@@ -12,8 +12,6 @@ Features:
 - Active incident detection
 - Kill switch status check
 - Deployment freeze detection
-
-Reference: Google SRE Workbook - Alerting on SLOs, AWS FIS Safety Controls
 """
 
 from __future__ import annotations
@@ -81,15 +79,15 @@ class BlockReason(str, Enum):
     EMERGENCY_MODE_ACTIVE = "emergency_mode_active"
     """Emergency mode is active (LEVEL_2+)."""
     
-    # Phase 2: Panic Threshold 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    # Panic Threshold 연동
     PANIC_THRESHOLD_TRIGGERED = "panic_threshold_triggered"
     """Panic Threshold 발동 (70%+ CB OPEN)."""
     
-    # Phase 3: Chaos Budget 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §17)
+    # Chaos Budget 연동
     CHAOS_BUDGET_EXCEEDED = "chaos_budget_exceeded"
     """월간 카오스 실험 예산 초과."""
     
-    # Phase 6: CB Freeze Mode 연동 (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    # CB Freeze Mode 연동
     CB_FREEZE_MODE_ACTIVE = "cb_freeze_mode_active"
     """Circuit Breaker Freeze Mode 활성화 - 모든 카오스 실험 차단."""
 
@@ -124,7 +122,7 @@ class SafetyConfig:
     require_no_deployment_freeze: bool = True
     """Require no active deployment freeze."""
     
-    # Phase 6: CB Freeze Mode 체크 (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    # CB Freeze Mode 체크
     require_no_freeze_mode: bool = True
     """Require CB Freeze Mode to be inactive for chaos experiments."""
     
@@ -185,12 +183,12 @@ class SafetyCheckResult:
     emergency_mode_active: bool = False
     emergency_level: str = "NORMAL"
     
-    # Panic threshold (Phase 2: 32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    # Panic threshold
     panic_threshold_triggered: bool = False
     panic_open_rate: float = 0.0
     panic_open_circuits: List[str] = field(default_factory=list)
     
-    # Phase 6: CB Freeze Mode (32_CHAOS_SYSTEM_INTEGRATION.md §22)
+    # CB Freeze Mode
     freeze_mode_active: bool = False
     """CB Freeze Mode 활성화 여부."""
     
@@ -434,8 +432,6 @@ class SafetyGuard:
         """
         Check CB Freeze Mode status. Returns True if blocked.
         
-        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22
-        
         CB Freeze Mode가 활성화되면 모든 카오스 실험을 차단합니다.
         Freeze Mode는 LOCKDOWN 상태에서 CB 상태를 동결하여
         시스템 안정성을 보호합니다.
@@ -516,15 +512,15 @@ class SafetyGuard:
         if self._check_emergency_mode_status(result):
             return True
         
-        # 4. Check panic threshold (Phase 2: 32_CHAOS_SYSTEM_INTEGRATION.md §5)
+        # 4. Check panic threshold
         if self._check_panic_threshold_status(result):
             return True
         
-        # 5. Check chaos budget (Phase 3: 32_CHAOS_SYSTEM_INTEGRATION.md §17)
+        # 5. Check chaos budget
         if self._check_chaos_budget_status(result):
             return True
         
-        # 6. Check CB Freeze Mode (Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22)
+        # 6. Check CB Freeze Mode
         if self._config.require_no_freeze_mode:
             if self._check_freeze_mode_status(result):
                 return True
@@ -781,7 +777,7 @@ class SafetyGuard:
             logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
     
     # =========================================================================
-    # Phase 2: Panic Threshold Check (32_CHAOS_SYSTEM_INTEGRATION.md §5)
+    # Panic Threshold Check
     # =========================================================================
     
     def _check_panic_threshold(self) -> Dict[str, Any]:
@@ -789,8 +785,6 @@ class SafetyGuard:
         Panic Threshold 상태 확인.
         
         70% 이상의 Circuit Breaker가 OPEN 상태이면 시스템 전체 붕괴로 판단.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §5
         
         Returns:
             Dict with:
@@ -832,10 +826,7 @@ class SafetyGuard:
         
         Panic Threshold 발동 시 모든 카오스 실험 차단.
         50% 이상 OPEN이면 경고.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §5.2.1
         """
-        result.checks_performed.append("panic_threshold")
         panic_result = self._check_panic_threshold()
         
         result.panic_threshold_triggered = panic_result["triggered"]
@@ -897,14 +888,12 @@ class SafetyGuard:
             logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
     
     # =========================================================================
-    # Phase 3: Chaos Budget Check (32_CHAOS_SYSTEM_INTEGRATION.md §17.3)
+    # Chaos Budget Check
     # =========================================================================
     
     def _check_chaos_budget_status(self, result: SafetyCheckResult) -> bool:
         """
         Check chaos budget status. Returns True if blocked.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.3
         
         Args:
             result: SafetyCheckResult to update

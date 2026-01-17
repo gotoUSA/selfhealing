@@ -3,8 +3,7 @@ Security and Notification Configuration Serializers.
 
 Security and Notification config serializers.
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -15,7 +14,7 @@ class SecurityConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Security configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "security"
@@ -38,7 +37,7 @@ class NotificationConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Notification configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "notification"

@@ -400,7 +400,7 @@ class ComplianceService:
             self._violations.append(violation)
             logger.warning(f"Compliance violation: {check_id} in {stage_name}")
             
-            # Audit 로깅 (Phase 3)
+            # Audit 로깅
             self._log_compliance_audit(
                 stage_name=stage_name,
                 standard=check.standard.value,
@@ -412,7 +412,7 @@ class ComplianceService:
             )
             return violation
         
-        # 검사 통과 시에도 Audit 로깅 (Phase 3)
+        # 검사 통과 시에도 Audit 로깅
         self._log_compliance_audit(
             stage_name=stage_name,
             standard=check.standard.value,

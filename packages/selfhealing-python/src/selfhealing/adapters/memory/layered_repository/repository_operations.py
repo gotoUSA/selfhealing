@@ -2,8 +2,6 @@
 Repository Operations Mixin.
 
 Provides CircuitBreakerStateRepository interface implementation with L1 priority.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

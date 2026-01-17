@@ -7,8 +7,6 @@ Thin Task, Fat Service Pattern:
 
 스케줄: 매일 09:00
 큐: reports
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md §3.1
 """
 
 from __future__ import annotations

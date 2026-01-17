@@ -8,10 +8,6 @@ Endpoints:
 - GET  /api/self-healing/config/drift-thresholds/       - Get drift threshold config
 - PUT  /api/self-healing/config/drift-thresholds/       - Update drift threshold config
 - POST /api/self-healing/config/drift-thresholds/reset/ - Reset to defaults
-
-Reference: 
-- docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
-- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md (Phase 2)
 """
 
 import logging

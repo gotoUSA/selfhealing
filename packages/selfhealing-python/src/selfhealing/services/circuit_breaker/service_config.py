@@ -3,10 +3,6 @@ Service Configuration Manager for Circuit Breaker
 
 서비스 설정을 관리하고, criticality 기반 조회 및 Load Shedding 대상 선택을 제공합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 2 - 서비스 Criticality 설정
-Section 3 - Load Shedding (부분적 차단)
-
 사용 예시:
     manager = ServiceConfigManager()
     

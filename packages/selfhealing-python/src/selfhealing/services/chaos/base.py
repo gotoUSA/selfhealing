@@ -6,8 +6,6 @@ Contains core abstractions for chaos experiments:
 - Enums (ExperimentStatus, ExperimentType, TrafficType)
 - Data classes (ExperimentConfig, ExperimentResult, SteadyStateHypothesis, MonotonicTTLHelper)
 - Base class (ChaosExperiment)
-
-Reference: Netflix ChAP, Gremlin, AWS FIS patterns
 """
 
 from __future__ import annotations
@@ -1554,7 +1552,7 @@ class ChaosExperiment(abc.ABC):
         """
         Record audit event.
         
-        Phase 2: audit_helpers 통합 (20_AUDIT_UNIFICATION_PLAN.md)
+        audit_helpers 통합:
         - 기존: 로컬 로깅만
         - 변경: WAL + 해시 체인 연결
         - 하위 호환: _audit_records 리스트 유지

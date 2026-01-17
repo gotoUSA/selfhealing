@@ -3,8 +3,7 @@ Base Mixin for Configuration Serializers.
 
 Provides apply strategy and safe fallback validation.
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -14,7 +13,7 @@ class ApplyStrategyMixin(serializers.Serializer):
     """
     Mixin that adds apply strategy fields to config serializers.
     
-    Phase 6: Safe Default 검증 및 폴백 기능 추가.
+    Safe Default 검증 및 폴백 기능 추가.
     """
 
     # 서브클래스에서 오버라이드하여 config_type 지정

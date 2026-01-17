@@ -2,9 +2,7 @@
 DLQ List Operations Mixin.
 
 Provides methods for listing and getting DLQ entries.
-Uses Repository pattern for domain-free architecture (Phase 5+).
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1
+Uses Repository pattern for domain-free architecture.
 """
 
 from __future__ import annotations

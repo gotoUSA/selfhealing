@@ -4,8 +4,6 @@ L1 Metric Snapshot Storage.
 Provides local file-based snapshot storage for metric values.
 This is the "last resort" fallback when all other data sources fail.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 5)
-
 Design Philosophy:
 - "Last Known Good" (LKG) pattern
 - Atomic writes using Write-to-Temp-and-Rename
@@ -13,9 +11,9 @@ Design Philosophy:
 - Age tracking for data freshness indication
 
 Fallback Hierarchy:
-1. Real-time Push Events (Phase 3)
+1. Real-time Push Events
 2. DB Query (Manual Sync)
-3. Redis Air-Gap (Phase 4)
+3. Redis Air-Gap
 4. L1 Local Snapshot ← This module
 5. Safe Defaults (Emergency)
 """

@@ -569,7 +569,7 @@ class BlastRadiusCheckResultSerializer(serializers.Serializer):
 
 
 # =============================================================================
-# Phase 1 Safety Mechanism Serializers (TTL, Stop Conditions, Dry Run)
+# Safety Mechanism Serializers (TTL, Stop Conditions, Dry Run)
 # =============================================================================
 
 
@@ -760,7 +760,7 @@ class ExperimentConfigWithTTLSerializer(serializers.Serializer):
 
 
 # =============================================================================
-# Phase 2: Impact Prediction Serializers
+# Impact Prediction Serializers
 # =============================================================================
 
 

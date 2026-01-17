@@ -13,7 +13,7 @@ Usage (기존 코드 그대로 동작):
 
 Note: Admin/Dashboard operations (cleanup, archive, purge, list, entry management)
       should be implemented in the host application using Django ORM directly.
-      This package follows domain-free principles (Phase 5+).
+      This package follows domain-free principles.
 """
 
 from __future__ import annotations

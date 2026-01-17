@@ -8,8 +8,6 @@ Pydantic Settings Advanced Features Tests.
 - TestConfigDriftAudit: 설정 변경 감지 및 Audit 로깅
 - TestPydanticSettingsIntegration: 모듈 export 및 Context Manager 통합
 
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md §8
-
 Note: 이 테스트 파일은 Django 없이 단위 테스트로 실행됩니다.
 Django 의존 테스트는 tests/self_healing/ 디렉토리에서 실행됩니다.
 """

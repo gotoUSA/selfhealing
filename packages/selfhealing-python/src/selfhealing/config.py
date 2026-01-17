@@ -8,7 +8,7 @@ the appropriate configuration source.
 For Django applications, configuration is loaded from Django settings.
 For other frameworks, uses environment variables or defaults.
 
-v6.3.0: Drift Detection Phase 3
+v6.3.0: Drift Detection
 - ConfigDriftMonitor: 환경변수 변경 감지 및 캐시 무효화
 - lru_cache 함수들에 대한 메트릭 추적
 """
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional
 
-# Drift Detection Metrics (Phase 3)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_config_env_changed,
@@ -48,8 +48,6 @@ except ImportError:
 class NotificationLimits:
     """
     Limits for notification message formatting.
-
-    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
     """
 
     # Slack API limits
@@ -68,8 +66,6 @@ class NotificationLimits:
 class ForensicSettings:
     """
     Forensic context configuration.
-
-    Reference: docs/L3_SELF_HEALING_OPERATIONS.md §6 (Forensic Context)
     """
 
     # Stack trace limits
@@ -203,8 +199,6 @@ class EventLoggingConfig:
     1. API/Admin 설정 (런타임 변경)
     2. 환경변수 (컨테이너 기본값)
     3. 하드코딩 기본값
-
-    Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 
     Example:
         >>> config = get_event_logging_config()
@@ -388,8 +382,6 @@ def get_event_logging_config() -> EventLoggingConfig:
 class MetricCollectionSettings:
     """
     메트릭 수집 설정.
-
-    Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
     """
 
     # 동기화 설정
@@ -450,8 +442,6 @@ class L2StorageConfig:
 
     Layered Storage(L1 Memory + L2 Redis/DB)에서 L2 장애 시
     타임아웃 및 복구 동작을 제어합니다.
-
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 
     Priority (highest to lowest):
     1. API/Runtime 설정 (런타임 변경)
@@ -753,7 +743,7 @@ def get_l2_storage_runtime_config() -> L2StorageRuntimeConfig:
 
 
 # =============================================================================
-# Config Drift Monitor (Phase 3)
+# Config Drift Monitor
 # =============================================================================
 
 
@@ -761,7 +751,7 @@ class ConfigDriftMonitor:
     """
     환경변수 변경 감지 및 lru_cache 무효화.
     
-    v6.3.0: Drift Detection Phase 3 구현
+    v6.3.0: Drift Detection 구현
     
     환경변수가 변경되면 관련 lru_cache를 무효화하고
     Prometheus 메트릭을 기록합니다.

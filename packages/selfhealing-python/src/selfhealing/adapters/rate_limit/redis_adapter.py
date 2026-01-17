@@ -11,7 +11,7 @@ Features:
     - Atomic increment/set operations
     - Automatic TTL-based cleanup
     - Fastest option for distributed rate limiting
-    - v6.3.0: Drift detection and fallback metrics (Phase 2)
+    - v6.3.0: Drift detection and fallback metrics
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageUnavailableError,
 )
 
-# Drift Detection Metrics (Phase 2)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_ratelimit_redis_unavailable,
@@ -53,7 +53,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
     Uses Redis for atomic distributed rate limit state management.
     Recommended for production multi-server environments.
     
-    v6.3.0: Drift Detection Phase 2
+    v6.3.0: Drift Detection
     - Fallback 모드 추적 및 메트릭
     - Redis 복구 시 로컬 상태와 동기화
     - Drift 감지 및 reconciliation

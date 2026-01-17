@@ -6,8 +6,6 @@ Rollback DNA Service - 안전한 자동 롤백
 - 롤백 상태 추적
 - 롤백 정책 관리
 - Zero-Downtime 롤백
-
-Reference: docs/self_healing/33_DNA_SAFETY_FEATURES.md
 """
 
 from .service import RollbackService

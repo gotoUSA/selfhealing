@@ -85,7 +85,6 @@ CONFIG_CLASSES = {
     "slo": None,  # SLO는 별도 처리 (SLOConfigRuntime)
     "governance": GovernanceConfig,
     "drift_threshold": DriftThresholdConfig,
-    # Phase 3
     "l2_storage": L2StorageConfig,
     "chaos": ChaosConfig,
     "approval_requests": None,  # ApprovalRequest는 리스트로 저장

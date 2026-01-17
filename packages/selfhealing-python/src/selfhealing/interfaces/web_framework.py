@@ -9,8 +9,6 @@ Design Principles:
 2. Dataclasses for immutable request/response contexts
 3. ABC for framework adapter contracts
 4. OpenAPI/documentation support
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md Section 3.4
 """
 
 from __future__ import annotations

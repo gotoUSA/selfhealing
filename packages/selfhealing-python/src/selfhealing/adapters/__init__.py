@@ -64,7 +64,7 @@ from selfhealing.adapters.memory import (
 )
 
 # =============================================================================
-# Cache Adapters (Phase 2)
+# Cache Adapters
 # =============================================================================
 from selfhealing.adapters.cache import (
     RedisCacheAdapter,
@@ -72,7 +72,7 @@ from selfhealing.adapters.cache import (
 )
 
 # =============================================================================
-# Task Queue Adapters (Phase 2)
+# Task Queue Adapters
 # =============================================================================
 from selfhealing.adapters.queues import (
     CeleryTaskAdapter,

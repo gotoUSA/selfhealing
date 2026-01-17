@@ -147,7 +147,7 @@ class GovernanceConfigView(APIView):
 
 class L2StorageConfigManagedView(APIView):
     """
-    L2 Storage Config API using RuntimeConfigManager (Phase 3).
+    L2 Storage Config API using RuntimeConfigManager.
 
     GET  /api/self-healing/config/l2-storage/
     PUT  /api/self-healing/config/l2-storage/

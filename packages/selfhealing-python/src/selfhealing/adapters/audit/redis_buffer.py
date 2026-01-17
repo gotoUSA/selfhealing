@@ -1,8 +1,6 @@
 """
 Redis 기반 분산 Audit 버퍼.
 
-27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md §8.2.3
-
 기존 패턴 참조:
 - CB Advanced Protection의 Redis-First + WAL 패턴
 - RedisMetricSourceAdapter의 Write-Through 패턴

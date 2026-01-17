@@ -1,10 +1,8 @@
 """
-Unit Tests for Phase 3: Push-Only Event Integration
+Push-Only Event Integration Tests
 
 Tests for verifying that DLQService and CircuitBreakerService
 properly emit push events for metric updates.
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md §5 (Phase 3)
 """
 
 from datetime import datetime, timedelta, timezone
@@ -26,8 +24,6 @@ class TestDLQServicePushEvents:
         """
         Purpose:
             Verify store_failure calls on_item_created event handler.
-        
-        Reference: Phase 3 - DLQ 생성 시 Push 이벤트
         """
         from selfhealing.services.dlq_service import DLQService, DLQConfig
         
@@ -54,8 +50,6 @@ class TestDLQServicePushEvents:
         """
         Purpose:
             Verify resolve_entry calls on_item_resolved event handler.
-        
-        Reference: Phase 3 - DLQ 해결 시 Push 이벤트
         """
         from selfhealing.metrics.event_handlers import DLQMetricEventHandler
         
@@ -68,8 +62,6 @@ class TestDLQServicePushEvents:
         """
         Purpose:
             Verify store_failure correctly calls event handler.
-        
-        Reference: Phase 3 - Push 이벤트 통합
         """
         from selfhealing.services.dlq_service import DLQService, DLQConfig
         
@@ -106,8 +98,6 @@ class TestCircuitBreakerPushEvents:
         """
         Purpose:
             Verify force_open calls on_state_changed event handler.
-        
-        Reference: Phase 3 - CB 상태 변경 시 Push 이벤트
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         
@@ -138,8 +128,6 @@ class TestCircuitBreakerPushEvents:
         """
         Purpose:
             Verify force_close calls on_state_changed event handler.
-        
-        Reference: Phase 3 - CB 상태 변경 시 Push 이벤트
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         
@@ -170,8 +158,6 @@ class TestCircuitBreakerPushEvents:
         """
         Purpose:
             Verify no event is emitted when state doesn't change.
-        
-        Reference: Phase 3 - 중복 이벤트 방지
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         
@@ -197,8 +183,6 @@ class TestCircuitBreakerPushEvents:
         """
         Purpose:
             Verify reset calls on_state_changed when state actually changes.
-        
-        Reference: Phase 3 - Reset 시 Push 이벤트
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         
@@ -228,8 +212,6 @@ class TestCircuitBreakerPushEvents:
         """
         Purpose:
             Verify automatic circuit open on failure threshold emits event.
-        
-        Reference: Phase 3 - 자동 상태 변경 시 Push 이벤트
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
@@ -278,8 +260,6 @@ class TestSafeGaugeIntegration:
         """
         Purpose:
             Verify SafeGauge prevents negative values on dec().
-        
-        Reference: Phase 3 - SafeGauge 음수 방지
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
@@ -302,8 +282,6 @@ class TestSafeGaugeIntegration:
         """
         Purpose:
             Verify SafeGauge maintains correct balance with inc/dec.
-        
-        Reference: Phase 3 - SafeGauge 정상 동작
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
@@ -328,8 +306,6 @@ class TestSafeGaugeIntegration:
         """
         Purpose:
             Verify SafeGauge.set() clamps negative values to 0.
-        
-        Reference: Phase 3 - SafeGauge 음수 방지
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock

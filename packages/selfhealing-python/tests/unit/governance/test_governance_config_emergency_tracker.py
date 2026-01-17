@@ -1,5 +1,5 @@
 """
-Tests for Governance Phase 1 Implementation.
+Tests for Governance Config and Emergency Tracker Implementation.
 
 테스트 대상:
 1. GovernanceConfig 데이터클래스
@@ -486,7 +486,7 @@ class TestGovernanceTask:
 
 
 class TestGovernanceIntegration:
-    """Integration tests for governance Phase 1."""
+    """Integration tests for governance config and emergency tracker."""
 
     @patch("selfhealing.services.runtime_config.base.get_state_backend")
     def test_full_governance_workflow(self, mock_backend):

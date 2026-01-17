@@ -4,8 +4,6 @@ Shadow Logger Module
 L2 장애 동안의 상태 변화를 로컬에 기록합니다.
 Shadow Log는 L2 복구 후 재동기화 및 Forensic 분석에 활용됩니다.
 
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
-
 Version: 6.4.0 - Drift Detection 메트릭 추가
 """
 
@@ -17,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-# Drift Detection 메트릭 (Phase 4)
+# Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
         record_shadow_log_sync_failure,
@@ -41,8 +39,6 @@ class L2SyncFailureRecord:
 
     L2 장애 동안 발생한 상태 변화를 기록하여
     사후 분석(Forensic) 및 복구 후 재동기화에 활용합니다.
-
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
     """
 
     service_name: str
@@ -64,8 +60,6 @@ class ShadowLogger:
     메모리에 기록하여, L2 복구 후 재동기화 및 Forensic 분석에 활용됩니다.
 
     Thread-safe 구현으로 동시 접근에 안전합니다.
-
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
     """
 
     _instance: Optional["ShadowLogger"] = None
@@ -130,12 +124,12 @@ class ShadowLogger:
             if len(self._failure_log) > self._max_entries:
                 self._failure_log = self._failure_log[-self._max_entries:]
 
-            # Phase 4: Drift Detection 메트릭 기록
+            # Drift Detection 메트릭 기록
             if HAS_DRIFT_METRICS:
                 record_shadow_log_sync_failure(adapter_type, operation)
                 self._update_drift_metrics()
 
-            # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+            # Audit 기록
             self._record_audit_event(
                 event_type="SHADOW_LOG_SYNC_FAILED",
                 service_name=service_name,
@@ -181,12 +175,12 @@ class ShadowLogger:
                     record.recovery_time = recovery_time
                     count += 1
         if count > 0:
-            # Phase 4: Drift Detection 메트릭 기록
+            # Drift Detection 메트릭 기록
             if HAS_DRIFT_METRICS:
                 record_shadow_log_recovered(service_name, count)
                 with self._lock:
                     self._update_drift_metrics()
-            # Audit 기록 (Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md)
+            # Audit 기록
             self._record_audit_event(
                 event_type="SHADOW_LOG_RECOVERED",
                 service_name=service_name,
@@ -208,7 +202,7 @@ class ShadowLogger:
                     record.synced_after_recovery = True
                     record.recovery_time = now_time
                     count += 1
-            # Phase 4: Drift Detection 메트릭 업데이트
+            # Drift Detection 메트릭 업데이트
             if HAS_DRIFT_METRICS and count > 0:
                 self._update_drift_metrics()
         if count > 0:
@@ -217,7 +211,7 @@ class ShadowLogger:
 
     def _update_drift_metrics(self) -> None:
         """
-        Phase 4: Drift Detection 메트릭 업데이트.
+        Drift Detection 메트릭 업데이트.
         
         Note: 이 메서드는 _lock이 이미 획득된 상태에서 호출되어야 함.
         """
@@ -247,7 +241,7 @@ class ShadowLogger:
             unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
             services = set(r.service_name for r in self._failure_log)
             
-            # Phase 4: Drift Detection 메트릭 업데이트
+            # Drift Detection 메트릭 업데이트
             if HAS_DRIFT_METRICS:
                 self._update_drift_metrics()
             
@@ -280,8 +274,6 @@ class ShadowLogger:
 
         Returns:
             분석 결과 딕셔너리
-
-        Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7.3
         """
         with self._lock:
             unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
@@ -422,7 +414,7 @@ class ShadowLogger:
         """
         Audit 이벤트 기록.
         
-        Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+        Audit 통합 개선:
         - _write_to_wal() 직접 호출로 ActorContext/TraceContext 자동 결합
         - "L2 장애 중 어떤 운영자의 어떤 작업에서 동기화 실패 발생" 추적 가능
         """

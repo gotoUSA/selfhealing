@@ -90,7 +90,7 @@ def _log_governance_blocked(
     이 함수는 차단이 발생할 때마다 호출되어
     "왜 이때 작업이 안 됐지?"라는 질문에 대한 기록을 남깁니다.
 
-    Phase 3 변경:
+    변경 사항:
     - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
     - request가 없으면 → 기존 방식 유지 (직접 로깅)
 
@@ -102,7 +102,7 @@ def _log_governance_blocked(
         domain: 도메인
         request: Django HttpRequest 객체 (있으면 버퍼에 적재)
     """
-    # === Phase 3: 버퍼 패턴 우선 ===
+    # === 버퍼 패턴 우선 ===
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType

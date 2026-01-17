@@ -4,8 +4,6 @@
 
 Zero-Latency Logging을 위한 비동기 이벤트 버퍼링
 복구 경로에서 ~100ms 단축
-
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import queue

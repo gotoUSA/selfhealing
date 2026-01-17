@@ -10,7 +10,7 @@ Features:
 4. DLQ 자동 적재: 복구 가능한 요청을 DLQ에 자동 저장
 5. Self-Audit 연동: 해시 체인 로그에 이벤트 기록
 
-Stage 16 v6.1.0 (HEALING PROOF - Phase 3/4/5 Fix):
+Stage 16 v6.1.0 (HEALING PROOF Fix):
 - stress 엔드포인트 503 에러를 인프라 장애로 인식 (신호 통합)
 - CB OPEN 시 선제적 DLQ 적재 (자동 라우팅)
 - 완전한 자율 치유 사이클 달성
@@ -475,7 +475,7 @@ class SelfHealingMiddleware:
         request: Optional["HttpRequest"] = None,
     ) -> None:
         """Log event to audit system."""
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer

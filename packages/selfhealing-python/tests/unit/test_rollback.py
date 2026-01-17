@@ -1,7 +1,5 @@
 """
-Phase 1 DNA Safety 단위 테스트 - Rollback DNA
-
-Reference: docs/self_healing/33_DNA_SAFETY_FEATURES.md
+DNA Safety 단위 테스트 - Rollback DNA
 """
 import pytest
 from datetime import datetime

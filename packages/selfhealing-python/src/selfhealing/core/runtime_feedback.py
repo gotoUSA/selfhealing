@@ -9,8 +9,6 @@ Netflix Hystrix, Google Autopilot 스타일의 자율 조정 시스템
 3. 안전 한계 검증 (Safety Bounds)
 4. 설정 적용 + 감사 로그 + 알림
 5. 실패 시 자동 롤백 (Fallback 안전장치)
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 from __future__ import annotations

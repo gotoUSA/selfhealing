@@ -4,8 +4,7 @@ Runtime Configuration API Serializers.
 Serializers for validating and serializing runtime configuration updates.
 Includes apply strategy support (immediate, delayed, graceful).
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -20,7 +19,7 @@ class ApplyStrategyMixin(serializers.Serializer):
     """
     Mixin that adds apply strategy fields to config serializers.
     
-    Phase 6: Safe Default 검증 및 폴백 기능 추가.
+    Safe Default 검증 및 폴백 기능 추가.
     """
 
     # 서브클래스에서 오버라이드하여 config_type 지정
@@ -96,7 +95,7 @@ class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Circuit Breaker configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "circuit_breaker"
@@ -124,7 +123,7 @@ class DLQConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for DLQ configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "dlq"
@@ -147,7 +146,7 @@ class RetryConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Retry configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "retry"
@@ -174,7 +173,7 @@ class SLAConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for SLA configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "sla"
@@ -316,7 +315,7 @@ class SLOConfigSerializer(ApplyStrategyMixin):
     - PUT: SLO 기본값 업데이트 및 SLO 추가/수정
     - DELETE: 특정 SLO 삭제 (별도 엔드포인트)
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "slo"
@@ -370,7 +369,7 @@ class RateLimitConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Rate Limit configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "rate_limit"
@@ -391,7 +390,7 @@ class SecurityConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Security configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "security"
@@ -414,7 +413,7 @@ class IdempotencyConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Idempotency configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "idempotency"
@@ -434,7 +433,7 @@ class NotificationConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Notification configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "notification"
@@ -463,7 +462,6 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
     Serializer for Forensic configuration.
     
     Forensic 분석 및 디버깅 관련 설정.
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
 
     _config_type = "forensic"
@@ -473,7 +471,7 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
     response_body_max_length = serializers.IntegerField(required=False, min_value=100, max_value=100000)
     user_agent_max_length = serializers.IntegerField(required=False, min_value=50, max_value=2000)
     
-    # Phase 5: 추가 Forensic 설정 (이전 env만 노출되었던 설정들)
+    # 추가 Forensic 설정 (이전 env만 노출되었던 설정들)
     max_stack_frames = serializers.IntegerField(
         required=False,
         min_value=10,
@@ -510,7 +508,7 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Metrics configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "metrics"
@@ -544,7 +542,7 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     Serializer for Error Budget configuration.
 
     Error Budget 및 Burn Rate 임계값 설정.
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "error_budget"
@@ -632,8 +630,7 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
 
 
 # =============================================================================
-# Logging Configuration Serializer (Phase 5)
-# Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+# Logging Configuration Serializer
 # =============================================================================
 
 
@@ -643,8 +640,6 @@ class LoggingConfigSerializer(ApplyStrategyMixin):
     
     각 Self-Healing 컴포넌트별 로깅 레벨 설정.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
-    
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
 
     _config_type = "logging"
@@ -759,11 +754,7 @@ class CancelPendingChangeSerializer(serializers.Serializer):
 
 
 class L2StorageConfigSerializer(ApplyStrategyMixin):
-    """
-    Serializer for L2 Storage resilience configuration.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
-    """
+    """Serializer for L2 Storage resilience configuration."""
 
     # 타임아웃 설정 (ms)
     redis_timeout_ms = serializers.IntegerField(
@@ -887,7 +878,6 @@ class ShadowLogStatsSerializer(serializers.Serializer):
 
 # =============================================================================
 # Replay Automation Configuration Serializer
-# Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
 # =============================================================================
 
 
@@ -900,7 +890,7 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
     - Track 2: Scheduled batch replay
     - Track 3: Traffic-aware replay (future)
     - Adaptive mode for dynamic batch sizing
-    - Phase 4: Domain priority-based replay
+    - Domain priority-based replay
     """
 
     _config_type = "replay_automation"
@@ -965,7 +955,7 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
         help_text="Failure rate threshold to trigger batch size reduction (0.05-0.5)",
     )
 
-    # Phase 4: Domain Priority Policy
+    # Domain Priority Policy
     priority_enabled = serializers.BooleanField(
         required=False,
         help_text="Enable priority-based batch processing by domain",

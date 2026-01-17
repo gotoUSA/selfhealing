@@ -544,7 +544,7 @@ class TestAuditIntegrationEnd2End:
 
 
 # =============================================================================
-# Test: Phase 1 - CorruptionShield Batching (배칭)
+# Test: CorruptionShield Batching
 # =============================================================================
 
 
@@ -552,7 +552,7 @@ class TestCorruptionShieldBatching:
     """
     CorruptionShield 배칭 테스트.
     
-    Phase 1 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+    CorruptionShield 개선:
     - 10개 필드 위반 시 10개 로그 → 1개 로그로 최적화
     """
     
@@ -705,7 +705,7 @@ class TestCorruptionShieldBatching:
 
 
 # =============================================================================
-# Test: Phase 2 - ActorContext/TraceContext 자동 결합
+# Test: ActorContext/TraceContext 자동 결합
 # =============================================================================
 
 
@@ -713,7 +713,7 @@ class TestAuditContextAutoInjection:
     """
     ActorContext/TraceContext 자동 주입 테스트.
     
-    Phase 2 개선 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md):
+    Context 결합 개선:
     - ShadowLogger/WAL에서 _write_to_wal() 직접 호출
     - "어떤 운영자의 어떤 작업에서 발생" 추적 가능
     """
@@ -843,12 +843,12 @@ class TestAuditContextAutoInjection:
 
 
 # =============================================================================
-# Test: Phase 3 - Forensic 민감정보 마스킹
+# Test: Forensic 민감정보 마스킹
 # =============================================================================
 
 
 class TestForensicMasking:
-    """Forensic 민감정보 마스킹 테스트 (Phase 3)."""
+    """Forensic 민감정보 마스킹 테스트."""
     
     def test_password_masked_in_context(self):
         """password 필드 마스킹."""
@@ -972,12 +972,12 @@ class TestForensicMasking:
 
 
 # =============================================================================
-# Test: Phase 4 - InMemoryAuditBuffer
+# Test: InMemoryAuditBuffer
 # =============================================================================
 
 
 class TestInMemoryAuditBuffer:
-    """메모리 버퍼 폴백 테스트 (Phase 4)."""
+    """메모리 버퍼 폴백 테스트."""
     
     def test_buffer_add_entry(self):
         """엔트리 추가."""
@@ -1148,12 +1148,12 @@ class TestInMemoryAuditBuffer:
 
 
 # =============================================================================
-# Test: Phase 5 - ForensicRateLimiter
+# Test: ForensicRateLimiter
 # =============================================================================
 
 
 class TestForensicRateLimiter:
-    """Forensic Rate Limiter 테스트 (Phase 5)."""
+    """Forensic Rate Limiter 테스트."""
     
     def test_exception_rate_limit(self):
         """분당 10건 초과 시 드롭."""
@@ -1282,12 +1282,12 @@ class TestForensicRateLimiter:
 
 
 # =============================================================================
-# Test: Phase 6 - RedisAuditBuffer
+# Test: RedisAuditBuffer
 # =============================================================================
 
 
 class TestRedisAuditBuffer:
-    """Redis Audit Buffer 테스트 (Phase 6)."""
+    """Redis Audit Buffer 테스트."""
     
     def test_log_success(self):
         """Redis 기록 성공."""
@@ -1504,12 +1504,12 @@ class TestRedisAuditBuffer:
 
 
 # =============================================================================
-# Test: Phase 7 - MTTR Calculator
+# Test: MTTR Calculator
 # =============================================================================
 
 
 class TestMTTRCalculator:
-    """MTTR Calculator 테스트 (Phase 7)."""
+    """MTTR Calculator 테스트."""
     
     def test_empty_events(self):
         """빈 이벤트 목록."""

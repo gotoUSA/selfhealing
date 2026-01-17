@@ -159,8 +159,6 @@ def link_audit_to_dlq(
     Creates the relationship between DLQ entries and their audit trail,
     enabling the "Master Trail" feature for technical due diligence.
 
-    Reference: 07_HYBRID_STORAGE_ARCHITECTURE.md - Audit/Statistics Integration
-
     Args:
         entity_id: DLQ entry ID
         entity_type: Entity type (usually "dlq_entry")

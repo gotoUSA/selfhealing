@@ -1,7 +1,5 @@
 """
 Tests for Metric Event Handlers.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 import pytest

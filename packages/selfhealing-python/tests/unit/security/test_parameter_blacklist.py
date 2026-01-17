@@ -4,8 +4,6 @@ ParameterBlacklist 및 LearningService 확장 테스트
 순위 5.5, 5.7 구현 테스트:
 - ParameterBlacklist (Escape Strategy - 위험 파라미터 블랙리스트)
 - StateBackend 기반 영속성
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
 """
 
 from datetime import datetime, timedelta, timezone

@@ -112,7 +112,7 @@ class SelfHealingRecoveryLogger:
         """
         Log an event to the recovery chain.
 
-        Phase 3: request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
+        request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         (복구 체인은 대부분 비동기 컨텍스트에서 실행되므로 request가 없는 경우가 많음)
         """
         self._lazy_init()
@@ -132,7 +132,7 @@ class SelfHealingRecoveryLogger:
 
             chain["events"].append(event)
 
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
                 from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer

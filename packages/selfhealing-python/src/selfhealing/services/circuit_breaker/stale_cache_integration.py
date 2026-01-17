@@ -1,10 +1,8 @@
 """
-Canary + Stale Cache Integration - Phase 4.2
+Canary + Stale Cache Integration
 
 HALF_OPEN 상태에서 Canary 비율(10%→30%→60%)의 요청만 백엔드로 보내고,
 나머지 요청은 즉시 Stale Cache를 반환합니다.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md Section 16
 
 결과: 
 - 90%의 사용자는 에러 없이 서비스 이용 (약간 오래된 데이터)

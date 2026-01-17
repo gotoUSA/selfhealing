@@ -1,14 +1,12 @@
 """
 🧠 지능 레인 (Analyze & Learn) Celery Tasks
 
-Phase 3 구현: 자율 운영 지능 레인 태스크들
+자율 운영 지능 레인 태스크들
 
 Tasks:
 1. CheckSLADriftTask - SLA 드리프트 감지 및 경고
 2. AnalyzeForensicPendingTask - Pending 상태 장기 체류 항목 포렌식 분석
 3. AnalyzeCrossStageInsightsTask - Stage 간 학습 인사이트 분석
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §3, §4
 """
 
 from __future__ import annotations
@@ -512,8 +510,7 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
 
 
 # =============================================================================
-# Task 5: Verify Reconciliation Accuracy (Phase 8)
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+# Task 5: Verify Reconciliation Accuracy
 # =============================================================================
 
 
@@ -532,8 +529,6 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
             "verified_count": int,
             "high_variance_count": int,
         }
-    
-    Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
     """
     
     name = "selfhealing.verify_reconciliation_accuracy"
@@ -743,7 +738,7 @@ INTELLIGENCE_TASKS = [
     AnalyzeForensicPendingTask,
     AnalyzeCrossStageInsightsTask,
     CheckRecoveryTransitionsTask,
-    VerifyReconciliationAccuracyTask,  # Phase 8: Accuracy Audit
+    VerifyReconciliationAccuracyTask,
 ]
 
 
@@ -818,8 +813,7 @@ def get_intelligence_beat_schedule() -> Dict[str, Any]:
             "schedule": crontab(hour=22, minute=0),
             "options": {"queue": "analysis"},
         },
-        # 5분마다 - Reconciliation 정확도 검증 (Phase 8)
-        # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+        # 5분마다 - Reconciliation 정확도 검증
         "verify-reconciliation-accuracy": {
             "task": "selfhealing.verify_reconciliation_accuracy",
             "schedule": crontab(minute="*/5"),
@@ -834,7 +828,7 @@ __all__ = [
     "AnalyzeForensicPendingTask",
     "AnalyzeCrossStageInsightsTask",
     "CheckRecoveryTransitionsTask",
-    "VerifyReconciliationAccuracyTask",  # Phase 8
+    "VerifyReconciliationAccuracyTask",
     # Registry
     "INTELLIGENCE_TASKS",
     "register_intelligence_tasks_with_celery",

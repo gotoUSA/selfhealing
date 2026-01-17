@@ -9,9 +9,6 @@ Provides:
 - create_selfhealing_groups: RBAC group creation signal handler
 - AbstractFailedOperation: Domain-free abstract model for DLQ entries
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
-
-Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter

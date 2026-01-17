@@ -157,7 +157,7 @@ class ManualControlMixin:
                         )
                     except Exception as e:
                         logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
-                    # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+                    # Push 이벤트 - CB 상태 변경 메트릭 기록
                     try:
                         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
                         CircuitBreakerEventHandler.on_state_changed(
@@ -423,7 +423,7 @@ class ManualControlMixin:
                         )
                     except Exception as e:
                         logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
-                # Phase 3: Push 이벤트 - CB 상태 변경 메트릭 기록
+                # Push 이벤트 - CB 상태 변경 메트릭 기록
                 if previous_state != new_state:
                     try:
                         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler

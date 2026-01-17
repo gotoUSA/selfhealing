@@ -3,15 +3,13 @@ Core SafeGauge Implementation.
 
 Thread-safe gauge wrapper that prevents negative values.
 
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
-
 Design Philosophy:
 - Counter Pair (Google SRE style) is technically superior but requires
   PromQL calculations on the dashboard side.
 - SafeGauge provides "plug-and-play" experience for buyers while
   internally preventing the -1 dashboard embarrassment.
 
-Enhanced Features (Phase 5 - Metric Reliability):
+Enhanced Features (Metric Reliability):
 - Sync Status Tracking: last_sync_time and is_synced for data freshness
 - Staleness Detection: Auto-mark as stale after threshold
 - Stabilization Period: Gradual recovery from strict mode
@@ -41,7 +39,7 @@ class SafeGaugeChild:
     This is critical for preventing "-1 pending items" on dashboards
     after server restarts when the in-memory counter starts at 0.
 
-    Enhanced with sync status tracking (Phase 5):
+    Enhanced with sync status tracking:
     - Tracks last_sync_time for data freshness indication
     - Auto-detects staleness based on threshold
     - Supports stabilization period for gradual recovery
@@ -81,7 +79,7 @@ class SafeGaugeChild:
         self._shadow_value: float = 0.0
         self._initialized = False
 
-        # Sync status tracking (Phase 5)
+        # Sync status tracking
         self._sync_info = SyncInfo(
             staleness_threshold=staleness_threshold,
             stabilization_duration=stabilization_duration,

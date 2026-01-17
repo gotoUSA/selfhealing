@@ -12,8 +12,6 @@ Endpoints:
 - PUT  /api/self-healing/config/tier-overrides/ - Update tier overrides
 - POST /api/self-healing/config/tiers/dry-run/  - Simulate tier changes
 - POST /api/self-healing/config/tiers/reset/    - Reset to defaults
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 4)
 """
 
 from __future__ import annotations

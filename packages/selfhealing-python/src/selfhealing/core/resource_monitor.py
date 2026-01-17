@@ -5,8 +5,6 @@ cgroup v1/v2 지원 리소스 모니터링 유틸리티.
 
 Cgroup 기반으로 컨테이너의 메모리/CPU 제한을 감지하고,
 Chaos Experiment의 Resource Exhaustion이 안전 한계 내에서 동작하도록 합니다.
-
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §7.3 (Q3: Cgroup-Aware Limit)
 """
 
 from __future__ import annotations

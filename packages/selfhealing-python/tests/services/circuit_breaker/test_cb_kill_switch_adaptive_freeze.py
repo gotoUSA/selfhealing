@@ -1,14 +1,11 @@
 """
-Phase 1: Circuit Breaker Advanced Protection Tests
+Circuit Breaker Kill Switch and Adaptive Freeze Tests
 
 테스트 대상:
 1. Kill Switch Override (manual_control.py 수정)
 2. Adaptive Threshold (adaptive_threshold.py)
 3. Freeze Mode (freeze_mode.py)
 4. Panic Threshold (panic_threshold.py)
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 11.1 - Phase 1: 핵심 안전장치
 """
 
 import pytest
@@ -507,8 +504,8 @@ class TestPanicThreshold:
 # =============================================================================
 
 
-class TestPhase1Integration:
-    """Phase 1 기능 통합 테스트."""
+class TestKillSwitchAdaptiveFreezeIntegration:
+    """Kill Switch 및 Adaptive Freeze 기능 통합 테스트."""
     
     def test_adaptive_threshold_with_freeze_mode(self):
         """Adaptive Threshold와 Freeze Mode 연동."""
@@ -531,7 +528,7 @@ class TestPhase1Integration:
         assert allowed is False
     
     def test_imports_work(self):
-        """모든 Phase 1 모듈 import 확인."""
+        """모든 모듈 import 확인."""
         from selfhealing.services.circuit_breaker import (
             # Adaptive Threshold
             AdaptiveThresholdManager,

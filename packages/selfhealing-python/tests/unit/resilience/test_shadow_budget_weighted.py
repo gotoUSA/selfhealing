@@ -1,10 +1,8 @@
 """
 Shadow Budget 가중치 기반 계산 단위 테스트.
 
-Phase 0: 핵심 설계 원칙 (Cap, Source Reliability)
-Phase 1: Severity 기반 가중치
-
-Reference: docs/self_healing/middleware_system/30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md
+핵심 설계 원칙 (Cap, Source Reliability)
+Severity 기반 가중치
 """
 
 import pytest
@@ -48,13 +46,12 @@ def sample_failsafe_period():
 
 
 # =============================================================================
-# Phase 0: 핵심 설계 원칙 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0
+# 핵심 설계 원칙 테스트
 # =============================================================================
 
 
-class TestPhase0Constants:
-    """Phase 0 상수 정의 테스트."""
+class TestWeightedBudgetConstants:
+    """가중치 상수 정의 테스트."""
 
     def test_max_weight_multiplier_defined(self):
         """MAX_WEIGHT_MULTIPLIER가 50.0으로 정의되어 있어야 함."""
@@ -131,13 +128,12 @@ class TestSourceReliabilityWeight:
 
 
 # =============================================================================
-# Phase 1: Severity 기반 가중치 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.1
+# Severity 기반 가중치 테스트
 # =============================================================================
 
 
-class TestPhase1SeverityConstants:
-    """Phase 1 Severity 상수 정의 테스트."""
+class TestSeverityWeightConstants:
+    """Severity 상수 정의 테스트."""
 
     def test_critical_severity_weight(self):
         """CRITICAL은 0.01분 (10배 가중치)."""
@@ -369,13 +365,12 @@ class TestEdgeCases:
 
 
 # =============================================================================
-# Phase 2: Domain SLA 기반 가중치 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.2
+# Domain SLA 기반 가중치 테스트
 # =============================================================================
 
 
-class TestPhase2DomainConstants:
-    """Phase 2 Domain 상수 정의 테스트."""
+class TestDomainSLAWeightConstants:
+    """Domain 상수 정의 테스트."""
 
     def test_default_sla_hours_defined(self):
         """DEFAULT_SLA_HOURS가 24로 정의되어 있어야 함."""
@@ -493,13 +488,12 @@ class TestDomainWeightIntegration:
 
 
 # =============================================================================
-# Phase 3: Learning 패턴 기반 가중치 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.3
+# Learning 패턴 기반 가중치 테스트
 # =============================================================================
 
 
-class TestPhase3PatternConstants:
-    """Phase 3 Pattern 상수 정의 테스트."""
+class TestPatternWeightConstants:
+    """Pattern 상수 정의 테스트."""
 
     def test_pattern_occurrence_weight_defined(self):
         """PATTERN_OCCURRENCE_WEIGHT가 정의되어 있어야 함."""
@@ -674,8 +668,7 @@ class TestPatternWeightIntegration:
 
 
 # =============================================================================
-# Phase 0: Multiplier Cap 통합 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.0.1
+# Multiplier Cap 통합 테스트
 # =============================================================================
 
 
@@ -791,12 +784,12 @@ class TestMultiplierCap:
 
 
 # =============================================================================
-# calculate_shadow_budget with Phase 2, 3 통합 테스트
+# calculate_shadow_budget 통합 테스트
 # =============================================================================
 
 
 class TestCalculateShadowBudgetWithDomainAndPattern:
-    """calculate_shadow_budget Phase 2, 3 통합 테스트."""
+    """calculate_shadow_budget 통합 테스트."""
 
     def test_calculate_with_domain_and_failure_type(
         self, shadow_calculator, sample_failsafe_period, monkeypatch
@@ -860,13 +853,12 @@ class TestCalculateShadowBudgetWithDomainAndPattern:
 
 
 # =============================================================================
-# Phase 5: Simulation Stats Callback 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.5
+# Simulation Stats Callback 테스트
 # =============================================================================
 
 
-class TestPhase5SimulationBridge:
-    """Phase 5 Simulation Stats Callback 테스트."""
+class TestSimulationBridge:
+    """Simulation Stats Callback 테스트."""
 
     def test_service_uses_simulation_callback_when_no_stats_provided(self):
         """get_failed_operation_stats가 None일 때 시뮬레이션 콜백 사용."""
@@ -896,13 +888,12 @@ class TestPhase5SimulationBridge:
 
 
 # =============================================================================
-# Phase 6: Pending Reconciliation Freeze 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.6
+# Pending Reconciliation Freeze 테스트
 # =============================================================================
 
 
-class TestPhase6PendingFreeze:
-    """Phase 6 Pending Freeze 테스트."""
+class TestPendingReconciliationFreeze:
+    """Pending Freeze 테스트."""
 
     def test_notify_pending_freeze_skipped_for_small_adjustment(self, shadow_calculator):
         """5% 이하 조정은 freeze를 트리거하지 않음."""
@@ -968,13 +959,12 @@ class TestPhase6PendingFreeze:
 
 
 # =============================================================================
-# Phase 7: Audit 이벤트 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5
+# Audit 이벤트 테스트
 # =============================================================================
 
 
-class TestPhase7AuditEvents:
-    """Phase 7 Audit 이벤트 테스트."""
+class TestAuditEvents:
+    """Audit 이벤트 테스트."""
 
     def test_audit_event_types_defined(self):
         """Reconciliation 관련 AuditEventType이 정의되어 있어야 함."""
@@ -1017,13 +1007,12 @@ class TestPhase7AuditEvents:
 
 
 # =============================================================================
-# Phase 8: Accuracy Audit 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §5.2.2
+# Accuracy Audit 테스트
 # =============================================================================
 
 
-class TestPhase8AccuracyAudit:
-    """Phase 8 Accuracy Audit 테스트."""
+class TestAccuracyAudit:
+    """Accuracy Audit 테스트."""
 
     def test_shadow_budget_has_verification_fields(self):
         """ShadowBudget에 정확도 검증 필드가 있어야 함."""
@@ -1064,13 +1053,12 @@ class TestPhase8AccuracyAudit:
 
 
 # =============================================================================
-# Phase 9: 알림 연동 테스트
-# Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §6
+# 알림 연동 테스트
 # =============================================================================
 
 
-class TestPhase9Notification:
-    """Phase 9 알림 연동 테스트."""
+class TestNotificationIntegration:
+    """알림 연동 테스트."""
 
     def test_notify_shadow_budget_calculated_method_exists(self, shadow_calculator):
         """_notify_shadow_budget_calculated 메서드가 존재해야 함."""

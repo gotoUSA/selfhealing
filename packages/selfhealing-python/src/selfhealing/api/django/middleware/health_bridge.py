@@ -10,8 +10,6 @@ Usage in settings.py:
         "django.middleware.security.SecurityMiddleware",
         ...
     ]
-
-Reference: docs/self_healing/07_CONTROL_API.md
 """
 
 from __future__ import annotations
@@ -71,14 +69,14 @@ class HealthBridgeMiddleware:
         """Process request/response."""
         from django.http import JsonResponse
 
-        # === Phase 1: Early Return for Bridge Paths ===
+        # === Early Return for Bridge Paths ===
         if request.path in self.BRIDGE_PATHS:
             return self._serve_bridge_response(request)
 
-        # === Phase 2: Normal Request Processing ===
+        # === Normal Request Processing ===
         response = self.get_response(request)
 
-        # === Phase 3: Update CB Snapshot (best-effort) ===
+        # === Update CB Snapshot (best-effort) ===
         # Non-blocking: 실패해도 요청은 정상 처리
         self._try_update_snapshot()
 

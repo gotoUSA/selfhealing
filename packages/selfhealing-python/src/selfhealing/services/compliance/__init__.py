@@ -6,8 +6,6 @@ Compliance DNA Service - 규정 준수 자동화
 - 자동 감사 리포트
 - 규정 위반 감지
 - DORA, PCI-DSS 등 표준 지원
-
-Reference: docs/self_healing/32_DNA_ENTERPRISE_FEATURES.md
 """
 
 from .service import ComplianceService

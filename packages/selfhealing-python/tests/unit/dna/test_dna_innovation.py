@@ -1,7 +1,7 @@
 """
 DNA Innovation 모듈 테스트
 
-Phase 4: Auto-Suggestion Engine + Cross-Stage Learning 테스트
+Auto-Suggestion Engine + Cross-Stage Learning 테스트
 """
 
 import pytest

@@ -75,44 +75,44 @@ class AuditEventType(Enum):
     CONFIG_CHANGE = "config_change"
     MANUAL_OVERRIDE = "manual_override"
     
-    # 복구 관련 (Phase 3 추가)
+    # 복구 관련
     RECOVERY_EVENT = "recovery_event"
     RECOVERY_CHAIN_STARTED = "recovery_chain_started"
     RECOVERY_CHAIN_COMPLETED = "recovery_chain_completed"
     
-    # 재시도 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # 재시도 관련
     RETRY_ATTEMPTED = "retry_attempted"
     RETRY_EXHAUSTED = "retry_exhausted"
     
-    # 시스템 제어 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # 시스템 제어 관련
     SYSTEM_CONTROL_CHANGED = "system_control_changed"
     
-    # 롤백 관련 (Phase 1 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # 롤백 관련
     ROLLBACK_PERFORMED = "rollback_performed"
     
-    # Chaos 실험 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # Chaos 실험 관련
     CHAOS_EXPERIMENT_STARTED = "chaos_experiment_started"
     CHAOS_EXPERIMENT_COMPLETED = "chaos_experiment_completed"
     CHAOS_INJECTION_APPLIED = "chaos_injection_applied"
     CHAOS_ROLLBACK_TRIGGERED = "chaos_rollback_triggered"
     
-    # Emergency Mode 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # Emergency Mode 관련
     EMERGENCY_MODE_ACTIVATED = "emergency_mode_activated"
     EMERGENCY_MODE_DEACTIVATED = "emergency_mode_deactivated"
     
-    # Error Budget 관련 (Phase 2 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # Error Budget 관련
     ERROR_BUDGET_DEPLETED = "error_budget_depleted"
     ERROR_BUDGET_BLOCKED = "error_budget_blocked"
     
-    # Compliance 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # Compliance 관련
     COMPLIANCE_VIOLATION = "compliance_violation"
     COMPLIANCE_CHECK_PASSED = "compliance_check_passed"
     
-    # Blast Radius 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # Blast Radius 관련
     BLAST_RADIUS_ISOLATION = "blast_radius_isolation"
     BLAST_RADIUS_VIOLATION = "blast_radius_violation"
     
-    # FinOps 관련 (Phase 3 추가: 20_AUDIT_UNIFICATION_PLAN.md)
+    # FinOps 관련
     FINOPS_THRESHOLD_EXCEEDED = "finops_threshold_exceeded"
     FINOPS_BUDGET_EXCEEDED = "finops_budget_exceeded"
     

@@ -357,7 +357,7 @@ def on_task_retry(
 
 
 # =============================================================================
-# Phase 28: Celery Task trace_id 표준화 - Prerun/Postrun 핸들러
+# Celery Task trace_id 표준화 - Prerun/Postrun 핸들러
 # =============================================================================
 
 
@@ -373,7 +373,7 @@ def on_task_prerun(
     """
     Celery Task 시작 전 TraceContext 자동 주입.
     
-    Phase 28: 모든 Celery Task에 자동으로 trace_id를 주입합니다.
+    모든 Celery Task에 자동으로 trace_id를 주입합니다.
     
     동작:
     1. kwargs에 trace_info가 있으면 HTTP에서 전파된 것으로 간주 → 원본 trace_id 사용
@@ -449,7 +449,7 @@ def on_task_postrun(
     """
     Celery Task 완료 후 TraceContext 정리.
     
-    Phase 28: Worker 재사용 시 이전 Task의 trace_id/celery_context 잔존 방지.
+    Worker 재사용 시 이전 Task의 trace_id/celery_context 잔존 방지.
     """
     if not _config.enabled:
         return
@@ -897,8 +897,8 @@ def disconnect_selfhealing_signals():
         task_failure.disconnect(on_task_failure)
         task_success.disconnect(on_task_success)
         task_retry.disconnect(on_task_retry)
-        task_prerun.disconnect(on_task_prerun)    # Phase 28: trace_id 자동 주입
-        task_postrun.disconnect(on_task_postrun)  # Phase 28: trace_id 정리
+        task_prerun.disconnect(on_task_prerun)    # trace_id 자동 주입
+        task_postrun.disconnect(on_task_postrun)  # trace_id 정리
         _signals_connected = False
         logger.info("[SelfHealing] Signal hooks disconnected")
     except Exception as e:

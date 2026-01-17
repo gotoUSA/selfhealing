@@ -10,8 +10,6 @@ Tasks:
 2. cleanup_expired_config - 만료된 Pending Config 항목 정리
 3. expire_approval_requests - 72시간 이상 대기 중인 승인 요청 만료
 4. purge_archived_dlq_entries - 90일 이상 된 아카이브 항목 영구 삭제 (고위험)
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §3, §4
 """
 
 from __future__ import annotations

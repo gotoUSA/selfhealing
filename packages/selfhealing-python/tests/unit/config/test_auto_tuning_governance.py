@@ -2,8 +2,6 @@
 AutoTuningService Governance 통합 테스트.
 
 AutoTuningService가 시작 전 Governance 체크를 수행하는지 검증합니다.
-
-Reference: docs/self_healing/middleware_system/26_IMPROVEMENT_PART1_GOVERNANCE_INTEGRATION.md
 """
 
 import pytest

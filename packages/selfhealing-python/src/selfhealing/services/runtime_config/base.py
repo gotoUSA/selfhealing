@@ -201,7 +201,7 @@ class BaseConfigManager:
                 reason=final_reason,
             )
 
-            # Emit CONFIG_CHANGE audit event (Phase 6)
+            # Emit CONFIG_CHANGE audit event
             if diff:
                 self._emit_config_change_audit(
                     config_type=config_type,

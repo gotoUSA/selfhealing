@@ -2,8 +2,6 @@
 Auto Tuning Service Tests
 
 AutoTuningService의 모든 기능을 테스트합니다.
-
-Reference: docs/self_healing/38_AUTO_TUNING_API.md
 """
 
 import pytest

@@ -1,7 +1,5 @@
 """
 Tests for Config Apply Tasks.
-
-Reference: docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md
 """
 
 from unittest.mock import Mock, patch, MagicMock

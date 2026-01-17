@@ -3,8 +3,6 @@ Metric Source Adapter Base Interface.
 
 Provides an abstract interface for collecting metrics from various sources
 without direct dependency on user's database schema.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

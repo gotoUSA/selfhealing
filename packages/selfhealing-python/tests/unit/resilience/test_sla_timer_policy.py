@@ -4,7 +4,6 @@ Unit Tests for SLA Timer Policy
 Tests for SLA threshold configuration, breach detection,
 and domain-specific timeout policies.
 
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md
 Risk Covered: R-012 (SLA breach undetected)
 Compliance: SOC 2 (Availability & Monitoring)
 """

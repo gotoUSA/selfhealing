@@ -1,11 +1,11 @@
 """
 Unit tests for Drift Detection Metrics.
 
-Tests for Phase 1, 2, 3, 4 drift detection implementations:
-- Phase 1: PoolCircuitBreaker, PrecomputedCache
-- Phase 2: EmergencyMode, RateLimiter
-- Phase 3: Config lru_cache
-- Phase 4: WAL Sync, ShadowLogger, TTLCache
+Tests for drift detection implementations:
+- PoolCircuitBreaker, PrecomputedCache
+- EmergencyMode, RateLimiter
+- Config lru_cache
+- WAL Sync, ShadowLogger, TTLCache
 """
 
 import pytest
@@ -399,7 +399,7 @@ class TestSafeFunctions:
 
 
 # =============================================================================
-# Phase 4: WAL Sync Drift Tests
+# WAL Sync Drift Tests
 # =============================================================================
 
 
@@ -475,7 +475,7 @@ class TestWALSyncDrift:
 
 
 # =============================================================================
-# Phase 4: ShadowLogger Drift Tests
+# ShadowLogger Drift Tests
 # =============================================================================
 
 
@@ -574,7 +574,7 @@ class TestShadowLoggerDrift:
 
 
 # =============================================================================
-# Phase 4: TTLCache Drift Tests
+# TTLCache Drift Tests
 # =============================================================================
 
 

@@ -290,9 +290,6 @@ def log_cb_state_change_with_trace_audit(
     전체 서비스 호출 흐름을 1초 만에 시각화할 수 있습니다.
     
     WAL 기반 누락 0 보장.
-    
-    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-    Section 15 - Distributed Tracing 연동
     """
     details = {
         "cb_name": cb_name,
@@ -362,9 +359,6 @@ def log_governance_blocked_cb_audit(
     CRITICAL 수준이면 OPEN을 보류합니다.
     
     WAL 기반 누락 0 보장.
-    
-    Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-    Section 7 - Blast Radius 연동
     """
     affected_count = len(affected_services) if affected_services else 0
     

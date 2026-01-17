@@ -13,8 +13,6 @@ Design Principles:
 Key Insight:
     "Every application has a database" - DB as guaranteed fallback
     ensures 100% coverage regardless of customer infrastructure.
-
-Reference: docs/RATE_LIMIT_COORDINATOR.md
 """
 
 from __future__ import annotations

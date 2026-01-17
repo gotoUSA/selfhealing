@@ -1,7 +1,7 @@
 """
-Phase 2 마이그레이션 테스트 - DLQService와 audit_helpers의 하이브리드 로직
+DLQService와 audit_helpers의 하이브리드 로직 테스트
 
-56_AUDIT_MIDDLEWARE_DESIGN.md Phase 2 요구사항:
+요구사항:
 1. audit_helpers.py에 request 파라미터 추가 (선택적) - ✅ 구현됨
 2. 기존 직접 호출 유지 (하위 호환) - ✅ 구현됨
 3. 새 코드에서 버퍼 패턴 사용 - ✅ 구현됨
@@ -23,8 +23,8 @@ class MockRequest:
         self.method = "POST"
 
 
-class TestDLQServicePhase2WithRequest:
-    """DLQService Phase 2 테스트 - request가 있는 경우 버퍼에 적재."""
+class TestDLQServiceWithRequest:
+    """DLQService 테스트 - request가 있는 경우 버퍼에 적재."""
     
     def test_store_failure_with_request_adds_to_buffer(self):
         """store_failure가 request와 함께 호출되면 버퍼에 이벤트가 적재되어야 함."""
@@ -103,8 +103,8 @@ class TestDLQServicePhase2WithRequest:
         assert request_param.default is None, "request parameter should default to None"
 
 
-class TestDLQServicePhase2Replay:
-    """DLQService.replay Phase 2 테스트."""
+class TestDLQServiceReplay:
+    """DLQService.replay 테스트."""
     
     def test_replay_with_request_logs_to_buffer(self):
         """replay가 request와 함께 호출되면 버퍼에 이벤트가 적재되어야 함."""
@@ -233,8 +233,8 @@ class TestAuditHelpersHybridWithRequest:
         # 에러 없이 완료되면 성공
 
 
-class TestPhase2BufferIntegrity:
-    """Phase 2 버퍼 무결성 테스트."""
+class TestBufferIntegrity:
+    """버퍼 무결성 테스트."""
     
     def test_multiple_operations_accumulate_in_buffer(self):
         """여러 작업이 동일 버퍼에 누적되어야 함."""

@@ -78,8 +78,7 @@ class EmergencyState:
     recovery_started_at: Optional[str] = None
     target_level: Optional[EmergencyLevel] = None
     
-    # Chaos-Aware 메타데이터 (§14)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §14.2
+    # Chaos-Aware 메타데이터
     metadata: Optional[Dict[str, Any]] = None
     """
     추가 메타데이터.

@@ -6,8 +6,6 @@ Layered Configuration Provider.
 2. Static ENV (.env, 환경변수)
 3. Dynamic DB/Redis (RuntimeConfigManager)
 4. Request-scoped override (per-request context)
-
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md §8.1
 """
 
 from __future__ import annotations

@@ -7,9 +7,6 @@ Provides role-based access control for the Self-Healing system:
 - Admin: Full access (CB control, system enable/disable, config changes)
 - EmergencyEscalation: Break Glass pattern for emergency mode changes
 - ThresholdBased: Risk-based access control for high-impact operations
-
-Reference: docs/self_healing/10_OPERATIONS_GUIDE.md (권한 테이블)
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 from __future__ import annotations

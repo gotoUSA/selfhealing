@@ -1,7 +1,5 @@
 """
 Tests for Safety Bounds - 자율 조정 안전 한계
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 import pytest

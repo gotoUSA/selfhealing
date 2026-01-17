@@ -1,8 +1,7 @@
 """
-Tests for Phase 1 audit helpers.
+Tests for retry and rollback audit helpers.
 
 Tests retry, system control, and rollback audit logging functionality.
-Reference: docs/self_healing/middleware_system/20_AUDIT_UNIFICATION_PLAN.md
 """
 
 import pytest
@@ -415,7 +414,7 @@ class TestLogRollbackAudit:
 
 
 class TestAuditEventTypeExtensions:
-    """Tests for Phase 1 AuditEventType additions."""
+    """Tests for retry and rollback AuditEventType additions."""
 
     def test_retry_attempted_exists(self):
         """RETRY_ATTEMPTED should exist in AuditEventType."""

@@ -213,7 +213,7 @@ class CoreConfigMixin:
         max_body_size_bytes: Optional[int] = None,
         retention_days: Optional[int] = None,
         sampling_rate: Optional[float] = None,
-        # Phase 5: 추가 설정
+        # 추가 설정
         max_stack_frames: Optional[int] = None,
         max_context_size_bytes: Optional[int] = None,
         include_local_variables: Optional[bool] = None,

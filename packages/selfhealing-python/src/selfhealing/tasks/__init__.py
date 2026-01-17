@@ -17,11 +17,9 @@ Usage:
         NotificationTiming,
         DailyAutonomousReport,
     )
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
 """
 
-# 문서 §6.1 파일 구조에 따른 import:
+# Task 모듈 import:
 # - notification_policy.py: NotificationPolicy, NotificationTiming, NotificationThreshold
 # - base.py: BaseNotifyingTask, reset_cooldowns, get_cooldown_status
 from .notification_policy import (
@@ -41,7 +39,7 @@ from .drift_detection import (
 )
 
 from .daily_report import (
-    GenerateDailyAutonomousReportTask,  # Phase 5 - daily_report.py (per 09_AUTONOMOUS_TASK_EXPANSION.md §6.2)
+    GenerateDailyAutonomousReportTask,  # daily_report.py 모듈
     generate_daily_autonomous_report,
     get_daily_report_beat_schedule,
 )
@@ -72,7 +70,7 @@ from .compliance_tasks import (
     RunComplianceCheckTask,
     GenerateFinOpsReportTask,
     CollectSelfHealingMetricsTask,
-    # NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에서 export (문서 §6.2 Phase 5)
+    # NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에서 export
     COMPLIANCE_TASKS,
     register_compliance_tasks_with_celery,
     get_compliance_beat_schedule,

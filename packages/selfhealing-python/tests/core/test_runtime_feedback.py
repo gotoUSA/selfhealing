@@ -1,7 +1,5 @@
 """
 Tests for Runtime Feedback Loop - 실시간 메트릭 기반 자동 튜닝
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 import pytest

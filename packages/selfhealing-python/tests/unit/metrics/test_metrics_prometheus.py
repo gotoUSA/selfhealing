@@ -1,7 +1,5 @@
 """
 Tests for Prometheus Metrics Module.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from unittest.mock import Mock, patch

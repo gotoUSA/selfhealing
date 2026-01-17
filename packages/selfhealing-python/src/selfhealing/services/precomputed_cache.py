@@ -271,7 +271,7 @@ def get_cached_response(
     """
     Get response from multi-tier cache with fallback to compute.
     
-    v6.3.0: Drift Detection 메트릭 추가 (Phase 1)
+    v6.3.0: Drift Detection 메트릭 추가
     
     Flow:
     1. Check L1 (in-process) → 0ms if hit

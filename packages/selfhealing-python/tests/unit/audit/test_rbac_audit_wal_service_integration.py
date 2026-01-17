@@ -1,11 +1,11 @@
 """
-Phase 25: RBAC-Audit 연동 Phase 2, 3 테스트
+RBAC-Audit WAL Service 연동 테스트
 
-Phase 2 구현 사항:
+WAL Service 구현 사항:
 - _write_to_wal()에 actor_roles 파라미터 추가 및 자동 전파
 - _try_add_to_buffer()에 actor_roles 파라미터 추가 및 자동 전파
 
-Phase 3 구현 사항:
+Celery Task 연동 구현 사항:
 - 개별 서비스 연동 (DLQ, CB, Replay, Retry)
 - Celery Task actor_info 전달
 """
@@ -23,7 +23,7 @@ from selfhealing.context.actor_context import (
 
 
 class TestWriteToWalWithActorRoles:
-    """Phase 2.1: _write_to_wal() actor_roles 지원 테스트."""
+    """_write_to_wal() actor_roles 지원 테스트."""
 
     @patch("selfhealing.services.audit.base._get_wal")
     def test_write_to_wal_includes_actor_roles_from_context(self, mock_get_wal):
@@ -109,7 +109,7 @@ class TestWriteToWalWithActorRoles:
 
 
 class TestTryAddToBufferWithActorRoles:
-    """Phase 2.2: _try_add_to_buffer() actor_roles 지원 테스트."""
+    """_try_add_to_buffer() actor_roles 지원 테스트."""
 
     @patch("selfhealing.audit.event_buffer.RequestAuditBuffer")
     def test_try_add_to_buffer_includes_actor_roles_in_details(
@@ -160,8 +160,8 @@ class TestTryAddToBufferWithActorRoles:
         assert result is False
 
 
-class TestPhase3CeleryTaskActorInfo:
-    """Phase 3: Celery Task actor_info 전달 테스트."""
+class TestCeleryTaskActorInfo:
+    """Celery Task actor_info 전달 테스트."""
 
     def test_get_actor_for_celery_includes_roles(self):
         """get_actor_for_celery()가 roles를 포함하는지 확인."""
@@ -245,8 +245,8 @@ class TestPhase3CeleryTaskActorInfo:
         assert wal_entry["actor_roles"] == ["selfhealing_admin"]
 
 
-class TestPhase3DLQAuditIntegration:
-    """Phase 3.1: DLQ Audit actor_roles 자동 전파 테스트."""
+class TestDLQAuditIntegration:
+    """DLQ Audit actor_roles 자동 전파 테스트."""
 
     @patch("selfhealing.services.audit.base._get_wal")
     @patch("selfhealing.services.audit.dlq_audit._get_audit_adapter")
@@ -281,8 +281,8 @@ class TestPhase3DLQAuditIntegration:
         assert wal_entry["actor_roles"] == ["selfhealing_operator"]
 
 
-class TestPhase3CBAuditIntegration:
-    """Phase 3.2: CB Audit actor_roles 자동 전파 테스트."""
+class TestCBAuditIntegration:
+    """CB Audit actor_roles 자동 전파 테스트."""
 
     @patch("selfhealing.services.audit.base._get_wal")
     def test_log_cb_state_change_audit_includes_actor_roles(self, mock_get_wal):
@@ -315,8 +315,8 @@ class TestPhase3CBAuditIntegration:
         assert wal_entry["actor_roles"] == ["selfhealing_admin"]
 
 
-class TestPhase3EndToEndFlow:
-    """Phase 3: HTTP → Celery → Audit 전체 흐름 테스트."""
+class TestEndToEndFlow:
+    """HTTP → Celery → Audit 전체 흐름 테스트."""
 
     @patch("selfhealing.services.audit.base._get_wal")
     def test_http_to_celery_to_audit_flow(self, mock_get_wal):

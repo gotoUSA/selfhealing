@@ -6,8 +6,6 @@ Handles cleanup and archival operations for DLQ, Config, and Approvals.
 Thin Task, Fat Service 원칙:
 - Task는 단순 위임자 역할
 - 모든 비즈니스 로직은 이 서비스에서 처리
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md
 """
 
 from __future__ import annotations

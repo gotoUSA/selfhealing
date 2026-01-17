@@ -2,8 +2,6 @@
 L2 Load Operations Mixin.
 
 Provides methods for loading data from L2 storage.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

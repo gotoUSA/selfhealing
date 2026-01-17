@@ -2,9 +2,6 @@
 L2 Storage and Replay Automation Configuration Serializers.
 
 L2StorageConfig, L2StorageStatus, ShadowLog, ReplayAutomation serializers.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
-Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
 """
 
 from rest_framework import serializers
@@ -14,8 +11,6 @@ from .base import ApplyStrategyMixin
 class L2StorageConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for L2 Storage resilience configuration.
-    
-    Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
     """
 
     # 타임아웃 설정 (ms)
@@ -147,7 +142,7 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
     - Track 2: Scheduled batch replay
     - Track 3: Traffic-aware replay (future)
     - Adaptive mode for dynamic batch sizing
-    - Phase 4: Domain priority-based replay
+    - Domain priority-based replay
     """
 
     _config_type = "replay_automation"
@@ -212,7 +207,7 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
         help_text="Failure rate threshold to trigger batch size reduction (0.05-0.5)",
     )
 
-    # Phase 4: Domain Priority Policy
+    # Domain Priority Policy
     priority_enabled = serializers.BooleanField(
         required=False,
         help_text="Enable priority-based batch processing by domain",

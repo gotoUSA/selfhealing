@@ -1,7 +1,7 @@
 """
 DNA Zero-Base 모듈 테스트
 
-Phase 4: Zero-Base 시나리오 탐험 테스트
+Zero-Base 시나리오 탐험 테스트
 """
 
 import pytest

@@ -4,8 +4,6 @@ Decision Engine - 메트릭 기반 조정 결정
 실시간 메트릭을 분석하여 파라미터 조정을 제안합니다.
 
 Netflix Hystrix, Google Autopilot 스타일의 자율 조정 엔진
-
-Reference: docs/self_healing/36_RUNTIME_FEEDBACK_IMPLEMENTATION.md
 """
 
 from __future__ import annotations

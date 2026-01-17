@@ -1,9 +1,7 @@
 """
 Air-Gap Adapter Unit Tests.
 
-Tests for the Air-Gap storage adapters (Phase 4).
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+Tests for the Air-Gap storage adapters.
 """
 
 import pytest

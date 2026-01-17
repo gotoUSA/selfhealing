@@ -1,5 +1,5 @@
 """
-Phase 1 Tests - Circuit Breaker Notification Handler.
+Circuit Breaker Notification Handler Tests.
 
 Tests for:
 1. _on_circuit_breaker_opened_notify - CB OPEN 알림 핸들러
@@ -8,8 +8,7 @@ Tests for:
 4. trace_url 노출 확인
 5. 알림 실패 시 예외 격리 확인
 
-Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-Phase 1: 핵심 알림 연결
+핵심 알림 연결
 """
 
 import pytest

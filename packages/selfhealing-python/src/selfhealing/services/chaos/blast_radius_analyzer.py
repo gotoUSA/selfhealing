@@ -5,16 +5,13 @@ Blast Radius Analyzer.
 BlastRadiusManager와 ImpactPredictor를 통합하여
 종합적인 영향도 분석을 제공합니다.
 
-Reference:
+Related Modules:
 - BlastRadiusManager: services/chaos/blast_radius.py
 - ImpactPredictor: services/chaos/impact_predictor.py
 
-Design Principle (24_CHAOS_INTEGRATION_PLAN.md §6.2):
+Design Principle:
 - 의존성 그래프 탐색을 통한 영향 범위 분석
 - 폭발 반경 레벨 계산
-
-Related Docs:
-- 24_CHAOS_INTEGRATION_PLAN.md Phase 2
 """
 
 from __future__ import annotations

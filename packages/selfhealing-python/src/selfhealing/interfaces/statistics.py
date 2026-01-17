@@ -10,8 +10,6 @@ Design Principles:
 2. Read-heavy, complex aggregations
 3. Graceful degradation via NullStatisticsRepository
 4. Framework-agnostic (Django ORM, SQLAlchemy, etc.)
-
-Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 from __future__ import annotations

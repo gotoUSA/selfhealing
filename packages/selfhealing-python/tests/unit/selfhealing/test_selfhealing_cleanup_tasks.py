@@ -1,15 +1,13 @@
 """
 🧹 청소부 레인 태스크 단위 테스트
 
-Phase 2 테스트: 자율 운영 청소부 레인 태스크들 (Thin Task, Fat Service 패턴)
+자율 운영 청소부 레인 태스크들 테스트 (Thin Task, Fat Service 패턴)
 
 Tests:
 1. archive_old_dlq_entries - DLQ 아카이브 태스크
 2. cleanup_expired_config - 만료 설정 정리 태스크
 3. expire_approval_requests - 승인 요청 만료 태스크
 4. purge_archived_dlq_entries - 영구 삭제 태스크 (고위험)
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §7
 """
 
 from __future__ import annotations

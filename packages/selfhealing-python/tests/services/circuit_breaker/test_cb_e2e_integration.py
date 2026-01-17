@@ -1,10 +1,7 @@
 """
-Phase 6 테스트: 통합 테스트 (Integration Tests)
+통합 테스트 (End-to-End Integration Tests)
 
 전체 시스템 컴포넌트가 함께 동작하는지 검증합니다.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 11.1 - Phase 6: 통합 및 문서화
 
 테스트 구조:
     - 6.1.1: End-to-End Flow Tests (전체 흐름)
@@ -32,7 +29,7 @@ from selfhealing.services.circuit_breaker.models import (
     PanicThresholdConfig,
 )
 
-# Adaptive Threshold (Phase 1)
+# Adaptive Threshold
 from selfhealing.services.circuit_breaker.adaptive_threshold import (
     AdaptiveThresholdManager,
     get_adaptive_threshold_manager,
@@ -40,7 +37,7 @@ from selfhealing.services.circuit_breaker.adaptive_threshold import (
     should_allow_cb_auto_open,
 )
 
-# Freeze Mode (Phase 1)
+# Freeze Mode
 from selfhealing.services.circuit_breaker.freeze_mode import (
     FreezeModeManager,
     get_freeze_mode_manager,
@@ -48,7 +45,7 @@ from selfhealing.services.circuit_breaker.freeze_mode import (
     should_allow_cb_state_change,
 )
 
-# Panic Threshold (Phase 1)
+# Panic Threshold
 from selfhealing.services.circuit_breaker.panic_threshold import (
     PanicThresholdMonitor,
     get_panic_threshold_monitor,
@@ -56,7 +53,7 @@ from selfhealing.services.circuit_breaker.panic_threshold import (
     is_panic_threshold_triggered,
 )
 
-# Tracing (Phase 2)
+# Tracing
 from selfhealing.services.circuit_breaker.tracing import (
     TracingConfig,
     TriggeringRequestInfo,
@@ -66,7 +63,7 @@ from selfhealing.services.circuit_breaker.tracing import (
     record_failure_with_trace,
 )
 
-# Service Config (Phase 3)
+# Service Config
 from selfhealing.services.circuit_breaker.service_config import (
     ServiceConfigManager,
     get_service_config_manager,
@@ -76,7 +73,7 @@ from selfhealing.services.circuit_breaker.service_config import (
     get_services_by_criticality,
 )
 
-# Blast Radius (Phase 3)
+# Blast Radius
 from selfhealing.services.circuit_breaker.blast_radius_integration import (
     BlastRadiusLevel,
     BlastRadiusAssessment,
@@ -87,7 +84,7 @@ from selfhealing.services.circuit_breaker.blast_radius_integration import (
     assess_cb_open_impact,
 )
 
-# Canary Recovery (Phase 4)
+# Canary Recovery
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryState,
     CanaryRecoveryManager,
@@ -102,7 +99,7 @@ from selfhealing.services.circuit_breaker.canary_recovery import (
     canary_record_failure,
 )
 
-# Stale Cache Integration (Phase 4)
+# Stale Cache Integration
 from selfhealing.services.circuit_breaker.stale_cache_integration import (
     CanaryWithStaleCacheConfig,
     StaleCacheStore,
@@ -111,7 +108,7 @@ from selfhealing.services.circuit_breaker.stale_cache_integration import (
     reset_canary_stale_cache_service,
 )
 
-# Recovery Strategy (Phase 4)
+# Recovery Strategy
 from selfhealing.services.circuit_breaker.recovery_strategy import (
     RecoveryStrategySelector,
     get_recovery_strategy_selector,
@@ -119,7 +116,7 @@ from selfhealing.services.circuit_breaker.recovery_strategy import (
     select_recovery_strategy,
 )
 
-# Load Shedding (Phase 5)
+# Load Shedding
 from selfhealing.services.circuit_breaker.load_shedding import (
     SheddingState,
     SheddingDecision,

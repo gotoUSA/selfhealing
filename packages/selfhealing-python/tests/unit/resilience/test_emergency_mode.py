@@ -3,8 +3,6 @@ Emergency Mode Tests.
 
 비상 모드 고급 기능 (EmergencyLevel, GracefulDegradationManager, RecoveryGate)
 단위 테스트 및 통합 테스트.
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md (Section 4)
 """
 
 import pytest

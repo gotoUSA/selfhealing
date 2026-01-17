@@ -8,8 +8,6 @@ This module enables:
 - Testable time operations via MockTimeProvider
 - Clock skew tolerance for distributed idempotency checks
 - Framework-agnostic time handling
-
-Reference: docs/STAGE_23_CLOCK_SKEW.md
 """
 
 from __future__ import annotations

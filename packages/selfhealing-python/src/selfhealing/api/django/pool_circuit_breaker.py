@@ -31,7 +31,7 @@ from django.http import JsonResponse
 from django.db import connections
 from django.conf import settings
 
-# Drift Detection Metrics (Phase 1)
+# Drift Detection 메트릭
 from selfhealing.metrics.drift_metrics import (
     record_pool_cb_stale,
     record_pool_cb_cache_age,
@@ -235,7 +235,7 @@ class PoolCircuitBreaker:
 
         v6.2.0: 매 요청에서 이 메서드를 호출하여 블로킹 방지.
         v6.2.1: Stale 캐시 감지 및 안전 폴백 처리 추가.
-        v6.2.2: Prometheus 메트릭 연동 (Drift Detection Phase 1)
+        v6.2.2: Prometheus 메트릭 연동
 
         Stale 처리 정책:
         - 경고 (stale_threshold_multiplier 초과): 로그 경고, 캐시 데이터 사용
@@ -676,7 +676,6 @@ class PoolCircuitBreakerMiddleware:
 
         캐시 기반 결정임을 명확히 기록하여 분석 시 혼선 방지.
 
-        Phase 3 변경:
         - RequestAuditBuffer 패턴 우선 사용 (AuditMiddleware에서 일괄 기록)
         - 버퍼 사용 불가 시 기존 ContinuousAuditRecorder 직접 호출로 fallback
         """

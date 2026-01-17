@@ -12,8 +12,6 @@ Endpoints:
 - GET  /api/self-healing/emergency/history/  - 비상 모드 변경 이력
 - GET  /api/self-healing/emergency/config/   - 복구 게이트 설정 조회
 - PUT  /api/self-healing/emergency/config/   - 복구 게이트 설정 변경
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1A.md (Section 4)
 """
 
 from __future__ import annotations

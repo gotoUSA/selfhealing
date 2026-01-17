@@ -4,8 +4,6 @@ ChaosScheduler Idempotency 테스트
 순위 6 구현 테스트:
 - ChaosScheduler에서 IdempotencyKey.for_chaos_experiment 사용
 - 중복 실험 실행 방지
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.3
 """
 
 from datetime import datetime

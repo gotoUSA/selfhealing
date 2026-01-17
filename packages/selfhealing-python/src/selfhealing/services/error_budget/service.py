@@ -43,8 +43,7 @@ class ErrorBudgetService:
         self._simulated_errors: int = 0
         self._simulated_requests: int = 0
         
-        # Phase 5: Simulation Stats Callback - Chaos 연동
-        # Reference: 30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md §4.5
+        # Simulation Stats Callback - Chaos 연동
         def _simulation_stats_callback(start_time, end_time) -> dict:
             """Chaos Engineering 테스트용 콜백."""
             if self._simulated_errors > 0:

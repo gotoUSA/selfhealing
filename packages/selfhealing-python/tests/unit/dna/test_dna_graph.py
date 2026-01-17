@@ -1,7 +1,7 @@
 """
 Dependency Graph 단위 테스트
 
-Phase 2: dna_graph.py 모듈 테스트
+dna_graph.py 모듈 테스트
 """
 
 import pytest

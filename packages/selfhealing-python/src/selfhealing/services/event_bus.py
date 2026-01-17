@@ -16,8 +16,6 @@ Events:
 - CircuitBreakerStateChanged: CB 상태 변경 시 발행
 - ConfigUpdated: 런타임 설정 변경 시 발행
 
-Reference: docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md (Section 6)
-
 Usage:
     from selfhealing.services.event_bus import (
         get_event_bus,
@@ -90,8 +88,7 @@ class EventType(Enum):
     CHAOS_EXPERIMENT_STOPPED = "chaos_experiment_stopped"
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # Security Violation Events (순위 2.5 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.5
+    # Security Violation Events
     # ═══════════════════════════════════════════════════════════════════════════
     SECURITY_VIOLATION_DETECTED = "security_violation_detected"
     """보안 위반 감지됨."""
@@ -563,14 +560,10 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
     CB 상태 변경 → EventBus 발행 → 알림 핸들러 호출 순서이므로,
     이 함수가 호출되는 시점에 CB 상태 변경은 이미 완료된 상태입니다.
     
-    Phase 3: Actionable Alert 추가 (문서 §7.2 ⑥)
+    Actionable Alert 추가
     - dashboard_url: Grafana 대시보드 (읽기 전용)
     - admin_url: Admin 제어판 (쿼리 파라미터로 컨텍스트 전달)
     - runbook_url: 장애 대응 매뉴얼
-    
-    Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
-    Section 6.1 - 알림 함수 설계
-    Section 9.3 - Phase 3: Actionable Alert
     """
     try:
         from selfhealing.services.unified_notification import (
@@ -588,7 +581,7 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
         trace_url = event.data.get("trace_url")
         timestamp = event.data.get("timestamp", "")
         
-        # Phase 3: Actionable URLs 생성
+        # Actionable URLs 생성
         url_builder = get_actionable_alert_url_builder()
         actionable_urls = url_builder.build_cb_open_urls(
             service_name=service_name,
@@ -609,7 +602,7 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
                 "trace_url": trace_url,
                 "event_type": "circuit_breaker_opened",
                 "trigger_time": timestamp,
-                # Phase 3: Actionable Alert URLs
+                # Actionable Alert URLs
                 "dashboard_url": actionable_urls.dashboard_url,
                 "admin_url": actionable_urls.admin_url,
                 "runbook_url": actionable_urls.runbook_url,
@@ -629,8 +622,6 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
     
     RuntimeConfig에서 track1_enabled 설정을 확인하고,
     활성화된 경우 conditional_replay_on_circuit_close 태스크를 트리거합니다.
-    
-    Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
     """
     service_name = event.data.get("service_name", "unknown")
     
@@ -709,8 +700,7 @@ def register_default_handlers():
         priority=EventPriority.NORMAL,
     )
     
-    # Circuit Breaker 알림 핸들러 (신규)
-    # Reference: docs/self_healing/middleware_system/23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md
+    # Circuit Breaker 알림 핸들러
     bus.subscribe(
         EventType.CIRCUIT_BREAKER_OPENED,
         _on_circuit_breaker_opened_notify,

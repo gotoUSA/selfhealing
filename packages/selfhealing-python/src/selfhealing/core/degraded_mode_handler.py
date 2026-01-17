@@ -6,7 +6,6 @@ DegradedModeHandler - 사령탑 연결 실패 시 Degraded Mode 관리 (Platinum
 사령탑 장애 시에도 0ms 즉시 보호 로직 가동
 
 Note: 정적 설정 기본값은 safe_defaults.py 참조
-Reference: docs/self_healing/21_PLATINUM_SLA_OPTIMIZATION_PLAN.md
 """
 
 import os

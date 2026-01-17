@@ -52,8 +52,8 @@ def register_domain(domain: str) -> None:
         _registered_domains.append(domain)
 
 
-# Note: DOMAINS constant removed in Phase 2 neutralization.
-# Use get_domains() or register_domain() instead.
+# Note: DOMAINS 상수가 제거되었습니다.
+# get_domains() 또는 register_domain()을 사용하세요.
 
 
 class SelfHealingMetrics:

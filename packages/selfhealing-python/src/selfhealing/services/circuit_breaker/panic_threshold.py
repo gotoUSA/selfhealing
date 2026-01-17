@@ -5,9 +5,6 @@ Panic Threshold for Circuit Breaker
 인프라 전체 붕괴로 판단합니다. 이때 자율 운영 엔진이 스스로 Emergency Level 3를
 선포하고 모든 자동 복구를 중단합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 14 - Panic Threshold (시스템 전체 자폭 방지)
-
 동작 흐름:
     get_open_circuits() → OPEN 비율 계산 → 70% 초과?
                                             ↓ Yes

@@ -4,10 +4,6 @@ Chaos Experiment Notification.
 카오스 실험 상태 변경 시 알림을 발송합니다.
 Admin Deep Link 방식으로 거버넌스를 유지합니다.
 
-Design Reference:
-- 24_CHAOS_INTEGRATION_PLAN.md §3.6, §6.3
-- 23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md §7.2
-
 Principle:
 - Slack Interactive 버튼 대신 Admin Deep Link 사용
 - 거버넌스와 감사 추적 보장

@@ -69,7 +69,7 @@ from selfhealing.api.django.views.health import (
     SelfHealingMetricsView,
 )
 
-# Import from metric_sync module (Phase 1: Poll 제거 + Manual API)
+# Import from metric_sync module
 from selfhealing.api.django.views.metric_sync import (
     MetricSyncView,
     DriftReportView,
@@ -109,7 +109,7 @@ __all__ = [
     "ConnectionPoolHealthView",
     "simple_health_ping",
     "SelfHealingMetricsView",
-    # Metric Sync Views (Phase 1)
+    # Metric Sync Views
     "MetricSyncView",
     "DriftReportView",
 ]

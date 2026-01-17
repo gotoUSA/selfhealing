@@ -2,8 +2,6 @@
 Layered Repository Base Class.
 
 Provides the base class with initialization and configuration.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

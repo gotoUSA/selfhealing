@@ -1,15 +1,13 @@
 """
 📋 증명 레인 (Compliance & Report) Celery Tasks
 
-Phase 4 구현: 자율 운영 증명 레인 태스크들
+자율 운영 증명 레인 태스크들
 
 Tasks:
 1. RunComplianceCheckTask - 규정 준수 상태 점검
 2. GenerateFinOpsReportTask - FinOps 비용 분석 리포트 생성
 3. CollectSelfHealingMetricsTask - Self-Healing 메트릭 수집
 4. GenerateDailyAutonomousReportTask - 일일 자율 운영 리포트 생성
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §3, §4
 """
 
 from __future__ import annotations
@@ -391,8 +389,7 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
 
 
 # =============================================================================
-# NOTE: GenerateDailyAutonomousReportTask는 문서 §6.2 Phase 5에 따라
-# daily_report.py에 위치합니다. (09_AUTONOMOUS_TASK_EXPANSION.md 참조)
+# NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에 위치합니다.
 # =============================================================================
 
 
@@ -477,12 +474,12 @@ def get_compliance_beat_schedule() -> Dict[str, Any]:
             "options": {"queue": "metrics"},
         },
         # NOTE: generate-daily-autonomous-report는 daily_report.py의
-        # get_daily_report_beat_schedule()에서 정의 (문서 §6.2 Phase 5)
+        # get_daily_report_beat_schedule()에서 정의
     }
 
 
 __all__ = [
-    # Task Classes (증명 레인 - 문서 §4.2)
+    # Task Classes (증명 레인)
     # NOTE: GenerateDailyAutonomousReportTask는 daily_report.py에서 export
     "RunComplianceCheckTask",
     "GenerateFinOpsReportTask",

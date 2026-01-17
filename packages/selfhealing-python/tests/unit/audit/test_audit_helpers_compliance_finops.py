@@ -1,10 +1,9 @@
 """
-Tests for Phase 3 audit helpers.
+Tests for compliance and FinOps audit helpers.
 
 Tests compliance, blast radius, finops, and data access audit logging.
-Reference: docs/self_healing/middleware_system/20_AUDIT_UNIFICATION_PLAN.md
 
-Phase 3 goals:
+Goals:
 - Compliance audit integration (log_compliance_audit)
 - Blast radius audit integration (log_blast_radius_audit)
 - FinOps audit integration (log_finops_audit)
@@ -22,8 +21,8 @@ import logging
 # =============================================================================
 
 
-class TestAuditEventTypePhase3:
-    """Tests for Phase 3 AuditEventType additions."""
+class TestAuditEventTypeComplianceFinOps:
+    """Tests for compliance and FinOps AuditEventType additions."""
 
     def test_compliance_event_types_exist(self):
         """Should have Compliance-related event types."""

@@ -64,9 +64,6 @@ class ErrorBudgetCalculator:
 
         Returns:
             ErrorBudgetStatus
-            
-        Reference:
-            31_CHAOS_EXPERIMENT_EXPANSION.md §7.1 (Q1: 실험 데이터 자동 태깅)
         """
         slo = self.slo_config.get_slo(slo_name)
         if not slo:

@@ -11,8 +11,6 @@ This module provides:
 
 Note: All hooks are conditionally registered based on environment settings.
 Production environment blocks all extreme testing modes.
-
-Reference: docs/self_healing/52_HOOK_REGISTRY_ARCHITECTURE.md
 """
 
 from selfhealing.resilience.bypass_hooks import register_resilience_hooks

@@ -68,7 +68,7 @@ __all__ = [
     "get_signal_hooks_config",
     "selfhealing_task",
     "SignalHooksConfig",
-    # Beat Schedule (Phase 5)
+    # Beat Schedule
     "get_selfhealing_beat_schedule",
     "get_schedule_summary",
     "validate_schedule",

@@ -5,8 +5,6 @@ Provides graceful degradation strategies when connections fail:
 - Cache miss → DB fallback
 - External API down → cached/default response
 - Message queue down → sync processing
-
-Reference: docs/STAGE_24_PARTIAL_PARTITION.md
 """
 
 from __future__ import annotations

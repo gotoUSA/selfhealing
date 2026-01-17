@@ -28,8 +28,6 @@ Endpoints:
 - GET  /api/self-healing/l2-storage/drift/history/ - Get drift reconciliation history
 - POST /api/self-healing/l2-storage/drift/reconcile/ - Force drift reconciliation
 - POST /api/self-healing/l2-storage/drift/reconcile/<service_name>/ - Reconcile single service
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 # Re-export from config module

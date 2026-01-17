@@ -2,8 +2,6 @@
 L2 Error Handling Mixin.
 
 Provides methods for handling L2 errors and success states.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md
 """
 
 from __future__ import annotations

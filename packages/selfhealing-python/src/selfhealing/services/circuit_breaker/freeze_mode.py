@@ -3,9 +3,6 @@ Freeze Mode for Circuit Breaker
 
 LOCKDOWN 상태에서 현재 CB 상태를 그대로 동결합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 6 - LOCKDOWN Freeze Mode
-
 Freeze Mode 동작:
 - 자동 OPEN   → ❌ 금지
 - 자동 CLOSE  → ❌ 금지  

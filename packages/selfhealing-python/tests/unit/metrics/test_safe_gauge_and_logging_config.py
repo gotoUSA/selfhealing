@@ -5,8 +5,6 @@ These tests verify:
 1. SafeGauge prevents negative gauge values (critical for dashboard display)
 2. EventLoggingConfig provides runtime-configurable logging levels
 3. Event handlers use SafeGauge and dynamic logging correctly
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 import logging

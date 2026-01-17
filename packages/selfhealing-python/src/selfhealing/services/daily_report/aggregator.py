@@ -2,8 +2,6 @@
 Daily Report Aggregation Logic.
 
 Collects and aggregates task results from cache/storage.
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.1
 """
 
 from __future__ import annotations

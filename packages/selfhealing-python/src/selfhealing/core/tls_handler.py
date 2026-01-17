@@ -11,8 +11,6 @@ Provides:
 - Error classification
 - Retry strategies for transient failures
 - Alert mechanisms for certificate issues
-
-Reference: docs/STAGE_25_TLS_FAILURE.md
 """
 
 from __future__ import annotations

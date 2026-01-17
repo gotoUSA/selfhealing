@@ -5,8 +5,6 @@ Provides an abstraction layer between Self-Healing engine and business DB.
 The engine reads metrics from Air-Gap storage (Redis) instead of directly
 accessing the business database.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 4)
-
 Design Philosophy:
 - Self-Healing engine NEVER touches business DB directly
 - Business layer writes summaries to Air-Gap storage

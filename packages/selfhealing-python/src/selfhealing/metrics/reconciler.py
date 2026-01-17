@@ -3,8 +3,6 @@ Metric Reconciler for Lazy Synchronization.
 
 Provides mechanisms to synchronize Gauge metrics with actual data sources
 during server startup and on-demand.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

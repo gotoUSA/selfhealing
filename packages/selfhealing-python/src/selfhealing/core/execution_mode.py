@@ -14,8 +14,6 @@ Usage:
 
 Environment Variable:
     SELFHEALING_EXECUTION_MODE: "active" | "shadow" | "evaluation"
-
-Reference: docs/capability-audit/capablitity_정의/03-PROTECTION-MECHANISMS.md
 """
 
 from __future__ import annotations

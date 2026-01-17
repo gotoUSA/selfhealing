@@ -1,7 +1,7 @@
 """
 WAL (Write-Ahead Log) 테스트.
 
-Phase 2: Data Integrity 테스트
+Data Integrity 테스트:
 - WAL 쓰기/읽기
 - CRC32 체크섬 검증
 - 파일 로테이션

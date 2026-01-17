@@ -1,5 +1,5 @@
 """
-Tests for Pydantic Settings Module - Phase 2.
+Tests for Pydantic Settings Advanced Features.
 
 Tests for the 12 additional settings classes:
 - SLASettings
@@ -14,9 +14,6 @@ Tests for the 12 additional settings classes:
 - ChaosSettings
 - DriftThresholdSettings
 - L2StorageSettings
-
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 import pytest
@@ -694,9 +691,9 @@ class TestL2StorageSettings:
         assert settings1 is settings2
 
 
-class TestPhase2ConsistencyWithLegacy:
+class TestPydanticConsistencyWithLegacy:
     """
-    Phase 2 설정과 기존 dataclass 설정의 일관성 검증.
+    Pydantic 설정과 기존 dataclass 설정의 일관성 검증.
     """
 
     def test_sla_consistency(self):

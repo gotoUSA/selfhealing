@@ -11,8 +11,6 @@ Features:
 - Approval workflow for high-risk experiments
 - Kill switch integration
 - Audit trail recording
-
-Reference: Netflix ChAP, Gremlin scheduled attacks, AWS FIS experiments
 """
 
 from __future__ import annotations
@@ -100,7 +98,7 @@ class ChaosSchedulerService:
         # Currently running experiments
         self._running_experiments: Dict[str, str] = {}  # schedule_id -> experiment_id
         
-        # Phase 6: Experiment instances by status (32_CHAOS_SYSTEM_INTEGRATION.md §22.2.3)
+        # Experiment instances by status
         # Maps experiment_id -> ChaosExperiment instance for recovery monitoring
         self._experiment_instances: Dict[str, Any] = {}
         
@@ -431,7 +429,6 @@ class ChaosSchedulerService:
 
     # =========================================================================
     # 순위 6: Idempotency 체크 (v2.5.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.3
     # =========================================================================
 
     def _check_idempotency(
@@ -887,8 +884,6 @@ class ChaosSchedulerService:
         """
         Register an experiment instance for recovery monitoring.
         
-        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §22.2.3
-        
         Args:
             experiment_id: Unique experiment ID
             experiment: ChaosExperiment instance
@@ -912,8 +907,6 @@ class ChaosSchedulerService:
     def get_experiments_by_status(self, status: str) -> List[Any]:
         """
         Get experiments by status.
-        
-        Phase 6: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3
         
         Used by check_recovery_monitoring_experiments Celery task
         to find experiments in RECOVERY_MONITORING state.

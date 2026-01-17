@@ -9,8 +9,6 @@ Design Principles:
 2. Dataclasses for immutable DTOs
 3. ABC for queue contracts
 4. Support for both immediate and scheduled execution
-
-Reference: docs/PLUGGABLE_ARCHITECTURE.md Section 3.3
 """
 
 from __future__ import annotations

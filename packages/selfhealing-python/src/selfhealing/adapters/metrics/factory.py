@@ -2,8 +2,6 @@
 Metric Adapter Factory.
 
 Creates the appropriate metric source adapter based on configuration.
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 from __future__ import annotations

@@ -7,8 +7,6 @@ Tracks health of different connection types independently:
 - External API connections
 
 Enables graceful degradation when partial failures occur.
-
-Reference: docs/STAGE_24_PARTIAL_PARTITION.md
 """
 
 from __future__ import annotations
@@ -124,8 +122,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         self._health_states: Dict[str, ConnectionHealth] = {}
         self._failure_threshold = failure_threshold
         
-        # Phase 5-2: Simulation override for chaos testing
-        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2, §22.2.2
+        # 카오스 테스트용 시뮬레이션 오버라이드
         self._simulation_overrides: Dict[str, ConnectionHealth] = {}
         self._partition_override: Optional[PartitionState] = None
         self._simulation_experiment_id: Optional[str] = None
@@ -139,8 +136,6 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
     ) -> None:
         """
         특정 연결에 대한 시뮬레이션 상태 설정.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2, §22.2.2
         
         Args:
             connection_type: 연결 타입 (DATABASE, CACHE, EXTERNAL_API)
@@ -177,8 +172,6 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """
         네트워크 파티션 시뮬레이션 설정.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
-        
         Args:
             partition_state: 강제할 파티션 상태
             experiment_id: 관련 카오스 실험 ID (감사 추적용)
@@ -196,8 +189,6 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
     def clear_all_simulation_overrides(self) -> None:
         """
         모든 시뮬레이션 오버라이드 해제.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
         """
         import logging
         self._simulation_overrides.clear()
@@ -239,12 +230,11 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """
         Check health of a specific connection.
         
-        Phase 5-2: 시뮬레이션 오버라이드 지원
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
+        시뮬레이션 오버라이드를 지원합니다.
         """
         key = f"{connection_type.value}:{name}"
         
-        # Phase 5-2: 시뮬레이션 오버라이드 체크
+        # 시뮬레이션 오버라이드 체크
         if key in self._simulation_overrides:
             import logging
             logging.getLogger(__name__).debug(
@@ -295,10 +285,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """
         Get current partition state across all connections.
         
-        Phase 5-2: 시뮬레이션 오버라이드 지원
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.2.2
+        시뮬레이션 오버라이드를 지원합니다.
         """
-        # Phase 5-2: 파티션 시뮬레이션 오버라이드 체크
+        # 파티션 시뮬레이션 오버라이드 체크
         if self._partition_override is not None:
             import logging
             logging.getLogger(__name__).debug(

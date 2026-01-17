@@ -3,8 +3,7 @@ SLA/SLO Configuration Serializers.
 
 SLA, SLO Definition, SLO Config, ErrorBudget serializers.
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -15,7 +14,7 @@ class SLAConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for SLA configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "sla"
@@ -157,7 +156,7 @@ class SLOConfigSerializer(ApplyStrategyMixin):
     - PUT: SLO 기본값 업데이트 및 SLO 추가/수정
     - DELETE: 특정 SLO 삭제 (별도 엔드포인트)
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "slo"
@@ -212,7 +211,7 @@ class ErrorBudgetConfigSerializer(ApplyStrategyMixin):
     Serializer for Error Budget configuration.
 
     Error Budget 및 Burn Rate 임계값 설정.
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "error_budget"

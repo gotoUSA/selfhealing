@@ -15,8 +15,6 @@ Design Philosophy:
     - Redis 있으면 사용 (최고 성능)
     - 없으면 Database 사용 (100% 호환)
     - DB도 없으면 InMemory (단일 프로세스)
-
-Reference: docs/RATE_LIMIT_COORDINATOR.md
 """
 
 from __future__ import annotations

@@ -3,8 +3,7 @@ Advanced Configuration Serializers.
 
 Forensic, Metrics, Logging config serializers.
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
@@ -16,7 +15,6 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
     Serializer for Forensic configuration.
     
     Forensic 분석 및 디버깅 관련 설정.
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
 
     _config_type = "forensic"
@@ -26,7 +24,7 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
     response_body_max_length = serializers.IntegerField(required=False, min_value=100, max_value=100000)
     user_agent_max_length = serializers.IntegerField(required=False, min_value=50, max_value=2000)
     
-    # Phase 5: 추가 Forensic 설정 (이전 env만 노출되었던 설정들)
+    # 추가 Forensic 설정 (이전 env만 노출되었던 설정들)
     max_stack_frames = serializers.IntegerField(
         required=False,
         min_value=10,
@@ -63,7 +61,7 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Metrics configuration.
     
-    Phase 6: Safe Default 폴백 적용.
+    Safe Default 폴백 적용.
     """
 
     _config_type = "metrics"
@@ -98,8 +96,6 @@ class LoggingConfigSerializer(ApplyStrategyMixin):
     
     각 Self-Healing 컴포넌트별 로깅 레벨 설정.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
-    
-    Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 5, 6)
     """
 
     _config_type = "logging"

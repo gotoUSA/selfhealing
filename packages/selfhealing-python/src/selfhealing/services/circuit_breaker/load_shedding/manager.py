@@ -4,9 +4,6 @@ Load Shedding Manager.
 핵심 서비스 에러율을 모니터링하고, 임계값 초과 시
 비핵심 서비스 트래픽을 단계적으로 제한합니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 3 - Load Shedding (부분적 차단)
-
 Usage:
     manager = LoadSheddingManager()
 

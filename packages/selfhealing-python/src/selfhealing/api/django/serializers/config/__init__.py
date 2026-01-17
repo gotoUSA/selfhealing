@@ -6,8 +6,7 @@ Provides backward-compatible re-exports of all config serializers.
 Serializers for validating and serializing runtime configuration updates.
 Includes apply strategy support (immediate, delayed, graceful).
 
-Phase 6: Fail-Safe Default 강화 추가.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+Fail-Safe Default 강화 추가.
 """
 
 # Base

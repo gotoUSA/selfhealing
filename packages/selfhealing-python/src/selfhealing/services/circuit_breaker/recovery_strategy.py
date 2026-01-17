@@ -1,10 +1,8 @@
 """
-Recovery Strategy Selector - Phase 4.3
+Recovery Strategy Selector
 
 서비스별 복구 전략을 선택하고 관리합니다.
 immediate vs canary 전략을 지원합니다.
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md Section 4, 8
 
 전략:
 - immediate: HALF_OPEN 즉시 100% 트래픽 허용 (빠른 복구, 위험도 높음)

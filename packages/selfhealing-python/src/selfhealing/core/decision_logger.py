@@ -1,5 +1,5 @@
 """
-Decision Record Logger - Phase 1 (Sink-Only)
+Decision Record Logger (Sink-Only)
 
 This module provides structured logging for Decision Record events.
 Logs are emitted at decision boundaries with fixed fields only.
@@ -11,8 +11,6 @@ Logged fields:
 - service_name
 - policy_version
 - timestamp
-
-Reference: docs/capability-audit/capablitity_정의/11-DECISION-RECORD-LOGGING.md
 """
 
 from __future__ import annotations

@@ -3,8 +3,6 @@ Redis-based Circuit Breaker State Repository.
 
 Implements CircuitBreakerStateRepository interface using ResilientStorageBackend.
 Provides zero data loss guarantees through WAL-First protocol.
-
-Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
 """
 
 from __future__ import annotations
@@ -36,8 +34,6 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     Redis Key Structure:
     - cb:{service_name} → Hash with state fields
     - cb:{service_name}:history → List of state change events
-    
-    Reference: docs/self_healing/middleware_system/05_RESILIENT_STORAGE_BACKEND.md
     """
     
     KEY_PREFIX = "cb:"
