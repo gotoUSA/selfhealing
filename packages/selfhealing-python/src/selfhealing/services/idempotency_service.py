@@ -14,7 +14,7 @@ Usage:
     key = IdempotencyKey.for_operation("order", 123, "process")
     result = service.check(key, lookup_fn)
 
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7
+멱등성 키 관리로 안전한 재시도 연산을 보장합니다.
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ class IdempotencyDomain(Enum):
     """커스텀 도메인."""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # Chaos Engineering 관련 (순위 4 - v2.4.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §3.2
+    # Chaos Engineering 관련 도메인
+    # Chaos 실험 실행 및 좀비 헌터 분산 락 관리
     # ═══════════════════════════════════════════════════════════════════════════
     CHAOS_EXPERIMENT = "chaos_experiment"
     """Chaos 실험 실행 (동일 실험 중복 실행 방지)."""
@@ -70,7 +70,7 @@ class IdempotencyDomain(Enum):
     CHAOS_ZOMBIE_HUNTER = "chaos_zombie_hunter"
     """Zombie Hunter 분산 락 (고아 실험 중복 rollback 방지).
     
-    Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
+    고아 상태의 실험을 감지하고 안전하게 정리합니다.
     """
 
     # ═══════════════════════════════════════════════════════════════════════════

@@ -3,8 +3,6 @@ Self-Healing HTTP Client
 
 Chaos 실험 플래그 자동 전파 기능이 포함된 HTTP 클라이언트.
 OpenTelemetry 의존 없이 수동으로 헤더를 전파합니다.
-
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §6.2 (헤더 전파 방식)
 """
 
 from __future__ import annotations

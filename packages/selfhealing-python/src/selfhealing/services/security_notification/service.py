@@ -9,7 +9,7 @@ Handles security-related notifications across multiple channels:
 - SMS alerts (critical only)
 - PagerDuty integration (critical only)
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
+심각도에 따라 적절한 채널로 알림을 라우팅합니다.
 """
 
 from __future__ import annotations

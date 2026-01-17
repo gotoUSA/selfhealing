@@ -14,7 +14,7 @@ Thin Task, Fat Service Architecture:
     - Celery Task는 단순 위임자 역할만 수행
     - Audit 로깅은 check_all_governance를 통해 자동 수행
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §2
+DLQ 재생 기능을 제공합니다.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ class BatchReplayResult:
     results: list[ReplayResult] | None = None
     governance_blocked: bool = False
     governance_block_reason: str = ""
-    # Phase 4: Priority-based replay info
+    # 도메인 우선순위 기반 재생 정보
     priority_used: bool = False
     domains_processed: list[str] | None = None
 

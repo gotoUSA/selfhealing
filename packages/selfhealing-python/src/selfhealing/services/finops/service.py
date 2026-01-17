@@ -375,7 +375,7 @@ class FinOpsService:
         self._alerts.clear()
     
     # =========================================================================
-    # Phase 3: Chaos Budget 전용 (32_CHAOS_SYSTEM_INTEGRATION.md §17)
+    # Chaos Budget 전용 - 카오스 실험 비용 관리
     # =========================================================================
     
     # 가중치 폭발 방지
@@ -393,8 +393,6 @@ class FinOpsService:
     ) -> CostBudget:
         """
         전역 카오스 실험 예산 설정.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.1
         
         Args:
             max_budget: 월간 최대 예산 (USD)
@@ -430,8 +428,6 @@ class FinOpsService:
         
         높은 가중치 = 높은 위험 도메인 = 더 많은 예산 소진
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.1
-        
         Args:
             domain: 도메인 이름 (e.g., "payment", "order")
             weight: 가중치 배수 (기본 1.0, 최대 MAX_CHAOS_WEIGHT_MULTIPLIER)
@@ -460,8 +456,6 @@ class FinOpsService:
     ) -> Optional[CostRecord]:
         """
         카오스 실험 비용 기록 (가중치 적용).
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §17.2.2
         
         Args:
             experiment_id: 실험 ID

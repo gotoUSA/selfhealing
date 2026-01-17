@@ -2,8 +2,7 @@
 Health Check Service
 
 비즈니스 로직을 View에서 분리한 Health Check 서비스 레이어.
-
-Reference: docs/SERVICE_LAYER_EXTRACTION_PLAN.md Phase 3
+기본 DB 연결 확인, 커넥션 풀 상태 조회, Kubernetes 프로브 기능을 제공합니다.
 """
 
 from __future__ import annotations

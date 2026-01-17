@@ -11,9 +11,8 @@ Features:
 - Trigger security notifications
 - ActionPolicy-based protection with rollback support (v2.1.0)
 
-Reference:
-- docs/L3_SELF_HEALING_OPERATIONS.md §5 (Security Violation Handling)
-- docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8
+보안 위반 감지 및 분류, 즉각적 보호 조치, SecurityIncident 레코드 생성,
+보안 알림 발송 및 ActionPolicy 기반 보호를 제공합니다.
 """
 
 from __future__ import annotations
@@ -58,8 +57,8 @@ class ViolationType(str, Enum):
     INJECTION_ATTEMPT = "injection_attempt"
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # Self-Healing 루프 감지 관련 (v2.0.0 - 순위 0.5)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.2
+    # Self-Healing 루프 감지 관련
+    # 복구 무한 루프, 상충 조정, 타임아웃, 플래핑 탐지
     # ═══════════════════════════════════════════════════════════════════════════
     RECOVERY_LOOP_DETECTED = "recovery_loop_detected"
     """복구/조정 무한 루프 감지 - 가장 심각."""
@@ -74,8 +73,8 @@ class ViolationType(str, Enum):
     """파라미터 플래핑 감지 (미세 조정 반복)."""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # CorruptionShield / 이상 감지 관련 (순위 1 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # CorruptionShield / 이상 감지 관련
+    # 통계적 이상, 행위 이상, 스키마 위반, 비즈니스 규칙 위반 탐지
     # ═══════════════════════════════════════════════════════════════════════════
     ANOMALY_STATISTICAL = "anomaly_statistical"
     """L3 통계적 이상 감지 (Z-score 기반)."""
@@ -90,8 +89,8 @@ class ViolationType(str, Enum):
     """L2 비즈니스 규칙 위반."""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # Audit 무결성 관련 (순위 1 - v2.3.0)
-    # Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §2.2
+    # Audit 무결성 관련
+    # 감사 로그 조작 시도 및 해시 체인 무결성 위반 탐지
     # ═══════════════════════════════════════════════════════════════════════════
     AUDIT_TAMPERING = "audit_tampering"
     """Audit 로그 조작 시도 감지."""

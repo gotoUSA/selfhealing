@@ -3,8 +3,6 @@ Chaos-Aware Metrics Adapter
 
 Chaos 실험 인식 메트릭 어댑터.
 실험 트래픽을 메트릭 수집에서 제외하여 AutoTuning 학습 오염 방지.
-
-Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §7.2 (Q2: Auto-Tuning Metric Silence)
 """
 
 from __future__ import annotations

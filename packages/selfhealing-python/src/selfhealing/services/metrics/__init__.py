@@ -13,7 +13,7 @@ This package has been refactored from a single 1,247-line file into:
 
 All exports are maintained for backward compatibility.
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
+DLQ, 재시도, 복구, Circuit Breaker 운영에 대한 포괄적인 관측성을 제공합니다.
 """
 
 from __future__ import annotations

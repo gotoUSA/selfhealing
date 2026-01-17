@@ -173,8 +173,7 @@ class ComplianceService:
         # 기본 검사 항목 로드
         self._load_default_checks()
         
-        # Phase 4: DORA-003 자동 검사 함수 등록
-        # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
+        # DORA-003 자동 검사 함수 등록 (Resilience Testing 요구사항)
         self._register_resilience_testing_check()
         
         logger.info("ComplianceService initialized")
@@ -221,7 +220,7 @@ class ComplianceService:
         """
         DORA-003 자동 검사 함수 등록.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
+        Resilience Testing 규정 준수 여부를 자동으로 검사합니다.
         """
         self._check_functions["DORA-003"] = self._check_resilience_testing
     
@@ -232,8 +231,6 @@ class ComplianceService:
         판정 기준:
         - 최근 30일 내 카오스 실험 4회 이상 실행
         - "실패한 실험"도 "복원력 한계를 발견한 성공적 테스트"로 인정
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §18.2
         
         Returns:
             bool: True if compliant, False otherwise

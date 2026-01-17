@@ -4,12 +4,15 @@ Drift Detection Metrics for Self-Healing System.
 이 모듈은 캐시, 계층형 저장소, 분산 복제 등에서 발생하는
 불일치(Drift)를 추적하기 위한 Prometheus 메트릭을 정의합니다.
 
-Reference:
-    - 08_DRIFT_DETECTION_IMPLEMENTATION_PLAN.md
-
-Phase 1: PoolCircuitBreaker, PrecomputedCache
-Phase 2: EmergencyMode Cache, RateLimiter
-Phase 3: Config lru_cache
+메트릭 카테고리:
+- PoolCircuitBreaker: 커넥션 풀 서킷 브레이커 캐시 상태
+- PrecomputedCache: L1/L2 캐시 일관성 및 Drift 감지
+- EmergencyMode Cache: 비상 모드 캐시 상태
+- RateLimiter: Redis 상태 및 Fallback 모드
+- Config Cache: 설정 캐시 및 환경변수 변경 감지
+- WAL Sync: Write-Ahead Log 동기화 상태
+- ShadowLogger: L2 동기화 실패 추적
+- TTLCache: TTL 기반 캐시 만료/퇴거
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ METRIC_PREFIX = "selfhealing"
 
 
 # =============================================================================
-# Phase 1: PoolCircuitBreaker Metrics
+# PoolCircuitBreaker Metrics - 커넥션 풀 서킷 브레이커 캐시 상태
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -73,7 +76,7 @@ else:
 
 
 # =============================================================================
-# Phase 1: PrecomputedCache Metrics
+# PrecomputedCache Metrics - L1/L2 캐시 일관성 및 Drift 감지
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -109,7 +112,7 @@ else:
 
 
 # =============================================================================
-# Phase 2: EmergencyMode Cache Metrics
+# EmergencyMode Cache Metrics - 비상 모드 캐시 상태
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -142,7 +145,7 @@ else:
 
 
 # =============================================================================
-# Phase 2: RateLimiter Metrics
+# RateLimiter Metrics - Redis 상태 및 Fallback 모드
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -176,7 +179,7 @@ else:
 
 
 # =============================================================================
-# Phase 3: Config Cache Metrics
+# Config Cache Metrics - 설정 캐시 및 환경변수 변경 감지
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -212,7 +215,7 @@ else:
 
 
 # =============================================================================
-# Phase 4: WAL Sync Metrics
+# WAL Sync Metrics - Write-Ahead Log 동기화 상태
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -256,7 +259,7 @@ else:
 
 
 # =============================================================================
-# Phase 4: ShadowLogger Metrics
+# ShadowLogger Metrics - L2 동기화 실패 추적
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -296,7 +299,7 @@ else:
 
 
 # =============================================================================
-# Phase 4: TTLCache Metrics
+# TTLCache Metrics - TTL 기반 캐시 만료/퇴거
 # =============================================================================
 
 if PROMETHEUS_AVAILABLE:
@@ -469,7 +472,7 @@ def record_config_cache_miss(config_type: str) -> None:
 
 
 # =============================================================================
-# Phase 4 Helper Functions: WAL Sync
+# WAL Sync Helper Functions
 # =============================================================================
 
 
@@ -510,7 +513,7 @@ def update_wal_last_sequence(seq: int) -> None:
 
 
 # =============================================================================
-# Phase 4 Helper Functions: ShadowLogger
+# ShadowLogger Helper Functions
 # =============================================================================
 
 
@@ -548,7 +551,7 @@ def update_shadow_log_oldest_unsynced_age(age_seconds: float) -> None:
 
 
 # =============================================================================
-# Phase 4 Helper Functions: TTLCache
+# TTLCache Helper Functions
 # =============================================================================
 
 
@@ -587,7 +590,7 @@ def record_cache_set(cache_name: str) -> None:
 # =============================================================================
 
 __all__ = [
-    # Phase 1: PoolCircuitBreaker
+    # PoolCircuitBreaker
     "pool_cb_cache_stale_total",
     "pool_cb_cache_age_ms",
     "pool_cb_cache_hit_rate",
@@ -596,7 +599,7 @@ __all__ = [
     "record_pool_cb_cache_age",
     "update_pool_cb_hit_rate",
     "record_pool_cb_background_restart",
-    # Phase 1: PrecomputedCache
+    # PrecomputedCache
     "cache_drift_detected_total",
     "cache_l1_l2_consistency",
     "cache_hit_rate",
@@ -605,7 +608,7 @@ __all__ = [
     "update_cache_consistency",
     "update_cache_hit_rate",
     "record_cache_refresh",
-    # Phase 2: EmergencyMode
+    # EmergencyMode
     "emergency_cache_stale_total",
     "emergency_cache_drift_total",
     "emergency_cache_age_seconds",
@@ -614,7 +617,7 @@ __all__ = [
     "record_emergency_cache_drift",
     "update_emergency_cache_age",
     "record_emergency_cache_load",
-    # Phase 2: RateLimiter
+    # RateLimiter
     "ratelimit_redis_unavailable_total",
     "ratelimit_state_drift_total",
     "ratelimit_fallback_active",
@@ -623,7 +626,7 @@ __all__ = [
     "record_ratelimit_drift",
     "set_ratelimit_fallback_mode",
     "record_ratelimit_reconciliation",
-    # Phase 3: Config
+    # Config Cache
     "config_env_changed_total",
     "config_cache_invalidated_total",
     "config_cache_hit_total",
@@ -632,7 +635,7 @@ __all__ = [
     "record_config_cache_invalidated",
     "record_config_cache_hit",
     "record_config_cache_miss",
-    # Phase 4: WAL Sync
+    # WAL Sync
     "wal_entries_written_total",
     "wal_entries_recovered_total",
     "wal_corruption_detected_total",
@@ -645,7 +648,7 @@ __all__ = [
     "record_wal_rotation",
     "update_wal_sync_lag",
     "update_wal_last_sequence",
-    # Phase 4: ShadowLogger
+    # ShadowLogger
     "shadow_log_sync_failures_total",
     "shadow_log_unsynced_count",
     "shadow_log_recovered_total",
@@ -656,7 +659,7 @@ __all__ = [
     "record_shadow_log_recovered",
     "update_shadow_log_affected_services",
     "update_shadow_log_oldest_unsynced_age",
-    # Phase 4: TTLCache
+    # TTLCache
     "cache_ttl_expired_total",
     "cache_ttl_evicted_total",
     "cache_entries_count",

@@ -15,7 +15,7 @@ AuditMiddleware - 중앙화된 Audit 미들웨어
 
 3. "무결성 해시 체인의 단일화"
    - 모든 로그가 ContinuousAuditRecorder라는 단일 통로를 거치게 됩니다.
-   - Big 4 감사 시 "단 하나의 로그도 누락되거나 조작되지 않았다"를 증명합니다.
+   - 기업 감사 시 "단 하나의 로그도 누락되거나 조작되지 않았다"를 증명합니다.
 
 CRITICAL: 이 Middleware는 MIDDLEWARE 리스트 가장 마지막에 위치해야 함!
 

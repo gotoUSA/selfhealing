@@ -2,9 +2,6 @@
 Chaos Experiment Constants
 
 안전 메커니즘 관련 상수 정의.
-Reference: 34_CHAOS_SAFETY_MECHANISMS.md
-
-작성일: 2026-01-14
 """
 
 from typing import Dict, Any
@@ -27,8 +24,6 @@ class ExperimentHardCaps:
     
     이 값들은 실험 구성에서 상한선으로 적용됩니다.
     사용자가 더 큰 값을 지정해도 이 값으로 제한됩니다.
-    
-    Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §9.3
     """
     
     # === SimulatedDiskIOExperiment ===

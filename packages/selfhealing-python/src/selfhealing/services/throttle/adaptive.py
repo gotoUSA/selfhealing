@@ -10,9 +10,7 @@ Algorithm:
    - If gradient > 0 (RTT increasing): limit = limit × 0.9
    - If gradient <= 0 (RTT stable/decreasing): limit = limit + 1
 
-Reference:
-- Netflix Concurrency Limits: https://github.com/Netflix/concurrency-limits
-- "Performance Under Load" - Netflix Tech Blog
+응답 시간 온도에 따른 동적 속도 제한 조절 기능을 제공합니다.
 
 Usage:
     throttle = AdaptiveThrottle(config=ThrottleConfig(

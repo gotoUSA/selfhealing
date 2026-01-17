@@ -2,8 +2,7 @@
 Daily Report Data Models.
 
 Contains data classes for task results and daily report aggregation.
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §6.1
+일일 자율 운영 보고서 데이터 집계를 위한 데이터 클래스.
 """
 
 from __future__ import annotations
@@ -29,8 +28,7 @@ class DailyAutonomousReport:
     Daily autonomous operations summary report.
 
     Aggregates counts and statistics from all self-healing tasks
-    executed during the day. This is the main class specified in
-    09_AUTONOMOUS_TASK_EXPANSION.md §6.1 for daily report aggregation.
+    executed during the day. This is the main class for daily report aggregation.
 
     Contains counts and statistics from all self-healing tasks
     executed during the day.

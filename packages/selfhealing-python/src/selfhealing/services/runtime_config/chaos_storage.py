@@ -223,7 +223,7 @@ class ChaosStorageMixin:
             return dry_run_config
 
     # =========================================================================
-    # Phase 3: L2 Storage Config
+    # L2 Storage Config
     # =========================================================================
 
     def get_l2_storage_config(self) -> Dict[str, Any]:

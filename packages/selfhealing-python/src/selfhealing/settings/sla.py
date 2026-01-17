@@ -11,8 +11,7 @@ Replaces:
 Environment Variables:
     SELFHEALING_SLA_DEFAULT_HOURS=24
 
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
+SLA 일괄 설정 및 도메인별 임계값 관리.
 """
 
 import logging

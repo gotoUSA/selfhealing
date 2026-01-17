@@ -20,7 +20,7 @@ class ApprovalMixin:
     """Mixin providing 4-Eyes approval workflow methods."""
 
     # =========================================================================
-    # Phase 3: 4-Eyes Approval Workflow
+    # 4-Eyes Approval Workflow
     # =========================================================================
 
     def get_approval_requests(self, status: Optional[str] = None) -> List[Dict[str, Any]]:

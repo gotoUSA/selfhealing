@@ -2,13 +2,8 @@
 Self-Healing Control API Service
 
 Provides the core business logic for the Self-Healing Control API.
-Based on: docs/self_healing/5_CONTROL_API/
 
-Reference documents:
-- CONTROL_API_INTERFACE.md: API contract
-- CONTROL_API_EXECUTION.md: Execution behavior
-- CONTROL_API_SECURITY_GOVERNANCE.md: Authorization & risk
-- CONTROL_API_TEST_REQUIREMENTS.md: Test specifications
+서비스 차단/허용, 장애 주입, 위험 평가 및 제어 요청 처리 로직을 제공합니다.
 """
 
 from __future__ import annotations
@@ -91,7 +86,7 @@ def assess_risk_level(action: str, environment: str) -> str:
     """
     Assess the risk level for an action in an environment.
 
-    Based on: CONTROL_API_SECURITY_GOVERNANCE.md §4 (Risk Classification)
+    환경과 작업 유형에 따른 위험 수준을 평가합니다.
 
     Args:
         action: Action type

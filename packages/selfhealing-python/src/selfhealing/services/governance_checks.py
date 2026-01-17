@@ -36,8 +36,7 @@ Audit Logging 연동:
     if not is_system_enabled():
         return {"error": "Kill Switch active"}
 
-Reference:
-- docs/self_healing/17_SYSTEM_ARCHITECTURE_DIAGRAM.md §8, §9
+아키텍처 다이어그램에 기반한 거버넌스 체크.
 """
 
 from __future__ import annotations

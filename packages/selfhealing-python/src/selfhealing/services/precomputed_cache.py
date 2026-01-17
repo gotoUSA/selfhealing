@@ -13,9 +13,7 @@ Background Worker:
 - 15초마다 health/error-budget/pool-status 사전 계산
 - AppConfig.ready()에서 시작
 
-Reference:
-- V3 Optimization Plan (리뷰어 피드백 반영)
-- Target: P95 < 50ms for all L3 observability endpoints
+L3 엔드포인트 성능 최적화를 위한 사전 계산 캠시 서비스.
 """
 
 from __future__ import annotations
@@ -41,7 +39,7 @@ except ImportError:
     TTLCache = None
     HAS_CACHETOOLS = False
 
-# Drift Detection Metrics (Phase 1)
+# Drift Detection Metrics
 try:
     from selfhealing.metrics.drift_metrics import (
         record_cache_drift,

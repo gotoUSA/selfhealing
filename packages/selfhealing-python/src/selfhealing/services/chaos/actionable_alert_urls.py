@@ -3,17 +3,10 @@ Chaos Actionable Alert URL Builder.
 
 Chaos 알림에 포함될 Admin Deep Link를 생성합니다.
 
-Design Reference:
-- 23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md §7.2 ⑥
-- CB URL 패턴: services/circuit_breaker/actionable_alert_urls.py
-
-Principle:
+설계 원칙:
 - 거버넌스 유지: 운영자가 Admin에 로그인하는 과정이 보안 인증(MFA)과 감사(Audit) 단계
 - 설정 제로: 별도의 슬랙 앱 설정 불필요
 - 비즈니스 가치: 원클릭 편의성보다 운영자 신원 확인과 감사 추적(Audit Trail) 우선
-
-Related Docs:
-- 24_CHAOS_INTEGRATION_PLAN.md §6.3
 """
 
 from __future__ import annotations

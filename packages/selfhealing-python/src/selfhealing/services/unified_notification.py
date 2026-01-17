@@ -17,7 +17,7 @@ Key Features:
 - Audit trail integration
 - Emergency level escalation
 
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md §7
+중앙화된 알림 라우팅 및 관리를 제공합니다.
 """
 
 from __future__ import annotations

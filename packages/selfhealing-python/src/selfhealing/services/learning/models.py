@@ -21,8 +21,8 @@ class BlacklistReason(str, Enum):
     """
     블랙리스트 등록 사유.
     
-    순위 5.5: Escape Strategy - LearningService 블랙리스트
-    Reference: 28_IMPROVEMENT_PART3_ENUM_EXTENSION.md §8.3.4
+    Escape Strategy - LearningService 블랙리스트 관리.
+    루프/플래핑 탐지 시 해당 파라미터 조합을 블랙리스트에 등록합니다.
     """
     RECOVERY_LOOP = "recovery_loop"
     """복구/조정 무한 루프 감지."""

@@ -60,11 +60,11 @@ STORAGE_KEYS = {
     "slo": "runtime_config:slo",
     "governance": "runtime_config:governance",
     "drift_threshold": "runtime_config:drift_threshold",
-    # Phase 3: L2 Storage, Chaos, 4-Eyes Approval
+    # L2 Storage, Chaos, 4-Eyes Approval
     "l2_storage": "runtime_config:l2_storage",
     "chaos": "runtime_config:chaos",
     "approval_requests": "runtime_config:approval_requests",
-    # Phase 4: Replay Automation
+    # Replay Automation
     "replay_automation": "runtime_config:replay_automation",
 }
 
@@ -89,7 +89,7 @@ CONFIG_CLASSES = {
     "l2_storage": L2StorageConfig,
     "chaos": ChaosConfig,
     "approval_requests": None,  # ApprovalRequest는 리스트로 저장
-    # Phase 4: Replay Automation
+    # Replay Automation
     "replay_automation": ReplayAutomationConfig,
 }
 

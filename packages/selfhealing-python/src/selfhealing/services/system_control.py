@@ -9,8 +9,6 @@ Features:
 - 서버 재시작 시 자동 상태 복구
 - 다중 서버 간 상태 공유 (Redis 백엔드 사용 시)
 
-Reference: docs/SERVICE_LAYER_EXTRACTION_PLAN.md Phase 4
-
 Configuration:
     # Django settings.py
     SELFHEALING_STATE_BACKEND = "redis"  # or "file" (default)

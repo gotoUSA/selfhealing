@@ -44,13 +44,13 @@ from selfhealing.api.django.serializers.chaos import (
     SafetyCheckResultSerializer,
     BlastRadiusCheckRequestSerializer,
     BlastRadiusCheckResultSerializer,
-    # Phase 2: Safety Mechanism Serializers
+    # Safety Mechanism Serializers
     TTLConfigSerializer,
     StopConditionsConfigSerializer,
     DryRunConfigSerializer,
     KillAllRequestSerializer,
     KillAllResponseSerializer,
-    # Phase 2: Impact Prediction Serializers
+    # Impact Prediction Serializers
     DryRunAnalysisRequestSerializer,
     DryRunAnalysisResponseSerializer,
 )

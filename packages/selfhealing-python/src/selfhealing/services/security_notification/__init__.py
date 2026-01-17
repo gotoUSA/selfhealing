@@ -12,7 +12,7 @@ Notifications are routed based on incident severity:
 - HIGH: Slack + Email
 - MEDIUM: Slack only
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
+보안 사고 심각도에 따른 다중 채널 알림을 제공합니다.
 """
 
 from __future__ import annotations

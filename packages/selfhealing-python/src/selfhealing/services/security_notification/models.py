@@ -3,7 +3,7 @@ Security Notification Models and Data Classes.
 
 Enums, dataclasses, and configuration for security notifications.
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
+보안 알림 설정 및 결과 데이터 클래스.
 """
 
 from __future__ import annotations

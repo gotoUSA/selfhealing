@@ -26,8 +26,8 @@ class AdvancedConfigMixin:
     """Mixin providing advanced configuration methods."""
 
     # =========================================================================
-    # Logging Config (Phase 5)
-    # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+    # Logging Config
+    # 시스템 컴포넌트별 로깅 설정 관리
     # =========================================================================
 
     def get_logging_config(self) -> Dict[str, Any]:

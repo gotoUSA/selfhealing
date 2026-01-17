@@ -683,7 +683,7 @@ class PoolCircuitBreakerMiddleware:
         if not self._audit_enabled:
             return
 
-        # === Phase 3: 버퍼 패턴 우선 ===
+        # === Audit 버퍼 패턴 우선 ===
         try:
             from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 

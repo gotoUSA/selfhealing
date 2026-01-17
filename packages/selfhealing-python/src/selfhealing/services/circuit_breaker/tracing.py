@@ -5,14 +5,11 @@ CB 상태 변화 시 해당 상태 변화를 유발한 '마지막 요청'의 tra
 운영자가 "서킷이 왜 열렸지?"라고 물었을 때, 로그의 trace_id 하나로
 전체 서비스 호출 흐름을 1초 만에 시각화할 수 있습니다.
 
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 15 - Distributed Tracing 연동 (장애 전파 가시성)
-
 운영 가치:
 - "서킷이 왜 열렸지?" → trace_id 클릭 → 1초
 - Root Cause 분석: 30분~1시간 → 1분 이내
 - 서비스 간 연쇄 장애 추적: 불가능 → 전체 호출 그래프 시각화
-- 실사 대응: "조사 중입니다" → trace_id로 즉시 증거 제시
+- 감사 대응: "조사 중입니다" → trace_id로 즉시 증거 제시
 """
 
 from __future__ import annotations

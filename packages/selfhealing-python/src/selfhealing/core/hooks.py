@@ -29,9 +29,7 @@ Usage:
     if should_bypass:
         audit_logger.log_bypass(reason, request)
 
-Reference:
-- docs/self_healing/52_HOOK_REGISTRY_ARCHITECTURE.md
-- Big 4 Audit Compliance: All bypass decisions are logged
+기업 감사 준수: 모든 바이패스 결정이 로그로 기록됩니다.
 """
 
 from __future__ import annotations

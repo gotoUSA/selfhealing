@@ -84,8 +84,7 @@ class ExperimentStatus(str, Enum):
     ROLLED_BACK = "rolled_back"
     """Experiment was rolled back due to issues."""
     
-    # Phase 1: 비동기 복구 모니터링 (§15)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.2
+    # 비동기 복구 모니터링: 실험 완료 후 시스템이 정상으로 복구되는지 추적
     RECOVERY_MONITORING = "recovery_monitoring"
     """실험 완료 후 Canary 복구 모니터링 중."""
 
@@ -93,14 +92,14 @@ class ExperimentStatus(str, Enum):
 class ExperimentType(str, Enum):
     """Core experiment types."""
     
-    # Existing types
+    # 기본 장애 주입 유형
     LATENCY_INJECTION = "latency_injection"
     ERROR_5XX = "error_5xx"
     PACKET_LOSS = "packet_loss"
     TIMEOUT = "timeout"
     RESOURCE_EXHAUSTION = "resource_exhaustion"
     
-    # Phase 0-1: New types added per 31_CHAOS_EXPERIMENT_EXPANSION.md
+    # 확장 장애 유형: 다양한 네트워크/서비스 장애 시뮬레이션
     ERROR_4XX = "error_4xx"
     CONNECTION_RESET = "connection_reset"
     RATE_LIMIT = "rate_limit"
@@ -108,16 +107,14 @@ class ExperimentType(str, Enum):
     PARTIAL_FAILURE = "partial_failure"
     CASCADING_FAILURE = "cascading_failure"
     
-    # Phase 5-2: Pool/Connection simulation experiments
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §16.3, §22.2.2
+    # 커넥션 풀/네트워크 시뮬레이션 실험
     POOL_EXHAUSTION = "pool_exhaustion"
     """Connection Pool 고갈 시뮬레이션 실험."""
     
     CONNECTION_PARTITION = "connection_partition"
     """네트워크 파티션 시뮬레이션 실험."""
     
-    # Phase 6: 업계 표준 실험 추가
-    # Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md
+    # 업계 표준 실험: Netflix ChAP, Gremlin, AWS FIS 패턴 기반
     CERTIFICATE_EXPIRY = "certificate_expiry"
     """인증서 만료 시뮬레이션 실험."""
     
@@ -127,8 +124,7 @@ class ExperimentType(str, Enum):
     CLOCK_SKEW = "clock_skew"
     """시스템 시간 불일치 시뮬레이션 실험."""
     
-    # Phase 6: 추가 업계 표준 실험
-    # Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2-6
+    # 추가 인프라 장애 시뮬레이션
     NETWORK_BLACKHOLE = "network_blackhole"
     """네트워크 블랙홀 시뮬레이션 실험."""
     
@@ -138,8 +134,7 @@ class ExperimentType(str, Enum):
     SIMULATED_TLS_FAILURE = "simulated_tls_failure"
     """TLS 핸드셰이크 실패 시뮬레이션 실험."""
     
-    # Phase 6: 시스템 고유 실험
-    # Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §6
+    # Self-Healing 시스템 고유 실험
     AUDIT_STORAGE_FAILURE = "audit_storage_failure"
     """Audit 저장소 계층 장애 시뮬레이션 실험."""
     
@@ -195,8 +190,7 @@ class ExperimentConfig:
     ttl_seconds: Optional[int] = None
     """Soft TTL: 장애 주입 종료 시간 (초). None이면 기본값 사용."""
     
-    # Phase 1: Soft/Hard TTL 이중 구조 (§15.4)
-    # Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
+    # Soft/Hard TTL 이중 구조: Soft TTL 후 Grace Period 동안 복구 모니터링
     grace_period_seconds: int = 300
     """Grace Period: Canary 복구 대기 시간 (기본 5분)."""
     
@@ -207,8 +201,6 @@ class ExperimentConfig:
         
         Soft TTL + Grace Period.
         Canary 복구가 완료되지 않더라도 강제 종료.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
         """
         base_ttl = self.ttl_seconds or 600  # 기본 10분
         return base_ttl + self.grace_period_seconds
@@ -217,8 +209,7 @@ class ExperimentConfig:
     dry_run: bool = False
     """True이면 실제 장애 주입 없이 시뮬레이션만 수행."""
     
-    # Phase 6: Resilience Expectation
-    # Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8.4
+    # Resilience Expectation: 시스템이 장애에 어떻게 반응해야 하는지 정의
     resilience_expectation: Optional[Any] = None
     """
     시스템이 이 장애에 대해 어떻게 반응해야 하는지 정의.
@@ -282,8 +273,7 @@ class ExperimentResult:
     auto_expired: bool = False
     """TTL에 의해 자동 만료되었는지 여부."""
     
-    # Phase 6: Resilience Validation
-    # Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §8.5
+    # Resilience Validation: Chaos 실험 결과로 시스템 회복력 검증
     resilience_validation: Optional[Dict[str, Any]] = None
     """
     Resilience 기대값 검증 결과.
@@ -387,7 +377,6 @@ class SteadyStateHypothesis:
 
 # =============================================================================
 # Monotonic TTL Helper (ClockSkew 보호용)
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §5.1, 34_CHAOS_SAFETY_MECHANISMS.md §2
 # =============================================================================
 
 
@@ -401,11 +390,6 @@ class MonotonicTTLHelper:
     
     time.monotonic()는 시스템 시간(timezone.now())과 달리
     시스템 시간 변경에 영향받지 않는 상대 시간을 반환합니다.
-    
-    Reference:
-    - 33_CHAOS_INDUSTRY_EXPERIMENTS.md §9.2 Monotonic TTL
-    - 34_CHAOS_SAFETY_MECHANISMS.md §2 Monotonic Clock 보호
-    - metrics/decorators.py:86-88 (기존 사용 패턴)
     
     Example:
         # ClockSkewExperiment에서 사용
@@ -594,8 +578,7 @@ class ChaosExperiment(abc.ABC):
         return now() > self._expires_at
     
     # =========================================================================
-    # Monotonic TTL Methods (ClockSkew 보호용)
-    # Reference: 34_CHAOS_SAFETY_MECHANISMS.md §2
+    # Monotonic TTL Methods (ClockSkew 보호용) - 시스템 시간 조작에 독립적
     # =========================================================================
     
     def _start_monotonic_timer(self) -> None:
@@ -605,8 +588,6 @@ class ChaosExperiment(abc.ABC):
         ClockSkewExperiment 등 시스템 시간 관련 실험에서 사용합니다.
         time.monotonic()는 시스템 시간 변경에 영향받지 않으므로,
         시간 조작 실험에서도 TTL이 정확하게 작동합니다.
-        
-        Reference: 34_CHAOS_SAFETY_MECHANISMS.md §2.3
         """
         self._monotonic_ttl_helper: Optional[MonotonicTTLHelper] = MonotonicTTLHelper(
             ttl_seconds=float(self._effective_ttl)
@@ -656,7 +637,7 @@ class ChaosExperiment(abc.ABC):
         return self._monotonic_ttl_helper.remaining_seconds()
     
     # =========================================================================
-    # Phase 5-1: 비동기 복구 모니터링 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §15, §22.2.3)
+    # 비동기 복구 모니터링 메서드 - Soft TTL 후 시스템 복구 추적
     # =========================================================================
     
     def is_hard_ttl_expired(self) -> bool:
@@ -666,8 +647,6 @@ class ChaosExperiment(abc.ABC):
         Hard TTL = Soft TTL + Grace Period.
         Grace Period 동안 Canary 복구를 기다리며,
         Hard TTL이 지나면 강제 종료.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.4
         
         Returns:
             True if hard TTL expired, False otherwise
@@ -686,8 +665,6 @@ class ChaosExperiment(abc.ABC):
         RECOVERY_MONITORING 상태에서 복구 완료 처리.
         
         Canary 복구가 완료되면 호출되어 실험을 COMPLETED로 전환.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3, §22.2.3
         """
         if self.status != ExperimentStatus.RECOVERY_MONITORING:
             logger.warning(
@@ -715,8 +692,6 @@ class ChaosExperiment(abc.ABC):
         
         Hard TTL 만료 시 또는 관리자 개입 시 호출.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.3
-        
         Args:
             reason: 강제 종료 사유
         """
@@ -740,8 +715,6 @@ class ChaosExperiment(abc.ABC):
         RUNNING 상태에서 RECOVERY_MONITORING 상태로 전환.
         
         Soft TTL 도달 시 장애 주입을 중단하고 복구 모니터링 단계로 전환.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15.2, §15.4
         """
         if self.status != ExperimentStatus.RUNNING:
             logger.warning(
@@ -770,8 +743,6 @@ class ChaosExperiment(abc.ABC):
         """
         Canary 복구 단계 검증.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §4.2.1
-        
         Returns:
             Dict with canary state information
         """
@@ -798,14 +769,12 @@ class ChaosExperiment(abc.ABC):
             return {"in_canary": False, "error": str(e)}
     
     # =========================================================================
-    # Phase 5-1: 모니터 스냅샷 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §13, §22.2.4)
+    # 모니터 스냅샷 메서드 - 실험 전후 시스템 상태 캡처
     # =========================================================================
     
     def _get_pool_state_snapshot(self) -> Dict[str, Any]:
         """
         실험 전후 커넥션 풀 상태 캡처.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.1, §22.2.4
         
         Returns:
             Dict with pool health status and statistics
@@ -834,8 +803,6 @@ class ChaosExperiment(abc.ABC):
         """
         실험 전후 인증서 상태 캡처.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.2, §22.2.4
-        
         Returns:
             Dict with certificate check status
         """
@@ -858,8 +825,6 @@ class ChaosExperiment(abc.ABC):
     def _get_connection_health_snapshot(self) -> Dict[str, Any]:
         """
         실험 전후 연결 상태 캡처.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §13.3, §22.2.4
         
         Returns:
             Dict with connection health and partition state
@@ -1038,14 +1003,14 @@ class ChaosExperiment(abc.ABC):
             
             self._audit("experiment_completed", {"result": self.result.to_dict()})
             
-            # Phase 3: LearningService 피드백 루프 (32_CHAOS_SYSTEM_INTEGRATION.md §20.4)
+            # LearningService 피드백 루프: 가설 검증 결과 기록
             cb_snapshot = self._get_cb_state_snapshot()
             self._record_hypothesis_validation(
                 actual_recovery_time=recovery_time if recovery_time > 0 else 60.0,
                 actual_cb_state=cb_snapshot.get("target_service_state"),
             )
             
-            # Phase 3: FinOps 비용 기록 (32_CHAOS_SYSTEM_INTEGRATION.md §10.2)
+            # FinOps 비용 기록
             self.record_finops_cost()
             
             return self.result
@@ -1090,14 +1055,12 @@ class ChaosExperiment(abc.ABC):
         }
     
     # =========================================================================
-    # Phase 2: CB 상태 스냅샷 캡처 (32_CHAOS_SYSTEM_INTEGRATION.md §2)
+    # Circuit Breaker 상태 스냅샷 캡처
     # =========================================================================
     
     def _get_cb_state_snapshot(self) -> Dict[str, Any]:
         """
         실험 전후 CB 상태 스냅샷 캡처.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §2.2.1
         
         Returns:
             Dict with:
@@ -1126,8 +1089,6 @@ class ChaosExperiment(abc.ABC):
         
         기본 메트릭 + Circuit Breaker 상태를 함께 캡처.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §2.2.2
-        
         Returns:
             Dict containing metrics and circuit_breaker state
         """
@@ -1136,14 +1097,12 @@ class ChaosExperiment(abc.ABC):
         return steady_state
     
     # =========================================================================
-    # Phase 4: 고급 기능 - 통합 스냅샷 메서드 (32_CHAOS_SYSTEM_INTEGRATION.md §7, §8, §9)
+    # 고급 스냅샷 메서드 - Corruption Shield, DLQ, Throttle 통합
     # =========================================================================
     
     def _get_corruption_shield_stats(self) -> Dict[str, Any]:
         """
         Corruption Shield 통계 조회.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §7.2.2
         
         Returns:
             Dict with corruption shield statistics
@@ -1163,8 +1122,6 @@ class ChaosExperiment(abc.ABC):
     def _get_dlq_stats(self) -> Dict[str, Any]:
         """
         DLQ 통계 조회 (카오스 실험 제외).
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §8.2.2
         
         Returns:
             Dict with DLQ pending counts
@@ -1187,8 +1144,6 @@ class ChaosExperiment(abc.ABC):
         """
         Adaptive Throttle 통계 조회.
         
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §9.2.1
-        
         Returns:
             Dict with throttle statistics
         """
@@ -1205,7 +1160,7 @@ class ChaosExperiment(abc.ABC):
             return {}
     
     # =========================================================================
-    # Phase 6: 추가 스냅샷 메서드 - Emergency, Tiering, RateLimit
+    # 추가 스냅샷 메서드 - Emergency, Tiering, RateLimit
     # =========================================================================
     
     def _get_emergency_state_snapshot(self) -> Dict[str, Any]:
@@ -1315,11 +1270,8 @@ class ChaosExperiment(abc.ABC):
         """
         모든 관련 서비스의 종합 스냅샷 캡처.
         
-        CB, Corruption Shield, DLQ, Throttle 상태를 모두 포함.
-        Phase 5-4: Pool, Cert, Connection Health 스냅샷 추가.
-        Phase 6: Emergency, Tiering CB, Rate Limit, Tiering Registry 스냅샷 추가.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4, Phase 5-4 (§13, §22.2.4)
+        CB, Corruption Shield, DLQ, Throttle, Pool, Cert, Connection Health,
+        Emergency, Tiering CB, Rate Limit, Tiering Registry 상태를 모두 포함.
         
         Returns:
             Dict containing all service snapshots
@@ -1329,11 +1281,11 @@ class ChaosExperiment(abc.ABC):
             "corruption_shield": self._get_corruption_shield_stats(),
             "dlq": self._get_dlq_stats(),
             "throttle": self._get_throttle_stats(),
-            # Phase 5-4: Monitor snapshots
+            # 모니터 스냅샷
             "pool": self._get_pool_state_snapshot(),
             "cert": self._get_cert_state_snapshot(),
             "connection_health": self._get_connection_health_snapshot(),
-            # Phase 6: Additional snapshots
+            # 추가 스냅샷
             "emergency": self._get_emergency_state_snapshot(),
             "tiering_cb": self._get_tiering_cb_snapshot(),
             "rate_limit": self._get_rate_limit_snapshot(),
@@ -1359,7 +1311,7 @@ class ChaosExperiment(abc.ABC):
         return -1.0
     
     # =========================================================================
-    # Phase 3: LearningService 피드백 루프 (32_CHAOS_SYSTEM_INTEGRATION.md §20.4)
+    # LearningService 피드백 루프 - 가설 검증 결과 기록 및 학습
     # =========================================================================
     
     def _record_hypothesis_validation(
@@ -1372,8 +1324,6 @@ class ChaosExperiment(abc.ABC):
     ) -> None:
         """
         가설 검증 결과를 LearningService에 기록.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §20.4
         
         Args:
             actual_recovery_time: 실제 복구 시간 (초)
@@ -1473,8 +1423,6 @@ class ChaosExperiment(abc.ABC):
     def record_finops_cost(self) -> None:
         """
         카오스 실험 비용을 FinOps에 기록.
-        
-        Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §10.2
         """
         try:
             from selfhealing.services.finops.service import FinOpsService

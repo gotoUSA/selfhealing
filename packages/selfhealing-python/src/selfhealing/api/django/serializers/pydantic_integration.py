@@ -1,14 +1,12 @@
 """
 Pydantic-DRF Serializer Integration Helper.
 
-Phase 3: DRF Serializer 자동 생성 및 Pydantic 모델 통합.
+DRF Serializer 자동 생성 및 Pydantic 모델 통합.
 
 이 모듈은 Pydantic Settings에서 DRF Serializer 필드를 자동으로 생성합니다.
 - Pydantic 스키마 → DRF 필드 변환
 - 검증은 Pydantic 모델에 위임
 - 중복 코드 제거
-
-Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
 from typing import Any, Dict, Type, Optional

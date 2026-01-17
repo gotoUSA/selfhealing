@@ -36,11 +36,10 @@ Usage:
         SyncTaskAdapter,
     )
 
-Reference: docs/PLUGGABLE_ARCHITECTURE.md
+플러거블 인터페이스의 구체적 구현체 모음.
 
 NOTE: Django and SQLAlchemy adapters have been removed in v2.0.0.
       Use Redis adapters (with ResilientStorageBackend fallback) instead.
-      See docs/self_healing/middleware_system/06_REDIS_MIGRATION.md
 """
 
 # =============================================================================

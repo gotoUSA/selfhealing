@@ -2,7 +2,7 @@
 Chaos Experiment Isolation Helpers
 
 가상 격리 패턴 구현 헬퍼 함수.
-Reference: 34_CHAOS_SAFETY_MECHANISMS.md §3
+Chaos 실험 데이터를 별도 도메인에 저장하여 실제 데이터와 분리합니다.
 
 작성일: 2026-01-14
 """

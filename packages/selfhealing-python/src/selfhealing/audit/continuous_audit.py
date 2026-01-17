@@ -1,5 +1,5 @@
 """
-Continuous Audit Recorder - Big 4 스타일 지속적 감사.
+Continuous Audit Recorder - 기업 감사 스타일 지속적 감사.
 
 모든 자동화된 결정을 위변조 불가능하게 기록합니다.
 보고서 포맷팅은 제공하지 않고, 완전한 raw data만 제공합니다.

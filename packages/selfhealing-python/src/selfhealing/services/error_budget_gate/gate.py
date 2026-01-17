@@ -3,9 +3,6 @@ Error Budget Gate - Core Gate Class.
 
 에러 예산 기반 자동화 제어 게이트.
 위기 상황일수록 인간의 개입을 강제하는 설계.
-
-Reference:
-- docs/self_healing/12_ERROR_BUDGET.md
 """
 
 from __future__ import annotations

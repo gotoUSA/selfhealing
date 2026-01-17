@@ -7,7 +7,7 @@ as a Django app in INSTALLED_APPS.
 Lifecycle Hooks:
     1. ready() - Called on every server start
        - Environment variable snapshot logging (audit trail)
-       - Metric Gauge hydration (Phase 2: Startup Hydration)
+       - Metric Gauge hydration (Startup Hydration)
        - Runs every time because env vars can change between restarts
 
     2. post_migrate signal - Called only after migrations
@@ -32,11 +32,6 @@ Note:
     - Environment variable audit
     - Startup hydration for Prometheus gauges
     - Pre-computed cache worker
-
-Reference:
-    - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
-    - docs/self_healing/18_METRIC_DRIFT_STRATEGY.md (Phase 2)
-    - docs/self_healing/middleware_system/06_REDIS_MIGRATION.md
 """
 
 from __future__ import annotations
@@ -105,7 +100,7 @@ class SelfHealingConfig(AppConfig):
     verbose_name = "Self-Healing System"
     default_auto_field = "django.db.models.BigAutoField"
 
-    # Phase 2: Startup Hydration - 중복 실행 방지
+    # Startup Hydration - 중복 실행 방지
     _hydration_done: bool = False
     _hydration_lock: threading.Lock = threading.Lock()
 
@@ -120,15 +115,13 @@ class SelfHealingConfig(AppConfig):
         Responsibilities:
         1. Connect post_migrate signal for RBAC group creation
         2. Log environment variable snapshot for audit trail
-        3. Validate config with Safe Defaults (Phase 6)
-        4. Hydrate metric gauges with jitter (Phase 2)
+        3. Validate config with Safe Defaults (Fail-Safe Default 강화)
+        4. Hydrate metric gauges with jitter (Startup Hydration)
         5. Start pre-computed cache worker (V3 Optimization)
 
         Note: Environment snapshot is logged here (not in post_migrate) because
         env vars can change on every restart, not just during migrations.
         This aligns with 12-Factor App principles and Spring Boot patterns.
-
-        Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
         """
         # Connect post_migrate signal for RBAC group creation
         # sender=self ensures it only runs when this app's migrations complete
@@ -138,17 +131,15 @@ class SelfHealingConfig(AppConfig):
             dispatch_uid="selfhealing_create_rbac_groups",
         )
 
-        # Log environment variable snapshot (Phase 2: 환경변수 Audit)
+        # Log environment variable snapshot (환경변수 Audit)
         # This runs on every server start because env vars can change
         # between restarts (e.g., Docker container restart with new env)
         self._log_env_snapshot()
 
-        # Validate config with Safe Defaults (Phase 6: Fail-Safe Default 강화)
-        # Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+        # Validate config with Safe Defaults (Fail-Safe Default 강화)
         self._validate_startup_config()
 
-        # Hydrate metric gauges with jitter (Phase 2: Startup Hydration)
-        # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+        # Hydrate metric gauges with jitter (Startup Hydration)
         self._schedule_gauge_hydration()
 
         # V3: Start pre-computed cache worker for L3 observability endpoints
@@ -160,7 +151,7 @@ class SelfHealingConfig(AppConfig):
         Log environment variable snapshot for audit trail.
 
         Best-effort: If logging fails, system continues normally.
-        This is critical for compliance (Big 4 audit requirements).
+        This is critical for compliance (enterprise audit requirements).
         """
         try:
             from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit
@@ -176,11 +167,9 @@ class SelfHealingConfig(AppConfig):
         """
         Validate config with Safe Defaults on startup.
 
-        Phase 6: Fail-Safe Default 강화
+        Fail-Safe Default 강화:
         - Non-fatal 설정: Safe Default 적용 후 계속 운영
         - Fatal 설정 위반: Quarantine Mode (LEVEL_3) 활성화
-
-        Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
         """
         try:
             from selfhealing.core.safe_defaults import (
@@ -254,8 +243,7 @@ class SelfHealingConfig(AppConfig):
             logger.error(f"[SelfHealing] Failed to activate Quarantine Mode: {e}")
 
     # =========================================================================
-    # Phase 2: Startup Hydration
-    # Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+    # Startup Hydration - 시작 시 Prometheus Gauge 초기화
     # =========================================================================
 
     def _should_hydrate(self) -> bool:

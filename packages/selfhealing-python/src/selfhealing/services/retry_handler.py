@@ -9,7 +9,7 @@ Provides a reusable retry mechanism with:
 - Forensic context capture
 - Rate limit awareness (Self-DDoS prevention)
 
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7, §8
+Idempotency 체크, DLQ 라우팅, Rate Limit 인식 기능을 제공합니다.
 """
 
 from __future__ import annotations

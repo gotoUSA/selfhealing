@@ -3,13 +3,11 @@ Forensic-Audit 브릿지 모듈.
 
 Forensic 캡처 이벤트를 Audit 시스템에 연결합니다.
 
-Part 2: 27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md
-
-Phase 3: Forensic 민감정보 마스킹 연동
+민감정보 마스킹 연동:
 - mask_sensitive_fields() 사용하여 실제 마스킹 수행
 - ForensicSettings.sensitive_field_patterns 연동
 
-Phase 5: Forensic Rate Limiter (SlidingWindow)
+Forensic Rate Limiter (SlidingWindow):
 - 분당 최대 10건의 예외 캡처
 - 분당 최대 1건의 메모리 스냅샷
 - 에러 폭풍 시 Audit 파일 비대화 방지
@@ -42,7 +40,7 @@ DEFAULT_SENSITIVE_PATTERNS = [
 
 
 # =============================================================================
-# Phase 5: Forensic Rate Limiter (SlidingWindow)
+# Forensic Rate Limiter (SlidingWindow)
 # =============================================================================
 
 
@@ -50,7 +48,7 @@ class ForensicRateLimiter:
     """
     Forensic 이벤트 Rate Limiter.
     
-    Sliding Window 알고리즘 (27_IMPROVEMENT_PART2_AUDIT_INTEGRATION.md §8.2.2):
+    Sliding Window 알고리즘:
     - 분당 최대 10건의 예외 캡처
     - 분당 최대 1건의 메모리 스냅샷
     - 정확한 윈도우 기반 제어 (버스트 불허)
