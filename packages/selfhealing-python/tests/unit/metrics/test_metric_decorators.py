@@ -220,3 +220,85 @@ class TestAsyncTrackReplay:
         mock_handler.on_replay_completed.assert_called_once()
         call_args = mock_handler.on_replay_completed.call_args
         assert call_args[0][1] is False  # success=False
+
+
+class TestDecoratorFunctoolsWrapsPreservation:
+    """
+    Tests for functools.wraps preservation in decorators.
+    
+    리뷰 ②: Universal Decorator에서 functools.wraps가 정확히 적용되어
+    inspect.iscoroutinefunction() 및 원래 함수의 메타데이터가 보존되는지 확인.
+    """
+    
+    import asyncio
+    import inspect
+    
+    def test_sync_decorator_preserves_function_name(self):
+        """Sync decorator should preserve original function name."""
+        
+        @track_replay(domain="payment")
+        def my_sync_replay_function():
+            """My sync docstring."""
+            return True
+        
+        assert my_sync_replay_function.__name__ == "my_sync_replay_function"
+        assert my_sync_replay_function.__doc__ == "My sync docstring."
+    
+    def test_async_decorator_preserves_function_name(self):
+        """Async decorator should preserve original function name."""
+        import asyncio
+        
+        @track_replay(domain="payment")
+        async def my_async_replay_function():
+            """My async docstring."""
+            return True
+        
+        assert my_async_replay_function.__name__ == "my_async_replay_function"
+        assert my_async_replay_function.__doc__ == "My async docstring."
+    
+    def test_async_wrapper_is_still_coroutine_function(self):
+        """Async wrapped function should still be recognized as coroutine function."""
+        import asyncio
+        import inspect
+        
+        @track_replay(domain="payment")
+        async def my_async_replay():
+            return True
+        
+        # This is the key check from 리뷰 ②
+        assert asyncio.iscoroutinefunction(my_async_replay)
+        assert inspect.iscoroutinefunction(my_async_replay)
+    
+    def test_sync_wrapper_is_not_coroutine_function(self):
+        """Sync wrapped function should NOT be recognized as coroutine function."""
+        import asyncio
+        import inspect
+        
+        @track_replay(domain="payment")
+        def my_sync_replay():
+            return True
+        
+        assert not asyncio.iscoroutinefunction(my_sync_replay)
+        assert not inspect.iscoroutinefunction(my_sync_replay)
+    
+    def test_track_dlq_creation_preserves_metadata(self):
+        """track_dlq_creation should preserve function metadata."""
+        
+        @track_dlq_creation(domain="payment")
+        def create_payment_dlq(failure_type: str):
+            """Create a payment DLQ item."""
+            return {"id": 1}
+        
+        assert create_payment_dlq.__name__ == "create_payment_dlq"
+        assert "Create a payment DLQ" in create_payment_dlq.__doc__
+    
+    def test_track_dlq_resolution_preserves_metadata(self):
+        """track_dlq_resolution should preserve function metadata."""
+        
+        @track_dlq_resolution(domain="payment")
+        def resolve_payment_dlq(item):
+            """Resolve a payment DLQ item."""
+            return item
+        
+        assert resolve_payment_dlq.__name__ == "resolve_payment_dlq"
+        assert "Resolve a payment DLQ" in resolve_payment_dlq.__doc__

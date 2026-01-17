@@ -336,3 +336,76 @@ class TestSafeGaugeLRUCache:
         
         assert isinstance(child, NoOpGaugeChild)
         assert safe.current_size == 0
+
+
+class TestSafeGaugeLRUEvictionLogging:
+    """
+    LRU 캐시 축출(Eviction) 경고 로그 테스트.
+    
+    리뷰 ①: max_size에 도달하여 항목이 삭제될 때 logger.warning을 남기는지 확인.
+    """
+
+    @pytest.fixture
+    def mock_gauge(self):
+        """Create mock prometheus gauge."""
+        gauge = Mock()
+        gauge.labels = MagicMock(side_effect=lambda **kwargs: Mock())
+        return gauge
+
+    def test_eviction_logs_warning(self, mock_gauge, caplog):
+        """Eviction 발생 시 경고 로그가 기록되어야 함."""
+        import logging
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        with caplog.at_level(logging.WARNING):
+            safe = SafeGauge(mock_gauge, max_label_combinations=2)
+            
+            safe.labels(domain="a")
+            safe.labels(domain="b")
+            safe.labels(domain="c")  # eviction 발생
+            
+        # 경고 로그 확인
+        warning_logs = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_logs) >= 1
+        
+        # 로그 메시지에 필수 정보 포함 확인
+        log_message = warning_logs[0].message
+        assert "LRU eviction" in log_message
+        assert "domain" in log_message
+        assert "max_label_combinations" in log_message
+
+    def test_eviction_log_includes_shadow_value(self, mock_gauge, caplog):
+        """Eviction 로그에 shadow_value가 포함되어야 함."""
+        import logging
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        with caplog.at_level(logging.WARNING):
+            safe = SafeGauge(mock_gauge, max_label_combinations=2)
+            
+            safe.labels(domain="a")
+            safe.labels(domain="b")
+            safe.labels(domain="c")  # eviction 발생
+            
+        warning_logs = [r for r in caplog.records if r.levelno == logging.WARNING]
+        log_message = warning_logs[0].message
+        assert "shadow_value" in log_message
+
+    def test_multiple_evictions_log_count(self, mock_gauge, caplog):
+        """여러 번 eviction 발생 시 각각 경고 로그 기록."""
+        import logging
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        with caplog.at_level(logging.WARNING):
+            safe = SafeGauge(mock_gauge, max_label_combinations=2)
+            
+            safe.labels(domain="a")
+            safe.labels(domain="b")
+            safe.labels(domain="c")  # eviction #1
+            safe.labels(domain="d")  # eviction #2
+            
+        warning_logs = [r for r in caplog.records if "LRU eviction" in r.message]
+        assert len(warning_logs) == 2
+        
+        # eviction 번호 확인
+        assert "#1" in warning_logs[0].message
+        assert "#2" in warning_logs[1].message
