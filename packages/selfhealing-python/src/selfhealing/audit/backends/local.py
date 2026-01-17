@@ -11,10 +11,15 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
-from selfhealing.audit.integrity import HashChainManager
+from selfhealing.audit.integrity import (
+    HashChainManager,
+    RedisHashChainManager,
+    HashChainManagerProtocol,
+    create_hash_chain_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,9 @@ class LocalFileBackend(AuditBackend):
         filename_pattern: Optional[str] = None,
         enable_hash_chain: bool = True,
         rotate_daily: bool = True,
+        distributed_hash_chain: bool = False,
+        redis_client: Optional[Any] = None,
+        redis_key_prefix: str = "selfhealing:",
     ):
         """
         Initialize local file backend.
@@ -48,6 +56,9 @@ class LocalFileBackend(AuditBackend):
             filename_pattern: Pattern for log filenames (use {date} placeholder)
             enable_hash_chain: Enable hash chain integrity (recommended)
             rotate_daily: Create new file each day
+            distributed_hash_chain: Use Redis-based distributed hash chain
+            redis_client: Redis client for distributed mode
+            redis_key_prefix: Key prefix for Redis keys
         """
         self._log_dir = Path(log_dir or self.DEFAULT_LOG_DIR)
         self._filename_pattern = filename_pattern or self.DEFAULT_FILENAME_PATTERN
@@ -62,7 +73,24 @@ class LocalFileBackend(AuditBackend):
         # Initialize hash chain manager
         if enable_hash_chain:
             state_file = self._log_dir / ".hash_chain_state.json"
-            self._hash_chain = HashChainManager(state_file)
+            
+            if distributed_hash_chain and redis_client is not None:
+                # Distributed mode: Redis-based hash chain with local fallback
+                local_fallback = HashChainManager(state_file)
+                self._hash_chain: Optional[HashChainManagerProtocol] = RedisHashChainManager(
+                    redis_client=redis_client,
+                    key_prefix=redis_key_prefix,
+                    fallback_manager=local_fallback,
+                )
+                logger.info("[LocalFileBackend] Using distributed hash chain (Redis)")
+            else:
+                # Local mode: File-based hash chain
+                self._hash_chain = HashChainManager(state_file)
+                if distributed_hash_chain:
+                    logger.warning(
+                        "[LocalFileBackend] Distributed hash chain requested but "
+                        "no Redis client provided. Using local mode."
+                    )
         else:
             self._hash_chain = None
 

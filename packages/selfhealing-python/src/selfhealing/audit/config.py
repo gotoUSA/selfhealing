@@ -8,7 +8,7 @@ Continuous Audit Configuration.
 import os
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,20 @@ class AuditConfig:
     )
     batch_flush_interval: int = field(
         default_factory=lambda: int(os.environ.get("AUDIT_BATCH_FLUSH_INTERVAL", "10"))
+    )
+    
+    # 분산 해시 체인 설정
+    hash_chain_distributed: bool = field(
+        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_DISTRIBUTED", "false").lower() == "true"
+    )
+    hash_chain_redis_url: Optional[str] = field(
+        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_REDIS_URL", os.environ.get("REDIS_URL"))
+    )
+    hash_chain_key_prefix: str = field(
+        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_KEY_PREFIX", "selfhealing:")
+    )
+    hash_chain_lock_timeout: float = field(
+        default_factory=lambda: float(os.environ.get("AUDIT_HASH_CHAIN_LOCK_TIMEOUT", "5.0"))
     )
     
     def __post_init__(self) -> None:
@@ -148,7 +162,29 @@ class AuditConfig:
             "integrity_check_interval": self.integrity_check_interval,
             "batch_size": self.batch_size,
             "batch_flush_interval": self.batch_flush_interval,
+            "hash_chain_distributed": self.hash_chain_distributed,
+            "hash_chain_redis_url": "***" if self.hash_chain_redis_url else None,
+            "hash_chain_key_prefix": self.hash_chain_key_prefix,
+            "hash_chain_lock_timeout": self.hash_chain_lock_timeout,
         }
+    
+    def get_redis_client(self) -> Optional[Any]:
+        """
+        Get Redis client for distributed hash chain.
+        
+        Returns:
+            Redis client if distributed mode enabled and configured,
+            None otherwise.
+        """
+        if not self.hash_chain_distributed or not self.hash_chain_redis_url:
+            return None
+        
+        try:
+            import redis
+            return redis.from_url(self.hash_chain_redis_url)
+        except Exception as e:
+            logger.warning(f"[AuditConfig] Failed to create Redis client: {e}")
+            return None
 
 
 # 규정별 최소 보존 기간 참조
