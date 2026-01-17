@@ -1,7 +1,7 @@
 # 41. Wrapper 리팩토링 PART 4: 설계 보완 및 구현
 
 > **작성일**: 2026-01-17  
-> **상태**: 구현 완료 (1~3)  
+> **상태**: ✅ 구현 완료 (1~5)  
 > **관련 문서**: [PART1](41_WRAPPER_REFACTORING_PART1.md), [PART2](41_WRAPPER_REFACTORING_PART2.md), [PART3](41_WRAPPER_REFACTORING_PART3.md)
 
 ---
@@ -17,8 +17,8 @@ PART 1~3 리팩토링 완료 후 아키텍트 리뷰에서 도출된 추가 보�
 | 1 | SafeGauge LRU 캐시 (메모리 관리) | **높음** | ✅ 구현 완료 |
 | 2 | Decorator Universal Async Support | **높음** | ✅ 구현 완료 |
 | 3 | Task Layer exc_info 일관성 | 중간 | ✅ 구현 완료 |
-| 4 | ProviderRegistry override_provider | 중간 | ⏳ 구현 예정 |
-| 5 | automation_gate Audit 포렌식 필드 | 중간 | ⏳ 구현 예정 |
+| 4 | ProviderRegistry override_provider | 중간 | ✅ 구현 완료 |
+| 5 | automation_gate Audit 포렌식 필드 | 중간 | ✅ 구현 완료 |
 | 6 | SyncInfo 관리 방안 검증 | 낮음 | ✅ 설계 완료 |
 | 7 | CleanupService 상태 비저장 검증 | 낮음 | ✅ 설계 완료 |
 
@@ -1148,30 +1148,30 @@ def log_error_budget_blocked_audit(
 ## 7. 구현 로드맵
 
 ```
-Phase 4.1: SafeGauge LRU 캐시 ⏳
+Phase 4.1: SafeGauge LRU 캐시 ✅
 ├── OrderedDict 기반 LRU 구현
 ├── max_label_combinations 파라미터 추가
 ├── Eviction 메트릭 추가
 └── 단위 테스트 추가
 
-Phase 4.2: Universal Async Decorators ⏳
+Phase 4.2: Universal Async Decorators ✅
 ├── utils/decorator_utils.py 생성
 ├── track_replay Universal 구현
 ├── automation_gate Universal 구현
 ├── track_dlq_* Universal 구현
 └── 단위 테스트 추가
 
-Phase 4.3: exc_info 일관성 ⏳
+Phase 4.3: exc_info 일관성 ✅
 ├── cleanup_tasks.py 수정
 ├── daily_report.py 수정
 └── 기타 Task 파일 검토
 
-Phase 4.4: ProviderRegistry 테스트 격리 ⏳
+Phase 4.4: ProviderRegistry 테스트 격리 ✅
 ├── override_provider Context Manager 추가
 ├── isolated_test_context 추가
 └── conftest.py 개선
 
-Phase 4.5: Audit 포렌식 필드 ⏳
+Phase 4.5: Audit 포렌식 필드 ✅
 ├── log_error_budget_blocked_audit 개선
 ├── blocked_request_trace_id 추가
 ├── actor_roles_at_block 추가
@@ -1184,35 +1184,35 @@ Phase 4.5: Audit 포렌식 필드 ⏳
 
 ### 8.1 SafeGauge LRU
 
-- [ ] `max_label_combinations` 초과 시 eviction 발생
-- [ ] LRU 순서 유지 확인 (최근 접근 항목 보존)
-- [ ] Eviction 메트릭 기록 확인
-- [ ] Thread-safety 테스트
+- [x] `max_label_combinations` 초과 시 eviction 발생
+- [x] LRU 순서 유지 확인 (최근 접근 항목 보존)
+- [x] Eviction 메트릭 기록 확인
+- [x] Thread-safety 테스트
 
 ### 8.2 Universal Decorators
 
-- [ ] 동기 함수에 적용 시 정상 동작
-- [ ] 비동기 함수에 적용 시 정상 동작
-- [ ] 메트릭 기록 정상
-- [ ] 예외 전파 정상
+- [x] 동기 함수에 적용 시 정상 동작
+- [x] 비동기 함수에 적용 시 정상 동작
+- [x] 메트릭 기록 정상
+- [x] 예외 전파 정상
 
 ### 8.3 exc_info 일관성
 
-- [ ] 모든 Task에서 `exc_info=True` 적용
-- [ ] 스택트레이스 로그 확인
-- [ ] Celery 결과 백엔드 정상
+- [x] 모든 Task에서 `exc_info=True` 적용
+- [x] 스택트레이스 로그 확인
+- [x] Celery 결과 백엔드 정상
 
 ### 8.4 ProviderRegistry 테스트 격리
 
-- [ ] `override_provider` Context Manager 동작
-- [ ] `isolated_test_context` 동작
-- [ ] 복원 확인
+- [x] `override_provider` Context Manager 동작
+- [x] `isolated_test_context` 동작
+- [x] 복원 확인
 
 ### 8.5 Audit 포렌식
 
-- [ ] `blocked_request_trace_id` WAL 기록 확인
-- [ ] `actor_roles_at_block` WAL 기록 확인
-- [ ] 자동 추출 동작 확인
+- [x] `blocked_request_trace_id` WAL 기록 확인
+- [x] `actor_roles_at_block` WAL 기록 확인
+- [x] 자동 추출 동작 확인
 
 ---
 

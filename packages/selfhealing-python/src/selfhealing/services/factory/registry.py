@@ -23,12 +23,26 @@ Testing Example:
     ...     cache="memory",
     ...     queue="sync",
     ... )
+
+Test Isolation:
+    >>> # 테스트에서 Provider 임시 교체
+    >>> with ProviderRegistry.override_provider("cache", mock_cache):
+    ...     # 이 블록 내에서만 mock_cache 사용
+    ...     do_something()
+    >>> # 자동 복원
+    >>>
+    >>> # 완전 격리된 테스트 컨텍스트
+    >>> with ProviderRegistry.isolated_test_context() as registry:
+    ...     registry.set_defaults(cache="memory", queue="sync")
+    ...     # 격리된 환경에서 테스트
+    >>> # 자동 복원
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional, Dict, Type, Any
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Optional, Dict, Type, Any, Generator
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
@@ -399,3 +413,109 @@ class ProviderRegistry:
         )
 
         logger.info("[ProviderRegistry] Configured for production")
+
+    # =========================================================================
+    # Test Isolation Context Managers
+    # =========================================================================
+
+    @classmethod
+    @contextmanager
+    def override_provider(
+        cls, 
+        provider_type: str, 
+        mock_instance: Any
+    ) -> Generator[None, None, None]:
+        """
+        테스트용 Provider 임시 교체 (Context Manager).
+        
+        전역 상태를 안전하게 교체하고 자동으로 복원합니다.
+        private 속성에 직접 접근하는 대신 이 메서드를 사용하세요.
+        
+        Args:
+            provider_type: "cache" 또는 "queue"
+            mock_instance: Mock 인스턴스
+        
+        Usage:
+            >>> mock_cache = MagicMock()
+            >>> with ProviderRegistry.override_provider("cache", mock_cache):
+            ...     # 이 블록 내에서만 mock_cache 사용
+            ...     result = ProviderRegistry.get_cache()
+            ...     assert result is mock_cache
+            >>> # 자동 복원
+        
+        Thread Safety:
+            이 메서드는 thread-local이 아니므로, 
+            멀티스레드 테스트에서는 각 테스트가 독립 프로세스에서 실행되어야 합니다.
+        
+        Raises:
+            ValueError: provider_type이 "cache" 또는 "queue"가 아닌 경우
+        """
+        if provider_type not in ("cache", "queue"):
+            raise ValueError(
+                f"Unknown provider_type: {provider_type}. "
+                f"Must be 'cache' or 'queue'."
+            )
+        
+        instances = cls._cache_instances if provider_type == "cache" else cls._queue_instances
+        default_name = cls._default_cache if provider_type == "cache" else cls._default_queue
+        
+        # 기존 인스턴스 백업
+        old_instance = instances.get(default_name)
+        
+        # Mock 인스턴스 설정
+        instances[default_name] = mock_instance
+        logger.debug(
+            f"[ProviderRegistry] Override {provider_type}: "
+            f"{type(mock_instance).__name__}"
+        )
+        
+        try:
+            yield
+        finally:
+            # 복원
+            if old_instance is not None:
+                instances[default_name] = old_instance
+            else:
+                instances.pop(default_name, None)
+            logger.debug(f"[ProviderRegistry] Restored {provider_type}")
+    
+    @classmethod
+    @contextmanager
+    def isolated_test_context(cls) -> Generator["ProviderRegistry", None, None]:
+        """
+        완전히 격리된 테스트 컨텍스트 제공.
+        
+        모든 인스턴스와 기본값을 임시로 교체하고 자동 복원합니다.
+        테스트 간 전역 상태 오염을 방지합니다.
+        
+        Usage:
+            >>> with ProviderRegistry.isolated_test_context() as registry:
+            ...     registry.set_defaults(cache="memory", queue="sync")
+            ...     # 격리된 환경에서 테스트
+            ...     cache = registry.get_cache()
+            >>> # 자동 복원 - 기존 상태로 돌아감
+        
+        Returns:
+            ProviderRegistry 클래스 자체 (메서드 체이닝용)
+        """
+        # 전체 상태 백업
+        old_cache_instances = cls._cache_instances.copy()
+        old_queue_instances = cls._queue_instances.copy()
+        old_default_cache = cls._default_cache
+        old_default_queue = cls._default_queue
+        
+        # 초기화 (빈 상태로 시작)
+        cls._cache_instances = {}
+        cls._queue_instances = {}
+        
+        logger.debug("[ProviderRegistry] Entering isolated test context")
+        
+        try:
+            yield cls
+        finally:
+            # 복원
+            cls._cache_instances = old_cache_instances
+            cls._queue_instances = old_queue_instances
+            cls._default_cache = old_default_cache
+            cls._default_queue = old_default_queue
+            logger.debug("[ProviderRegistry] Exited isolated test context")

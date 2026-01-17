@@ -390,13 +390,66 @@ def log_error_budget_blocked_audit(
     threshold_percent: Optional[float] = None,
     reason: Optional[str] = None,
     request: Any = None,
+    # 포렌식 필드: 명시적 전달 또는 자동 추출
+    blocked_request_trace_id: Optional[str] = None,
+    actor_roles: Optional[list] = None,
 ) -> Optional[int]:
     """
     Error Budget Gate 차단을 Audit 로그에 기록.
     
     에러 예산 부족으로 인한 자동화 차단을 기록합니다.
     WAL 기반 누락 0 보장.
+    
+    Args:
+        action: 차단된 액션 이름 (예: "dlq_auto_replay")
+        gate_status: 게이트 상태 (BLOCKED, CRITICAL 등)
+        error_budget_percent: 현재 에러 예산 잔여율 (%)
+        threshold_percent: 차단 임계치 (%)
+        reason: 차단 사유
+        request: Django request 객체 (선택)
+        blocked_request_trace_id: 차단된 요청의 Trace ID.
+                                  None이면 현재 컨텍스트에서 자동 추출.
+        actor_roles: 실행 주체의 역할 목록.
+                    None이면 현재 컨텍스트에서 자동 추출.
+    
+    Returns:
+        WAL 시퀀스 번호 (성공 시), None (실패 시)
+    
+    Example:
+        >>> log_error_budget_blocked_audit(
+        ...     action="dlq_auto_replay",
+        ...     gate_status="CRITICAL",
+        ...     error_budget_percent=5.2,
+        ...     threshold_percent=10.0,
+        ...     reason="에러 예산 부족으로 자동 실행 차단",
+        ... )
     """
+    import time
+    
+    # trace_id 자동 추출 (명시적으로 전달되지 않은 경우)
+    if blocked_request_trace_id is None:
+        try:
+            from selfhealing.audit.trace import get_trace_id
+            blocked_request_trace_id = get_trace_id()
+        except ImportError:
+            pass
+        except Exception:
+            blocked_request_trace_id = None
+    
+    # actor_roles 자동 추출 (명시적으로 전달되지 않은 경우)
+    final_actor_roles = actor_roles
+    if final_actor_roles is None:
+        try:
+            from selfhealing.context.actor_context import ActorContext
+            if ActorContext.is_set():
+                final_actor_roles = ActorContext.get_current().roles
+            else:
+                final_actor_roles = []
+        except ImportError:
+            final_actor_roles = []
+        except Exception:
+            final_actor_roles = []
+    
     details = {
         "action": action,
         "gate_status": gate_status,
@@ -404,6 +457,10 @@ def log_error_budget_blocked_audit(
         "threshold_percent": threshold_percent,
         "reason": reason,
         "manual_mode_enforced": True,
+        # 포렌식 필드: 차단 시점의 컨텍스트 정보
+        "blocked_request_trace_id": blocked_request_trace_id,
+        "actor_roles_at_block": final_actor_roles,
+        "blocked_at": time.time(),
     }
     details = {k: v for k, v in details.items() if v is not None}
     
@@ -414,6 +471,9 @@ def log_error_budget_blocked_audit(
         success=False,
         error_message=reason,
         target_id=action,
+        # 명시적 전달 (WAL 최상위 레벨에도 기록)
+        actor_roles=final_actor_roles,
+        trace_id=blocked_request_trace_id,
     )
     
     if request is not None:
@@ -435,8 +495,9 @@ def log_error_budget_blocked_audit(
             pass
     
     budget_str = f"{error_budget_percent:.1f}%" if error_budget_percent is not None else "N/A"
+    trace_str = blocked_request_trace_id[:8] if blocked_request_trace_id else "N/A"
     logger.warning(
         f"[ErrorBudgetAudit] BLOCKED | action={action} | "
-        f"budget={budget_str} | status={gate_status}"
+        f"budget={budget_str} | status={gate_status} | trace_id={trace_str}"
     )
     return wal_seq
