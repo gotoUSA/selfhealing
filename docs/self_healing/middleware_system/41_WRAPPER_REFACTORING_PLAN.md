@@ -1,8 +1,8 @@
 # 41. Wrapper 시스템 리팩토링 계획
 
-> **작성일**: 2026-01-16  
-> **상태**: Phase 3 완료 ✅ (전체 완료)  
-> **관련 문서**: PART1~PART3 상세 문서 참조
+> **작성일**: 2026-01-16 (PART4 추가: 2026-01-17)  
+> **상태**: Phase 4 진행 중 ⏳  
+> **관련 문서**: PART1~PART4 상세 문서 참조
 
 ---
 
@@ -30,13 +30,14 @@
 
 ## 2. 상세 문서 구조
 
-리팩토링 계획은 **3개 파트**로 분할:
+리팩토링 계획은 **4개 파트**로 분할:
 
 | 파트 | 문서 | 내용 |
 |---|---|---|
 | PART 1 | [41_WRAPPER_REFACTORING_PART1.md](41_WRAPPER_REFACTORING_PART1.md) | SafeGauge 모듈화 (#1) |
 | PART 2 | [41_WRAPPER_REFACTORING_PART2.md](41_WRAPPER_REFACTORING_PART2.md) | Task Wrapper 일관성 (#2, cleanup_tasks, daily_report) |
 | PART 3 | [41_WRAPPER_REFACTORING_PART3.md](41_WRAPPER_REFACTORING_PART3.md) | Decorator 통합 및 기타 Wrapper (#3~#11) |
+| PART 4 | [41_WRAPPER_REFACTORING_PART4.md](41_WRAPPER_REFACTORING_PART4.md) | 설계 보완 (LRU 캐시, Universal Async, 테스트 격리, 포렌식) |
 
 ---
 
@@ -161,6 +162,23 @@ Phase 3: Decorator 통합 (PART3) ✅ COMPLETED
 └── MetricsProviderWrapper 분리 ✅
     - services/auto_tuning/metrics_provider.py 생성
     - service.py 내부 클래스 → 외부 클래스로 분리
+
+Phase 4: 설계 보완 (PART4) ⏳ IN PROGRESS
+├── SafeGauge LRU 캐시 ⏳
+│   - OrderedDict 기반 max_label_combinations
+│   - Eviction 메트릭 및 콜백
+├── Universal Async Decorators ⏳
+│   - track_replay, automation_gate, track_dlq_* async 지원
+│   - utils/decorator_utils.py 헬퍼
+├── Task Layer exc_info 일관성 ⏳
+│   - cleanup_tasks.py exc_info=True 추가
+│   - daily_report.py exc_info=True 추가
+├── ProviderRegistry 테스트 격리 ⏳
+│   - override_provider Context Manager
+│   - isolated_test_context
+└── Audit 포렌식 필드 ⏳
+    - blocked_request_trace_id 추가
+    - actor_roles_at_block 추가
 ```
 
 ---
@@ -175,6 +193,11 @@ Phase 3: Decorator 통합 (PART3) ✅ COMPLETED
 | 데코레이터 중복 | 2개 (track_replay) | 1개 | ✅ 완료 |
 | with_jitter 위치 | metrics/ | utils/ | ✅ 완료 |
 | MetricsProviderWrapper 위치 | 내부 클래스 | 외부 파일 | ✅ 완료 |
+| SafeGauge 메모리 관리 | 없음 | LRU 캐시 | ⏳ PART4 |
+| Decorator 비동기 지원 | 부분적 | Universal | ⏳ PART4 |
+| Task exc_info 일관성 | 부분적 | 100% | ⏳ PART4 |
+| ProviderRegistry 테스트 격리 | 없음 | Context Manager | ⏳ PART4 |
+| Audit 포렌식 필드 | trace_id 자동 | 명시적 포함 | ⏳ PART4 |
 
 ---
 
@@ -183,3 +206,4 @@ Phase 3: Decorator 통합 (PART3) ✅ COMPLETED
 - [PART 1: SafeGauge 모듈화](41_WRAPPER_REFACTORING_PART1.md)
 - [PART 2: Task Wrapper 일관성](41_WRAPPER_REFACTORING_PART2.md)
 - [PART 3: Decorator 통합](41_WRAPPER_REFACTORING_PART3.md)
+- [PART 4: 설계 보완](41_WRAPPER_REFACTORING_PART4.md)
