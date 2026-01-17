@@ -657,7 +657,626 @@ class TestCircuitBreakerSettings:
 
 ---
 
-## 8. 관련 문서
+## 8. Phase 6: 고급 기능 확장 (예정)
+
+> 코드 리뷰 기반 개선 계획 (2026-01-17 추가)
+
+### 8.1 Layered Configuration Provider
+
+#### 8.1.1 현재 상태 (코드 증거)
+
+현재 `RuntimeConfigManager._get_config()` ([base.py#L85-L115](../../../packages/selfhealing-python/src/selfhealing/services/runtime_config/base.py#L85-L115)):
+
+```python
+def _get_config(self, config_type: str) -> Dict[str, Any]:
+    with self._lock:
+        config_class = CONFIG_CLASSES.get(config_type)
+        
+        # Get defaults (Level 1 + Level 2: Pydantic가 환경변수 자동 로드)
+        if config_class is not None:
+            defaults = to_dict(config_class())
+        
+        # Level 3: DB/Redis 오버라이드
+        merged = defaults.copy()
+        merged.update(self._cache[config_type])  # DB 값이 덮어쓰기
+```
+
+**현재 지원되는 레벨:**
+| Level | 출처 | 지원 여부 | 코드 위치 |
+|-------|------|----------|----------|
+| Level 1 | Pydantic 기본값 | ✅ 지원 | `config_class()` |
+| Level 2 | 환경변수/.env | ✅ 지원 | Pydantic BaseSettings 자동 |
+| Level 3 | DB/Redis 오버라이드 | ✅ 지원 | `self._cache` |
+| Level 4 | Request 단위 임시 설정 | ❌ 미지원 | 구현 필요 |
+
+#### 8.1.2 구현 계획: Layered Provider
+
+```python
+# settings/layered_provider.py (신규)
+"""
+Layered Configuration Provider.
+
+설정 우선순위 (낮음 → 높음):
+1. Hard-coded defaults (Pydantic Field default)
+2. Static ENV (.env, 환경변수)
+3. Dynamic DB/Redis (RuntimeConfigManager)
+4. Request-scoped override (per-request context)
+"""
+
+from contextvars import ContextVar
+from typing import Any, Dict, Optional, TypeVar, Type
+from pydantic_settings import BaseSettings
+
+T = TypeVar("T", bound=BaseSettings)
+
+# Level 4: Request-scoped overrides
+_request_overrides: ContextVar[Dict[str, Dict[str, Any]]] = ContextVar(
+    "request_overrides", default={}
+)
+
+
+def get_layered_settings(
+    settings_class: Type[T],
+    config_type: str,
+    domain: Optional[str] = None,
+) -> T:
+    """
+    계층화된 설정 로드.
+    
+    우선순위: Hard-coded < ENV < DB/Redis < Request Override
+    
+    Args:
+        settings_class: Pydantic Settings 클래스
+        config_type: RuntimeConfigManager 설정 타입
+        domain: 도메인별 오버라이드 키
+        
+    Returns:
+        병합된 Settings 인스턴스
+    """
+    # Level 1 + 2: Pydantic defaults + ENV
+    base_settings = settings_class()
+    base_dict = base_settings.model_dump()
+    
+    # Level 3: DB/Redis (RuntimeConfigManager)
+    from selfhealing.services.runtime_config import get_runtime_config_manager
+    try:
+        manager = get_runtime_config_manager()
+        runtime_config = manager._get_config(config_type)
+        base_dict.update(runtime_config)
+    except Exception:
+        pass  # Graceful fallback
+    
+    # Level 4: Request-scoped override
+    request_overrides = _request_overrides.get()
+    if config_type in request_overrides:
+        base_dict.update(request_overrides[config_type])
+    
+    # 병합된 값으로 새 인스턴스 생성 (model_copy 대신 직접 생성)
+    return settings_class.model_validate(base_dict)
+
+
+def set_request_override(config_type: str, overrides: Dict[str, Any]) -> None:
+    """Request 스코프 설정 오버라이드."""
+    current = _request_overrides.get().copy()
+    current[config_type] = overrides
+    _request_overrides.set(current)
+
+
+def clear_request_overrides() -> None:
+    """Request 스코프 오버라이드 초기화."""
+    _request_overrides.set({})
+```
+
+#### 8.1.3 Push-based 리프레시 (Redis Pub/Sub)
+
+**현재 인프라 (코드 증거):**
+
+[event_bus_redis.py#L36-L65](../../../packages/selfhealing-python/src/selfhealing/services/event_bus_redis.py#L36-L65):
+
+```python
+class RedisEventBus:
+    """Redis Pub/Sub 기반 분산 이벤트 버스."""
+    
+    def __init__(self, redis_url=None, channel=CHAOS_EVENT_CHANNEL, ...):
+        self._channel = channel
+        self._redis_client = redis.from_url(redis_url, ...)
+```
+
+**확장 계획:**
+
+```python
+# settings/config_refresh_channel.py (신규)
+CONFIG_REFRESH_CHANNEL = "selfhealing:config:refresh"
+
+class ConfigRefreshBus(RedisEventBus):
+    """설정 변경 전파용 Redis Pub/Sub."""
+    
+    def __init__(self):
+        super().__init__(channel=CONFIG_REFRESH_CHANNEL)
+    
+    def broadcast_refresh(self, config_type: str, changed_by: str) -> None:
+        """모든 인스턴스에 설정 재로드 신호 전파."""
+        self.publish(SelfHealingEvent(
+            event_type=EventType.CONFIG_CHANGE,
+            data={"config_type": config_type, "changed_by": changed_by},
+            source="config_manager",
+        ))
+    
+    def subscribe_refresh(self, handler: Callable) -> None:
+        """설정 재로드 이벤트 구독."""
+        self.subscribe(EventType.CONFIG_CHANGE, handler)
+```
+
+---
+
+### 8.2 SecretStr을 활용한 민감 정보 보호
+
+#### 8.2.1 현재 상태 (코드 증거)
+
+`SecuritySettings` 및 `L2StorageSettings` 분석 결과:
+
+| 설정 파일 | 민감 필드 존재 | SecretStr 사용 |
+|----------|--------------|---------------|
+| [security.py](../../../packages/selfhealing-python/src/selfhealing/settings/security.py) | 없음 (캐시 prefix만) | ❌ 미사용 |
+| [l2_storage.py](../../../packages/selfhealing-python/src/selfhealing/settings/l2_storage.py) | 없음 (timeout만) | ❌ 미사용 |
+
+**그러나 향후 민감 필드 추가 가능성 대비 필요.**
+
+#### 8.2.2 구현 계획
+
+```python
+# settings/secrets.py (신규)
+"""
+민감 정보 설정 - SecretStr 사용.
+
+Pydantic SecretStr 특징:
+- repr(): '**********' 출력
+- str(): '**********' 출력  
+- get_secret_value(): 실제 값 반환
+
+이점:
+- print(settings) 시 자동 마스킹
+- JSON 로깅 시 자동 마스킹
+- 감사(Audit) 로그 안전
+"""
+from pydantic import SecretStr, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class SecretsSettings(BaseSettings):
+    """
+    민감 정보 전용 설정.
+    
+    모든 비밀번호, API 키, 토큰은 이 클래스에서 관리.
+    """
+    
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_SECRET_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+    
+    # 데이터베이스 (예시)
+    database_password: SecretStr = Field(
+        default=SecretStr(""),
+        description="Database password (masked in logs)",
+    )
+    
+    # Redis
+    redis_password: SecretStr = Field(
+        default=SecretStr(""),
+        description="Redis password (masked in logs)",
+    )
+    
+    # 외부 API
+    toss_secret_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Toss Payment secret key (masked in logs)",
+    )
+    slack_webhook_token: SecretStr = Field(
+        default=SecretStr(""),
+        description="Slack webhook token (masked in logs)",
+    )
+
+
+# 사용 예시
+# settings = SecretsSettings()
+# print(settings)  # database_password=SecretStr('**********')
+# actual = settings.database_password.get_secret_value()  # 실제 값
+```
+
+---
+
+### 8.3 부분 업데이트 (Partial Update) 지원
+
+#### 8.3.1 현재 상태 (코드 증거)
+
+[pydantic_integration.py#L160-L180](../../../packages/selfhealing-python/src/selfhealing/api/django/serializers/pydantic_integration.py#L160-L180):
+
+```python
+def validate_with_pydantic(self, data: dict) -> dict:
+    try:
+        validated_model = self._pydantic_model(**data)
+        return validated_model.model_dump(exclude_unset=True, ...)
+    except Exception as e:
+        raise serializers.ValidationError(str(e))
+```
+
+**현재 문제점:**
+- `**data`로 전체 모델 검증 → 필수 필드 누락 시 오류
+- PATCH 요청 시 일부 필드만 전달하면 ValidationError 발생 가능
+
+#### 8.3.2 구현 계획
+
+```python
+# pydantic_integration.py 보완
+def validate_with_pydantic_partial(
+    self,
+    data: dict,
+    current_settings: Optional[BaseModel] = None,
+) -> dict:
+    """
+    부분 업데이트를 지원하는 Pydantic 검증.
+    
+    PATCH 요청 시 변경된 필드만 검증하고 현재 값과 병합.
+    
+    Args:
+        data: 변경할 필드만 포함된 dict
+        current_settings: 현재 설정 인스턴스
+        
+    Returns:
+        병합된 검증 완료 데이터
+    """
+    if not self._pydantic_model:
+        return data
+    
+    try:
+        if current_settings:
+            # 현재 값과 병합 후 검증
+            current_dict = current_settings.model_dump()
+            current_dict.update(data)
+            validated = self._pydantic_model.model_validate(current_dict)
+        else:
+            # 기본값과 병합
+            validated = self._pydantic_model.model_validate(data)
+        
+        # 실제로 변경된 필드만 반환
+        return {k: v for k, v in validated.model_dump().items() if k in data}
+    except Exception as e:
+        raise serializers.ValidationError(str(e))
+```
+
+---
+
+### 8.4 Config Drift 감지 및 Audit 연동
+
+#### 8.4.1 현재 상태 (코드 증거)
+
+**AuditEventType.CONFIG_CHANGE 이미 존재:**
+
+[event_buffer.py#L79](../../../packages/selfhealing-python/src/selfhealing/audit/event_buffer.py#L79):
+
+```python
+class AuditEventType(Enum):
+    ...
+    CONFIG_CHANGE = "config_change"
+    ...
+```
+
+**RuntimeConfigManager가 이미 변경 이력 추적:**
+
+[base.py#L155-L175](../../../packages/selfhealing-python/src/selfhealing/services/runtime_config/base.py#L155-L175):
+
+```python
+# 현재 구현
+self._save_to_history(
+    config_type=config_type,
+    values=current,
+    changed_by=changed_by,
+    reason=final_reason,
+)
+```
+
+**그러나 Old vs New 값 비교가 없음!**
+
+#### 8.4.2 구현 계획
+
+```python
+# base.py 보완 - _update_config() 메서드
+def _update_config(self, config_type: str, changed_by: str = "system", 
+                   reason: str = "", **kwargs) -> Dict[str, Any]:
+    with self._lock:
+        current = self._get_config(config_type)
+        previous = current.copy()  # ✅ 이미 존재
+        
+        # ... (기존 업데이트 로직) ...
+        
+        # Diff 계산 (신규 추가)
+        diff = self._compute_diff(previous, current)
+        
+        if diff:
+            # Audit 이벤트 발행 (신규 추가)
+            self._emit_config_change_audit(
+                config_type=config_type,
+                changed_by=changed_by,
+                reason=reason,
+                old_values=diff["old"],
+                new_values=diff["new"],
+            )
+
+def _compute_diff(
+    self, old: Dict[str, Any], new: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """변경된 필드만 추출."""
+    old_diff = {}
+    new_diff = {}
+    
+    for key in set(old.keys()) | set(new.keys()):
+        if old.get(key) != new.get(key):
+            old_diff[key] = old.get(key)
+            new_diff[key] = new.get(key)
+    
+    if old_diff:
+        return {"old": old_diff, "new": new_diff}
+    return None
+
+def _emit_config_change_audit(
+    self,
+    config_type: str,
+    changed_by: str,
+    reason: str,
+    old_values: Dict[str, Any],
+    new_values: Dict[str, Any],
+) -> None:
+    """AuditEventType.CONFIG_CHANGE 발행."""
+    try:
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit import log_config_change
+        
+        # 기존 log_config_change 호환 호출
+        for key in new_values:
+            log_config_change(
+                config_type=config_type.upper(),
+                config_key=key,
+                old_value=old_values.get(key),
+                new_value=new_values[key],
+                user=changed_by,
+                reason=reason,
+            )
+        
+        logger.info(
+            f"[RuntimeConfig] Audit logged: {config_type} "
+            f"changed by {changed_by}, fields: {list(new_values.keys())}"
+        )
+    except Exception as e:
+        logger.warning(f"[RuntimeConfig] Failed to emit audit: {e}")
+```
+
+---
+
+### 8.5 자가 문서화 CLI (inspect-config)
+
+#### 8.5.1 현재 상태
+
+- `inspect-config` CLI 도구: **존재하지 않음**
+- `argparse` 사용: 테스트 파일에서만 사용
+
+#### 8.5.2 구현 계획: Django Management Command
+
+```python
+# selfhealing/management/commands/selfhealing_config.py (신규)
+"""
+Self-Healing 설정 검사 CLI.
+
+Usage:
+    python manage.py selfhealing_config --inspect
+    python manage.py selfhealing_config --inspect --format json
+    python manage.py selfhealing_config --validate
+    python manage.py selfhealing_config --export > config.json
+"""
+from django.core.management.base import BaseCommand
+import json
+
+
+class Command(BaseCommand):
+    help = "Self-Healing 설정 검사 및 문서화"
+    
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--inspect",
+            action="store_true",
+            help="현재 로드된 모든 설정 출력",
+        )
+        parser.add_argument(
+            "--format",
+            choices=["text", "json", "table"],
+            default="text",
+            help="출력 형식",
+        )
+        parser.add_argument(
+            "--validate",
+            action="store_true",
+            help="설정 유효성 검증",
+        )
+        parser.add_argument(
+            "--export",
+            action="store_true",
+            help="JSON Schema 내보내기",
+        )
+    
+    def handle(self, *args, **options):
+        from selfhealing.settings import get_config, SelfHealingSettings
+        
+        if options["inspect"]:
+            self._inspect_config(options["format"])
+        elif options["validate"]:
+            self._validate_config()
+        elif options["export"]:
+            self._export_schema()
+    
+    def _inspect_config(self, fmt: str):
+        """모든 설정값과 출처 출력."""
+        from selfhealing.settings import get_config
+        config = get_config()
+        
+        if fmt == "json":
+            self.stdout.write(json.dumps(
+                config.model_dump(),
+                indent=2,
+                default=str,
+            ))
+        else:
+            self.stdout.write("=== Self-Healing Configuration ===\n")
+            for field_name, field_info in config.model_fields.items():
+                value = getattr(config, field_name)
+                source = self._detect_source(field_name)
+                self.stdout.write(
+                    f"{field_name}: {value} (source: {source})"
+                )
+    
+    def _detect_source(self, field_name: str) -> str:
+        """설정값 출처 감지."""
+        import os
+        env_key = f"SELFHEALING_{field_name.upper()}"
+        if env_key in os.environ:
+            return "ENV"
+        # RuntimeConfigManager 확인
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+            manager = get_runtime_config_manager()
+            # ... 출처 판별 로직
+        except:
+            pass
+        return "DEFAULT"
+    
+    def _export_schema(self):
+        """JSON Schema 내보내기."""
+        from selfhealing.settings import SelfHealingSettings
+        schema = SelfHealingSettings.model_json_schema()
+        self.stdout.write(json.dumps(schema, indent=2))
+```
+
+---
+
+### 8.6 Phase 6 체크리스트 (예정)
+
+| 기능 | 상태 | 우선순위 | 예상 시간 |
+|------|------|---------|----------|
+| Layered Provider | 📋 설계 완료 | 높음 | 1일 |
+| Push-based Refresh (Redis) | 📋 인프라 존재 | 중간 | 0.5일 |
+| SecretStr 도입 | 📋 설계 완료 | 중간 | 0.5일 |
+| Partial Update 지원 | 📋 설계 완료 | 높음 | 0.5일 |
+| Config Drift Audit | 📋 부분 구현됨 | 높음 | 0.5일 |
+| CLI 도구 | 📋 설계 완료 | 낮음 | 0.5일 |
+
+**총 예상: 3.5일**
+
+---
+
+## 9. 기술 Q&A
+
+### 9.1 중첩 모델(Nested Models) 처리 방식
+
+**질문:** CircuitBreakerSettings 안에 RetrySettings가 있을 때 DRF 변환은?
+
+**코드 근거:**
+
+[pydantic_integration.py#L78-L82](../../../packages/selfhealing-python/src/selfhealing/api/django/serializers/pydantic_integration.py#L78-L82):
+
+```python
+# Array field (List[str] 등)
+elif field_type == "array":
+    items = props.get("items", {})
+    # Handle $ref or complex items (skip and use generic ListField)
+    if not isinstance(items, dict) or "$ref" in items:
+        kwargs.pop("help_text", None)
+        return serializers.ListField(child=serializers.DictField(), **kwargs)
+```
+
+**현재 상태:**
+- `$ref` (중첩 Pydantic 모델 참조) 감지 시 → `DictField()`로 폴백
+- 타입 안전성 일부 손실 (런타임 Pydantic 검증으로 보완)
+
+**root.py 구조 확인:**
+
+[root.py#L50-L55](../../../packages/selfhealing-python/src/selfhealing/settings/root.py#L50-L55):
+
+```python
+class SelfHealingSettings(BaseSettings):
+    circuit_breaker: CircuitBreakerSettings = Field(
+        default_factory=CircuitBreakerSettings,
+    )
+    # CircuitBreakerSettings는 독립 Settings이지 중첩이 아님
+```
+
+**결론:** 현재 시스템에서는 **중첩이 아닌 컴포지션 패턴** 사용.
+각 Settings가 독립적이므로 DRF 변환 문제 없음.
+
+---
+
+### 9.2 타입 힌트 전파 무결성 (IDE IntelliSense)
+
+**질문:** `settings.circuit_breaker.failure_threshold` 자동완성 작동하나요?
+
+**코드 근거:**
+
+[root.py#L31-L55](../../../packages/selfhealing-python/src/selfhealing/settings/root.py#L31-L55):
+
+```python
+class SelfHealingSettings(BaseSettings):
+    circuit_breaker: CircuitBreakerSettings = Field(...)  # 타입 명시
+    dlq: DLQSettings = Field(...)
+    retry: RetrySettings = Field(...)
+```
+
+[root.py#L166-L175](../../../packages/selfhealing-python/src/selfhealing/settings/root.py#L166-L175):
+
+```python
+def get_config() -> SelfHealingSettings:  # 반환 타입 명시
+    global _settings
+    if _settings is None:
+        _settings = SelfHealingSettings()
+    return _settings
+```
+
+**검증 결과:**
+
+```
+✅ config = get_config()
+   → 반환 타입: SelfHealingSettings (명시됨)
+
+✅ config.circuit_breaker
+   → 타입: CircuitBreakerSettings (Field 타입 힌트)
+
+✅ config.circuit_breaker.failure_threshold
+   → 타입: int (CircuitBreakerSettings.failure_threshold)
+
+✅ 모든 레이어에서 IDE 자동완성 작동
+```
+
+**증거 - CircuitBreakerSettings:**
+
+[circuit_breaker.py#L49-L56](../../../packages/selfhealing-python/src/selfhealing/settings/circuit_breaker.py#L49-L56):
+
+```python
+failure_threshold: int = Field(  # 타입 명시
+    default=5,
+    ge=1,
+    le=100,
+    description="Number of failures before opening circuit",
+)
+```
+
+**결론:** 
+- 모든 Settings 클래스에 타입 힌트 완벽 적용
+- `get_config() -> SelfHealingSettings` 반환 타입 명시
+- Pydantic의 `Field()` 타입 추론 지원
+- **IDE IntelliSense 100% 작동**
+
+---
+
+## 10. 관련 문서
 
 - [16_GOVERNANCE_IMPLEMENTATION_PART2.md](../16_GOVERNANCE_IMPLEMENTATION_PART2.md) - 현재 Safe Defaults 구현
 - [Pydantic v2 Documentation](https://docs.pydantic.dev/latest/)
