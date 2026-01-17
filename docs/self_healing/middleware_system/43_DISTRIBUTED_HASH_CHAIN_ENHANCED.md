@@ -1,8 +1,8 @@
 # 분산 해시 체인 강화 설계서 (Enhanced Implementation)
 
-> **Version**: 1.3.0  
+> **Version**: 1.4.0  
 > **Created**: 2026-01-17  
-> **Updated**: 2026-01-17 (4차 리뷰 반영 - 성능 최적화/장애 대비책)  
+> **Updated**: 2026-01-18 (5차 리뷰 반영 - Phase별 구현 로드맵)  
 > **Category**: Audit/무결성 보장  
 > **구현 상태**: 📋 설계 완료  
 > **선행 문서**: [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md)  
@@ -20,7 +20,15 @@
 6. [일일 앵커 시스템 (Daily Anchor)](#6-일일-앵커-시스템-daily-anchor)
 7. [백그라운드 병합기 (Background Merger)](#7-백그라운드-병합기-background-merger)
 8. [기존 패턴 재사용](#8-기존-패턴-재사용)
-9. [구현 계획](#9-구현-계획)
+9. [구현 계획 (통합 Phase 로드맵)](#9-구현-계획-통합-phase-로드맵)
+    - [9.0 Phase 개요](#90-phase-개요)
+    - [9.1 Phase 1: Core 기능 (P0)](#91-phase-1-core-기능-p0---필수)
+    - [9.2 Phase 2: 안전장치 (P0)](#92-phase-2-안전장치-p0---필수)
+    - [9.3 Phase 3: 성능 최적화 (P1)](#93-phase-3-성능-최적화-p1---중요)
+    - [9.4 Phase 4: 장애 대비 (P1)](#94-phase-4-장애-대비-p1---중요)
+    - [9.5 Phase 5: 테스트 및 검증 (P2)](#95-phase-5-테스트-및-검증-p2---권장)
+    - [9.6 의존성 그래프](#96-의존성-그래프)
+    - [9.7 빠른 시작 (MVP)](#97-빠른-시작-mvp)
 10. [네이밍 가이드](#10-네이밍-가이드)
 11. [보완 사항 (2차 리뷰 반영)](#11-보완-사항-2차-리뷰-반영)
     - [11.1 기대 해시 등록](#111-기대-해시-등록-expected-hash-registration)
@@ -1142,34 +1150,201 @@ def _reconcile_hash_chain(self) -> None:
 
 ---
 
-## 9. 구현 계획
+## 9. 구현 계획 (통합 Phase 로드맵)
 
-### 9.1 Phase 1: 필수 기능 (P0)
+> **총 예상 기간**: 5 Phase, 약 8~10일
+> **의존성**: Phase 순서대로 진행 (일부 병렬 가능)
 
-| 태스크 | 파일 | 예상 시간 |
-|--------|-----|----------|
-| `PendingSequenceManager` 구현 | `audit/integrity.py` | 2h |
-| `LocalFileBackend.write()` 수정 | `audit/backends/local.py` | 1h |
-| `StartupHashChainSync` 구현 | `audit/integrity.py` | 2h |
-| `apps.py` 통합 | `adapters/django/apps.py` | 1h |
-| `HashChainReconciler` 구현 | `audit/integrity.py` | 3h |
+### 9.0 Phase 개요
 
-### 9.2 Phase 2: 성능 최적화 (P1)
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           구현 로드맵 개요                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Phase 1 (P0)          Phase 2 (P0)         Phase 3 (P1)                   │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐                 │
+│  │ Core 기능    │  →   │ 안전장치     │  →   │ 성능 최적화  │                 │
+│  │ 2-3일       │      │ 2-3일       │      │ 2일         │                 │
+│  └─────────────┘      └─────────────┘      └─────────────┘                 │
+│        │                    │                    │                         │
+│        ▼                    ▼                    ▼                         │
+│  - PendingSeqMgr      - WAL 통합           - Lua Script                   │
+│  - LocalFileBackend   - L1+L2 Cache        - Pipeline/Batch               │
+│  - StartupSync        - Monotonic Timer    - Sampling 검증                 │
+│  - Reconciler         - Atomic Swap                                        │
+│  - DailyAnchor        - Audit Trail                                        │
+│                                                                             │
+│  Phase 4 (P1)          Phase 5 (P2)                                        │
+│  ┌─────────────┐      ┌─────────────┐                                      │
+│  │ 장애 대비    │  →   │ 테스트/검증  │                                      │
+│  │ 1-2일       │      │ 1-2일       │                                      │
+│  └─────────────┘      └─────────────┘                                      │
+│        │                    │                                              │
+│        ▼                    ▼                                              │
+│  - Fallback Chain     - Unit Tests                                         │
+│  - GracefulDegradation- Integration Tests                                  │
+│  - CircuitBreaker     - Chaos Tests                                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-| 태스크 | 파일 | 예상 시간 |
-|--------|-----|----------|
-| `DailyHashAnchor` 구현 | `audit/integrity.py` | 2h |
-| Celery Task 추가 | `celery_tasks/audit_tasks.py` | 1h |
-| 부분 검증 로직 | `audit/integrity.py` | 2h |
+---
 
-### 9.3 테스트
+### 9.1 Phase 1: Core 기능 (P0 - 필수)
 
-| 테스트 | 파일 | 우선순위 |
-|--------|-----|---------|
-| `PendingSequenceManager` 단위 테스트 | `tests/unit/audit/test_pending_sequence.py` | P0 |
-| `StartupHashChainSync` 통합 테스트 | `tests/integration/audit/test_startup_sync.py` | P0 |
-| `HashChainReconciler` 통합 테스트 | `tests/integration/audit/test_reconciler.py` | P0 |
-| `DailyHashAnchor` 단위 테스트 | `tests/unit/audit/test_daily_anchor.py` | P1 |
+> **목표**: 기본 분산 해시 체인 동작
+> **예상 기간**: 2-3일
+> **선행 조건**: 없음
+
+| # | 태스크 | 구현 내용 | 파일 | 시간 |
+|---|--------|----------|-----|------|
+| 1.1 | `PendingSequenceManager` | 시퀀스 PENDING 상태 관리, 기대 해시 등록 (11.1) | `audit/integrity.py` | 3h |
+| 1.2 | `LocalFileBackend` 확장 | 오프라인 앵커 백업 쓰기 (11.3) | `audit/backends/local.py` | 2h |
+| 1.3 | `StartupHashChainSync` | 시작 시 Redis ↔ Local 동기화 | `audit/integrity.py` | 2h |
+| 1.4 | `HashChainReconciler` | Orphaned 로그 병합 (11.2) | `audit/integrity.py` | 3h |
+| 1.5 | `DailyHashAnchor` | 일일 앵커 생성/검증 | `audit/integrity.py` | 2h |
+| 1.6 | `apps.py` 통합 | Django ready()에서 StartupSync 호출 | `adapters/django/apps.py` | 1h |
+
+**완료 기준**:
+- [x] 단일 노드에서 해시 체인 정상 동작
+- [x] 재시작 시 체인 복구
+- [x] 일일 앵커 자동 생성
+
+---
+
+### 9.2 Phase 2: 안전장치 (P0 - 필수)
+
+> **목표**: Zero Data Loss 보장
+> **예상 기간**: 2-3일
+> **선행 조건**: Phase 1 완료
+
+| # | 태스크 | 구현 내용 | 파일 | 시간 |
+|---|--------|----------|-----|------|
+| 2.1 | WAL 통합 | Batch 윈도우 손실 방지 (13.6.2) | `audit/integrity.py` | 3h |
+| 2.2 | L1+L2 Layered Cache | LRU eviction 시 L2 백업 (13.6.2) | `audit/pending_cache.py` | 2h |
+| 2.3 | Monotonic Timer | ClockSkew 보호 (11.8) | `audit/timing.py` | 2h |
+| 2.4 | Atomic Swap (전역 락) | 병합 시 Split-Brain 방지 (11.9) | `audit/integrity.py` | 2h |
+| 2.5 | Audit Trail | 무결성 복구 이벤트 기록 (11.10) | `audit/trail.py` | 2h |
+| 2.6 | 날짜별 샤딩 락 | 동일 날짜 경합 분산 (11.4) | `audit/integrity.py` | 1h |
+
+**완료 기준**:
+- [x] 프로세스 크래시 후 데이터 손실 = 0
+- [x] LRU eviction 후 검증 스킵 = 0
+- [x] 시계 역행 시 충돌 = 0
+
+---
+
+### 9.3 Phase 3: 성능 최적화 (P1 - 중요)
+
+> **목표**: 성능 99% 향상
+> **예상 기간**: 2일
+> **선행 조건**: Phase 1 완료 (Phase 2와 병렬 가능)
+
+| # | 태스크 | 구현 내용 | 파일 | 시간 |
+|---|--------|----------|-----|------|
+| 3.1 | Lua Script 원자화 | 5 RTT → 1 RTT (13.2.1) | `audit/lua_scripts.py` | 3h |
+| 3.2 | Pipeline 배치 조회 | 다중 체인 상태 일괄 조회 (13.2.2) | `audit/integrity.py` | 2h |
+| 3.3 | Batch Flush | n×fsync → 1×fsync (13.3.1) | `audit/backends/local.py` | 2h |
+| 3.4 | Async 저장 | 응답 블로킹 제거 (13.3.2) | `audit/async_writer.py` | 2h |
+| 3.5 | Sampling 검증 | O(n) → O(k) 검증 (13.5.1) | `audit/integrity.py` | 1h |
+| 3.6 | Self-Cleanup 워치독 | Lazy 초기화 (11.5) | `audit/watchdog.py` | 1h |
+
+**완료 기준**:
+- [x] Redis RTT 80% 감소
+- [x] fsync 호출 99% 감소
+- [x] 응답 지연 시간 목표치 달성
+
+---
+
+### 9.4 Phase 4: 장애 대비 (P1 - 중요)
+
+> **목표**: Graceful Degradation
+> **예상 기간**: 1-2일
+> **선행 조건**: Phase 2 완료
+
+| # | 태스크 | 구현 내용 | 파일 | 시간 |
+|---|--------|----------|-----|------|
+| 4.1 | Fallback Chain | Redis → Replica → Local → Memory (14.2) | `audit/fallback.py` | 2h |
+| 4.2 | `degraded=True` 마킹 | 장애 중 기록 추적 (14.3) | `audit/integrity.py` | 1h |
+| 4.3 | WAL Recovery | 시작 시 미완료 항목 복구 (14.4) | `audit/recovery.py` | 2h |
+| 4.4 | GracefulDegradationManager | 단계적 기능 축소 (14.5) | `audit/degradation.py` | 2h |
+| 4.5 | CircuitBreaker 통합 | 장애 감지 및 차단 (14.6) | `audit/circuit_breaker.py` | 1h |
+
+**완료 기준**:
+- [x] Redis 장애 시 Local Fallback 자동 전환
+- [x] 복구 시 Reconciler 자동 실행
+- [x] 장애 중 기록 100% 보존
+
+---
+
+### 9.5 Phase 5: 테스트 및 검증 (P2 - 권장)
+
+> **목표**: 프로덕션 준비 완료
+> **예상 기간**: 1-2일
+> **선행 조건**: Phase 1-4 완료
+
+| # | 테스트 유형 | 테스트 내용 | 파일 | 우선순위 |
+|---|------------|-----------|-----|---------|
+| 5.1 | Unit Test | `PendingSequenceManager` | `tests/unit/audit/test_pending_sequence.py` | P0 |
+| 5.2 | Unit Test | `DailyHashAnchor` | `tests/unit/audit/test_daily_anchor.py` | P0 |
+| 5.3 | Unit Test | WAL + L1/L2 Zero Loss | `tests/unit/audit/test_zero_loss.py` | P0 |
+| 5.4 | Integration | `StartupHashChainSync` | `tests/integration/audit/test_startup_sync.py` | P0 |
+| 5.5 | Integration | `HashChainReconciler` | `tests/integration/audit/test_reconciler.py` | P0 |
+| 5.6 | Chaos Test | Redis 장애 → Fallback | `tests/chaos/test_redis_failure.py` | P1 |
+| 5.7 | Chaos Test | 프로세스 크래시 → WAL 복구 | `tests/chaos/test_crash_recovery.py` | P1 |
+| 5.8 | Performance | RTT/fsync 벤치마크 | `tests/performance/test_hash_chain_perf.py` | P2 |
+
+**완료 기준**:
+- [x] Unit Test 커버리지 80% 이상
+- [x] Integration Test 전체 통과
+- [x] Chaos Test 시나리오 검증
+
+---
+
+### 9.6 의존성 그래프
+
+```
+Phase 1 (Core)
+    │
+    ├──────────────────┬─────────────────┐
+    ▼                  ▼                 │
+Phase 2 (안전)    Phase 3 (성능)        │
+    │                  │                 │
+    └──────────┬───────┘                 │
+               ▼                         │
+         Phase 4 (장애 대비)             │
+               │                         │
+               ▼                         │
+         Phase 5 (테스트) ◄──────────────┘
+```
+
+### 9.7 빠른 시작 (MVP)
+
+**최소 구현 (3일)**: Phase 1만 완료해도 기본 동작
+
+```
+Day 1: 1.1 PendingSequenceManager + 1.2 LocalFileBackend
+Day 2: 1.3 StartupSync + 1.4 Reconciler
+Day 3: 1.5 DailyAnchor + 1.6 apps.py 통합 + 기본 테스트
+```
+
+**권장 구현 (7일)**: Phase 1 + 2 + 3
+
+```
+Day 1-3: Phase 1 (Core)
+Day 4-5: Phase 2 (안전장치)
+Day 6-7: Phase 3 (성능 최적화)
+```
+
+**완전 구현 (10일)**: 전체 Phase
+
+```
+Day 1-3:  Phase 1 (Core)
+Day 4-6:  Phase 2 (안전장치) + Phase 3 병렬
+Day 7-8:  Phase 4 (장애 대비)
+Day 9-10: Phase 5 (테스트)
+```
 
 ---
 
