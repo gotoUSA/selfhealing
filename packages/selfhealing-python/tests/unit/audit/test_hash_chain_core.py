@@ -1,14 +1,11 @@
 """
-Phase 1 테스트: 분산 해시 체인 강화 (Enhanced Hash Chain)
+Tests for distributed hash chain integrity components.
 
-테스트 대상:
-1. PendingSequenceManager - PENDING 상태 관리
-2. DailyHashAnchor - 일일 앵커 생성/검증
-3. StartupHashChainSync - 시작 시 동기화
-4. HashChainReconciler - 장애 후 병합
-
-Reference:
-    docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+Tests cover:
+1. PendingSequenceManager - PENDING state lifecycle (reserve/commit/abort)
+2. DailyHashAnchor - Daily checkpoint creation and anchor-based verification
+3. StartupHashChainSync - Redis/file state synchronization on startup
+4. HashChainReconciler - Merging degraded entries back into main chain
 """
 
 import json
@@ -756,8 +753,8 @@ class TestHashChainReconciler:
 # Integration Test: Full Workflow
 # =============================================================================
 
-class TestPhase1Integration:
-    """Phase 1 통합 테스트."""
+class TestHashChainCoreIntegration:
+    """Distributed hash chain core integration tests."""
     
     def test_full_write_flow_with_pending(self, mock_redis, temp_log_dir):
         """전체 쓰기 플로우 테스트 (PENDING 상태 포함)."""

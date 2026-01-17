@@ -334,24 +334,25 @@ class HashChainManagerProtocol(Protocol):
 
 class RedisHashChainManager:
     """
-    Redis-based distributed hash chain manager.
+    Redis-based distributed hash chain manager for multi-pod environments.
     
-    Ensures single global hash chain across all Pods in distributed environment.
-    Uses RedisDistributedLock to prevent Race Conditions 100%.
+    Ensures a single global hash chain across all application instances by:
+    - Using Redis INCR for atomic sequence numbering
+    - Acquiring distributed lock before hash computation to prevent race conditions
+    - Falling back to local HashChainManager if Redis becomes unavailable
     
-    Features:
-        - Atomic sequence increment via Redis INCR
-        - Distributed lock for read-modify-write safety
-        - Automatic fallback to local HashChainManager on Redis failure
-        - Pod identification for forensics
+    Hash Chain Concept:
+        Each audit log entry contains a SHA-256 hash of the previous entry,
+        creating a tamper-evident chain. Any modification or deletion
+        breaks the chain and is detectable during verification.
     
-    Design:
-        - RedisDistributedLock: adapters/cache/redis_adapter.py
-        - ResilientStorageBackend pattern: adapters/resilient/backend.py
-        - DLQ's INCR pattern: adapters/redis/dlq.py
-    
-    Reference:
-        docs/self_healing/middleware_system/42_DISTRIBUTED_HASH_CHAIN_REDIS.md
+    Distributed Safety:
+        Multiple pods writing audit logs simultaneously could cause:
+        - Duplicate sequence numbers
+        - Previous hash mismatches (race condition)
+        
+        This manager solves these issues by serializing writes through
+        Redis locks and using atomic INCR for sequence generation.
     """
     
     SEQUENCE_KEY = "audit:hash_chain:seq"
@@ -647,27 +648,29 @@ def create_hash_chain_manager(
 
 class PendingSequenceManager:
     """
-    Manages PENDING state for hash chain sequences.
+    Tracks incomplete hash chain writes to ensure atomicity.
     
-    Implements Write-Ahead Checkpoint pattern to ensure atomicity between:
-    1. Redis hash chain update (sequence increment + hash computation)
-    2. Local file write
+    Problem Solved:
+        When writing an audit log entry, two operations must succeed:
+        1. Update Redis with new sequence/hash (distributed state)
+        2. Write entry to local file (persistent storage)
+        
+        If step 2 fails after step 1 succeeds, the hash chain has a "ghost"
+        sequence - a number that was assigned but never written to disk.
     
-    If file write fails after Redis update, the sequence is marked as ORPHANED
-    for later cleanup or reconciliation.
-    
+    Solution - Write-Ahead Checkpoint:
+        1. Before file write: Mark sequence as PENDING in Redis
+        2. On file write success: Remove PENDING marker (committed)
+        3. On file write failure: Move to ORPHANED for later recovery
+        
     Redis Key Structure:
-    - {prefix}audit:hash_chain:pending:{sequence} -> expected_hash (TTL: 30s)
-    - {prefix}audit:hash_chain:orphaned:{sequence} -> "true" (TTL: 24h)
+        {prefix}audit:hash_chain:pending:{sequence} -> expected_hash (TTL: 30s)
+        {prefix}audit:hash_chain:orphaned:{sequence} -> hash (TTL: 24h)
     
-    Lifecycle:
-    1. reserve_sequence() - Mark sequence as PENDING with expected hash
-    2. File write attempt
-    3a. commit_sequence() - Success: Remove PENDING (transaction complete)
-    3b. abort_sequence() - Failure: Move to ORPHANED (needs reconciliation)
-    
-    Reference:
-        docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+    Auto-Cleanup:
+        PENDING keys have short TTL (30s) for crash recovery.
+        If a process crashes mid-write, the PENDING key expires
+        and StartupHashChainSync will handle cleanup.
     """
     
     PENDING_KEY_PREFIX = "audit:hash_chain:pending:"
@@ -946,23 +949,26 @@ class PendingSequenceManager:
 
 class DailyHashAnchor:
     """
-    Daily hash anchor system for efficient verification.
+    Daily hash anchor system for efficient chain verification.
     
-    Stores end-of-day hash chain state as "anchor points" allowing:
-    - Partial verification: Only verify "today's logs + yesterday's anchor"
-    - Fast recovery: Resume chain from any anchor point
-    - Audit trail: Historical record of daily chain state
+    Problem:
+        Verifying a hash chain with millions of entries is expensive.
+        Full verification requires reading and hashing every entry.
+    
+    Solution - Daily Anchors:
+        Store the chain state (sequence + hash) at the end of each day.
+        Verification can then start from any anchor instead of from GENESIS.
+        
+        Example:
+        - Instead of verifying entries 1-1,000,000
+        - Verify: yesterday's anchor + today's entries (maybe 10,000)
     
     Redis Key Structure:
-    - {prefix}audit:hash_chain:anchor:{YYYY-MM-DD} -> {sequence, hash, timestamp}
-    
-    Features:
-    - Automatic anchor creation at day boundaries
-    - Configurable retention period (default: 90 days)
-    - Anchor-based partial chain verification
-    
-    Reference:
-        docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+        {prefix}audit:hash_chain:anchor:{YYYY-MM-DD} -> {sequence, hash, timestamp}
+        
+    Retention:
+        Anchors are automatically deleted after 90 days (configurable).
+        This provides sufficient history for audits while limiting storage.
     """
     
     ANCHOR_KEY_PREFIX = "audit:hash_chain:anchor:"
@@ -1249,19 +1255,24 @@ class StartupHashChainSync:
     """
     Synchronizes hash chain state between Redis and local files at startup.
     
-    Handles recovery scenarios where Redis and local state diverge:
-    - Redis ahead: Normal case (file write pending)
-    - File ahead: Redis lost data (sync Redis to file)
-    - Both empty: Fresh start
+    Why Needed:
+        After a restart, Redis and local file state may diverge:
+        - Redis restarted and lost data -> File is ahead
+        - Process crashed mid-write -> Redis is ahead (pending writes)
+        - Both empty -> Fresh start
     
-    Also cleans up stale PENDING sequences from previous crashes.
+    Sync Logic:
+        1. Read last sequence/hash from local log files
+        2. Read current sequence/hash from Redis
+        3. Compare and sync:
+           - Redis < File: Update Redis to match file (data recovery)
+           - Redis > File: Normal (some writes pending, no action needed)
+           - Equal: In sync, no action needed
+        4. Clean up stale PENDING sequences from previous crashes
     
-    Pattern References:
-    - _recover_from_wal_on_startup() (adapters/resilient/backend.py)
-    - Startup Hydration (adapters/django/apps.py)
-    
-    Reference:
-        docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+    Idempotent:
+        sync() is safe to call multiple times. After first sync,
+        subsequent calls return immediately without re-syncing.
     """
     
     SEQUENCE_KEY = "audit:hash_chain:seq"
@@ -1534,21 +1545,28 @@ class StartupHashChainSync:
 
 class HashChainReconciler:
     """
-    Reconciles degraded/orphaned entries back into the main hash chain.
+    Merges degraded/fallback entries back into the main hash chain.
     
-    When Redis fails, entries are written with "degraded: true" flag using
-    local fallback. This reconciler:
-    1. Finds all degraded entries in local files
-    2. Re-computes their hash chain integrity
-    3. Appends them to the main Redis chain
-    4. Updates the entries in local files as reconciled
+    Problem:
+        When Redis is unavailable, audit logs are written with:
+        - degraded: true (flag indicating fallback mode)
+        - Local-only sequence numbers (not globally coordinated)
+        
+        These entries exist in local files but are not part of the
+        verified global hash chain.
     
-    Pattern References:
-    - MetricsReconciler (metrics/reconciler.py)
-    - _recover_from_wal_on_startup() (adapters/resilient/backend.py)
+    Solution - Reconciliation:
+        When Redis recovers, this reconciler:
+        1. Scans local files for entries with "degraded: true"
+        2. Assigns them new global sequence numbers (continuing main chain)
+        3. Recomputes their hashes with proper previous_hash linkage
+        4. Updates Redis state to include these entries
+        5. Marks entries as "reconciled: true" (no longer degraded)
     
-    Reference:
-        docs/self_healing/middleware_system/43_DISTRIBUTED_HASH_CHAIN_ENHANCED.md
+    When to Run:
+        - Automatically after Redis recovery
+        - Manually via admin command
+        - On startup if degraded entries are detected
     """
     
     SEQUENCE_KEY = "audit:hash_chain:seq"
