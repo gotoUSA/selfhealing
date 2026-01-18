@@ -923,6 +923,133 @@ python -m pytest tests/unit/resilience/emergency_mode/ \
 
 ### 14.6 다음 단계
 
-- [ ] 백업 파일(.bak) 정리 (확인 후 삭제)
+- [x] 백업 파일(.bak) 정리 (완료)
+- [ ] CI/CD 파이프라인 테스트 경로 업데이트
+- [ ] 전체 테스트 스위트 회귀 테스트
+
+---
+
+## 15. Phase 3 실행 결과 (2026-01-XX)
+
+### 15.1 분리 대상
+
+| 원본 파일 | 줄 수 | 테스트 수 | 분리 대상 |
+|----------|-------|-----------|----------|
+| test_layered_repository.py | 862 | 39 | storage/layered_repository/ |
+| test_hash_chain_core.py | 862 | 30 | audit/hash_chain_core/ |
+| test_memory_repositories.py | 835 | 39 | adapters/memory_repositories/ |
+| test_opentelemetry_adapter.py | 813 | 35 | adapters/opentelemetry/ |
+| test_pydantic_settings_phase2.py | 821 | 59 | settings/pydantic_settings/ |
+
+### 15.2 분리 결과
+
+#### 15.2.1 tests/unit/storage/layered_repository/
+```
+layered_repository/
+├── __init__.py
+├── conftest.py               # MockL2Storage, 공통 fixtures
+├── test_basic.py             # TestLayeredRepositoryBasic
+├── test_cold_start.py        # TestColdStartProtection
+├── test_drift.py             # TestDriftReconciliation
+├── test_fallback.py          # TestIntelligentFallback
+├── test_forensic_analysis.py # TestShadowLogForensicAnalysis
+├── test_health_check.py      # TestL2HealthCheck
+├── test_l2_timeout.py        # TestL2Timeout
+└── test_shadow_logging.py    # TestShadowLogging
+```
+- 테스트 수: **39개**
+- 파일 수: 10개
+
+#### 15.2.2 tests/unit/audit/hash_chain_core/
+```
+hash_chain_core/
+├── __init__.py
+├── conftest.py               # MockRedisClient, MockPipeline (~150줄)
+├── test_daily_anchor.py      # TestDailyHashAnchor
+├── test_integration.py       # TestHashChainCoreIntegration
+├── test_pending_sequence.py  # TestPendingSequenceManager
+├── test_reconciler.py        # TestHashChainReconciler
+└── test_startup_sync.py      # TestStartupHashChainSync
+```
+- 테스트 수: **30개**
+- 파일 수: 7개
+
+#### 15.2.3 tests/unit/adapters/memory_repositories/
+```
+memory_repositories/
+├── __init__.py
+├── conftest.py
+├── test_circuit_breaker.py   # TestInMemoryCircuitBreakerStateRepository
+├── test_cleanup.py           # TestCleanupOperations
+├── test_failed_operation.py  # TestInMemoryFailedOperationRepository
+├── test_integration.py       # TestIntegrationScenarios
+├── test_provider_registry.py # TestProviderRegistry
+└── test_security_incident.py # TestInMemorySecurityIncidentRepository
+```
+- 테스트 수: **39개**
+- 파일 수: 8개
+
+#### 15.2.4 tests/unit/adapters/opentelemetry/
+```
+opentelemetry/
+├── __init__.py
+├── conftest.py               # otel_config, noop_adapter fixtures
+├── test_additional_safety.py # TestAdditionalSafety
+├── test_decision_boundary.py # TestDecisionBoundary
+├── test_noop_safety.py       # TestNoOpSafety
+└── test_span_ownership.py    # TestSpanOwnershipRules
+```
+- 테스트 수: **35개**
+- 파일 수: 6개
+
+#### 15.2.5 tests/unit/settings/pydantic_settings/
+```
+pydantic_settings/
+├── __init__.py
+├── conftest.py
+├── test_drift_l2_storage.py        # TestDriftThresholdSettings, TestL2StorageSettings
+├── test_forensic.py                # TestForensicSettings
+├── test_governance_chaos.py        # TestGovernanceSettings, TestChaosSettings
+├── test_idempotency.py             # TestIdempotencySettings
+├── test_legacy_consistency.py      # TestPydanticConsistencyWithLegacy
+├── test_logging_metrics.py         # TestLoggingSettings, TestMetricsSettings
+├── test_notification_error_budget.py # TestNotificationSettings, TestErrorBudgetSettings
+└── test_sla_slo.py                 # TestSLASettings, TestSLOSettings
+```
+- 테스트 수: **59개**
+- 파일 수: 10개
+
+### 15.3 기술적 해결 사항
+
+**Lazy Import 패턴 유지**: Phase 2와 동일하게 모든 분리된 테스트 파일에서 lazy import 패턴 적용
+
+### 15.4 실행 명령어
+
+```bash
+# Phase 3 전체 테스트 실행
+cd packages/selfhealing-python
+python -m pytest tests/unit/storage/layered_repository/ \
+                 tests/unit/audit/hash_chain_core/ \
+                 tests/unit/adapters/memory_repositories/ \
+                 tests/unit/adapters/opentelemetry/ \
+                 tests/unit/settings/pydantic_settings/ -q
+
+# 결과: 202 passed in 3.83s
+```
+
+### 15.5 Phase 1 + Phase 2 + Phase 3 총계
+
+| Phase | 패키지 수 | 총 테스트 수 | 총 파일 수 |
+|-------|-----------|--------------|-----------|
+| Phase 1 | 5 | 292 | ~35 |
+| Phase 2 | 4 | 170 | ~25 |
+| Phase 3 | 5 | 202 | 41 |
+| **Total** | **14** | **664** | **~101** |
+
+### 15.6 다음 단계
+
+- [x] Phase 3 원본 파일 삭제 완료
+- [x] Phase 3 백업 파일 삭제 완료
+- [ ] Phase 4: 나머지 600줄+ 파일 분리
 - [ ] CI/CD 파이프라인 테스트 경로 업데이트
 - [ ] 전체 테스트 스위트 회귀 테스트
