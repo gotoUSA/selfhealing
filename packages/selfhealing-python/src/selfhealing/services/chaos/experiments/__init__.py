@@ -88,8 +88,14 @@ from selfhealing.services.chaos.experiments.audit import (
     ReplayFloodExperiment,
 )
 
-# Factory function
-from selfhealing.services.chaos.base import ExperimentType
+# Factory function and core types from base
+from selfhealing.services.chaos.base import (
+    ExperimentType,
+    ExperimentConfig,
+    ExperimentStatus,
+    ExperimentResult,
+    _apply_chaos_config,
+)
 
 
 def create_experiment(experiment_type: str, config, experiment_id: str = None):
@@ -135,7 +141,7 @@ def create_experiment(experiment_type: str, config, experiment_id: str = None):
         raise ValueError(f"Unsupported experiment type: {experiment_type}")
     
     experiment_class = experiment_classes[experiment_type]
-    return experiment_class(config, experiment_id)
+    return experiment_class(experiment_id=experiment_id, config=config)
 
 
 __all__ = [
@@ -178,4 +184,7 @@ __all__ = [
     "ReplayFloodExperiment",
     # Factory
     "create_experiment",
+    # Config and utils (for tests)
+    "ExperimentConfig",
+    "_apply_chaos_config",
 ]

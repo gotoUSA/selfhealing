@@ -1,8 +1,0 @@
-...............                                                          [100%]
-============================== warnings summary ===============================
-packages\selfhealing-python\src\selfhealing\adapters\django\apps.py:361
-  C:\Users\admin\Desktop\python\CRUD\myproject\packages\selfhealing-python\src\selfhealing\adapters\django\apps.py:361: DeprecationWarning: Importing from old module paths is deprecated and will be removed in a future version. Please migrate to 'selfhealing' package. See packages/selfhealing-python/docs/MIGRATION.md for details.
-    from selfhealing.services.precomputed_cache import (
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-15 passed, 1 warning in 0.26s

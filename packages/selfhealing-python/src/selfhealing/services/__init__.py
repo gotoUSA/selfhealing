@@ -132,6 +132,9 @@ from .circuit_breaker_service import (
     should_allow_request,
     force_open_circuit,
     force_close_circuit,
+    # Rate limit tracking
+    RateLimitTracker,
+    get_rate_limit_tracker,
 )
 from .dlq_service import (
     get_dlq_service,
@@ -227,6 +230,8 @@ __all__ = [
     "should_allow_request",
     "force_open_circuit",
     "force_close_circuit",
+    "RateLimitTracker",
+    "get_rate_limit_tracker",
     
     # === Backward Compatibility - DLQ ===
     "DLQConfig",
