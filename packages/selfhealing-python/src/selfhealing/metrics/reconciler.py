@@ -18,7 +18,7 @@ from selfhealing.utils.jitter import with_jitter, JitterConfig
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
 if TYPE_CHECKING:
-    from selfhealing.services.security_violation_service import SecurityViolationService
+    from selfhealing.services.security import SecurityViolationService
 
 logger = logging.getLogger(__name__)
 

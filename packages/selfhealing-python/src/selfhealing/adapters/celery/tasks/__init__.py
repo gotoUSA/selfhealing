@@ -44,7 +44,7 @@ from __future__ import annotations
 # ============================================================
 # Async Persistence Tasks
 # ============================================================
-from selfhealing.adapters.celery.tasks.persistence import (
+from .persistence import (
     async_persist_batch,
     async_persist_dlq_entry,
     link_audit_to_dlq,
@@ -53,7 +53,7 @@ from selfhealing.adapters.celery.tasks.persistence import (
 # ============================================================
 # Circuit Breaker Tasks
 # ============================================================
-from selfhealing.adapters.celery.tasks.circuit_breaker import (
+from .circuit_breaker import (
     check_circuit_breaker_recovery,
     conditional_replay_on_circuit_close,
     expire_manual_overrides,
@@ -64,7 +64,7 @@ from selfhealing.adapters.celery.tasks.circuit_breaker import (
 # ============================================================
 # DLQ Replay Tasks
 # ============================================================
-from selfhealing.adapters.celery.tasks.dlq_replay import (
+from .dlq_replay import (
     cleanup_resolved_dlq_entries,
     replay_batch_by_domain,
     replay_single_dlq_entry,
@@ -73,7 +73,7 @@ from selfhealing.adapters.celery.tasks.dlq_replay import (
 # ============================================================
 # Metrics & Monitoring Tasks
 # ============================================================
-from selfhealing.adapters.celery.tasks.monitoring import (
+from .monitoring import (
     check_and_report_sla_breaches,
     collect_self_healing_metrics,
     emit_selfhealing_heartbeat,

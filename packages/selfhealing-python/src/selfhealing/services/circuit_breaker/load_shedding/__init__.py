@@ -22,7 +22,7 @@ from typing import Optional
 # ============================================================
 # Data Models
 # ============================================================
-from selfhealing.services.circuit_breaker.load_shedding.shedding_models import (
+from .shedding_models import (
     SheddingAuditEntry,
     SheddingDecision,
     SheddingState,
@@ -32,28 +32,28 @@ from selfhealing.services.circuit_breaker.load_shedding.shedding_models import (
 # ============================================================
 # Error Rate Provider
 # ============================================================
-from selfhealing.services.circuit_breaker.load_shedding.error_rate import (
+from .error_rate import (
     ErrorRateProvider,
 )
 
 # ============================================================
 # Manager
 # ============================================================
-from selfhealing.services.circuit_breaker.load_shedding.manager import (
+from .manager import (
     LoadSheddingManager,
 )
 
 # ============================================================
 # Middleware
 # ============================================================
-from selfhealing.services.circuit_breaker.load_shedding.shedding_middleware import (
+from .shedding_middleware import (
     LoadSheddingMiddleware,
 )
 
 # ============================================================
 # Dashboard
 # ============================================================
-from selfhealing.services.circuit_breaker.load_shedding.dashboard import (
+from .dashboard import (
     LoadSheddingDashboard,
 )
 

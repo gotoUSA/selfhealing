@@ -80,6 +80,6 @@ def create_security_violation_service(
     Returns:
         SecurityViolationService instance
     """
-    from selfhealing.services.security_violation_service import SecurityViolationService
+    from selfhealing.services.security import SecurityViolationService
 
     return SecurityViolationService(repository=repository)

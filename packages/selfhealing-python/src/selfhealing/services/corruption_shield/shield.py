@@ -342,7 +342,7 @@ class CorruptionShield:
         
         # Try to create security incident
         try:
-            from selfhealing.services.security_violation_service import (
+            from selfhealing.services.security import (
                 SecurityViolationService,
                 ViolationType,
             )
@@ -381,7 +381,7 @@ class CorruptionShield:
             ViolationType enum 값 (문자열)
         """
         try:
-            from selfhealing.services.security_violation_service import ViolationType
+            from selfhealing.services.security import ViolationType
         except ImportError:
             # Fallback to string
             return f"corruption_{violation.code}"

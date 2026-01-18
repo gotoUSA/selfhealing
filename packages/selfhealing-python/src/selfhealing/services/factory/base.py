@@ -245,7 +245,7 @@ class ServiceFactory:
 
     def create_security_violation_service(self):
         """Create SecurityViolationService with proper repository."""
-        from selfhealing.services.security_violation_service import SecurityViolationService
+        from selfhealing.services.security import SecurityViolationService
 
         return SecurityViolationService(repository=self.get_security_incident_repository())
 

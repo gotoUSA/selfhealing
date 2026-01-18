@@ -89,13 +89,13 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     DEFAULT_DOMAINS      → from selfhealing.services.metrics.registry import DEFAULT_DOMAINS
 
     # Security (→ security_*.py)
-    SecurityViolationResult → from selfhealing.services.security_violation_service import SecurityViolationResult
-    SecurityConfig       → from selfhealing.services.security_violation_service import SecurityConfig
-    ViolationType        → from selfhealing.services.security_violation_service import ViolationType
-    Severity             → from selfhealing.services.security_violation_service import Severity
-    SEVERITY_BY_VIOLATION_TYPE → from selfhealing.services.security_violation_service import SEVERITY_BY_VIOLATION_TYPE
-    get_security_violation_service → from selfhealing.services.security_violation_service import get_security_violation_service
-    handle_security_violation → from selfhealing.services.security_violation_service import handle_security_violation
+    SecurityViolationResult → from selfhealing.services.security import SecurityViolationResult
+    SecurityConfig       → from selfhealing.services.security import SecurityConfig
+    ViolationType        → from selfhealing.services.security import ViolationType
+    Severity             → from selfhealing.services.security import Severity
+    SEVERITY_BY_VIOLATION_TYPE → from selfhealing.services.security import SEVERITY_BY_VIOLATION_TYPE
+    get_security_violation_service → from selfhealing.services.security import get_security_violation_service
+    handle_security_violation → from selfhealing.services.security import handle_security_violation
     SecurityNotificationService → from selfhealing.services.security_notification_service import SecurityNotificationService
     SecurityNotificationResult → from selfhealing.services.security_notification_service import SecurityNotificationResult
     NotificationResult   → from selfhealing.services.security_notification_service import NotificationResult
@@ -168,7 +168,7 @@ from .control_api_service import (
 )
 
 # --- Backward Compatibility - Security ---
-from .security_violation_service import (
+from .security import (
     SecurityViolationService,
     SecurityViolationResult,
     SecurityConfig,

@@ -56,7 +56,7 @@ class LoadSheddingMiddleware:
     def manager(self) -> "LoadSheddingManager":
         """Manager 인스턴스."""
         if self._manager is None:
-            from selfhealing.services.circuit_breaker.load_shedding import (
+            from . import (
                 get_load_shedding_manager,
             )
 
