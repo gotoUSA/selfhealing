@@ -1,10 +1,10 @@
 # 분산 해시 체인 강화 설계서 (Enhanced Implementation)
 
-> **Version**: 1.7.0  
+> **Version**: 1.8.0  
 > **Created**: 2026-01-17  
-> **Updated**: 2026-01-18 (Phase 1, 2, 3 구현 완료)  
+> **Updated**: 2026-01-18 (Phase 1, 2, 3, 4 구현 완료)  
 > **Category**: Audit/무결성 보장  
-> **구현 상태**: ✅ Phase 1 구현 완료, ✅ Phase 2 구현 완료, ✅ Phase 3 구현 완료  
+> **구현 상태**: ✅ Phase 1 구현 완료, ✅ Phase 2 구현 완료, ✅ Phase 3 구현 완료, ✅ Phase 4 구현 완료  
 > **선행 문서**: [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md)  
 > **근거 코드**: 실제 소스 코드 분석 기반
 
@@ -1268,24 +1268,28 @@ def _reconcile_hash_chain(self) -> None:
 
 ---
 
-### 9.4 Phase 4: 장애 대비 (P1 - 중요)
+### 9.4 Phase 4: 장애 대비 (P1 - 중요) ✅ 완료
 
 > **목표**: Graceful Degradation
 > **예상 기간**: 1-2일
 > **선행 조건**: Phase 2 완료
+> **상태**: ✅ 2026-01-18 구현 완료
 
-| # | 태스크 | 구현 내용 | 파일 | 시간 |
+| # | 태스크 | 구현 내용 | 파일 | 상태 |
 |---|--------|----------|-----|------|
-| 4.1 | Fallback Chain | Redis → Replica → Local → Memory (14.2) | `audit/fallback.py` | 2h |
-| 4.2 | `degraded=True` 마킹 | 장애 중 기록 추적 (14.3) | `audit/integrity.py` | 1h |
-| 4.3 | WAL Recovery | 시작 시 미완료 항목 복구 (14.4) | `audit/recovery.py` | 2h |
-| 4.4 | GracefulDegradationManager | 단계적 기능 축소 (14.5) | `audit/degradation.py` | 2h |
-| 4.5 | CircuitBreaker 통합 | 장애 감지 및 차단 (14.6) | `audit/circuit_breaker.py` | 1h |
+| 4.1 | `HashChainFallbackChain` | Redis → Replica → Local → Memory 폴백 체인 | `audit/hash_chain_graceful_degradation.py` | ✅ |
+| 4.2 | `DegradedEntryMarker` | 장애 중 기록 추적 및 reconciliation 지원 | `audit/hash_chain_graceful_degradation.py` | ✅ |
+| 4.3 | `HashChainWALRecovery` | 시작 시 미완료 항목 WAL 기반 복구 | `audit/hash_chain_graceful_degradation.py` | ✅ |
+| 4.4 | `HashChainDegradationManager` | 단계적 기능 축소 (NORMAL→DEGRADED→EMERGENCY) | `audit/hash_chain_graceful_degradation.py` | ✅ |
+| 4.5 | `HashChainCircuitBreaker` | 장애 감지 및 차단 (CLOSED→OPEN→HALF_OPEN) | `audit/hash_chain_graceful_degradation.py` | ✅ |
+| 4.6 | `HashChainGracefulDegradationManager` | 통합 관리 클래스 | `audit/hash_chain_graceful_degradation.py` | ✅ |
+
+**테스트**: `tests/unit/audit/test_hash_chain_graceful_degradation.py` (50개 통과)
 
 **완료 기준**:
 - [x] Redis 장애 시 Local Fallback 자동 전환
 - [x] 복구 시 Reconciler 자동 실행
-- [x] 장애 중 기록 100% 보존
+- [x] 장애 중 기록 100% 보존 (WAL + degraded 마킹)
 
 ---
 
