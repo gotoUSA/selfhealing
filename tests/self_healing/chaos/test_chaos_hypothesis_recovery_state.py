@@ -26,7 +26,7 @@ class TestFailureHypothesis:
 
     def test_failure_hypothesis_creation(self):
         """Test basic FailureHypothesis creation."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             description="CB Open 실험 시, 30초 내에 Canary Stage 1이 시작되어야 함",
@@ -42,7 +42,7 @@ class TestFailureHypothesis:
 
     def test_failure_hypothesis_defaults(self):
         """Test FailureHypothesis default values."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis()
         
@@ -54,7 +54,7 @@ class TestFailureHypothesis:
 
     def test_validate_recovery_time_pass(self):
         """Test validation passes when recovery time is within tolerance."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -69,7 +69,7 @@ class TestFailureHypothesis:
 
     def test_validate_recovery_time_fail(self):
         """Test validation fails when recovery time exceeds tolerance."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -86,7 +86,7 @@ class TestFailureHypothesis:
 
     def test_validate_canary_stage_pass(self):
         """Test validation passes when canary stage matches."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -103,7 +103,7 @@ class TestFailureHypothesis:
 
     def test_validate_canary_stage_fail(self):
         """Test validation fails when canary stage doesn't match."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -121,7 +121,7 @@ class TestFailureHypothesis:
 
     def test_validate_cb_state_pass(self):
         """Test validation passes when CB state matches."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -138,7 +138,7 @@ class TestFailureHypothesis:
 
     def test_validate_cb_state_fail(self):
         """Test validation fails when CB state doesn't match."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -156,7 +156,7 @@ class TestFailureHypothesis:
 
     def test_validate_fallback_activation_pass(self):
         """Test validation passes when fallback is activated as expected."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -175,7 +175,7 @@ class TestFailureHypothesis:
 
     def test_validate_fallback_activation_fail(self):
         """Test validation fails when fallback is not activated."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=60.0,
@@ -193,7 +193,7 @@ class TestFailureHypothesis:
 
     def test_validate_multiple_violations(self):
         """Test validation returns multiple violations."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -214,7 +214,7 @@ class TestFailureHypothesis:
 
     def test_to_dict(self):
         """Test FailureHypothesis.to_dict() serialization."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             description="Test hypothesis",
@@ -240,7 +240,7 @@ class TestExperimentHypothesisConstants:
 
     def test_cb_open_hypothesis_defined(self):
         """Test CB_OPEN_HYPOTHESIS is properly defined."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CB_OPEN_HYPOTHESIS,
             FailureHypothesis,
         )
@@ -254,7 +254,7 @@ class TestExperimentHypothesisConstants:
 
     def test_latency_injection_hypothesis_defined(self):
         """Test LATENCY_INJECTION_HYPOTHESIS is properly defined."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LATENCY_INJECTION_HYPOTHESIS,
             FailureHypothesis,
         )
@@ -266,7 +266,7 @@ class TestExperimentHypothesisConstants:
 
     def test_error_5xx_hypothesis_defined(self):
         """Test ERROR_5XX_HYPOTHESIS is properly defined."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ERROR_5XX_HYPOTHESIS,
             FailureHypothesis,
         )
@@ -282,7 +282,7 @@ class TestExperimentClassesHaveHypothesis:
 
     def test_latency_injection_has_hypothesis(self):
         """Test LatencyInjectionExperiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             LATENCY_INJECTION_HYPOTHESIS,
         )
@@ -292,7 +292,7 @@ class TestExperimentClassesHaveHypothesis:
 
     def test_error_5xx_has_hypothesis(self):
         """Test Error5xxExperiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             Error5xxExperiment,
             ERROR_5XX_HYPOTHESIS,
         )
@@ -302,7 +302,7 @@ class TestExperimentClassesHaveHypothesis:
 
     def test_circuit_breaker_open_has_hypothesis(self):
         """Test CircuitBreakerOpenExperiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CircuitBreakerOpenExperiment,
             CB_OPEN_HYPOTHESIS,
         )
@@ -491,7 +491,7 @@ class TestPhase1Integration:
 
     def test_experiment_with_hypothesis_validation(self):
         """Test experiment instance can access failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             FailureHypothesis,
         )

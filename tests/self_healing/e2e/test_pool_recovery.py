@@ -5,7 +5,13 @@ Stage 26: Connection Pool 고갈 → 회복 테스트
 Pool 3개 설정에서:
 1. 동시에 5개 slow query 실행 → Pool 고갈
 2. 대기 후 → Pool 회복 확인
+
+Note: This is a standalone script, not a pytest test.
+Run directly with: python test_pool_recovery.py [base_url]
 """
+import pytest
+pytestmark = pytest.mark.skip(reason="This is a standalone script, not a pytest test - run directly with python")
+
 import requests
 import concurrent.futures
 import time

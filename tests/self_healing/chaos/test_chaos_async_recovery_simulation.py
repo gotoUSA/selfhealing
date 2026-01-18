@@ -30,7 +30,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_is_hard_ttl_expired_method_exists(self):
         """Test is_hard_ttl_expired method exists on ChaosExperiment."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -43,7 +43,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_is_hard_ttl_expired_when_not_started(self):
         """Test is_hard_ttl_expired returns False when experiment not started."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -56,7 +56,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_is_hard_ttl_expired_within_grace_period(self):
         """Test is_hard_ttl_expired returns False within grace period."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -77,7 +77,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_is_hard_ttl_expired_after_grace_period(self):
         """Test is_hard_ttl_expired returns True after grace period."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -98,7 +98,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_complete_recovery_monitoring_method_exists(self):
         """Test complete_recovery_monitoring method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -111,7 +111,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_complete_recovery_monitoring_from_valid_state(self):
         """Test complete_recovery_monitoring from RECOVERY_MONITORING state."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -131,7 +131,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_complete_recovery_monitoring_from_invalid_state(self):
         """Test complete_recovery_monitoring from non-RECOVERY_MONITORING state does nothing."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -151,7 +151,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_force_complete_method_exists(self):
         """Test force_complete method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -164,7 +164,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_force_complete_changes_status(self):
         """Test force_complete changes status to COMPLETED."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -181,7 +181,7 @@ class TestRecoveryMonitoringMethods:
     
     def test_transition_to_recovery_monitoring_method_exists(self):
         """Test transition_to_recovery_monitoring method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -202,7 +202,7 @@ class TestSnapshotMethods:
     
     def test_get_pool_state_snapshot_method_exists(self):
         """Test _get_pool_state_snapshot method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -215,7 +215,7 @@ class TestSnapshotMethods:
     
     def test_get_pool_state_snapshot_returns_dict(self):
         """Test _get_pool_state_snapshot returns a dictionary."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -229,7 +229,7 @@ class TestSnapshotMethods:
     
     def test_get_cert_state_snapshot_method_exists(self):
         """Test _get_cert_state_snapshot method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -242,7 +242,7 @@ class TestSnapshotMethods:
     
     def test_get_connection_health_snapshot_method_exists(self):
         """Test _get_connection_health_snapshot method exists."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -255,7 +255,7 @@ class TestSnapshotMethods:
     
     def test_get_connection_health_snapshot_returns_dict(self):
         """Test _get_connection_health_snapshot returns a dictionary."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             LatencyInjectionExperiment,
             ExperimentConfig,
         )
@@ -517,13 +517,13 @@ class TestPoolExhaustionExperiment:
     
     def test_experiment_class_exists(self):
         """Test PoolExhaustionExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import PoolExhaustionExperiment
+        from selfhealing.services.chaos.experiments import PoolExhaustionExperiment
         
         assert PoolExhaustionExperiment is not None
     
     def test_experiment_has_failure_hypothesis(self):
         """Test PoolExhaustionExperiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             PoolExhaustionExperiment,
             ExperimentConfig,
         )
@@ -536,13 +536,13 @@ class TestPoolExhaustionExperiment:
     
     def test_experiment_requires_approval(self):
         """Test PoolExhaustionExperiment requires approval."""
-        from selfhealing.services.chaos.experiment_impl import PoolExhaustionExperiment
+        from selfhealing.services.chaos.experiments import PoolExhaustionExperiment
         
         assert PoolExhaustionExperiment.requires_approval is True
     
     def test_experiment_inject_chaos(self):
         """Test inject_chaos sets simulation override."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             PoolExhaustionExperiment,
             ExperimentConfig,
         )
@@ -562,7 +562,7 @@ class TestPoolExhaustionExperiment:
     
     def test_experiment_rollback(self):
         """Test rollback clears simulation override."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             PoolExhaustionExperiment,
             ExperimentConfig,
         )
@@ -582,7 +582,7 @@ class TestPoolExhaustionExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory supports pool_exhaustion."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             PoolExhaustionExperiment,
             ExperimentConfig,
@@ -610,13 +610,13 @@ class TestConnectionPartitionExperiment:
     
     def test_experiment_class_exists(self):
         """Test ConnectionPartitionExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import ConnectionPartitionExperiment
+        from selfhealing.services.chaos.experiments import ConnectionPartitionExperiment
         
         assert ConnectionPartitionExperiment is not None
     
     def test_experiment_has_failure_hypothesis(self):
         """Test ConnectionPartitionExperiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ConnectionPartitionExperiment,
             ExperimentConfig,
         )
@@ -629,13 +629,13 @@ class TestConnectionPartitionExperiment:
     
     def test_experiment_requires_approval(self):
         """Test ConnectionPartitionExperiment requires approval."""
-        from selfhealing.services.chaos.experiment_impl import ConnectionPartitionExperiment
+        from selfhealing.services.chaos.experiments import ConnectionPartitionExperiment
         
         assert ConnectionPartitionExperiment.requires_approval is True
     
     def test_experiment_inject_chaos(self):
         """Test inject_chaos sets partition simulation."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ConnectionPartitionExperiment,
             ExperimentConfig,
         )
@@ -659,7 +659,7 @@ class TestConnectionPartitionExperiment:
     
     def test_experiment_rollback(self):
         """Test rollback clears partition simulation."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ConnectionPartitionExperiment,
             ExperimentConfig,
         )
@@ -683,7 +683,7 @@ class TestConnectionPartitionExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory supports connection_partition."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             ConnectionPartitionExperiment,
             ExperimentConfig,
@@ -743,7 +743,7 @@ class TestPoolExhaustionExperimentDesign:
     
     def test_experiment_uses_simulation_interface(self):
         """Test PoolExhaustionExperiment uses the simulation interface."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             PoolExhaustionExperiment,
             ExperimentConfig,
         )

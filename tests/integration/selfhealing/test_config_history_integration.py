@@ -356,7 +356,7 @@ class TestSaveToHistoryHelper:
             mock_service.save_version.side_effect = Exception("Save failed")
             mock_get.return_value = mock_service
 
-            with patch("selfhealing.services.runtime_config.logger") as mock_logger:
+            with patch("selfhealing.services.runtime_config.base.logger") as mock_logger:
                 manager = RuntimeConfigManager()
                 manager._save_to_history(
                     config_type="dlq",

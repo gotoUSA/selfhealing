@@ -302,7 +302,7 @@ class TestCheckRecoveryMonitoringTask:
         """Test task has correct name."""
         from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
         
-        assert check_recovery_monitoring_experiments.name == "chaos.check_recovery_monitoring"
+        assert check_recovery_monitoring_experiments.name == "selfhealing.celery_tasks.check_recovery_monitoring"
     
     def test_task_returns_correct_format(self):
         """Test task returns expected dictionary format."""
@@ -456,6 +456,6 @@ class TestCeleryBeatSchedule:
         assert "check-chaos-recovery-monitoring" in schedule
         task_config = schedule["check-chaos-recovery-monitoring"]
         
-        assert task_config["task"] == "chaos.check_recovery_monitoring"
+        assert task_config["task"] == "selfhealing.celery_tasks.check_recovery_monitoring"
         assert task_config["schedule"] == 30.0  # 30 seconds
         assert task_config["options"]["queue"] == "chaos_monitoring"

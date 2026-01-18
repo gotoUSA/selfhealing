@@ -9,6 +9,7 @@ Tests the dynamic permission levels based on discrepancy rate:
 
 Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
+
 import os
 import sys
 
@@ -16,6 +17,7 @@ import sys
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 
 import django
+
 django.setup()
 
 import pytest
@@ -143,7 +145,7 @@ class TestMediumRiskThreshold:
         request.user.is_authenticated = True
         request.user.is_staff = False
         request.user.is_superuser = False
-        # First call returns True (operator check), 
+        # First call returns True (operator check),
         # Second call returns False (admin check)
         request.user.groups.filter.return_value.exists.side_effect = [False, False]
         request.data = {"discrepancy_rate": 0.20}  # 20%
@@ -234,6 +236,11 @@ class TestDualApprovalRequired:
             with patch("selfhealing.services.runtime_config.get_runtime_config_manager") as mock_manager:
                 manager_instance = MagicMock()
                 mock_manager.return_value = manager_instance
+                manager_instance.get_governance_config.return_value = {
+                    "threshold_operator": 0.15,
+                    "threshold_admin": 0.30,
+                    "threshold_dual_approval": 0.50,
+                }
                 manager_instance.get_approval_requests.return_value = [
                     {
                         "id": "approval-123",
@@ -267,6 +274,11 @@ class TestDualApprovalRequired:
         with patch("selfhealing.services.runtime_config.get_runtime_config_manager") as mock_manager:
             manager_instance = MagicMock()
             mock_manager.return_value = manager_instance
+            manager_instance.get_governance_config.return_value = {
+                "threshold_operator": 0.15,
+                "threshold_admin": 0.30,
+                "threshold_dual_approval": 0.50,
+            }
             manager_instance.get_approval_requests.return_value = [
                 {
                     "id": "approval-123",
@@ -298,6 +310,11 @@ class TestDualApprovalRequired:
         with patch("selfhealing.services.runtime_config.get_runtime_config_manager") as mock_manager:
             manager_instance = MagicMock()
             mock_manager.return_value = manager_instance
+            manager_instance.get_governance_config.return_value = {
+                "threshold_operator": 0.15,
+                "threshold_admin": 0.30,
+                "threshold_dual_approval": 0.50,
+            }
             manager_instance.get_approval_requests.return_value = []
 
             permission = ThresholdBasedPermission()
@@ -353,9 +370,7 @@ class TestDualApprovalRequired:
     def test_notification_sent_when_dual_approval_required(self):
         """Notification should be sent when dual approval is required."""
         with patch("selfhealing.api.django.permissions.logger"):
-            with patch(
-                "selfhealing.services.security_notification_service.SecurityNotificationService"
-            ) as mock_service_class:
+            with patch("selfhealing.services.security_notification_service.SecurityNotificationService") as mock_service_class:
                 mock_service = MagicMock()
                 mock_service.config.enabled = True
                 mock_service_class.return_value = mock_service

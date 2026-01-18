@@ -31,7 +31,7 @@ class TestCanaryRecoveryVerification:
     @patch("selfhealing.services.circuit_breaker.canary_recovery.get_canary_recovery_manager")
     def test_verify_canary_recovery_in_canary(self, mock_get_manager):
         """Test _verify_canary_recovery when in canary state."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CircuitBreakerOpenExperiment,
         )
         from selfhealing.services.chaos.base import ExperimentConfig
@@ -60,7 +60,7 @@ class TestCanaryRecoveryVerification:
     @patch("selfhealing.services.circuit_breaker.canary_recovery.get_canary_recovery_manager")
     def test_verify_canary_recovery_not_in_canary(self, mock_get_manager):
         """Test _verify_canary_recovery when not in canary state."""
-        from selfhealing.services.chaos.experiment_impl import CircuitBreakerOpenExperiment
+        from selfhealing.services.chaos.experiments import CircuitBreakerOpenExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         # Mock no recovery state
@@ -79,7 +79,7 @@ class TestCanaryRecoveryVerification:
 
     def test_verify_canary_recovery_exception_handling(self):
         """Test _verify_canary_recovery handles exceptions gracefully."""
-        from selfhealing.services.chaos.experiment_impl import CircuitBreakerOpenExperiment
+        from selfhealing.services.chaos.experiments import CircuitBreakerOpenExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         config = ExperimentConfig(target_service="payment-api")
@@ -94,7 +94,7 @@ class TestCanaryRecoveryVerification:
 
     def test_get_canary_verification_result(self):
         """Test get_canary_verification_result includes hypothesis match."""
-        from selfhealing.services.chaos.experiment_impl import CircuitBreakerOpenExperiment
+        from selfhealing.services.chaos.experiments import CircuitBreakerOpenExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         config = ExperimentConfig(target_service="payment-api")
@@ -347,7 +347,7 @@ class TestHypothesisValidation:
 
     def test_failure_hypothesis_validate_pass(self):
         """Test FailureHypothesis.validate() when all conditions pass."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -367,7 +367,7 @@ class TestHypothesisValidation:
 
     def test_failure_hypothesis_validate_fail_recovery_time(self):
         """Test FailureHypothesis.validate() fails when recovery time exceeded."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -384,7 +384,7 @@ class TestHypothesisValidation:
 
     def test_failure_hypothesis_validate_fail_canary_stage(self):
         """Test FailureHypothesis.validate() fails on canary stage mismatch."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             expected_recovery_time_seconds=30.0,
@@ -402,7 +402,7 @@ class TestHypothesisValidation:
 
     def test_failure_hypothesis_to_dict(self):
         """Test FailureHypothesis.to_dict() serialization."""
-        from selfhealing.services.chaos.experiment_impl import FailureHypothesis
+        from selfhealing.services.chaos.experiments import FailureHypothesis
         
         hypothesis = FailureHypothesis(
             description="Test hypothesis",
@@ -440,7 +440,7 @@ class TestPhase3Integration:
         """Verify Phase 3 implementation matches documentation."""
         from selfhealing.services.chaos.safety_guard import SafetyGuard, BlockReason
         from selfhealing.services.chaos.base import ChaosExperiment
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CircuitBreakerOpenExperiment,
             FailureHypothesis,
         )
@@ -475,7 +475,7 @@ class TestPhase3Integration:
 
     def test_cb_open_experiment_has_failure_hypothesis(self):
         """Test CircuitBreakerOpenExperiment has failure_hypothesis defined."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CircuitBreakerOpenExperiment,
             CB_OPEN_HYPOTHESIS,
         )

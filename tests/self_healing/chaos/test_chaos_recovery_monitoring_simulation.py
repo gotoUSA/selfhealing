@@ -36,7 +36,7 @@ from typing import Dict, Any
 # Helper: Use LatencyInjectionExperiment as concrete implementation of ChaosExperiment
 def create_test_experiment(config):
     """Create a concrete experiment instance for testing base class methods."""
-    from selfhealing.services.chaos.experiment_impl import LatencyInjectionExperiment
+    from selfhealing.services.chaos.experiments import LatencyInjectionExperiment
     return LatencyInjectionExperiment(config=config)  # Must use keyword argument
 
 
@@ -318,7 +318,7 @@ class TestTriggerLoadShedding:
     @patch("selfhealing.services.circuit_breaker.load_shedding.get_load_shedding_manager")
     def test_trigger_load_shedding(self, mock_get_manager):
         """Test triggering load shedding."""
-        from selfhealing.services.chaos.experiment_impl import PartialFailureExperiment
+        from selfhealing.services.chaos.experiments import PartialFailureExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         # Mock LoadSheddingManager
@@ -357,7 +357,7 @@ class TestTriggerLoadShedding:
     @patch("selfhealing.services.circuit_breaker.load_shedding.get_load_shedding_manager")
     def test_trigger_load_shedding_already_active(self, mock_get_manager):
         """Test triggering when shedding is already active."""
-        from selfhealing.services.chaos.experiment_impl import PartialFailureExperiment
+        from selfhealing.services.chaos.experiments import PartialFailureExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         mock_manager = MagicMock()
@@ -387,7 +387,7 @@ class TestVerifySheddingBehavior:
     @patch("selfhealing.services.circuit_breaker.load_shedding.get_load_shedding_manager")
     def test_verify_shedding_behavior(self, mock_get_manager):
         """Test verifying shedding behavior."""
-        from selfhealing.services.chaos.experiment_impl import PartialFailureExperiment
+        from selfhealing.services.chaos.experiments import PartialFailureExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         mock_manager = MagicMock()
@@ -419,7 +419,7 @@ class TestDeactivateLoadShedding:
     @patch("selfhealing.services.circuit_breaker.load_shedding.get_load_shedding_manager")
     def test_deactivate_load_shedding(self, mock_get_manager):
         """Test deactivating load shedding on rollback."""
-        from selfhealing.services.chaos.experiment_impl import PartialFailureExperiment
+        from selfhealing.services.chaos.experiments import PartialFailureExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         mock_manager = MagicMock()
@@ -436,7 +436,7 @@ class TestDeactivateLoadShedding:
     @patch("selfhealing.services.circuit_breaker.load_shedding.get_load_shedding_manager")
     def test_deactivate_load_shedding_not_active(self, mock_get_manager):
         """Test that deactivate does nothing if not active."""
-        from selfhealing.services.chaos.experiment_impl import PartialFailureExperiment
+        from selfhealing.services.chaos.experiments import PartialFailureExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
         
         mock_manager = MagicMock()

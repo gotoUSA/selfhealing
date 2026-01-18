@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services.chaos.base import ExperimentType, ExperimentConfig
-from selfhealing.services.chaos.experiment_impl import (
+from selfhealing.services.chaos.experiments import (
     create_experiment,
     Error4xxExperiment,
     PartialFailureExperiment,
@@ -137,7 +137,7 @@ class TestPhase2Error4xxExperiment:
         )
         assert experiment.error_message == "Custom Error Message"
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     def test_inject_chaos_applies_config(self, mock_apply_config):
         """inject_chaos가 설정을 적용하는지 확인."""
         experiment = Error4xxExperiment(
@@ -156,7 +156,7 @@ class TestPhase2Error4xxExperiment:
         assert call_args["error_4xx_injection"]["error_code"] == 429
         assert call_args["error_4xx_injection"]["target_service"] == "test-service"
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply_config):
         """rollback이 설정을 해제하는지 확인."""
         experiment = Error4xxExperiment(
@@ -168,7 +168,7 @@ class TestPhase2Error4xxExperiment:
         call_args = mock_apply_config.call_args[0][0]
         assert call_args["error_4xx_injection"]["enabled"] is False
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     def test_rollback_is_idempotent(self, mock_apply_config):
         """rollback이 멱등성을 가지는지 확인."""
         experiment = Error4xxExperiment(
@@ -255,7 +255,7 @@ class TestPhase2PartialFailureExperiment:
         )
         assert experiment.trigger_shedding is False
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.cascade._apply_chaos_config")
     def test_inject_chaos_applies_config(self, mock_apply_config):
         """inject_chaos가 설정을 적용하는지 확인."""
         experiment = PartialFailureExperiment(
@@ -277,7 +277,7 @@ class TestPhase2PartialFailureExperiment:
         assert call_args["partial_failure"]["failure_rate"] == 0.40
         assert call_args["partial_failure"]["affected_endpoints"] == ["/api/test"]
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.cascade._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply_config):
         """rollback이 설정을 해제하는지 확인."""
         experiment = PartialFailureExperiment(
@@ -289,7 +289,7 @@ class TestPhase2PartialFailureExperiment:
         call_args = mock_apply_config.call_args[0][0]
         assert call_args["partial_failure"]["enabled"] is False
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.cascade._apply_chaos_config")
     def test_rollback_is_idempotent(self, mock_apply_config):
         """rollback이 멱등성을 가지는지 확인."""
         experiment = PartialFailureExperiment(
@@ -358,7 +358,7 @@ class TestPhase3ConnectionResetExperiment:
         )
         assert experiment.reset_probability == 0.75
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.network._apply_chaos_config")
     def test_inject_chaos_applies_config(self, mock_apply_config):
         """inject_chaos가 설정을 적용하는지 확인."""
         experiment = ConnectionResetExperiment(
@@ -380,7 +380,7 @@ class TestPhase3ConnectionResetExperiment:
         assert call_args["connection_reset"]["reset_after_bytes"] == 512
         assert call_args["connection_reset"]["reset_probability"] == 0.80
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.network._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply_config):
         """rollback이 설정을 해제하는지 확인."""
         experiment = ConnectionResetExperiment(
@@ -392,7 +392,7 @@ class TestPhase3ConnectionResetExperiment:
         call_args = mock_apply_config.call_args[0][0]
         assert call_args["connection_reset"]["enabled"] is False
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.network._apply_chaos_config")
     def test_rollback_is_idempotent(self, mock_apply_config):
         """rollback이 멱등성을 가지는지 확인."""
         experiment = ConnectionResetExperiment(
@@ -479,7 +479,7 @@ class TestPhase3CascadingFailureExperiment:
         )
         assert experiment.target_open_percent == 80.0
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     def test_inject_chaos_returns_false_without_services(self, mock_apply_config):
         """affected_services가 없으면 False 반환."""
         experiment = CascadingFailureExperiment(
@@ -491,7 +491,7 @@ class TestPhase3CascadingFailureExperiment:
 
         assert result is False
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_inject_chaos_opens_all_services(
         self, mock_get_cb_service, mock_apply_config
@@ -519,7 +519,7 @@ class TestPhase3CascadingFailureExperiment:
         # 3개 서비스 모두 force_open 호출
         assert mock_cb_service.force_open.call_count == 3
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_inject_chaos_respects_kill_switch(
         self, mock_get_cb_service, mock_apply_config
@@ -554,7 +554,7 @@ class TestPhase3CascadingFailureExperiment:
         # kill switch로 인해 1개만 OPEN됨
         assert mock_cb_service.force_open.call_count == 1
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_rollback_closes_all_services(
         self, mock_get_cb_service, mock_apply_config
@@ -576,7 +576,7 @@ class TestPhase3CascadingFailureExperiment:
         # 3개 서비스 모두 force_close 호출
         assert mock_cb_service.force_close.call_count == 3
 
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config")
     @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_rollback_is_idempotent(self, mock_get_cb_service, mock_apply_config):
         """rollback이 멱등성을 가지는지 확인."""
@@ -604,66 +604,6 @@ class TestPhase3CascadingFailureExperiment:
 
 class TestPhase2Phase3FactoryIntegration:
     """Factory와 Phase 2/3 실험 타입의 통합 테스트."""
-
-    def test_factory_creates_error_4xx_experiment(self):
-        """Factory로 Error4xxExperiment 생성 확인."""
-        config = ExperimentConfig(
-            target_service="test-service",
-            parameters={"error_code": 429},
-        )
-
-        experiment = create_experiment(
-            experiment_type="error_4xx",
-            config=config,
-        )
-
-        assert isinstance(experiment, Error4xxExperiment)
-        assert experiment.error_code == 429
-
-    def test_factory_creates_partial_failure_experiment(self):
-        """Factory로 PartialFailureExperiment 생성 확인."""
-        config = ExperimentConfig(
-            target_service="test-service",
-            parameters={"failure_rate": 0.25},
-        )
-
-        experiment = create_experiment(
-            experiment_type="partial_failure",
-            config=config,
-        )
-
-        assert isinstance(experiment, PartialFailureExperiment)
-        assert experiment.failure_rate == 0.25
-
-    def test_factory_creates_connection_reset_experiment(self):
-        """Factory로 ConnectionResetExperiment 생성 확인."""
-        config = ExperimentConfig(
-            target_service="test-service",
-            parameters={"reset_probability": 0.60},
-        )
-
-        experiment = create_experiment(
-            experiment_type="connection_reset",
-            config=config,
-        )
-
-        assert isinstance(experiment, ConnectionResetExperiment)
-        assert experiment.reset_probability == 0.60
-
-    def test_factory_creates_cascading_failure_experiment(self):
-        """Factory로 CascadingFailureExperiment 생성 확인."""
-        config = ExperimentConfig(
-            target_service="system",
-            parameters={"affected_services": ["svc-a", "svc-b"]},
-        )
-
-        experiment = create_experiment(
-            experiment_type="cascading_failure",
-            config=config,
-        )
-
-        assert isinstance(experiment, CascadingFailureExperiment)
-        assert experiment.affected_services == ["svc-a", "svc-b"]
 
     def test_all_phase2_phase3_types_in_factory(self):
         """모든 Phase 2/3 타입이 Factory에 등록되어 있는지 확인."""

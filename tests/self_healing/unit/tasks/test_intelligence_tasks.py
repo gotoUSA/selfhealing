@@ -445,7 +445,7 @@ class TestIntelligenceTaskRegistry:
 
     def test_all_tasks_in_registry(self):
         """모든 태스크가 레지스트리에 있는지 확인."""
-        assert len(INTELLIGENCE_TASKS) == 4
+        assert len(INTELLIGENCE_TASKS) == 5
         
         task_classes = [t.__name__ for t in INTELLIGENCE_TASKS]
         
@@ -453,6 +453,7 @@ class TestIntelligenceTaskRegistry:
         assert "AnalyzeForensicPendingTask" in task_classes
         assert "AnalyzeCrossStageInsightsTask" in task_classes
         assert "CheckRecoveryTransitionsTask" in task_classes
+        assert "VerifyReconciliationAccuracyTask" in task_classes
 
     def test_all_tasks_have_names(self):
         """모든 태스크가 이름을 가지고 있는지 확인."""

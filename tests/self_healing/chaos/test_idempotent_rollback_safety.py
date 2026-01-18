@@ -46,7 +46,7 @@ class TestIdempotentRollback:
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
         # 모듈 레벨 _apply_chaos_config 함수를 모킹
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock_apply:
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config") as mock_apply:
             # 첫 번째 롤백
             experiment.rollback()
             first_call_count = mock_apply.call_count
@@ -59,7 +59,7 @@ class TestIdempotentRollback:
         """여러 번 롤백해도 안전한지 테스트."""
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock_apply:
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config") as mock_apply:
             # 10번 롤백 시도
             for _ in range(10):
                 experiment.rollback()
@@ -99,7 +99,7 @@ class TestConcurrentRollback:
             execution_count[0] += 1
             time.sleep(0.05)  # 롤백에 시간이 걸리는 것을 시뮬레이션
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config", side_effect=counting_apply):
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config", side_effect=counting_apply):
             # 여러 스레드에서 동시에 롤백 시도
             threads = []
             for _ in range(5):
@@ -171,7 +171,7 @@ class TestDifferentExperimentTypesRollback:
         """LatencyInjectionExperiment 롤백 멱등성 테스트."""
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock:
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config") as mock:
             experiment.rollback()
             experiment.rollback()
             experiment.rollback()
@@ -182,7 +182,7 @@ class TestDifferentExperimentTypesRollback:
         """Error5xxExperiment 롤백 멱등성 테스트."""
         experiment = Error5xxExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock:
+        with patch("selfhealing.services.chaos.experiments.http_errors._apply_chaos_config") as mock:
             experiment.rollback()
             experiment.rollback()
             experiment.rollback()
@@ -193,7 +193,7 @@ class TestDifferentExperimentTypesRollback:
         """TimeoutExperiment 롤백 멱등성 테스트."""
         experiment = TimeoutExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock:
+        with patch("selfhealing.services.chaos.experiments.timeout._apply_chaos_config") as mock:
             experiment.rollback()
             experiment.rollback()
             experiment.rollback()
@@ -213,7 +213,7 @@ class TestRollbackErrorHandling:
         """롤백 예외 발생 시에도 크래시하지 않는지 테스트."""
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config", side_effect=Exception("Rollback failed")):
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config", side_effect=Exception("Rollback failed")):
             # 예외가 발생해도 크래시하지 않음
             experiment.rollback()  # Should not raise
 
@@ -224,7 +224,7 @@ class TestRollbackErrorHandling:
         """예외 발생 시 롤백 락이 해제되는지 테스트."""
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config", side_effect=Exception("Error")):
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config", side_effect=Exception("Error")):
             experiment.rollback()
 
         # 락이 해제되어 다시 획득 가능해야 함
@@ -246,7 +246,7 @@ class TestRollbackAuditTrail:
         """롤백이 로그를 남기는지 테스트."""
         experiment = LatencyInjectionExperiment(config=ExperimentConfig(target_service="payment"))
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config"):
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config"):
             experiment.rollback()
 
         # 롤백 완료 확인
@@ -261,7 +261,7 @@ class TestRollbackAuditTrail:
         def track_apply(config):
             apply_calls.append(config)
 
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config", side_effect=track_apply):
+        with patch("selfhealing.services.chaos.experiments.latency._apply_chaos_config", side_effect=track_apply):
             experiment.rollback()
             experiment.rollback()
             experiment.rollback()

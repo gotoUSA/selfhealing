@@ -142,7 +142,7 @@ class TestExperimentTTL:
 
         assert effective_ttl == 300
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     def test_calculate_expires_at(self, mock_now):
         """만료 시간 계산 테스트."""
         fixed_time = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
@@ -160,7 +160,7 @@ class TestExperimentTTL:
         assert expires_at == expected
         assert experiment._effective_ttl == 600
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     def test_is_expired_false(self, mock_now):
         """만료되지 않은 상태 테스트."""
         fixed_time = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
@@ -176,7 +176,7 @@ class TestExperimentTTL:
         # 현재 시간은 만료 전
         assert experiment.is_expired() is False
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     def test_is_expired_true(self, mock_now):
         """만료된 상태 테스트."""
         initial_time = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
@@ -194,7 +194,7 @@ class TestExperimentTTL:
 
         assert experiment.is_expired() is True
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     def test_is_expired_without_expires_at(self, mock_now):
         """expires_at이 설정되지 않은 경우 테스트."""
         mock_now.return_value = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
@@ -214,7 +214,7 @@ class TestExperimentTTL:
 class TestTTLAutoExpiration:
     """모니터링 중 TTL 자동 만료 테스트."""
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     @patch("time.sleep")
     def test_monitoring_loop_stops_on_ttl_expiration(self, mock_sleep, mock_now):
         """TTL 만료 시 모니터링 루프가 중단되는지 테스트."""
@@ -261,7 +261,7 @@ class TestTTLAutoExpiration:
 class TestExperimentResultTTLFields:
     """ExperimentResult의 TTL 관련 필드 테스트."""
 
-    @patch("selfhealing.services.chaos.base.now")
+    @patch("selfhealing.services.chaos.base.experiment.now")
     @patch("time.sleep")
     def test_result_contains_ttl_info(self, mock_sleep, mock_now):
         """실험 결과에 TTL 정보가 포함되는지 테스트."""
