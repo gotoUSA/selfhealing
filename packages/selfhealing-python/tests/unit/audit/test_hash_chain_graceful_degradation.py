@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from selfhealing.audit.hash_chain_graceful_degradation import (
+from selfhealing.audit.graceful_degradation import (
     DegradationLevel,
     FallbackConfig,
     HashChainFallbackChain,

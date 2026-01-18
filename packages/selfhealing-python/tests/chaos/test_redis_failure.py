@@ -14,7 +14,7 @@ These tests simulate real-world failure scenarios:
 - Redis recovery after extended outage
 
 Related code:
-    selfhealing/audit/hash_chain_graceful_degradation.py
+    selfhealing/audit/graceful_degradation.py
     selfhealing/audit/integrity.py
 """
 
@@ -40,7 +40,7 @@ class CircuitBreakerConfig:
     success_threshold: int = 2
 
 
-from selfhealing.audit.hash_chain_graceful_degradation import (
+from selfhealing.audit.graceful_degradation import (
     DegradationLevel,
     FallbackConfig,
     HashChainFallbackChain,

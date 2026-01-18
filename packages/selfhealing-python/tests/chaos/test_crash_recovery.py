@@ -13,7 +13,7 @@ These tests simulate real-world crash scenarios:
 - Recovery from WAL entries
 
 Related code:
-    selfhealing/audit/hash_chain_graceful_degradation.py#HashChainWALRecovery
+    selfhealing/audit/graceful_degradation.py#HashChainWALRecovery
     selfhealing/audit/integrity.py#StartupHashChainSync
     selfhealing/audit/integrity.py#PendingSequenceManager
 """
@@ -30,7 +30,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.audit.hash_chain_graceful_degradation import (
+from selfhealing.audit.graceful_degradation import (
     HashChainWALRecovery,
     HashChainGracefulDegradationManager,
     FallbackConfig,

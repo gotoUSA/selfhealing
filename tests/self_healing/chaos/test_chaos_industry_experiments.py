@@ -185,25 +185,25 @@ class TestCertificateExpiryExperiment:
     
     def test_class_exists(self):
         """Test CertificateExpiryExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import CertificateExpiryExperiment
+        from selfhealing.services.chaos.experiments import CertificateExpiryExperiment
         
         assert CertificateExpiryExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment_type is correct."""
-        from selfhealing.services.chaos.experiment_impl import CertificateExpiryExperiment
+        from selfhealing.services.chaos.experiments import CertificateExpiryExperiment
         
         assert CertificateExpiryExperiment.experiment_type == "certificate_expiry"
     
     def test_requires_approval_false(self):
         """Test requires_approval is False (low risk)."""
-        from selfhealing.services.chaos.experiment_impl import CertificateExpiryExperiment
+        from selfhealing.services.chaos.experiments import CertificateExpiryExperiment
         
         assert CertificateExpiryExperiment.requires_approval is False
     
     def test_has_failure_hypothesis(self):
         """Test experiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -217,7 +217,7 @@ class TestCertificateExpiryExperiment:
     
     def test_simulated_days_remaining_default(self):
         """Test simulated_days_remaining default value."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -230,7 +230,7 @@ class TestCertificateExpiryExperiment:
     
     def test_simulated_days_remaining_from_config(self):
         """Test simulated_days_remaining from config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -246,7 +246,7 @@ class TestCertificateExpiryExperiment:
     
     def test_affected_endpoints_default(self):
         """Test affected_endpoints default value."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -259,7 +259,7 @@ class TestCertificateExpiryExperiment:
     
     def test_affected_endpoints_from_config(self):
         """Test affected_endpoints from config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -274,10 +274,10 @@ class TestCertificateExpiryExperiment:
         
         assert experiment.affected_endpoints == endpoints
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos_with_endpoints(self, mock_apply):
         """Test inject_chaos with affected endpoints."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -310,7 +310,7 @@ class TestCertificateExpiryExperiment:
     
     def test_get_alerts_triggered(self):
         """Test get_alerts_triggered returns copy of alerts."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -324,10 +324,10 @@ class TestCertificateExpiryExperiment:
         assert isinstance(alerts, list)
         assert len(alerts) == 0
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply):
         """Test rollback clears the chaos config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -346,7 +346,7 @@ class TestCertificateExpiryExperiment:
     
     def test_rollback_idempotent(self):
         """Test rollback is idempotent."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
@@ -355,7 +355,7 @@ class TestCertificateExpiryExperiment:
             config=ExperimentConfig(target_service="test")
         )
         
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock:
+        with patch("selfhealing.services.chaos.experiments._apply_chaos_config") as mock:
             experiment.rollback()
             experiment.rollback()  # Second call
             experiment.rollback()  # Third call
@@ -365,7 +365,7 @@ class TestCertificateExpiryExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for certificate_expiry."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             CertificateExpiryExperiment,
             ExperimentConfig,
@@ -389,31 +389,31 @@ class TestClockSkewExperiment:
     
     def test_class_exists(self):
         """Test ClockSkewExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
         
         assert ClockSkewExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment_type is correct."""
-        from selfhealing.services.chaos.experiment_impl import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
         
         assert ClockSkewExperiment.experiment_type == "clock_skew"
     
     def test_requires_approval_true(self):
         """Test requires_approval is True (high risk)."""
-        from selfhealing.services.chaos.experiment_impl import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
         
         assert ClockSkewExperiment.requires_approval is True
     
     def test_max_skew_seconds_constant(self):
         """Test MAX_SKEW_SECONDS constant exists."""
-        from selfhealing.services.chaos.experiment_impl import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
         
         assert ClockSkewExperiment.MAX_SKEW_SECONDS == 86400  # 1 day
     
     def test_skew_seconds_default(self):
         """Test skew_seconds default value."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -426,7 +426,7 @@ class TestClockSkewExperiment:
     
     def test_skew_seconds_from_config(self):
         """Test skew_seconds from config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -442,7 +442,7 @@ class TestClockSkewExperiment:
     
     def test_skew_seconds_hard_cap_positive(self):
         """Test skew_seconds is capped at MAX_SKEW_SECONDS."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -460,7 +460,7 @@ class TestClockSkewExperiment:
     
     def test_skew_seconds_hard_cap_negative(self):
         """Test negative skew_seconds is capped correctly."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -478,15 +478,15 @@ class TestClockSkewExperiment:
     
     def test_has_failure_hypothesis(self):
         """Test experiment has failure_hypothesis."""
-        from selfhealing.services.chaos.experiment_impl import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
         
         assert hasattr(ClockSkewExperiment, "failure_hypothesis")
         assert ClockSkewExperiment.failure_hypothesis is not None
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos_starts_monotonic_timer(self, mock_apply):
         """Test inject_chaos starts monotonic TTL timer."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -505,7 +505,7 @@ class TestClockSkewExperiment:
     
     def test_is_expired_monotonic_uses_helper(self):
         """Test is_expired_monotonic uses MonotonicTTLHelper."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -527,7 +527,7 @@ class TestClockSkewExperiment:
     
     def test_is_expired_monotonic_fallback_without_helper(self):
         """Test is_expired_monotonic falls back when no helper."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -545,7 +545,7 @@ class TestClockSkewExperiment:
     
     def test_get_monotonic_remaining(self):
         """Test get_monotonic_remaining returns correct value."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -562,10 +562,10 @@ class TestClockSkewExperiment:
         assert remaining > 59.0
         assert remaining <= 60.0
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply):
         """Test rollback clears the chaos config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -587,7 +587,7 @@ class TestClockSkewExperiment:
     
     def test_rollback_idempotent(self):
         """Test rollback is idempotent."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -596,7 +596,7 @@ class TestClockSkewExperiment:
             config=ExperimentConfig(target_service="test")
         )
         
-        with patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config") as mock:
+        with patch("selfhealing.services.chaos.experiments._apply_chaos_config") as mock:
             experiment.rollback()
             experiment.rollback()  # Second call
             
@@ -605,7 +605,7 @@ class TestClockSkewExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for clock_skew."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             ClockSkewExperiment,
             ExperimentConfig,
@@ -657,10 +657,10 @@ class TestExperimentTypeEnum:
 class TestMonotonicTTLIntegration:
     """Integration tests for Monotonic TTL with ClockSkewExperiment."""
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_full_lifecycle_with_monotonic_ttl(self, mock_apply):
         """Test full experiment lifecycle with monotonic TTL protection."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
@@ -705,32 +705,32 @@ class TestDNSFailureExperiment:
     
     def test_class_exists(self):
         """Test DNSFailureExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        from selfhealing.services.chaos.experiments import DNSFailureExperiment
         
         assert DNSFailureExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is dns_failure."""
-        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        from selfhealing.services.chaos.experiments import DNSFailureExperiment
         
         assert DNSFailureExperiment.experiment_type == "dns_failure"
     
     def test_requires_approval(self):
         """Test requires_approval is True (network-wide impact)."""
-        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        from selfhealing.services.chaos.experiments import DNSFailureExperiment
         
         assert DNSFailureExperiment.requires_approval is True
     
     def test_failure_hypothesis_exists(self):
         """Test failure_hypothesis is defined."""
-        from selfhealing.services.chaos.experiment_impl import DNSFailureExperiment
+        from selfhealing.services.chaos.experiments import DNSFailureExperiment
         
         assert hasattr(DNSFailureExperiment, "failure_hypothesis")
         assert DNSFailureExperiment.failure_hypothesis is not None
     
     def test_default_failure_mode(self):
         """Test default failure_mode is timeout."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             DNSFailureExperiment,
             ExperimentConfig,
         )
@@ -743,7 +743,7 @@ class TestDNSFailureExperiment:
     
     def test_custom_failure_mode(self):
         """Test custom failure_mode from config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             DNSFailureExperiment,
             ExperimentConfig,
         )
@@ -757,10 +757,10 @@ class TestDNSFailureExperiment:
         
         assert experiment.failure_mode == "nxdomain"
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             DNSFailureExperiment,
             ExperimentConfig,
         )
@@ -786,10 +786,10 @@ class TestDNSFailureExperiment:
         assert "dns_failure" in call_args
         assert call_args["dns_failure"]["enabled"] is True
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_rollback(self, mock_apply):
         """Test rollback disables config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             DNSFailureExperiment,
             ExperimentConfig,
         )
@@ -806,7 +806,7 @@ class TestDNSFailureExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for dns_failure."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             DNSFailureExperiment,
             ExperimentConfig,
@@ -825,31 +825,31 @@ class TestNetworkBlackholeExperiment:
     
     def test_class_exists(self):
         """Test NetworkBlackholeExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        from selfhealing.services.chaos.experiments import NetworkBlackholeExperiment
         
         assert NetworkBlackholeExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is network_blackhole."""
-        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        from selfhealing.services.chaos.experiments import NetworkBlackholeExperiment
         
         assert NetworkBlackholeExperiment.experiment_type == "network_blackhole"
     
     def test_requires_approval(self):
         """Test requires_approval is True (high risk)."""
-        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        from selfhealing.services.chaos.experiments import NetworkBlackholeExperiment
         
         assert NetworkBlackholeExperiment.requires_approval is True
     
     def test_hard_cap_max_duration(self):
         """Test MAX_DURATION_SECONDS hard cap is 300."""
-        from selfhealing.services.chaos.experiment_impl import NetworkBlackholeExperiment
+        from selfhealing.services.chaos.experiments import NetworkBlackholeExperiment
         
         assert NetworkBlackholeExperiment.MAX_DURATION_SECONDS == 300
     
     def test_duration_seconds_capped(self):
         """Test duration_seconds is capped at MAX_DURATION_SECONDS."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             NetworkBlackholeExperiment,
             ExperimentConfig,
         )
@@ -863,10 +863,10 @@ class TestNetworkBlackholeExperiment:
         
         assert experiment.duration_seconds == 300  # Capped
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             NetworkBlackholeExperiment,
             ExperimentConfig,
         )
@@ -891,7 +891,7 @@ class TestNetworkBlackholeExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for network_blackhole."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             NetworkBlackholeExperiment,
             ExperimentConfig,
@@ -910,31 +910,31 @@ class TestSimulatedDiskIOExperiment:
     
     def test_class_exists(self):
         """Test SimulatedDiskIOExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        from selfhealing.services.chaos.experiments import SimulatedDiskIOExperiment
         
         assert SimulatedDiskIOExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is simulated_disk_io."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        from selfhealing.services.chaos.experiments import SimulatedDiskIOExperiment
         
         assert SimulatedDiskIOExperiment.experiment_type == "simulated_disk_io"
     
     def test_hard_cap_io_latency(self):
         """Test MAX_IO_LATENCY_MS hard cap is 2000."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        from selfhealing.services.chaos.experiments import SimulatedDiskIOExperiment
         
         assert SimulatedDiskIOExperiment.MAX_IO_LATENCY_MS == 2000
     
     def test_hard_cap_failure_rate(self):
         """Test MAX_FAILURE_RATE hard cap is 0.30."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedDiskIOExperiment
+        from selfhealing.services.chaos.experiments import SimulatedDiskIOExperiment
         
         assert SimulatedDiskIOExperiment.MAX_FAILURE_RATE == 0.30
     
     def test_io_latency_capped(self):
         """Test io_latency_ms is capped at MAX_IO_LATENCY_MS."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedDiskIOExperiment,
             ExperimentConfig,
         )
@@ -950,7 +950,7 @@ class TestSimulatedDiskIOExperiment:
     
     def test_failure_rate_capped(self):
         """Test failure_rate is capped at MAX_FAILURE_RATE."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedDiskIOExperiment,
             ExperimentConfig,
         )
@@ -964,10 +964,10 @@ class TestSimulatedDiskIOExperiment:
         
         assert experiment.failure_rate == 0.30  # Capped
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedDiskIOExperiment,
             ExperimentConfig,
         )
@@ -989,7 +989,7 @@ class TestSimulatedDiskIOExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for simulated_disk_io."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             SimulatedDiskIOExperiment,
             ExperimentConfig,
@@ -1008,31 +1008,31 @@ class TestSimulatedTLSFailureExperiment:
     
     def test_class_exists(self):
         """Test SimulatedTLSFailureExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        from selfhealing.services.chaos.experiments import SimulatedTLSFailureExperiment
         
         assert SimulatedTLSFailureExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is simulated_tls_failure."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        from selfhealing.services.chaos.experiments import SimulatedTLSFailureExperiment
         
         assert SimulatedTLSFailureExperiment.experiment_type == "simulated_tls_failure"
     
     def test_requires_approval(self):
         """Test requires_approval is True (security sensitive)."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        from selfhealing.services.chaos.experiments import SimulatedTLSFailureExperiment
         
         assert SimulatedTLSFailureExperiment.requires_approval is True
     
     def test_hard_cap_failure_rate(self):
         """Test MAX_FAILURE_RATE hard cap is 0.25."""
-        from selfhealing.services.chaos.experiment_impl import SimulatedTLSFailureExperiment
+        from selfhealing.services.chaos.experiments import SimulatedTLSFailureExperiment
         
         assert SimulatedTLSFailureExperiment.MAX_FAILURE_RATE == 0.25
     
     def test_default_failure_type(self):
         """Test default failure_type is handshake_timeout."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedTLSFailureExperiment,
             ExperimentConfig,
         )
@@ -1045,7 +1045,7 @@ class TestSimulatedTLSFailureExperiment:
     
     def test_failure_rate_capped(self):
         """Test failure_rate is capped at MAX_FAILURE_RATE."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedTLSFailureExperiment,
             ExperimentConfig,
         )
@@ -1059,10 +1059,10 @@ class TestSimulatedTLSFailureExperiment:
         
         assert experiment.failure_rate == 0.25  # Capped
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             SimulatedTLSFailureExperiment,
             ExperimentConfig,
         )
@@ -1084,7 +1084,7 @@ class TestSimulatedTLSFailureExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for simulated_tls_failure."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             SimulatedTLSFailureExperiment,
             ExperimentConfig,
@@ -1103,32 +1103,32 @@ class TestAuditStorageFailureExperiment:
     
     def test_class_exists(self):
         """Test AuditStorageFailureExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        from selfhealing.services.chaos.experiments import AuditStorageFailureExperiment
         
         assert AuditStorageFailureExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is audit_storage_failure."""
-        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        from selfhealing.services.chaos.experiments import AuditStorageFailureExperiment
         
         assert AuditStorageFailureExperiment.experiment_type == "audit_storage_failure"
     
     def test_requires_approval(self):
         """Test requires_approval is True (audit data risk)."""
-        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        from selfhealing.services.chaos.experiments import AuditStorageFailureExperiment
         
         assert AuditStorageFailureExperiment.requires_approval is True
     
     def test_failure_hypothesis_exists(self):
         """Test failure_hypothesis is defined."""
-        from selfhealing.services.chaos.experiment_impl import AuditStorageFailureExperiment
+        from selfhealing.services.chaos.experiments import AuditStorageFailureExperiment
         
         assert hasattr(AuditStorageFailureExperiment, "failure_hypothesis")
         assert AuditStorageFailureExperiment.failure_hypothesis is not None
     
     def test_default_failed_layer(self):
         """Test default failed_layer is l2."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             AuditStorageFailureExperiment,
             ExperimentConfig,
         )
@@ -1141,7 +1141,7 @@ class TestAuditStorageFailureExperiment:
     
     def test_default_recovery_mode(self):
         """Test default recovery_mode is degraded."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             AuditStorageFailureExperiment,
             ExperimentConfig,
         )
@@ -1152,10 +1152,10 @@ class TestAuditStorageFailureExperiment:
         
         assert experiment.recovery_mode == "degraded"
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             AuditStorageFailureExperiment,
             ExperimentConfig,
         )
@@ -1180,7 +1180,7 @@ class TestAuditStorageFailureExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for audit_storage_failure."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             AuditStorageFailureExperiment,
             ExperimentConfig,
@@ -1199,37 +1199,37 @@ class TestReplayFloodExperiment:
     
     def test_class_exists(self):
         """Test ReplayFloodExperiment class exists."""
-        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        from selfhealing.services.chaos.experiments import ReplayFloodExperiment
         
         assert ReplayFloodExperiment is not None
     
     def test_experiment_type(self):
         """Test experiment type is replay_flood."""
-        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        from selfhealing.services.chaos.experiments import ReplayFloodExperiment
         
         assert ReplayFloodExperiment.experiment_type == "replay_flood"
     
     def test_requires_approval(self):
         """Test requires_approval is True (resource intensive)."""
-        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        from selfhealing.services.chaos.experiments import ReplayFloodExperiment
         
         assert ReplayFloodExperiment.requires_approval is True
     
     def test_hard_cap_max_entries(self):
         """Test MAX_ENTRIES_TO_CREATE hard cap is 5000."""
-        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        from selfhealing.services.chaos.experiments import ReplayFloodExperiment
         
         assert ReplayFloodExperiment.MAX_ENTRIES_TO_CREATE == 5000
     
     def test_hard_cap_max_rate(self):
         """Test MAX_REPLAY_RATE hard cap is 500."""
-        from selfhealing.services.chaos.experiment_impl import ReplayFloodExperiment
+        from selfhealing.services.chaos.experiments import ReplayFloodExperiment
         
         assert ReplayFloodExperiment.MAX_REPLAY_RATE == 500
     
     def test_entries_to_create_capped(self):
         """Test entries_to_create is capped at MAX_ENTRIES_TO_CREATE."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ReplayFloodExperiment,
             ExperimentConfig,
         )
@@ -1245,7 +1245,7 @@ class TestReplayFloodExperiment:
     
     def test_replay_rate_capped(self):
         """Test replay_rate is capped at MAX_REPLAY_RATE."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ReplayFloodExperiment,
             ExperimentConfig,
         )
@@ -1261,7 +1261,7 @@ class TestReplayFloodExperiment:
     
     def test_isolated_domain_prefix(self):
         """Test isolated_domain has chaos prefix."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ReplayFloodExperiment,
             ExperimentConfig,
         )
@@ -1277,7 +1277,7 @@ class TestReplayFloodExperiment:
     
     def test_isolated_domain_no_double_prefix(self):
         """Test isolated_domain doesn't double-prefix."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ReplayFloodExperiment,
             ExperimentConfig,
         )
@@ -1291,10 +1291,10 @@ class TestReplayFloodExperiment:
         
         assert experiment.isolated_domain == "chaos_test:payment"
     
-    @patch("selfhealing.services.chaos.experiment_impl._apply_chaos_config")
+    @patch("selfhealing.services.chaos.experiments._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config with isolation metadata."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             ReplayFloodExperiment,
             ExperimentConfig,
         )
@@ -1320,7 +1320,7 @@ class TestReplayFloodExperiment:
     
     def test_create_experiment_factory(self):
         """Test create_experiment factory for replay_flood."""
-        from selfhealing.services.chaos.experiment_impl import (
+        from selfhealing.services.chaos.experiments import (
             create_experiment,
             ReplayFloodExperiment,
             ExperimentConfig,

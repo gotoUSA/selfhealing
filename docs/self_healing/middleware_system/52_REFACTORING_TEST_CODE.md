@@ -624,27 +624,47 @@ def test_{동작}_{조건}_{예상결과}:
 
 ## 12. 기존 테스트 파일 호환성
 
-### 12.1 기존 import 경로 유지
+### 12.1 호환성 전략: Import 전체 변경 (권장)
 
-분리 후에도 기존 import가 작동하도록 `__init__.py`에서 re-export:
+분리 후 기존 facade를 유지하는 대신, **모든 import 경로를 직접 수정**하는 것을 권장합니다.
 
+**권장 접근법**:
 ```python
-# tests/unit/audit/test_audit_forensic_bridge.py (deprecated facade)
-"""
-DEPRECATED: 이 모듈은 하위 호환성을 위해 유지됩니다.
-새 테스트는 tests/unit/audit/forensic_bridge/ 패키지를 사용하세요.
-"""
+# Before (구 경로)
+from selfhealing.services.chaos.experiment_impl import LatencyInjectionExperiment
 
-from tests.unit.audit.forensic_bridge.test_event_types import *
-from tests.unit.audit.forensic_bridge.test_corruption_shield import *
-from tests.unit.audit.forensic_bridge.test_shadow_logger import *
-# ... 나머지 re-export
+# After (새 경로)
+from selfhealing.services.chaos.experiments import LatencyInjectionExperiment
 ```
 
-### 12.2 점진적 마이그레이션
+**장점**:
+- 임시방편(facade)이 아닌 완전한 리팩토링
+- 코드베이스의 일관성 유지
+- 유지보수성 향상
+- 명확한 모듈 경계
+
+### 12.2 실제 적용 사례 (2025-06-16 완료)
+
+1. `experiment_impl.py` → `experiments/` 패키지
+   - 기존 facade 파일 삭제
+   - 모든 테스트 import 경로 수정
+   
+2. `integrity.py` → `integrity/` 패키지
+   - 기존 facade 파일 삭제
+   - 패키지 `__init__.py`에서 re-export
+   
+3. `hash_chain_graceful_degradation.py` → `graceful_degradation/` 패키지
+   - 기존 facade 파일 삭제
+   - 모든 테스트 import 경로 수정
+
+### 12.3 점진적 마이그레이션 (대안)
+
+facade를 일시적으로 유지해야 하는 경우에만 사용:
 
 1. 새 패키지 구조 생성
 2. 테스트를 새 파일로 이동
-3. 기존 파일을 facade로 변경
+3. 기존 파일을 facade로 변경 (임시)
 4. CI/CD에서 양쪽 경로 테스트 확인
-5. 충분한 기간 후 기존 파일 제거
+5. **즉시** 모든 import 수정 후 facade 제거
+
+**주의**: Facade는 임시방편이므로 가능한 빨리 제거해야 합니다.

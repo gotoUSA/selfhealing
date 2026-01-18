@@ -112,14 +112,23 @@ experiments/__init__.py:
     __all__ = [...]  # 모든 Experiment 클래스
 ```
 
-### 1.5 호환성 유지
+### 1.5 호환성 유지 (완료됨)
 
-기존 import 경로 호환을 위해 `experiment_impl.py`를 facade로 유지:
+**선택된 전략**: Import 전체 변경 (Facade 제거)
 
-```
-# experiment_impl.py (기존 파일, facade로 변경)
-from selfhealing.services.chaos.experiments import *  # 모든 re-export
-```
+기존 facade 방식 대신, 모든 테스트 코드의 import 경로를 직접 수정하여
+완전한 리팩토링을 완료했습니다.
+
+**변경 사항**:
+- `experiment_impl.py` 파일 삭제
+- 모든 import를 `experiments` 패키지로 변경:
+  - Before: `from selfhealing.services.chaos.experiment_impl import ...`
+  - After: `from selfhealing.services.chaos.experiments import ...`
+
+**장점**:
+- 임시방편(facade)이 아닌 완전한 리팩토링
+- 코드베이스의 일관성 유지
+- 유지보수성 향상
 
 ---
 
@@ -319,7 +328,18 @@ audit/graceful_degradation/
 
 7. **manager.py**
    - HashChainGracefulDegradationManager: 통합 진입점
-   - 모든 컴포넌트 조정 (Facade 패턴)
+   - 모든 컴포넌트 조정
+
+### 4.4 호환성 유지 (완료됨)
+
+**선택된 전략**: Import 전체 변경 (Facade 제거)
+
+- `hash_chain_graceful_degradation.py` 파일 삭제
+- 모든 import를 `graceful_degradation` 패키지로 변경:
+  - Before: `from selfhealing.audit.hash_chain_graceful_degradation import ...`
+  - After: `from selfhealing.audit.graceful_degradation import ...`
+- `integrity.py` 파일도 삭제됨
+  - 모든 import가 `integrity` 패키지로 변경됨
 
 ---
 

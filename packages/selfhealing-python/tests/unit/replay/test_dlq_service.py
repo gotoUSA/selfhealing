@@ -13,7 +13,6 @@ from unittest.mock import Mock, patch, MagicMock
 from selfhealing.services.dlq_service import (
     DLQService,
     DLQConfig,
-    ReplayResult,
     get_dlq_service,
 )
 from selfhealing.services.dlq_models import (
@@ -21,6 +20,7 @@ from selfhealing.services.dlq_models import (
     PaginatedResult,
     RetryResult,
     ResolveResult,
+    ReplayResult,
 )
 
 

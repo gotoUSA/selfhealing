@@ -11,15 +11,18 @@ This module provides:
 - DailyResilienceReport: Automated reporting
 """
 
-from .experiments import (
+from .base import (
     ChaosExperiment,
+    ExperimentConfig,
+    ExperimentResult,
+    ExperimentStatus,
+)
+from .experiments import (
     LatencyInjectionExperiment,
     Error5xxExperiment,
     PacketLossExperiment,
     TimeoutExperiment,
     ResourceExhaustionExperiment,
-    ExperimentResult,
-    ExperimentStatus,
 )
 from .blast_radius import (
     BlastRadius,

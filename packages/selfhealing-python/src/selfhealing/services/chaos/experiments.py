@@ -32,7 +32,7 @@ from selfhealing.services.chaos.base import (
     ChaosExperiment,
 )
 
-from selfhealing.services.chaos.experiment_impl import (
+from selfhealing.services.chaos.experiments import (
     # Concrete Experiments
     LatencyInjectionExperiment,
     Error5xxExperiment,
