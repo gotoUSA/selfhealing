@@ -1,8 +1,7 @@
 """
-Chaos Scheduler Models
+Chaos Scheduler Models.
 
 Data classes and enums for chaos scheduler operations.
-Separated from scheduler.py for better maintainability.
 """
 
 from __future__ import annotations
@@ -81,6 +80,11 @@ class ScheduledExperiment:
     schedule_time: str = "02:00"  # HH:MM UTC
     schedule_day: int = 0  # 0=Monday for weekly
     schedule_cron: str = ""  # For custom cron
+    
+    # Alias for cron expression (used in some places)
+    @property
+    def cron_expression(self) -> str:
+        return self.schedule_cron
     
     # Approval
     approval_status: str = ExperimentApprovalStatus.PENDING.value

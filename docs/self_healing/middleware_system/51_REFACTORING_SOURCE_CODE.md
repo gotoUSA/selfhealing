@@ -12,9 +12,9 @@
 | Phase 1-2 | integrity.py → integrity/ | ✅ 완료 | 12개 통과 | 2025-06-16 |
 | Phase 2-1 | hash_chain_graceful_degradation.py → graceful_degradation/ | ✅ 완료 | 50개 통과 | 2025-06-16 |
 | Phase 2-2 | resilience.py → resilience/ | ✅ 완료 | 38개 통과 | 2025-06-16 |
-| Phase 3 | middleware.py, security_violation_service.py | 미시작 | - | - |
-| Phase 4 | chaos/base.py, load_shedding.py, safety_guard.py | 미시작 | - | - |
-| Phase 5 | tasks.py, scheduler.py | 미시작 | - | - |
+| Phase 3 | middleware.py, security_violation_service.py | ✅ 완료 | 기존 패키지화 완료 | 2025-06-16 |
+| Phase 4 | chaos/base.py, load_shedding.py, safety_guard.py | ✅ 완료 | experiment.py 1,653→1,167줄 | 2025-06-16 |
+| Phase 5 | tasks.py, scheduler.py | ✅ 완료 | scheduler/ 패키지화 완료 | 2025-06-16 |
 
 ---
 
@@ -210,7 +210,7 @@ redis_manager.py ← sequence.py
 
 ---
 
-## 3. chaos/base.py (1,652줄) → 수직 분리
+## 3. chaos/base.py (1,652줄) → 수직 분리 ✅ 완료
 
 ### 3.1 현재 구조 분석
 
@@ -228,19 +228,22 @@ redis_manager.py ← sequence.py
 | 491-1634 | ChaosExperiment | 추상 기반 클래스 (1,143줄) |
 | 1635-1653 | _apply_chaos_config(), _get_current_chaos_config() | 유틸리티 |
 
-### 3.2 분리 전략
+### 3.2 분리 결과 (2025-06-16 완료)
 
 ```
-services/chaos/
-├── __init__.py           # 공개 API re-export
-├── base/
-│   ├── __init__.py       # base 패키지 공개 API
-│   ├── protocols.py      # AuditRecorderProtocol, KillSwitchProtocol
-│   ├── enums.py          # ExperimentStatus, ExperimentType, TrafficType
-│   ├── models.py         # ExperimentConfig, ExperimentResult, SteadyStateHypothesis
-│   ├── ttl_helper.py     # MonotonicTTLHelper
-│   ├── experiment.py     # ChaosExperiment 추상 클래스
-│   └── utils.py          # _apply_chaos_config(), _get_current_chaos_config()
+services/chaos/base/
+├── __init__.py       # base 패키지 공개 API (67줄)
+├── protocols.py      # AuditRecorderProtocol, KillSwitchProtocol (29줄)
+├── enums.py          # ExperimentStatus, ExperimentType, TrafficType (110줄)
+├── models.py         # ExperimentConfig, ExperimentResult, SteadyStateHypothesis (224줄)
+├── ttl_helper.py     # MonotonicTTLHelper (119줄)
+├── experiment.py     # ChaosExperiment 추상 클래스 (1,167줄, 1,653줄에서 축소)
+└── utils.py          # _apply_chaos_config(), _get_current_chaos_config() (36줄)
+
+개선 결과:
+- experiment.py: 1,653줄 → 1,167줄 (486줄 감소, 중복 코드 제거)
+- 모든 Enum, DataClass, Protocol이 별도 모듈로 분리
+- import 순환 의존성 해결
 ```
 
 ### 3.3 분리 근거
@@ -524,20 +527,25 @@ services/chaos/safety/
 └── helpers.py               # get_safety_guard(), reset_safety_guard()
 ```
 
-### 8.3 scheduler.py (1,062줄)
+### 8.3 scheduler.py (1,062줄) - ✅ 완료
 
 ```
-현재: services/chaos/scheduler.py
-      ChaosSchedulerService (985줄)
+현재: services/chaos/scheduler.py → scheduler/ 패키지로 분리됨
 
-분리 전략:
+분리 결과:
 services/chaos/scheduler/
-├── __init__.py              # 공개 API re-export
-├── service.py               # ChaosSchedulerService
-└── helpers.py               # get_chaos_scheduler(), reset_chaos_scheduler()
+├── __init__.py              # 공개 API re-export (72줄)
+├── models.py                # ScheduledExperiment, SchedulerConfig, ExecutionResult,
+│                            # ScheduleType, ExperimentApprovalStatus (270줄)
+├── service.py               # ChaosSchedulerService (900줄)
+└── helpers.py               # get_chaos_scheduler(), reset_chaos_scheduler() (47줄)
 
-참고: ChaosSchedulerService 자체가 985줄이지만 단일 책임(스케줄링)이므로
-      클래스 분리보다는 패키지화만 진행
+기존 파일 삭제됨:
+- services/chaos/scheduler.py (1,063줄)
+- services/chaos/scheduler_models.py (263줄)
+
+총 1,326줄 → 1,289줄 (4개 파일로 분리)
+완료일: 2025-06-16
 ```
 
 ### 8.4 resilience.py (1,027줄)

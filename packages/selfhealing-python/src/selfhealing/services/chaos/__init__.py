@@ -38,7 +38,11 @@ from .scheduler import (
     ChaosSchedulerService,
     ScheduledExperiment,
     ExperimentApprovalStatus,
+    ScheduleType,
+    SchedulerConfig,
+    ExecutionResult,
     get_chaos_scheduler,
+    reset_chaos_scheduler,
 )
 from .reports import (
     DailyResilienceReport,
@@ -105,7 +109,11 @@ __all__ = [
     "ChaosSchedulerService",
     "ScheduledExperiment",
     "ExperimentApprovalStatus",
+    "ScheduleType",
+    "SchedulerConfig",
+    "ExecutionResult",
     "get_chaos_scheduler",
+    "reset_chaos_scheduler",
     # Reports
     "DailyResilienceReport",
     "ResilienceReportGenerator",

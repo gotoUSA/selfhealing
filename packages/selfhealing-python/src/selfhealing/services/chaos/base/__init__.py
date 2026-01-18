@@ -18,32 +18,22 @@ Usage:
         ExperimentType,
     )
 
-Note: experiment.py contains the full original base.py content including
-ChaosExperiment class. Other files (protocols.py, enums.py, models.py,
-ttl_helper.py, utils.py) contain extracted components for modular access.
+Structure:
+- protocols.py: AuditRecorderProtocol, KillSwitchProtocol
+- enums.py: ExperimentStatus, ExperimentType, TrafficType
+- models.py: ExperimentConfig, ExperimentResult, SteadyStateHypothesis
+- ttl_helper.py: MonotonicTTLHelper
+- experiment.py: ChaosExperiment (abstract base class)
+- utils.py: _apply_chaos_config, _get_current_chaos_config
 """
 
-# Import from experiment.py (original base.py content)
-from .experiment import (
-    # Protocols
-    AuditRecorderProtocol,
-    KillSwitchProtocol,
-    # Enums
-    ExperimentStatus,
-    ExperimentType,
-    TrafficType,
-    # Models
-    ExperimentConfig,
-    ExperimentResult,
-    SteadyStateHypothesis,
-    # TTL Helper
-    MonotonicTTLHelper,
-    # Base Class
-    ChaosExperiment,
-    # Utils
-    _apply_chaos_config,
-    _get_current_chaos_config,
-)
+# Import from separate modules
+from .protocols import AuditRecorderProtocol, KillSwitchProtocol
+from .enums import ExperimentStatus, ExperimentType, TrafficType
+from .models import ExperimentConfig, ExperimentResult, SteadyStateHypothesis
+from .ttl_helper import MonotonicTTLHelper
+from .experiment import ChaosExperiment
+from .utils import _apply_chaos_config, _get_current_chaos_config
 
 
 __all__ = [

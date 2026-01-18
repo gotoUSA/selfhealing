@@ -1,16 +1,7 @@
 """
-Chaos Scheduler Service
+Chaos Scheduler Service.
 
 Celery Beat-based scheduler for autonomous chaos experiments.
-Implements scheduled execution with comprehensive pre-flight checks.
-
-Features:
-- Scheduled experiment execution (Celery Beat)
-- Pre-flight safety checks (SafetyGuard integration)
-- Blast radius enforcement
-- Approval workflow for high-risk experiments
-- Kill switch integration
-- Audit trail recording
 """
 
 from __future__ import annotations
@@ -23,8 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from selfhealing.core.timezone import now
 
-# Import models from scheduler_models for backward compatibility
-from .scheduler_models import (
+from .models import (
     ExperimentApprovalStatus,
     ScheduleType,
     ScheduledExperiment,
@@ -33,28 +23,6 @@ from .scheduler_models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# Backward compatibility exports
-__all__ = [
-    # Enums
-    "ExperimentApprovalStatus",
-    "ScheduleType",
-    # Data classes
-    "ScheduledExperiment",
-    "SchedulerConfig",
-    "ExecutionResult",
-    # Service
-    "ChaosSchedulerService",
-    # Factory functions
-    "get_chaos_scheduler",
-    "reset_chaos_scheduler",
-]
-
-
-# =============================================================================
-# Chaos Scheduler Service
-# =============================================================================
 
 
 class ChaosSchedulerService:
@@ -195,7 +163,7 @@ class ChaosSchedulerService:
         Returns:
             Created ScheduledExperiment
         """
-        from .blast_radius import BlastRadius, get_blast_radius_manager
+        from selfhealing.services.chaos.blast_radius import BlastRadius, get_blast_radius_manager
         
         with self._lock:
             schedule = ScheduledExperiment(
@@ -415,7 +383,7 @@ class ChaosSchedulerService:
 
     def _make_skipped_result(
         self, schedule_id: str, experiment_id: str, started_at, reason: str, status: str = "skipped"
-    ) -> "ExecutionResult":
+    ) -> ExecutionResult:
         """Create a skipped/blocked execution result."""
         return ExecutionResult(
             schedule_id=schedule_id,
@@ -427,17 +395,13 @@ class ChaosSchedulerService:
             completed_at=now().isoformat(),
         )
 
-    # =========================================================================
-    # 순위 6: Idempotency 체크 (v2.5.0)
-    # =========================================================================
-
     def _check_idempotency(
         self,
-        schedule: "ScheduledExperiment",
+        schedule: ScheduledExperiment,
         schedule_id: str,
         experiment_id: str,
         started_at,
-    ) -> ExecutionResult | None:
+    ) -> Optional[ExecutionResult]:
         """
         멱등성 체크: 동일 실험의 중복 실행 방지.
         
@@ -491,7 +455,7 @@ class ChaosSchedulerService:
             logger.warning(f"[ChaosScheduler] Idempotency check failed: {e}")
             return None
 
-    def _mark_idempotency_processed(self, schedule: "ScheduledExperiment") -> None:
+    def _mark_idempotency_processed(self, schedule: ScheduledExperiment) -> None:
         """
         실험 완료 후 멱등성 처리 완료 마킹.
         
@@ -516,7 +480,7 @@ class ChaosSchedulerService:
         except Exception as e:
             logger.warning(f"[ChaosScheduler] Failed to mark idempotency: {e}")
 
-    def _check_error_budget_gate(self, schedule_id: str, experiment_id: str, started_at) -> ExecutionResult | None:
+    def _check_error_budget_gate(self, schedule_id: str, experiment_id: str, started_at) -> Optional[ExecutionResult]:
         """Check error budget gate. Returns ExecutionResult if blocked, None otherwise."""
         try:
             from selfhealing.services.error_budget_gate import check_automation_allowed
@@ -538,8 +502,8 @@ class ChaosSchedulerService:
         return None
 
     def _check_pre_execution_conditions(
-        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
-    ) -> ExecutionResult | None:
+        self, schedule: ScheduledExperiment, schedule_id: str, experiment_id: str, started_at
+    ) -> Optional[ExecutionResult]:
         """Check scheduler/schedule/approval conditions. Returns ExecutionResult if blocked."""
         if not self._config.enabled:
             return self._make_skipped_result(schedule_id, experiment_id, started_at, "Scheduler is disabled")
@@ -557,10 +521,10 @@ class ChaosSchedulerService:
         return None
 
     def _check_safety_conditions(
-        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
-    ) -> ExecutionResult | None:
+        self, schedule: ScheduledExperiment, schedule_id: str, experiment_id: str, started_at
+    ) -> Optional[ExecutionResult]:
         """Check safety guard conditions. Returns ExecutionResult if blocked."""
-        from .safety_guard import get_safety_guard
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
 
         guard = get_safety_guard()
         safety_result = guard.check(experiment_id=experiment_id, target_service=schedule.target_service)
@@ -576,10 +540,10 @@ class ChaosSchedulerService:
         return None
 
     def _check_blast_radius_conditions(
-        self, schedule: "ScheduledExperiment", schedule_id: str, experiment_id: str, started_at
-    ) -> ExecutionResult | None:
+        self, schedule: ScheduledExperiment, schedule_id: str, experiment_id: str, started_at
+    ) -> Optional[ExecutionResult]:
         """Check blast radius conditions. Returns ExecutionResult if blocked."""
-        from .blast_radius import get_blast_radius_manager
+        from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
 
         br_manager = get_blast_radius_manager()
         br_result = br_manager.check(
@@ -615,10 +579,6 @@ class ChaosSchedulerService:
         Returns:
             ExecutionResult with outcome
         """
-        from .experiments import create_experiment, ExperimentConfig, ExperimentResult
-        from .safety_guard import get_safety_guard
-        from .blast_radius import get_blast_radius_manager, BlastRadius
-        
         schedule = self.get_schedule(schedule_id)
         if not schedule:
             return self._create_error_result(
@@ -668,7 +628,7 @@ class ChaosSchedulerService:
     
     def _run_pre_execution_checks(
         self,
-        schedule: Any,
+        schedule: ScheduledExperiment,
         schedule_id: str,
         experiment_id: str,
         started_at: Any,
@@ -701,16 +661,17 @@ class ChaosSchedulerService:
     
     def _execute_experiment(
         self,
-        schedule: Any,
+        schedule: ScheduledExperiment,
         schedule_id: str,
         experiment_id: str,
         started_at: Any,
         force: bool,
     ) -> ExecutionResult:
         """Execute the experiment and return result."""
-        from .experiments import create_experiment, ExperimentConfig
-        from .safety_guard import get_safety_guard
-        from .blast_radius import get_blast_radius_manager
+        from selfhealing.services.chaos.experiments import create_experiment
+        from selfhealing.services.chaos.base import ExperimentConfig
+        from selfhealing.services.chaos.safety_guard import get_safety_guard
+        from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
         
         guard = get_safety_guard()
         br_manager = get_blast_radius_manager()
@@ -771,7 +732,7 @@ class ChaosSchedulerService:
             if not force:
                 br_manager.unregister_experiment(experiment_id)
     
-    def _update_schedule_after_execution(self, schedule: Any, result: Any) -> None:
+    def _update_schedule_after_execution(self, schedule: ScheduledExperiment, result: Any) -> None:
         """Update schedule after experiment execution."""
         with self._lock:
             schedule.last_run_at = now().isoformat()
@@ -819,8 +780,6 @@ class ChaosSchedulerService:
         Returns:
             True if kill signal sent
         """
-        from .experiments import ChaosExperiment
-        
         logger.warning(f"[ChaosScheduler] Kill requested for {experiment_id}: {reason}")
         
         # Record audit
@@ -1031,32 +990,3 @@ class ChaosSchedulerService:
             f"[ChaosSchedulerAudit] {event_type}",
             extra={"audit_data": data}
         )
-
-
-# =============================================================================
-# Singleton
-# =============================================================================
-
-
-_chaos_scheduler: Optional[ChaosSchedulerService] = None
-_scheduler_lock = threading.Lock()
-
-
-def get_chaos_scheduler() -> ChaosSchedulerService:
-    """Get the singleton ChaosSchedulerService instance."""
-    global _chaos_scheduler
-    
-    if _chaos_scheduler is None:
-        with _scheduler_lock:
-            if _chaos_scheduler is None:
-                _chaos_scheduler = ChaosSchedulerService()
-                _chaos_scheduler._load_config()
-    
-    return _chaos_scheduler
-
-
-def reset_chaos_scheduler() -> None:
-    """Reset the singleton (for testing)."""
-    global _chaos_scheduler
-    with _scheduler_lock:
-        _chaos_scheduler = None
