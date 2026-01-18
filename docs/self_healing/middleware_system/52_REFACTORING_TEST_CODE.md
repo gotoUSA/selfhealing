@@ -799,6 +799,130 @@ pytest tests/unit/audit/forensic_bridge/ \
 
 ### 13.5 다음 단계
 
+- [x] ~~백업 파일(.bak) 정리 (확인 후 삭제)~~ → Phase 2 완료 후 진행
+- [ ] CI/CD 파이프라인 테스트 경로 업데이트
+- [x] ~~추가 대형 테스트 파일 식별 및 분리~~ → Phase 2 완료
+
+---
+
+## 14. Phase 2 실행 결과 (2026-01-18 완료)
+
+### 14.1 실행 요약
+
+| 원본 파일 | 라인 수 | 분리된 패키지 | 테스트 수 | 결과 |
+|-----------|---------|---------------|-----------|------|
+| `test_emergency_mode.py` | 979 | `tests/unit/resilience/emergency_mode/` | 49 | ✅ PASSED |
+| `test_hash_chain_performance.py` | 969 | `tests/unit/audit/hash_chain_performance/` | 38 | ✅ PASSED |
+| `test_audit_integration.py` | 935 | `tests/unit/audit/audit_integration/` | 48 | ✅ PASSED |
+| `test_audit_helpers_chaos_emergency.py` | 908 | `tests/unit/audit/helpers/` | 35 | ✅ PASSED |
+| **총합** | **3,791** | **4개 패키지** | **170** | ✅ **ALL PASSED** |
+
+### 14.2 생성된 패키지 구조
+
+#### 14.2.1 tests/unit/resilience/emergency_mode/
+```
+emergency_mode/
+├── __init__.py
+├── conftest.py
+├── test_enums_config.py       # TestEmergencyLevel, TestEmergencyModeConfig
+├── test_recovery_gate.py      # TestRecoveryGate
+├── test_manager.py            # TestEmergencyModeManager
+├── test_helpers.py            # TestEmergencyModeHelpers
+├── test_thread_safety.py      # TestEmergencyModeThreadSafety
+├── test_integration.py        # TestEmergencyModeIntegration
+├── test_config_history.py     # TestEmergencyModeConfigHistory
+└── test_snapshot.py           # TestEmergencySnapshot
+```
+- 테스트 수: **49개**
+- 원본 백업: `test_emergency_mode.py.bak`
+
+#### 14.2.2 tests/unit/audit/hash_chain_performance/
+```
+hash_chain_performance/
+├── __init__.py
+├── conftest.py               # MockRedisClient, MockPipeline fixtures
+├── test_lua_atomic.py        # TestLuaAtomicOperations
+├── test_pipeline_batch.py    # TestPipelineBatchOperations
+├── test_batch_flush.py       # TestBatchFlushOperations
+├── test_async_writer.py      # TestAsyncWriterPerformance
+├── test_sampling.py          # TestSamplingStrategy
+├── test_watchdog.py          # TestWatchdogMonitoring
+├── test_manager.py           # TestHashChainManager
+└── test_integration.py       # TestHashChainPerformanceIntegration
+```
+- 테스트 수: **38개**
+- 원본 백업: `test_hash_chain_performance.py.bak`
+
+#### 14.2.3 tests/unit/audit/audit_integration/
+```
+audit_integration/
+├── __init__.py
+├── test_async_logger.py      # TestAsyncAuditLogger
+├── test_observers.py         # TestAuditObservers
+├── test_recorder.py          # TestAuditRecorder
+├── test_helpers.py           # TestAuditHelpers
+├── test_enums.py             # TestAuditEnums
+├── test_data.py              # TestAuditData
+└── test_scenarios.py         # TestAuditScenarios
+```
+- 테스트 수: **48개**
+- 원본 백업: `test_audit_integration.py.bak`
+
+#### 14.2.4 tests/unit/audit/helpers/
+```
+helpers/
+├── __init__.py
+├── test_event_types.py       # TestAuditEventTypeChaosEmergency
+├── test_chaos_audit.py       # TestLogChaosExperimentAudit
+├── test_emergency_audit.py   # TestLogEmergencyModeAudit
+├── test_budget_audit.py      # TestLogErrorBudgetBlockedAudit
+├── test_migration.py         # TestChaosExperimentMigration, TestEmergencyModeManagerMigration, TestErrorBudgetGateMigration
+└── test_buffer.py            # TestBufferIntegration
+```
+- 테스트 수: **35개**
+- 원본 백업: `test_audit_helpers_chaos_emergency.py.bak`
+
+### 14.3 기술적 해결 사항
+
+**Lazy Import 패턴 적용**: 모든 테스트 파일에서 `selfhealing.services.*` 임포트를 테스트 메서드 내부로 이동하여 Prometheus 레지스트리 충돌 방지
+
+```python
+# BEFORE (충돌 발생):
+from selfhealing.services.emergency_mode import EmergencyLevel
+class TestEmergencyLevel:
+    def test_normal_level(self):
+        assert EmergencyLevel.NORMAL.value == 0
+
+# AFTER (정상 작동):
+class TestEmergencyLevel:
+    def test_normal_level(self):
+        from selfhealing.services.emergency_mode import EmergencyLevel
+        assert EmergencyLevel.NORMAL.value == 0
+```
+
+### 14.4 실행 명령어
+
+```bash
+# Phase 2 전체 테스트 실행
+cd packages/selfhealing-python
+python -m pytest tests/unit/resilience/emergency_mode/ \
+                 tests/unit/audit/hash_chain_performance/ \
+                 tests/unit/audit/audit_integration/ \
+                 tests/unit/audit/helpers/ -q
+
+# 결과: 170 passed in 17.70s
+```
+
+### 14.5 Phase 1 + Phase 2 총계
+
+| Phase | 패키지 수 | 총 테스트 수 |
+|-------|-----------|--------------|
+| Phase 1 | 5 | 292 |
+| Phase 2 | 4 | 170 |
+| **Total** | **9** | **462** |
+
+### 14.6 다음 단계
+
 - [ ] 백업 파일(.bak) 정리 (확인 후 삭제)
 - [ ] CI/CD 파이프라인 테스트 경로 업데이트
-- [ ] 추가 대형 테스트 파일 식별 및 분리
+- [ ] 전체 테스트 스위트 회귀 테스트
