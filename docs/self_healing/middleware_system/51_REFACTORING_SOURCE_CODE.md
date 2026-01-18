@@ -2,6 +2,19 @@
 
 > 작성일: 2026-01-18  
 > 대상: `packages/selfhealing-python/src/selfhealing`
+> 최종 업데이트: 2025-06-16
+
+## 진행 상태
+
+| Phase | 대상 파일 | 상태 | 테스트 | 완료일 |
+|-------|----------|------|--------|--------|
+| Phase 1-1 | experiment_impl.py → experiments/ | ✅ 완료 | 통과 | 2025-06-16 |
+| Phase 1-2 | integrity.py → integrity/ | ✅ 완료 | 12개 통과 | 2025-06-16 |
+| Phase 2-1 | hash_chain_graceful_degradation.py → graceful_degradation/ | ✅ 완료 | 50개 통과 | 2025-06-16 |
+| Phase 2-2 | resilience.py → resilience/ | ✅ 완료 | 38개 통과 | 2025-06-16 |
+| Phase 3 | middleware.py, security_violation_service.py | 미시작 | - | - |
+| Phase 4 | chaos/base.py, load_shedding.py, safety_guard.py | 미시작 | - | - |
+| Phase 5 | tasks.py, scheduler.py | 미시작 | - | - |
 
 ---
 

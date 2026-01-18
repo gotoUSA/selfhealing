@@ -1,0 +1,294 @@
+"""
+Hash Chain Degradation Manager.
+
+Coordinates degradation levels across all hash chain components,
+provides unified status, and triggers recovery when possible.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from .enums import DegradationLevel, FallbackConfig
+from .fallback import HashChainFallbackChain
+from .marker import DegradedEntryMarker
+from .wal_recovery import HashChainWALRecovery
+
+
+logger = logging.getLogger(__name__)
+
+
+class HashChainDegradationManager:
+    """
+    Manages graceful degradation for hash chain operations.
+    
+    Coordinates degradation levels across all hash chain components,
+    provides unified status, and triggers recovery when possible.
+    
+    Degradation Levels:
+    - NORMAL: Full Redis functionality
+    - DEGRADED: Local fallback active, entries marked for reconciliation
+    - EMERGENCY: Memory-only, minimal functionality
+    - READONLY: No writes, only cache reads
+    
+    Pattern source:
+        services/emergency_mode/manager.py#L37
+    
+    Usage:
+        manager = HashChainDegradationManager(redis_client)
+        manager.on_redis_failure()  # Triggers degradation
+        manager.on_redis_recovery()  # Triggers recovery
+    """
+    
+    _instance: Optional["HashChainDegradationManager"] = None
+    _lock = threading.Lock()
+    
+    def __new__(cls, *args, **kwargs) -> "HashChainDegradationManager":
+        """Singleton pattern."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(
+        self,
+        redis_client: Optional[Any] = None,
+        key_prefix: str = "selfhealing:",
+        wal_dir: Optional[Path] = None,
+    ):
+        """
+        Initialize degradation manager.
+        
+        Args:
+            redis_client: Redis client
+            key_prefix: Prefix for Redis keys
+            wal_dir: Directory for WAL files
+        """
+        if getattr(self, "_initialized", False):
+            return
+        
+        self._redis = redis_client
+        self._key_prefix = key_prefix
+        self._wal_dir = Path(wal_dir) if wal_dir else Path("logs/audit/wal")
+        self._state_lock = threading.RLock()
+        
+        # Current state
+        self._level = DegradationLevel.NORMAL if redis_client else DegradationLevel.DEGRADED
+        self._level_changed_at = datetime.now(timezone.utc).isoformat()
+        self._failure_count = 0
+        self._recovery_attempts = 0
+        
+        # Component references (lazy initialized)
+        self._fallback_chain: Optional[HashChainFallbackChain] = None
+        self._degraded_marker: Optional[DegradedEntryMarker] = None
+        self._wal_recovery: Optional[HashChainWALRecovery] = None
+        
+        # Callbacks
+        self._on_degradation_callbacks: List[Callable[[DegradationLevel], None]] = []
+        self._on_recovery_callbacks: List[Callable[[DegradationLevel], None]] = []
+        
+        self._initialized = True
+    
+    @property
+    def level(self) -> DegradationLevel:
+        """Get current degradation level."""
+        return self._level
+    
+    @property
+    def is_degraded(self) -> bool:
+        """Check if operating in any degraded mode."""
+        return self._level != DegradationLevel.NORMAL
+    
+    def set_level(self, level: DegradationLevel, reason: str = "") -> None:
+        """
+        Set degradation level.
+        
+        Args:
+            level: New degradation level
+            reason: Reason for level change
+        """
+        with self._state_lock:
+            if level == self._level:
+                return
+            
+            old_level = self._level
+            self._level = level
+            self._level_changed_at = datetime.now(timezone.utc).isoformat()
+            
+            logger.warning(
+                f"[HashChainDegradation] Level changed: {old_level.value} → {level.value}"
+                f"{f' ({reason})' if reason else ''}"
+            )
+            
+            # Record in Redis if available
+            self._record_level_change(old_level, level, reason)
+            
+            # Notify callbacks
+            if level == DegradationLevel.NORMAL:
+                for callback in self._on_recovery_callbacks:
+                    try:
+                        callback(level)
+                    except Exception as e:
+                        logger.error(f"[HashChainDegradation] Recovery callback failed: {e}")
+            else:
+                for callback in self._on_degradation_callbacks:
+                    try:
+                        callback(level)
+                    except Exception as e:
+                        logger.error(f"[HashChainDegradation] Degradation callback failed: {e}")
+    
+    def _record_level_change(
+        self,
+        old_level: DegradationLevel,
+        new_level: DegradationLevel,
+        reason: str,
+    ) -> None:
+        """Record level change in Redis."""
+        if not self._redis:
+            return
+        
+        try:
+            key = f"{self._key_prefix}audit:hash_chain:degradation_history"
+            timestamp = datetime.now(timezone.utc).isoformat()
+            pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
+            
+            entry = json.dumps({
+                "timestamp": timestamp,
+                "old_level": old_level.value,
+                "new_level": new_level.value,
+                "reason": reason,
+                "pod_id": pod_id,
+            })
+            
+            self._redis.lpush(key, entry)
+            # Keep only last 100 entries
+            self._redis.ltrim(key, 0, 99)
+            
+        except Exception as e:
+            logger.debug(f"[HashChainDegradation] Failed to record: {e}")
+    
+    def on_redis_failure(self, error: Optional[Exception] = None) -> None:
+        """
+        Handle Redis failure event.
+        
+        Triggers degradation and activates fallback mechanisms.
+        
+        Args:
+            error: The exception that caused the failure
+        """
+        with self._state_lock:
+            self._failure_count += 1
+            
+            reason = str(error) if error else "connection_failed"
+            
+            if self._level == DegradationLevel.NORMAL:
+                self.set_level(DegradationLevel.DEGRADED, reason)
+            elif self._level == DegradationLevel.DEGRADED and self._failure_count > 10:
+                self.set_level(DegradationLevel.EMERGENCY, "repeated_failures")
+    
+    def on_redis_recovery(self) -> None:
+        """
+        Handle Redis recovery event.
+        
+        Triggers recovery process including:
+        1. WAL replay
+        2. Degraded entry reconciliation
+        3. Level restoration
+        """
+        with self._state_lock:
+            self._recovery_attempts += 1
+            
+            try:
+                # Attempt WAL recovery if available
+                if self._wal_recovery:
+                    wal_result = self._wal_recovery.recover_on_startup()
+                    logger.info(f"[HashChainDegradation] WAL recovery: {wal_result}")
+                
+                # Reset failure count on successful recovery
+                self._failure_count = 0
+                
+                # Restore normal operation
+                self.set_level(DegradationLevel.NORMAL, "redis_recovered")
+                
+            except Exception as e:
+                logger.error(f"[HashChainDegradation] Recovery failed: {e}")
+                # Stay in degraded mode
+    
+    def on_filesystem_failure(self) -> None:
+        """Handle filesystem failure event."""
+        self.set_level(DegradationLevel.EMERGENCY, "filesystem_failure")
+    
+    def register_on_degradation(self, callback: Callable[[DegradationLevel], None]) -> None:
+        """Register callback for degradation events."""
+        self._on_degradation_callbacks.append(callback)
+    
+    def register_on_recovery(self, callback: Callable[[DegradationLevel], None]) -> None:
+        """Register callback for recovery events."""
+        self._on_recovery_callbacks.append(callback)
+    
+    def get_fallback_chain(self) -> HashChainFallbackChain:
+        """Get or create fallback chain instance."""
+        if self._fallback_chain is None:
+            self._fallback_chain = HashChainFallbackChain(
+                redis_primary=self._redis,
+                config=FallbackConfig(key_prefix=self._key_prefix),
+            )
+        return self._fallback_chain
+    
+    def get_degraded_marker(self) -> DegradedEntryMarker:
+        """Get or create degraded marker instance."""
+        if self._degraded_marker is None:
+            self._degraded_marker = DegradedEntryMarker(
+                redis_client=self._redis,
+                key_prefix=self._key_prefix,
+            )
+        return self._degraded_marker
+    
+    def get_wal_recovery(self) -> HashChainWALRecovery:
+        """Get or create WAL recovery instance."""
+        if self._wal_recovery is None:
+            self._wal_recovery = HashChainWALRecovery(
+                wal_dir=self._wal_dir,
+                redis_client=self._redis,
+                key_prefix=self._key_prefix,
+            )
+        return self._wal_recovery
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get comprehensive degradation status."""
+        status = {
+            "level": self._level.value,
+            "is_degraded": self.is_degraded,
+            "level_changed_at": self._level_changed_at,
+            "failure_count": self._failure_count,
+            "recovery_attempts": self._recovery_attempts,
+            "redis_available": self._redis is not None,
+        }
+        
+        if self._fallback_chain:
+            status["fallback"] = self._fallback_chain.get_stats()
+        
+        if self._degraded_marker:
+            status["degraded_marker"] = self._degraded_marker.get_stats()
+        
+        if self._wal_recovery:
+            status["wal_recovery"] = self._wal_recovery.get_stats()
+        
+        return status
+    
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset singleton instance (for testing)."""
+        with cls._lock:
+            cls._instance = None
+
+
+__all__ = ["HashChainDegradationManager"]
