@@ -253,17 +253,14 @@ class TraceContextProvider:
             return f"req-{uuid.uuid4().hex[:8]}"
     
     def _get_span_id(self) -> Optional[str]:
-        """현재 span_id 조회."""
-        # OpenTelemetry 사용 시 span_id 조회
-        try:
-            from opentelemetry import trace
-            span = trace.get_current_span()
-            if span:
-                ctx = span.get_span_context()
-                if ctx.is_valid:
-                    return format(ctx.span_id, '016x')
-        except ImportError:
-            pass
+        """현재 span_id 조회.
+        
+        Note:
+            OpenTelemetry SDK 의존성 없이 trace_id만 전파합니다.
+            span_id가 필요한 경우 W3C traceparent 헤더에서 추출합니다.
+        """
+        # span_id는 request context에서만 추출 가능
+        # OTel SDK 없이는 직접 생성하지 않음 (minimal dependency policy)
         return None
     
     def _get_request_id(self) -> Optional[str]:
@@ -537,9 +534,14 @@ class CircuitBreakerTracingManager:
         trigger: str,
     ) -> Any:
         """
-        OpenTelemetry Span 생성 (연동 시).
+        [DEPRECATED] OpenTelemetry Span 생성.
         
-        CB 상태 변화를 OpenTelemetry Span으로 기록합니다.
+        OpenTelemetry SDK 의존성이 제거되어 항상 None을 반환합니다.
+        CB 상태 변화는 Prometheus 메트릭과 Event Bus를 통해 추적하세요.
+        
+        분산 추적이 필요한 경우:
+        - trace_url_template을 설정하여 Jaeger/Zipkin UI 링크 생성
+        - audit/trace.py의 trace_id 전파 기능 활용
         
         Args:
             service_id: 서비스 ID
@@ -548,33 +550,15 @@ class CircuitBreakerTracingManager:
             trigger: 트리거 유형
             
         Returns:
-            OpenTelemetry Span (비활성화 시 None)
+            None (OTel SDK 제거됨)
         """
-        if not self.config.create_spans:
-            return None
-        
-        try:
-            from opentelemetry import trace
-            
-            tracer = trace.get_tracer("selfhealing.circuit_breaker")
-            
-            triggering_info = self.get_triggering_request(service_id)
-            
-            with tracer.start_as_current_span(
-                "circuit_breaker.state_change",
-                attributes={
-                    "cb.service_id": service_id,
-                    "cb.previous_state": previous_state,
-                    "cb.new_state": new_state,
-                    "cb.trigger": trigger,
-                    "cb.triggering_trace_id": triggering_info.trace_id if triggering_info else "",
-                }
-            ) as span:
-                return span
-                
-        except ImportError:
-            logger.debug("[CBTracing] OpenTelemetry not available")
-            return None
+        # OTel SDK 의존성 제거 - minimal dependency policy
+        # Prometheus 메트릭 및 Event Bus로 대체
+        logger.debug(
+            "[CBTracing] OTel span creation disabled (SDK removed). "
+            "Use trace_url_template for Jaeger/Zipkin links."
+        )
+        return None
 
 
 # =============================================================================

@@ -80,31 +80,6 @@ from selfhealing.adapters.queues import (
 )
 
 # =============================================================================
-# Observability Adapters (Optional Extensions)
-# =============================================================================
-# These adapters are optional and gracefully degrade to NO-OP when not available
-try:
-    from selfhealing.adapters.observability import (
-        OpenTelemetryAdapter,
-        OpenTelemetryConfig,
-        get_opentelemetry_adapter,
-        emit_selfhealing_event,
-        start_decision_span,
-        end_decision_span,
-    )
-
-    OPENTELEMETRY_ADAPTER_AVAILABLE = True
-except ImportError:
-    # OpenTelemetry adapter not available (missing dependencies)
-    OPENTELEMETRY_ADAPTER_AVAILABLE = False
-    OpenTelemetryAdapter = None
-    OpenTelemetryConfig = None
-    get_opentelemetry_adapter = None
-    emit_selfhealing_event = None
-    start_decision_span = None
-    end_decision_span = None
-
-# =============================================================================
 # Health Checker Adapters (Platinum SLA Optimization)
 # =============================================================================
 from selfhealing.adapters.health_checker import (
@@ -137,16 +112,6 @@ __all__ = [
     # =========================================================================
     "CeleryTaskAdapter",
     "SyncTaskAdapter",
-    # =========================================================================
-    # Observability Adapters (Optional)
-    # =========================================================================
-    "OPENTELEMETRY_ADAPTER_AVAILABLE",
-    "OpenTelemetryAdapter",
-    "OpenTelemetryConfig",
-    "get_opentelemetry_adapter",
-    "emit_selfhealing_event",
-    "start_decision_span",
-    "end_decision_span",
     # =========================================================================
     # Health Checker Adapters (Platinum SLA Optimization)
     # =========================================================================

@@ -2,31 +2,20 @@
 Observability Adapters for Self-Healing System
 
 This module provides optional observability adapters that extend
-the self-healing system's telemetry capabilities beyond Prometheus.
+the self-healing system's telemetry capabilities.
 
-Available Adapters:
-    - OpenTelemetry: Exports self-healing decision events to APM platforms
+Primary Observability:
+    - Prometheus/Grafana: Core metrics (see metrics/prometheus.py)
+    - Audit system: Full audit logging with hash chain integrity
 
-IMPORTANT:
-    - These adapters are OPTIONAL extensions
-    - The core system works identically without them
-    - Prometheus/Grafana integration remains the primary observability layer
+Distributed Tracing:
+    - trace_id propagation via audit/trace.py (W3C, X-Ray, Zipkin headers)
+    - URL template support for Jaeger/Zipkin UI links
+
+Note:
+    OpenTelemetry integration was intentionally removed to maintain
+    minimal dependencies. The system supports trace_id propagation
+    without requiring heavy OTel SDK dependencies (~50MB+).
 """
 
-from selfhealing.adapters.observability.opentelemetry import (
-    OpenTelemetryAdapter,
-    OpenTelemetryConfig,
-    get_opentelemetry_adapter,
-    emit_selfhealing_event,
-    start_decision_span,
-    end_decision_span,
-)
-
-__all__ = [
-    "OpenTelemetryAdapter",
-    "OpenTelemetryConfig",
-    "get_opentelemetry_adapter",
-    "emit_selfhealing_event",
-    "start_decision_span",
-    "end_decision_span",
-]
+__all__: list[str] = []
