@@ -9,7 +9,197 @@ This module provides:
 - SafetyGuard: Error budget pre-flight checks
 - ChaosSchedulerService: Celery Beat-based scheduling
 - DailyResilienceReport: Automated reporting
+- ChaosEngine: Unified facade for all Chaos subsystems
+
+Usage:
+    # Recommended: Single facade entry point
+    from selfhealing.services.chaos import get_chaos_engine
+    
+    engine = get_chaos_engine()
+    engine.scheduler.schedule_experiment(...)
+    engine.safety_guard.check_error_budget(...)
+    engine.blast_radius.get_current_policy()
+    engine.reports.generate_daily_report()
+    engine.analyzer.analyze_experiment(...)
+    
+    # Legacy: Individual helper functions (still supported)
+    from selfhealing.services.chaos import get_chaos_scheduler
+    scheduler = get_chaos_scheduler()
 """
+
+from __future__ import annotations
+
+import threading
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .blast_radius import BlastRadiusManager
+    from .blast_radius_analyzer import BlastRadiusAnalyzer
+    from .reports import ResilienceReportGenerator
+    from .safety_guard import SafetyGuard
+    from .scheduler import ChaosSchedulerService
+
+
+# =============================================================================
+# ChaosEngine Facade
+# =============================================================================
+
+
+class ChaosEngine:
+    """
+    Unified facade for all Chaos Engineering subsystems.
+    
+    Provides a single entry point to access:
+    - scheduler: Experiment scheduling and execution
+    - safety_guard: Safety checks and error budget validation
+    - blast_radius: Blast radius policy management
+    - reports: Report generation
+    - analyzer: Blast radius analysis
+    
+    All subsystems are lazily loaded on first access.
+    
+    Example:
+        engine = get_chaos_engine()
+        
+        # Schedule an experiment
+        engine.scheduler.schedule_experiment(config)
+        
+        # Check safety before execution
+        if engine.safety_guard.check_error_budget():
+            engine.scheduler.execute_experiment(exp_id)
+        
+        # Generate a report
+        engine.reports.generate_daily_report()
+    """
+    
+    def __init__(self) -> None:
+        """Initialize ChaosEngine with lazy-loaded subsystems."""
+        self._scheduler: Optional[ChaosSchedulerService] = None
+        self._safety_guard: Optional[SafetyGuard] = None
+        self._blast_radius: Optional[BlastRadiusManager] = None
+        self._reports: Optional[ResilienceReportGenerator] = None
+        self._analyzer: Optional[BlastRadiusAnalyzer] = None
+    
+    @property
+    def scheduler(self) -> ChaosSchedulerService:
+        """
+        Get the ChaosSchedulerService instance.
+        
+        Provides experiment CRUD, scheduling, and execution capabilities.
+        """
+        if self._scheduler is None:
+            from .scheduler import get_chaos_scheduler
+            self._scheduler = get_chaos_scheduler()
+        return self._scheduler
+    
+    @property
+    def safety_guard(self) -> SafetyGuard:
+        """
+        Get the SafetyGuard instance.
+        
+        Provides error budget validation and safety checks.
+        """
+        if self._safety_guard is None:
+            from .safety_guard import get_safety_guard
+            self._safety_guard = get_safety_guard()
+        return self._safety_guard
+    
+    @property
+    def blast_radius(self) -> BlastRadiusManager:
+        """
+        Get the BlastRadiusManager instance.
+        
+        Provides blast radius policy management.
+        """
+        if self._blast_radius is None:
+            from .blast_radius import get_blast_radius_manager
+            self._blast_radius = get_blast_radius_manager()
+        return self._blast_radius
+    
+    @property
+    def reports(self) -> ResilienceReportGenerator:
+        """
+        Get the ResilienceReportGenerator instance.
+        
+        Provides report generation capabilities.
+        """
+        if self._reports is None:
+            from .reports import get_report_generator
+            self._reports = get_report_generator()
+        return self._reports
+    
+    @property
+    def analyzer(self) -> BlastRadiusAnalyzer:
+        """
+        Get the BlastRadiusAnalyzer instance.
+        
+        Provides blast radius analysis capabilities.
+        """
+        if self._analyzer is None:
+            from .blast_radius_analyzer import get_blast_radius_analyzer
+            self._analyzer = get_blast_radius_analyzer()
+        return self._analyzer
+    
+    def reset(self) -> None:
+        """
+        Reset all cached subsystem instances.
+        
+        Used for testing to ensure fresh instances.
+        """
+        self._scheduler = None
+        self._safety_guard = None
+        self._blast_radius = None
+        self._reports = None
+        self._analyzer = None
+
+
+# =============================================================================
+# ChaosEngine Singleton
+# =============================================================================
+
+_chaos_engine_instance: Optional[ChaosEngine] = None
+_chaos_engine_lock = threading.Lock()
+
+
+def get_chaos_engine() -> ChaosEngine:
+    """
+    Get the singleton ChaosEngine instance.
+    
+    Returns:
+        ChaosEngine: The unified facade for all Chaos subsystems.
+    
+    Example:
+        engine = get_chaos_engine()
+        engine.scheduler.schedule_experiment(...)
+        engine.safety_guard.check_error_budget(...)
+    """
+    global _chaos_engine_instance
+    
+    if _chaos_engine_instance is None:
+        with _chaos_engine_lock:
+            if _chaos_engine_instance is None:
+                _chaos_engine_instance = ChaosEngine()
+    
+    return _chaos_engine_instance
+
+
+def reset_chaos_engine() -> None:
+    """
+    Reset the singleton ChaosEngine instance.
+    
+    Used for testing to ensure a fresh instance is created on next access.
+    Also resets all internal subsystem references.
+    """
+    global _chaos_engine_instance
+    with _chaos_engine_lock:
+        if _chaos_engine_instance is not None:
+            _chaos_engine_instance.reset()
+        _chaos_engine_instance = None
+
+
+# =============================================================================
+# Legacy Imports (Backward Compatible)
+# =============================================================================
 
 from .base import (
     ChaosExperiment,
@@ -88,6 +278,10 @@ from .resilience_validator import (
 )
 
 __all__ = [
+    # Chaos Engine Facade (New Unified Entry Point)
+    "ChaosEngine",
+    "get_chaos_engine",
+    "reset_chaos_engine",
     # Experiments
     "ChaosExperiment",
     "LatencyInjectionExperiment",
