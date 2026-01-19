@@ -1,7 +1,7 @@
 # 60. 리팩토링 계획 Phase 2: 현실적 기준 적용
 
 > 📅 작성일: 2026-01-19  
-> 📋 상태: ✅ Phase 2-A 완료 (2026-01-20)  
+> 📋 상태: ✅ Phase 2-A 완료 (2026-01-20), ✅ Phase 2-C 완료 (2026-01-19)  
 > 🎯 목표: 1000줄/800줄 완화 기준으로 잔여 대형 파일 리팩토링
 
 ---
@@ -61,13 +61,13 @@
 
 ### 2.3 리팩토링 필요 테스트 파일 (800줄 초과)
 
-| # | 파일 경로 | 줄 수 | 테스트 클래스 수 | 분리 우선순위 |
-|---|---------|------|---------------|------------|
-| 1 | test_cb_canary_recovery_strategy.py | 1,128 | 7개 | 🟡 중간 |
-| 2 | test_cb_cascade_prevention.py | 1,077 | 10개 | 🟡 중간 |
-| 3 | test_cb_load_shedding.py | 997 | 10개+ | 🟡 중간 |
-| 4 | test_cb_e2e_integration.py | 925 | 9개 | 🟡 중간 |
-| 5 | test_event_bus_error_budget_gate.py | 828 | - | ⚪ 낮음 |
+| # | 파일 경로 | 줄 수 | 테스트 클래스 수 | 분리 우선순위 | 상태 |
+|---|---------|------|---------------|------------|-----|
+| 1 | test_cb_canary_recovery_strategy.py | 1,128 | 7개 | 🟡 중간 | ✅ 분리 완료 |
+| 2 | test_cb_cascade_prevention.py | 1,077 | 11개 | 🟡 중간 | ✅ 분리 완료 |
+| 3 | test_cb_load_shedding.py | 997 | 18개 | ⚪ 낮음 (1000줄 미만) | ⏭️ 유지 |
+| 4 | test_cb_e2e_integration.py | 925 | 10개 | ⚪ 낮음 (1000줄 미만) | ⏭️ 유지 |
+| 5 | test_event_bus_error_budget_gate.py | 828 | 8개 | ⚪ 낮음 (1000줄 미만) | ⏭️ 유지 |
 
 ---
 
@@ -149,15 +149,29 @@
 
 ### 3.3 Phase 2-C: 테스트 코드 리팩토링 (800줄+ 파일)
 
-테스트 파일은 **기능별 분리**보다 **현행 유지**를 권장:
+테스트 파일은 **1000줄 초과 + 7개 이상 클래스**인 경우만 분리:
 
-**사유:**
-1. 테스트 간 공유 fixture로 인한 의존성
-2. 테스트 실행 시 컨텍스트 유지 필요
-3. IDE에서 클래스 단위 탐색으로 관리 가능
+**분리 완료된 파일:**
 
-**예외 (분리 권장):**
-- 1,000줄 초과 + 7개 이상 테스트 클래스인 경우만 선택적 분리
+#### 3.3.1 test_cb_canary_recovery_strategy.py (1,128줄 → 3개 파일)
+
+| 신규 파일 | 테스트 클래스 | 책임 |
+|----------|------------|-----|
+| test_canary_recovery_manager.py | TestCanaryRecoveryManager, TestCanaryStageMetrics | Canary 복구 매니저 |
+| test_stale_cache_integration.py | TestStaleCacheStore, TestCanaryWithStaleCacheService | Stale Cache 통합 |
+| test_recovery_strategy_selector.py | TestRecoveryStrategySelector, TestRecoveryStrategyIntegration, TestConvenienceFunctions | 복구 전략 선택기 |
+
+#### 3.3.2 test_cb_cascade_prevention.py (1,077줄 → 2개 파일)
+
+| 신규 파일 | 테스트 클래스 | 책임 |
+|----------|------------|-----|
+| test_service_config_manager.py | TestServiceConfigManager, TestServiceConfigInputValidation, TestServiceConfigLoadShedding, TestServiceConfigRecoveryStrategy, TestServiceConfigThresholdOverride | ServiceConfig 관리 |
+| test_blast_radius_cascade.py | TestBlastRadiusIntegration, TestBlastRadiusAutoOpenDecision, TestServiceDependencyGraph, TestCascadePreventionIntegration, TestModuleLevelConvenienceFunctions, TestExportsFromInit | Blast Radius 및 연쇄 장애 방지 |
+
+**분리 제외된 파일 (기준 미충족):**
+- test_cb_load_shedding.py (997줄 - 1000줄 미만)
+- test_cb_e2e_integration.py (925줄 - 1000줄 미만)
+- test_event_bus_error_budget_gate.py (828줄 - 1000줄 미만)
 
 ---
 
@@ -255,6 +269,7 @@ __all__ = [
 | 1.0 | 2026-01-19 | 초안 작성 |
 | 1.1 | 2026-01-19 | Phase 2-A 완료 - 4개 파일 리팩토링 |
 | 1.2 | 2026-01-19 | __init__.py Lazy Import 패턴 적용 - 모듈 분리 의미 극대화 |
+| 1.3 | 2026-01-19 | Phase 2-C 완료 - 2개 테스트 파일 분리 (91개 테스트 통과) |
 
 ---
 
@@ -426,3 +441,63 @@ def __getattr__(name: str):
   - Dead Letter Queue의 모든 연산을 단일 클래스에서 관리
   - Redis 트랜잭션 원자성 보장 필요
   - 분리 시 트랜잭션 경계 관리 복잡성 증가
+
+---
+
+## 9. Phase 2-C 실행 결과
+
+### 9.1 완료된 테스트 파일 리팩토링
+
+#### ✅ test_cb_canary_recovery_strategy.py (1,128줄, 7클래스 → 3개 파일)
+
+**원본 파일 삭제 후 분리:**
+
+| 신규 파일 | 테스트 클래스 | 줄 수 | 책임 |
+|----------|------------|------|-----|
+| test_canary_recovery_manager.py | TestCanaryRecoveryManager, TestCanaryStageMetrics | ~270줄 | Canary 복구 매니저 및 메트릭 |
+| test_stale_cache_integration.py | TestStaleCacheStore, TestCanaryWithStaleCacheService | ~230줄 | Stale Cache 저장소 및 통합 |
+| test_recovery_strategy_selector.py | TestRecoveryStrategySelector, TestRecoveryStrategyIntegration, TestConvenienceFunctions | ~480줄 | 복구 전략 선택 및 통합 |
+
+#### ✅ test_cb_cascade_prevention.py (1,077줄, 11클래스 → 2개 파일)
+
+**원본 파일 삭제 후 분리:**
+
+| 신규 파일 | 테스트 클래스 | 줄 수 | 책임 |
+|----------|------------|------|-----|
+| test_service_config_manager.py | TestServiceConfigManager, TestServiceConfigInputValidation, TestServiceConfigLoadShedding, TestServiceConfigRecoveryStrategy, TestServiceConfigThresholdOverride | ~440줄 | ServiceConfig 관리 |
+| test_blast_radius_cascade.py | TestBlastRadiusIntegration, TestBlastRadiusAutoOpenDecision, TestServiceDependencyGraph, TestCascadePreventionIntegration, TestModuleLevelConvenienceFunctions, TestExportsFromInit | ~500줄 | Blast Radius 및 연쇄 장애 방지 |
+
+### 9.2 테스트 결과
+
+- **총 테스트 수:** 91개
+- **통과:** 91개 (100%)
+- **실패:** 0개
+- **테스트 환경:** Docker (docker-compose.test.yml)
+
+```
+=============================== test session starts ===============================
+platform linux -- Python 3.12.12, pytest-9.0.2
+collected 91 items
+
+test_canary_recovery_manager.py::TestCanaryRecoveryManager: 12 passed
+test_canary_recovery_manager.py::TestCanaryStageMetrics: 2 passed
+test_stale_cache_integration.py::TestStaleCacheStore: 4 passed
+test_stale_cache_integration.py::TestCanaryWithStaleCacheService: 7 passed
+test_recovery_strategy_selector.py::TestRecoveryStrategySelector: 14 passed
+test_recovery_strategy_selector.py::TestRecoveryStrategyIntegration: 3 passed
+test_recovery_strategy_selector.py::TestConvenienceFunctions: 3 passed
+test_service_config_manager.py: 23 passed
+test_blast_radius_cascade.py: 23 passed
+
+======================== 91 passed, 1 warning in 4.52s ============================
+```
+
+### 9.3 분리 제외된 테스트 파일
+
+다음 파일들은 **1000줄 미만**이므로 분리 기준에 충족하지 않아 현행 유지:
+
+| 파일 | 줄 수 | 클래스 수 | 제외 사유 |
+|-----|------|---------|---------|
+| test_cb_load_shedding.py | 997 | 18개 | 1000줄 미만 |
+| test_cb_e2e_integration.py | 925 | 10개 | 1000줄 미만 |
+| test_event_bus_error_budget_gate.py | 828 | 8개 | 1000줄 미만 |
