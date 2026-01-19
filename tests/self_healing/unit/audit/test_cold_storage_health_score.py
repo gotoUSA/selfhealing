@@ -1,9 +1,13 @@
 """
-Tests for Cold Storage and Integrity Health Score (Phase 6).
+Cold Storage 및 Integrity Health Score 테스트.
 
-These tests verify:
-1. AnchorColdStorage: Archive expiring anchors before deletion
-2. IntegrityHealthScore: Real-time health monitoring
+이 테스트는 다음 기능을 검증합니다:
+1. AnchorColdStorage: Redis TTL 만료 전 앵커 Cold Storage 아카이브
+   - 법적/금융 감사용 5-7년 장기 보관 지원 (SOC2, HIPAA, PCI-DSS)
+   - JSONL + gzip 압축 저장, SHA256 무결성 검증
+2. IntegrityHealthScore: 실시간 무결성 건강 지수 모니터링
+   - Prometheus 지표 연동, 복구 이벤트 추적
+   - Dashboard 요약 API 제공
 """
 
 from __future__ import annotations

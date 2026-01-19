@@ -1,7 +1,7 @@
 """
-Tests for Startup Hydration (Phase 2: Startup Hydration).
+Startup Hydration 테스트.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+서비스 시작 시 Redis에서 설정을 hydration하는 기능 테스트.
 """
 
 import os

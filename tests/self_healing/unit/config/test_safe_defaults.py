@@ -1,8 +1,8 @@
 """
 Unit tests for Safe Defaults functionality.
 
-Phase 6: Fail-Safe Default 강화
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
+안전한 기본값(Fail-Safe Default) 강화 구현을 검증합니다.
+설정 실패 시 안전한 기본값으로 폴백되는지 확인합니다.
 """
 
 import pytest
@@ -852,12 +852,12 @@ class TestQuarantineModeIntegration:
 
 
 # =============================================================================
-# Phase C Tests: governance, l2_storage, drift_threshold
+# Advanced Config Tests: governance, l2_storage, drift_threshold
 # =============================================================================
 
 
-class TestPhaseCSafeDefaults:
-    """Test Phase C Safe Defaults - governance, l2_storage, drift_threshold."""
+class TestAdvancedSafeDefaults:
+    """governance, l2_storage, drift_threshold 설정의 Safe Default 테스트."""
 
     def test_governance_safe_defaults_defined(self):
         """governance Safe Default가 정의되어 있어야 함."""
@@ -902,8 +902,8 @@ class TestPhaseCSafeDefaults:
         assert drift_defaults["auto_alert_enabled"] is True
 
 
-class TestPhaseCValidationRules:
-    """Test Phase C Validation Rules."""
+class TestAdvancedValidationRules:
+    """governance, l2_storage, drift_threshold 설정의 검증 규칙 테스트."""
 
     def test_governance_validation_rules_defined(self):
         """governance 검증 규칙이 정의되어 있어야 함."""
@@ -945,8 +945,8 @@ class TestPhaseCValidationRules:
         assert rules["critical_percent"] == (5.0, 100.0)
 
 
-class TestPhaseCGetSafeDefaults:
-    """Test Phase C get_safe_default function."""
+class TestAdvancedGetSafeDefaults:
+    """governance, l2_storage, drift_threshold Safe Default 조회 테스트."""
 
     def test_get_governance_safe_default(self):
         """governance Safe Default를 가져올 수 있어야 함."""

@@ -25,8 +25,6 @@ Test Categories:
         - Rapid state transitions
         - Threshold boundary conditions
         - Recovery stability
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §8 (Testing Strategy)
 """
 
 import random

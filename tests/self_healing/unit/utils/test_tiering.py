@@ -8,8 +8,6 @@ Tests the tier-based rate limiting system:
 - TierConfigValidator (Safe Boundary rules)
 - TierRegistry service layer
 - Dry Run / Simulation
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 4)
 """
 
 import re

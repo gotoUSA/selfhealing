@@ -5,8 +5,6 @@ Mock 없이 실제 StateBackend를 사용하여 테스트.
 - 직렬화/역직렬화 검증
 - 영속성 (저장/로드) 검증
 - 실제 LearningService 연동 검증
-
-Reference: docs/self_healing/middleware_system/28_IMPROVEMENT_PART3_ENUM_EXTENSION.md
 """
 
 import json

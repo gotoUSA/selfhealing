@@ -3,8 +3,6 @@ Unit Tests for Self-Healing Components
 
 Tests for backoff calculator, retry handler policy logic,
 and idempotency key generation without database dependencies.
-
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7, §8
 """
 
 from decimal import Decimal

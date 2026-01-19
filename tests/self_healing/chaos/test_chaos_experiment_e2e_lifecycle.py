@@ -1,10 +1,8 @@
 """
-Phase 4: Chaos End-to-End (E2E) Integration Tests
+Chaos Experiment E2E Lifecycle Tests
 
-Tests for Phase 4 implementation - Full scenario integration:
+Tests for full scenario integration:
 - Complete chaos experiment flow (4 tests)
-
-Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.5
 
 Test Coverage:
 - Experiment lifecycle (create → analyze → execute → notify → cleanup)

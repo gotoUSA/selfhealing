@@ -7,8 +7,6 @@ Integration tests for the Circuit Breaker system including:
 - Admin action simulation
 - State persistence and recovery
 
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §9
-
 Note: Uses in-memory repositories for parallel execution.
 """
 

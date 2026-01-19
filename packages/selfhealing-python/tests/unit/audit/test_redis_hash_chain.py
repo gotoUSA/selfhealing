@@ -7,9 +7,6 @@ RedisHashChainManager 단위 테스트.
 3. 동시 쓰기 시 시퀀스 원자성
 4. 해시 체인 연속성 검증
 5. 상태 조회 및 통계
-
-Reference:
-    docs/self_healing/middleware_system/42_DISTRIBUTED_HASH_CHAIN_REDIS.md
 """
 
 import json

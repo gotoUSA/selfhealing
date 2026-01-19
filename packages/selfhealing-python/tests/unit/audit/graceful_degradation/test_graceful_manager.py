@@ -1,7 +1,10 @@
 """
 HashChainGracefulDegradationManager 및 통합 테스트.
 
-Unified access 및 Phase 4 통합 시나리오 테스트.
+통합 액세스 인터페이스 및 장애 복구 시나리오 테스트:
+- 단일 진입점을 통한 모든 graceful degradation 컴포넌트 접근
+- 전체 장애 → 복구 사이클 테스트
+- CircuitBreaker + FallbackChain + WALRecovery 연동
 """
 
 import pytest
@@ -102,8 +105,8 @@ class TestHashChainGracefulDegradationManager:
         assert "degraded_marker" in status
 
 
-class TestPhase4Integration:
-    """Integration tests for Phase 4 components."""
+class TestGracefulDegradationIntegration:
+    """Graceful Degradation 통합 테스트 - 장애 → 복구 전체 흐름."""
     
     def setup_method(self):
         """Reset singleton before each test."""

@@ -3,8 +3,6 @@ Circuit Breaker TTL Expiration Tests
 
 Tests for G-03: Circuit breaker TTL expiration auto-closes.
 Validates that manually opened circuits auto-close after TTL expires.
-
-Reference: docs/l3_auto_self_healing/testing/L3_TEST_GAP_REPORT.md
 Risk Covered: R-017 (Forgotten open circuit blocks operations indefinitely)
 """
 

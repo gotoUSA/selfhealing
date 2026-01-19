@@ -5,8 +5,6 @@ Tests the one-way emergency escalation for Self-Healing API:
 - Operator can escalate to STRICT mode (emergency) with reason required
 - Only Admin can restore to NORMAL mode
 - Proper audit logging for emergency actions
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 import os
 import sys

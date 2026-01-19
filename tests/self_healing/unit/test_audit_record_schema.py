@@ -2,8 +2,6 @@
 Unit Tests for Audit Record Schema
 
 Tests for audit trail field completeness and schema validation.
-
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md
 Risk Covered: R-006 (Unaccountable autonomous decisions)
 Compliance: NIST AU-3, SOC 2 CC4.1, ISO 27001 A.12.4.1
 """

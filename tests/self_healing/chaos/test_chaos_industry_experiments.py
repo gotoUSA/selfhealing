@@ -1,16 +1,10 @@
 """
-Phase 6: 업계 표준 Chaos 실험 테스트
+업계 표준 Chaos 실험 테스트.
 
 테스트 대상:
-- MonotonicTTLHelper (ClockSkew 보호용)
-- CertificateExpiryExperiment
-- ClockSkewExperiment
-
-Reference:
-- 33_CHAOS_INDUSTRY_EXPERIMENTS.md §4, §5
-- 34_CHAOS_SAFETY_MECHANISMS.md §2 Monotonic Clock 보호
-
-작성일: 2026-01-14
+- MonotonicTTLHelper: ClockSkew 보호용 모노토닉 타이머
+- CertificateExpiryExperiment: 인증서 만료 장애 주입
+- ClockSkewExperiment: 시스템 시간 왜곡 장애 주입
 """
 
 import time
@@ -621,8 +615,7 @@ class TestMonotonicTTLIntegration:
 
 
 # =============================================================================
-# Phase 3-4 Experiment Tests (New)
-# Reference: 33_CHAOS_INDUSTRY_EXPERIMENTS.md §2-6
+# 네트워크/인프라 장애 Experiment 테스트
 # =============================================================================
 
 
@@ -1271,7 +1264,7 @@ class TestReplayFloodExperiment:
 
 
 class TestExperimentTypeEnumExtended:
-    """Test ExperimentType enum for Phase 3-4 additions."""
+    """ExperimentType enum 확장 타입 테스트."""
     
     def test_network_blackhole_exists(self):
         """Test NETWORK_BLACKHOLE exists in enum."""

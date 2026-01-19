@@ -1,7 +1,7 @@
 """
 Tests for Metric Reconciler.
 
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
+메트릭 불일치 감지 및 자동 동기화 테스트.
 """
 
 import pytest

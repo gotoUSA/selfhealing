@@ -1,16 +1,16 @@
 """
-Chaos tests for crash recovery scenarios (Phase 5).
+크래시 복구 시나리오 Chaos 테스트.
 
-Tests the system's ability to recover from process crashes:
-- WAL-based recovery of uncommitted writes
-- PENDING sequence cleanup after crash
-- Hash chain state restoration from files
-- Data integrity after crash recovery
+프로세스 크래시 복구 능력 검증:
+- WAL 기반 미커밋 쓰기 복구
+- 크래시 후 PENDING 시퀀스 정리
+- 파일에서 해시 체인 상태 복원
+- 크래시 복구 후 데이터 무결성
 
-These tests simulate real-world crash scenarios:
-- Process crash mid-write
-- Server restart with pending data
-- Recovery from WAL entries
+실제 크래시 시나리오 시뮬레이션:
+- 쓰기 중간 프로세스 크래시
+- 미처리 데이터가 있는 서버 재시작
+- WAL 엔트리에서 복구
 
 Related code:
     selfhealing/audit/graceful_degradation.py#HashChainWALRecovery

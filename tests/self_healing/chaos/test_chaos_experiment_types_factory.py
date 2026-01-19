@@ -1,13 +1,11 @@
 """
-Phase 0 & Phase 1: Chaos Experiment Expansion Tests
+Chaos Experiment 확장 테스트.
 
-Tests for:
-- Phase 0-1: ExperimentType Enum 확장 (6개 신규 타입)
-- Phase 0-2: Factory 함수 업데이트
-- Phase 1-1: CircuitBreakerOpenExperiment 구현
-- Phase 1-4: RateLimitExperiment 구현
-
-Reference: docs/self_healing/middleware_system/31_CHAOS_EXPERIMENT_EXPANSION.md
+테스트 대상:
+- ExperimentType Enum 확장 (신규 타입 6개)
+- Factory 함수 업데이트
+- CircuitBreakerOpenExperiment inject/rollback 동작
+- RateLimitExperiment inject/rollback 동작
 """
 
 from __future__ import annotations
@@ -26,12 +24,12 @@ from selfhealing.services.chaos.experiments import (
 
 
 # =============================================================================
-# Phase 0-1: ExperimentType Enum 확장 테스트
+# ExperimentType Enum 확장 테스트
 # =============================================================================
 
 
-class TestPhase0ExperimentTypeEnum:
-    """Phase 0-1: ExperimentType Enum에 6개 신규 타입이 추가되었는지 테스트."""
+class TestExperimentTypeEnumExtension:
+    """ExperimentType Enum에 6개 신규 타입이 추가되었는지 테스트."""
 
     def test_existing_experiment_types_still_available(self):
         """기존 5개 타입이 유지되어 있는지 확인."""
@@ -44,7 +42,6 @@ class TestPhase0ExperimentTypeEnum:
 
     def test_new_experiment_types_added(self):
         """6개 신규 타입이 추가되었는지 확인."""
-        # Phase 0-1: 6개 타입 추가됨 (31_CHAOS_EXPERIMENT_EXPANSION.md)
         assert ExperimentType.ERROR_4XX.value == "error_4xx"
         assert ExperimentType.CONNECTION_RESET.value == "connection_reset"
         assert ExperimentType.RATE_LIMIT.value == "rate_limit"
@@ -60,12 +57,12 @@ class TestPhase0ExperimentTypeEnum:
 
 
 # =============================================================================
-# Phase 0-2: Factory 함수 업데이트 테스트
+# Factory 함수 업데이트 테스트
 # =============================================================================
 
 
-class TestPhase0FactoryFunction:
-    """Phase 0-2: Factory 함수가 새 타입을 인식하는지 테스트."""
+class TestExperimentFactoryFunction:
+    """Factory 함수가 새 타입을 인식하는지 테스트."""
 
     def test_factory_creates_existing_types(self):
         """기존 타입에 대한 Factory 동작 확인."""
@@ -106,12 +103,12 @@ class TestPhase0FactoryFunction:
 
 
 # =============================================================================
-# Phase 1-1: CircuitBreakerOpenExperiment 테스트
+# CircuitBreakerOpenExperiment 테스트
 # =============================================================================
 
 
-class TestPhase1CircuitBreakerOpenExperiment:
-    """Phase 1-1: CircuitBreakerOpenExperiment inject/rollback 동작 테스트."""
+class TestCircuitBreakerOpenExperiment:
+    """CircuitBreakerOpenExperiment inject/rollback 동작 테스트."""
 
     def test_experiment_type_is_circuit_breaker_open(self):
         """experiment_type이 circuit_breaker_open인지 확인."""
@@ -163,12 +160,12 @@ class TestPhase1CircuitBreakerOpenExperiment:
 
 
 # =============================================================================
-# Phase 1-4: RateLimitExperiment 테스트
+# RateLimitExperiment 테스트
 # =============================================================================
 
 
-class TestPhase1RateLimitExperiment:
-    """Phase 1-4: RateLimitExperiment inject/rollback 동작 테스트."""
+class TestRateLimitExperiment:
+    """RateLimitExperiment inject/rollback 동작 테스트."""
 
     def test_experiment_type_is_rate_limit(self):
         """experiment_type이 rate_limit인지 확인."""

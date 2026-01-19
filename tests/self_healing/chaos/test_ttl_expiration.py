@@ -1,11 +1,12 @@
 """
-TTL (Self-Expiration) Tests for Chaos Engine Safety Mechanisms
+TTL (Self-Expiration) Chaos 안전 메커니즘 테스트.
 
-Tests the TTL (Time-To-Live) functionality that ensures chaos experiments
-automatically expire, preventing runaway chaos if the engine dies.
+Chaos 실험이 엔진 사망 시에도 자동으로 만료되도록 보장하는
+TTL(Time-To-Live) 기능 테스트.
 
-Phase 3: Chaos Safety Implementation Plan
-Reference: docs/self_healing/CHAOS_SAFETY_IMPLEMENTATION_PLAN.md
+테스트 대상:
+- TTLConfig: TTL 설정 구성
+- Experiment 자동 만료: Chaos 엔진 사망 시 runaway 방지
 """
 
 import time

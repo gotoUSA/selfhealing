@@ -1,14 +1,12 @@
 """
-Phase 1 Unit Tests - Chaos System Integration (32_CHAOS_SYSTEM_INTEGRATION.md)
+Chaos Hypothesis 및 Recovery State 테스트
 
 Tests for:
-- FailureHypothesis data class (§20.2)
-- 실험별 기대 가설 상수 (§20.3)
-- Chaos-Aware 메타데이터 (§14)
-- RECOVERY_MONITORING 상태 (§15.2)
-- Soft/Hard TTL 이중 구조 (§15.4)
-
-Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §12.1 Phase 1
+- FailureHypothesis data class
+- 실험별 기대 가설 상수
+- Chaos-Aware 메타데이터
+- RECOVERY_MONITORING 상태
+- Soft/Hard TTL 이중 구조
 """
 
 import pytest

@@ -1,14 +1,11 @@
 """
-Tests for Governance Phase 2 Implementation.
+Governance Drift Threshold 구현 테스트.
 
 테스트 대상:
 1. DriftThresholdConfig RuntimeConfigManager 통합
 2. GovernanceRBACStatusView API
 3. GovernanceConfigView API
 4. Drift Threshold API 리팩토링
-
-Reference:
-- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
 """
 
 import pytest
@@ -320,8 +317,8 @@ class TestURLRegistration:
 # =============================================================================
 
 
-class TestPhase2Integration:
-    """Integration tests for Phase 2 features."""
+class TestGovernanceIntegration:
+    """Governance 통합 테스트."""
 
     @patch("selfhealing.services.runtime_config.base.get_state_backend")
     @patch("selfhealing.core.state_backend.get_state_backend")

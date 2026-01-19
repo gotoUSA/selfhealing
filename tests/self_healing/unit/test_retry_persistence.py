@@ -3,8 +3,6 @@ Retry Count Persistence Tests
 
 Tests for G-06: Retry count persists across worker restart.
 Validates that retry count survives Celery worker restart.
-
-Reference: docs/l3_auto_self_healing/testing/L3_TEST_GAP_REPORT.md
 Risk Covered: R-018 (Infinite retries due to count reset)
 """
 

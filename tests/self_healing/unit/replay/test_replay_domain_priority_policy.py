@@ -1,15 +1,13 @@
 """
-Phase 4 Tests - Domain Priority Policy (도메인별 차등 정책).
+Domain Priority Policy (도메인별 차등 정책) 테스트.
 
-Tests for:
-1. ReplayAutomationConfig domain priority fields
-2. ReplayService priority-based entry retrieval
-3. Domain-specific max_retries override
-4. RuntimeConfig integration for priority settings
-5. ReplayAutomationConfigSerializer Phase 4 fields
-6. BatchReplayResult priority_used field
-
-Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md §7
+테스트 대상:
+1. ReplayAutomationConfig 도메인 우선순위 필드
+2. ReplayService 우선순위 기반 엔트리 조회
+3. 도메인별 max_retries 오버라이드
+4. RuntimeConfig 우선순위 설정 통합
+5. ReplayAutomationConfigSerializer 도메인 우선순위 필드
+6. BatchReplayResult priority_used 필드
 """
 
 import pytest
@@ -17,15 +15,15 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 
 # =============================================================================
-# ReplayAutomationConfig Phase 4 Field Tests
+# ReplayAutomationConfig 도메인 우선순위 필드 테스트
 # =============================================================================
 
 
-class TestReplayAutomationConfigPhase4:
-    """ReplayAutomationConfig Phase 4 필드 테스트."""
+class TestReplayAutomationConfigDomainPriority:
+    """ReplayAutomationConfig 도메인 우선순위 필드 테스트."""
 
     def test_priority_fields_default_values(self):
-        """Phase 4 필드 기본값 확인."""
+        """우선순위 필드 기본값 확인."""
         from selfhealing.core.config import ReplayAutomationConfig
 
         config = ReplayAutomationConfig()
@@ -36,7 +34,7 @@ class TestReplayAutomationConfigPhase4:
         assert config.domain_on_circuit_close == {}
 
     def test_priority_fields_custom_values(self):
-        """Phase 4 필드 커스텀 값 설정."""
+        """우선순위 필드 커스텀 값 설정."""
         from selfhealing.core.config import ReplayAutomationConfig
 
         config = ReplayAutomationConfig(
@@ -51,8 +49,8 @@ class TestReplayAutomationConfigPhase4:
         assert config.domain_max_retries == {"payment": 10, "notification": 3}
         assert config.domain_on_circuit_close == {"payment": True, "analytics": False}
 
-    def test_config_to_dict_includes_phase4_fields(self):
-        """model_dump()가 Phase 4 필드를 포함하는지 확인."""
+    def test_config_to_dict_includes_priority_fields(self):
+        """model_dump()가 우선순위 필드를 포함하는지 확인."""
         from selfhealing.core.config import ReplayAutomationConfig
 
         config = ReplayAutomationConfig(
@@ -404,15 +402,15 @@ class TestReplayBatchPriorityMode:
 
 
 # =============================================================================
-# BatchReplayResult Phase 4 Field Tests
+# BatchReplayResult Priority Field Tests
 # =============================================================================
 
 
-class TestBatchReplayResultPhase4:
-    """BatchReplayResult Phase 4 필드 테스트."""
+class TestBatchReplayResultPriorityFields:
+    """BatchReplayResult 우선순위 필드 테스트."""
 
     def test_default_values(self):
-        """Phase 4 필드 기본값 확인."""
+        """우선순위 필드 기본값 확인."""
         from selfhealing.services.replay_service import BatchReplayResult
 
         result = BatchReplayResult()
@@ -421,7 +419,7 @@ class TestBatchReplayResultPhase4:
         assert result.domains_processed is None
 
     def test_custom_values(self):
-        """Phase 4 필드 커스텀 값 설정."""
+        """우선순위 필드 커스텀 값 설정."""
         from selfhealing.services.replay_service import BatchReplayResult
 
         result = BatchReplayResult(
@@ -437,15 +435,15 @@ class TestBatchReplayResultPhase4:
 
 
 # =============================================================================
-# Serializer Phase 4 Field Tests
+# Serializer Priority Field Tests
 # =============================================================================
 
 
-class TestReplayAutomationSerializerPhase4:
-    """ReplayAutomationConfigSerializer Phase 4 필드 테스트."""
+class TestReplayAutomationSerializerPriorityFields:
+    """ReplayAutomationConfigSerializer 우선순위 필드 테스트."""
 
     def test_priority_fields_validation(self):
-        """Phase 4 필드 유효성 검사."""
+        """우선순위 필드 유효성 검사."""
         from selfhealing.api.django.serializers.config import ReplayAutomationConfigSerializer
 
         serializer = ReplayAutomationConfigSerializer(data={
@@ -562,8 +560,8 @@ class TestPriorityModeThreadSafety:
 # =============================================================================
 
 
-class TestPhase4Integration:
-    """Phase 4 통합 테스트."""
+class TestDomainPriorityIntegration:
+    """도메인 우선순위 통합 테스트."""
 
     def test_full_priority_flow(self):
         """전체 우선순위 플로우 테스트."""

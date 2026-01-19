@@ -1,7 +1,7 @@
 """
-Discovery Stage 단위 테스트
+Discovery Stage 단위 테스트.
 
-Phase 2: dna_discovery.py 모듈 테스트
+dna_discovery.py 모듈 테스트: API 엔드포인트 발견 및 dead code 후보 식별.
 """
 
 import pytest

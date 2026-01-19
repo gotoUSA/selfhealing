@@ -1,14 +1,14 @@
 """
-Integration tests for StartupHashChainSync (Phase 5).
+StartupHashChainSync 통합 테스트.
 
-Tests the complete startup synchronization workflow:
-- Redis/file state comparison and sync decision logic
-- Handling of Redis-ahead, file-ahead, and in-sync scenarios
-- Cleanup of PENDING sequences after crash
-- Idempotent sync behavior
+시스템 시작 시 해시 체인 동기화 전체 워크플로우 테스트:
+- Redis/파일 상태 비교 및 동기화 결정 로직
+- Redis 앞선 상태, 파일 앞선 상태, 동기화된 상태 처리
+- 크래시 후 PENDING 시퀀스 정리
+- 멱등성(idempotent) 동기화 동작
 
-Test scenarios simulate real restart conditions where Redis and
-file states may diverge due to crashes or network issues.
+테스트 시나리오는 크래시나 네트워크 문제로 인해
+Redis와 파일 상태가 불일치할 수 있는 실제 재시작 상황을 시뮬레이션합니다.
 
 Related code:
     selfhealing/audit/integrity.py#StartupHashChainSync

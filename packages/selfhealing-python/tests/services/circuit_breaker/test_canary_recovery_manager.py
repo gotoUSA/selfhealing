@@ -1,10 +1,8 @@
 """
-Circuit Breaker Canary Recovery Manager 테스트
+Circuit Breaker Canary Recovery Manager 테스트.
 
 Test Coverage:
-- 4.1 CanaryRecoveryManager: 단계적 복구, 성공률 추적, 단계 전이
-
-기존 test_cb_canary_recovery_strategy.py에서 분리됨 (Phase 2-C).
+- CanaryRecoveryManager: 단계적 복구, 성공률 추적, 단계 전이
 """
 
 import pytest

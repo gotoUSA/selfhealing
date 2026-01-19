@@ -1,10 +1,8 @@
 """
 Config API History Integration Tests.
 
-Phase 4: Tests for ConfigHistory integration with Config API views.
-Verifies that API updates correctly pass changed_by and reason to ConfigHistory.
-
-Reference: docs/self_healing/17_CONFIG_HISTORY_INTEGRATION.md
+ConfigHistory와 Config API 뷰 통합 테스트.
+API 업데이트 시 changed_by 및 reason이 ConfigHistory에 올바르게 전달되는지 검증합니다.
 """
 
 import os

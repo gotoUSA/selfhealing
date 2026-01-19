@@ -1,13 +1,10 @@
 """
-Phase 2: Circuit Breaker Audit Enhancement Tests
+Circuit Breaker Tracing & Audit Enhancement Tests
 
 테스트 대상:
 1. Distributed Tracing (tracing.py)
 2. CB 상태 변화 Audit with trace_id
 3. GOVERNANCE_BLOCKED CB Audit
-
-Reference: docs/self_healing/middleware_system/21_CB_ADVANCED_PROTECTION.md
-Section 11.1 - Phase 2: Audit 강화
 """
 
 import pytest

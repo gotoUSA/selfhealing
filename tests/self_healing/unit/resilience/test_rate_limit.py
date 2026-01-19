@@ -7,8 +7,6 @@ Tests the Defense-in-Depth rate limiting strategy:
 - Redis Health Checker with mini circuit breaker
 - Shadow audit logging
 - Prometheus metrics
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md (Section 3)
 """
 
 import json

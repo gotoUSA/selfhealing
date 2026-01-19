@@ -3,8 +3,6 @@ Unit Tests for Failure Classification
 
 Tests for classifying errors into retryable vs non-retryable categories,
 and mapping to appropriate recovery actions.
-
-Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md
 Risk Covered: R-015 (Retry storm), R-002 (Unbounded retry costs)
 """
 

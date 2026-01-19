@@ -1,7 +1,10 @@
 """
-Integration Tests for Phase 3 components.
+Hash Chain Performance 컴포넌트 통합 테스트.
 
-Tests complete flows using performance components together.
+성능 최적화 컴포넌트들을 함께 사용하는 전체 흐름 테스트:
+- BatchFlushWriter + AsyncAuditWriter 조합
+- LuaAtomicHashChain + PipelineBatchQuery 조합
+- 전체 쓰기 플로우 성능 검증
 """
 
 import hashlib
@@ -15,8 +18,8 @@ import pytest
 from .conftest import MockRedisClient
 
 
-class TestPhase3Integration:
-    """Integration tests for Phase 3 components."""
+class TestPerformanceIntegration:
+    """Hash Chain Performance 통합 테스트."""
     
     def test_full_write_flow_with_performance_components(self):
         """Test complete write flow using performance components."""

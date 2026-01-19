@@ -6,8 +6,6 @@ Tests for SecurityViolationService functionality including:
 - Protective action execution
 - Security incident creation
 - IP management (logging, banning)
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §5 (Security Violation Handling)
 """
 
 from unittest.mock import MagicMock, patch

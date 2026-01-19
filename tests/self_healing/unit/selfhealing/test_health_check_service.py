@@ -1,7 +1,7 @@
 """
-Unit tests for HealthCheckService.
+HealthCheckService 단위 테스트.
 
-Phase 3 - Health Check 비즈니스 로직 서비스 테스트.
+Health Check 비즈니스 로직 서비스 테스트.
 """
 
 import pytest

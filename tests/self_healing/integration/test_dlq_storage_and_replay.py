@@ -2,7 +2,7 @@
 DLQ Storage and Replay Integration Tests
 
 Tests for Dead Letter Queue storage and replay functionality.
-Validates the implementation of Operations §1 (DLQ) and §2 (Replay Policy).
+DLQ 저장 및 Replay 정책 구현을 검증합니다.
 
 Test Categories:
     A. DLQ Service Tests:
@@ -30,8 +30,6 @@ Test Categories:
         - State transitions
         - Soft-delete vs hard-delete
         - Handler crash handling
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §1, §2
 
 Note: All tests use in-memory mock repositories - no DB dependency.
       This enables parallel test execution with pytest-xdist.

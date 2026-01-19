@@ -1,7 +1,7 @@
 """
-Unit Tests for Layered Storage and Related Components.
+Layered Storage 및 관련 컴포넌트 단위 테스트.
 
-Phase 3: Tests for layered repository, drift reconciliation, and shadow logger.
+계층형 저장소, drift 재조정, shadow logger 테스트.
 """
 
 import os

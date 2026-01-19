@@ -1,14 +1,12 @@
 """
-Phase 4: Advanced Integration Tests
+Advanced Chaos Integration Tests
 
-Tests for Phase 4 features from 32_CHAOS_SYSTEM_INTEGRATION.md:
-- Corruption Shield integration (§7)
-- DLQ stats integration (§8)
-- Throttle stats integration (§9)
-- DORA-003 auto check (§18)
+Tests for advanced chaos 기능:
+- Corruption Shield integration
+- DLQ stats integration
+- Throttle stats integration
+- DORA-003 auto check
 - Comprehensive snapshot
-
-Reference: 32_CHAOS_SYSTEM_INTEGRATION.md Phase 4
 """
 
 import pytest

@@ -1,14 +1,11 @@
-# Hash Chain Graceful Degradation Test Package
 """
-test_hash_chain_graceful_degradation.py에서 분리된 테스트 모음.
+Hash Chain Graceful Degradation 테스트 패키지.
 
-원본 파일: 1050줄 → 패키지로 분리 (52_REFACTORING_TEST_CODE.md Phase 1)
-
-Covers fault-tolerant features:
-- HashChainFallbackChain: Multi-tier fallback (Redis → Replica → Local → Memory)
-- DegradedEntryMarker: Marking entries recorded during failures
-- HashChainWALRecovery: WAL-based crash recovery
-- HashChainDegradationManager: Unified degradation level management
-- HashChainCircuitBreaker: Circuit breaker for hash chain operations
-- HashChainGracefulDegradationManager: Unified access
+장애 허용(fault-tolerant) 기능 테스트:
+- HashChainFallbackChain: 다단계 폴백 (Redis → Replica → Local → Memory)
+- DegradedEntryMarker: 장애 중 기록된 엔트리 마킹
+- HashChainWALRecovery: WAL 기반 크래시 복구
+- HashChainDegradationManager: 통합 degradation 레벨 관리 (NORMAL→DEGRADED→EMERGENCY)
+- HashChainCircuitBreaker: 해시 체인 작업용 서킷 브레이커
+- HashChainGracefulDegradationManager: 통합 액세스 인터페이스
 """

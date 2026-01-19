@@ -2,8 +2,7 @@
 Config History Integration Tests.
 
 RuntimeConfigManager와 ConfigHistory 자동 연동 테스트.
-
-Reference: docs/self_healing/17_CONFIG_HISTORY_INTEGRATION.md (Phase 1)
+설정 변경 시 자동으로 이력이 기록되고 롤백 가능한지 검증합니다.
 """
 
 import pytest

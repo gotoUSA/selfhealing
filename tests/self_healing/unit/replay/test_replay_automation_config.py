@@ -1,14 +1,12 @@
 """
-Phase 1 Tests - DLQ Replay Automation.
+DLQ Replay Automation 테스트.
 
-Tests for:
+테스트 대상:
 1. ReplayAutomationConfig dataclass
-2. RuntimeConfigManager replay_automation support
-3. EventBus _on_circuit_breaker_closed handler with Track 1
-4. ReplayAutomationConfigSerializer validation
+2. RuntimeConfigManager replay_automation 지원
+3. EventBus _on_circuit_breaker_closed 핸들러
+4. ReplayAutomationConfigSerializer 검증
 5. ReplayAutomationConfigView API
-
-Reference: docs/self_healing/middleware_system/19_DLQ_AUTOMATION_BLUEPRINT.md
 """
 
 import pytest

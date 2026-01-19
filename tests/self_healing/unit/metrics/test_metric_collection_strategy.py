@@ -6,8 +6,6 @@ Tests for:
 - Event handlers and decorators
 - Jitter and Reconciler
 - DriftThresholdConfig
-
-Reference: docs/self_healing/13_METRIC_COLLECTION_STRATEGY.md
 """
 
 import time

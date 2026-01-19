@@ -1,13 +1,11 @@
 """
-Tests for Daily Report and Unified Notification Manager.
+Daily Report 및 Unified Notification Manager 테스트.
 
-Tests the notification architecture Phase 3-5 implementations:
-- DailyReportData aggregation
-- DailyReportCollector functionality
-- UnifiedNotificationManager routing
-- Cooldown and suppression logic
-
-Reference: docs/self_healing/middleware_system/08_NOTIFICATION_ARCHITECTURE.md
+테스트 대상:
+- DailyReportData 집계
+- DailyReportCollector 기능
+- UnifiedNotificationManager 라우팅
+- Cooldown 및 억제 로직
 """
 
 import pytest

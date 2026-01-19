@@ -1,10 +1,9 @@
 """
-Stage 23: Clock Skew Integration Tests
+Clock Skew Integration Tests
 
 Tests for clock skew tolerance at the service level,
 simulating distributed systems with clock drift.
-
-Reference: docs/STAGE_23_CLOCK_SKEW.md
+뛔에 분산 시스템의 시간 동기화 문제를 검증합니다.
 """
 
 from __future__ import annotations

@@ -1,13 +1,11 @@
 """
-🧠 지능 레인 (Intelligence Tasks) 단위 테스트
+🧠 지능 레인 (Intelligence Tasks) 단위 테스트.
 
-Tests for Phase 3 implementation:
-- CheckSLADriftTask
-- AnalyzeForensicPendingTask
-- AnalyzeCrossStageInsightsTask
-- CheckRecoveryTransitionsTask
-
-Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md §7
+테스트 대상:
+- CheckSLADriftTask: SLA drift 감지
+- AnalyzeForensicPendingTask: Forensic pending 분석
+- AnalyzeCrossStageInsightsTask: 크로스 스테이지 인사이트 분석
+- CheckRecoveryTransitionsTask: 복구 전환 확인
 """
 
 import pytest

@@ -1,10 +1,10 @@
 """
-Phase 3 Audit Middleware Integration Tests
+Audit Middleware Buffer Pattern Integration Tests
 
-File: tests/self_healing/integration/test_audit_middleware_phase3.py
+File: tests/self_healing/integration/test_audit_middleware_buffer_pattern.py
 
 Purpose:
-    Django 환경에서 Phase 3 마이그레이션 결과를 검증합니다.
+    Django 환경에서 Audit 미들웨어 버퍼 패턴 마이그레이션 결과를 검증합니다.
     - SelfHealingMiddleware → RequestAuditBuffer 연동
     - PoolCircuitBreakerMiddleware → 버퍼 패턴 우선 적용
     - governance_checks → 하이브리드 로직 검증
@@ -14,8 +14,6 @@ Purpose:
 Difference from unit tests:
     - packages/.../tests/ 의 단위 테스트는 시그니처와 모킹 레벨 검증
     - 이 통합 테스트는 실제 Django request/response 사이클에서 동작 검증
-
-Document Reference: 56_AUDIT_MIDDLEWARE_DESIGN.md Phase 3
 """
 
 from datetime import timedelta

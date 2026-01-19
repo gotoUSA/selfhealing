@@ -2,8 +2,7 @@
 Config History & Rollback Tests.
 
 설정 변경 이력 관리 및 롤백 기능 테스트.
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md (Phase 4)
+버전 관리, 이력 조회, 롤백 처리를 검증합니다.
 """
 
 import pytest

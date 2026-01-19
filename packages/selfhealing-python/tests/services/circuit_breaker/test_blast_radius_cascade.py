@@ -1,11 +1,9 @@
 """
-Circuit Breaker Blast Radius 및 연쇄 장애 방지 테스트
+Circuit Breaker Blast Radius 및 연쇄 장애 방지 테스트.
 
 Test Coverage:
-- 3.2 BlastRadiusIntegration: 의존성 관리, 영향 평가, 자동 OPEN 차단
-- 3.3 통합 테스트: ServiceConfig + BlastRadius 연동
-
-기존 test_cb_cascade_prevention.py에서 분리됨 (Phase 2-C).
+- BlastRadiusIntegration: 의존성 관리, 영향 평가, 자동 OPEN 차단
+- 통합 테스트: ServiceConfig + BlastRadius 연동
 """
 
 import pytest

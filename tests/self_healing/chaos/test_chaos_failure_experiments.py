@@ -1,13 +1,11 @@
 """
-Phase 2 & Phase 3: Chaos Experiment Expansion Tests
+Chaos Failure Experiment Expansion Tests
 
 Tests for:
-- Phase 2-1: Error4xxExperiment 구현
-- Phase 2-4: PartialFailureExperiment 구현
-- Phase 3-1: ConnectionResetExperiment 구현
-- Phase 3-4: CascadingFailureExperiment 구현
-
-Reference: docs/self_healing/middleware_system/31_CHAOS_EXPERIMENT_EXPANSION.md
+- Error4xxExperiment 구현
+- PartialFailureExperiment 구현
+- ConnectionResetExperiment 구현
+- CascadingFailureExperiment 구현
 """
 
 from __future__ import annotations

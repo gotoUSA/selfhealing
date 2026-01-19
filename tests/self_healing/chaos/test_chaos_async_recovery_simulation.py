@@ -1,12 +1,10 @@
 """
-Phase 5 Integration Tests - 비동기 복구 모니터링 및 시뮬레이션 인터페이스
+비동기 복구 모니터링 및 시뮬레이션 인터페이스 테스트
 
 Tests for:
-- Phase 5-1: RECOVERY_MONITORING 상태 전환, Hard TTL 체크, 스냅샷 메서드
-- Phase 5-2: set_simulation_override() 인터페이스 (PoolMonitor, ConnectionHealthMonitor)
+- RECOVERY_MONITORING 상태 전환, Hard TTL 체크, 스냅샷 메서드
+- set_simulation_override() 인터페이스 (PoolMonitor, ConnectionHealthMonitor)
 - PoolExhaustionExperiment, ConnectionPartitionExperiment 실험 타입
-
-Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §15, §16, §22.2
 """
 
 import pytest

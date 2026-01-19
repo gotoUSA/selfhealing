@@ -1,10 +1,8 @@
 """
-Circuit Breaker ServiceConfigManager 테스트
+Circuit Breaker ServiceConfigManager 테스트.
 
 Test Coverage:
-- 3.1 ServiceConfigManager: 서비스 등록, criticality 조회, Load Shedding 대상 선택
-
-기존 test_cb_cascade_prevention.py에서 분리됨 (Phase 2-C).
+- ServiceConfigManager: 서비스 등록, criticality 조회, Load Shedding 대상 선택
 """
 
 import pytest

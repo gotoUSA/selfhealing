@@ -1,6 +1,5 @@
-# Shadow Budget Test Package
 """
-test_shadow_budget_weighted.py에서 분리된 테스트 모음.
+Shadow Budget 테스트 패키지.
 
-원본 파일: 1129줄 → 패키지로 분리 (52_REFACTORING_TEST_CODE.md Phase 1)
+가중치 기반 Shadow Budget 계산 및 검증 테스트.
 """

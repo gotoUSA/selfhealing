@@ -1,17 +1,17 @@
 """
-Chaos tests for Redis failure scenarios (Phase 5).
+Redis 장애 시나리오 Chaos 테스트.
 
-Tests the system's behavior under Redis failures:
-- Automatic fallback to local storage
-- Entry marking as degraded during failures  
-- Recovery and reconciliation after Redis comes back
-- Circuit breaker behavior
+Redis 장애 상황에서 시스템 동작 검증:
+- 로컬 스토리지로 자동 폴백
+- 장애 중 엔트리 degraded 마킹
+- Redis 복구 후 재조정(reconciliation)
+- 서킷 브레이커 동작
 
-These tests simulate real-world failure scenarios:
-- Redis timeout
-- Redis connection refused
-- Redis intermittent failures
-- Redis recovery after extended outage
+실제 장애 시나리오 시뮬레이션:
+- Redis 타임아웃
+- Redis 연결 거부
+- Redis 간헐적 장애
+- 장기 중단 후 Redis 복구
 
 Related code:
     selfhealing/audit/graceful_degradation.py

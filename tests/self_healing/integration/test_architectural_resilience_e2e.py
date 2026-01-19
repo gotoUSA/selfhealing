@@ -1,8 +1,8 @@
 """
-L3 Self-Healing Phase 2 Integration Tests
+L3 Self-Healing Resilience Integration Tests
 
 Tests for retry logic, idempotency checking, and DLQ integration.
-Validates the implementation of Architecture §7 (Idempotency) and §8 (Retry Strategy).
+멱등성(Idempotency)과 재시도 전략(Retry Strategy) 구현을 검증합니다.
 
 Test Categories:
     A. Backoff Calculator Tests:
@@ -20,8 +20,6 @@ Test Categories:
     D. DLQ Integration Tests:
         - Full failure to DLQ flow
         - DLQ state transitions
-
-Reference: docs/L3_SELF_HEALING_ARCHITECTURE.md §7, §8
 """
 
 import threading

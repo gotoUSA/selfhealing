@@ -1,9 +1,10 @@
 """
 Metric Reliability System Unit Tests.
 
-Tests for Phase 5: SafeGauge Sync Status, L1 Snapshot, Conservative Fallback.
-
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+메트릭 신뢰성 시스템 테스트:
+- SafeGauge 동기화 상태 추적
+- L1 스냅샷 저장/복원
+- 보수적 폴백 전략
 """
 
 import json

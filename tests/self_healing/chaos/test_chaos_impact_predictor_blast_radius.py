@@ -1,12 +1,10 @@
 """
-Phase 2: Chaos Dry Run and Impact Prediction Tests
+Chaos Dry Run and Impact Prediction Tests
 
-Tests for Phase 2 implementation:
+Tests for Chaos 시스템 영향도 예측 및 분석:
 - ImpactPredictor (4 tests)
 - BlastRadiusAnalyzer (4 tests)
 - Dry Run API (4 tests)
-
-Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.3
 
 Total: 12 tests
 """

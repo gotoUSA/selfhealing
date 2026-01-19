@@ -1,7 +1,5 @@
 """
-Phase 6: Chaos System Integration Tests
-
-Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §22 (Phase 6 구현)
+Chaos Freeze Mode 및 Scheduler 테스트
 
 Tests for:
 1. CB Freeze Mode 연동 - SafetyGuard에서 Freeze Mode 체크

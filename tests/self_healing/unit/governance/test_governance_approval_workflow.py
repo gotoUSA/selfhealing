@@ -1,5 +1,5 @@
 """
-Tests for Governance Phase 3 Implementation.
+Governance Approval Workflow 구현 테스트.
 
 테스트 대상:
 1. L2StorageConfig RuntimeConfigManager 통합
@@ -9,9 +9,6 @@ Tests for Governance Phase 3 Implementation.
 5. ApprovalRequestApproveView API
 6. ApprovalRequestRejectView API
 7. L2StorageConfigManagedView API
-
-Reference:
-- docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md Phase 3
 """
 
 import pytest
@@ -330,8 +327,8 @@ class TestURLRegistration:
 # =============================================================================
 
 
-class TestPhase3Integration:
-    """Integration tests for Phase 3 features."""
+class TestGovernanceIntegration:
+    """Governance 기능 통합 테스트."""
 
     def test_chaos_config_in_storage_keys(self):
         """Test chaos config is in storage keys."""
@@ -339,16 +336,16 @@ class TestPhase3Integration:
 
         assert "chaos" in STORAGE_KEYS
 
-    def test_all_phase3_storage_keys_present(self):
-        """Test all Phase 3 storage keys are present."""
+    def test_all_governance_storage_keys_present(self):
+        """RuntimeConfigManager에 등록된 governance 관련 storage key 확인."""
         from selfhealing.services.runtime_config.constants import STORAGE_KEYS
 
         assert "l2_storage" in STORAGE_KEYS
         assert "chaos" in STORAGE_KEYS
         assert "approval_requests" in STORAGE_KEYS
 
-    def test_all_phase3_config_classes_present(self):
-        """Test all Phase 3 config classes are present."""
+    def test_all_governance_config_classes_present(self):
+        """RuntimeConfigManager에 등록된 governance 관련 config class 확인."""
         from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import L2StorageConfig, ChaosConfig
 

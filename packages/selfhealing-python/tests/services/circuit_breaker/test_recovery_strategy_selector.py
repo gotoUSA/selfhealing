@@ -1,12 +1,10 @@
 """
-Circuit Breaker Recovery Strategy Selector 테스트
+Circuit Breaker Recovery Strategy Selector 테스트.
 
 Test Coverage:
-- 4.3 RecoveryStrategySelector: immediate vs canary 선택, criticality 기반 선택
+- RecoveryStrategySelector: immediate vs canary 선택, criticality 기반 선택
 - 통합 테스트: 복구 전략 통합 흐름
 - 편의 함수 테스트
-
-기존 test_cb_canary_recovery_strategy.py에서 분리됨 (Phase 2-C).
 """
 
 import pytest

@@ -6,8 +6,6 @@ Tests the dynamic permission levels based on discrepancy rate:
 - <= 30%: Admin approval
 - 30% ~ 50%: Admin + warning log
 - > 50%: 4-Eyes Dual Approval Required
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 import os

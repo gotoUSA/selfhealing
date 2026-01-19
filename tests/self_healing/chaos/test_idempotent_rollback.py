@@ -1,11 +1,12 @@
 """
-Idempotent Rollback Tests for Chaos Engine Safety Mechanisms
+Idempotent Rollback Chaos 안전 메커니즘 테스트.
 
-Tests the idempotent rollback functionality that ensures safe rollback
-even with duplicate rollback requests or concurrent rollback attempts.
+중복 롤백 요청이나 동시 롤백 시도에도 안전한 롤백을 보장하는
+멱등성(idempotent) 롤백 기능 테스트.
 
-Phase 3: Chaos Safety Implementation Plan
-Reference: docs/self_healing/CHAOS_SAFETY_IMPLEMENTATION_PLAN.md
+테스트 대상:
+- 안전한 중복 롤백: 동일 실험에 대한 다중 롤백 요청 처리
+- 동시 롤백: 병렬 롤백 시도의 안전한 처리
 """
 
 import threading

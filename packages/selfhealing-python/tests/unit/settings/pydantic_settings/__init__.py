@@ -1,6 +1,5 @@
 """
-Pydantic Settings Phase 2 Tests Package.
+Pydantic Settings 테스트 패키지.
 
-Split from test_pydantic_settings_phase2.py (821 lines).
-Tests for the 12 additional settings classes plus consistency tests.
+12개 추가 설정 클래스 및 일관성 테스트를 포함합니다.
 """

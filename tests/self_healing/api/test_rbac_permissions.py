@@ -5,8 +5,6 @@ Tests the role-based access control for Self-Healing API:
 - IsViewer: Read-only access
 - IsOperator: DLQ operations
 - IsSelfHealingAdmin: Full access including CB control
-
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 import pytest

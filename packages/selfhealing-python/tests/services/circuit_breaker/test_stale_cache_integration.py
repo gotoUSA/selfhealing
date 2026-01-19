@@ -1,10 +1,8 @@
 """
-Circuit Breaker Stale Cache 통합 테스트
+Circuit Breaker Stale Cache 통합 테스트.
 
 Test Coverage:
-- 4.2 CanaryWithStaleCacheService: Canary + Stale Cache 결합
-
-기존 test_cb_canary_recovery_strategy.py에서 분리됨 (Phase 2-C).
+- CanaryWithStaleCacheService: Canary + Stale Cache 결합
 """
 
 import pytest

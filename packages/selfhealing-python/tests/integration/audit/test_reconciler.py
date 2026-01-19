@@ -1,15 +1,15 @@
 """
-Integration tests for HashChainReconciler (Phase 5).
+HashChainReconciler 통합 테스트.
 
-Tests the complete reconciliation workflow for degraded entries:
-- Finding degraded entries in local log files
-- Assigning new global sequence numbers
-- Recomputing hashes for proper chain linkage
-- Updating Redis state after reconciliation
-- Marking entries as reconciled
+degraded 엔트리 재조정(reconciliation) 전체 워크플로우 테스트:
+- 로컬 로그 파일에서 degraded 엔트리 찾기
+- 새로운 전역 시퀀스 번호 할당
+- 적절한 체인 연결을 위한 해시 재계산
+- 재조정 후 Redis 상태 업데이트
+- 엔트리를 reconciled로 마킹
 
-Test scenarios simulate Redis recovery situations where
-degraded entries need to be merged back into the main chain.
+테스트 시나리오는 degraded 엔트리를 메인 체인에
+다시 병합해야 하는 Redis 복구 상황을 시뮬레이션합니다.
 
 Related code:
     selfhealing/audit/integrity.py#HashChainReconciler

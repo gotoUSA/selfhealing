@@ -1,10 +1,8 @@
 """
-Phase 4: Chaos Dry Run Integration Tests
+Chaos Dry Run Integration Tests
 
-Tests for Phase 4 implementation - Dry Run full flow integration:
+Tests for Dry Run full flow integration:
 - Dry Run → Prediction → Recommendations (4 tests)
-
-Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.5
 
 Total: 4 tests
 """

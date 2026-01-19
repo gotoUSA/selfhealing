@@ -1,8 +1,7 @@
 """
-API 미노출 설정 추가 테스트 (Phase 5).
+API 미노출 설정 추가 테스트.
 
 ForensicConfigSerializer 확장 필드 및 LoggingConfigSerializer 테스트.
-Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
 """
 
 import os
@@ -64,7 +63,7 @@ def viewer_user():
 
 
 class TestForensicConfigSerializer:
-    """ForensicConfigSerializer 테스트 - Phase 5 확장 필드 포함."""
+    """ForensicConfigSerializer 테스트 - 확장 필드 포함."""
 
     def test_valid_basic_fields(self):
         """기본 필드 검증 테스트."""
@@ -78,7 +77,7 @@ class TestForensicConfigSerializer:
         assert serializer.validated_data["error_message_max_length"] == 500
 
     def test_valid_extended_fields(self):
-        """Phase 5 확장 필드 검증 테스트."""
+        """확장 필드 검증 테스트."""
         data = {
             "max_stack_frames": 100,
             "max_context_size_bytes": 131072,  # 128KB
@@ -157,7 +156,7 @@ class TestForensicConfigSerializer:
 
 
 class TestLoggingConfigSerializer:
-    """LoggingConfigSerializer 테스트 - Phase 5 신규."""
+    """LoggingConfigSerializer 테스트."""
 
     def test_valid_log_levels(self):
         """유효한 로그 레벨 검증 테스트."""
@@ -420,8 +419,8 @@ class TestLoggingConfigView:
 # =============================================================================
 
 
-class TestPhase5Integration:
-    """Phase 5 통합 테스트."""
+class TestConfigIntegration:
+    """설정 통합 테스트."""
 
     @pytest.fixture(autouse=True)
     def setup(self, factory, admin_user):

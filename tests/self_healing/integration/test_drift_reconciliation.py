@@ -2,8 +2,6 @@
 드리프트 복구 통합 테스트.
 
 L2 복구 후 L1/L2 상태 불일치 해결 시나리오 테스트.
-
-Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §6
 """
 
 import time

@@ -1,7 +1,7 @@
 """
-Tests for Metric Sync API (Phase 1: Poll 제거 + Manual API).
+Tests for Metric Sync API.
 
-Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
+메트릭 수동 동기화 API 테스트.
 """
 
 import os

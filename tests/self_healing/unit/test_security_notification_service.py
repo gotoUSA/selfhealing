@@ -7,8 +7,6 @@ Tests for SecurityNotificationService functionality including:
 - Email notification
 - SMS notification
 - PagerDuty integration
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §4 (Escalation & Notifications)
 """
 
 from unittest.mock import MagicMock, patch, Mock

@@ -2,8 +2,6 @@
 Tests for Self-Healing Observability Celery Tasks
 
 Tests for metric collection and SLA breach checking tasks.
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
 """
 
 from unittest.mock import MagicMock, patch

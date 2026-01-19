@@ -1,11 +1,10 @@
 """
-Unit Tests for Django Repository Implementations.
+Django Repository 구현 단위 테스트.
 
-Phase 3: Django adapter repository tests.
-Uses mocks to avoid database dependencies.
+Django adapter repository 테스트 - 데이터베이스 의존성 없이 mock 사용.
 
-NOTE: These tests are currently skipped as the repository implementations
-have been moved or refactored. Update when repositories are restored.
+NOTE: 현재 이 테스트는 skip됨. repository 구현이 이동/리팩토링됨.
+repository 복원 시 업데이트 필요.
 """
 
 import os

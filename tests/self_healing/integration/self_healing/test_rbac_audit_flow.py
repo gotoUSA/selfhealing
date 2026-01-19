@@ -1,5 +1,5 @@
 """
-Phase 25: RBAC-Audit 통합 테스트 (Phase 4.2)
+RBAC-Audit 통합 테스트
 
 RBAC → Audit 전체 흐름 E2E 테스트 (Mock 기반).
 Django 의존성 없이 selfhealing 패키지만으로 테스트합니다.

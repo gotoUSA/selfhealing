@@ -1,15 +1,13 @@
 """
-Phase 3 Unit Tests - Chaos System Integration (32_CHAOS_SYSTEM_INTEGRATION.md)
+Chaos Canary Recovery 및 FinOps Tests
 
 Tests for:
-- CircuitBreakerOpenExperiment._verify_canary_recovery() (§4)
-- CircuitBreakerOpenExperiment._check_canary_started() (§4)
-- FinOpsService.set_chaos_budget() / record_chaos_cost() (§17)
-- SafetyGuard._check_chaos_budget_status() (§17.3)
-- ChaosExperiment._record_hypothesis_validation() (§20.4)
-- ChaosExperiment.record_finops_cost() (§10.2)
-
-Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §12.1 Phase 3
+- CircuitBreakerOpenExperiment._verify_canary_recovery()
+- CircuitBreakerOpenExperiment._check_canary_started()
+- FinOpsService.set_chaos_budget() / record_chaos_cost()
+- SafetyGuard._check_chaos_budget_status()
+- ChaosExperiment._record_hypothesis_validation()
+- ChaosExperiment.record_finops_cost()
 """
 
 import pytest

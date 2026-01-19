@@ -6,8 +6,6 @@ Tests for CircuitBreakerService functionality including:
 - State transitions
 - Conditional replay triggering
 - Admin action integration
-
-Reference: docs/L3_SELF_HEALING_OPERATIONS.md §9
 """
 
 import pytest
