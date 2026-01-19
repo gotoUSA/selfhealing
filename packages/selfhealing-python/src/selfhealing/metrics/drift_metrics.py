@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client, but don't fail if not installed
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import Counter, Gauge, Histogram, REGISTRY
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -32,6 +32,52 @@ except ImportError:
     Counter = None
     Gauge = None
     Histogram = None
+    REGISTRY = None
+
+
+# =============================================================================
+# Safe Metric Registration Helpers (avoid duplicate registration)
+# =============================================================================
+
+
+def _get_or_create_counter(name: str, description: str, labels: list = None) -> Optional[Counter]:
+    """Get existing counter or create new one to avoid duplicate registration."""
+    if not PROMETHEUS_AVAILABLE:
+        return None
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Counter(name, description, labels or [])
+    except ValueError:
+        return REGISTRY._names_to_collectors.get(name)
+
+
+def _get_or_create_gauge(name: str, description: str, labels: list = None) -> Optional[Gauge]:
+    """Get existing gauge or create new one to avoid duplicate registration."""
+    if not PROMETHEUS_AVAILABLE:
+        return None
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Gauge(name, description, labels or [])
+    except ValueError:
+        return REGISTRY._names_to_collectors.get(name)
+
+
+def _get_or_create_histogram(
+    name: str, description: str, labels: list = None, buckets: tuple = None
+) -> Optional[Histogram]:
+    """Get existing histogram or create new one to avoid duplicate registration."""
+    if not PROMETHEUS_AVAILABLE:
+        return None
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        if buckets:
+            return Histogram(name, description, labels or [], buckets=buckets)
+        return Histogram(name, description, labels or [])
+    except ValueError:
+        return REGISTRY._names_to_collectors.get(name)
 
 
 # =============================================================================
@@ -45,300 +91,249 @@ METRIC_PREFIX = "selfhealing"
 # PoolCircuitBreaker Metrics - 커넥션 풀 서킷 브레이커 캐시 상태
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # PoolCircuitBreaker Stale Cache 메트릭
-    pool_cb_cache_stale_total = Counter(
-        f"{METRIC_PREFIX}_pool_cb_cache_stale_total",
-        "Total stale cache events in PoolCircuitBreaker",
-        ["severity"],  # warning, critical
-    )
+# PoolCircuitBreaker Stale Cache 메트릭
+pool_cb_cache_stale_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_pool_cb_cache_stale_total",
+    "Total stale cache events in PoolCircuitBreaker",
+    ["severity"],  # warning, critical
+)
 
-    pool_cb_cache_age_ms = Histogram(
-        f"{METRIC_PREFIX}_pool_cb_cache_age_ms",
-        "Age of PoolCircuitBreaker cache when accessed (ms)",
-        buckets=[10, 50, 100, 200, 500, 1000, 2000, 5000],
-    )
+pool_cb_cache_age_ms = _get_or_create_histogram(
+    f"{METRIC_PREFIX}_pool_cb_cache_age_ms",
+    "Age of PoolCircuitBreaker cache when accessed (ms)",
+    [],
+    buckets=(10, 50, 100, 200, 500, 1000, 2000, 5000),
+)
 
-    pool_cb_cache_hit_rate = Gauge(
-        f"{METRIC_PREFIX}_pool_cb_cache_hit_rate",
-        "PoolCircuitBreaker cache hit rate",
-    )
+pool_cb_cache_hit_rate = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_pool_cb_cache_hit_rate",
+    "PoolCircuitBreaker cache hit rate",
+)
 
-    pool_cb_background_restarts_total = Counter(
-        f"{METRIC_PREFIX}_pool_cb_background_restarts_total",
-        "Number of background thread restarts in PoolCircuitBreaker",
-    )
-else:
-    pool_cb_cache_stale_total = None
-    pool_cb_cache_age_ms = None
-    pool_cb_cache_hit_rate = None
-    pool_cb_background_restarts_total = None
+pool_cb_background_restarts_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_pool_cb_background_restarts_total",
+    "Number of background thread restarts in PoolCircuitBreaker",
+)
 
 
 # =============================================================================
 # PrecomputedCache Metrics - L1/L2 캐시 일관성 및 Drift 감지
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # PrecomputedCache Drift 메트릭
-    cache_drift_detected_total = Counter(
-        f"{METRIC_PREFIX}_cache_drift_detected_total",
-        "Total cache drift detections between L1 and L2",
-        ["cache_key", "severity"],  # severity: warning, critical
-    )
+# PrecomputedCache Drift 메트릭
+cache_drift_detected_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_drift_detected_total",
+    "Total cache drift detections between L1 and L2",
+    ["cache_key", "severity"],  # severity: warning, critical
+)
 
-    cache_l1_l2_consistency = Gauge(
-        f"{METRIC_PREFIX}_cache_l1_l2_consistency",
-        "L1/L2 cache consistency ratio (1.0 = fully consistent)",
-        ["cache_key"],
-    )
+cache_l1_l2_consistency = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_cache_l1_l2_consistency",
+    "L1/L2 cache consistency ratio (1.0 = fully consistent)",
+    ["cache_key"],
+)
 
-    cache_hit_rate = Gauge(
-        f"{METRIC_PREFIX}_cache_hit_rate",
-        "Cache hit rate per layer",
-        ["cache_key", "layer"],  # layer: l1, l2, l3
-    )
+cache_hit_rate = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_cache_hit_rate",
+    "Cache hit rate per layer",
+    ["cache_key", "layer"],  # layer: l1, l2, l3
+)
 
-    cache_refresh_total = Counter(
-        f"{METRIC_PREFIX}_cache_refresh_total",
-        "Total cache refresh operations",
-        ["cache_key", "status"],  # status: success, failed
-    )
-else:
-    cache_drift_detected_total = None
-    cache_l1_l2_consistency = None
-    cache_hit_rate = None
-    cache_refresh_total = None
+cache_refresh_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_refresh_total",
+    "Total cache refresh operations",
+    ["cache_key", "status"],  # status: success, failed
+)
 
 
 # =============================================================================
 # EmergencyMode Cache Metrics - 비상 모드 캐시 상태
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # EmergencyMode Cache 메트릭
-    emergency_cache_stale_total = Counter(
-        f"{METRIC_PREFIX}_emergency_cache_stale_total",
-        "Number of times emergency mode cache became stale",
-    )
+# EmergencyMode Cache 메트릭
+emergency_cache_stale_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_emergency_cache_stale_total",
+    "Number of times emergency mode cache became stale",
+)
 
-    emergency_cache_drift_total = Counter(
-        f"{METRIC_PREFIX}_emergency_cache_drift_total",
-        "Number of times cached state differed from backend",
-    )
+emergency_cache_drift_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_emergency_cache_drift_total",
+    "Number of times cached state differed from backend",
+)
 
-    emergency_cache_age_seconds = Gauge(
-        f"{METRIC_PREFIX}_emergency_cache_age_seconds",
-        "Current age of emergency mode cache in seconds",
-    )
+emergency_cache_age_seconds = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_emergency_cache_age_seconds",
+    "Current age of emergency mode cache in seconds",
+)
 
-    emergency_cache_load_total = Counter(
-        f"{METRIC_PREFIX}_emergency_cache_load_total",
-        "Number of times state was loaded from backend",
-        ["reason"],  # reason: expired, invalidated, startup
-    )
-else:
-    emergency_cache_stale_total = None
-    emergency_cache_drift_total = None
-    emergency_cache_age_seconds = None
-    emergency_cache_load_total = None
+emergency_cache_load_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_emergency_cache_load_total",
+    "Number of times state was loaded from backend",
+    ["reason"],  # reason: expired, invalidated, startup
+)
 
 
 # =============================================================================
 # RateLimiter Metrics - Redis 상태 및 Fallback 모드
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # RateLimiter Redis Drift 메트릭
-    ratelimit_redis_unavailable_total = Counter(
-        f"{METRIC_PREFIX}_ratelimit_redis_unavailable_total",
-        "Number of times Redis was unavailable for rate limiting",
-    )
+# RateLimiter Redis Drift 메트릭
+ratelimit_redis_unavailable_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_ratelimit_redis_unavailable_total",
+    "Number of times Redis was unavailable for rate limiting",
+)
 
-    ratelimit_state_drift_total = Counter(
-        f"{METRIC_PREFIX}_ratelimit_state_drift_total",
-        "Number of rate limit state drifts detected",
-        ["key"],
-    )
+ratelimit_state_drift_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_ratelimit_state_drift_total",
+    "Number of rate limit state drifts detected",
+    ["key"],
+)
 
-    ratelimit_fallback_active = Gauge(
-        f"{METRIC_PREFIX}_ratelimit_fallback_active",
-        "Whether rate limiter is in fallback mode (1=yes, 0=no)",
-    )
+ratelimit_fallback_active = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_ratelimit_fallback_active",
+    "Whether rate limiter is in fallback mode (1=yes, 0=no)",
+)
 
-    ratelimit_reconciliation_total = Counter(
-        f"{METRIC_PREFIX}_ratelimit_reconciliation_total",
-        "Number of rate limit state reconciliations after Redis recovery",
-        ["result"],  # result: success, failed
-    )
-else:
-    ratelimit_redis_unavailable_total = None
-    ratelimit_state_drift_total = None
-    ratelimit_fallback_active = None
-    ratelimit_reconciliation_total = None
+ratelimit_reconciliation_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_ratelimit_reconciliation_total",
+    "Number of rate limit state reconciliations after Redis recovery",
+    ["result"],  # result: success, failed
+)
 
 
 # =============================================================================
 # Config Cache Metrics - 설정 캐시 및 환경변수 변경 감지
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # Config lru_cache 메트릭
-    config_env_changed_total = Counter(
-        f"{METRIC_PREFIX}_config_env_changed_total",
-        "Number of environment variable changes detected",
-        ["config_type"],
-    )
+# Config lru_cache 메트릭
+config_env_changed_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_config_env_changed_total",
+    "Number of environment variable changes detected",
+    ["config_type"],
+)
 
-    config_cache_invalidated_total = Counter(
-        f"{METRIC_PREFIX}_config_cache_invalidated_total",
-        "Number of config cache invalidations",
-        ["config_type"],
-    )
+config_cache_invalidated_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_config_cache_invalidated_total",
+    "Number of config cache invalidations",
+    ["config_type"],
+)
 
-    config_cache_hit_total = Counter(
-        f"{METRIC_PREFIX}_config_cache_hit_total",
-        "Number of config cache hits",
-        ["config_type"],
-    )
+config_cache_hit_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_config_cache_hit_total",
+    "Number of config cache hits",
+    ["config_type"],
+)
 
-    config_cache_miss_total = Counter(
-        f"{METRIC_PREFIX}_config_cache_miss_total",
-        "Number of config cache misses (recomputed)",
-        ["config_type"],
-    )
-else:
-    config_env_changed_total = None
-    config_cache_invalidated_total = None
-    config_cache_hit_total = None
-    config_cache_miss_total = None
+config_cache_miss_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_config_cache_miss_total",
+    "Number of config cache misses (recomputed)",
+    ["config_type"],
+)
 
 
 # =============================================================================
 # WAL Sync Metrics - Write-Ahead Log 동기화 상태
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # WAL 동기화 Drift 메트릭
-    wal_entries_written_total = Counter(
-        f"{METRIC_PREFIX}_wal_entries_written_total",
-        "Total WAL entries written",
-    )
+# WAL 동기화 Drift 메트릭
+wal_entries_written_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_wal_entries_written_total",
+    "Total WAL entries written",
+)
 
-    wal_entries_recovered_total = Counter(
-        f"{METRIC_PREFIX}_wal_entries_recovered_total",
-        "Total WAL entries recovered",
-    )
+wal_entries_recovered_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_wal_entries_recovered_total",
+    "Total WAL entries recovered",
+)
 
-    wal_corruption_detected_total = Counter(
-        f"{METRIC_PREFIX}_wal_corruption_detected_total",
-        "Number of WAL corruption events detected",
-    )
+wal_corruption_detected_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_wal_corruption_detected_total",
+    "Number of WAL corruption events detected",
+)
 
-    wal_rotation_total = Counter(
-        f"{METRIC_PREFIX}_wal_rotation_total",
-        "Number of WAL file rotations",
-    )
+wal_rotation_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_wal_rotation_total",
+    "Number of WAL file rotations",
+)
 
-    wal_sync_lag_entries = Gauge(
-        f"{METRIC_PREFIX}_wal_sync_lag_entries",
-        "Number of WAL entries pending sync to central storage",
-    )
+wal_sync_lag_entries = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_wal_sync_lag_entries",
+    "Number of WAL entries pending sync to central storage",
+)
 
-    wal_last_sequence = Gauge(
-        f"{METRIC_PREFIX}_wal_last_sequence",
-        "Last WAL sequence number written",
-    )
-else:
-    wal_entries_written_total = None
-    wal_entries_recovered_total = None
-    wal_corruption_detected_total = None
-    wal_rotation_total = None
-    wal_sync_lag_entries = None
-    wal_last_sequence = None
+wal_last_sequence = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_wal_last_sequence",
+    "Last WAL sequence number written",
+)
 
 
 # =============================================================================
 # ShadowLogger Metrics - L2 동기화 실패 추적
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # ShadowLogger L2 동기화 Drift 메트릭
-    shadow_log_sync_failures_total = Counter(
-        f"{METRIC_PREFIX}_shadow_log_sync_failures_total",
-        "Total L2 sync failures recorded in shadow log",
-        ["adapter_type", "operation"],  # operation: sync, update, delete
-    )
+# ShadowLogger L2 동기화 Drift 메트릭
+shadow_log_sync_failures_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_shadow_log_sync_failures_total",
+    "Total L2 sync failures recorded in shadow log",
+    ["adapter_type", "operation"],  # operation: sync, update, delete
+)
 
-    shadow_log_unsynced_count = Gauge(
-        f"{METRIC_PREFIX}_shadow_log_unsynced_count",
-        "Number of shadow log records not yet synced to L2",
-    )
+shadow_log_unsynced_count = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_shadow_log_unsynced_count",
+    "Number of shadow log records not yet synced to L2",
+)
 
-    shadow_log_recovered_total = Counter(
-        f"{METRIC_PREFIX}_shadow_log_recovered_total",
-        "Total shadow log records recovered after L2 recovery",
-        ["service_name"],
-    )
+shadow_log_recovered_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_shadow_log_recovered_total",
+    "Total shadow log records recovered after L2 recovery",
+    ["service_name"],
+)
 
-    shadow_log_affected_services = Gauge(
-        f"{METRIC_PREFIX}_shadow_log_affected_services",
-        "Number of services affected by L2 sync failures",
-    )
+shadow_log_affected_services = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_shadow_log_affected_services",
+    "Number of services affected by L2 sync failures",
+)
 
-    shadow_log_oldest_unsynced_age_seconds = Gauge(
-        f"{METRIC_PREFIX}_shadow_log_oldest_unsynced_age_seconds",
-        "Age of oldest unsynced shadow log record in seconds",
-    )
-else:
-    shadow_log_sync_failures_total = None
-    shadow_log_unsynced_count = None
-    shadow_log_recovered_total = None
-    shadow_log_affected_services = None
-    shadow_log_oldest_unsynced_age_seconds = None
+shadow_log_oldest_unsynced_age_seconds = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_shadow_log_oldest_unsynced_age_seconds",
+    "Age of oldest unsynced shadow log record in seconds",
+)
 
 
 # =============================================================================
 # TTLCache Metrics - TTL 기반 캐시 만료/퇴거
 # =============================================================================
 
-if PROMETHEUS_AVAILABLE:
-    # TTLCache Strategy Drift 메트릭
-    cache_ttl_expired_total = Counter(
-        f"{METRIC_PREFIX}_cache_ttl_expired_total",
-        "Total cache entries expired by TTL",
-        ["cache_name"],
-    )
+# TTLCache Strategy Drift 메트릭
+cache_ttl_expired_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_ttl_expired_total",
+    "Total cache entries expired by TTL",
+    ["cache_name"],
+)
 
-    cache_ttl_evicted_total = Counter(
-        f"{METRIC_PREFIX}_cache_ttl_evicted_total",
-        "Total cache entries evicted (capacity limit)",
-        ["cache_name"],
-    )
+cache_ttl_evicted_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_ttl_evicted_total",
+    "Total cache entries evicted (capacity limit)",
+    ["cache_name"],
+)
 
-    cache_entries_count = Gauge(
-        f"{METRIC_PREFIX}_cache_entries_count",
-        "Current number of entries in cache",
-        ["cache_name"],
-    )
+cache_entries_count = _get_or_create_gauge(
+    f"{METRIC_PREFIX}_cache_entries_count",
+    "Current number of entries in cache",
+    ["cache_name"],
+)
 
-    cache_get_total = Counter(
-        f"{METRIC_PREFIX}_cache_get_total",
-        "Total cache get operations",
-        ["cache_name", "result"],  # result: hit, miss, expired
-    )
+cache_get_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_get_total",
+    "Total cache get operations",
+    ["cache_name", "result"],  # result: hit, miss, expired
+)
 
-    cache_set_total = Counter(
-        f"{METRIC_PREFIX}_cache_set_total",
-        "Total cache set operations",
-        ["cache_name"],
-    )
-else:
-    cache_ttl_expired_total = None
-    cache_ttl_evicted_total = None
-    cache_entries_count = None
-    cache_get_total = None
-    cache_set_total = None
+cache_set_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_cache_set_total",
+    "Total cache set operations",
+    ["cache_name"],
+)
 
 
 # =============================================================================
