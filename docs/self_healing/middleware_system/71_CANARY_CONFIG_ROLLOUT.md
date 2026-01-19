@@ -2100,18 +2100,18 @@ data:
 
 ---
 
-### Step 1: 데이터 모델 (필수 선행)
+### Step 1: 데이터 모델 (필수 선행) ✅ 완료
 
 > 다른 모든 컴포넌트가 의존하는 기반 모델
 
-- [ ] `services/canary/__init__.py` 생성
-- [ ] `services/canary/models.py` 생성
-  - [ ] `CanaryState` enum
-  - [ ] `CanaryStage` dataclass
-  - [ ] `CanaryRollout` dataclass
-  - [ ] `CanaryMetrics` dataclass
-  - [ ] `PassCriteria` dataclass
-- [ ] 단위 테스트: `tests/unit/services/canary/test_models.py`
+- [x] `services/canary/__init__.py` 생성
+- [x] `services/canary/models.py` 생성
+  - [x] `CanaryState` enum
+  - [x] `CanaryStage` dataclass
+  - [x] `CanaryRollout` dataclass
+  - [x] `CanaryMetrics` dataclass
+  - [x] `PassCriteria` dataclass
+- [x] 단위 테스트: `tests/unit/services/canary/test_models.py` (30 tests passed)
 
 ### Step 2: 핵심 서비스 (Step 1 완료 후)
 
