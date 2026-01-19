@@ -140,7 +140,3 @@ def reset_replay_automation_settings() -> None:
     """Reset cached settings (for testing)."""
     global _settings
     _settings = None
-
-
-# Legacy alias
-ReplayAutomationConfig = ReplayAutomationSettings

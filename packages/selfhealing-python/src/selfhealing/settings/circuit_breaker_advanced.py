@@ -164,7 +164,3 @@ def reset_circuit_breaker_advanced_settings() -> None:
     """Reset cached settings (for testing)."""
     global _settings
     _settings = None
-
-
-# Legacy alias
-CircuitBreakerAdvancedConfig = CircuitBreakerAdvancedSettings

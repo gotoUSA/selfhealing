@@ -20,7 +20,6 @@ from selfhealing.settings.circuit_breaker import (
 )
 from selfhealing.settings.circuit_breaker_advanced import (
     CircuitBreakerAdvancedSettings,
-    CircuitBreakerAdvancedConfig,  # Legacy alias
     get_circuit_breaker_advanced_settings,
     reset_circuit_breaker_advanced_settings,
 )
@@ -108,7 +107,6 @@ from selfhealing.settings.l2_storage import (
 )
 from selfhealing.settings.replay_automation import (
     ReplayAutomationSettings,
-    ReplayAutomationConfig,  # Legacy alias
     get_replay_automation_settings,
     reset_replay_automation_settings,
 )
@@ -137,7 +135,6 @@ from selfhealing.settings.secrets import (
 # Root Settings (SelfHealingSettings)
 from selfhealing.settings.root import (
     SelfHealingSettings,
-    SelfHealingConfig,  # Legacy alias
     get_config,
     set_config,
     reset_config,
@@ -160,37 +157,9 @@ from selfhealing.settings.root import (
     get_rate_limit_settings,
 )
 
-# Re-export get_circuit_breaker_advanced_settings from circuit_breaker_advanced module
-from selfhealing.settings.circuit_breaker_advanced import (
-    get_circuit_breaker_advanced_settings,
-)
-
-# =============================================================================
-# Backward Compatibility Aliases
-# Legacy dataclass aliases - keeping for external packages
-# =============================================================================
-
-CircuitBreakerConfig = CircuitBreakerSettings
-DLQConfig = DLQSettings
-RetryConfig = RetrySettings
-RateLimitConfig = RateLimitSettings
-SecurityConfig = SecuritySettings
-SLAConfig = SLASettings
-IdempotencyConfig = IdempotencySettings
-ForensicConfig = ForensicSettings
-LoggingConfig = LoggingSettings
-MetricsConfig = MetricsSettings
-NotificationConfig = NotificationSettings
-ErrorBudgetConfig = ErrorBudgetSettings
-GovernanceConfig = GovernanceSettings
-ChaosConfig = ChaosSettings
-DriftThresholdConfig = DriftThresholdSettings
-L2StorageConfig = L2StorageSettings
-
 __all__ = [
     # Root Settings
     "SelfHealingSettings",
-    "SelfHealingConfig",  # Legacy alias
     "get_config",
     "set_config",
     "reset_config",
@@ -203,7 +172,6 @@ __all__ = [
     "reset_circuit_breaker_settings",
     # Circuit Breaker Advanced
     "CircuitBreakerAdvancedSettings",
-    "CircuitBreakerAdvancedConfig",  # Legacy alias
     "get_circuit_breaker_advanced_settings",
     "reset_circuit_breaker_advanced_settings",
     # DLQ
@@ -273,7 +241,6 @@ __all__ = [
     "reset_l2_storage_settings",
     # Replay Automation
     "ReplayAutomationSettings",
-    "ReplayAutomationConfig",  # Legacy alias
     "get_replay_automation_settings",
     "reset_replay_automation_settings",
     # 계층형 Provider
@@ -293,21 +260,4 @@ __all__ = [
     "SecretsSettings",
     "get_secrets",
     "reset_secrets",
-    # Legacy aliases (deprecated)
-    "CircuitBreakerConfig",
-    "DLQConfig",
-    "RetryConfig",
-    "RateLimitConfig",
-    "SecurityConfig",
-    "SLAConfig",
-    "IdempotencyConfig",
-    "ForensicConfig",
-    "LoggingConfig",
-    "MetricsConfig",
-    "NotificationConfig",
-    "ErrorBudgetConfig",
-    "GovernanceConfig",
-    "ChaosConfig",
-    "DriftThresholdConfig",
-    "L2StorageConfig",
 ]

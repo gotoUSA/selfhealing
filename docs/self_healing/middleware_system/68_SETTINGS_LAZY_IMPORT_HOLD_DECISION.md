@@ -1,19 +1,21 @@
-# 68. settings/__init__.py 분석 및 보류 결정서
+# 68. settings/__init__.py Legacy Alias 제거 완료
 
 | 항목 | 내용 |
 |-----|------|
-| 버전 | 1.0 |
+| 버전 | 2.0 |
 | 작성일 | 2026-01-19 |
-| 우선순위 | 🟢 보류 |
-| 결정 | Lazy Import **적용하지 않음** |
+| 완료일 | 2026-01-19 |
+| 상태 | ✅ 완전 완료 |
+| 우선순위 | 🟢 완료 |
+| 결정 | Lazy Import **적용하지 않음**, Legacy Alias **즉시 제거** |
 
 ---
 
 ## 1. 현황 분석
 
-### 1.1 파일 현황
+### 1.1 파일 현황 (변경 전)
 
-`selfhealing/settings/__init__.py`: **314줄, 90개 심볼**
+`selfhealing/settings/__init__.py`: **314줄, 90개 심볼** → **261줄, 71개 심볼**
 
 **코드 근거:**
 ```python
@@ -118,81 +120,72 @@ from selfhealing.settings import (
 > 3. Lazy Import 오버헤드가 이점보다 클 수 있음
 > 4. 핵심 진입점이므로 안정성 우선
 
-### 3.2 대안: Legacy Alias 정리
+### 3.2 Legacy Alias 즉시 제거 (2026-01-19 완료)
 
-**현재 문제 (코드 근거):**
-```python
-# settings/__init__.py:165-181
-CircuitBreakerConfig = CircuitBreakerSettings  # Legacy alias
-DLQConfig = DLQSettings
-RetryConfig = RetrySettings
-RateLimitConfig = RateLimitSettings
-SecurityConfig = SecuritySettings
-SLAConfig = SLASettings
-IdempotencyConfig = IdempotencySettings
-ForensicConfig = ForensicSettings
-LoggingConfig = LoggingSettings
-MetricsConfig = MetricsSettings
-NotificationConfig = NotificationSettings
-ErrorBudgetConfig = ErrorBudgetSettings
-GovernanceConfig = GovernanceSettings
-ChaosConfig = ChaosSettings
-DriftThresholdConfig = DriftThresholdSettings
-L2StorageConfig = L2StorageSettings
-```
+**제거된 Legacy Alias (총 19개):**
 
-**16개의 Legacy alias가 `__all__`에 포함됨**
+| 서브모듈 | 제거된 Alias |
+|---------|-------------|
+| `settings/__init__.py` | 16개 (`CircuitBreakerConfig`, `DLQConfig`, `RetryConfig`, `RateLimitConfig`, `SecurityConfig`, `SLAConfig`, `IdempotencyConfig`, `ForensicConfig`, `LoggingConfig`, `MetricsConfig`, `NotificationConfig`, `ErrorBudgetConfig`, `GovernanceConfig`, `ChaosConfig`, `DriftThresholdConfig`, `L2StorageConfig`) |
+| `settings/root.py` | `SelfHealingConfig` |
+| `settings/circuit_breaker_advanced.py` | `CircuitBreakerAdvancedConfig` |
+| `settings/replay_automation.py` | `ReplayAutomationConfig` |
 
-### 3.3 권장 조치: Legacy Alias Deprecation
-
-```python
-# 향후 조치
-# 1. Deprecation Warning 추가
-def __getattr__(name: str):
-    _legacy_aliases = {
-        "CircuitBreakerConfig": "CircuitBreakerSettings",
-        "DLQConfig": "DLQSettings",
-        ...
-    }
-    if name in _legacy_aliases:
-        import warnings
-        new_name = _legacy_aliases[name]
-        warnings.warn(
-            f"'{name}' is deprecated. Use '{new_name}' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return globals()[new_name]
-    raise AttributeError(...)
-```
+**결정 근거:**
+- `from selfhealing.settings import *Config` 형태로 직접 import하는 코드 **0건**
+- 모든 사용처가 내부 코드 (외부 사용자 없음)
+- Deprecation 단계 불필요 → 즉시 제거
 
 ---
 
-## 4. 요약
+## 4. 구현 결과
 
-### 4.1 결정 매트릭스
+### 4.1 변경된 파일
 
-| 패키지 | Lazy Import | 이유 |
-|--------|-------------|------|
-| `views/__init__.py` | ✅ 적용 | View 로딩 지연 가능 |
-| `circuit_breaker/__init__.py` | ✅ 적용 | I/O 모듈 다수 |
-| `audit/__init__.py` | ✅ 적용 | WAL, 백엔드 등 I/O |
-| `core/__init__.py` | ⚠️ 부분 (settings 제거) | re-export 제거 |
-| **`settings/__init__.py`** | ❌ **보류** | 순수 데이터, 핵심 진입점 |
+| 파일 | 변경 내용 |
+|------|----------|
+| `settings/__init__.py` | Legacy alias 16개 제거, import 3개 정리 (314줄 → 261줄) |
+| `settings/root.py` | `SelfHealingConfig = SelfHealingSettings` 제거 |
+| `settings/circuit_breaker_advanced.py` | `CircuitBreakerAdvancedConfig = ...` 제거 |
+| `settings/replay_automation.py` | `ReplayAutomationConfig = ...` 제거 |
 
-### 4.2 향후 과제
+### 4.2 테스트 결과
 
-| 우선순위 | 작업 | 예상 시간 |
-|---------|------|----------|
-| 🟢 낮음 | Legacy alias deprecation warning 추가 | 1시간 |
-| 🟢 낮음 | v3.0.0에서 Legacy alias 제거 | - |
+| 테스트 파일 | 테스트 수 | 결과 |
+|------------|----------|------|
+| settings 단위 테스트 | 153 | ✅ PASS |
+| audit lazy import 테스트 | 29 | ✅ PASS |
+| SLA timer policy 테스트 | 20 | ✅ PASS |
+
+### 4.3 효과 측정
+
+| 지표 | Before | After | 개선율 |
+|------|--------|-------|-------|
+| settings/__init__.py 심볼 | 90개 | 71개 | -21% |
+| settings/__init__.py 코드 | 314줄 | 261줄 | -17% |
+| Legacy alias | 19개 | 0개 | -100% |
+| `__all__` 항목 | ~90개 | ~71개 | -21% |
 
 ---
 
-## 5. 참고 자료
+## 5. 요약
+
+### 5.1 결정 매트릭스
+
+| 패키지 | Lazy Import | Legacy Alias | 상태 |
+|--------|-------------|--------------|------|
+| `views/__init__.py` | ✅ 적용 | N/A | 완료 |
+| `circuit_breaker/__init__.py` | ✅ 적용 | N/A | 완료 |
+| `audit/__init__.py` | ✅ 적용 | N/A | 완료 |
+| `core/__init__.py` | ⚠️ settings 제거 | N/A | 완료 (67번) |
+| **`settings/__init__.py`** | ❌ 보류 | ✅ **즉시 제거** | ✅ 완료 |
+
+---
+
+## 6. 참고 자료
 
 | 문서 | 경로 |
 |------|------|
-| 현재 파일 | `settings/__init__.py` (314줄) |
+| 현재 파일 | `settings/__init__.py` (261줄) |
+| core re-export 제거 | `67_CORE_SETTINGS_REEXPORT_REMOVAL_PLAN.md` |
 | 패턴 효율성 분석 | `64_PATTERN_EFFICIENCY_ANALYSIS.md` |
-| Pydantic Settings 문서 | https://docs.pydantic.dev/latest/concepts/pydantic_settings/ |

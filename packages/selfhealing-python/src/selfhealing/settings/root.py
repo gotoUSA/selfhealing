@@ -277,11 +277,6 @@ def get_rate_limit_config() -> RateLimitSettings:
     return get_config().rate_limit
 
 
-# =============================================================================
-# Legacy aliases for backward compatibility
-# =============================================================================
-SelfHealingConfig = SelfHealingSettings
-
 # Legacy function aliases
 get_dlq_settings = get_dlq_config
 get_retry_settings = get_retry_config
