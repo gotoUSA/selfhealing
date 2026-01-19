@@ -183,7 +183,7 @@ from .security import (
 )
 
 # --- Backward Compatibility - Security Notification ---
-from .security_notification_service import (
+from .security_notification import (
     SecurityNotificationService,
     SecurityNotificationResult,
     NotificationConfig,
