@@ -1,10 +1,10 @@
 # 분산 해시 체인 강화 설계서 (Enhanced Implementation)
 
-> **Version**: 1.9.0  
+> **Version**: 2.0.0  
 > **Created**: 2026-01-17  
-> **Updated**: 2026-01-18 (Phase 1, 2, 3, 4, 5 구현 완료)  
+> **Updated**: 2026-01-19 (Phase 1, 2, 3, 4, 5, 6 구현 완료)  
 > **Category**: Audit/무결성 보장  
-> **구현 상태**: ✅ Phase 1 구현 완료, ✅ Phase 2 구현 완료, ✅ Phase 3 구현 완료, ✅ Phase 4 구현 완료, ✅ Phase 5 구현 완료  
+> **구현 상태**: ✅ Phase 1 구현 완료, ✅ Phase 2 구현 완료, ✅ Phase 3 구현 완료, ✅ Phase 4 구현 완료, ✅ Phase 5 구현 완료, ✅ Phase 6 구현 완료  
 > **선행 문서**: [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md)  
 > **근거 코드**: 실제 소스 코드 분석 기반
 
@@ -59,6 +59,26 @@
     - [14.5 GracefulDegradationManager](#145-gracefuldegradationmanager)
     - [14.6 Self-Healing 통합](#146-self-healing-통합)
     - [14.7 복구 우선순위](#147-복구-우선순위)
+15. [Cold Storage 앵커 아카이브 (Phase 6.1)](#15-cold-storage-앵커-아카이브-phase-61)
+    - [15.1 배경 및 필요성](#151-배경-및-필요성)
+    - [15.2 설계: AnchorColdStorage](#152-설계-anchorcoldSstorage)
+    - [15.3 아카이브 흐름](#153-아카이브-흐름)
+    - [15.4 Celery Beat 통합](#154-celery-beat-통합)
+    - [15.5 환경 변수](#155-환경-변수)
+    - [15.6 무결성 검증](#156-무결성-검증)
+    - [15.7 검색 API](#157-검색-api)
+    - [15.8 테스트](#158-테스트)
+16. [무결성 건강 지수 (Integrity Health Score) (Phase 6.2)](#16-무결성-건강-지수-integrity-health-score-phase-62)
+    - [16.1 목적](#161-목적)
+    - [16.2 설계: IntegrityHealthScore](#162-설계-integrityhealthscore)
+    - [16.3 Prometheus 지표](#163-prometheus-지표)
+    - [16.4 Dashboard Summary API](#164-dashboard-summary-api)
+    - [16.5 Reconciler/Watchdog 연동](#165-reconcilerwatchdog-연동)
+    - [16.6 상태 메시지 생성](#166-상태-메시지-생성)
+    - [16.7 Self-Audit Trail 통합](#167-self-audit-trail-통합)
+    - [16.8 테스트](#168-테스트)
+    - [16.9 가치](#169-가치)
+17. [Phase 6 요약](#17-phase-6-요약)
 
 ---
 
@@ -3556,3 +3576,384 @@ class IntegrityCircuitBreaker:
 - [adapters/resilient/backend.py](../../../packages/selfhealing-python/src/selfhealing/adapters/resilient/backend.py) - 복구 패턴
 - [metrics/reconciler.py](../../../packages/selfhealing-python/src/selfhealing/metrics/reconciler.py) - Reconciler 패턴
 - [adapters/django/apps.py](../../../packages/selfhealing-python/src/selfhealing/adapters/django/apps.py) - Startup Hydration 패턴
+
+---
+
+## 15. Cold Storage 앵커 아카이브 (Phase 6.1)
+
+> **Version**: 2.0.0  
+> **Updated**: 2026-01-19  
+> **상태**: ✅ 구현 완료
+
+### 15.1 배경 및 필요성
+
+**문제점:**
+- Redis 앵커 TTL: 90일 후 자동 삭제
+- 법적/금융 감사: 5-7년 데이터 보관 필요 (SOC2, HIPAA, PCI-DSS)
+- 90일치 앵커로는 1년 전 로그 무결성 증명 불가
+
+**업계 표준:**
+| 규정 | 요구 보관 기간 |
+|------|---------------|
+| SOC2 | 7년 |
+| HIPAA | 6년 이상 |
+| PCI-DSS | 1년 + 3개월 즉시 접근, 7년 아카이브 |
+| GDPR | 목적에 따라 다름, 감사 추적 5년+ |
+
+### 15.2 설계: AnchorColdStorage
+
+**파일 위치**: `packages/selfhealing-python/src/selfhealing/audit/integrity/cold_storage.py`
+
+```python
+class AnchorColdStorage:
+    """
+    Manages archival of expired anchors to cold storage.
+    
+    Archive Strategy:
+        - Archive anchors when TTL < 7 days remaining
+        - Store in monthly gzip-compressed JSONL files
+        - Include SHA256 checksums for integrity
+        - Support retrieval for historical audits
+    
+    Directory Structure:
+        {base_dir}/cold_storage/anchors/
+            2026/
+                01/
+                    anchors_2026-01.jsonl.gz
+                    anchors_2026-01.jsonl.gz.sha256
+    """
+    
+    ARCHIVE_THRESHOLD_DAYS = 7   # TTL < 7일이면 아카이브
+    DEFAULT_COLD_RETENTION_YEARS = 7  # 7년 보관
+```
+
+### 15.3 아카이브 흐름
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        앵커 아카이브 흐름                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Day 1-83: Redis 앵커 (TTL 90일)                                      │
+│        ↓                                                              │
+│  Day 84+: TTL < 7일 감지                                              │
+│        ↓                                                              │
+│  archive_expiring_anchors() 호출 (Celery Beat)                        │
+│        ↓                                                              │
+│  ┌─────────────────────────────────────────┐                         │
+│  │  Cold Storage 저장                       │                         │
+│  │  - JSONL 라인 추가                       │                         │
+│  │  - gzip 압축                             │                         │
+│  │  - SHA256 체크섬 생성                    │                         │
+│  └─────────────────────────────────────────┘                         │
+│        ↓                                                              │
+│  Day 90: Redis TTL 만료 (자연 삭제)                                   │
+│        ↓                                                              │
+│  Year 1-7: Cold Storage에서 검색 가능                                 │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 15.4 Celery Beat 통합
+
+```python
+# celery_tasks/audit_tasks.py
+
+from celery import shared_task
+
+@shared_task(name="selfhealing.tasks.archive_expiring_anchors")
+def archive_expiring_anchors_task() -> Dict[str, Any]:
+    """Archive anchors that are close to expiration."""
+    from selfhealing.audit.integrity.cold_storage import AnchorColdStorage
+    from selfhealing.adapters.cache.factory import get_redis_client
+    
+    redis = get_redis_client()
+    cold_storage = AnchorColdStorage(redis_client=redis)
+    
+    result = cold_storage.archive_expiring_anchors()
+    return {
+        "archived_count": result.archived_count,
+        "failed_count": result.failed_count,
+        "archived_dates": result.archived_dates,
+    }
+
+
+# Celery Beat 스케줄
+CELERY_BEAT_SCHEDULE = {
+    "archive-expiring-anchors": {
+        "task": "selfhealing.tasks.archive_expiring_anchors",
+        "schedule": crontab(hour=2, minute=0),  # 매일 새벽 2시
+    },
+}
+```
+
+### 15.5 환경 변수
+
+```bash
+# Cold Storage 기본 디렉토리
+SELFHEALING_DATA_DIR=/var/lib/selfhealing
+
+# 아카이브 임계값 (TTL이 이 일수 미만이면 아카이브)
+SELFHEALING_COLD_STORAGE_THRESHOLD_DAYS=7
+
+# Cold Storage 보관 기간 (년)
+SELFHEALING_COLD_STORAGE_RETENTION_YEARS=7
+```
+
+### 15.6 무결성 검증
+
+```python
+# 아카이브 무결성 확인
+storage = LocalFileColdStorage(base_dir=Path("/var/lib/selfhealing"))
+
+# 2026년 1월 아카이브 검증
+is_valid = storage.verify_integrity(2026, 1)
+if not is_valid:
+    logger.error("Archive tampered: 2026-01")
+```
+
+### 15.7 검색 API
+
+```python
+# 과거 앵커 검색 (Redis 만료 후)
+cold_storage = AnchorColdStorage(redis_client=redis)
+
+# 1년 전 앵커 검색
+anchor = cold_storage.retrieve_archived_anchor("2025-01-15")
+if anchor:
+    print(f"Found anchor: seq={anchor['sequence']}, hash={anchor['hash'][:16]}...")
+```
+
+### 15.8 테스트
+
+**파일**: `tests/self_healing/unit/audit/test_phase6_cold_storage_health_score.py`
+
+```
+TestLocalFileColdStorage: 7 tests ✅
+TestAnchorColdStorage: 6 tests ✅
+```
+
+---
+
+## 16. 무결성 건강 지수 (Integrity Health Score) (Phase 6.2)
+
+> **Version**: 2.0.0  
+> **Updated**: 2026-01-19  
+> **상태**: ✅ 구현 완료
+
+### 16.1 목적
+
+**시스템 지능의 시각화:**
+> "우리 시스템은 현재 100% 무결하며, 오늘 3건의 잠재적 체인 단절을 자동으로 복구했습니다."
+
+**SRE Golden Signals 연동:**
+- Latency: 복구 소요 시간
+- Errors: degraded/orphaned 시퀀스 수
+- Saturation: 체인 길이 대비 검증 완료율
+
+### 16.2 설계: IntegrityHealthScore
+
+**파일 위치**: `packages/selfhealing-python/src/selfhealing/audit/integrity/health_score.py`
+
+```python
+class IntegrityHealthScore:
+    """
+    Real-time integrity health monitoring.
+    
+    Aggregates data from:
+    - HashChainReconciler (degraded entry recovery)
+    - StartupHashChainSync (startup sync events)
+    - PendingSequenceManager (orphaned sequence cleanup)
+    - DailyHashAnchor (anchor verification)
+    
+    Exposes metrics as:
+    - Prometheus Gauges for real-time monitoring
+    - JSON API for dashboard integration
+    - Self-audit trail for compliance
+    """
+    
+    # Health score thresholds
+    HEALTHY_THRESHOLD = 95.0    # >= 95%: HEALTHY
+    WARNING_THRESHOLD = 80.0    # 80-95%: WARNING
+    CRITICAL_THRESHOLD = 50.0   # < 50%: CRITICAL
+```
+
+### 16.3 Prometheus 지표
+
+```python
+# Prometheus Gauge 이름
+GAUGE_HEALTH_SCORE = "selfhealing_integrity_health_score"      # 0-100
+GAUGE_DEGRADED_COUNT = "selfhealing_integrity_degraded_count"   # 현재 degraded 수
+GAUGE_ORPHANED_COUNT = "selfhealing_integrity_orphaned_count"   # 현재 orphaned 수
+GAUGE_RECOVERIES_TODAY = "selfhealing_integrity_recoveries_today"  # 오늘 복구 횟수
+```
+
+**Grafana 대시보드 쿼리 예시:**
+
+```promql
+# Health Score 패널
+selfhealing_integrity_health_score
+
+# 오늘 자동 복구 횟수
+selfhealing_integrity_recoveries_today
+
+# 시간당 복구 비율
+rate(selfhealing_integrity_recoveries_total[1h])
+```
+
+### 16.4 Dashboard Summary API
+
+```python
+health = get_integrity_health_score(redis_client=redis)
+summary = health.get_dashboard_summary()
+```
+
+**응답 예시:**
+
+```json
+{
+  "status": "HEALTHY",
+  "health_score": 100.0,
+  "is_healthy": true,
+  "summary": {
+    "chain_length": 1000000,
+    "verified_sequences": 1000000,
+    "degraded_sequences": 0,
+    "orphaned_sequences": 0
+  },
+  "recovery": {
+    "recoveries_today": 3,
+    "sequences_recovered": 15,
+    "avg_recovery_time_ms": 150.5,
+    "last_recovery_at": "2026-01-19T07:00:00Z"
+  },
+  "streaks": {
+    "days_since_last_break": 30
+  },
+  "message": "Integrity: 100% - All sequences verified | Today: 3 auto-recoveries",
+  "calculated_at": "2026-01-19T08:00:00Z"
+}
+```
+
+### 16.5 Reconciler/Watchdog 연동
+
+```python
+# HashChainReconciler 연동
+class HashChainReconciler:
+    def reconcile(self) -> Dict[str, Any]:
+        start_time = time.monotonic()
+        
+        # ... 복구 로직 ...
+        
+        # Health Score 업데이트
+        from selfhealing.audit.integrity.health_score import get_integrity_health_score
+        
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+        health_score = get_integrity_health_score()
+        health_score.record_recovery(
+            event_type="reconcile",
+            sequences_affected=result["entries_merged"],
+            recovery_time_ms=elapsed_ms,
+            details=result,
+        )
+        
+        return result
+```
+
+### 16.6 상태 메시지 생성
+
+```python
+def _generate_status_message(self, metrics: IntegrityHealthMetrics) -> str:
+    if metrics.health_score >= 100:
+        base = "Integrity: 100% - All sequences verified"
+    elif metrics.health_score >= self.HEALTHY_THRESHOLD:
+        base = f"Integrity: {metrics.health_score:.1f}% - Healthy"
+    elif metrics.health_score >= self.WARNING_THRESHOLD:
+        base = f"Integrity: {metrics.health_score:.1f}% - Warning: {metrics.degraded_sequences} degraded"
+    else:
+        base = f"Integrity: {metrics.health_score:.1f}% - Critical: Immediate attention required"
+    
+    if metrics.recoveries_today > 0:
+        base += f" | Today: {metrics.recoveries_today} auto-recoveries"
+    
+    return base
+```
+
+### 16.7 Self-Audit Trail 통합
+
+모든 복구 이벤트는 Self-Audit에 기록됨:
+
+```python
+self_audit().log(
+    SelfAuditEvent.RECOVERY_COMPLETED,
+    f"Integrity recovery: {event.event_type} ({event.sequences_affected} sequences)",
+    {
+        "action": "integrity_recovery",
+        "event_type": event.event_type,
+        "sequences_affected": event.sequences_affected,
+        "recovery_time_ms": event.recovery_time_ms,
+    }
+)
+```
+
+### 16.8 테스트
+
+**파일**: `tests/self_healing/unit/audit/test_phase6_cold_storage_health_score.py`
+
+```
+TestIntegrityHealthScore: 12 tests ✅
+TestIntegrityHealthScoreSingleton: 2 tests ✅
+TestIntegrityHealthMetrics: 1 test ✅
+TestColdStorageIntegration: 1 test ✅
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total Phase 6: 30 tests passed ✅
+```
+
+### 16.9 가치
+
+```
+"우리 시스템은 Redis가 장애나도,
+ 로컬 Fallback으로 로그를 계속 수집하고,
+ 복구 시 자동으로 체인에 병합하며,
+ 그 모든 과정이 Self-Audit Trail로
+ 영구적으로 기록되어 있습니다.
+ 
+ 현재 무결성: 100%
+ 오늘 자동 복구: 3건
+ 마지막 체인 단절 이후: 30일"
+ 
+→ 감사/컴플라이언스 증거로 활용 가능
+→ 시스템의 지능이 눈에 보이게 됨
+```
+
+---
+
+## 17. Phase 6 요약
+
+| 구성요소 | 파일 | 기능 |
+|---------|-----|------|
+| `AnchorColdStorage` | `cold_storage.py` | 만료 앵커 Cold Storage 아카이브 |
+| `LocalFileColdStorage` | `cold_storage.py` | 로컬 파일 시스템 백엔드 |
+| `IntegrityHealthScore` | `health_score.py` | 실시간 무결성 건강 지수 |
+| `IntegrityHealthMetrics` | `health_score.py` | Prometheus 지표 데이터 클래스 |
+
+### 17.1 재사용 패턴
+
+| 신규 컴포넌트 | 기존 패턴 | 파일 위치 |
+|-------------|----------|----------|
+| `AnchorColdStorage` | `ArchiveTask` | `tasks/base.py#L66` |
+| `LocalFileColdStorage` | `WALEntry` JSONL 저장 | `audit/wal.py` |
+| `IntegrityHealthScore` | `MetricReconciler.SyncResult` | `metrics/reconciler.py#L45` |
+| Prometheus Gauges | `safe_gauge.py` | `metrics/safe_gauge.py` |
+
+---
+
+## 참고 문서
+
+- [42_DISTRIBUTED_HASH_CHAIN_REDIS.md](./42_DISTRIBUTED_HASH_CHAIN_REDIS.md) - 기본 구현
+- [05_RESILIENT_STORAGE_BACKEND.md](./05_RESILIENT_STORAGE_BACKEND.md) - WAL-First 원칙
+- [adapters/resilient/backend.py](../../../packages/selfhealing-python/src/selfhealing/adapters/resilient/backend.py) - 복구 패턴
+- [metrics/reconciler.py](../../../packages/selfhealing-python/src/selfhealing/metrics/reconciler.py) - Reconciler 패턴
+- [adapters/django/apps.py](../../../packages/selfhealing-python/src/selfhealing/adapters/django/apps.py) - Startup Hydration 패턴
+- [audit/integrity/cold_storage.py](../../../packages/selfhealing-python/src/selfhealing/audit/integrity/cold_storage.py) - Cold Storage 구현
+- [audit/integrity/health_score.py](../../../packages/selfhealing-python/src/selfhealing/audit/integrity/health_score.py) - Health Score 구현

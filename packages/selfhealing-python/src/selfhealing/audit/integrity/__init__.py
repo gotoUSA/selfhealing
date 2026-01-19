@@ -59,6 +59,22 @@ from selfhealing.audit.integrity.reconciler import (
     HashChainReconciler,
 )
 
+# Cold Storage (Phase 6)
+from selfhealing.audit.integrity.cold_storage import (
+    AnchorColdStorage,
+    LocalFileColdStorage,
+    ArchiveResult,
+)
+
+# Health Score (Phase 6)
+from selfhealing.audit.integrity.health_score import (
+    IntegrityHealthScore,
+    IntegrityHealthMetrics,
+    RecoveryEvent,
+    get_integrity_health_score,
+    reset_integrity_health_score,
+)
+
 
 __all__ = [
     # Models
@@ -82,4 +98,14 @@ __all__ = [
     "StartupHashChainSync",
     # Reconciler
     "HashChainReconciler",
+    # Cold Storage
+    "AnchorColdStorage",
+    "LocalFileColdStorage",
+    "ArchiveResult",
+    # Health Score
+    "IntegrityHealthScore",
+    "IntegrityHealthMetrics",
+    "RecoveryEvent",
+    "get_integrity_health_score",
+    "reset_integrity_health_score",
 ]
