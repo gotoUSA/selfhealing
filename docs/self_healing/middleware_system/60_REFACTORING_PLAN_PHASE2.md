@@ -253,7 +253,8 @@ __all__ = [
 | 버전 | 날짜 | 변경 내용 |
 |-----|-----|---------|
 | 1.0 | 2026-01-19 | 초안 작성 |
-| 1.1 | 2026-01-20 | Phase 2-A 완료 - 4개 파일 리팩토링 |
+| 1.1 | 2026-01-19 | Phase 2-A 완료 - 4개 파일 리팩토링 |
+| 1.2 | 2026-01-19 | __init__.py Lazy Import 패턴 적용 - 모듈 분리 의미 극대화 |
 
 ---
 
@@ -271,9 +272,9 @@ __all__ = [
 - `performance/sampling.py` - SamplingConfig, SamplingVerifier (~185줄)
 - `performance/watchdog.py` - PendingSequenceWatchdog (~165줄)
 - `performance/manager.py` - HashChainPerformanceManager (~140줄)
-- `performance/__init__.py` - 모든 심볼 re-export
+- `performance/__init__.py` - **Lazy Import 패턴** (핵심 API만 직접 import)
 
-**하위 호환성:** 기존 import 경로 100% 유지
+**하위 호환성:** 기존 import 경로 100% 유지 (Lazy Import로 on-demand 로딩)
 
 #### ✅ api/django/views/chaos.py → chaos/ 패키지
 
@@ -282,9 +283,9 @@ __all__ = [
 - `views/chaos/schedule_views.py` - ScheduleListView, ScheduleDetailView, ScheduleApprovalView, ScheduleExecuteView, PendingApprovalsView
 - `views/chaos/safety_views.py` - KillSwitchView, SafetyCheckView, BlastRadiusCheckView, StopConditionsConfigView, TTLConfigView, DryRunConfigView, KillAllView
 - `views/chaos/report_views.py` - ReportListView, ReportDetailView, ReportGenerateView, GradeHistoryView, DryRunAnalysisView
-- `views/chaos/__init__.py` - 모든 View 클래스 re-export
+- `views/chaos/__init__.py` - **Lazy Import 패턴** (모든 View on-demand 로딩)
 
-**하위 호환성:** 기존 import 경로 100% 유지
+**하위 호환성:** 기존 import 경로 100% 유지 (Lazy Import로 on-demand 로딩)
 
 #### ✅ api/django/serializers/config.py (기존 패키지 존재)
 
@@ -302,6 +303,44 @@ __all__ = [
 - **Import 테스트:** 모든 리팩토링된 모듈 import 성공
 - **Django 환경 테스트:** `manage.py shell`에서 모든 View/클래스 로딩 확인
 - **기존 테스트 상태:** Phase 2-A와 무관한 기존 테스트 실패 존재 (test_pool_circuit_breaker_v620.py 관련)
+
+### 8.3 Lazy Import 패턴 적용 (v1.2)
+
+**문제점:**
+- `__init__.py`에서 모든 심볼을 직접 re-export하면 파일 분리의 의미가 희석됨
+- 모듈 초기화 시 모든 서브모듈이 로딩되어 startup 비용 증가
+
+**해결책: Python 3.7+ `__getattr__` 기반 Lazy Import**
+
+```python
+# performance/__init__.py 예시
+from selfhealing.audit.performance.manager import HashChainPerformanceManager  # 핵심 API만 직접 import
+
+_LAZY_IMPORTS = {
+    "LuaAtomicHashChain": ("selfhealing.audit.performance.lua_atomic", "LuaAtomicHashChain"),
+    # ... 나머지 심볼들
+}
+
+def __getattr__(name: str):
+    if name in _LAZY_IMPORTS:
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, attr_name)
+    raise AttributeError(...)
+```
+
+**장점:**
+- 핵심 API (`HashChainPerformanceManager`)만 즉시 로딩
+- 나머지는 실제 사용 시점에 on-demand 로딩
+- IDE 타입 힌트 지원 (`TYPE_CHECKING` 블록)
+- 기존 import 경로 100% 호환
+- 레거시 파일에 `DeprecationWarning` 추가로 마이그레이션 유도
+
+**적용 파일:**
+- `selfhealing/audit/performance/__init__.py`
+- `selfhealing/api/django/views/chaos/__init__.py`
+- `selfhealing/audit/hash_chain_performance.py` (레거시, DeprecationWarning 포함)
 
 ---
 
