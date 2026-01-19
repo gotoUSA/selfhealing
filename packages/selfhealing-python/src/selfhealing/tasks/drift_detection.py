@@ -283,7 +283,7 @@ class SLADriftDetector:
 
     def _send_drift_notifications(self, warnings: list[dict]) -> None:
         """Send notifications for SLA drift warnings."""
-        from selfhealing.services.security_notification_service import (
+        from selfhealing.services.security_notification import (
             get_security_notification_service,
         )
 

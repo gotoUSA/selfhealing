@@ -96,13 +96,13 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     SEVERITY_BY_VIOLATION_TYPE → from selfhealing.services.security import SEVERITY_BY_VIOLATION_TYPE
     get_security_violation_service → from selfhealing.services.security import get_security_violation_service
     handle_security_violation → from selfhealing.services.security import handle_security_violation
-    SecurityNotificationService → from selfhealing.services.security_notification_service import SecurityNotificationService
-    SecurityNotificationResult → from selfhealing.services.security_notification_service import SecurityNotificationResult
-    NotificationResult   → from selfhealing.services.security_notification_service import NotificationResult
-    NotificationConfig   → from selfhealing.services.security_notification_service import NotificationConfig
-    NotificationChannel  → from selfhealing.services.security_notification_service import NotificationChannel
-    get_security_notification_service → from selfhealing.services.security_notification_service import get_security_notification_service
-    notify_security_incident → from selfhealing.services.security_notification_service import notify_security_incident
+    SecurityNotificationService → from selfhealing.services.security_notification import SecurityNotificationService
+    SecurityNotificationResult → from selfhealing.services.security_notification import SecurityNotificationResult
+    NotificationResult   → from selfhealing.services.security_notification import NotificationResult
+    NotificationConfig   → from selfhealing.services.security_notification import NotificationConfig
+    NotificationChannel  → from selfhealing.services.security_notification import NotificationChannel
+    get_security_notification_service → from selfhealing.services.security_notification import get_security_notification_service
+    notify_security_incident → from selfhealing.services.security_notification import notify_security_incident
 
     # DLQ 상세 (→ dlq_service.py)
     DLQConfig            → from selfhealing.services.dlq_service import DLQConfig

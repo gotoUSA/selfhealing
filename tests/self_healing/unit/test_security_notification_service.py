@@ -624,7 +624,7 @@ class TestExternalAPIFailures:
         incident.description = "Test"
 
         with patch(
-            "selfhealing.services.security_notification_service.requests.post",
+            "selfhealing.services.security_notification.pagerduty_handler.requests.post",
             side_effect=TimeoutError("Connection timed out"),
         ):
             result = service._trigger_pagerduty(incident)
@@ -650,7 +650,7 @@ class TestExternalAPIFailures:
         incident.description = "Test"
 
         with patch(
-            "selfhealing.services.security_notification_service.requests.post",
+            "selfhealing.services.security_notification.pagerduty_handler.requests.post",
             side_effect=ConnectionError("Connection refused"),
         ):
             result = service._trigger_pagerduty(incident)
@@ -915,7 +915,7 @@ class TestHelperFunctions:
             Verify get_security_notification_service returns same instance.
         """
         # Reset singleton
-        import selfhealing.services.security_notification_service as svc_module
+        import selfhealing.services.security_notification as svc_module
 
         svc_module._notification_service = None
 
@@ -931,7 +931,7 @@ class TestHelperFunctions:
             Verify convenience function works correctly.
         """
         # Reset singleton with dry run config
-        import selfhealing.services.security_notification_service as svc_module
+        import selfhealing.services.security_notification as svc_module
 
         svc_module._notification_service = SecurityNotificationService(config=NotificationConfig(enabled=True, dry_run=True))
 

@@ -263,7 +263,7 @@ class BaseNotifyingTask:
     def _send_notification(self, result: Dict[str, Any]) -> None:
         """Send notification via SecurityNotificationService."""
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 
@@ -296,7 +296,7 @@ class BaseNotifyingTask:
     def _send_pre_notification(self, *args: Any, **kwargs: Any) -> None:
         """Send pre-execution notification for high-risk tasks."""
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 
@@ -330,7 +330,7 @@ class BaseNotifyingTask:
 
         # Send approval request notification
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 

@@ -540,7 +540,7 @@ class TestIntegrationScenarios:
         """테스트 전 초기화."""
         reset_cooldowns()
 
-    @patch("selfhealing.services.security_notification_service.get_security_notification_service")
+    @patch("selfhealing.services.security_notification.get_security_notification_service")
     @patch("selfhealing.audit.get_audit_logger")
     def test_full_task_execution_flow(self, mock_audit, mock_notify):
         """전체 태스크 실행 흐름."""

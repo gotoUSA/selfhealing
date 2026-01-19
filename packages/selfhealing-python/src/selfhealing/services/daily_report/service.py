@@ -161,7 +161,7 @@ class DailyReportService:
     ) -> None:
         """Send report to Slack."""
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 
@@ -185,7 +185,7 @@ class DailyReportService:
     ) -> None:
         """Send report via email."""
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 

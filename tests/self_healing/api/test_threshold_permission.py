@@ -370,7 +370,7 @@ class TestDualApprovalRequired:
     def test_notification_sent_when_dual_approval_required(self):
         """Notification should be sent when dual approval is required."""
         with patch("selfhealing.api.django.permissions.logger"):
-            with patch("selfhealing.services.security_notification_service.SecurityNotificationService") as mock_service_class:
+            with patch("selfhealing.services.security_notification.SecurityNotificationService") as mock_service_class:
                 mock_service = MagicMock()
                 mock_service.config.enabled = True
                 mock_service_class.return_value = mock_service

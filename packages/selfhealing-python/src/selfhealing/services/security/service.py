@@ -451,7 +451,7 @@ class SecurityViolationService:
     ) -> None:
         """Send security notification for the incident."""
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 get_security_notification_service,
             )
 

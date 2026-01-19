@@ -519,7 +519,7 @@ class ThresholdBasedPermission(BasePermission):
             request: HTTP 요청 객체
         """
         try:
-            from selfhealing.services.security_notification_service import (
+            from selfhealing.services.security_notification import (
                 SecurityNotificationService,
             )
 
