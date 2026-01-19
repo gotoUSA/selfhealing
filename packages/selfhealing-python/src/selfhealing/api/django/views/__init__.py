@@ -3,168 +3,360 @@ Self-Healing API Views Package.
 
 This package provides REST API endpoints for the Self-Healing system.
 
+Performance Optimization:
+    All views are lazy-loaded to minimize Django app startup time.
+    Views are loaded on-demand when first accessed.
+
+Usage:
+    # Recommended: Import from specific submodules for best performance
+    from selfhealing.api.django.views.circuit_breaker import ControlActionView
+    from selfhealing.api.django.views.health import SelfHealingHealthView
+
+    # Legacy: Still works via lazy import (backward compatible)
+    from selfhealing.api.django.views import ControlActionView
+
 Modules:
 - circuit_breaker: Control API views for Circuit Breaker management
 - dlq: DLQ (Dead Letter Queue) management views
 - health: Health check and metrics views
+- system_control: Kill switch and system control views
+- config: Runtime configuration views
+- drift_threshold: Drift threshold configuration views
+- error_budget: Error budget and deployment policy views
+- config_history: Configuration history views
+- chaos: Chaos Engineering views (already lazy)
+- governance: Governance API views
+- xtest_mode: X-Test-Mode views
+- auto_tuning: Auto tuning views
 """
 
-# Circuit Breaker Control Views
-from selfhealing.api.django.views.circuit_breaker import (
-    ControlRequest,
-    ControlResponse,
-    ControlAPIService,
-    get_control_api_service,
-    ControlActionView,
-    ControlStatusView,
-    ServiceStatusView,
-    ControlAuditView,
-    QuickAllowView,
-    QuickBlockView,
-    QuickResetView,
-)
+from __future__ import annotations
 
-# DLQ Views
-from selfhealing.api.django.views.dlq import (
-    DLQReplayView,
-    DLQCleanupStatsView,
-    DLQArchiveView,
-    DLQPurgeView,
-    DLQListView,
-    DLQDetailView,
-    DLQRetryView,
-    DLQResolveView,
-)
+from typing import TYPE_CHECKING
 
-# Dashboard Views
-from selfhealing.api.django.views.dashboard import (
-    DashboardSummaryView,
-)
+# =============================================================================
+# LAZY IMPORTS - All views loaded on-demand for faster startup
+# =============================================================================
 
-# Health & Metrics Views
-from selfhealing.api.django.views.health import (
-    SelfHealingHealthView,
-    LivenessView,
-    ReadinessView,
-    ConnectionPoolHealthView,
-    simple_health_ping,
-    SelfHealingMetricsView,
-)
+# Mapping of symbol names to their module paths
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    # -------------------------------------------------------------------------
+    # circuit_breaker.py (11 symbols)
+    # -------------------------------------------------------------------------
+    "ControlRequest": ("selfhealing.api.django.views.circuit_breaker", "ControlRequest"),
+    "ControlResponse": ("selfhealing.api.django.views.circuit_breaker", "ControlResponse"),
+    "ControlAPIService": ("selfhealing.api.django.views.circuit_breaker", "ControlAPIService"),
+    "get_control_api_service": ("selfhealing.api.django.views.circuit_breaker", "get_control_api_service"),
+    "ControlActionView": ("selfhealing.api.django.views.circuit_breaker", "ControlActionView"),
+    "ControlStatusView": ("selfhealing.api.django.views.circuit_breaker", "ControlStatusView"),
+    "ServiceStatusView": ("selfhealing.api.django.views.circuit_breaker", "ServiceStatusView"),
+    "ControlAuditView": ("selfhealing.api.django.views.circuit_breaker", "ControlAuditView"),
+    "QuickAllowView": ("selfhealing.api.django.views.circuit_breaker", "QuickAllowView"),
+    "QuickBlockView": ("selfhealing.api.django.views.circuit_breaker", "QuickBlockView"),
+    "QuickResetView": ("selfhealing.api.django.views.circuit_breaker", "QuickResetView"),
+    # -------------------------------------------------------------------------
+    # dlq.py (8 symbols)
+    # -------------------------------------------------------------------------
+    "DLQReplayView": ("selfhealing.api.django.views.dlq", "DLQReplayView"),
+    "DLQCleanupStatsView": ("selfhealing.api.django.views.dlq", "DLQCleanupStatsView"),
+    "DLQArchiveView": ("selfhealing.api.django.views.dlq", "DLQArchiveView"),
+    "DLQPurgeView": ("selfhealing.api.django.views.dlq", "DLQPurgeView"),
+    "DLQListView": ("selfhealing.api.django.views.dlq", "DLQListView"),
+    "DLQDetailView": ("selfhealing.api.django.views.dlq", "DLQDetailView"),
+    "DLQRetryView": ("selfhealing.api.django.views.dlq", "DLQRetryView"),
+    "DLQResolveView": ("selfhealing.api.django.views.dlq", "DLQResolveView"),
+    # -------------------------------------------------------------------------
+    # dashboard.py (1 symbol)
+    # -------------------------------------------------------------------------
+    "DashboardSummaryView": ("selfhealing.api.django.views.dashboard", "DashboardSummaryView"),
+    # -------------------------------------------------------------------------
+    # health.py (6 symbols)
+    # -------------------------------------------------------------------------
+    "SelfHealingHealthView": ("selfhealing.api.django.views.health", "SelfHealingHealthView"),
+    "LivenessView": ("selfhealing.api.django.views.health", "LivenessView"),
+    "ReadinessView": ("selfhealing.api.django.views.health", "ReadinessView"),
+    "ConnectionPoolHealthView": ("selfhealing.api.django.views.health", "ConnectionPoolHealthView"),
+    "simple_health_ping": ("selfhealing.api.django.views.health", "simple_health_ping"),
+    "SelfHealingMetricsView": ("selfhealing.api.django.views.health", "SelfHealingMetricsView"),
+    # -------------------------------------------------------------------------
+    # system_control.py (9 symbols)
+    # -------------------------------------------------------------------------
+    "SystemStatusView": ("selfhealing.api.django.views.system_control", "SystemStatusView"),
+    "SystemEnableView": ("selfhealing.api.django.views.system_control", "SystemEnableView"),
+    "SystemDisableView": ("selfhealing.api.django.views.system_control", "SystemDisableView"),
+    "DryRunEnableView": ("selfhealing.api.django.views.system_control", "DryRunEnableView"),
+    "DryRunDisableView": ("selfhealing.api.django.views.system_control", "DryRunDisableView"),
+    "is_selfhealing_enabled": ("selfhealing.api.django.views.system_control", "is_selfhealing_enabled"),
+    "is_dry_run": ("selfhealing.api.django.views.system_control", "is_dry_run"),
+    "should_execute_action": ("selfhealing.api.django.views.system_control", "should_execute_action"),
+    "get_system_control": ("selfhealing.api.django.views.system_control", "get_system_control"),
+    # -------------------------------------------------------------------------
+    # config.py (14 symbols)
+    # -------------------------------------------------------------------------
+    "AllConfigView": ("selfhealing.api.django.views.config", "AllConfigView"),
+    "ResetConfigView": ("selfhealing.api.django.views.config", "ResetConfigView"),
+    "PendingChangesView": ("selfhealing.api.django.views.config", "PendingChangesView"),
+    "CancelPendingChangeView": ("selfhealing.api.django.views.config", "CancelPendingChangeView"),
+    "CircuitBreakerConfigView": ("selfhealing.api.django.views.config", "CircuitBreakerConfigView"),
+    "DLQConfigView": ("selfhealing.api.django.views.config", "DLQConfigView"),
+    "RetryConfigView": ("selfhealing.api.django.views.config", "RetryConfigView"),
+    "SLAConfigView": ("selfhealing.api.django.views.config", "SLAConfigView"),
+    "RateLimitConfigView": ("selfhealing.api.django.views.config", "RateLimitConfigView"),
+    "SecurityConfigView": ("selfhealing.api.django.views.config", "SecurityConfigView"),
+    "IdempotencyConfigView": ("selfhealing.api.django.views.config", "IdempotencyConfigView"),
+    "NotificationConfigView": ("selfhealing.api.django.views.config", "NotificationConfigView"),
+    "ForensicConfigView": ("selfhealing.api.django.views.config", "ForensicConfigView"),
+    "MetricsConfigView": ("selfhealing.api.django.views.config", "MetricsConfigView"),
+    # -------------------------------------------------------------------------
+    # drift_threshold.py (2 symbols)
+    # -------------------------------------------------------------------------
+    "DriftThresholdConfigView": ("selfhealing.api.django.views.drift_threshold", "DriftThresholdConfigView"),
+    "DriftThresholdResetView": ("selfhealing.api.django.views.drift_threshold", "DriftThresholdResetView"),
+    # -------------------------------------------------------------------------
+    # error_budget.py (7 symbols)
+    # -------------------------------------------------------------------------
+    "ErrorBudgetStatusView": ("selfhealing.api.django.views.error_budget", "ErrorBudgetStatusView"),
+    "ErrorBudgetHistoryView": ("selfhealing.api.django.views.error_budget", "ErrorBudgetHistoryView"),
+    "DeploymentVerdictView": ("selfhealing.api.django.views.error_budget", "DeploymentVerdictView"),
+    "DeploymentFreezeAcknowledgeView": ("selfhealing.api.django.views.error_budget", "DeploymentFreezeAcknowledgeView"),
+    "DeploymentOverrideView": ("selfhealing.api.django.views.error_budget", "DeploymentOverrideView"),
+    "DeploymentFreezeLiftView": ("selfhealing.api.django.views.error_budget", "DeploymentFreezeLiftView"),
+    "ActiveOverrideView": ("selfhealing.api.django.views.error_budget", "ActiveOverrideView"),
+    # -------------------------------------------------------------------------
+    # config_history.py (4 symbols)
+    # -------------------------------------------------------------------------
+    "ConfigHistoryView": ("selfhealing.api.django.views.config_history", "ConfigHistoryView"),
+    "ConfigVersionDetailView": ("selfhealing.api.django.views.config_history", "ConfigVersionDetailView"),
+    "ConfigRollbackView": ("selfhealing.api.django.views.config_history", "ConfigRollbackView"),
+    "ConfigCompareView": ("selfhealing.api.django.views.config_history", "ConfigCompareView"),
+    # -------------------------------------------------------------------------
+    # chaos/ (16 symbols) - already lazy in chaos/__init__.py
+    # -------------------------------------------------------------------------
+    "SafetyGuardConfigView": ("selfhealing.api.django.views.chaos", "SafetyGuardConfigView"),
+    "BlastRadiusPolicyView": ("selfhealing.api.django.views.chaos", "BlastRadiusPolicyView"),
+    "SchedulerConfigView": ("selfhealing.api.django.views.chaos", "SchedulerConfigView"),
+    "ReportConfigView": ("selfhealing.api.django.views.chaos", "ReportConfigView"),
+    "ScheduleListView": ("selfhealing.api.django.views.chaos", "ScheduleListView"),
+    "ScheduleDetailView": ("selfhealing.api.django.views.chaos", "ScheduleDetailView"),
+    "ScheduleApprovalView": ("selfhealing.api.django.views.chaos", "ScheduleApprovalView"),
+    "ScheduleExecuteView": ("selfhealing.api.django.views.chaos", "ScheduleExecuteView"),
+    "KillSwitchView": ("selfhealing.api.django.views.chaos", "KillSwitchView"),
+    "SafetyCheckView": ("selfhealing.api.django.views.chaos", "SafetyCheckView"),
+    "BlastRadiusCheckView": ("selfhealing.api.django.views.chaos", "BlastRadiusCheckView"),
+    "ReportListView": ("selfhealing.api.django.views.chaos", "ReportListView"),
+    "ReportDetailView": ("selfhealing.api.django.views.chaos", "ReportDetailView"),
+    "ReportGenerateView": ("selfhealing.api.django.views.chaos", "ReportGenerateView"),
+    "GradeHistoryView": ("selfhealing.api.django.views.chaos", "GradeHistoryView"),
+    "PendingApprovalsView": ("selfhealing.api.django.views.chaos", "PendingApprovalsView"),
+    # -------------------------------------------------------------------------
+    # governance/ (9 symbols)
+    # -------------------------------------------------------------------------
+    "GovernanceService": ("selfhealing.api.django.views.governance", "GovernanceService"),
+    "get_governance_service": ("selfhealing.api.django.views.governance", "get_governance_service"),
+    "reset_governance_service": ("selfhealing.api.django.views.governance", "reset_governance_service"),
+    "MetricStatusView": ("selfhealing.api.django.views.governance", "MetricStatusView"),
+    "GovernanceReconcileView": ("selfhealing.api.django.views.governance", "GovernanceReconcileView"),
+    "GovernanceModeView": ("selfhealing.api.django.views.governance", "GovernanceModeView"),
+    "DeprecatedMetricSyncView": ("selfhealing.api.django.views.governance", "DeprecatedMetricSyncView"),
+    "DeprecatedDriftReportView": ("selfhealing.api.django.views.governance", "DeprecatedDriftReportView"),
+    # -------------------------------------------------------------------------
+    # xtest_mode.py (7 symbols)
+    # -------------------------------------------------------------------------
+    "XTestModeMixin": ("selfhealing.api.django.views.xtest_mode", "XTestModeMixin"),
+    "InjectCBFailureView": ("selfhealing.api.django.views.xtest_mode", "InjectCBFailureView"),
+    "ResetCBView": ("selfhealing.api.django.views.xtest_mode", "ResetCBView"),
+    "CBStatusDetailView": ("selfhealing.api.django.views.xtest_mode", "CBStatusDetailView"),
+    "InjectErrorBudgetView": ("selfhealing.api.django.views.xtest_mode", "InjectErrorBudgetView"),
+    "SystemSnapshotView": ("selfhealing.api.django.views.xtest_mode", "SystemSnapshotView"),
+    "FastFailTestView": ("selfhealing.api.django.views.xtest_mode", "FastFailTestView"),
+    # -------------------------------------------------------------------------
+    # auto_tuning.py (9 symbols)
+    # -------------------------------------------------------------------------
+    "AutoTuningStatusView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningStatusView"),
+    "AutoTuningEnableView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningEnableView"),
+    "AutoTuningDisableView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningDisableView"),
+    "AutoTuningModuleEnableView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningModuleEnableView"),
+    "AutoTuningModuleDisableView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningModuleDisableView"),
+    "AutoTuningBoundsView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningBoundsView"),
+    "AutoTuningHistoryView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningHistoryView"),
+    "AutoTuningOverrideView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningOverrideView"),
+    "AutoTuningMetricsView": ("selfhealing.api.django.views.auto_tuning", "AutoTuningMetricsView"),
+}
 
-# System Control Views (Kill Switch)
-from selfhealing.api.django.views.system_control import (
-    SystemStatusView,
-    SystemEnableView,
-    SystemDisableView,
-    DryRunEnableView,
-    DryRunDisableView,
-    is_selfhealing_enabled,
-    is_dry_run,
-    should_execute_action,
-    get_system_control,
-)
+# Cache for lazily loaded symbols
+_loaded_symbols: dict[str, object] = {}
 
-# Runtime Config Views
-from selfhealing.api.django.views.config import (
-    AllConfigView,
-    ResetConfigView,
-    PendingChangesView,
-    CancelPendingChangeView,
-    CircuitBreakerConfigView,
-    DLQConfigView,
-    RetryConfigView,
-    SLAConfigView,
-    RateLimitConfigView,
-    SecurityConfigView,
-    IdempotencyConfigView,
-    NotificationConfigView,
-    ForensicConfigView,
-    MetricsConfigView,
-)
 
-# Drift Threshold Configuration Views
-from selfhealing.api.django.views.drift_threshold import (
-    DriftThresholdConfigView,
-    DriftThresholdResetView,
-)
+def __getattr__(name: str) -> object:
+    """Lazy import for backward compatibility.
+    
+    This allows:
+        from selfhealing.api.django.views import ControlActionView
+    
+    Without loading all view modules at package import time.
+    """
+    if name in _loaded_symbols:
+        return _loaded_symbols[name]
+    
+    if name in _LAZY_IMPORTS:
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        symbol = getattr(module, attr_name)
+        _loaded_symbols[name] = symbol
+        return symbol
+    
+    raise AttributeError(f"module 'selfhealing.api.django.views' has no attribute '{name}'")
 
-# Error Budget & Deployment Policy Views
-from selfhealing.api.django.views.error_budget import (
-    ErrorBudgetStatusView,
-    ErrorBudgetHistoryView,
-    DeploymentVerdictView,
-    DeploymentFreezeAcknowledgeView,
-    DeploymentOverrideView,
-    DeploymentFreezeLiftView,
-    ActiveOverrideView,
-)
 
-# Config History Views
-from selfhealing.api.django.views.config_history import (
-    ConfigHistoryView,
-    ConfigVersionDetailView,
-    ConfigRollbackView,
-    ConfigCompareView,
-)
+def __dir__() -> list[str]:
+    """List available symbols for IDE autocompletion."""
+    return list(__all__)
 
-# Chaos Engineering Views
-from selfhealing.api.django.views.chaos import (
-    SafetyGuardConfigView,
-    BlastRadiusPolicyView,
-    SchedulerConfigView,
-    ReportConfigView,
-    ScheduleListView,
-    ScheduleDetailView,
-    ScheduleApprovalView,
-    ScheduleExecuteView,
-    KillSwitchView,
-    SafetyCheckView,
-    BlastRadiusCheckView,
-    ReportListView,
-    ReportDetailView,
-    ReportGenerateView,
-    GradeHistoryView,
-    PendingApprovalsView,
-)
 
-# Governance API Views (New Unified Hub)
-from selfhealing.api.django.views.governance import (
-    # Service
-    GovernanceService,
-    get_governance_service,
-    reset_governance_service,
-    # New API Views
-    MetricStatusView,
-    GovernanceReconcileView,
-    GovernanceModeView,
-    # Deprecated Views (with Warning headers)
-    DeprecatedMetricSyncView,
-    DeprecatedDriftReportView,
-)
-
-# X-Test-Mode Views (Stage 48: Chaos Proof)
-from selfhealing.api.django.views.xtest_mode import (
-    XTestModeMixin,
-    InjectCBFailureView,
-    ResetCBView,
-    CBStatusDetailView,
-    InjectErrorBudgetView,
-    SystemSnapshotView,
-    FastFailTestView,
-)
-
-# Auto Tuning Views
-from selfhealing.api.django.views.auto_tuning import (
-    AutoTuningStatusView,
-    AutoTuningEnableView,
-    AutoTuningDisableView,
-    AutoTuningModuleEnableView,
-    AutoTuningModuleDisableView,
-    AutoTuningBoundsView,
-    AutoTuningHistoryView,
-    AutoTuningOverrideView,
-    AutoTuningMetricsView,
-)
+# TYPE_CHECKING block for IDE support without runtime import
+if TYPE_CHECKING:
+    # Circuit Breaker Control Views
+    from selfhealing.api.django.views.circuit_breaker import (
+        ControlRequest,
+        ControlResponse,
+        ControlAPIService,
+        get_control_api_service,
+        ControlActionView,
+        ControlStatusView,
+        ServiceStatusView,
+        ControlAuditView,
+        QuickAllowView,
+        QuickBlockView,
+        QuickResetView,
+    )
+    # DLQ Views
+    from selfhealing.api.django.views.dlq import (
+        DLQReplayView,
+        DLQCleanupStatsView,
+        DLQArchiveView,
+        DLQPurgeView,
+        DLQListView,
+        DLQDetailView,
+        DLQRetryView,
+        DLQResolveView,
+    )
+    # Dashboard Views
+    from selfhealing.api.django.views.dashboard import (
+        DashboardSummaryView,
+    )
+    # Health & Metrics Views
+    from selfhealing.api.django.views.health import (
+        SelfHealingHealthView,
+        LivenessView,
+        ReadinessView,
+        ConnectionPoolHealthView,
+        simple_health_ping,
+        SelfHealingMetricsView,
+    )
+    # System Control Views (Kill Switch)
+    from selfhealing.api.django.views.system_control import (
+        SystemStatusView,
+        SystemEnableView,
+        SystemDisableView,
+        DryRunEnableView,
+        DryRunDisableView,
+        is_selfhealing_enabled,
+        is_dry_run,
+        should_execute_action,
+        get_system_control,
+    )
+    # Runtime Config Views
+    from selfhealing.api.django.views.config import (
+        AllConfigView,
+        ResetConfigView,
+        PendingChangesView,
+        CancelPendingChangeView,
+        CircuitBreakerConfigView,
+        DLQConfigView,
+        RetryConfigView,
+        SLAConfigView,
+        RateLimitConfigView,
+        SecurityConfigView,
+        IdempotencyConfigView,
+        NotificationConfigView,
+        ForensicConfigView,
+        MetricsConfigView,
+    )
+    # Drift Threshold Configuration Views
+    from selfhealing.api.django.views.drift_threshold import (
+        DriftThresholdConfigView,
+        DriftThresholdResetView,
+    )
+    # Error Budget & Deployment Policy Views
+    from selfhealing.api.django.views.error_budget import (
+        ErrorBudgetStatusView,
+        ErrorBudgetHistoryView,
+        DeploymentVerdictView,
+        DeploymentFreezeAcknowledgeView,
+        DeploymentOverrideView,
+        DeploymentFreezeLiftView,
+        ActiveOverrideView,
+    )
+    # Config History Views
+    from selfhealing.api.django.views.config_history import (
+        ConfigHistoryView,
+        ConfigVersionDetailView,
+        ConfigRollbackView,
+        ConfigCompareView,
+    )
+    # Chaos Engineering Views
+    from selfhealing.api.django.views.chaos import (
+        SafetyGuardConfigView,
+        BlastRadiusPolicyView,
+        SchedulerConfigView,
+        ReportConfigView,
+        ScheduleListView,
+        ScheduleDetailView,
+        ScheduleApprovalView,
+        ScheduleExecuteView,
+        KillSwitchView,
+        SafetyCheckView,
+        BlastRadiusCheckView,
+        ReportListView,
+        ReportDetailView,
+        ReportGenerateView,
+        GradeHistoryView,
+        PendingApprovalsView,
+    )
+    # Governance API Views (New Unified Hub)
+    from selfhealing.api.django.views.governance import (
+        GovernanceService,
+        get_governance_service,
+        reset_governance_service,
+        MetricStatusView,
+        GovernanceReconcileView,
+        GovernanceModeView,
+        DeprecatedMetricSyncView,
+        DeprecatedDriftReportView,
+    )
+    # X-Test-Mode Views (Stage 48: Chaos Proof)
+    from selfhealing.api.django.views.xtest_mode import (
+        XTestModeMixin,
+        InjectCBFailureView,
+        ResetCBView,
+        CBStatusDetailView,
+        InjectErrorBudgetView,
+        SystemSnapshotView,
+        FastFailTestView,
+    )
+    # Auto Tuning Views
+    from selfhealing.api.django.views.auto_tuning import (
+        AutoTuningStatusView,
+        AutoTuningEnableView,
+        AutoTuningDisableView,
+        AutoTuningModuleEnableView,
+        AutoTuningModuleDisableView,
+        AutoTuningBoundsView,
+        AutoTuningHistoryView,
+        AutoTuningOverrideView,
+        AutoTuningMetricsView,
+    )
 
 __all__ = [
     # Data classes
