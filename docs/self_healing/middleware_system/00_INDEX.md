@@ -1,7 +1,7 @@
 # Self-Healing 미들웨어 시스템 문서 인덱스
 
-> **Version**: 2.6.0
-> **Updated**: 2026-01-09
+> **Version**: 2.8.0
+> **Updated**: 2026-01-19
 > **Based on**: MIDDLEWARE_REFERENCE.md v2.2.0
 
 ---
@@ -28,9 +28,12 @@ middleware_system/
 ├── 20_AUDIT_UNIFICATION_PLAN.md       ← Audit 통합 계획
 ├── 21_CB_ADVANCED_PROTECTION.md       ← CB 고급 보호 시스템
 ├── ...
-├── 31_CHAOS_EXPERIMENT_EXPANSION.md   ← 미구현 Chaos 실험 타입 구현 계획 (NEW)
-├── 32_CHAOS_SYSTEM_INTEGRATION.md     ← Self-Healing 시스템 연동 계획 (NEW)
-└── 33_CHAOS_INDUSTRY_EXPERIMENTS.md   ← 업계 표준 Chaos 실험 추가 계획 (NEW)
+├── 31_CHAOS_EXPERIMENT_EXPANSION.md   ← 미구현 Chaos 실험 타입 구현 계획
+├── 32_CHAOS_SYSTEM_INTEGRATION.md     ← Self-Healing 시스템 연동 계획
+├── 33_CHAOS_INDUSTRY_EXPERIMENTS.md   ← 업계 표준 Chaos 실험 추가 계획
+├── ...
+├── 70_MULTI_CLUSTER_ARCHITECTURE.md   ← 다중 클러스터/리전 아키텍처 (NEW)
+└── 71_CANARY_CONFIG_ROLLOUT.md        ← 카나리 설정 롤아웃 시스템 (NEW)
 ```
 
 ---
@@ -238,6 +241,46 @@ middleware_system/
 
 ---
 
+### [70_MULTI_CLUSTER_ARCHITECTURE.md](70_MULTI_CLUSTER_ARCHITECTURE.md) 🆕
+
+**목적**: 다중 클러스터/리전 지원을 위한 네임스페이스 기반 아키텍처
+
+| 섹션 | 내용 |
+|------|------|
+| 단일 vs 다중 클러스터 | 배포 유형별 차이점 및 선택 기준 |
+| 네임스페이스 설계 | 우선순위 기반 네임스페이스 결정 (namespace > region > tenant > env) |
+| Redis 키 격리 | 클러스터/리전별 키 프리픽스 전략 |
+| 구현 계획 | Phase 1-4 단계별 마이그레이션 가이드 |
+| 영향도 분석 | 변경 필요 파일 및 비즈니스 로직 영향 없음 |
+
+**주요 패키지**:
+- `selfhealing.settings.namespace` (신규)
+- `selfhealing.adapters.redis.*` (수정)
+- `selfhealing.adapters.resilient.backend` (수정)
+- `selfhealing.services.config_history` (수정)
+
+---
+
+### [71_CANARY_CONFIG_ROLLOUT.md](71_CANARY_CONFIG_ROLLOUT.md) 🆕
+
+**목적**: 설정 변경의 점진적 롤아웃을 위한 카나리 배포 시스템
+
+| 섹션 | 내용 |
+|------|------|
+| 문제 정의 | 설정 변경의 즉시 적용 위험성 |
+| 카나리 전략 | 클러스터 기반/비율 기반/시간 기반 롤아웃 |
+| 롤아웃 단계 | Pending → Canary → Expanding → Complete/Rollback |
+| 자동화 기능 | 메트릭 기반 자동 승격/롤백 |
+| API 설계 | REST API 및 Celery 태스크 정의 |
+
+**주요 패키지**:
+- `selfhealing.services.canary.models` (신규)
+- `selfhealing.services.canary.service` (신규)
+- `selfhealing.api.django.views.canary` (신규)
+- `selfhealing.tasks.canary_tasks` (신규)
+
+---
+
 ## 🔗 크로스 레퍼런스
 
 ### 인터페이스 → 구현체 매핑
@@ -354,6 +397,8 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 2.8.0 | 2026-01-19 | 70_MULTI_CLUSTER_ARCHITECTURE.md 대폭 확장 - ClusterIdentity, TieredRedisProvider, PropagationHealthMonitor 추가 |
+| 2.7.0 | 2026-01-09 | 70_MULTI_CLUSTER_ARCHITECTURE.md, 71_CANARY_CONFIG_ROLLOUT.md 추가 |
 | 2.6.0 | 2026-01-09 | 31_CHAOS_EXPERIMENT_EXPANSION.md, 32_CHAOS_SYSTEM_INTEGRATION.md, 33_CHAOS_INDUSTRY_EXPERIMENTS.md 추가 |
 | 2.4.0 | 2026-01-02 | 08_NOTIFICATION_ARCHITECTURE.md, 09_AUTONOMOUS_TASK_EXPANSION.md 추가 |
 | 2.3.0 | 2026-01-02 | 07_HYBRID_STORAGE_ARCHITECTURE.md 추가 |
