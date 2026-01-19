@@ -159,6 +159,18 @@ class GlobalConfigPropagator:
         """
         self._ensure_initialized()
         
+        # Quarantine Mode 체크
+        try:
+            from selfhealing.core.cluster_identity import is_quarantine_mode
+            if is_quarantine_mode():
+                logger.warning(
+                    "[GlobalConfigPropagator] Quarantine Mode active, "
+                    "skipping cross-cluster propagation"
+                )
+                return False
+        except ImportError:
+            pass
+        
         if not self._redis:
             logger.warning("[GlobalConfigPropagator] Redis not available, skipping propagation")
             return False

@@ -269,11 +269,15 @@ class HealthCheckService:
         전체 시스템 헬스 체크.
         
         Uses ProviderRegistry for statistics to maintain framework independence.
+        Logs cluster_id for multi-cluster observability.
         
         Returns:
             HealthStatus: 전체 헬스 상태
         """
         from django.utils import timezone
+        
+        # Cluster Identity 로깅
+        cluster_id, region, environment = self._get_cluster_info()
         
         try:
             db_check = self.check_database("default")
@@ -292,15 +296,37 @@ class HealthCheckService:
             health_status = "degraded"
             db_status = "unhealthy"
         
+        # 클러스터 정보 포함 로깅
+        logger.info(
+            f"[HealthCheck] cluster_id={cluster_id} region={region} env={environment} "
+            f"status={health_status} services={services_count}"
+        )
+        
         return HealthStatus(
             status=health_status,
             checks={
                 "database": db_status,
                 "circuit_breaker": "enabled",
+                "cluster_id": cluster_id,
+                "region": region or "unknown",
             },
             services_count=services_count,
             timestamp=timezone.now().isoformat(),
         )
+    
+    def _get_cluster_info(self) -> tuple:
+        """클러스터 정보 조회."""
+        try:
+            from selfhealing.core.cluster_identity import get_cluster_identity
+            identity = get_cluster_identity()
+            return identity.cluster_id, identity.region, identity.environment
+        except Exception:
+            import os
+            return (
+                os.environ.get("SELFHEALING_CLUSTER_ID", "unknown"),
+                os.environ.get("SELFHEALING_REGION"),
+                os.environ.get("SELFHEALING_ENV", "production"),
+            )
 
     def is_alive(self) -> bool:
         """

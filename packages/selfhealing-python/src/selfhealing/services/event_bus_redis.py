@@ -1,12 +1,16 @@
 """
 Redis Event Bus
 
-멀티-인스턴스 환경에서 Chaos 이벤트 실시간 동기화를 위한 Redis Pub/Sub 기반 이벤트 버스.
+멀티-인스턴스 환경에서 이벤트 실시간 동기화를 위한 Redis Pub/Sub 기반 이벤트 버스.
 
 Features:
 - Redis Pub/Sub 기반 분산 이벤트 전파
+- 다중 채널 지원 (chaos, config, emergency, circuit_breaker, global)
 - 기존 SelfHealingEventBus와 동일한 인터페이스
 - Graceful fallback (Redis 연결 실패 시 로컬 처리)
+
+Reference:
+- docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
 from __future__ import annotations
@@ -15,7 +19,8 @@ import json
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from selfhealing.services.event_bus import (
     EventType,
@@ -27,17 +32,82 @@ from selfhealing.services.event_bus import (
 logger = logging.getLogger(__name__)
 
 
-# Redis channel name for chaos events
-CHAOS_EVENT_CHANNEL = "selfhealing:chaos:events"
+# =============================================================================
+# Channel Definitions
+# =============================================================================
+
+
+class EventChannel(Enum):
+    """Redis Pub/Sub 채널 정의."""
+    
+    CHAOS = "chaos"
+    CONFIG = "config"
+    EMERGENCY = "emergency"
+    CIRCUIT_BREAKER = "circuit_breaker"
+    GLOBAL = "global"
+
+
+# 채널별 Redis 키 패턴
+SELFHEALING_EVENT_CHANNELS: Dict[str, str] = {
+    EventChannel.CHAOS.value: "selfhealing:events:chaos",
+    EventChannel.CONFIG.value: "selfhealing:events:config",
+    EventChannel.EMERGENCY.value: "selfhealing:events:emergency",
+    EventChannel.CIRCUIT_BREAKER.value: "selfhealing:events:cb",
+    EventChannel.GLOBAL.value: "selfhealing:global:events",
+}
+
+# EventType → Channel 매핑
+EVENT_TYPE_TO_CHANNEL: Dict[EventType, EventChannel] = {
+    # Chaos Events
+    EventType.CHAOS_EXPERIMENT_STARTED: EventChannel.CHAOS,
+    EventType.CHAOS_EXPERIMENT_STOPPED: EventChannel.CHAOS,
+    EventType.CHAOS_EXPERIMENT_BLOCKED: EventChannel.CHAOS,
+    
+    # Config Events
+    EventType.CONFIG_UPDATED: EventChannel.CONFIG,
+    EventType.KILL_SWITCH_ACTIVATED: EventChannel.CONFIG,
+    EventType.KILL_SWITCH_DEACTIVATED: EventChannel.CONFIG,
+    
+    # Emergency Events
+    EventType.EMERGENCY_LEVEL_CHANGED: EventChannel.EMERGENCY,
+    EventType.EMERGENCY_ACTIVATED: EventChannel.EMERGENCY,
+    EventType.EMERGENCY_DEACTIVATED: EventChannel.EMERGENCY,
+    EventType.EMERGENCY_RECOVERY_STARTED: EventChannel.EMERGENCY,
+    EventType.EMERGENCY_RECOVERY_COMPLETED: EventChannel.EMERGENCY,
+    
+    # Circuit Breaker Events
+    EventType.CIRCUIT_BREAKER_OPENED: EventChannel.CIRCUIT_BREAKER,
+    EventType.CIRCUIT_BREAKER_CLOSED: EventChannel.CIRCUIT_BREAKER,
+    EventType.CIRCUIT_BREAKER_HALF_OPENED: EventChannel.CIRCUIT_BREAKER,
+    
+    # Error Budget → Global (cross-cluster 관심)
+    EventType.ERROR_BUDGET_CRITICAL: EventChannel.GLOBAL,
+    EventType.ERROR_BUDGET_WARNING: EventChannel.GLOBAL,
+    EventType.ERROR_BUDGET_RECOVERED: EventChannel.GLOBAL,
+    
+    # Security → Global
+    EventType.SECURITY_VIOLATION_DETECTED: EventChannel.GLOBAL,
+    EventType.SECURITY_VIOLATION_CRITICAL: EventChannel.GLOBAL,
+}
+
+# 기존 호환성을 위한 기본 채널
+CHAOS_EVENT_CHANNEL = SELFHEALING_EVENT_CHANNELS[EventChannel.CHAOS.value]
 
 
 class RedisEventBus:
     """
     Redis Pub/Sub 기반 분산 이벤트 버스.
     
-    멀티-인스턴스 환경에서 Chaos 이벤트를 실시간으로 동기화합니다.
+    멀티-인스턴스 환경에서 이벤트를 실시간으로 동기화합니다.
     기존 SelfHealingEventBus와 동일한 인터페이스를 제공하면서
     Redis를 통해 다른 인스턴스에도 이벤트를 전파합니다.
+    
+    다중 채널 지원:
+    - chaos: Chaos Engineering 이벤트
+    - config: 설정 변경 이벤트
+    - emergency: 비상 모드 이벤트
+    - circuit_breaker: CB 상태 변경 이벤트
+    - global: 글로벌 전파 이벤트 (Error Budget, Security 등)
     
     Usage:
         bus = get_event_bus(distributed=True)
@@ -52,25 +122,29 @@ class RedisEventBus:
     def __init__(
         self,
         redis_url: Optional[str] = None,
-        channel: str = CHAOS_EVENT_CHANNEL,
+        channels: Optional[Dict[str, str]] = None,
         fallback_to_local: bool = True,
+        subscribe_channels: Optional[List[EventChannel]] = None,
     ):
         """
         초기화.
         
         Args:
             redis_url: Redis 연결 URL (없으면 환경변수에서 읽음)
-            channel: Pub/Sub 채널명
+            channels: 채널 정의 (없으면 기본값 사용)
             fallback_to_local: Redis 연결 실패 시 로컬 이벤트 버스 사용
+            subscribe_channels: 구독할 채널 목록 (없으면 모든 채널)
         """
-        self._channel = channel
+        self._channels = channels or SELFHEALING_EVENT_CHANNELS
         self._fallback_to_local = fallback_to_local
+        self._subscribe_channels = subscribe_channels or list(EventChannel)
         self._local_bus = SelfHealingEventBus()
         self._redis_client: Optional[Any] = None
         self._pubsub: Optional[Any] = None
         self._listener_thread: Optional[threading.Thread] = None
         self._running = False
         self._lock = threading.RLock()
+        self._subscribed_redis_channels: Set[str] = set()
         
         # Redis 연결 시도
         self._redis_url = redis_url or self._get_redis_url()
@@ -109,7 +183,7 @@ class RedisEventBus:
         """
         Redis Pub/Sub 리스너 시작.
         
-        백그라운드 스레드에서 Redis 채널을 구독하고
+        백그라운드 스레드에서 모든 설정된 Redis 채널을 구독하고
         수신된 이벤트를 로컬 핸들러에 전달합니다.
         """
         if not self._redis_client:
@@ -121,7 +195,13 @@ class RedisEventBus:
             
             self._running = True
             self._pubsub = self._redis_client.pubsub()
-            self._pubsub.subscribe(self._channel)
+            
+            # 모든 설정된 채널 구독
+            for channel_enum in self._subscribe_channels:
+                channel_name = self._channels.get(channel_enum.value)
+                if channel_name:
+                    self._pubsub.subscribe(channel_name)
+                    self._subscribed_redis_channels.add(channel_name)
             
             self._listener_thread = threading.Thread(
                 target=self._listen_loop,
@@ -129,7 +209,10 @@ class RedisEventBus:
                 name="RedisEventBusListener",
             )
             self._listener_thread.start()
-            logger.info(f"[RedisEventBus] Listener started on channel: {self._channel}")
+            logger.info(
+                f"[RedisEventBus] Listener started on channels: "
+                f"{list(self._subscribed_redis_channels)}"
+            )
     
     def stop_listener(self) -> None:
         """Redis Pub/Sub 리스너 중지."""
@@ -190,12 +273,23 @@ class RedisEventBus:
         # Redis로 전파
         if propagate_to_redis and self._redis_client:
             try:
+                # EventType에 따른 채널 선택
+                channel = self._get_channel_for_event(event.event_type)
                 self._redis_client.publish(
-                    self._channel,
+                    channel,
                     json.dumps(event.to_dict(), default=str),
                 )
             except Exception as e:
                 logger.warning(f"[RedisEventBus] Failed to publish to Redis: {e}")
+    
+    def _get_channel_for_event(self, event_type: EventType) -> str:
+        """EventType에 맞는 Redis 채널 반환."""
+        channel_enum = EVENT_TYPE_TO_CHANNEL.get(event_type, EventChannel.GLOBAL)
+        return self._channels.get(channel_enum.value, self._channels[EventChannel.GLOBAL.value])
+    
+    def get_channel(self, channel: EventChannel) -> str:
+        """특정 채널의 Redis 키 반환."""
+        return self._channels.get(channel.value, "")
     
     def subscribe(
         self,

@@ -122,6 +122,7 @@ class ClusterIdentity:
 # =============================================================================
 
 _identity: Optional[ClusterIdentity] = None
+_quarantine_mode: bool = False
 
 
 def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
@@ -134,7 +135,7 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
     Returns:
         ClusterIdentity 인스턴스
     """
-    global _identity
+    global _identity, _quarantine_mode
     if _identity is None:
         _identity = ClusterIdentity(
             cluster_id=os.environ.get("SELFHEALING_CLUSTER_ID", "default"),
@@ -145,11 +146,49 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
         if not skip_validation:
             # Fail-Fast 비활성화 상태에서만 validation 실행
             # 기본적으로 개발 환경에서는 경고만 출력
-            _identity.validate(fail_fast=False)
+            is_valid = _identity.validate(fail_fast=False)
+            if not is_valid:
+                _quarantine_mode = True
+                logger.warning(
+                    "⚠️ [QuarantineMode] System running in Quarantine Mode. "
+                    "Cross-cluster operations will be disabled."
+                )
     return _identity
+
+
+def is_quarantine_mode() -> bool:
+    """
+    Quarantine Mode 여부 확인.
+    
+    Quarantine Mode에서는:
+    - 글로벌 설정 전파 비활성화
+    - Cross-cluster 이벤트 발행 차단
+    - 로컬 클러스터 내에서만 동작
+    
+    Returns:
+        Quarantine Mode 활성화 여부
+    """
+    global _quarantine_mode
+    return _quarantine_mode
+
+
+def set_quarantine_mode(enabled: bool) -> None:
+    """
+    Quarantine Mode 수동 설정 (관리자 용도).
+    
+    Args:
+        enabled: True면 Quarantine Mode 활성화
+    """
+    global _quarantine_mode
+    _quarantine_mode = enabled
+    if enabled:
+        logger.warning("⚠️ [QuarantineMode] Manually enabled by administrator")
+    else:
+        logger.info("✅ [QuarantineMode] Disabled by administrator")
 
 
 def reset_cluster_identity() -> None:
     """테스트용 싱글톤 리셋."""
-    global _identity
+    global _identity, _quarantine_mode
     _identity = None
+    _quarantine_mode = False

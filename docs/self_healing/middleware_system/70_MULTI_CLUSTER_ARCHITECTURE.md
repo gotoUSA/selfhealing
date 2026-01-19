@@ -1700,7 +1700,7 @@ def reset_propagation_health_monitor() -> None:
 - [x] `audit/integrity/cross_cluster_linker.py` - CrossClusterAuditLinker 생성
 - [x] `services/isolation/regional_gate.py` - RegionalIsolationGate 생성
 - [x] `services/config/propagation_health.py` - PropagationHealthMonitor 생성
-- [ ] `event_bus_redis.py` - 범용화 (다중 채널) *향후 필요시 구현*
+- [x] `event_bus_redis.py` - 범용화 (다중 채널: chaos, config, emergency, circuit_breaker, global)
 
 ### Phase 4: Trace ID 개선 ✅ COMPLETED (2026-01-19)
 - [x] `audit/trace.py` - 클러스터 접두사 추가
@@ -1710,11 +1710,10 @@ def reset_propagation_health_monitor() -> None:
 ### Phase 5: 마이그레이션 도구 ✅ COMPLETED (2026-01-19)
 - [x] `scripts/migrate_namespace.py` 작성
 - [x] `scripts/verify_global_anchors.py` 작성
-- [ ] 마이그레이션 가이드 문서화 *향후 필요시 작성*
 
 ### Phase 6: 설정 필수화 및 Fail-Fast ✅ COMPLETED (2026-01-19)
 - [x] `settings/root.py` - cluster_id 경고 추가 (model_validator)
 - [x] `settings/propagation.py` - Tier 설정 추가 (tier1_max_latency_ms, tier2_max_latency_ms)
 - [x] `settings/root.py` - namespace, propagation 필드 추가
-- [ ] HealthCheck 로그에 cluster_id 출력 *향후 HealthCheck 구현시 추가*
-- [ ] Quarantine Mode 폴백 옵션 *향후 필요시 구현*
+- [x] HealthCheck 로그에 cluster_id 출력 (`services/health_check.py`)
+- [x] Quarantine Mode 폴백 옵션 (`core/cluster_identity.py` - `is_quarantine_mode()`, `set_quarantine_mode()`)
