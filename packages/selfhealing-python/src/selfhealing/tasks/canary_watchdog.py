@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+from selfhealing.utils.time import utc_now
 
 if TYPE_CHECKING:
     from selfhealing.services.canary import CanaryRollout
@@ -189,7 +191,7 @@ class RolloutWatchdog:
             active_rollouts = self.service.get_active_rollouts()
             result.scanned_count = len(active_rollouts)
             
-            now = datetime.utcnow()
+            now = utc_now()
             
             for rollout in active_rollouts:
                 zombie = self._check_zombie(rollout, now)
@@ -392,7 +394,7 @@ class RolloutWatchdog:
             
             active_rollouts = self.service.get_active_rollouts()
             result.scanned_count = len(active_rollouts)
-            now = datetime.utcnow()
+            now = utc_now()
             
             for rollout in active_rollouts:
                 if rollout.state != CanaryState.CANARY:
@@ -551,3 +553,57 @@ def collect_canary_metrics() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"[CanaryWatchdog] collect_canary_metrics failed: {e}", exc_info=True)
         raise
+
+
+# =============================================================================
+# Celery Beat Schedule
+# =============================================================================
+
+
+def get_canary_watchdog_beat_schedule() -> Dict[str, Any]:
+    """
+    Canary Watchdog Celery Beat 스케줄 설정.
+    
+    Returns:
+        Dict[str, Any]: Celery Beat 스케줄 설정
+        
+    Usage:
+        from selfhealing.tasks.canary_watchdog import get_canary_watchdog_beat_schedule
+        
+        CELERY_BEAT_SCHEDULE = {
+            **get_canary_watchdog_beat_schedule(),
+        }
+    """
+    from celery.schedules import crontab
+    
+    return {
+        # Zombie 롤아웃 스캔 (5분마다)
+        "canary-scan-zombie-rollouts": {
+            "task": "selfhealing.tasks.canary_watchdog.scan_zombie_rollouts",
+            "schedule": crontab(minute="*/5"),
+            "options": {
+                "queue": "maintenance",
+                "expires": 240,  # 4분 내 처리 안되면 만료
+            },
+        },
+        
+        # 자동 프로모션 체크 (1분마다)
+        "canary-auto-promote-eligible": {
+            "task": "selfhealing.tasks.canary_watchdog.auto_promote_eligible",
+            "schedule": crontab(minute="*/1"),
+            "options": {
+                "queue": "realtime",
+                "expires": 50,  # 50초 내 처리 안되면 만료
+            },
+        },
+        
+        # 메트릭 수집 (2분마다)
+        "canary-collect-metrics": {
+            "task": "selfhealing.tasks.canary_watchdog.collect_canary_metrics",
+            "schedule": crontab(minute="*/2"),
+            "options": {
+                "queue": "metrics",
+                "expires": 90,
+            },
+        },
+    }

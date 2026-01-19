@@ -82,6 +82,7 @@ def get_selfhealing_beat_schedule(
     include_intelligence: bool = True,
     include_compliance: bool = True,
     include_traffic_aware: bool = True,
+    include_canary_watchdog: bool = True,
     include_legacy: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -92,6 +93,7 @@ def get_selfhealing_beat_schedule(
         include_intelligence: Include 🧠 지능 레인 tasks
         include_compliance: Include 📋 증명 레인 tasks
         include_traffic_aware: Include 🚦 Traffic-Aware Replay tasks (Track 3)
+        include_canary_watchdog: Include 🐤 Canary Watchdog tasks
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
     
     Returns:
@@ -138,6 +140,14 @@ def get_selfhealing_beat_schedule(
             logger.debug("[BeatSchedule] Added traffic-aware replay schedule (Track 3)")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load traffic-aware tasks: {e}")
+    
+    if include_canary_watchdog:
+        try:
+            from selfhealing.tasks.canary_watchdog import get_canary_watchdog_beat_schedule
+            schedule.update(get_canary_watchdog_beat_schedule())
+            logger.debug("[BeatSchedule] Added canary watchdog schedules")
+        except ImportError as e:
+            logger.warning(f"[BeatSchedule] Could not load canary watchdog tasks: {e}")
     
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())

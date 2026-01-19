@@ -7,9 +7,10 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import Mock, patch, MagicMock
 
+from selfhealing.utils.time import utc_now
 from selfhealing.tasks.canary_watchdog import (
     RolloutWatchdog,
     WatchdogConfig,
@@ -75,7 +76,7 @@ def sample_rollout():
             ),
         ],
         created_by="admin@example.com",
-        created_at=datetime.utcnow(),  # 방금 생성됨
+        created_at=utc_now(),  # 방금 생성됨
         reason="Test rollout",
     )
 
@@ -99,7 +100,7 @@ def zombie_rollout():
             ),
         ],
         created_by="operator@example.com",
-        created_at=datetime.utcnow() - timedelta(minutes=45),  # 45분 전 생성
+        created_at=utc_now() - timedelta(minutes=45),  # 45분 전 생성
         reason="Old rollout",
     )
 
@@ -123,7 +124,7 @@ def paused_rollout():
             ),
         ],
         created_by="admin@example.com",
-        created_at=datetime.utcnow() - timedelta(minutes=35),  # 35분 전
+        created_at=utc_now() - timedelta(minutes=35),  # 35분 전
         reason="Paused rollout",
     )
 
@@ -171,7 +172,7 @@ class TestZombieRollout:
             rollout_id="test123",
             config_type="circuit_breaker",
             state="canary",
-            stuck_since=datetime.utcnow() - timedelta(minutes=40),
+            stuck_since=utc_now() - timedelta(minutes=40),
             stuck_minutes=40.0,
             created_by="admin@example.com",
             affected_clusters=["seoul", "tokyo"],
@@ -207,7 +208,7 @@ class TestWatchdogResult:
             rollout_id="test123",
             config_type="cb",
             state="canary",
-            stuck_since=datetime.utcnow(),
+            stuck_since=utc_now(),
             stuck_minutes=45.0,
             created_by="admin",
             affected_clusters=["seoul"],
@@ -318,7 +319,7 @@ class TestRolloutWatchdog:
                 CanaryStage(name="canary", clusters=["seoul"], percentage=10, duration_minutes=5),
             ],
             created_by="admin",
-            created_at=datetime.utcnow() - timedelta(minutes=65),
+            created_at=utc_now() - timedelta(minutes=65),
         )
         
         watchdog = RolloutWatchdog(config=watchdog_config)
@@ -337,7 +338,7 @@ class TestRolloutWatchdog:
     def test_auto_promote_eligible(self, watchdog_config, sample_rollout):
         """자동 프로모션 조건 충족 시 프로모션."""
         # duration 경과한 롤아웃
-        sample_rollout.created_at = datetime.utcnow() - timedelta(minutes=10)
+        sample_rollout.created_at = utc_now() - timedelta(minutes=10)
         
         watchdog = RolloutWatchdog(config=watchdog_config)
         

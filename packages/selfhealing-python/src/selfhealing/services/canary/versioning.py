@@ -26,8 +26,9 @@ Usage:
         logger.warning(f"Conflict: {e.conflicting_operator} modified config")
 """
 import logging
-from datetime import datetime
 from typing import Optional, TYPE_CHECKING
+
+from selfhealing.utils.time import utc_now
 
 if TYPE_CHECKING:
     from selfhealing.services.config_history import ConfigVersion
@@ -228,7 +229,7 @@ def _log_version_conflict(
         "actual_version": actual_version,
         "conflicting_operator": conflicting_operator,
         "attempted_by": attempted_by,
-        "conflict_time": datetime.utcnow().isoformat(),
+        "conflict_time": utc_now().isoformat(),
         "action": "rollback_blocked",
     }
     

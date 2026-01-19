@@ -20,7 +20,8 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 import os
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import timedelta
+from selfhealing.utils.time import utc_now
 
 from rest_framework.test import APIRequestFactory
 from rest_framework import status as http_status
@@ -113,7 +114,7 @@ def sample_rollout():
             ),
         ],
         created_by="admin@example.com",
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
         reason="Reduce failure threshold",
     )
 
@@ -129,7 +130,7 @@ def active_rollout(sample_rollout):
 def completed_rollout(sample_rollout):
     """완료된 롤아웃."""
     sample_rollout.state = CanaryState.COMPLETED
-    sample_rollout.completed_at = datetime.utcnow()
+    sample_rollout.completed_at = utc_now()
     return sample_rollout
 
 

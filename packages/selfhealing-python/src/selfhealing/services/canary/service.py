@@ -42,8 +42,9 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+from selfhealing.utils.time import utc_now
 
 from selfhealing.services.canary.models import (
     CanaryRollout,
@@ -357,7 +358,7 @@ class CanaryRolloutService:
         if next_index >= len(rollout.stages):
             # 모든 단계 완료
             rollout.state = CanaryState.COMPLETED
-            rollout.completed_at = datetime.utcnow()
+            rollout.completed_at = utc_now()
             self._remove_from_active(rollout.id)
             
             # 락 해제
@@ -423,7 +424,7 @@ class CanaryRolloutService:
         
         rollout.state = CanaryState.ROLLED_BACK
         rollout.rollback_reason = reason
-        rollout.completed_at = datetime.utcnow()
+        rollout.completed_at = utc_now()
         self._save_rollout(rollout)
         self._remove_from_active(rollout.id)
         
@@ -511,7 +512,7 @@ class CanaryRolloutService:
         
         rollout.state = CanaryState.CANCELLED
         rollout.rollback_reason = reason
-        rollout.completed_at = datetime.utcnow()
+        rollout.completed_at = utc_now()
         self._save_rollout(rollout)
         self._remove_from_active(rollout.id)
         

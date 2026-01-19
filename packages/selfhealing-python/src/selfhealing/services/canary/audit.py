@@ -21,8 +21,9 @@ Usage:
 import hashlib
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional, TYPE_CHECKING
+
+from selfhealing.utils.time import utc_now
 
 if TYPE_CHECKING:
     from selfhealing.services.canary.models import CanaryRollout
@@ -101,7 +102,7 @@ def log_canary_action(
         # 메타데이터
         "initiated_by": rollout.created_by,
         "reason": rollout.reason,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
         
         # 안전 검사 결과
         "safety_check_result": safety_check_result or {"checked": False},
@@ -153,7 +154,7 @@ def log_canary_error(
         "error_type": type(error).__name__,
         "error_message": str(error),
         "operator": operator,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
     }
     
     logger.error(
@@ -217,7 +218,7 @@ def log_canary_metrics_check(
                 "metrics": metrics,
                 "passed": passed,
                 "failure_reason": failure_reason,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             },
         )
     except Exception as e:

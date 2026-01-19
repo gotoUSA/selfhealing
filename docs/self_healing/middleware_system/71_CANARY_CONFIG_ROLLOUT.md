@@ -2176,13 +2176,15 @@ data:
   - [x] `scan_zombie_rollouts` Celery 태스크
   - [x] `auto_promote_eligible` Celery 태스크
   - [x] `collect_canary_metrics` Celery 태스크
+  - [x] `get_canary_watchdog_beat_schedule()` 스케줄 함수
 - [x] 단위 테스트: `tests/unit/tasks/test_canary_watchdog.py` (20 tests passed)
-- [ ] Celery Beat 설정 추가
+- [x] Celery Beat 설정 추가 (`beat_schedule.py`에 통합)
+- [x] `datetime.utcnow()` deprecated 경고 수정 (`utc_now()` 사용)
+- [x] 통합 테스트: `tests/integration/selfhealing/test_canary_integration.py` (8 tests)
 - [ ] Prometheus 메트릭 연동
   - [ ] `canary_rollout_total` counter
   - [ ] `canary_rollout_duration_seconds` histogram
 - [ ] Slack 알림 연동
-- [ ] 통합 테스트
 
 ### Step 5: 클러스터 동기화 (환경에 따라 선택)
 
