@@ -38,3 +38,91 @@ def pytest_collection_modifyitems(config, items):
         if not redis_available and "requires_redis" in [m.name for m in item.iter_markers()]:
             item.add_marker(skip_redis)
 
+
+# =============================================================================
+# Redis Fixtures for Integration Tests
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def redis_client():
+    """
+    Real Redis client for integration tests.
+    
+    Requires Docker Compose: docker-compose -f docker-compose.test.yml up -d
+    Port: 16379 (mapped from container's 6379)
+    """
+    import os
+    import redis
+    
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    client = redis.from_url(redis_url, decode_responses=True)
+    
+    # Verify connection
+    try:
+        client.ping()
+    except redis.ConnectionError:
+        pytest.skip("Redis not available. Run: docker-compose -f docker-compose.test.yml up -d")
+    
+    yield client
+    
+    # Cleanup: flush test database
+    client.flushdb()
+
+
+@pytest.fixture
+def redis_circuit_breaker_repository(redis_client):
+    """
+    Real Redis-based Circuit Breaker Repository.
+    
+    Uses ResilientStorageBackend with actual Redis connection.
+    """
+    import os
+    from selfhealing.adapters.resilient.backend import (
+        ResilientStorageBackend,
+        ResilientStorageConfig,
+    )
+    from selfhealing.adapters.redis.circuit_breaker import RedisCircuitBreakerStateRepository
+    
+    # Create backend with test namespace
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    config = ResilientStorageConfig(
+        redis_url=redis_url,
+        key_prefix="test:selfhealing:",
+        allow_memory_only=True,  # Allow fallback for test isolation
+    )
+    backend = ResilientStorageBackend(config=config)
+    
+    yield RedisCircuitBreakerStateRepository(backend=backend)
+    
+    # Cleanup: remove test keys
+    for key in redis_client.keys("test:selfhealing:*"):
+        redis_client.delete(key)
+
+
+@pytest.fixture
+def redis_dlq_repository(redis_client):
+    """
+    Real Redis-based DLQ Repository.
+    
+    Uses ResilientStorageBackend with actual Redis connection.
+    """
+    import os
+    from selfhealing.adapters.resilient.backend import (
+        ResilientStorageBackend,
+        ResilientStorageConfig,
+    )
+    from selfhealing.adapters.redis.dlq import RedisDLQRepository
+    
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    config = ResilientStorageConfig(
+        redis_url=redis_url,
+        key_prefix="test:selfhealing:dlq:",
+        allow_memory_only=True,
+    )
+    backend = ResilientStorageBackend(config=config)
+    
+    yield RedisDLQRepository(backend=backend)
+    
+    # Cleanup: remove test keys
+    for key in redis_client.keys("test:selfhealing:dlq:*"):
+        redis_client.delete(key)
