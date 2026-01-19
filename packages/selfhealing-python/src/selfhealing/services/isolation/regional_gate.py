@@ -1,0 +1,382 @@
+"""
+Regional Isolation Gate.
+
+리전 단위 트래픽 차단 게이트.
+
+특정 리전(클러스터 그룹)이 불안정할 때 
+해당 리전으로의 트래픽을 전역적으로 차단.
+
+코드 근거:
+- blast_radius.py#L40: REGION 레벨 이미 존재
+- guard.py#L827-836: 전역 차단 패턴 존재
+
+Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
+"""
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class IsolationInfo:
+    """리전 격리 정보."""
+    
+    region: str
+    isolated: bool
+    reason: str
+    isolated_at: Optional[datetime] = None
+    isolated_by: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "region": self.region,
+            "isolated": self.isolated,
+            "reason": self.reason,
+            "isolated_at": self.isolated_at.isoformat() if self.isolated_at else None,
+            "isolated_by": self.isolated_by,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "IsolationInfo":
+        """딕셔너리에서 IsolationInfo 생성."""
+        return cls(
+            region=data.get("region", ""),
+            isolated=data.get("isolated", False),
+            reason=data.get("reason", ""),
+            isolated_at=datetime.fromisoformat(data["isolated_at"]) if data.get("isolated_at") else None,
+            isolated_by=data.get("isolated_by"),
+            expires_at=datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None,
+        )
+
+
+class RegionalIsolationGate:
+    """
+    리전 단위 트래픽 차단 게이트.
+    
+    특정 리전(클러스터 그룹)이 불안정할 때 
+    해당 리전으로의 트래픽을 전역적으로 차단.
+    
+    Usage:
+        gate = get_regional_isolation_gate()
+        
+        # 리전 격리
+        gate.isolate_region("tokyo", reason="High error rate", duration_seconds=300)
+        
+        # 격리 상태 확인
+        is_isolated, reason = gate.is_region_isolated("tokyo")
+        if is_isolated:
+            return redirect_to_fallback()
+        
+        # 격리 해제
+        gate.restore_region("tokyo")
+    """
+    
+    # Redis 키 패턴
+    GATE_KEY_TEMPLATE = "selfhealing:global:isolation:{region}"
+    ISOLATION_LIST_KEY = "selfhealing:global:isolation:list"
+    
+    # 이벤트 채널
+    ISOLATION_EVENT_CHANNEL = "selfhealing:global:isolation:events"
+    
+    def __init__(
+        self,
+        global_redis: Optional[Any] = None,
+        cluster_identity: Optional["ClusterIdentity"] = None,
+    ):
+        """
+        Initialize RegionalIsolationGate.
+        
+        Args:
+            global_redis: 글로벌 Redis 클라이언트
+            cluster_identity: 클러스터 식별 정보
+        """
+        self._redis = global_redis
+        self._identity = cluster_identity
+        self._initialized = False
+    
+    def _ensure_initialized(self) -> None:
+        """지연 초기화 수행."""
+        if self._initialized:
+            return
+        
+        # ClusterIdentity 초기화
+        if self._identity is None:
+            try:
+                from selfhealing.core.cluster_identity import get_cluster_identity
+                self._identity = get_cluster_identity(skip_validation=True)
+            except Exception as e:
+                logger.warning(f"[RegionalIsolationGate] Failed to get cluster identity: {e}")
+        
+        # Redis 클라이언트 초기화
+        if self._redis is None:
+            try:
+                from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+                provider = TieredRedisProvider()
+                self._redis = provider.get_redis(RedisScope.GLOBAL)
+            except Exception as e:
+                logger.warning(f"[RegionalIsolationGate] Failed to initialize Redis: {e}")
+        
+        self._initialized = True
+    
+    def isolate_region(
+        self,
+        region: str,
+        reason: str,
+        duration_seconds: int = 300,
+    ) -> bool:
+        """
+        리전 격리 활성화.
+        
+        Args:
+            region: 격리할 리전
+            reason: 격리 사유
+            duration_seconds: 격리 지속 시간 (초, 기본 5분)
+            
+        Returns:
+            격리 성공 여부
+        """
+        self._ensure_initialized()
+        
+        if not self._redis:
+            logger.warning("[RegionalIsolationGate] Redis not available")
+            return False
+        
+        try:
+            key = self.GATE_KEY_TEMPLATE.format(region=region)
+            now = datetime.now(timezone.utc)
+            expires_at = datetime.fromtimestamp(
+                now.timestamp() + duration_seconds,
+                tz=timezone.utc
+            )
+            
+            isolation_info = IsolationInfo(
+                region=region,
+                isolated=True,
+                reason=reason,
+                isolated_at=now,
+                isolated_by=self._identity.cluster_id if self._identity else "unknown",
+                expires_at=expires_at,
+            )
+            
+            # 저장
+            self._redis.set(
+                key,
+                json.dumps(isolation_info.to_dict()),
+                ex=duration_seconds
+            )
+            
+            # 목록에 추가
+            self._redis.sadd(self.ISOLATION_LIST_KEY, region)
+            
+            # 이벤트 발행
+            self._publish_event("isolated", isolation_info)
+            
+            logger.warning(
+                f"[RegionalIsolationGate] Region ISOLATED: {region} "
+                f"reason='{reason}' duration={duration_seconds}s "
+                f"by={isolation_info.isolated_by}"
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to isolate region {region}: {e}")
+            return False
+    
+    def is_region_isolated(self, region: str) -> Tuple[bool, Optional[str]]:
+        """
+        리전 격리 상태 확인.
+        
+        Args:
+            region: 확인할 리전
+            
+        Returns:
+            (격리 여부, 격리 사유) 튜플
+        """
+        self._ensure_initialized()
+        
+        if not self._redis:
+            return False, None
+        
+        try:
+            key = self.GATE_KEY_TEMPLATE.format(region=region)
+            data = self._redis.get(key)
+            
+            if data:
+                if isinstance(data, bytes):
+                    data = data.decode()
+                info = IsolationInfo.from_dict(json.loads(data))
+                return info.isolated, info.reason
+            
+            return False, None
+            
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to check isolation status: {e}")
+            return False, None
+    
+    def get_isolation_info(self, region: str) -> Optional[IsolationInfo]:
+        """
+        리전 격리 상세 정보 조회.
+        
+        Args:
+            region: 조회할 리전
+            
+        Returns:
+            격리 정보 또는 None
+        """
+        self._ensure_initialized()
+        
+        if not self._redis:
+            return None
+        
+        try:
+            key = self.GATE_KEY_TEMPLATE.format(region=region)
+            data = self._redis.get(key)
+            
+            if data:
+                if isinstance(data, bytes):
+                    data = data.decode()
+                return IsolationInfo.from_dict(json.loads(data))
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to get isolation info: {e}")
+            return None
+    
+    def restore_region(self, region: str) -> bool:
+        """
+        리전 격리 해제.
+        
+        Args:
+            region: 해제할 리전
+            
+        Returns:
+            해제 성공 여부
+        """
+        self._ensure_initialized()
+        
+        if not self._redis:
+            return False
+        
+        try:
+            key = self.GATE_KEY_TEMPLATE.format(region=region)
+            
+            # 기존 정보 조회
+            existing = self.get_isolation_info(region)
+            
+            # 삭제
+            deleted = self._redis.delete(key)
+            self._redis.srem(self.ISOLATION_LIST_KEY, region)
+            
+            if deleted:
+                # 이벤트 발행
+                restore_info = IsolationInfo(
+                    region=region,
+                    isolated=False,
+                    reason="Manual restore",
+                    isolated_by=self._identity.cluster_id if self._identity else "unknown",
+                )
+                self._publish_event("restored", restore_info)
+                
+                logger.info(f"[RegionalIsolationGate] Region RESTORED: {region}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to restore region {region}: {e}")
+            return False
+    
+    def list_isolated_regions(self) -> Dict[str, IsolationInfo]:
+        """
+        현재 격리 중인 모든 리전 목록.
+        
+        Returns:
+            {region: IsolationInfo} 딕셔너리
+        """
+        self._ensure_initialized()
+        
+        if not self._redis:
+            return {}
+        
+        try:
+            regions = self._redis.smembers(self.ISOLATION_LIST_KEY)
+            result = {}
+            
+            for region in regions:
+                if isinstance(region, bytes):
+                    region = region.decode()
+                
+                info = self.get_isolation_info(region)
+                if info and info.isolated:
+                    result[region] = info
+                else:
+                    # 만료된 항목 정리
+                    self._redis.srem(self.ISOLATION_LIST_KEY, region)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to list isolated regions: {e}")
+            return {}
+    
+    def _publish_event(self, event_type: str, info: IsolationInfo) -> None:
+        """격리 이벤트 발행."""
+        if not self._redis:
+            return
+        
+        try:
+            event = {
+                "type": event_type,
+                "info": info.to_dict(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self._redis.publish(
+                self.ISOLATION_EVENT_CHANNEL,
+                json.dumps(event)
+            )
+        except Exception as e:
+            logger.error(f"[RegionalIsolationGate] Failed to publish event: {e}")
+    
+    def is_current_region_isolated(self) -> Tuple[bool, Optional[str]]:
+        """
+        현재 클러스터가 속한 리전의 격리 상태 확인.
+        
+        Returns:
+            (격리 여부, 격리 사유) 튜플
+        """
+        self._ensure_initialized()
+        
+        if not self._identity or not self._identity.region:
+            return False, None
+        
+        return self.is_region_isolated(self._identity.region)
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_gate: Optional[RegionalIsolationGate] = None
+
+
+def get_regional_isolation_gate() -> RegionalIsolationGate:
+    """RegionalIsolationGate 싱글톤 반환."""
+    global _gate
+    if _gate is None:
+        _gate = RegionalIsolationGate()
+    return _gate
+
+
+def reset_regional_isolation_gate() -> None:
+    """테스트용 싱글톤 리셋."""
+    global _gate
+    _gate = None

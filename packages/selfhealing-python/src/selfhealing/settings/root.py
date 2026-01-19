@@ -6,9 +6,11 @@ Unified Pydantic Settings replacing core/config.py:SelfHealingConfig.
 All sub-settings are composed here for single-point access.
 """
 
+import logging
+import os
 from typing import Any, Dict, Optional
 
-from pydantic import Field, ConfigDict
+from pydantic import Field, ConfigDict, model_validator
 from pydantic_settings import BaseSettings
 
 from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
@@ -27,6 +29,10 @@ from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.drift_threshold import DriftThresholdSettings
 from selfhealing.settings.l2_storage import L2StorageSettings
 from selfhealing.settings.logging_config import LoggingSettings
+from selfhealing.settings.namespace import NamespaceSettings
+from selfhealing.settings.propagation import PropagationSettings
+
+_root_logger = logging.getLogger(__name__)
 
 
 class SelfHealingSettings(BaseSettings):
@@ -113,6 +119,22 @@ class SelfHealingSettings(BaseSettings):
         default_factory=LoggingSettings,
         description="Logging configuration",
     )
+    namespace: NamespaceSettings = Field(
+        default_factory=NamespaceSettings,
+        description="Multi-cluster namespace configuration",
+    )
+    propagation: PropagationSettings = Field(
+        default_factory=PropagationSettings,
+        description="Cross-cluster propagation configuration",
+    )
+    
+    # ==========================================================================
+    # Multi-Cluster Configuration
+    # ==========================================================================
+    cluster_id: str = Field(
+        default="default",
+        description="Cluster identifier (REQUIRED for multi-cluster deployments)",
+    )
     
     # ==========================================================================
     # Feature flags
@@ -145,6 +167,32 @@ class SelfHealingSettings(BaseSettings):
         default_factory=dict,
         description="Per-domain configuration overrides",
     )
+
+    # ==========================================================================
+    # Validators
+    # ==========================================================================
+    @model_validator(mode="after")
+    def warn_default_cluster_id(self) -> "SelfHealingSettings":
+        """
+        Warn if using default cluster_id in multi-cluster mode.
+        
+        This validator logs a warning when:
+        - namespace is enabled (multi-cluster mode)
+        - cluster_id is still "default"
+        
+        This helps prevent data conflicts in multi-cluster deployments.
+        """
+        # Only warn if namespace is enabled and cluster_id is default
+        if self.namespace.namespace_enabled and self.cluster_id == "default":
+            # Check if environment variable is set
+            env_cluster_id = os.environ.get("SELFHEALING_CLUSTER_ID")
+            if not env_cluster_id or env_cluster_id == "default":
+                _root_logger.warning(
+                    "⚠️ SELFHEALING_CLUSTER_ID not set while namespace is enabled. "
+                    "Using 'default' - this may cause data conflicts in multi-cluster. "
+                    "Set SELFHEALING_CLUSTER_ID environment variable to your cluster name."
+                )
+        return self
 
     # ==========================================================================
     # Convenience methods for backward compatibility

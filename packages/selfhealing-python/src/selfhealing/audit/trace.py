@@ -20,17 +20,67 @@ _trace_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("t
 # Thread-local fallback for non-async code
 _thread_local = threading.local()
 
+# Flag to enable/disable cluster prefix in trace IDs
+_cluster_prefix_enabled = True
 
-def generate_trace_id() -> str:
+
+def generate_trace_id(include_cluster_prefix: bool = True) -> str:
     """
-    Generate a new trace ID.
+    Generate a new trace ID with optional cluster prefix.
 
-    Format: "req-{uuid4_short}" (e.g., "req-a1b2c3d4")
+    Format with cluster prefix: "req-{cluster_prefix}-{uuid4_short}"
+    Example: "req-seop-a1b2c3d4" (seoul + production)
+    
+    Format without cluster prefix: "req-{uuid4_short}"
+    Example: "req-a1b2c3d4"
+    
+    The cluster prefix includes:
+    - First 3 characters of region (or "unk" if not set)
+    - First character of environment (or "u" if not set)
+    
+    This ensures trace IDs from different clusters are distinguishable,
+    reducing collision probability in multi-cluster environments.
 
+    Args:
+        include_cluster_prefix: Whether to include cluster prefix (default: True)
+        
     Returns:
         New unique trace ID
     """
-    return f"req-{uuid.uuid4().hex[:8]}"
+    uuid_part = uuid.uuid4().hex[:8]
+    
+    if not include_cluster_prefix or not _cluster_prefix_enabled:
+        return f"req-{uuid_part}"
+    
+    try:
+        from selfhealing.core.cluster_identity import get_cluster_identity
+        identity = get_cluster_identity(skip_validation=True)
+        prefix = identity.trace_id_prefix
+        return f"req-{prefix}-{uuid_part}"
+    except Exception:
+        # Fallback to basic format if cluster identity not available
+        return f"req-{uuid_part}"
+
+
+def set_cluster_prefix_enabled(enabled: bool) -> None:
+    """
+    Enable or disable cluster prefix in trace IDs.
+    
+    Args:
+        enabled: True to include cluster prefix, False to disable
+    """
+    global _cluster_prefix_enabled
+    _cluster_prefix_enabled = enabled
+
+
+def get_cluster_prefix_enabled() -> bool:
+    """
+    Check if cluster prefix is enabled in trace IDs.
+    
+    Returns:
+        True if cluster prefix is enabled, False otherwise
+    """
+    return _cluster_prefix_enabled
 
 
 def get_trace_id() -> str:

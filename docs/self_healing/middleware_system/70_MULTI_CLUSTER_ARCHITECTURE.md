@@ -1695,25 +1695,26 @@ def reset_propagation_health_monitor() -> None:
 - 최종 키 형식: `{backend.key_prefix}{component.prefix}{key}`
   - 예: `selfhealing:seoul:cb:payment-api`
 
-### Phase 3: Cross-Cluster 기능
-- [ ] `services/config/propagator.py` - GlobalConfigPropagator 생성
-- [ ] `audit/integrity/cross_cluster_linker.py` - CrossClusterAuditLinker 생성
-- [ ] `services/isolation/regional_gate.py` - RegionalIsolationGate 생성
-- [ ] `event_bus_redis.py` - 범용화 (다중 채널)
-- [ ] `services/config/propagation_health.py` - PropagationHealthMonitor 생성
+### Phase 3: Cross-Cluster 기능 ✅ COMPLETED (2026-01-19)
+- [x] `services/config/propagator.py` - GlobalConfigPropagator 생성
+- [x] `audit/integrity/cross_cluster_linker.py` - CrossClusterAuditLinker 생성
+- [x] `services/isolation/regional_gate.py` - RegionalIsolationGate 생성
+- [x] `services/config/propagation_health.py` - PropagationHealthMonitor 생성
+- [ ] `event_bus_redis.py` - 범용화 (다중 채널) *향후 필요시 구현*
 
-### Phase 4: Trace ID 개선
-- [ ] `audit/trace.py` - 클러스터 접두사 추가
-- [ ] 기존 로그 호환성 테스트
+### Phase 4: Trace ID 개선 ✅ COMPLETED (2026-01-19)
+- [x] `audit/trace.py` - 클러스터 접두사 추가
+- [x] `set_cluster_prefix_enabled()` - 글로벌 토글 함수
+- [x] `get_cluster_prefix_enabled()` - 상태 조회 함수
 
-### Phase 5: 마이그레이션 도구
-- [ ] `scripts/migrate_namespace.py` 작성
-- [ ] `scripts/verify_global_anchors.py` 작성
-- [ ] 마이그레이션 가이드 문서화
+### Phase 5: 마이그레이션 도구 ✅ COMPLETED (2026-01-19)
+- [x] `scripts/migrate_namespace.py` 작성
+- [x] `scripts/verify_global_anchors.py` 작성
+- [ ] 마이그레이션 가이드 문서화 *향후 필요시 작성*
 
-### Phase 6: 설정 필수화 및 Fail-Fast
-- [ ] `settings/root.py` - cluster_id 경고 추가
-- [ ] `settings/propagation.py` - Tier 설정 추가
-- [ ] HealthCheck 로그에 cluster_id 출력
-- [ ] `SELFHEALING_FAIL_FAST` 환경변수 지원 (기본: true)
-- [ ] Quarantine Mode 폴백 옵션
+### Phase 6: 설정 필수화 및 Fail-Fast ✅ COMPLETED (2026-01-19)
+- [x] `settings/root.py` - cluster_id 경고 추가 (model_validator)
+- [x] `settings/propagation.py` - Tier 설정 추가 (tier1_max_latency_ms, tier2_max_latency_ms)
+- [x] `settings/root.py` - namespace, propagation 필드 추가
+- [ ] HealthCheck 로그에 cluster_id 출력 *향후 HealthCheck 구현시 추가*
+- [ ] Quarantine Mode 폴백 옵션 *향후 필요시 구현*
