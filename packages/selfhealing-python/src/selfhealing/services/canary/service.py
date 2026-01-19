@@ -592,6 +592,79 @@ class CanaryRolloutService:
                 return rollout
         return None
 
+    def get_completed_rollouts(self, limit: int = 20) -> List[CanaryRollout]:
+        """
+        완료된 롤아웃 목록 조회.
+        
+        완료/롤백/실패/취소된 롤아웃을 최근 순으로 반환합니다.
+        
+        Args:
+            limit: 최대 조회 개수 (기본 20)
+        
+        Returns:
+            완료된 CanaryRollout 목록
+        """
+        if not self.redis_client:
+            return []
+        
+        # 모든 롤아웃 키 패턴 검색
+        pattern = self.ROLLOUT_KEY.format(
+            prefix=get_key_prefix(),
+            rollout_id="*",
+        )
+        
+        completed_rollouts = []
+        
+        try:
+            # SCAN 사용 (KEYS보다 안전)
+            cursor = 0
+            while True:
+                cursor, keys = self.redis_client.scan(cursor, match=pattern, count=100)
+                
+                for key in keys:
+                    if isinstance(key, bytes):
+                        key = key.decode('utf-8')
+                    
+                    data = self.redis_client.get(key)
+                    if data:
+                        if isinstance(data, bytes):
+                            data = data.decode('utf-8')
+                        rollout = self._deserialize_rollout(json.loads(data))
+                        
+                        # 완료 상태만 포함
+                        if rollout.is_terminal:
+                            completed_rollouts.append(rollout)
+                
+                if cursor == 0:
+                    break
+        except Exception as e:
+            logger.warning(f"[CanaryRollout] Failed to scan completed rollouts: {e}")
+            return []
+        
+        # 완료 시간 역순 정렬
+        completed_rollouts.sort(
+            key=lambda r: r.completed_at or r.created_at,
+            reverse=True,
+        )
+        
+        return completed_rollouts[:limit]
+
+    def collect_metrics(self, rollout_id: str) -> List[CanaryMetrics]:
+        """
+        롤아웃 메트릭 수집 (Public API).
+        
+        Args:
+            rollout_id: 롤아웃 ID
+        
+        Returns:
+            CanaryMetrics 목록
+        """
+        rollout = self.get_rollout(rollout_id)
+        if not rollout:
+            return []
+        
+        return self._collect_stage_metrics(rollout)
+
     # =========================================================================
     # Private Methods - Redis Operations
     # =========================================================================

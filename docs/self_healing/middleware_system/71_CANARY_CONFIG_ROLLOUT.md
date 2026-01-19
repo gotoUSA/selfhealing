@@ -2072,15 +2072,15 @@ data:
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 3: API                                                          │
-│ ├── permissions.py (IsPanicRollbackAuthorized)                      │
-│ ├── views/canary.py (List, Detail, Action Views)                    │
-│ └── urls.py (URL 등록)                                               │
+│ Step 3: API ✅                                                       │
+│ ├── permissions.py (IsPanicRollbackAuthorized) ✅                   │
+│ ├── views/canary.py (List, Detail, Action Views) ✅                 │
+│ └── urls.py (URL 등록) ✅                                           │
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 4: 자동화                                                       │
-│ ├── tasks/canary_watchdog.py (Zombie 방어)                          │
+│ Step 4: 자동화 ✅                                                    │
+│ ├── tasks/canary_watchdog.py (Zombie 방어) ✅                       │
 │ ├── Celery Beat 설정                                                 │
 │ ├── Prometheus 메트릭                                                │
 │ └── Slack 알림                                                       │
@@ -2153,21 +2153,30 @@ data:
   - [x] `get_canary_rollout_service()` 싱글톤
 - [x] 단위 테스트: `tests/unit/services/canary/test_service.py` (17 tests passed)
 
-### Step 3: API (Step 2 완료 후)
+### Step 3: API (Step 2 완료 후) ✅ 완료
 
-- [ ] `api/django/permissions.py`에 `IsPanicRollbackAuthorized` 추가
-- [ ] `api/django/views/canary.py` 생성
-  - [ ] `CanaryRolloutListView`
-  - [ ] `CanaryRolloutDetailView`
-  - [ ] `CanaryRolloutActionView`
-- [ ] `api/django/urls.py`에 URL 등록
-- [ ] API 테스트: `tests/api/canary/test_views.py`
+- [x] `api/django/permissions.py`에 `IsPanicRollbackAuthorized` 추가
+- [x] `api/django/views/canary.py` 생성
+  - [x] `CanaryRolloutListView`
+  - [x] `CanaryRolloutDetailView`
+  - [x] `CanaryRolloutActionView`
+  - [x] `CanaryPanicRollbackView`
+  - [x] `CanaryMetricsView`
+  - [x] `CanaryHistoryView`
+- [x] `api/django/urls.py`에 URL 등록
+- [x] API 테스트: `tests/api/canary/test_views.py` (26 tests passed)
 
-### Step 4: 자동화 (Step 3 완료 후)
+### Step 4: 자동화 (Step 3 완료 후) ✅ 완료
 
-- [ ] `tasks/canary_watchdog.py` 생성
-  - [ ] `RolloutWatchdog` 클래스
-  - [ ] `scan_zombie_rollouts` Celery 태스크
+- [x] `tasks/canary_watchdog.py` 생성
+  - [x] `WatchdogConfig` dataclass
+  - [x] `ZombieRollout` dataclass
+  - [x] `WatchdogResult` dataclass
+  - [x] `RolloutWatchdog` 클래스
+  - [x] `scan_zombie_rollouts` Celery 태스크
+  - [x] `auto_promote_eligible` Celery 태스크
+  - [x] `collect_canary_metrics` Celery 태스크
+- [x] 단위 테스트: `tests/unit/tasks/test_canary_watchdog.py` (20 tests passed)
 - [ ] Celery Beat 설정 추가
 - [ ] Prometheus 메트릭 연동
   - [ ] `canary_rollout_total` counter

@@ -246,6 +246,16 @@ from selfhealing.api.django.views.auto_tuning import (
     AutoTuningMetricsView,
 )
 
+# Canary Rollout API Views
+from selfhealing.api.django.views.canary import (
+    CanaryRolloutListView,
+    CanaryRolloutDetailView,
+    CanaryRolloutActionView,
+    CanaryPanicRollbackView,
+    CanaryMetricsView,
+    CanaryHistoryView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -675,6 +685,22 @@ urlpatterns += [
     path("xtest/record-healing-event/", RecordHealingEventView.as_view(), name="xtest-record-healing-event"),
     path("xtest/healing-incidents/", GetHealingIncidentsView.as_view(), name="xtest-healing-incidents"),
     path("xtest/multi-blast-radius/", MultiServiceBlastRadiusView.as_view(), name="xtest-multi-blast-radius"),
+    # =========================================================================
+    # Canary Rollout API - 설정 변경의 점진적 배포
+    # Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
+    # =========================================================================
+    # List & Create
+    path("canary/rollouts/", CanaryRolloutListView.as_view(), name="canary-rollout-list"),
+    # History (completed rollouts)
+    path("canary/history/", CanaryHistoryView.as_view(), name="canary-history"),
+    # Panic Rollback (all active rollouts)
+    path("canary/panic-rollback/", CanaryPanicRollbackView.as_view(), name="canary-panic-rollback"),
+    # Detail
+    path("canary/rollouts/<str:rollout_id>/", CanaryRolloutDetailView.as_view(), name="canary-rollout-detail"),
+    # Metrics
+    path("canary/rollouts/<str:rollout_id>/metrics/", CanaryMetricsView.as_view(), name="canary-rollout-metrics"),
+    # Actions: start, promote, rollback, pause, resume, cancel
+    path("canary/rollouts/<str:rollout_id>/<str:action>/", CanaryRolloutActionView.as_view(), name="canary-rollout-action"),
 ]
 
 # Stress Test Endpoints - DEBUG 모드에서만 활성화 (프로덕션 제외)

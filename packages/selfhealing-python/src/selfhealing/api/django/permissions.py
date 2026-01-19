@@ -556,6 +556,81 @@ class ThresholdBasedPermission(BasePermission):
         return request.META.get("REMOTE_ADDR")
 
 
+class IsPanicRollbackAuthorized(BasePermission):
+    """
+    긴급 롤백(Panic Rollback) 권한.
+    
+    Canary Rollout 긴급 전체 롤백을 위한 Break Glass 권한.
+    4-Eyes 승인 없이 단일 승인자가 긴급 실행 가능.
+    
+    허용 조건:
+    - Admin 권한 보유자
+    - 또는 Emergency Escalation 권한 보유자 (reason 필수)
+    
+    강제 Audit:
+    - 모든 긴급 롤백은 CanaryAudit에 기록됨
+    - reason 필수 (사후 검토 보장)
+    
+    Reference:
+    - AWS Break Glass Pattern
+    - docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
+    """
+    
+    message = (
+        "긴급 롤백 권한이 없습니다. "
+        "Admin 또는 Emergency Escalation 권한이 필요합니다."
+    )
+    
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """
+        긴급 롤백 권한 체크.
+        
+        Args:
+            request: HTTP 요청 객체 (data.reason 필드 사용)
+            view: 뷰 객체
+        
+        Returns:
+            bool: 권한 여부
+        """
+        # 테스트 환경에서 인증 바이패스
+        if _is_auth_disabled():
+            return True
+        
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # reason 필수 검증 (강제 Audit)
+        reason = request.data.get("reason", "").strip()
+        if not reason:
+            self.message = (
+                "긴급 롤백 시 reason(사유)은 필수입니다. "
+                "사후 감사를 위해 롤백 사유를 입력해주세요."
+            )
+            logger.warning(
+                f"[RBAC] Panic rollback denied - reason required: "
+                f"user={request.user}"
+            )
+            return False
+        
+        # Admin은 항상 허용
+        if IsSelfHealingAdmin().has_permission(request, view):
+            logger.warning(
+                f"[RBAC] Panic rollback authorized (Admin): "
+                f"user={request.user}, reason={reason[:50]}"
+            )
+            return True
+        
+        # Operator + Emergency Escalation (Break Glass)
+        if IsOperator().has_permission(request, view):
+            logger.warning(
+                f"[RBAC] Panic rollback authorized (Emergency Escalation): "
+                f"user={request.user}, reason={reason[:50]}"
+            )
+            return True
+        
+        return False
+
+
 # Backward compatibility aliases
 SelfHealingViewer = IsViewer
 SelfHealingOperator = IsOperator
