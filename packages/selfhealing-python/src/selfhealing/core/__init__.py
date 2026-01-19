@@ -35,56 +35,6 @@ from selfhealing.core.backoff import (
     calculate_backoff,
 )
 
-# =============================================================================
-# DEPRECATED: Settings re-exports
-# Use 'from selfhealing.settings import ...' instead
-# Will be removed in v3.0.0
-# =============================================================================
-import importlib
-import warnings
-
-def _deprecated_settings_import(name: str) -> None:
-    """Helper to emit deprecation warning for settings imports."""
-    warnings.warn(
-        f"Importing '{name}' from 'selfhealing.core' is deprecated. "
-        f"Use 'from selfhealing.settings import {name}' instead. "
-        "This will be removed in v3.0.0.",
-        DeprecationWarning,
-        stacklevel=4,
-    )
-
-# Lazy import with deprecation warning
-_DEPRECATED_SETTINGS_IMPORTS: dict[str, tuple[str, str]] = {
-    # Settings Classes (re-exported with alias)
-    "SelfHealingConfig": ("selfhealing.settings", "SelfHealingSettings"),
-    "CircuitBreakerConfig": ("selfhealing.settings", "CircuitBreakerSettings"),
-    "DLQConfig": ("selfhealing.settings", "DLQSettings"),
-    "RetryConfig": ("selfhealing.settings", "RetrySettings"),
-    "SLAConfig": ("selfhealing.settings", "SLASettings"),
-    "SLAThresholds": ("selfhealing.settings", "SLASettings"),  # Extra alias
-    "IdempotencyConfig": ("selfhealing.settings", "IdempotencySettings"),
-    "SecurityConfig": ("selfhealing.settings", "SecuritySettings"),
-    "SecurityThresholds": ("selfhealing.settings", "SecuritySettings"),  # Extra alias
-    "ForensicConfig": ("selfhealing.settings", "ForensicSettings"),
-    "MetricsConfig": ("selfhealing.settings", "MetricsSettings"),
-    "NotificationConfig": ("selfhealing.settings", "NotificationSettings"),
-    "NotificationLimits": ("selfhealing.settings", "NotificationSettings"),  # Extra alias
-    # Settings Functions
-    "get_config": ("selfhealing.settings", "get_config"),
-    "set_config": ("selfhealing.settings", "set_config"),
-    "configure": ("selfhealing.settings", "configure"),
-    "reload_config": ("selfhealing.settings", "reload_config"),
-    "get_circuit_breaker_settings": ("selfhealing.settings", "get_circuit_breaker_config"),
-    "get_dlq_settings": ("selfhealing.settings", "get_dlq_settings"),
-    "get_retry_settings": ("selfhealing.settings", "get_retry_settings"),
-    "get_sla_thresholds": ("selfhealing.settings", "get_sla_thresholds"),
-    "get_security_thresholds": ("selfhealing.settings", "get_security_thresholds"),
-    "get_forensic_settings": ("selfhealing.settings", "get_forensic_settings"),
-    "get_notification_settings": ("selfhealing.settings", "get_notification_settings"),
-}
-
-_deprecated_cache: dict[str, object] = {}
-
 # ForensicContext, ForensicContextBuilder, etc. removed - forensic.py deleted
 from selfhealing.core.pool_monitor import (
     PoolHealthStatus,
@@ -180,30 +130,6 @@ from selfhealing.core.degraded_mode_handler import DegradedModeHandler
 from selfhealing.core.adaptive_jitter import AdaptiveJitter
 
 
-# =============================================================================
-# __getattr__ for deprecated settings imports with warning
-# =============================================================================
-def __getattr__(name: str) -> object:
-    """Lazy import with deprecation warning for settings symbols."""
-    if name in _deprecated_cache:
-        return _deprecated_cache[name]
-    
-    if name in _DEPRECATED_SETTINGS_IMPORTS:
-        _deprecated_settings_import(name)
-        module_path, attr_name = _DEPRECATED_SETTINGS_IMPORTS[name]
-        module = importlib.import_module(module_path)
-        symbol = getattr(module, attr_name)
-        _deprecated_cache[name] = symbol
-        return symbol
-    
-    raise AttributeError(f"module 'selfhealing.core' has no attribute '{name}'")
-
-
-def __dir__() -> list[str]:
-    """List available symbols for IDE autocompletion."""
-    return list(__all__)
-
-
 __all__ = [
     # Types
     "FailureType",
@@ -225,32 +151,6 @@ __all__ = [
     "BackoffConfig",
     "BackoffCalculator",  # = LegacyBackoffCalculator, config-based
     "calculate_backoff",
-    # Config
-    "SelfHealingConfig",
-    "CircuitBreakerConfig",
-    "DLQConfig",
-    "RetryConfig",
-    "SLAConfig",
-    "SLAThresholds",  # Legacy alias
-    "IdempotencyConfig",
-    "SecurityConfig",
-    "SecurityThresholds",  # Legacy alias
-    "ForensicConfig",
-    "MetricsConfig",
-    "NotificationConfig",
-    "NotificationLimits",  # Legacy alias
-    "get_config",
-    "set_config",
-    "configure",
-    "reload_config",
-    "get_circuit_breaker_settings",
-    "get_dlq_settings",
-    "get_retry_settings",
-    "get_sla_thresholds",
-    "get_security_thresholds",
-    "get_forensic_settings",
-    "get_notification_settings",
-    # Forensic - removed (forensic.py deleted)
     # Pool Monitor (Stage 26)
     "PoolHealthStatus",
     "PoolStats",

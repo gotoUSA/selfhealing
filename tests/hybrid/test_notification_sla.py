@@ -234,7 +234,7 @@ class TestNotificationSLAPolicy:
             - webhook: 8 hours
             - notification: 24 hours (longest, least critical)
         """
-        from selfhealing.core import get_sla_thresholds
+        from selfhealing.settings import get_sla_thresholds
 
         sla_config = get_sla_thresholds()
         thresholds = sla_config.get_all_thresholds()

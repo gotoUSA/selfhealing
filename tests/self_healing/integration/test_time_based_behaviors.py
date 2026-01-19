@@ -221,7 +221,7 @@ class TestSLABreachDetectionTimeBased:
         Expected behavior:
         - Operation created_at + 1 hour < current_time = breach
         """
-        from selfhealing.core import SLAThresholds
+        from selfhealing.settings import SLASettings as SLAThresholds
 
         # Create a pending payment failure at the frozen time
         failed_op = failed_operation_repository.create(
@@ -260,7 +260,7 @@ class TestSLABreachDetectionTimeBased:
         Expected behavior:
         - Operation created_at + 1 hour > current_time = no breach
         """
-        from selfhealing.core import SLAThresholds
+        from selfhealing.settings import SLASettings as SLAThresholds
 
         # Create a pending payment failure at the frozen time
         failed_op = failed_operation_repository.create(
@@ -296,7 +296,7 @@ class TestSLABreachDetectionTimeBased:
         2. Check for breaches at 16:01:00 (4 hours 1 minute later)
         3. Expect: Failure is identified as SLA breach
         """
-        from selfhealing.core import SLAThresholds
+        from selfhealing.settings import SLASettings as SLAThresholds
 
         failed_op = failed_operation_repository.create(
             domain="point",
@@ -327,7 +327,7 @@ class TestSLABreachDetectionTimeBased:
         2. Check for breaches at 15:00:00 (3 hours later)
         3. Expect: No breach (within 4 hour threshold)
         """
-        from selfhealing.core import SLAThresholds
+        from selfhealing.settings import SLASettings as SLAThresholds
 
         failed_op = failed_operation_repository.create(
             domain="point",

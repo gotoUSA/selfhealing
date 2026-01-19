@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import pytest
 
-from selfhealing.core import SLAConfig
+from selfhealing.settings import SLASettings as SLAConfig
 
 
 # Shopping domain-specific SLA thresholds for testing
