@@ -1677,17 +1677,23 @@ def reset_propagation_health_monitor() -> None:
 
 ## 12. 체크리스트
 
-### Phase 1: 핵심 인프라
-- [ ] `core/cluster_identity.py` - ClusterIdentity 싱글톤 생성
-- [ ] `core/tiered_redis.py` - TieredRedisProvider 생성
-- [ ] `settings/namespace.py` - NamespaceSettings 생성
-- [ ] 단위 테스트 작성
+### Phase 1: 핵심 인프라 ✅ COMPLETED (2026-01-19)
+- [x] `core/cluster_identity.py` - ClusterIdentity 싱글톤 생성
+- [x] `core/tiered_redis.py` - TieredRedisProvider 생성
+- [x] `settings/namespace.py` - NamespaceSettings 생성
+- [x] 단위 테스트 작성
 
-### Phase 2: Adapter 수정
-- [ ] `adapters/redis/circuit_breaker.py` - KEY_PREFIX 동적화
-- [ ] `adapters/redis/dlq.py` - KEY_PREFIX 동적화
-- [ ] `services/config_history.py` - CONFIG_*_KEY 동적화
-- [ ] 통합 테스트 작성
+### Phase 2: Adapter 수정 ✅ COMPLETED (2026-01-19)
+- [x] `adapters/redis/circuit_breaker.py` - KEY_PREFIX 동적화
+- [x] `adapters/redis/dlq.py` - KEY_PREFIX 동적화
+- [x] `services/config_history.py` - CONFIG_*_KEY 동적화
+- [x] 통합 테스트 작성
+
+**구현 노트:**
+- Namespace prefixing은 `ResilientStorageBackend.config.key_prefix`에서 처리
+- CB/DLQ는 component prefix(`cb:`, `dlq:`)만 반환
+- 최종 키 형식: `{backend.key_prefix}{component.prefix}{key}`
+  - 예: `selfhealing:seoul:cb:payment-api`
 
 ### Phase 3: Cross-Cluster 기능
 - [ ] `services/config/propagator.py` - GlobalConfigPropagator 생성

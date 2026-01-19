@@ -34,9 +34,15 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     Redis Key Structure:
     - cb:{service_name} → Hash with state fields
     - cb:{service_name}:history → List of state change events
+    
+    Multi-Cluster Support:
+    - Namespace-aware key prefixing via NamespaceSettings
+    - Key pattern: {namespace}:cb:{service_name} (when enabled)
+    
+    Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
     """
     
-    KEY_PREFIX = "cb:"
+    _BASE_PREFIX = "cb"
     HISTORY_SUFFIX = ":history"
     MAX_HISTORY_ENTRIES = 100
     
@@ -48,14 +54,42 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             backend: ResilientStorageBackend instance
         """
         self._backend = backend
+        self._key_prefix = self._build_key_prefix()
+    
+    def _build_key_prefix(self) -> str:
+        """
+        Build component key prefix.
+        
+        Note: Namespace prefixing is handled by ResilientStorageBackend.config.key_prefix.
+        This method returns only the component-level prefix (e.g., "cb:").
+        
+        Final key format in Redis:
+        - Backend.key_prefix + CB.key_prefix + service_name
+        - e.g., "selfhealing:seoul:" + "cb:" + "payment-api"
+        
+        Returns:
+            Component key prefix like "cb:"
+        """
+        # CB는 항상 base prefix만 반환
+        # namespace prefixing은 ResilientStorageBackend에서 처리
+        return f"{self._BASE_PREFIX}:"
+    
+    @property
+    def KEY_PREFIX(self) -> str:
+        """
+        Backward compatible property for KEY_PREFIX.
+        
+        Returns dynamically built prefix for namespace support.
+        """
+        return self._key_prefix
     
     def _make_key(self, service_name: str) -> str:
         """Generate storage key for service."""
-        return f"{self.KEY_PREFIX}{service_name}"
+        return f"{self._key_prefix}{service_name}"
     
     def _make_history_key(self, service_name: str) -> str:
         """Generate history key for service."""
-        return f"{self.KEY_PREFIX}{service_name}{self.HISTORY_SUFFIX}"
+        return f"{self._key_prefix}{service_name}{self.HISTORY_SUFFIX}"
     
     # =========================================================================
     # Interface Implementation

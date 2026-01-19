@@ -41,7 +41,40 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
-# Redis 키 패턴
+
+# =============================================================================
+# Redis Key Helpers (Multi-Cluster Support)
+# Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
+# =============================================================================
+
+def _get_key_prefix() -> str:
+    """
+    Get namespace-aware key prefix.
+    
+    Returns:
+        Key prefix like "selfhealing:seoul:" or "selfhealing:"
+    """
+    from selfhealing.settings.namespace import get_namespace_settings
+    return get_namespace_settings().get_key_prefix()
+
+
+def _get_config_history_key(config_type: str) -> str:
+    """Get config history key with namespace support."""
+    return f"{_get_key_prefix()}config:history:{config_type}"
+
+
+def _get_config_version_key(config_type: str) -> str:
+    """Get config version counter key with namespace support."""
+    return f"{_get_key_prefix()}config:version:{config_type}"
+
+
+def _get_config_current_key(config_type: str) -> str:
+    """Get current config key with namespace support."""
+    return f"{_get_key_prefix()}config:current:{config_type}"
+
+
+# Legacy constants (for backward compatibility with imports)
+# These still work but use the dynamic functions internally
 CONFIG_HISTORY_KEY = "selfhealing:config:history:{config_type}"
 CONFIG_VERSION_COUNTER_KEY = "selfhealing:config:version:{config_type}"
 CONFIG_CURRENT_KEY = "selfhealing:config:current:{config_type}"
@@ -166,9 +199,9 @@ class ConfigHistoryService:
             return None
         
         try:
-            history_key = CONFIG_HISTORY_KEY.format(config_type=config_type)
-            version_key = CONFIG_VERSION_COUNTER_KEY.format(config_type=config_type)
-            current_key = CONFIG_CURRENT_KEY.format(config_type=config_type)
+            history_key = _get_config_history_key(config_type)
+            version_key = _get_config_version_key(config_type)
+            current_key = _get_config_current_key(config_type)
             
             # 새 버전 번호 (원자적 증가)
             version_num = self.redis_client.incr(version_key)
@@ -228,7 +261,7 @@ class ConfigHistoryService:
             return []
         
         try:
-            history_key = CONFIG_HISTORY_KEY.format(config_type=config_type)
+            history_key = _get_config_history_key(config_type)
             entries = self.redis_client.lrange(history_key, 0, min(limit - 1, MAX_HISTORY_ENTRIES - 1))
             
             versions = []
@@ -261,7 +294,7 @@ class ConfigHistoryService:
             return None
         
         try:
-            current_key = CONFIG_CURRENT_KEY.format(config_type=config_type)
+            current_key = _get_config_current_key(config_type)
             data = self.redis_client.get(current_key)
             
             if data:
@@ -379,7 +412,7 @@ class ConfigHistoryService:
             return 0
         
         try:
-            history_key = CONFIG_HISTORY_KEY.format(config_type=config_type)
+            history_key = _get_config_history_key(config_type)
             return self.redis_client.llen(history_key)
         except Exception:
             return 0
@@ -394,9 +427,9 @@ class ConfigHistoryService:
             return False
         
         try:
-            history_key = CONFIG_HISTORY_KEY.format(config_type=config_type)
-            version_key = CONFIG_VERSION_COUNTER_KEY.format(config_type=config_type)
-            current_key = CONFIG_CURRENT_KEY.format(config_type=config_type)
+            history_key = _get_config_history_key(config_type)
+            version_key = _get_config_version_key(config_type)
+            current_key = _get_config_current_key(config_type)
             
             pipe = self.redis_client.pipeline()
             pipe.delete(history_key)

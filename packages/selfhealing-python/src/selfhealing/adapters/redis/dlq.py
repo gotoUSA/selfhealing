@@ -42,12 +42,18 @@ class RedisDLQRepository(FailedOperationRepository):
     - dlq:{id} → Hash with entry data
     - dlq:pending → Sorted Set for pending entries (score = timestamp)
     - dlq:id_seq → Counter for ID generation
+    
+    Multi-Cluster Support:
+    - Namespace-aware key prefixing via NamespaceSettings
+    - Key pattern: {namespace}:dlq:{id} (when enabled)
+    
+    Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
     """
     
-    KEY_PREFIX = "dlq:"
-    PENDING_KEY = "dlq:pending"
-    ID_SEQ_KEY = "dlq:id_seq"
-    BY_DOMAIN_PREFIX = "dlq:by_domain:"
+    _BASE_PREFIX = "dlq"
+    _PENDING_SUFFIX = "pending"
+    _ID_SEQ_SUFFIX = "id_seq"
+    _BY_DOMAIN_PREFIX = "by_domain"
     
     def __init__(self, backend: "ResilientStorageBackend"):
         """
@@ -57,10 +63,53 @@ class RedisDLQRepository(FailedOperationRepository):
             backend: ResilientStorageBackend instance
         """
         self._backend = backend
+        self._key_prefix = self._build_key_prefix()
+        # Dynamic keys based on namespace
+        self._pending_key = f"{self._key_prefix}{self._PENDING_SUFFIX}"
+        self._id_seq_key = f"{self._key_prefix}{self._ID_SEQ_SUFFIX}"
+        self._by_domain_prefix = f"{self._key_prefix}{self._BY_DOMAIN_PREFIX}:"
+    
+    def _build_key_prefix(self) -> str:
+        """
+        Build component key prefix.
+        
+        Note: Namespace prefixing is handled by ResilientStorageBackend.config.key_prefix.
+        This method returns only the component-level prefix (e.g., "dlq:").
+        
+        Final key format in Redis:
+        - Backend.key_prefix + DLQ.key_prefix + entry_id
+        - e.g., "selfhealing:seoul:" + "dlq:" + "pending"
+        
+        Returns:
+            Component key prefix like "dlq:"
+        """
+        # DLQ는 항상 base prefix만 반환
+        # namespace prefixing은 ResilientStorageBackend에서 처리
+        return f"{self._BASE_PREFIX}:"
+    
+    @property
+    def KEY_PREFIX(self) -> str:
+        """Backward compatible property."""
+        return self._key_prefix
+    
+    @property
+    def PENDING_KEY(self) -> str:
+        """Backward compatible property."""
+        return self._pending_key
+    
+    @property
+    def ID_SEQ_KEY(self) -> str:
+        """Backward compatible property."""
+        return self._id_seq_key
+    
+    @property
+    def BY_DOMAIN_PREFIX(self) -> str:
+        """Backward compatible property."""
+        return self._by_domain_prefix
     
     def _make_key(self, entry_id: int) -> str:
         """Generate storage key for entry."""
-        return f"{self.KEY_PREFIX}{entry_id}"
+        return f"{self._key_prefix}{entry_id}"
     
     # =========================================================================
     # Interface Implementation
