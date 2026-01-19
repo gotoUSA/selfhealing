@@ -2056,19 +2056,19 @@ data:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 1: 데이터 모델                                                  │
+│ Step 1: 데이터 모델 ✅                                               │
 │ └── models.py (CanaryState, CanaryStage, CanaryRollout, PassCriteria)│
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 2: 핵심 서비스                                                  │
+│ Step 2: 핵심 서비스 ✅                                               │
 │ ├── 2A. 서브 컴포넌트 (병렬 가능)                                    │
-│ │   ├── locking.py (Config Lock)                                    │
-│ │   ├── versioning.py (Optimistic Lock)                             │
-│ │   ├── chaos_guard.py (Chaos 충돌 방어)                            │
-│ │   └── audit.py (Audit 로깅)                                       │
+│ │   ├── locking.py (Config Lock) ✅                                 │
+│ │   ├── versioning.py (Optimistic Lock) ✅                          │
+│ │   ├── chaos_guard.py (Chaos 충돌 방어) ✅                         │
+│ │   └── audit.py (Audit 로깅) ✅                                    │
 │ └── 2B. 메인 서비스 (2A 완료 후)                                     │
-│     └── service.py (CanaryRolloutService)                           │
+│     └── service.py (CanaryRolloutService) ✅                        │
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -2113,41 +2113,45 @@ data:
   - [x] `PassCriteria` dataclass
 - [x] 단위 테스트: `tests/unit/services/canary/test_models.py` (30 tests passed)
 
-### Step 2: 핵심 서비스 (Step 1 완료 후)
+### Step 2: 핵심 서비스 (Step 1 완료 후) ✅ 완료
 
 > 서브 컴포넌트들은 병렬로 개발 가능. service.py는 모든 서브 컴포넌트 완료 후.
 
 **2A. 서브 컴포넌트 (병렬 개발 가능):**
 
-- [ ] `services/canary/locking.py` (Config Lock)
-  - [ ] `ConfigLockError` 예외
-  - [ ] `CanaryConfigLock` 클래스
-  - [ ] 단위 테스트
+- [x] `services/canary/locking.py` (Config Lock)
+  - [x] `ConfigLockError` 예외
+  - [x] `CanaryConfigLock` 클래스
+  - [x] 단위 테스트 (12 tests passed)
 
-- [ ] `services/canary/versioning.py` (Optimistic Lock)
-  - [ ] `VersionConflictError` 예외
-  - [ ] `check_version_and_rollback()` 함수
-  - [ ] 단위 테스트
+- [x] `services/canary/versioning.py` (Optimistic Lock)
+  - [x] `VersionConflictError` 예외
+  - [x] `VersionChecker` 클래스
+  - [x] `check_version_and_rollback()` 함수
+  - [x] 단위 테스트 (8 tests passed)
 
-- [ ] `services/canary/chaos_guard.py` (Chaos 충돌 방어)
-  - [ ] `ChaosConflictPolicy` enum
-  - [ ] `CanaryChaosGuard` 클래스
-  - [ ] 단위 테스트
+- [x] `services/canary/chaos_guard.py` (Chaos 충돌 방어)
+  - [x] `ChaosConflictPolicy` enum (STRICT/SMART/LOOSE)
+  - [x] `ChaosConflictResult` dataclass
+  - [x] `CanaryChaosGuard` 클래스
+  - [x] 단위 테스트 (14 tests passed)
 
-- [ ] `services/canary/audit.py` (Audit 로깅)
-  - [ ] `log_canary_action()` 함수
-  - [ ] 단위 테스트
+- [x] `services/canary/audit.py` (Audit 로깅)
+  - [x] `log_canary_action()` 함수
+  - [x] `CANARY_ACTIONS` 상수
+  - [x] 단위 테스트 (7 tests passed)
 
 **2B. 메인 서비스 (2A 모두 완료 후):**
 
-- [ ] `services/canary/service.py` (CanaryRolloutService)
-  - [ ] `create_rollout()` - locking.py 연동
-  - [ ] `start_rollout()` - chaos_guard.py 연동
-  - [ ] `promote()` - versioning.py 연동
-  - [ ] `rollback()` - audit.py 연동
-  - [ ] `pause()`, `resume()`
-  - [ ] ConfigHistoryService 연동
-- [ ] 통합 테스트: `tests/integration/canary/test_service.py`
+- [x] `services/canary/service.py` (CanaryRolloutService)
+  - [x] `create_rollout()` - locking.py 연동
+  - [x] `start_rollout()` - chaos_guard.py 연동
+  - [x] `promote()` - versioning.py 연동
+  - [x] `rollback()` - audit.py 연동
+  - [x] `pause()`, `resume()`
+  - [x] ConfigHistoryService 연동
+  - [x] `get_canary_rollout_service()` 싱글톤
+- [x] 단위 테스트: `tests/unit/services/canary/test_service.py` (17 tests passed)
 
 ### Step 3: API (Step 2 완료 후)
 
