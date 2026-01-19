@@ -2,8 +2,10 @@
 
 | 항목 | 내용 |
 |-----|------|
-| 버전 | 1.0 |
+| 버전 | 1.1 |
 | 작성일 | 2026-01-19 |
+| 완료일 | 2026-01-19 |
+| 상태 | ✅ Phase 1 완료 |
 | 우선순위 | 🟡 단기 |
 | 예상 효과 | API 혼란 제거, 순환 의존성 위험 제거 |
 
@@ -283,11 +285,11 @@ This will be removed in v3.0.0.
 
 ## 7. 구현 체크리스트
 
-### Phase 1 (즉시)
-- [ ] `_DEPRECATED_SETTINGS_IMPORTS` 딕셔너리 추가
-- [ ] `__getattr__` 함수 구현 (deprecation warning 포함)
-- [ ] 기존 직접 import 문 제거
-- [ ] 단위 테스트 통과 확인
+### Phase 1 (즉시) ✅ 완료
+- [x] `_DEPRECATED_SETTINGS_IMPORTS` 딕셔너리 추가
+- [x] `__getattr__` 함수 구현 (deprecation warning 포함)
+- [x] 기존 직접 import 문 제거
+- [x] 단위 테스트 통과 확인 (12개 테스트)
 
 ### Phase 2 (1주일 내)
 - [ ] 테스트 코드 마이그레이션 (12곳)
@@ -303,10 +305,54 @@ This will be removed in v3.0.0.
 
 ---
 
-## 8. 참고 자료
+## 8. 구현 결과
+
+### 8.1 변경된 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `packages/selfhealing-python/src/selfhealing/core/__init__.py` | Deprecation Warning 패턴 적용 |
+| `tests/self_healing/unit/core/test_core_settings_deprecation.py` | 테스트 코드 추가 |
+
+### 8.2 구현 상세
+
+**Deprecation Warning 패턴:**
+- `_DEPRECATED_SETTINGS_IMPORTS` 딕셔너리로 26개 심볼 매핑
+- `__getattr__` 함수로 최초 접근 시 warning 발생 및 로딩
+- `_deprecated_cache` 딕셔너리로 캐싱
+
+**Warning 메시지 예시:**
+```
+DeprecationWarning: Importing 'SLAThresholds' from 'selfhealing.core' is deprecated.
+Use 'from selfhealing.settings import SLAThresholds' instead.
+This will be removed in v3.0.0.
+```
+
+### 8.3 테스트 결과
+
+| 테스트 카테고리 | 결과 |
+|----------------|------|
+| Deprecation warning 발생 | ✅ PASS |
+| 하위 호환성 유지 | ✅ PASS |
+| Core 고유 심볼 경고 없음 | ✅ PASS |
+| Legacy alias 동작 | ✅ PASS |
+| 캐싱 동작 | ✅ PASS |
+| Invalid attribute 에러 | ✅ PASS |
+
+### 8.4 효과 측정
+
+| 지표 | Before | After | 개선율 |
+|------|--------|-------|-------|
+| 직접 import 심볼 | 26개 | 0개 | -100% |
+| 하위 호환성 | - | 100% 유지 | ✅ |
+| Warning 발생 | 없음 | 사용 시 발생 | ✅ |
+
+---
+
+## 9. 참고 자료
 
 | 문서 | 경로 |
 |------|------|
-| 현재 파일 | `core/__init__.py` (286줄) |
+| 현재 파일 | `core/__init__.py` (311줄) |
 | settings 정의 | `settings/__init__.py` (314줄) |
 | 패턴 효율성 분석 | `64_PATTERN_EFFICIENCY_ANALYSIS.md` |

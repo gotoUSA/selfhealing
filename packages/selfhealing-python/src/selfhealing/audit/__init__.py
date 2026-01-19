@@ -34,7 +34,9 @@ import importlib
 from typing import TYPE_CHECKING
 
 # =============================================================================
-# CORE API - 직접 import (10개) - 가장 자주 사용되는 핵심 API
+# CORE API - 직접 import (11개) - 가장 자주 사용되는 핵심 API
+# NOTE: self_audit 함수는 서브모듈 이름과 동일하여 lazy import 불가,
+#       직접 import 필요 (Python import 시스템 제약)
 # =============================================================================
 from selfhealing.audit.logger import (
     AuditLogger,
@@ -52,6 +54,8 @@ from selfhealing.audit.trace import (
     generate_trace_id,
 )
 from selfhealing.audit.integrity import HashChainManager
+# self_audit 함수는 모듈명과 동일하여 __getattr__ lazy import 불가 - 직접 import
+from selfhealing.audit.self_audit import self_audit as self_audit
 
 
 # =============================================================================
@@ -126,11 +130,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "RingBufferStats": ("selfhealing.audit.ring_buffer", "RingBufferStats"),
     "BackpressureStrategy": ("selfhealing.audit.ring_buffer", "BackpressureStrategy"),
     
-    # self_audit (4개)
+    # self_audit (3개) - self_audit 함수는 직접 import (모듈명 충돌)
     "SelfAuditLogger": ("selfhealing.audit.self_audit", "SelfAuditLogger"),
     "SelfAuditEvent": ("selfhealing.audit.self_audit", "SelfAuditEvent"),
     "SelfAuditStats": ("selfhealing.audit.self_audit", "SelfAuditStats"),
-    "self_audit": ("selfhealing.audit.self_audit", "self_audit"),
     
     # checksum (10개)
     "compute_crc32": ("selfhealing.audit.checksum", "compute_crc32"),
