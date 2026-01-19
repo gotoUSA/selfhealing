@@ -2087,14 +2087,14 @@ data:
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 5: 클러스터 동기화 (대부분 추가 구현 불필요)                     │
+│ Step 5: 클러스터 동기화 (대부분 추가 구현 불필요) ✅                  │
 │ ├── A/B/C. 독립 운영 → 환경변수 설정만                               │
-│ └── D. 크로스 클러스터 알림 (선택) → cross_cluster.py                │
+│ └── D. 크로스 클러스터 알림 (선택) → cross_cluster.py ✅             │
 └─────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Step 6: Request-level Canary (선택)                                  │
-│ └── feature_flag.py (단일 클러스터 내 부분 적용 필요시)              │
+│ Step 6: Request-level Canary (선택) ✅                               │
+│ └── feature_flag.py (단일 클러스터 내 부분 적용 필요시) ✅           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -2186,7 +2186,7 @@ data:
   - [ ] `canary_rollout_duration_seconds` histogram
 - [ ] Slack 알림 연동
 
-### Step 5: 클러스터 동기화 (환경에 따라 선택)
+### Step 5: 클러스터 동기화 (환경에 따라 선택) ✅ 완료
 
 > **대부분의 경우 추가 구현 불필요**. 환경변수 설정만으로 동작.
 
@@ -2333,23 +2333,26 @@ class GovernancePolicySync:
 
 **체크리스트:**
 
-- [ ] `services/canary/cross_cluster.py` 생성
-  - [ ] `CrossClusterNotifier` 클래스
-  - [ ] `CrossClusterPropagationRequest` 클래스
-  - [ ] `GovernancePolicySync` 클래스
-- [ ] Slack 알림 연동
+- [x] `services/canary/cross_cluster.py` 생성
+  - [x] `CrossClusterNotifier` 클래스
+  - [x] `CrossClusterPropagationRequest` 클래스
+  - [x] `GovernancePolicySync` 클래스
+- [x] Slack 알림 연동 (SlackNotificationBackend)
 - [ ] 승인/거절 API 엔드포인트
-- [ ] 단위 테스트
+- [x] 단위 테스트 (28 tests passed)
 
-### Step 6: Request-level Canary (선택)
+### Step 6: Request-level Canary (선택) ✅ 완료
 
 > 단일 클러스터 내 **일부 요청에만** 설정 적용이 필요한 경우
 
 **주의**: Self-Healing은 **설정 변경**만 다룹니다. 서비스 배포 카나리(Pod v1→v2)는 Kubernetes/서비스 메시 영역이며, Self-Healing과 무관합니다.
 
-- [ ] `services/canary/feature_flag.py` 생성
-  - [ ] `CanaryFeatureFlag` 클래스
-  - [ ] `should_use_canary_config()` 메서드
-  - [ ] `get_effective_config()` 메서드
-- [ ] Django 미들웨어 연동 (선택)
-- [ ] 단위 테스트
+- [x] `services/canary/feature_flag.py` 생성
+  - [x] `CanaryFeatureFlag` 클래스
+  - [x] `should_use_canary_config()` 메서드
+  - [x] `get_effective_config()` 메서드
+  - [x] `CanarySelectionStrategy` enum (RANDOM, USER_ID_HASH, HEADER_BASED, IP_HASH, WHITELIST)
+  - [x] `CanaryFlagConfig` dataclass
+  - [x] `CanaryDecision` dataclass
+- [x] Django 미들웨어 연동 (`CanaryConfigMiddleware`)
+- [x] 단위 테스트 (40 tests passed)
