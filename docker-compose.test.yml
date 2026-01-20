@@ -137,6 +137,33 @@ services:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=myproject.settings
 
+  # tests/hybrid folder runner - Celery/Redis integration tests
+  test-hybrid:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/hybrid/ -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - TEST_DB_AVAILABLE=true
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_healthy
+
   # Global tests folder runner - for fixing broken tests
   test-global:
     build: .

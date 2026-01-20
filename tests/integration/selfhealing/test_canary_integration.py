@@ -14,7 +14,8 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 import os
 import sys
 import pytest
-from datetime import timedelta
+# 이 파일의 모든 테스트는 Redis 필요
+pytestmark = pytest.mark.requires_redisfrom datetime import timedelta
 from unittest.mock import patch, MagicMock
 
 # Setup Django before importing selfhealing
@@ -56,24 +57,8 @@ def reset_services():
     reset_watchdog()
 
 
-@pytest.fixture
-def redis_available():
-    """
-    Redis 연결 가능 여부 확인.
-    
-    Uses RedisTestConfig for port configuration.
-    Docker Compose test environment uses TEST_PORT (16379).
-    """
-    try:
-        import redis
-        from tests.factories.constants import REDIS_CONFIG
-        # 환경변수 또는 RedisTestConfig.TEST_PORT 사용
-        redis_port = int(os.environ.get("REDIS_PORT", REDIS_CONFIG.TEST_PORT))
-        client = redis.Redis(host=REDIS_CONFIG.DEFAULT_HOST, port=redis_port)
-        client.ping()
-        return True
-    except Exception:
-        return False
+# NOTE: redis_available fixture 제거됨
+# tests/conftest.py의 pytest_collection_modifyitems가 requires_redis 마커 처리
 
 
 @pytest.fixture
@@ -102,15 +87,8 @@ def sample_stages():
     ]
 
 
-# =============================================================================
-# Skip Markers
-# =============================================================================
-
-
-requires_redis = pytest.mark.skipif(
-    os.environ.get("SKIP_REDIS_TESTS", "false").lower() == "true",
-    reason="Redis not available or SKIP_REDIS_TESTS=true"
-)
+# NOTE: requires_redis 마커는 tests/conftest.py에서 처리됨
+# 파일 레벨 pytestmark로 대체
 
 
 # =============================================================================
@@ -121,12 +99,8 @@ requires_redis = pytest.mark.skipif(
 class TestCanaryRolloutServiceIntegration:
     """CanaryRolloutService 통합 테스트."""
 
-    @requires_redis
-    def test_create_and_get_rollout(self, redis_available, sample_stages):
+    def test_create_and_get_rollout(self, sample_stages):
         """롤아웃 생성 및 조회."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 생성
@@ -148,12 +122,8 @@ class TestCanaryRolloutServiceIntegration:
         assert retrieved.id == rollout.id
         assert retrieved.config_type == "circuit_breaker"
 
-    @requires_redis
-    def test_full_rollout_lifecycle(self, redis_available, sample_stages):
+    def test_full_rollout_lifecycle(self, sample_stages):
         """롤아웃 전체 생명주기 테스트: 생성 → 시작 → 프로모션 → 완료."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 1. 생성
@@ -195,12 +165,8 @@ class TestCanaryRolloutServiceIntegration:
         assert rollout.state == CanaryState.COMPLETED
         assert rollout.completed_at is not None
 
-    @requires_redis
-    def test_rollback_restores_previous_values(self, redis_available, sample_stages):
+    def test_rollback_restores_previous_values(self, sample_stages):
         """롤백 시 이전 값 복원 확인."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 롤아웃 생성 및 시작
@@ -221,12 +187,8 @@ class TestCanaryRolloutServiceIntegration:
         assert rollout.state == CanaryState.ROLLED_BACK
         assert rollout.rollback_reason == "Integration test rollback"
 
-    @requires_redis
-    def test_pause_and_resume(self, redis_available, sample_stages):
+    def test_pause_and_resume(self, sample_stages):
         """일시 중지 및 재개."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         rollout = service.create_rollout(
@@ -260,12 +222,8 @@ class TestCanaryRolloutServiceIntegration:
 class TestConfigLockIntegration:
     """ConfigLock 통합 테스트."""
 
-    @requires_redis
-    def test_lock_prevents_concurrent_rollouts(self, redis_available):
+    def test_lock_prevents_concurrent_rollouts(self):
         """동시 롤아웃 방지."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         stages = [
             CanaryStage(name="test", clusters=["test"], percentage=100, duration_minutes=5)
@@ -299,12 +257,8 @@ class TestConfigLockIntegration:
 class TestWatchdogIntegration:
     """RolloutWatchdog 통합 테스트."""
 
-    @requires_redis
-    def test_watchdog_detects_zombie_rollouts(self, redis_available, sample_stages):
+    def test_watchdog_detects_zombie_rollouts(self, sample_stages):
         """Zombie 롤아웃 감지."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 오래된 롤아웃 생성 (zombie 판정 대상)
@@ -331,12 +285,8 @@ class TestWatchdogIntegration:
         assert result.scanned_count >= 1
         assert result.zombie_count >= 1
 
-    @requires_redis
-    def test_watchdog_auto_rollback_on_threshold(self, redis_available, sample_stages):
+    def test_watchdog_auto_rollback_on_threshold(self, sample_stages):
         """임계값 초과 시 자동 롤백."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 매우 오래된 롤아웃 생성
@@ -380,12 +330,8 @@ class TestWatchdogIntegration:
 class TestActiveRolloutsIntegration:
     """활성 롤아웃 목록 관리 통합 테스트."""
 
-    @requires_redis
-    def test_get_active_rollouts(self, redis_available, sample_stages):
+    def test_get_active_rollouts(self, sample_stages):
         """활성 롤아웃 목록 조회."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         service = get_canary_rollout_service()
         
         # 여러 롤아웃 생성

@@ -53,23 +53,8 @@ def reset_registry():
     ProviderRegistry.reset()
 
 
-@pytest.fixture
-def redis_available():
-    """
-    Check if Redis is available.
-    
-    Uses RedisTestConfig for consistent port configuration.
-    Docker Compose test environment uses TEST_PORT (16379).
-    """
-    try:
-        import redis
-        from tests.factories.constants import REDIS_CONFIG
-        redis_port = int(os.environ.get("REDIS_PORT", REDIS_CONFIG.TEST_PORT))
-        client = redis.Redis(host=REDIS_CONFIG.DEFAULT_HOST, port=redis_port)
-        client.ping()
-        return True
-    except Exception:
-        return False
+# NOTE: redis_available fixture 제거됨
+# tests/conftest.py의 pytest_collection_modifyitems가 requires_redis 마커 처리
 
 
 @pytest.fixture
@@ -281,18 +266,12 @@ class TestAuditTrailIntegration:
 # =============================================================================
 
 
-@pytest.mark.skipif(
-    os.environ.get("CI") == "true" or os.environ.get("SKIP_REDIS_TESTS") == "true",
-    reason="Skip Redis tests in CI without Docker or when Redis not available",
-)
+@pytest.mark.requires_redis
 class TestRedisBackendIntegration:
     """Integration tests requiring Redis (run with docker-compose)."""
 
-    def test_redis_runtime_with_null_statistics(self, redis_available):
+    def test_redis_runtime_with_null_statistics(self):
         """Redis runtime works with null statistics adapter."""
-        if not redis_available:
-            pytest.skip("Redis not available")
-        
         # Register Redis repositories if available
         try:
             from selfhealing.adapters.redis import (
