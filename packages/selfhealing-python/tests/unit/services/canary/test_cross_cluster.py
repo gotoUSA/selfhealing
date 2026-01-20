@@ -261,19 +261,39 @@ class TestLoggingNotificationBackend:
     def test_send_logs_message(self, caplog):
         """로그에 알림 기록 테스트."""
         import logging
+        import sys
+        from io import StringIO
         
         backend = LoggingNotificationBackend()
 
-        with caplog.at_level(logging.INFO, logger="selfhealing.services.canary.cross_cluster"):
+        # stderr 캡처로 로그 확인 (caplog가 캡처하지 못하는 경우 대비)
+        captured_stderr = StringIO()
+        old_stderr = sys.stderr
+        
+        # 로거에 핸들러 추가
+        test_logger = logging.getLogger("selfhealing.services.canary.cross_cluster")
+        handler = logging.StreamHandler(captured_stderr)
+        handler.setLevel(logging.INFO)
+        test_logger.addHandler(handler)
+        original_level = test_logger.level
+        test_logger.setLevel(logging.INFO)
+        
+        try:
             result = backend.send(
                 channel="#test-channel",
                 message="Test notification message",
                 metadata={"key": "value"},
             )
+        finally:
+            test_logger.removeHandler(handler)
+            test_logger.setLevel(original_level)
 
         assert result is True
-        assert "CrossClusterNotification" in caplog.text
-        assert "#test-channel" in caplog.text
+        
+        # caplog 또는 captured_stderr에서 확인
+        log_output = caplog.text + captured_stderr.getvalue()
+        assert "CrossClusterNotification" in log_output
+        assert "#test-channel" in log_output
 
 
 # =============================================================================

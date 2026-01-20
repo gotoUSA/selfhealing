@@ -352,60 +352,77 @@ class TestSafeGaugeLRUEvictionLogging:
         gauge.labels = MagicMock(side_effect=lambda **kwargs: Mock())
         return gauge
 
-    def test_eviction_logs_warning(self, mock_gauge, caplog):
+    @pytest.fixture
+    def captured_logs(self):
+        """로거를 직접 캡처하는 fixture (테스트 격리 문제 해결)."""
+        import logging
+        from io import StringIO
+        
+        # 로거 설정
+        test_logger = logging.getLogger("selfhealing.metrics.safe_gauge.core")
+        
+        # 캡처용 핸들러
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.WARNING)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        
+        # 로거에 핸들러 추가 및 propagate 강제 설정
+        original_level = test_logger.level
+        original_propagate = test_logger.propagate
+        test_logger.setLevel(logging.WARNING)
+        test_logger.propagate = True
+        test_logger.addHandler(handler)
+        
+        yield log_capture
+        
+        # 정리
+        test_logger.removeHandler(handler)
+        test_logger.setLevel(original_level)
+        test_logger.propagate = original_propagate
+
+    def test_eviction_logs_warning(self, mock_gauge, captured_logs):
         """Eviction 발생 시 경고 로그가 기록되어야 함."""
-        import logging
         from selfhealing.metrics.safe_gauge import SafeGauge
 
-        with caplog.at_level(logging.WARNING):
-            safe = SafeGauge(mock_gauge, max_label_combinations=2)
-            
-            safe.labels(domain="a")
-            safe.labels(domain="b")
-            safe.labels(domain="c")  # eviction 발생
-            
-        # 경고 로그 확인
-        warning_logs = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warning_logs) >= 1
+        safe = SafeGauge(mock_gauge, max_label_combinations=2)
         
-        # 로그 메시지에 필수 정보 포함 확인
-        log_message = warning_logs[0].message
-        assert "LRU eviction" in log_message
-        assert "domain" in log_message
-        assert "max_label_combinations" in log_message
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")  # eviction 발생
+            
+        # 캡처된 로그 확인
+        log_output = captured_logs.getvalue()
+        assert "LRU eviction" in log_output
+        assert "domain" in log_output
+        assert "max_label_combinations" in log_output
 
-    def test_eviction_log_includes_shadow_value(self, mock_gauge, caplog):
+    def test_eviction_log_includes_shadow_value(self, mock_gauge, captured_logs):
         """Eviction 로그에 shadow_value가 포함되어야 함."""
-        import logging
         from selfhealing.metrics.safe_gauge import SafeGauge
 
-        with caplog.at_level(logging.WARNING):
-            safe = SafeGauge(mock_gauge, max_label_combinations=2)
-            
-            safe.labels(domain="a")
-            safe.labels(domain="b")
-            safe.labels(domain="c")  # eviction 발생
-            
-        warning_logs = [r for r in caplog.records if r.levelno == logging.WARNING]
-        log_message = warning_logs[0].message
-        assert "shadow_value" in log_message
-
-    def test_multiple_evictions_log_count(self, mock_gauge, caplog):
-        """여러 번 eviction 발생 시 각각 경고 로그 기록."""
-        import logging
-        from selfhealing.metrics.safe_gauge import SafeGauge
-
-        with caplog.at_level(logging.WARNING):
-            safe = SafeGauge(mock_gauge, max_label_combinations=2)
-            
-            safe.labels(domain="a")
-            safe.labels(domain="b")
-            safe.labels(domain="c")  # eviction #1
-            safe.labels(domain="d")  # eviction #2
-            
-        warning_logs = [r for r in caplog.records if "LRU eviction" in r.message]
-        assert len(warning_logs) == 2
+        safe = SafeGauge(mock_gauge, max_label_combinations=2)
         
-        # eviction 번호 확인
-        assert "#1" in warning_logs[0].message
-        assert "#2" in warning_logs[1].message
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")  # eviction 발생
+            
+        # 캡처된 로그에서 shadow_value 확인
+        log_output = captured_logs.getvalue()
+        assert "shadow_value" in log_output
+
+    def test_multiple_evictions_log_count(self, mock_gauge, captured_logs):
+        """여러 번 eviction 발생 시 각각 경고 로그 기록."""
+        from selfhealing.metrics.safe_gauge import SafeGauge
+
+        safe = SafeGauge(mock_gauge, max_label_combinations=2)
+        
+        safe.labels(domain="a")
+        safe.labels(domain="b")
+        safe.labels(domain="c")  # eviction #1
+        safe.labels(domain="d")  # eviction #2
+            
+        # 캡처된 로그에서 eviction 번호 확인
+        log_output = captured_logs.getvalue()
+        assert "LRU eviction #1" in log_output
+        assert "LRU eviction #2" in log_output
