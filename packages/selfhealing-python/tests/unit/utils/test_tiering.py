@@ -1150,33 +1150,6 @@ class TestResolveTierWithFallback:
         assert result.is_fallback is True
         assert result.fallback_reason == TierFallbackReason.CONFIG_MISSING
 
-    @pytest.mark.skip(reason="Django-specific test - requires Django settings and should be in tests/self_healing/django/")
-    def test_circuit_open_bypasses_engine(self):
-        """When circuit is open, static path match still works."""
-        from selfhealing.api.django.tiering import (
-            TierRegistry,
-            TierFallbackReason,
-            get_tiering_circuit_breaker,
-        )
-        
-        cb = get_tiering_circuit_breaker()
-        cb.reset()
-        
-        registry = TierRegistry.__new__(TierRegistry)
-        registry._init()
-        
-        # Trip the circuit breaker
-        for _ in range(cb.FAILURE_THRESHOLD):
-            cb.record_failure(Exception("test"))
-        
-        assert cb.is_open is True
-        
-        # Static path match takes priority over circuit open
-        result = registry.resolve_tier_with_fallback("/api/self-healing/control/")
-        
-        # Static path match is still honored
-        assert result.tier_id == "critical"
-
     def test_exception_triggers_fallback(self):
         """Exception in tier resolution should trigger fallback."""
         from selfhealing.api.django.tiering import (

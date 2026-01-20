@@ -245,22 +245,3 @@ class TestDriftDetectionNoAutoAdjust:
             for warning in result["warnings"]:
                 assert "[ACTION REQUIRED" in warning["recommendation"]
 
-
-@pytest.mark.django_db(transaction=True)
-class TestDriftDetectionIntegration:
-    """Integration tests with actual database.
-
-    Run with: docker-compose exec web pytest tests/self_healing/unit/test_drift_detection.py::TestDriftDetectionIntegration
-    """
-
-    @pytest.mark.skip(
-        reason="Integration test - run in Docker: docker-compose exec web pytest -k TestDriftDetectionIntegration"
-    )
-    def test_full_drift_detection_cycle(self):
-        """Test full drift detection cycle with real data."""
-        from shopping.tasks.drift_detection_tasks import check_sla_drift
-
-        result = check_sla_drift()
-
-        assert result["success"] is True
-        assert "domains_checked" in result

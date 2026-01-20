@@ -52,20 +52,6 @@ class TestChaosContextFaultTolerance:
         result = is_chaos_experiment(mock_op)
         assert isinstance(result, bool)
 
-    @pytest.mark.skip(reason="resolve_expired_chaos_experiments is Django-specific, not part of selfhealing package")
-    def test_resolve_expired_with_db_failure(self):
-        """resolve_expired should handle DB failures gracefully."""
-        from selfhealing.services.chaos_context import (
-            resolve_expired_chaos_experiments,
-        )
-
-        with patch("shopping.models.failed_operation.FailedOperation") as MockOp:
-            MockOp.objects.filter.side_effect = Exception("DB unavailable")
-
-            # Should raise exception (caller must handle)
-            with pytest.raises(Exception):
-                resolve_expired_chaos_experiments()
-
 
 class TestDriftDetectionFaultTolerance:
     """Test Drift Detection task failure handling."""
@@ -125,18 +111,6 @@ class TestAuditTrailResilience:
 
 class TestGracefulDegradation:
     """Test graceful degradation patterns in new features."""
-
-    @pytest.mark.skip(reason="DLQService.repository uses ProviderRegistry - no local fallback in docstring")
-    def test_dlq_service_fallback_to_local_adapter(self):
-        """DLQService should fallback to local adapter if package unavailable."""
-        from selfhealing.services.dlq_service import DLQService
-        import inspect
-
-        # Verify by code inspection
-        source = inspect.getsource(DLQService.repository.fget)
-
-        assert "Fallback to local" in source
-        assert "DjangoFailedOperationRepository" in source
 
     def test_idempotency_service_graceful_degradation(self):
         """IdempotencyService should gracefully degrade to DB-only."""

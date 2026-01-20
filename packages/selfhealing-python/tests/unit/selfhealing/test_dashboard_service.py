@@ -211,100 +211,46 @@ class TestDashboardServiceResolutionRate:
         assert rate == 33.0
 
 
-@pytest.mark.skip(reason="DashboardService uses NullStatisticsRepository - requires proper adapter registration")
-class TestDashboardServiceWithMock:
-    """Tests for DashboardService methods with mocked model."""
+class TestDashboardServiceWithMockedRepo:
+    """Tests for DashboardService with mocked stats_repo."""
 
     @pytest.fixture
-    def mock_model(self):
-        """Create a mock FailedOperation model."""
+    def mock_stats_repo(self):
+        """Create a mock statistics repository."""
+        from selfhealing.core.types import StatusCounts
+
         mock = MagicMock()
-        mock.Status = MagicMock()
-        mock.Status.PENDING = "pending"
-        mock.Status.RESOLVED = "resolved"
-        mock.Status.FAILED = "failed"
-        mock.Status.ARCHIVED = "archived"
+        mock.get_status_counts.return_value = StatusCounts(
+            total=80, pending=10, resolved=50, failed=5, archived=15
+        )
+        mock.get_recent_activity.return_value = MagicMock(
+            new_failures_24h=5, resolved_24h=3, new_failures_7d=20, resolved_7d=15
+        )
+        mock.get_distribution.return_value = MagicMock(
+            by_domain=[{"domain": "order", "count": 10}],
+            by_failure_type=[{"failure_type": "network", "count": 5}],
+        )
+        mock.get_alerts.return_value = MagicMock(
+            high_retry_count=3, avg_retry_count=2.5
+        )
         return mock
 
     @pytest.fixture
-    def service_with_mock(self, mock_model):
-        """Create a DashboardService with mocked model."""
+    def service_with_mock(self, mock_stats_repo):
+        """Create a DashboardService with mocked stats_repo."""
         service = DashboardService()
-        service._model = mock_model
+        service._stats_repo = mock_stats_repo
         return service
 
-    def test_get_status_counts(self, service_with_mock, mock_model):
-        """Test get_status_counts method."""
-        # Setup mock queryset
-        mock_queryset = MagicMock()
-        mock_queryset.values.return_value.annotate.return_value.values_list.return_value = [
-            ("pending", 10),
-            ("resolved", 50),
-            ("failed", 5),
-            ("archived", 15),
-        ]
-        mock_model.objects.values.return_value = mock_queryset.values.return_value
-
+    def test_get_status_counts(self, service_with_mock, mock_stats_repo):
+        """Test get_status_counts method via stats_repo."""
         result = service_with_mock.get_status_counts()
 
         assert isinstance(result, StatusCounts)
         assert result.total == 80
         assert result.pending == 10
         assert result.resolved == 50
-        assert result.failed == 5
-        assert result.archived == 15
-
-    def test_get_recent_activity(self, service_with_mock, mock_model):
-        """Test get_recent_activity method."""
-        # Setup mock querysets
-        mock_model.objects.filter.return_value.count.return_value = 5
-
-        result = service_with_mock.get_recent_activity(hours=24, days=7)
-
-        assert isinstance(result, RecentActivity)
-        # All counts should be 5 due to our mock
-        assert result.new_failures_24h == 5
-        assert result.resolved_24h == 5
-        assert result.new_failures_7d == 5
-        assert result.resolved_7d == 5
-
-    def test_get_distribution(self, service_with_mock, mock_model):
-        """Test get_distribution method."""
-        # Setup mock for domain distribution
-        mock_domain_qs = MagicMock()
-        mock_domain_qs.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = [
-            {"domain": "order", "count": 10},
-            {"domain": "payment", "count": 5},
-        ]
-
-        mock_model.objects.filter.return_value = mock_domain_qs
-
-        result = service_with_mock.get_distribution(limit=10)
-
-        assert isinstance(result, Distribution)
-
-    def test_get_alerts(self, service_with_mock, mock_model):
-        """Test get_alerts method."""
-        # Setup high retry count
-        mock_model.objects.filter.return_value.count.return_value = 3
-
-        # Setup average
-        mock_model.objects.filter.return_value.aggregate.return_value = {"avg": 2.5}
-
-        result = service_with_mock.get_alerts(high_retry_threshold=5)
-
-        assert isinstance(result, AlertInfo)
-        assert result.high_retry_count == 3
-        assert result.avg_retry_count == 2.5
-
-    def test_get_alerts_none_average(self, service_with_mock, mock_model):
-        """Test get_alerts with None average (no entries)."""
-        mock_model.objects.filter.return_value.count.return_value = 0
-        mock_model.objects.filter.return_value.aggregate.return_value = {"avg": None}
-
-        result = service_with_mock.get_alerts()
-
-        assert result.avg_retry_count == 0.0
+        mock_stats_repo.get_status_counts.assert_called_once()
 
 
 class TestGetDashboardService:
@@ -378,3 +324,76 @@ class TestDashboardServiceGetSummary:
         assert "recent_activity" in result_dict
         assert "distribution" in result_dict
         assert "alerts" in result_dict
+
+
+class TestDashboardCaching:
+    """Tests for Dashboard Redis caching."""
+
+    @pytest.fixture
+    def mock_cache(self):
+        """Create a mock cache provider."""
+        cache = Mock()
+        cache.get.return_value = None  # Cache miss by default
+        cache.set.return_value = None
+        return cache
+
+    @pytest.fixture
+    def service_with_cache(self, mock_cache):
+        """Create DashboardService with mocked cache."""
+        service = DashboardService(cache=mock_cache)
+        # Also mock stats_repo to avoid ProviderRegistry dependency
+        mock_repo = Mock()
+        mock_repo.get_status_counts.return_value = StatusCounts(
+            total=100, pending=10, resolved=70, failed=5, archived=15
+        )
+        mock_repo.get_recent_activity.return_value = RecentActivity(
+            new_failures_24h=5, resolved_24h=3, new_failures_7d=20, resolved_7d=15
+        )
+        mock_repo.get_distribution.return_value = Distribution(
+            by_domain=[], by_failure_type=[]
+        )
+        mock_repo.get_alerts.return_value = AlertInfo(high_retry_count=0, avg_retry_count=0.0)
+        service._stats_repo = mock_repo
+        return service
+
+    def test_cache_hit(self, mock_cache, service_with_cache):
+        """Test that cache is used when available."""
+        cached_data = {
+            "timestamp": "2025-12-21T10:00:00Z",
+            "health_status": "healthy",
+            "overview": {"total": 10, "pending": 0, "resolved": 5, "failed": 0, "archived": 5, "resolution_rate_percent": 50.0},
+            "recent_activity": {"new_failures_24h": 0, "resolved_24h": 2, "new_failures_7d": 5, "resolved_7d": 5},
+            "distribution": {"by_domain": [], "by_failure_type": []},
+            "alerts": {"high_retry_count": 0, "avg_retry_count": 0.0},
+            "recommendations": [],
+        }
+        mock_cache.get.return_value = cached_data
+
+        result = service_with_cache.get_summary()
+
+        # Cache should be queried
+        assert mock_cache.get.called
+        # Result should match cached data
+        assert result.health_status == "healthy"
+        assert result.status_counts.total == 10
+
+    def test_cache_miss_and_set(self, mock_cache, service_with_cache):
+        """Test that cache is populated on cache miss."""
+        mock_cache.get.return_value = None  # Cache miss
+
+        service_with_cache.get_summary()
+
+        # Cache should be set after fetching fresh data
+        assert mock_cache.set.called
+
+    def test_skip_cache_flag(self, mock_cache, service_with_cache):
+        """Test that skip_cache=True bypasses cache."""
+        cached_data = {"health_status": "healthy", "overview": {"total": 999}}
+        mock_cache.get.return_value = cached_data
+
+        result = service_with_cache.get_summary(skip_cache=True)
+
+        # stats_repo should be accessed (cache bypassed)
+        assert service_with_cache.stats_repo.get_status_counts.called
+        # Result should be fresh data, not cached
+        assert result.status_counts.total == 100  # From mock_repo, not 999
