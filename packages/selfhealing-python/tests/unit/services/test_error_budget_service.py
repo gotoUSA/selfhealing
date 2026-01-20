@@ -442,7 +442,6 @@ class TestFreezeDecisionRecorder:
         assert result["freeze_status"] == "freeze_recommended"
 
 
-@pytest.mark.skip(reason="ErrorBudgetService initialization issue - exclude_chaos parameter causes failure")
 class TestErrorBudgetService:
     """Test integrated ErrorBudgetService."""
 

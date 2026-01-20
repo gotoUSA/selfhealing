@@ -211,19 +211,16 @@ class TestHealthCheckService:
     # get_overall_health Tests
     # =========================================================================
 
-    @pytest.mark.skip(reason="Patches non-existent method _get_circuit_breaker_model - use _get_circuit_breaker_count instead")
     @patch("django.utils.timezone")
-    @patch.object(HealthCheckService, "_get_circuit_breaker_model")
+    @patch.object(HealthCheckService, "_get_circuit_breaker_count")
     @patch.object(HealthCheckService, "check_database")
-    def test_get_overall_health_healthy(self, mock_check_db, mock_get_model, mock_timezone):
+    def test_get_overall_health_healthy(self, mock_check_db, mock_get_count, mock_timezone):
         """전체 헬스 체크 - 정상."""
         mock_check_db.return_value = DatabaseCheck(
             alias="default", vendor="postgresql", is_connected=True, is_usable=True
         )
         
-        mock_model = MagicMock()
-        mock_model.objects.count.return_value = 5
-        mock_get_model.return_value = mock_model
+        mock_get_count.return_value = 5
         
         mock_timezone.now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
 

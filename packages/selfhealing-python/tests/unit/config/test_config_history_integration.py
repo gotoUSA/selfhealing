@@ -8,8 +8,6 @@ RuntimeConfigManager와 ConfigHistory 자동 연동 테스트.
 import pytest
 from unittest.mock import patch, MagicMock, call
 
-pytestmark = pytest.mark.skip(reason="get_state_backend function does not exist in runtime_config module")
-
 from selfhealing.services.runtime_config import (
     RuntimeConfigManager,
     get_runtime_config_manager,
@@ -39,8 +37,8 @@ def reset_singletons():
 
 @pytest.fixture
 def mock_state_backend():
-    """StateBackend 모킹."""
-    with patch("selfhealing.services.runtime_config.get_state_backend") as mock:
+    """StateBackend 모킹 - base 모듈에서 패치."""
+    with patch("selfhealing.services.runtime_config.base.get_state_backend") as mock:
         backend = MagicMock()
         backend.get.return_value = None
         backend.set.return_value = True
@@ -357,7 +355,7 @@ class TestSaveToHistoryHelper:
             mock_service.save_version.side_effect = Exception("Save failed")
             mock_get.return_value = mock_service
 
-            with patch("selfhealing.services.runtime_config.logger") as mock_logger:
+            with patch("selfhealing.services.runtime_config.base.logger") as mock_logger:
                 manager = RuntimeConfigManager()
                 manager._save_to_history(
                     config_type="dlq",

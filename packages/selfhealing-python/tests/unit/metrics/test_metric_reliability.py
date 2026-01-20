@@ -445,7 +445,6 @@ class TestMetricReliabilityManager:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="Patches non-existent get_snapshot_storage function")
 class TestMetricReliabilityIntegration:
     """신뢰도 시스템 통합 테스트."""
 
@@ -478,7 +477,7 @@ class TestMetricReliabilityIntegration:
         )
         
         # 1. 데이터 없음 → Default
-        with patch("selfhealing.metrics.reliability_manager.get_snapshot_storage") as mock:
+        with patch("selfhealing.metrics.snapshot_storage.get_snapshot_storage") as mock:
             mock.return_value.load_value.return_value = None
             mock.return_value.get_snapshot_age.return_value = None
             
@@ -497,6 +496,7 @@ class TestMetricReliabilityIntegration:
         from selfhealing.metrics.reliability_manager import (
             MetricReliabilityManager,
             OperatingMode,
+            ReliabilityLevel,
             ReliabilityThresholds,
         )
         
@@ -509,8 +509,8 @@ class TestMetricReliabilityIntegration:
         # 동기화 성공
         manager.report_sync_success("payment", "push", 5)
         
-        # 시간 경과 (데이터 stale)
+        # 시간 경과 (데이터 stale) → medium_max_age(0.2) 초과 → LOW
         time.sleep(0.25)
         
         state = manager.get_reliability_state("payment")
-        assert state.reliability_level == ReliabilityLevel.UNKNOWN
+        assert state.reliability_level == ReliabilityLevel.LOW

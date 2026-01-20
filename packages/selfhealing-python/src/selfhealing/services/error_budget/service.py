@@ -44,14 +44,14 @@ class ErrorBudgetService:
         self._simulated_requests: int = 0
         
         # Simulation Stats Callback - Chaos 연동
-        def _simulation_stats_callback(start_time, end_time) -> dict:
+        def _simulation_stats_callback(start_time, end_time, exclude_chaos=False) -> dict:
             """Chaos Engineering 테스트용 콜백."""
             if self._simulated_errors > 0:
                 return {
                     "total_errors": self._simulated_errors,
                     "source": "simulation",
                 }
-            return None  # 시뮬레이션 데이터가 없으면 None 반환
+            return {"total_errors": 0, "source": "simulation"}  # 빈 dict 대신 기본값 반환
         
         # 실제 콜백이 없으면 시뮬레이션 콜백 사용
         actual_failed_stats = get_failed_operation_stats or _simulation_stats_callback

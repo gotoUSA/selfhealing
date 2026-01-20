@@ -77,17 +77,7 @@ class TestPoolCircuitBreakerCaching:
         assert cb._background_thread.name == "PoolCB-Refresh"
         assert cb._background_thread.daemon is True
 
-    @pytest.mark.skip(reason="time.sleep 기반 테스트 - 부하테스트에서 검증")
-    def test_background_thread_stops_on_shutdown(self, fresh_circuit_breaker):
-        """백그라운드 스레드가 중지 가능한지 확인 - 부하테스트에서 검증"""
-        cb = fresh_circuit_breaker
-
-        # 스레드 중지
-        cb._stop_background_refresh()
-
-        # 중지 확인 (1초 내)
-        time.sleep(0.2)
-        assert not cb._background_thread.is_alive() or cb._stop_background.is_set()
+    # test_background_thread_stops_on_shutdown 삭제됨 - 부하테스트(Locust)에서 검증
 
     def test_cache_stats_tracking(self, fresh_circuit_breaker):
         """캐시 통계 추적 확인"""
@@ -127,37 +117,7 @@ class TestPoolCircuitBreakerCaching:
             assert reason is None
             mock_fetch.assert_not_called()
 
-    @pytest.mark.skip(reason="부하테스트에서 실제 Pool 고갈 상황으로 검증 필요 - Locust 테스트 참조")
-    def test_circuit_opens_on_cached_exhaustion(self, fresh_circuit_breaker):
-        """
-        캐시된 고갈 상태에서 Circuit이 OPEN되는지 확인
-        
-        NOTE: 이 테스트는 단위 테스트 환경에서 불안정합니다.
-        실제 Pool 고갈 시나리오는 부하테스트에서 검증:
-        - load_tests/locustfile.py의 PoolExhaustionTest
-        - 또는 scripts/test_pool_exhaustion.py
-        """
-        cb = fresh_circuit_breaker
-
-        # 캐시를 고갈 상태로 설정
-        with cb._cache_lock:
-            cb._cached_pool_status = {
-                "available": True,
-                "is_exhausted": True,  # 고갈!
-                "is_near_exhaustion": True,
-                "checkedout": 5,
-                "total_capacity": 5,
-                "usage_percent": 100,
-                "_cache_time": time.time(),
-            }
-
-        # 요청 처리
-        allow, reason = cb.should_allow_request()
-
-        # 거부되어야 함
-        assert allow is False
-        assert "exhausted" in reason.lower() or "open" in reason.lower()
-        assert cb.state == cb.OPEN
+    # test_circuit_opens_on_cached_exhaustion 삭제됨 - 부하테스트(Locust)에서 검증
 
 
 class TestPoolCircuitBreakerMiddlewareIntegration:
@@ -272,37 +232,7 @@ class TestPoolCircuitBreakerCacheRefresh:
         cb._stop_background_refresh()
         PoolCircuitBreaker._instance = None
 
-    @pytest.mark.skip(reason="time.sleep 기반 테스트 - 부하테스트에서 검증")
-    def test_cache_refreshes_periodically(self, fast_refresh_circuit_breaker):
-        """캐시가 주기적으로 갱신되는지 확인 - 부하테스트에서 검증"""
-        cb = fast_refresh_circuit_breaker
-
-        initial_refreshes = cb._stats.get("cache_refreshes", 0)
-
-        # 200ms 대기 (50ms 간격이면 약 4회 갱신 예상)
-        time.sleep(0.2)
-
-        # 갱신 횟수 증가 확인
-        assert cb._stats["cache_refreshes"] > initial_refreshes
-
-    @pytest.mark.skip(reason="time.sleep 기반 테스트 - 부하테스트에서 검증")
-    def test_stale_cache_warning(self, fast_refresh_circuit_breaker, caplog):
-        """오래된 캐시에 대한 경고 로깅"""
-        import logging
-
-        cb = fast_refresh_circuit_breaker
-
-        # 캐시를 매우 오래된 것으로 설정
-        with cb._cache_lock:
-            cb._cached_pool_status["_cache_time"] = time.time() - 10  # 10초 전
-
-        # 로깅 레벨 설정
-        with caplog.at_level(logging.WARNING):
-            cb.get_cached_pool_status()
-
-        # 경고 메시지 확인 (Stale cache)
-        # Note: 실제 환경에서만 동작, CI에서는 스킵 가능
-        # assert "Stale cache" in caplog.text
+    # test_cache_refreshes_periodically, test_stale_cache_warning 삭제됨 - 부하테스트(Locust)에서 검증
 
 
 class TestPoolCircuitBreakerReset:
@@ -435,24 +365,7 @@ class TestPoolCircuitBreakerV621Improvements:
 
         assert cb._stats["stale_cache_fallbacks"] > initial_fallbacks
 
-    @pytest.mark.skip(reason="스레드 join/restart 테스트 - 부하테스트에서 검증")
-    def test_background_thread_auto_restart(self, fresh_circuit_breaker_v621):
-        """백그라운드 스레드가 죽으면 자동 재시작되는지 확인 - 부하테스트에서 검증"""
-        cb = fresh_circuit_breaker_v621
-
-        # 스레드 강제 중지
-        cb._stop_background.set()
-        if cb._background_thread:
-            cb._background_thread.join(timeout=0.5)
-
-        initial_restarts = cb._stats.get("background_thread_restarts", 0)
-
-        # 캐시 조회 시 스레드 재시작 트리거
-        cb.get_cached_pool_status()
-
-        # 스레드 재시작 확인
-        assert cb._stats["background_thread_restarts"] > initial_restarts
-        assert cb._background_thread.is_alive()
+    # test_background_thread_auto_restart 삭제됨 - 부하테스트(Locust)에서 검증
 
     def test_stale_threshold_multiplier_setting(self):
         """stale_threshold_multiplier 환경변수가 적용되는지 확인"""

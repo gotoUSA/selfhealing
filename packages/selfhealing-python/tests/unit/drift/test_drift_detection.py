@@ -185,58 +185,6 @@ class TestDecisionRecorder:
         assert result["success"] is False
 
 
-@pytest.mark.skip(reason="Patches non-existent functions - shopping.tasks only re-exports from selfhealing.celery_tasks")
-class TestCeleryTaskWrappers:
-    """Test Django/Celery task wrappers."""
-
-    @patch("shopping.tasks.drift_detection_tasks._get_sla_thresholds")
-    @patch("shopping.tasks.drift_detection_tasks._get_failed_operations")
-    def test_check_sla_drift_task(self, mock_get_ops, mock_get_sla):
-        """Test check_sla_drift Celery task."""
-        from shopping.tasks.drift_detection_tasks import check_sla_drift
-
-        mock_sla = MagicMock()
-        mock_sla.get_all_thresholds.return_value = {"payment": timedelta(hours=1)}
-        mock_get_sla.return_value = mock_sla
-
-        mock_qs = MagicMock()
-        mock_qs.count.return_value = 0
-        mock_get_ops.return_value = mock_qs
-
-        result = check_sla_drift()
-
-        assert result["success"] is True
-
-    @patch("shopping.tasks.drift_detection_tasks._resolve_expired_chaos_experiments")
-    def test_cleanup_chaos_task(self, mock_resolve):
-        """Test cleanup_expired_chaos_experiments Celery task."""
-        from shopping.tasks.drift_detection_tasks import cleanup_expired_chaos_experiments
-
-        mock_resolve.return_value = 3
-
-        result = cleanup_expired_chaos_experiments()
-
-        assert result["success"] is True
-        assert result["resolved_count"] == 3
-
-    @patch("shopping.tasks.drift_detection_tasks._get_failed_operation_by_id")
-    def test_record_decision_task(self, mock_get_op):
-        """Test record_advisory_decision Celery task."""
-        from shopping.tasks.drift_detection_tasks import record_advisory_decision
-
-        mock_op = MagicMock()
-        mock_op.metadata = {}
-        mock_get_op.return_value = mock_op
-
-        result = record_advisory_decision(
-            operation_id=1,
-            decision="approved",
-            decided_by="admin",
-        )
-
-        assert result["success"] is True
-
-
 class TestDriftDetectionNoAutoAdjust:
     """Test that drift detection NEVER auto-adjusts settings."""
 

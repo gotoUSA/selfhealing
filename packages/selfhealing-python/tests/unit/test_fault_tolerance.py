@@ -70,15 +70,15 @@ class TestChaosContextFaultTolerance:
 class TestDriftDetectionFaultTolerance:
     """Test Drift Detection task failure handling."""
 
-    @pytest.mark.skip(reason="Patches non-existent function - shopping.tasks only re-exports from selfhealing.celery_tasks")
     def test_check_sla_drift_handles_db_failure(self):
         """check_sla_drift should return error result on DB failure."""
-        from shopping.tasks.drift_detection_tasks import check_sla_drift
+        from selfhealing.celery_tasks.drift_detection_tasks import check_sla_drift
 
-        with patch("shopping.tasks.drift_detection_tasks._get_sla_thresholds") as mock_sla:
+        with patch("selfhealing.celery_tasks.drift_detection_tasks._get_sla_thresholds") as mock_sla:
             mock_sla.side_effect = Exception("Config unavailable")
 
-            result = check_sla_drift()
+            # Celery task는 bound task이므로 apply() 또는 직접 호출 필요
+            result = check_sla_drift.apply().result
 
             assert result["success"] is False
             assert "error" in result
@@ -174,32 +174,30 @@ class TestGracefulDegradation:
 class TestSystemRecovery:
     """Test system recovery when features fail."""
 
-    @pytest.mark.skip(reason="Patches non-existent function - shopping.tasks only re-exports from selfhealing.celery_tasks")
     def test_drift_detection_failure_returns_structured_error(self):
         """Drift detection failure returns structured error for monitoring."""
-        from shopping.tasks.drift_detection_tasks import check_sla_drift
+        from selfhealing.celery_tasks.drift_detection_tasks import check_sla_drift
 
-        with patch("shopping.tasks.drift_detection_tasks._get_sla_thresholds") as mock_sla:
+        with patch("selfhealing.celery_tasks.drift_detection_tasks._get_sla_thresholds") as mock_sla:
             mock_sla.side_effect = Exception("Database connection lost")
 
-            result = check_sla_drift()
+            result = check_sla_drift.apply().result
 
             # Should return structured error, not raise exception
             assert result["success"] is False
             assert "error" in result
             assert "checked_at" in result  # Always includes timestamp
 
-    @pytest.mark.skip(reason="Patches non-existent function - shopping.tasks only re-exports from selfhealing.celery_tasks")
     def test_cleanup_task_failure_logged(self):
         """cleanup_expired_chaos_experiments logs failures properly."""
-        from shopping.tasks.drift_detection_tasks import (
+        from selfhealing.celery_tasks.drift_detection_tasks import (
             cleanup_expired_chaos_experiments,
         )
 
-        with patch("shopping.tasks.drift_detection_tasks._resolve_expired_chaos_experiments") as mock_resolve:
+        with patch("selfhealing.celery_tasks.drift_detection_tasks._resolve_expired_chaos_experiments") as mock_resolve:
             mock_resolve.side_effect = Exception("Cleanup failed")
 
-            result = cleanup_expired_chaos_experiments()
+            result = cleanup_expired_chaos_experiments.apply().result
 
             assert result["success"] is False
             assert "error" in result
