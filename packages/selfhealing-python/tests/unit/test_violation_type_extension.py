@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.security_violation_service import (
+from selfhealing.services.security import (
     ActionPolicy,
     ACTION_POLICY_BY_VIOLATION_TYPE,
     Severity,
@@ -230,7 +230,7 @@ class TestCriticalViolationEventBus:
         Purpose:
             CRITICAL 보안 위반 시 EventBus에 이벤트가 발행되는지 확인.
         """
-        from selfhealing.services.security_violation_service import SecurityViolationService
+        from selfhealing.services.security import SecurityViolationService
 
         with patch("selfhealing.services.event_bus.get_event_bus") as mock_get_bus:
             mock_bus = MagicMock()
@@ -262,7 +262,7 @@ class TestCriticalViolationEventBus:
         Purpose:
             EventBus 실패 시 예외가 발생하지 않는지 확인.
         """
-        from selfhealing.services.security_violation_service import SecurityViolationService
+        from selfhealing.services.security import SecurityViolationService
 
         with patch("selfhealing.services.event_bus.get_event_bus") as mock_get_bus:
             mock_get_bus.side_effect = Exception("EventBus unavailable")
@@ -290,7 +290,7 @@ class TestViolationTypeIntegration:
         Purpose:
             handle_violation이 CRITICAL 위반에 대해 이벤트를 발행하는지 확인.
         """
-        from selfhealing.services.security_violation_service import SecurityViolationService
+        from selfhealing.services.security import SecurityViolationService
 
         # Repository와 Cache mock
         mock_repo = MagicMock()
@@ -318,7 +318,7 @@ class TestViolationTypeIntegration:
         Purpose:
             handle_violation이 MEDIUM 위반에 대해 이벤트를 발행하지 않는지 확인.
         """
-        from selfhealing.services.security_violation_service import SecurityViolationService
+        from selfhealing.services.security import SecurityViolationService
 
         mock_repo = MagicMock()
         mock_repo.create.return_value = MagicMock(id=999)
