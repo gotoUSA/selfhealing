@@ -8,6 +8,9 @@ Covers zero-data-loss and integrity guarantee features:
 - AtomicMergeSwap: Global lock preventing concurrent reconciliation
 - ShardedDateLock: Per-date parallel lock
 - IntegrityAuditTrail: Forensic event recording
+
+Refactored to use Factory Pattern (Phase 4):
+- MockRedisClient → factories.MockRedisClient
 """
 
 import json
@@ -34,101 +37,8 @@ from selfhealing.audit.hash_chain_safety import (
     HashChainSafetyManager,
 )
 
-
-# =============================================================================
-# Mock Redis Client
-# =============================================================================
-
-class MockRedisClient:
-    """Test-purpose Mock Redis client."""
-    
-    def __init__(self, should_fail: bool = False):
-        self._data: Dict[str, Any] = {}
-        self._lists: Dict[str, List[Any]] = {}
-        self._should_fail = should_fail
-        self._lock = threading.Lock()
-    
-    def get(self, key: str) -> Optional[bytes]:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        value = self._data.get(key)
-        if value is not None:
-            return str(value).encode()
-        return None
-    
-    def set(
-        self,
-        key: str,
-        value: Any,
-        nx: bool = False,
-        ex: int = None,
-        px: int = None,
-    ) -> bool:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        with self._lock:
-            if nx and key in self._data:
-                return False
-            self._data[key] = value
-            return True
-    
-    def delete(self, *keys: str) -> int:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        count = 0
-        for key in keys:
-            if key in self._data:
-                del self._data[key]
-                count += 1
-        return count
-    
-    def eval(self, script: str, numkeys: int, *args) -> Any:
-        """Simple eval implementation for check-and-delete pattern."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        
-        # Handle the common check-and-delete pattern
-        if numkeys == 1 and len(args) >= 2:
-            key = args[0]
-            expected_value = args[1]
-            
-            current = self._data.get(key)
-            if current is not None:
-                current_str = current if isinstance(current, str) else str(current)
-                if current_str == expected_value:
-                    del self._data[key]
-                    return 1
-            return 0
-        
-        return 0
-    
-    def lpush(self, key: str, *values: Any) -> int:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        with self._lock:
-            if key not in self._lists:
-                self._lists[key] = []
-            for v in values:
-                self._lists[key].insert(0, v)
-            return len(self._lists[key])
-    
-    def ltrim(self, key: str, start: int, end: int) -> bool:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        with self._lock:
-            if key in self._lists:
-                self._lists[key] = self._lists[key][start:end + 1]
-            return True
-    
-    def lrange(self, key: str, start: int, end: int) -> List[bytes]:
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        lst = self._lists.get(key, [])
-        if end < 0:
-            end = len(lst) + end + 1
-        else:
-            end = end + 1
-        return [v.encode() if isinstance(v, str) else v for v in lst[start:end]]
+# Factory Pattern imports
+from tests.factories import MockRedisClient
 
 
 # =============================================================================

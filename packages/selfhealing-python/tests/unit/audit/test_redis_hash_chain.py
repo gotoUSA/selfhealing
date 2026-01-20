@@ -7,6 +7,9 @@ RedisHashChainManager 단위 테스트.
 3. 동시 쓰기 시 시퀀스 원자성
 4. 해시 체인 연속성 검증
 5. 상태 조회 및 통계
+
+Refactored to use Factory Pattern (Phase 4):
+- MockRedisClient → factories.MockRedisClient
 """
 
 import json
@@ -30,121 +33,8 @@ from selfhealing.audit.integrity import (
     create_hash_chain_manager,
 )
 
-
-# =============================================================================
-# Mock Redis Client
-# =============================================================================
-
-class MockRedisClient:
-    """Mock Redis client for testing without real Redis."""
-    
-    def __init__(self, should_fail: bool = False):
-        self._data: Dict[str, Any] = {}
-        self._hashes: Dict[str, Dict[str, str]] = {}
-        self._should_fail = should_fail
-        self._lock = threading.Lock()
-        self._acquired_locks: Dict[str, str] = {}  # key -> owner_id
-    
-    def incr(self, key: str) -> int:
-        """Atomic increment."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        with self._lock:
-            current = int(self._data.get(key, 0))
-            new_value = current + 1
-            self._data[key] = new_value
-            return new_value
-    
-    def get(self, key: str) -> Optional[bytes]:
-        """Get value."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        value = self._data.get(key)
-        if value is not None:
-            return str(value).encode()
-        return None
-    
-    def set(self, key: str, value: Any, nx: bool = False, px: Optional[int] = None) -> bool:
-        """Set value with optional NX (not exists)."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        with self._lock:
-            if nx and key in self._data:
-                return False
-            self._data[key] = value
-            return True
-    
-    def delete(self, *keys: str) -> int:
-        """Delete keys."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        count = 0
-        for key in keys:
-            if key in self._data:
-                del self._data[key]
-                count += 1
-            if key in self._hashes:
-                del self._hashes[key]
-                count += 1
-        return count
-    
-    def hget(self, key: str, field: str) -> Optional[bytes]:
-        """Get hash field."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        hash_data = self._hashes.get(key, {})
-        value = hash_data.get(field)
-        if value is not None:
-            return str(value).encode()
-        return None
-    
-    def hset(self, key: str, mapping: Dict[str, Any] = None, **kwargs) -> int:
-        """Set hash fields."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        if mapping is None:
-            mapping = kwargs
-        with self._lock:
-            if key not in self._hashes:
-                self._hashes[key] = {}
-            self._hashes[key].update({str(k): str(v) for k, v in mapping.items()})
-            return len(mapping)
-    
-    def hgetall(self, key: str) -> Dict[bytes, bytes]:
-        """Get all hash fields."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        hash_data = self._hashes.get(key, {})
-        return {k.encode(): v.encode() for k, v in hash_data.items()}
-    
-    def eval(self, script: str, numkeys: int, *args) -> Any:
-        """Evaluate Lua script (simplified mock)."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        
-        # Simplified: Handle lock release script
-        if numkeys == 1 and len(args) >= 2:
-            key = args[0]
-            expected_value = args[1]
-            
-            with self._lock:
-                current = self._data.get(key)
-                if current == expected_value:
-                    if key in self._data:
-                        del self._data[key]
-                    return 1
-            return 0
-        return 0
-    
-    def exists(self, key: str) -> int:
-        """Check if key exists."""
-        if self._should_fail:
-            raise ConnectionError("Redis connection failed")
-        return 1 if key in self._data else 0
-    
-    def pexpire(self, key: str, milliseconds: int) -> int:
-        """Set TTL (mock - just returns 1)."""
-        return 1 if key in self._data else 0
+# Factory Pattern imports
+from tests.factories import MockRedisClient
 
 
 # =============================================================================

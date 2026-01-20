@@ -56,6 +56,16 @@ class MockPipeline:
         self._commands.append(("hget", key, field))
         return self
     
+    def hgetall(self, key: str) -> "MockPipeline":
+        """HGETALL 명령 추가."""
+        self._commands.append(("hgetall", key))
+        return self
+    
+    def exists(self, key: str) -> "MockPipeline":
+        """EXISTS 명령 추가."""
+        self._commands.append(("exists", key))
+        return self
+    
     def incr(self, key: str) -> "MockPipeline":
         """INCR 명령 추가."""
         self._commands.append(("incr", key))
@@ -87,6 +97,10 @@ class MockPipeline:
                     results.append(len(cmd[2]) if cmd[2] else 0)
                 elif cmd[0] == "hget":
                     results.append(self._redis.hget(cmd[1], cmd[2]))
+                elif cmd[0] == "hgetall":
+                    results.append(self._redis.hgetall(cmd[1]))
+                elif cmd[0] == "exists":
+                    results.append(self._redis.exists(cmd[1]))
                 elif cmd[0] == "incr":
                     results.append(self._redis.incr(cmd[1]))
                 elif cmd[0] == "expire":
@@ -403,6 +417,81 @@ class MockRedisClient:
         """PUBLISH 명령 (Mock: 수신자 0)."""
         self._check_failure()
         return 0
+    
+    # =========================================================================
+    # Scripting
+    # =========================================================================
+    
+    def __init_scripts(self):
+        """스크립트 저장소 초기화 (lazy init)."""
+        if not hasattr(self, '_scripts'):
+            self._scripts: Dict[str, str] = {}
+            self._script_counter = 0
+    
+    def script_load(self, script: str) -> str:
+        """SCRIPT LOAD 명령 - 스크립트를 로드하고 SHA 반환."""
+        self._check_failure()
+        self.__init_scripts()
+        self._script_counter += 1
+        sha = f"sha_{self._script_counter}"
+        self._scripts[sha] = script
+        return sha
+    
+    def eval(self, script: str, numkeys: int, *args) -> Any:
+        """
+        EVAL 명령 (Lua 스크립트 실행 모의).
+        
+        지원 패턴:
+        1. Lock release (check-and-delete)
+        2. Atomic sequence (INCR + HGET)
+        3. Pending commit (EXISTS + DEL)
+        """
+        self._check_failure()
+        
+        # Pattern 1: Atomic sequence reservation (INCR + HGET)
+        if "INCR" in script and "HGET" in script:
+            seq_key = args[0] if len(args) > 0 else "seq"
+            hash_key = args[1] if len(args) > 1 else "hash"
+            new_seq = self.incr(seq_key)
+            prev_hash = self.hget(hash_key, "previous_hash")
+            prev_hash = prev_hash.decode() if prev_hash else "GENESIS"
+            return [new_seq, prev_hash]
+        
+        # Pattern 2: Pending commit (EXISTS + DEL)
+        if "EXISTS" in script and "DEL" in script:
+            pending_key = args[0] if len(args) > 0 else "pending"
+            if self.exists(pending_key):
+                self.delete(pending_key)
+                return {"ok": True}
+            return {"err": "PENDING_NOT_FOUND"}
+        
+        # Pattern 3: Lock release (check-and-delete)
+        if numkeys == 1 and len(args) >= 2:
+            key = args[0]
+            expected_value = args[1]
+            
+            with self._lock:
+                current = self._data.get(key)
+                if current == expected_value:
+                    if key in self._data:
+                        del self._data[key]
+                    return 1
+            return 0
+        
+        return 0
+    
+    def evalsha(self, sha: str, numkeys: int, *args) -> Any:
+        """EVALSHA 명령 - SHA로 스크립트 실행."""
+        self._check_failure()
+        self.__init_scripts()
+        if sha in self._scripts:
+            return self.eval(self._scripts[sha], numkeys, *args)
+        raise Exception("NOSCRIPT")
+    
+    def pexpire(self, key: str, milliseconds: int) -> int:
+        """PEXPIRE 명령 (Mock: TTL 설정 없이 존재 여부만 반환)."""
+        self._check_failure()
+        return 1 if key in self._data or key in self._hashes else 0
     
     # =========================================================================
     # Utility
