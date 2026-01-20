@@ -2,7 +2,7 @@
 
 > **용도**: 새로운 세션에서 리팩토링 진행 시 체크리스트로 활용  
 > **관련 문서**: 60-64번 문서
-> **최종 업데이트**: 2026-01-20
+> **최종 업데이트**: 2026-01-21
 
 ---
 
@@ -99,6 +99,29 @@
 
 ## Phase 4: 통합 테스트 리팩토링 (64번 문서)
 
+### 📊 테스트 실행 결과 (2026-01-21)
+
+| 테스트 서비스 | Passed | Failed | Skipped | 시간 |
+|--------------|--------|--------|---------|------|
+| test-hybrid | 98 | 0 | 0 | ~15s |
+| test-chaos | 682 | 0 | 35 | ~45s |
+| test-global | 1,372 | 39 | 81 | 71.5s |
+
+#### 🔴 실패 원인 분석 (39개 실패)
+
+**1. RBAC Permission 로직 버그 (37개)**
+- `IsViewer`, `IsOperator`, `IsSelfHealingAdmin` 권한 클래스가 인증되지 않은 사용자에게도 `True` 반환
+- `ThresholdBasedPermission`, `EmergencyEscalationPermission` 동일 문제
+- 근본 원인: `selfhealing/api/django/permissions.py` 권한 검증 로직 문제
+- ⚠️ **Phase 4 리팩토링과 무관 - 별도 버그 수정 필요**
+
+**2. API 인증 누락 (2개)**
+- `test_sync_requires_admin`: 403 예상 → 200 반환
+- `test_get_status_unauthenticated`: 401/403 예상 → 200 반환
+
+**3. 메서드 누락 (1개)**
+- `RedisDLQRepository.list_pending()` 없음 (→ `get_pending` 사용 필요)
+
 ### 4.1 tests/hybrid/ (14개 파일)
 
 - [ ] test_celery_async_mode.py
@@ -156,10 +179,12 @@
 
 ## 최종 검증
 
-- [ ] `docker-compose up -d` 전체 서비스 실행
-- [ ] `python -m pytest tests/ --override-ini=addopts= --ignore=tests/load/ -v` 전체 통과
-- [ ] 하드코딩된 localhost/port grep 결과 없음
-- [ ] pytest.skip 우회 패턴 최소화
+- [x] `docker-compose up -d` 전체 서비스 실행
+- [x] `docker-compose -f docker-compose.test.yml run --rm test-hybrid` 실행 (98 passed)
+- [x] `docker-compose -f docker-compose.test.yml run --rm test-chaos` 실행 (682 passed, 35 skipped)
+- [x] `docker-compose -f docker-compose.test.yml run --rm test-global` 실행 (1372 passed, 39 failed, 81 skipped)
+- [ ] RBAC Permission 버그 수정 후 전체 테스트 통과 확인 (별도 이슈)
+- [ ] Phase 4 Factory 패턴 적용 완료
 
 ---
 
@@ -187,3 +212,40 @@
 | import 오류 | 경로 및 PYTHONPATH 확인 | 62번 |
 | Builder 누락 | Factory 확장 문서 참조 | 63번 |
 | 테스트 실패 | 개별 파일 디버깅 후 진행 | 64번 |
+
+---
+
+## 🚨 발견된 이슈 (2026-01-21)
+
+### 이슈 #1: RBAC Permission 권한 검증 버그
+
+**영향 받는 파일:**
+- `selfhealing/api/django/permissions.py`
+
+**증상:**
+- `IsViewer.has_permission()`, `IsOperator.has_permission()`, `IsSelfHealingAdmin.has_permission()` 메서드가 인증되지 않은 사용자에게도 `True` 반환
+- Mock 테스트에서 `request.user.groups.filter()` 호출되지 않음
+
+**영향 받는 테스트:**
+- `tests/self_healing/api/test_rbac_permissions.py` (15개)
+- `tests/integration/selfhealing/test_rbac_permissions.py` (15개)
+- `tests/self_healing/api/test_emergency_escalation.py` (6개)
+- `tests/self_healing/api/test_threshold_permission.py` (3개)
+
+**우선순위:** 🔴 높음 (보안 관련)
+
+---
+
+### 이슈 #2: RedisDLQRepository 메서드 누락
+
+**영향 받는 파일:**
+- `selfhealing/core/dlq/redis_dlq.py` (또는 관련 모듈)
+
+**증상:**
+- `list_pending()` 메서드 없음
+- 힌트: `get_pending` 메서드 사용 필요
+
+**영향 받는 테스트:**
+- `tests/self_healing/integration/test_multi_cluster_namespace.py::TestNamespaceIsolation::test_dlq_namespace_isolation`
+
+**우선순위:** 🟡 중간
