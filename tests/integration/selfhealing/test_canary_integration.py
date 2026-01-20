@@ -14,8 +14,11 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 import os
 import sys
 import pytest
+
 # 이 파일의 모든 테스트는 Redis 필요
-pytestmark = pytest.mark.requires_redisfrom datetime import timedelta
+pytestmark = pytest.mark.requires_redis
+
+from datetime import timedelta
 from unittest.mock import patch, MagicMock
 
 # Setup Django before importing selfhealing
