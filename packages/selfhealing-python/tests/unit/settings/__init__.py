@@ -1,1 +1,1 @@
-"""Unit tests for Pydantic Settings module."""
+"""Unit tests for selfhealing settings."""

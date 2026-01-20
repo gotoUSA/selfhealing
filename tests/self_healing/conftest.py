@@ -2,17 +2,34 @@
 Self-healing tests conftest.
 
 Provides isolation from shopping app database dependencies.
+
+Fixture Strategy:
+    - mock_external_services: autouse=False (명시적 요청 필요)
+    - reset_singletons: autouse=True (항상 싱글톤 리셋)
+    
+    Django/shopping 앱에 의존하는 테스트에서만 mock_external_services를 사용합니다.
+    순수 selfhealing 패키지 테스트는 Mock 없이 실행됩니다.
 """
 import pytest
 from unittest.mock import MagicMock, patch
 
 
-@pytest.fixture(autouse=True, scope="function")
+@pytest.fixture(scope="function")
 def mock_external_services():
     """
     Mock external services to prevent blocking on Redis/DB connections.
     
-    This fixture runs for every test in self_healing test suite.
+    Note: autouse=False - 필요한 테스트에서 명시적으로 요청하세요.
+    
+    Usage:
+        @pytest.mark.usefixtures("mock_external_services")
+        class TestMyFeature:
+            ...
+            
+        또는
+        
+        def test_something(mock_external_services):
+            ...
     """
     mock_backend = MagicMock()
     mock_backend.get.return_value = None

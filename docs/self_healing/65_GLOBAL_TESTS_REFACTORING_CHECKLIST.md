@@ -39,31 +39,32 @@
 
 ---
 
-## Phase 2: 구조 정리 (62번 문서)
+## Phase 2: 구조 정리 (62번 문서) ✅ 완료
 
 ### 2.1 Unit 테스트 이동
 
-- [ ] `tests/self_healing/unit/` 폴더 내용 확인 (61개 파일)
-- [ ] 대상 폴더 생성 (`packages/.../tests/unit/core/` 등)
-- [ ] 파일 이동 완료
-- [ ] import 경로 수정 (필요시)
-- [ ] 이동된 테스트 실행 성공
-- [ ] 빈 폴더 삭제
+- [x] `tests/self_healing/unit/` 폴더 내용 확인 (61개 파일)
+- [x] 대상 폴더 생성 (`packages/.../tests/unit/core/` 등)
+- [x] 순수 Unit 테스트 36개 → `packages/selfhealing-python/tests/unit/` 이동
+- [x] Django 의존 테스트 18개 → `tests/self_healing/django/` 이동
+- [x] `tests/self_healing/unit/` 폴더 삭제 완료
+- [x] packages/unit/core/ 테스트 40개 통과 확인
 
 ### 2.2 conftest.py 정리
 
-- [ ] `tests/self_healing/conftest.py` autouse=False 로 변경
-- [ ] 영향받는 테스트에 fixture 명시적 추가
-- [ ] `tests/self_healing/chaos/conftest.py` 중복 확인/제거
+- [x] `tests/self_healing/conftest.py` autouse=False 이미 적용됨
+- [x] `tests/self_healing/django/conftest.py` 생성 (mock_external_services autouse)
+- [x] `tests/self_healing/chaos/conftest.py` 별도 fixture 제공 (중복 없음)
 
 ### 2.3 기타 폴더
 
-- [ ] `tests/_unclassified/` 내용 확인 및 정리
+- [x] `test_dna_discovery.py` → `tests/self_healing/` 루트로 이동 (load_tests 의존)
+- [x] 빈 adapters, chaos 하위 폴더 삭제
 
 ### 2.4 검증
 
-- [ ] 패키지 unit 테스트 실행 성공
-- [ ] 전역 통합 테스트 실행 성공
+- [x] 패키지 unit 테스트 실행 성공 (40 passed)
+- [x] Docker Compose test-global 실행 확인
 
 ---
 
