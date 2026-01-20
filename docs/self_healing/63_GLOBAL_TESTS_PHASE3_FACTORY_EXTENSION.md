@@ -181,23 +181,23 @@ stages = [
 
 ## 6. 구현 순서
 
-| 순서 | 항목 | 우선순위 | 근거 |
-|------|------|---------|------|
-| 1 | MockRequestBuilder | 높음 | API 테스트 10개+ 파일에서 사용 |
-| 2 | CanaryStageBuilder | 중간 | Canary 테스트에서 반복 사용 |
-| 3 | ChaosExperimentBuilder | 중간 | Chaos 테스트 20개+ 파일 |
-| 4 | WatchdogConfigBuilder | 낮음 | 사용 빈도 낮음 |
-| 5 | NotificationBuilder | 낮음 | 특정 테스트에서만 사용 |
+| 순서 | 항목 | 우선순위 | 근거 | 상태 |
+|------|------|---------|------|------|
+| 1 | MockRequestBuilder | 높음 | API 테스트 10개+ 파일에서 사용 | ✅ 완료 |
+| 2 | CanaryStageBuilder | 중간 | Canary 테스트에서 반복 사용 | ✅ 완료 |
+| 3 | ChaosExperimentBuilder | 중간 | Chaos 테스트 20개+ 파일 | ✅ 완료 |
+| 4 | WatchdogConfigBuilder | 낮음 | 사용 빈도 낮음 | ✅ 완료 |
+| 5 | NotificationBuilder | 낮음 | 특정 테스트에서만 사용 | ⏸️ 보류 |
 
 ---
 
 ## 7. 완료 기준
 
-- [ ] MockRequestBuilder 구현 및 테스트
-- [ ] CanaryStageBuilder 구현 및 테스트
-- [ ] ChaosExperimentBuilder 구현 및 테스트
-- [ ] constants.py 확장 (Canary, Chaos, Notification)
-- [ ] 기존 테스트 1개 이상 새 Builder로 리팩토링하여 동작 확인
+- [x] MockRequestBuilder 구현 및 테스트
+- [x] CanaryStageBuilder 구현 및 테스트
+- [x] ChaosExperimentBuilder 구현 및 테스트
+- [x] constants.py 확장 (Canary: CanaryCluster/CanaryPercentage, Chaos: ChaosIntensity, RBAC: RBACRole)
+- [ ] 기존 테스트 1개 이상 새 Builder로 리팩토링하여 동작 확인 (Phase 4에서 진행)
 
 ---
 
@@ -205,17 +205,72 @@ stages = [
 
 모든 새 Builder는 기존 파일에 추가:
 
-| Builder | 파일 |
-|---------|------|
-| MockRequestBuilder | `tests/factories/builders.py` |
-| CanaryStageBuilder | `tests/factories/builders.py` |
-| ChaosExperimentBuilder | `tests/factories/builders.py` |
-| WatchdogConfigBuilder | `tests/factories/builders.py` |
-| NotificationBuilder | `tests/factories/builders.py` |
+| Builder | 파일 | 상태 |
+|---------|------|------|
+| MockRequestBuilder | `tests/factories/builders.py` | ✅ 구현 |
+| CanaryStageBuilder | `tests/factories/builders.py` | ✅ 구현 |
+| ChaosExperimentBuilder | `tests/factories/builders.py` | ✅ 구현 |
+| WatchdogConfigBuilder | `tests/factories/builders.py` | ✅ 구현 |
+| NotificationBuilder | `tests/factories/builders.py` | ⏸️ 보류 |
 
 상수는:
-| 상수 | 파일 |
-|------|------|
-| CanaryCluster, CanaryPercentage | `tests/factories/constants.py` |
-| ChaosType, ChaosIntensity | `tests/factories/constants.py` |
-| NotificationType, NotificationPriority | `tests/factories/constants.py` |
+| 상수 | 파일 | 상태 |
+|------|------|------|
+| CanaryCluster, CanaryPercentage | `tests/factories/constants.py` | ✅ 구현 |
+| ChaosIntensity | `tests/factories/constants.py` | ✅ 구현 |
+| RBACRole | `tests/factories/constants.py` | ✅ 구현 |
+| NotificationType, NotificationPriority | `tests/factories/constants.py` | ⏸️ 보류 |
+
+---
+
+## 9. 구현 완료 내역 (2026-01-21)
+
+### 9.1 구현된 Builder
+
+| Builder | 주요 메서드 | 용도 |
+|---------|------------|------|
+| `MockRequestBuilder` | `authenticated()`, `as_superuser()`, `in_group()`, `with_data()`, `post()`, `with_ip()` | API Permission 테스트용 Mock Request 생성 |
+| `CanaryStageBuilder` | `canary_stage()`, `regional_stage()`, `global_stage()`, `with_percentage()`, `default_three_stage_rollout()` | Canary 롤아웃 단계 설정 생성 |
+| `ChaosExperimentBuilder` | `latency_injection()`, `circuit_breaker_open()`, `target_service()`, `medium_intensity()` | Chaos 실험 설정 생성 |
+| `WatchdogConfigBuilder` | `default()`, `aggressive()`, `conservative()`, `with_zombie_threshold()` | Watchdog 설정 생성 |
+
+### 9.2 구현된 상수
+
+| 상수 클래스 | 값 | 용도 |
+|------------|-----|------|
+| `CanaryCluster` | SEOUL_CANARY, SEOUL_MAIN, TOKYO_MAIN, SINGAPORE_MAIN | 클러스터 이름 |
+| `CanaryPercentage` | INITIAL(10), HALF(50), FULL(100) | 트래픽 비율 |
+| `ChaosIntensity` | LOW_RATE(0.001), MEDIUM_RATE(0.01), HIGH_RATE(0.05), EXTREME_RATE(0.1) | 주입 비율 |
+| `RBACRole` | VIEWER, OPERATOR, ADMIN | Self-Healing API 역할 |
+
+### 9.3 사용 예시
+
+```python
+from tests.factories import (
+    MockRequestBuilder,
+    CanaryStageBuilder,
+    ChaosExperimentBuilder,
+    WatchdogConfigBuilder,
+)
+
+# API 테스트용 Mock Request
+request = (MockRequestBuilder()
+    .authenticated()
+    .as_operator()
+    .with_data({"threshold": 10})
+    .post()
+    .build())
+
+# Canary 3단계 롤아웃
+stages = CanaryStageBuilder.default_three_stage_rollout()
+
+# Chaos 레이턴시 주입 실험
+config = (ChaosExperimentBuilder()
+    .latency_injection(500)
+    .target_service("payment-api")
+    .medium_intensity()
+    .build())
+
+# 공격적 Watchdog 설정
+watchdog = WatchdogConfigBuilder().aggressive().build()
+```

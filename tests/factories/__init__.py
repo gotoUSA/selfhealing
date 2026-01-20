@@ -42,6 +42,11 @@ from tests.factories.constants import (
     CeleryTestConfig,
     RedisTestConfig,
     DatabaseTestConfig,
+    # Phase 3: 추가 상수
+    CanaryCluster,
+    CanaryPercentage,
+    ChaosIntensity,
+    RBACRole,
 )
 
 # Builders
@@ -50,6 +55,11 @@ from tests.factories.builders import (
     FailedOperationBuilder,
     CanaryRolloutBuilder,
     MockServiceBuilder,
+    # Phase 3: 추가 Builder
+    MockRequestBuilder,
+    CanaryStageBuilder,
+    ChaosExperimentBuilder,
+    WatchdogConfigBuilder,
 )
 
 # Data Factories
@@ -81,11 +91,21 @@ __all__ = [
     "CeleryTestConfig",
     "RedisTestConfig",
     "DatabaseTestConfig",
+    # Phase 3: 추가 상수
+    "CanaryCluster",
+    "CanaryPercentage",
+    "ChaosIntensity",
+    "RBACRole",
     # Builders
     "CircuitBreakerStateBuilder",
     "FailedOperationBuilder",
     "CanaryRolloutBuilder",
     "MockServiceBuilder",
+    # Phase 3: 추가 Builder
+    "MockRequestBuilder",
+    "CanaryStageBuilder",
+    "ChaosExperimentBuilder",
+    "WatchdogConfigBuilder",
     # Data Factory
     "TestDataFactory",
     "MockCircuitBreakerStateData",

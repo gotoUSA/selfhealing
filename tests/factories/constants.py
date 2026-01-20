@@ -90,6 +90,72 @@ class PaymentStatus:
     FAILED = "failed"
 
 
+class CanaryCluster:
+    """
+    Canary 클러스터 이름 상수.
+    
+    Canary 롤아웃 테스트에서 사용하는 클러스터 식별자입니다.
+    실제 배포 환경의 클러스터 구조를 반영합니다.
+    """
+    # 카나리 전용 (초기 10% 트래픽)
+    SEOUL_CANARY = "seoul-canary"
+    
+    # 메인 클러스터 (리전별)
+    SEOUL_MAIN = "seoul-main"
+    TOKYO_MAIN = "tokyo-main"
+    SINGAPORE_MAIN = "singapore-main"
+    
+    # 클러스터 그룹 (단계별 롤아웃용)
+    CANARY_ONLY = [SEOUL_CANARY]
+    REGIONAL = [SEOUL_MAIN, TOKYO_MAIN]
+    GLOBAL = [SEOUL_MAIN, TOKYO_MAIN, SINGAPORE_MAIN]
+
+
+class CanaryPercentage:
+    """
+    Canary 단계별 트래픽 비율 상수.
+    
+    각 롤아웃 단계에서 새 설정이 적용되는 트래픽 비율입니다.
+    """
+    INITIAL = 10.0    # 초기 카나리 (10%)
+    HALF = 50.0       # 리전 확장 (50%)
+    FULL = 100.0      # 전체 적용 (100%)
+
+
+class ChaosIntensity:
+    """
+    Chaos 실험 강도 상수.
+    
+    장애 주입 비율 및 지속 시간을 정의합니다.
+    """
+    # 주입 비율 (injection_rate)
+    LOW_RATE = 0.001       # 0.1%
+    MEDIUM_RATE = 0.01     # 1%
+    HIGH_RATE = 0.05       # 5%
+    EXTREME_RATE = 0.1     # 10%
+    
+    # 지속 시간 (duration_seconds)
+    SHORT_DURATION = 60           # 1분
+    MEDIUM_DURATION = 300         # 5분
+    LONG_DURATION = 600           # 10분
+    EXTENDED_DURATION = 1800      # 30분
+
+
+class RBACRole:
+    """
+    RBAC 역할 상수.
+    
+    Self-Healing API 접근 제어에 사용되는 역할 그룹입니다.
+    """
+    VIEWER = "selfhealing_viewer"
+    OPERATOR = "selfhealing_operator"
+    ADMIN = "selfhealing_admin"
+    
+    # 역할 그룹 리스트
+    ALL_ROLES = [VIEWER, OPERATOR, ADMIN]
+    ELEVATED_ROLES = [OPERATOR, ADMIN]
+
+
 @dataclass(frozen=True)
 class TestConstants:
     """

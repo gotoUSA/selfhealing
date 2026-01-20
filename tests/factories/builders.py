@@ -420,3 +420,610 @@ class MockServiceBuilder:
     def build(self) -> MagicMock:
         """Mock 객체 반환."""
         return self._mock
+
+
+# =============================================================================
+# Phase 3: 추가 Builder 클래스
+# =============================================================================
+
+
+class MockRequestBuilder:
+    """
+    Django/DRF API 테스트용 Mock Request Builder.
+    
+    체이닝 방식으로 HTTP 요청 Mock 객체를 생성합니다.
+    Permission 테스트, View 테스트에서 반복되는 request 생성을 간소화합니다.
+    
+    Usage:
+        # 관리자 요청
+        request = (MockRequestBuilder()
+            .authenticated()
+            .as_superuser()
+            .with_data({"threshold": 10})
+            .build())
+        
+        # 특정 그룹 사용자
+        request = (MockRequestBuilder()
+            .authenticated()
+            .in_group("selfhealing_operator")
+            .with_ip("192.168.1.100")
+            .build())
+    """
+    
+    def __init__(self):
+        self._mock = Mock()
+        self._user = Mock()
+        self._is_authenticated = False
+        self._is_staff = False
+        self._is_superuser = False
+        self._groups: List[str] = []
+        self._group_check_result = False
+        self._data: Dict[str, Any] = {}
+        self._method = "GET"
+        self._ip_address = "127.0.0.1"
+        self._headers: Dict[str, str] = {}
+        self._user_str = "test_user"
+    
+    def authenticated(self) -> "MockRequestBuilder":
+        """인증된 사용자로 설정."""
+        self._is_authenticated = True
+        return self
+    
+    def anonymous(self) -> "MockRequestBuilder":
+        """익명(비인증) 사용자로 설정."""
+        self._is_authenticated = False
+        return self
+    
+    def as_staff(self) -> "MockRequestBuilder":
+        """스태프 권한으로 설정."""
+        self._is_staff = True
+        return self
+    
+    def as_superuser(self) -> "MockRequestBuilder":
+        """슈퍼유저(관리자) 권한으로 설정."""
+        self._is_superuser = True
+        self._is_staff = True  # 슈퍼유저는 스태프 권한 포함
+        return self
+    
+    def in_group(self, *group_names: str) -> "MockRequestBuilder":
+        """
+        특정 그룹에 소속된 사용자로 설정.
+        
+        Args:
+            *group_names: 그룹 이름들 (예: "selfhealing_operator", "selfhealing_admin")
+        """
+        self._groups.extend(group_names)
+        self._group_check_result = True
+        return self
+    
+    def as_viewer(self) -> "MockRequestBuilder":
+        """Self-Healing Viewer 그룹으로 설정."""
+        return self.in_group("selfhealing_viewer")
+    
+    def as_operator(self) -> "MockRequestBuilder":
+        """Self-Healing Operator 그룹으로 설정."""
+        return self.in_group("selfhealing_operator")
+    
+    def as_admin(self) -> "MockRequestBuilder":
+        """Self-Healing Admin 그룹으로 설정."""
+        return self.in_group("selfhealing_admin")
+    
+    def with_data(self, data: Dict[str, Any]) -> "MockRequestBuilder":
+        """요청 바디 데이터 설정."""
+        self._data.update(data)
+        return self
+    
+    def with_method(self, method: str) -> "MockRequestBuilder":
+        """HTTP 메서드 설정 (GET, POST, PUT, PATCH, DELETE)."""
+        self._method = method.upper()
+        return self
+    
+    def get(self) -> "MockRequestBuilder":
+        """GET 요청으로 설정."""
+        return self.with_method("GET")
+    
+    def post(self) -> "MockRequestBuilder":
+        """POST 요청으로 설정."""
+        return self.with_method("POST")
+    
+    def put(self) -> "MockRequestBuilder":
+        """PUT 요청으로 설정."""
+        return self.with_method("PUT")
+    
+    def patch(self) -> "MockRequestBuilder":
+        """PATCH 요청으로 설정."""
+        return self.with_method("PATCH")
+    
+    def delete(self) -> "MockRequestBuilder":
+        """DELETE 요청으로 설정."""
+        return self.with_method("DELETE")
+    
+    def with_ip(self, ip_address: str) -> "MockRequestBuilder":
+        """클라이언트 IP 주소 설정."""
+        self._ip_address = ip_address
+        return self
+    
+    def with_headers(self, headers: Dict[str, str]) -> "MockRequestBuilder":
+        """HTTP 헤더 설정."""
+        self._headers.update(headers)
+        return self
+    
+    def with_user_str(self, user_str: str) -> "MockRequestBuilder":
+        """사용자 문자열 표현 설정 (로깅용)."""
+        self._user_str = user_str
+        return self
+    
+    def build(self) -> Mock:
+        """Mock Request 객체 생성."""
+        # 사용자 설정
+        if not self._is_authenticated:
+            self._mock.user = None
+            # 또는 익명 사용자 Mock
+            self._mock.user = self._user
+            self._user.is_authenticated = False
+        else:
+            self._mock.user = self._user
+            self._user.is_authenticated = True
+            self._user.is_staff = self._is_staff
+            self._user.is_superuser = self._is_superuser
+            
+            # 그룹 체크 설정
+            self._user.groups.filter.return_value.exists.return_value = self._group_check_result
+            
+            # 사용자 문자열 표현
+            self._user.__str__ = Mock(return_value=self._user_str)
+        
+        # 요청 데이터
+        self._mock.data = self._data
+        self._mock.method = self._method
+        
+        # META 설정 (IP, 헤더 등)
+        meta = {"REMOTE_ADDR": self._ip_address}
+        for key, value in self._headers.items():
+            # HTTP_ 접두사 추가 (Django 표준)
+            http_key = f"HTTP_{key.upper().replace('-', '_')}"
+            meta[http_key] = value
+        self._mock.META = meta
+        
+        return self._mock
+
+
+class CanaryStageBuilder:
+    """
+    Canary Stage Builder.
+    
+    체이닝 방식으로 Canary 롤아웃 단계 객체를 생성합니다.
+    CanaryStage dataclass와 호환되는 딕셔너리를 반환합니다.
+    
+    Usage:
+        # 카나리 단계 (10%)
+        stage = (CanaryStageBuilder()
+            .canary_stage()
+            .with_percentage(10.0)
+            .with_duration(5)
+            .auto_promote()
+            .build())
+        
+        # 리전 확장 단계 (50%)
+        stage = (CanaryStageBuilder()
+            .regional_stage()
+            .build())
+    """
+    
+    def __init__(self):
+        from tests.factories.constants import CanaryCluster, CanaryPercentage
+        self._name = "canary"
+        self._clusters = CanaryCluster.CANARY_ONLY.copy()
+        self._percentage = CanaryPercentage.INITIAL
+        self._duration_minutes = 5
+        self._auto_promote = True
+        self._error_rate_threshold = 0.05
+        self._latency_increase_threshold = 0.5
+    
+    def canary_stage(self) -> "CanaryStageBuilder":
+        """카나리 단계 (10% 트래픽, seoul-canary 클러스터)."""
+        from tests.factories.constants import CanaryCluster, CanaryPercentage
+        self._name = "canary"
+        self._clusters = CanaryCluster.CANARY_ONLY.copy()
+        self._percentage = CanaryPercentage.INITIAL
+        self._duration_minutes = 5
+        self._auto_promote = True
+        return self
+    
+    def regional_stage(self) -> "CanaryStageBuilder":
+        """리전 확장 단계 (50% 트래픽, seoul + tokyo 메인)."""
+        from tests.factories.constants import CanaryCluster, CanaryPercentage
+        self._name = "regional"
+        self._clusters = CanaryCluster.REGIONAL.copy()
+        self._percentage = CanaryPercentage.HALF
+        self._duration_minutes = 10
+        self._auto_promote = False
+        return self
+    
+    def global_stage(self) -> "CanaryStageBuilder":
+        """글로벌 단계 (100% 트래픽, 전체 클러스터)."""
+        from tests.factories.constants import CanaryCluster, CanaryPercentage
+        self._name = "global"
+        self._clusters = CanaryCluster.GLOBAL.copy()
+        self._percentage = CanaryPercentage.FULL
+        self._duration_minutes = 0  # 최종 단계
+        self._auto_promote = False
+        return self
+    
+    def with_name(self, name: str) -> "CanaryStageBuilder":
+        """단계 이름 설정."""
+        self._name = name
+        return self
+    
+    def with_clusters(self, clusters: List[str]) -> "CanaryStageBuilder":
+        """클러스터 목록 설정."""
+        self._clusters = clusters.copy()
+        return self
+    
+    def with_percentage(self, percentage: float) -> "CanaryStageBuilder":
+        """트래픽 비율 설정 (0.0 ~ 100.0)."""
+        self._percentage = percentage
+        return self
+    
+    def with_duration(self, minutes: int) -> "CanaryStageBuilder":
+        """단계 유지 시간 설정 (분)."""
+        self._duration_minutes = minutes
+        return self
+    
+    def auto_promote(self, enabled: bool = True) -> "CanaryStageBuilder":
+        """자동 프로모션 활성화/비활성화."""
+        self._auto_promote = enabled
+        return self
+    
+    def with_error_threshold(self, threshold: float) -> "CanaryStageBuilder":
+        """에러율 임계값 설정 (0.0 ~ 1.0)."""
+        self._error_rate_threshold = threshold
+        return self
+    
+    def with_latency_threshold(self, threshold: float) -> "CanaryStageBuilder":
+        """레이턴시 증가 임계값 설정 (0.0 ~ 1.0)."""
+        self._latency_increase_threshold = threshold
+        return self
+    
+    def build(self) -> Dict[str, Any]:
+        """
+        Canary Stage 딕셔너리 생성.
+        
+        Returns:
+            CanaryStage 생성자와 호환되는 딕셔너리
+        """
+        return {
+            "name": self._name,
+            "clusters": self._clusters,
+            "percentage": self._percentage,
+            "duration_minutes": self._duration_minutes,
+            "auto_promote": self._auto_promote,
+            "error_rate_threshold": self._error_rate_threshold,
+            "latency_increase_threshold": self._latency_increase_threshold,
+        }
+    
+    @classmethod
+    def default_three_stage_rollout(cls) -> List[Dict[str, Any]]:
+        """
+        기본 3단계 롤아웃 구성 생성 (canary → regional → global).
+        
+        Returns:
+            [canary(10%), regional(50%), global(100%)] 단계 리스트
+        """
+        return [
+            cls().canary_stage().build(),
+            cls().regional_stage().build(),
+            cls().global_stage().build(),
+        ]
+
+
+class ChaosExperimentBuilder:
+    """
+    Chaos Experiment Builder.
+    
+    체이닝 방식으로 Chaos 실험 설정을 생성합니다.
+    ExperimentConfig dataclass와 호환되는 딕셔너리를 반환합니다.
+    
+    Usage:
+        # 레이턴시 주입 실험
+        config = (ChaosExperimentBuilder()
+            .latency_injection()
+            .target_service("payment-api")
+            .medium_intensity()
+            .build())
+        
+        # CB 강제 Open 실험
+        config = (ChaosExperimentBuilder()
+            .circuit_breaker_open()
+            .target_service("external-gateway")
+            .with_duration(60)
+            .build())
+    """
+    
+    def __init__(self):
+        from tests.factories.constants import ChaosIntensity
+        self._experiment_type = "latency_injection"
+        self._target_service = "test-service"
+        self._target_domain = ""
+        self._target_instances: List[str] = []
+        self._injection_rate = ChaosIntensity.LOW_RATE
+        self._duration_seconds = ChaosIntensity.MEDIUM_DURATION
+        self._traffic_type = "synthetic"
+        self._auto_rollback = True
+        self._sla_threshold = 1.0  # 1%
+        self._parameters: Dict[str, Any] = {}
+        self._dry_run = False
+    
+    # --- 실험 타입 설정 ---
+    
+    def latency_injection(self, latency_ms: int = 500) -> "ChaosExperimentBuilder":
+        """레이턴시 주입 실험."""
+        self._experiment_type = "latency_injection"
+        self._parameters["latency_ms"] = latency_ms
+        return self
+    
+    def error_5xx(self, status_code: int = 500) -> "ChaosExperimentBuilder":
+        """5XX 에러 주입 실험."""
+        self._experiment_type = "error_5xx"
+        self._parameters["status_code"] = status_code
+        return self
+    
+    def timeout(self, timeout_seconds: int = 30) -> "ChaosExperimentBuilder":
+        """타임아웃 주입 실험."""
+        self._experiment_type = "timeout"
+        self._parameters["timeout_seconds"] = timeout_seconds
+        return self
+    
+    def circuit_breaker_open(self) -> "ChaosExperimentBuilder":
+        """Circuit Breaker 강제 Open 실험."""
+        self._experiment_type = "circuit_breaker_open"
+        return self
+    
+    def rate_limit(self, requests_per_second: int = 10) -> "ChaosExperimentBuilder":
+        """Rate Limit 실험."""
+        self._experiment_type = "rate_limit"
+        self._parameters["requests_per_second"] = requests_per_second
+        return self
+    
+    def resource_exhaustion(self) -> "ChaosExperimentBuilder":
+        """리소스 고갈 실험."""
+        self._experiment_type = "resource_exhaustion"
+        return self
+    
+    def packet_loss(self, loss_rate: float = 0.1) -> "ChaosExperimentBuilder":
+        """패킷 손실 실험."""
+        self._experiment_type = "packet_loss"
+        self._parameters["loss_rate"] = loss_rate
+        return self
+    
+    def connection_reset(self) -> "ChaosExperimentBuilder":
+        """커넥션 리셋 실험."""
+        self._experiment_type = "connection_reset"
+        return self
+    
+    def partial_failure(self, failure_rate: float = 0.3) -> "ChaosExperimentBuilder":
+        """부분 실패 실험."""
+        self._experiment_type = "partial_failure"
+        self._parameters["failure_rate"] = failure_rate
+        return self
+    
+    def cascading_failure(self) -> "ChaosExperimentBuilder":
+        """연쇄 장애 실험."""
+        self._experiment_type = "cascading_failure"
+        return self
+    
+    # --- 대상 설정 ---
+    
+    def target_service(self, service_name: str) -> "ChaosExperimentBuilder":
+        """대상 서비스 설정."""
+        self._target_service = service_name
+        return self
+    
+    def target_domain(self, domain: str) -> "ChaosExperimentBuilder":
+        """대상 도메인 설정."""
+        self._target_domain = domain
+        return self
+    
+    def target_instances(self, instances: List[str]) -> "ChaosExperimentBuilder":
+        """대상 인스턴스 목록 설정."""
+        self._target_instances = instances.copy()
+        return self
+    
+    # --- 강도 설정 ---
+    
+    def low_intensity(self) -> "ChaosExperimentBuilder":
+        """낮은 강도 (0.1%, 1분)."""
+        from tests.factories.constants import ChaosIntensity
+        self._injection_rate = ChaosIntensity.LOW_RATE
+        self._duration_seconds = ChaosIntensity.SHORT_DURATION
+        return self
+    
+    def medium_intensity(self) -> "ChaosExperimentBuilder":
+        """중간 강도 (1%, 5분)."""
+        from tests.factories.constants import ChaosIntensity
+        self._injection_rate = ChaosIntensity.MEDIUM_RATE
+        self._duration_seconds = ChaosIntensity.MEDIUM_DURATION
+        return self
+    
+    def high_intensity(self) -> "ChaosExperimentBuilder":
+        """높은 강도 (5%, 10분)."""
+        from tests.factories.constants import ChaosIntensity
+        self._injection_rate = ChaosIntensity.HIGH_RATE
+        self._duration_seconds = ChaosIntensity.LONG_DURATION
+        return self
+    
+    def extreme_intensity(self) -> "ChaosExperimentBuilder":
+        """극한 강도 (10%, 30분)."""
+        from tests.factories.constants import ChaosIntensity
+        self._injection_rate = ChaosIntensity.EXTREME_RATE
+        self._duration_seconds = ChaosIntensity.EXTENDED_DURATION
+        return self
+    
+    def with_injection_rate(self, rate: float) -> "ChaosExperimentBuilder":
+        """주입 비율 직접 설정 (0.0 ~ 1.0)."""
+        self._injection_rate = rate
+        return self
+    
+    def with_duration(self, seconds: int) -> "ChaosExperimentBuilder":
+        """지속 시간 직접 설정 (초)."""
+        self._duration_seconds = seconds
+        return self
+    
+    # --- 기타 설정 ---
+    
+    def dry_run(self, enabled: bool = True) -> "ChaosExperimentBuilder":
+        """Dry Run 모드 설정 (실제 장애 주입 없음)."""
+        self._dry_run = enabled
+        return self
+    
+    def auto_rollback(self, enabled: bool = True) -> "ChaosExperimentBuilder":
+        """SLA 위반 시 자동 롤백 설정."""
+        self._auto_rollback = enabled
+        return self
+    
+    def with_sla_threshold(self, percent: float) -> "ChaosExperimentBuilder":
+        """SLA 위반 임계값 설정 (%)."""
+        self._sla_threshold = percent
+        return self
+    
+    def with_traffic_type(self, traffic_type: str) -> "ChaosExperimentBuilder":
+        """트래픽 타입 설정 (synthetic, production)."""
+        self._traffic_type = traffic_type
+        return self
+    
+    def with_parameter(self, key: str, value: Any) -> "ChaosExperimentBuilder":
+        """추가 파라미터 설정."""
+        self._parameters[key] = value
+        return self
+    
+    def build(self) -> Dict[str, Any]:
+        """
+        Chaos Experiment 설정 딕셔너리 생성.
+        
+        Returns:
+            ExperimentConfig 생성자와 호환되는 딕셔너리
+        """
+        return {
+            "experiment_type": self._experiment_type,
+            "target_service": self._target_service,
+            "target_domain": self._target_domain,
+            "target_instances": self._target_instances,
+            "injection_rate": self._injection_rate,
+            "duration_seconds": self._duration_seconds,
+            "traffic_type": self._traffic_type,
+            "auto_rollback_on_sla_breach": self._auto_rollback,
+            "sla_breach_threshold_percent": self._sla_threshold,
+            "parameters": self._parameters,
+            "dry_run": self._dry_run,
+        }
+
+
+class WatchdogConfigBuilder:
+    """
+    Watchdog Config Builder.
+    
+    Canary Rollout Watchdog 설정을 생성합니다.
+    zombie 롤아웃 감지 및 자동 롤백/프로모션 설정을 포함합니다.
+    
+    Usage:
+        # 기본 설정
+        config = WatchdogConfigBuilder().default().build()
+        
+        # 공격적 설정 (빠른 감지)
+        config = WatchdogConfigBuilder().aggressive().build()
+        
+        # 보수적 설정 (느린 감지)
+        config = WatchdogConfigBuilder().conservative().build()
+    """
+    
+    def __init__(self):
+        self._zombie_threshold_minutes = 30
+        self._auto_rollback_after_minutes = 60
+        self._max_stage_duration_minutes = 15
+        self._enable_auto_promote = True
+        self._enable_auto_rollback = True
+        self._notification_enabled = True
+        self._slack_channel = "#selfhealing-alerts"
+    
+    def default(self) -> "WatchdogConfigBuilder":
+        """기본 Watchdog 설정."""
+        self._zombie_threshold_minutes = 30
+        self._auto_rollback_after_minutes = 60
+        self._max_stage_duration_minutes = 15
+        self._enable_auto_promote = True
+        self._enable_auto_rollback = True
+        return self
+    
+    def aggressive(self) -> "WatchdogConfigBuilder":
+        """
+        공격적 설정 (빠른 감지/대응).
+        
+        짧은 임계값으로 빠르게 zombie 감지 및 롤백합니다.
+        """
+        self._zombie_threshold_minutes = 10
+        self._auto_rollback_after_minutes = 20
+        self._max_stage_duration_minutes = 5
+        self._enable_auto_promote = True
+        self._enable_auto_rollback = True
+        return self
+    
+    def conservative(self) -> "WatchdogConfigBuilder":
+        """
+        보수적 설정 (느린 감지/대응).
+        
+        긴 임계값으로 충분한 관찰 시간을 부여합니다.
+        """
+        self._zombie_threshold_minutes = 60
+        self._auto_rollback_after_minutes = 120
+        self._max_stage_duration_minutes = 30
+        self._enable_auto_promote = False
+        self._enable_auto_rollback = False
+        return self
+    
+    def with_zombie_threshold(self, minutes: int) -> "WatchdogConfigBuilder":
+        """Zombie 감지 임계값 설정 (분)."""
+        self._zombie_threshold_minutes = minutes
+        return self
+    
+    def with_auto_rollback_after(self, minutes: int) -> "WatchdogConfigBuilder":
+        """자동 롤백까지 대기 시간 설정 (분)."""
+        self._auto_rollback_after_minutes = minutes
+        return self
+    
+    def with_max_stage_duration(self, minutes: int) -> "WatchdogConfigBuilder":
+        """단계별 최대 체류 시간 설정 (분)."""
+        self._max_stage_duration_minutes = minutes
+        return self
+    
+    def enable_auto_promote(self, enabled: bool = True) -> "WatchdogConfigBuilder":
+        """자동 프로모션 활성화/비활성화."""
+        self._enable_auto_promote = enabled
+        return self
+    
+    def enable_auto_rollback(self, enabled: bool = True) -> "WatchdogConfigBuilder":
+        """자동 롤백 활성화/비활성화."""
+        self._enable_auto_rollback = enabled
+        return self
+    
+    def with_notification(self, enabled: bool = True, channel: str = "#selfhealing-alerts") -> "WatchdogConfigBuilder":
+        """알림 설정."""
+        self._notification_enabled = enabled
+        self._slack_channel = channel
+        return self
+    
+    def build(self) -> Dict[str, Any]:
+        """
+        Watchdog 설정 딕셔너리 생성.
+        
+        Returns:
+            WatchdogConfig 생성자와 호환되는 딕셔너리
+        """
+        return {
+            "zombie_threshold_minutes": self._zombie_threshold_minutes,
+            "auto_rollback_after_minutes": self._auto_rollback_after_minutes,
+            "max_stage_duration_minutes": self._max_stage_duration_minutes,
+            "enable_auto_promote": self._enable_auto_promote,
+            "enable_auto_rollback": self._enable_auto_rollback,
+            "notification_enabled": self._notification_enabled,
+            "slack_channel": self._slack_channel,
+        }

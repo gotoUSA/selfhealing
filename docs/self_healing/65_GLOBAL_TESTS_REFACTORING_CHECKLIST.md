@@ -68,31 +68,32 @@
 
 ---
 
-## Phase 3: Factory 확장 (63번 문서)
+## Phase 3: Factory 확장 (63번 문서) ✅ 완료
 
 ### 3.1 Builder 추가
 
-- [ ] `MockRequestBuilder` 구현
-- [ ] `CanaryStageBuilder` 구현
-- [ ] `ChaosExperimentBuilder` 구현
-- [ ] `WatchdogConfigBuilder` 구현 (선택)
-- [ ] `NotificationBuilder` 구현 (선택)
+- [x] `MockRequestBuilder` 구현 - API 테스트용 Mock Request 객체 생성
+- [x] `CanaryStageBuilder` 구현 - Canary 롤아웃 단계 설정 생성
+- [x] `ChaosExperimentBuilder` 구현 - Chaos 실험 설정 생성
+- [x] `WatchdogConfigBuilder` 구현 - Watchdog 설정 생성
+- [ ] `NotificationBuilder` 구현 (선택, 필요시 추가)
 
 ### 3.2 상수 추가
 
-- [ ] `CanaryCluster` 상수 추가
-- [ ] `ChaosType`, `ChaosIntensity` 상수 추가
-- [ ] `NotificationType`, `NotificationPriority` 상수 추가 (선택)
+- [x] `CanaryCluster` 상수 추가 - 클러스터 이름 (SEOUL_CANARY, SEOUL_MAIN 등)
+- [x] `CanaryPercentage` 상수 추가 - 트래픽 비율 (INITIAL, HALF, FULL)
+- [x] `ChaosIntensity` 상수 추가 - 주입 비율/지속시간 (LOW_RATE, MEDIUM_RATE 등)
+- [x] `RBACRole` 상수 추가 - RBAC 역할 (VIEWER, OPERATOR, ADMIN)
 
 ### 3.3 __init__.py 업데이트
 
-- [ ] 새 Builder export 추가
-- [ ] 새 상수 export 추가
+- [x] 새 Builder export 추가 (MockRequestBuilder, CanaryStageBuilder 등)
+- [x] 새 상수 export 추가 (CanaryCluster, ChaosIntensity 등)
 
 ### 3.4 검증
 
-- [ ] 새 Builder 단위 테스트 작성/실행
-- [ ] 기존 테스트 1개 새 Builder로 리팩토링하여 동작 확인
+- [x] 새 Builder 동작 테스트 완료 (python -c 스크립트)
+- [ ] 기존 테스트 1개 새 Builder로 리팩토링하여 동작 확인 (Phase 4에서 진행)
 
 ---
 
