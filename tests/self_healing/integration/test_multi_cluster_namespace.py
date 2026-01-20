@@ -250,7 +250,7 @@ class TestNamespaceIsolation:
         tokyo_dlq = RedisDLQRepository(tokyo_backend)
         
         # Tokyo에서 pending 조회 - Seoul 것이 보이면 안 됨
-        tokyo_pending = tokyo_dlq.list_pending(limit=10)
+        tokyo_pending = tokyo_dlq.get_pending(limit=10)
         assert len(tokyo_pending) == 0, (
             f"Tokyo should not see Seoul's DLQ entries, got {len(tokyo_pending)}"
         )
@@ -262,7 +262,7 @@ class TestNamespaceIsolation:
             error_message="Tokyo order validation error",
         )
         
-        tokyo_pending_after = tokyo_dlq.list_pending(limit=10)
+        tokyo_pending_after = tokyo_dlq.get_pending(limit=10)
         assert len(tokyo_pending_after) == 1, "Tokyo should have 1 entry"
         
         # Cleanup
