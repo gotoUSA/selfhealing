@@ -43,6 +43,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
       - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
     depends_on:
       db:
         condition: service_healthy
@@ -156,6 +157,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - TEST_DB_AVAILABLE=true
       - TEST_REDIS_AVAILABLE=true
+      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
     depends_on:
       db:
         condition: service_healthy
@@ -183,6 +185,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - TEST_DB_AVAILABLE=true
       - TEST_REDIS_AVAILABLE=true
+      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
     depends_on:
       db:
         condition: service_healthy
