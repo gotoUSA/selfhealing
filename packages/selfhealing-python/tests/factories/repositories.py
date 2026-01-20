@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 
-from tests.factories.data_factory import MockCircuitBreakerStateData, DefaultValues
+from tests.factories.constants import DefaultValues
+from tests.factories.data_factory import MockCircuitBreakerStateData
 
 
 class InMemoryCircuitBreakerRepository:

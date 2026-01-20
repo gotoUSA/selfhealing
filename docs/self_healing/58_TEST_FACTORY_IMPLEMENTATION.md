@@ -931,11 +931,14 @@ repo = InMemoryCircuitBreakerRepository()
 state = repo.get_or_create("test_service")
 
 # Time Helpers
-from tests.factories import freeze_time, mock_sleep
+from tests.factories import freeze_time, mock_sleep, get_fixed_datetime
 
-with freeze_time("2026-01-20 12:00:00"):
+with freeze_time("2024-01-15 12:00:00"):  # 테스트에서 원하는 시간 지정
     # datetime.now()가 고정됨
     pass
+
+# 고정 datetime 생성 (년/월/일 필수)
+fixed_dt = get_fixed_datetime(2024, 1, 15, 12, 0, 0)
 
 with mock_sleep() as sleep_mock:
     time.sleep(10)  # 즉시 반환

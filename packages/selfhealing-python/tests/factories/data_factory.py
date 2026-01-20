@@ -23,46 +23,8 @@ from selfhealing.core.types import (
     CircuitState,
 )
 
-
-# =============================================================================
-# Default Constants - 중앙 관리 상수
-# =============================================================================
-
-class DefaultValues:
-    """테스트에서 사용하는 기본값 상수."""
-    
-    # 도메인 관련
-    DOMAIN_ORDER = "order"
-    DOMAIN_PAYMENT = "payment"
-    DOMAIN_NOTIFICATION = "notification"
-    DOMAIN_EXTERNAL = "external_service"
-    
-    # 서비스 관련
-    SERVICE_PAYMENT_API = "payment-api"
-    SERVICE_EXTERNAL_GATEWAY = "external-gateway"
-    SERVICE_ORDER_SERVICE = "order-service"
-    SERVICE_TEST = "test_service"
-    
-    # 실패 타입
-    FAILURE_NETWORK = "network"
-    FAILURE_TIMEOUT = "timeout"
-    FAILURE_PG_TIMEOUT = "PG_TIMEOUT"
-    
-    # 상태
-    STATUS_PENDING = "pending"
-    STATUS_RESOLVED = "resolved"
-    STATUS_ARCHIVED = "archived"
-    
-    # Circuit Breaker
-    CB_STATE_CLOSED = "closed"
-    CB_STATE_OPEN = "open"
-    CB_STATE_HALF_OPEN = "half_open"
-    
-    # 기본 설정값
-    DEFAULT_MAX_RETRIES = 3
-    DEFAULT_FAILURE_THRESHOLD = 5
-    DEFAULT_RECOVERY_TIMEOUT = 60
-    DEFAULT_SUCCESS_THRESHOLD = 2
+# 상수는 constants.py에서 관리
+from tests.factories.constants import DefaultValues
 
 
 @dataclass

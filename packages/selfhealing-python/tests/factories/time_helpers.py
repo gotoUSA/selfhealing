@@ -4,16 +4,19 @@ Time Helpers for Testing.
 datetime.now()와 time.sleep() 호출을 제어하기 위한 유틸리티입니다.
 
 Usage:
-    from tests.factories.time_helpers import freeze_time, mock_sleep
+    from tests.factories.time_helpers import freeze_time, mock_sleep, get_fixed_datetime
     
     # FreezeTime - datetime.now()를 특정 시간으로 고정
-    with freeze_time("2026-01-20 12:00:00"):
-        now = datetime.now()  # 항상 2026-01-20 12:00:00 반환
+    with freeze_time("2024-01-15 12:00:00"):  # 테스트에서 원하는 시간 지정
+        now = datetime.now()  # 고정된 시간 반환
     
     # MockSleep - time.sleep()을 모킹하여 즉시 반환
     with mock_sleep() as sleep_mock:
         time.sleep(10)  # 즉시 반환
         assert sleep_mock.total_slept == 10
+    
+    # 고정 datetime 생성 (모든 인자 필수)
+    fixed_dt = get_fixed_datetime(2024, 1, 15, 12, 0, 0)
 
 Note:
     freezegun 패키지 필요: pip install freezegun
@@ -94,12 +97,12 @@ def freeze_time(time_to_freeze: str, **kwargs) -> Generator[None, None, None]:
     freezegun 패키지를 래핑하여 일관된 인터페이스를 제공합니다.
     
     Args:
-        time_to_freeze: ISO 형식 시간 문자열 (예: "2026-01-20 12:00:00")
+        time_to_freeze: ISO 형식 시간 문자열 (예: "2024-01-15 12:00:00")
         **kwargs: freezegun.freeze_time에 전달할 추가 인자
     
     Usage:
-        with freeze_time("2026-01-20 12:00:00"):
-            now = datetime.now()  # 2026-01-20 12:00:00
+        with freeze_time("2024-01-15 12:00:00"):
+            now = datetime.now()  # 고정된 시간 반환
     
     Yields:
         None
@@ -117,10 +120,10 @@ def freeze_time(time_to_freeze: str, **kwargs) -> Generator[None, None, None]:
 
 
 def get_fixed_datetime(
-    year: int = 2026,
-    month: int = 1,
-    day: int = 20,
-    hour: int = 12,
+    year: int,
+    month: int,
+    day: int,
+    hour: int = 0,
     minute: int = 0,
     second: int = 0,
     tz: Optional[timezone] = timezone.utc,
@@ -129,13 +132,22 @@ def get_fixed_datetime(
     테스트용 고정 datetime 반환.
     
     일관된 테스트를 위해 고정된 시간을 생성합니다.
+    년/월/일은 필수 인자로, 하드코딩 없이 명시적으로 지정해야 합니다.
     
     Args:
-        year, month, day, hour, minute, second: 시간 구성요소
+        year: 연도 (필수)
+        month: 월 (필수)
+        day: 일 (필수)
+        hour: 시 (기본: 0)
+        minute: 분 (기본: 0)
+        second: 초 (기본: 0)
         tz: 시간대 (기본: UTC)
     
     Returns:
         datetime: 지정된 시간의 datetime 객체
+    
+    Example:
+        dt = get_fixed_datetime(2024, 1, 15, 12, 30, 0)
     """
     dt = datetime(year, month, day, hour, minute, second)
     if tz:
