@@ -31,8 +31,11 @@
 
 ### 1.4 검증
 
-- [ ] `docker-compose -f docker-compose.test.yml up -d` 성공
-- [ ] `docker-compose -f docker-compose.test.yml ps` 모든 서비스 healthy
+- [x] `docker-compose -f docker-compose.test.yml up -d` 성공
+- [x] `docker-compose -f docker-compose.test.yml ps` 모든 서비스 healthy
+  - db: healthy ✅
+  - redis: healthy ✅
+  - celery-worker: healthy ✅
 
 ---
 

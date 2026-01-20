@@ -183,7 +183,7 @@ services:
       - SELFHEALING_ENABLED=true
     command: >
       sh -c "
-        pip install -e /code/packages/selfhealing-python &&
+        pip install -e /code/packages/selfhealing-python --no-deps -q &&
         celery -A myproject worker -l info -Q default,selfhealing,dlq,payment_critical,order_processing --concurrency=2
       "
     healthcheck:
