@@ -2,22 +2,14 @@
 Django Integration Tests Conftest.
 
 Django/shopping 앱에 의존하는 테스트용 fixtures.
-이 폴더의 테스트는 mock_external_services fixture를 자동으로 적용받습니다.
+
+중요: 이 폴더의 테스트들은 실제 Django/DB/Redis 연결을 테스트합니다.
+mock_external_services를 사용하지 않습니다 - 실제 외부 의존성 테스트가 목적입니다.
+
+실행 방법:
+    docker-compose -f docker-compose.test.yml exec web pytest tests/self_healing/django/ -v
 """
 import pytest
-
-
-# =============================================================================
-# Django 의존 테스트에 mock_external_services 자동 적용
-# =============================================================================
-@pytest.fixture(autouse=True)
-def apply_mock_external_services(mock_external_services):
-    """
-    이 폴더의 모든 테스트에 mock_external_services 적용.
-    
-    상위 conftest.py의 mock_external_services를 자동으로 사용합니다.
-    """
-    pass  # fixture가 요청되면 자동으로 yield됨
 
 
 # =============================================================================
