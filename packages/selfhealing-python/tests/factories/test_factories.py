@@ -122,24 +122,26 @@ class TestTestDataFactory:
         entry = TestDataFactory.failed_operation()
         
         assert entry.id == 1
-        assert entry.domain == Domains.ORDER
-        assert entry.failure_type == FailureTypes.NETWORK
+        assert entry.domain == Domains.PAYMENT
+        assert entry.failure_type == FailureTypes.PG_TIMEOUT
         assert entry.status == Status.PENDING
         assert entry.retry_count == 0
+        assert entry.entity_type == "order"
+        assert entry.entity_id == "order-123"
     
     def test_failed_operation_custom(self):
         """커스텀 FailedOperation 생성."""
         entry = TestDataFactory.failed_operation(
             id=10,
-            domain=Domains.PAYMENT,
-            failure_type=FailureTypes.PG_TIMEOUT,
+            domain=Domains.ORDER,
+            failure_type=FailureTypes.NETWORK,
             status=Status.RESOLVED,
             retry_count=3,
         )
         
         assert entry.id == 10
-        assert entry.domain == Domains.PAYMENT
-        assert entry.failure_type == FailureTypes.PG_TIMEOUT
+        assert entry.domain == Domains.ORDER
+        assert entry.failure_type == FailureTypes.NETWORK
         assert entry.status == Status.RESOLVED
         assert entry.retry_count == 3
     

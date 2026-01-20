@@ -23,9 +23,12 @@ class TestGenerateTraceId:
         """Test that generated trace ID has correct format."""
         trace_id = generate_trace_id()
         
-        # Format: "req-{uuid4_short}"
+        # Format: "req-{cluster_prefix}-{uuid4_short}" or "req-{uuid4_short}"
+        # With cluster prefix: "req-unkp-12345678" (17 chars)
+        # Without cluster prefix: "req-12345678" (12 chars)
         assert trace_id.startswith("req-")
-        assert len(trace_id) == 12  # "req-" + 8 hex chars
+        # Length varies based on cluster prefix: 12 (no prefix) or 17 (with prefix)
+        assert len(trace_id) in [12, 17]
 
     def test_generate_trace_id_uniqueness(self):
         """Test that generated trace IDs are unique."""

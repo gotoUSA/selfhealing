@@ -267,7 +267,7 @@ class TestAuditWatchdogLocalFile:
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()
-        time.sleep(0.1)
+        time.sleep(0.2)  # Increased wait time for at least 2-3 heartbeat attempts
         watchdog.stop()
 
         # 실패하지만 watchdog은 계속 동작

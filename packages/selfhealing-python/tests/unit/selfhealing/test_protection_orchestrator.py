@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.security_violation_service import (
+from selfhealing.services.security import (
     ActionPolicy,
     ACTION_POLICY_PRIORITY,
     ACTION_POLICY_BY_VIOLATION_TYPE,
@@ -366,7 +366,7 @@ class TestProtectionOrchestratorRollback:
         Purpose:
             계정 동결 해제가 로그되는지 확인.
         """
-        with patch("selfhealing.services.security_violation_service.logger") as mock_logger:
+        with patch("selfhealing.services.security.orchestrator.logger") as mock_logger:
             orchestrator._rollback_account_freeze({"user_id": 123})
             mock_logger.info.assert_called()
 

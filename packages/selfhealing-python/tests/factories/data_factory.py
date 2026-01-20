@@ -16,12 +16,12 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock
 
 from selfhealing.core.types import (
-    FailedOperationData,
     CircuitBreakerStateData,
     FailureType,
     OperationStatus,
     CircuitState,
 )
+from selfhealing.interfaces import FailedOperationData
 
 # 상수는 constants.py에서 관리
 from tests.factories.constants import DefaultValues
@@ -146,18 +146,23 @@ class TestDataFactory:
     @staticmethod
     def failed_operation(
         id: int = 1,
-        domain: str = DefaultValues.DOMAIN_ORDER,
-        failure_type: str = DefaultValues.FAILURE_NETWORK,
+        domain: str = DefaultValues.DOMAIN_PAYMENT,
+        failure_type: str = DefaultValues.FAILURE_PG_TIMEOUT,
         status: str = DefaultValues.STATUS_PENDING,
         retry_count: int = 0,
         max_retries: int = DefaultValues.DEFAULT_MAX_RETRIES,
         created_at: Optional[datetime] = None,
-        error_message: str = "Connection timeout",
-        context: Optional[Dict[str, Any]] = None,
+        error_message: str = "Connection timed out",
+        error_code: str = "TIMEOUT",
+        snapshot_data: Optional[Dict[str, Any]] = None,
+        entity_type: str = "order",
+        entity_id: str = "order-123",
         **kwargs,
     ) -> FailedOperationData:
         """
         Failed Operation 데이터 생성.
+        
+        interfaces.FailedOperationData 스키마 사용.
         
         Args:
             id: 엔트리 ID
@@ -168,7 +173,10 @@ class TestDataFactory:
             max_retries: 최대 재시도 횟수
             created_at: 생성 시간
             error_message: 에러 메시지
-            context: 컨텍스트 데이터
+            error_code: 에러 코드
+            snapshot_data: 스냅샷 데이터
+            entity_type: 엔티티 타입
+            entity_id: 엔티티 ID
             **kwargs: 추가 필드
             
         Returns:
@@ -177,8 +185,8 @@ class TestDataFactory:
         if created_at is None:
             created_at = datetime.now(timezone.utc)
         
-        if context is None:
-            context = {"order_id": 123, "amount": 10000}
+        if snapshot_data is None:
+            snapshot_data = {"order_id": 123, "amount": 10000}
         
         return FailedOperationData(
             id=id,
@@ -186,8 +194,11 @@ class TestDataFactory:
             failure_type=failure_type,
             status=status,
             created_at=created_at,
-            context=context,
             error_message=error_message,
+            error_code=error_code,
+            snapshot_data=snapshot_data,
+            entity_type=entity_type,
+            entity_id=entity_id,
             retry_count=retry_count,
             max_retries=max_retries,
             **kwargs,

@@ -41,7 +41,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             L1 위반이 SCHEMA_VIOLATION으로 매핑되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="missing_field", layer="L1")
         result = shield._map_to_violation_type(violation)
@@ -53,7 +53,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             L2 위반이 BUSINESS_RULE_VIOLATION으로 매핑되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="invalid_amount", layer="L2")
         result = shield._map_to_violation_type(violation)
@@ -65,7 +65,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             L3 위반이 ANOMALY_STATISTICAL으로 매핑되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="zscore_exceeded", layer="L3")
         result = shield._map_to_violation_type(violation)
@@ -77,7 +77,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             behavioral anomaly가 ANOMALY_BEHAVIORAL으로 매핑되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="behavioral_anomaly_detected", layer="L3")
         result = shield._map_to_violation_type(violation)
@@ -89,7 +89,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             anomaly 키워드가 있으면 ANOMALY_STATISTICAL으로 매핑되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="anomaly_detected", layer="L3")
         result = shield._map_to_violation_type(violation)
@@ -101,7 +101,7 @@ class TestCorruptionShieldMapping:
         Purpose:
             알 수 없는 layer가 SUSPICIOUS_ACTIVITY로 폴백되는지 확인.
         """
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         violation = MockViolation(code="unknown", layer="L4")  # 존재하지 않는 레이어
         result = shield._map_to_violation_type(violation)
@@ -115,7 +115,7 @@ class TestCorruptionShieldMapping:
         """
         from selfhealing.services.corruption_shield.shield import ValidationResult
 
-        with patch("selfhealing.services.security_violation_service.SecurityViolationService") as mock_svc_class:
+        with patch("selfhealing.services.security.SecurityViolationService") as mock_svc_class:
             mock_service = MagicMock()
             mock_svc_class.return_value = mock_service
 
@@ -162,10 +162,10 @@ class TestCorruptionShieldIntegration:
             CorruptionShieldConfig,
             ValidationResult,
         )
-        from selfhealing.services.security_violation_service import ViolationType
+        from selfhealing.services.security import ViolationType
 
         # Mock SecurityViolationService
-        with patch("selfhealing.services.security_violation_service.SecurityViolationService") as mock_svc_class:
+        with patch("selfhealing.services.security.SecurityViolationService") as mock_svc_class:
             mock_service = MagicMock()
             mock_svc_class.return_value = mock_service
 
