@@ -1,21 +1,54 @@
 # 58. Test Factory Implementation Guide
 
 > **의존**: [57_TEST_REFACTORING_PLAN.md](57_TEST_REFACTORING_PLAN.md)  
-> **목적**: Factory Pattern 구현 상세 가이드
+> **목적**: Factory Pattern 구현 상세 가이드  
+> **상태**: ✅ **구현 완료** (2026-01-20)
 
 ---
 
 ## 1. 디렉토리 구조
 
+### 1.1 계획 vs 실제 구현
+
+**계획된 구조:**
+```
+packages/selfhealing-python/tests/factories/
+├── __init__.py           # 메인 Factory (TestDataFactory)
+├── repositories.py       # InMemory Repository 모음
+├── redis.py              # MockRedisClient (통합본)
+├── builders.py           # 복잡한 객체 Builder (선택사항)
+└── constants.py          # 테스트 상수 (선택사항)
+```
+
+**실제 구현된 구조:**
+```
+packages/selfhealing-python/tests/factories/
+├── __init__.py           # 모듈 export (15개 심볼)
+├── data_factory.py       # TestDataFactory, MockCircuitBreakerStateData, DefaultValues
+├── redis.py              # MockRedisClient, MockPipeline, MockDistributedLock
+├── repositories.py       # InMemoryCircuitBreakerRepository, InMemoryRateLimitTracker, InMemoryDLQRepository
+└── time_helpers.py       # freeze_time, mock_sleep, MockSleep, get_fixed_datetime, make_datetime_range
+```
+
+### 1.2 변경 사항
+
+| 계획 | 실제 | 사유 |
+|------|------|------|
+| `constants.py` | `data_factory.py`의 `DefaultValues` 클래스 | 상수와 Factory를 한 파일에서 관리하는 것이 더 편리 |
+| `builders.py` | 미구현 | 현재 복잡한 객체 빌더 필요 없음, 향후 필요시 추가 |
+| - | `time_helpers.py` 추가 | Phase 4-5에서 시간 관련 테스트 유틸리티 필요 |
+
+### 1.3 전체 워크스페이스 구조
+
 ```
 packages/selfhealing-python/tests/
 ├── factories/
-│   ├── __init__.py           # 메인 Factory (TestDataFactory)
-│   ├── repositories.py       # InMemory Repository 모음
-│   ├── redis.py              # MockRedisClient (통합본)
-│   ├── builders.py           # 복잡한 객체 Builder
-│   └── constants.py          # 테스트 상수 (도메인명, 서비스명 등)
-├── conftest.py               # 글로벌 fixture (Factory 기반)
+│   ├── __init__.py           # 모듈 export
+│   ├── data_factory.py       # TestDataFactory + DefaultValues
+│   ├── redis.py              # MockRedisClient
+│   ├── repositories.py       # InMemory Repositories
+│   └── time_helpers.py       # Time utilities
+├── conftest.py               # 글로벌 fixture
 └── ... (기존 테스트 파일들)
 ```
 
@@ -838,11 +871,73 @@ mock_entry = F.mock_failed_operation(domain=Domains.PAYMENT)
 
 ---
 
-## 5. 다음 단계
+## 5. 구현 현황 (2026-01-20)
 
-이 문서의 구현을 시작하려면:
+### 5.1 완료된 작업
 
-1. `packages/selfhealing-python/tests/factories/` 디렉토리 생성
-2. 위 코드들 파일로 저장
-3. 1개 테스트 파일에서 시도
-4. 성공 시 점진적 확대
+| 항목 | 상태 | 설명 |
+|------|------|------|
+| `data_factory.py` | ✅ 완료 | `TestDataFactory`, `MockCircuitBreakerStateData`, `DefaultValues` |
+| `redis.py` | ✅ 완료 | `MockRedisClient`, `MockPipeline`, `MockDistributedLock` |
+| `repositories.py` | ✅ 완료 | `InMemoryCircuitBreakerRepository`, `InMemoryRateLimitTracker`, `InMemoryDLQRepository` |
+| `time_helpers.py` | ✅ 완료 | `freeze_time`, `mock_sleep`, `MockSleep`, `get_fixed_datetime`, `make_datetime_range` |
+| `__init__.py` | ✅ 완료 | 15개 심볼 export |
+
+### 5.2 리팩토링된 테스트 파일
+
+| 파일 | 적용된 Factory |
+|------|----------------|
+| `tests/services/circuit_breaker/test_service.py` | `MockCircuitBreakerStateData`, `InMemoryCircuitBreakerRepository` |
+| `tests/services/circuit_breaker/test_protection.py` | `MockCircuitBreakerStateData`, `InMemoryCircuitBreakerRepository`, `InMemoryRateLimitTracker` |
+| `tests/services/circuit_breaker/test_manual_control.py` | `MockCircuitBreakerStateData`, `InMemoryCircuitBreakerRepository` |
+| `tests/services/circuit_breaker/test_convenience.py` | `MockCircuitBreakerStateData`, `InMemoryCircuitBreakerRepository` |
+| `tests/services/dlq/test_entry_operations.py` | `TestDataFactory.mock_failed_operation` |
+| `tests/services/dlq/test_list_operations.py` | `TestDataFactory.mock_failed_operation` |
+| `tests/unit/audit/hash_chain_core/conftest.py` | `MockRedisClient` (factories에서 import) |
+| `tests/unit/audit/graceful_degradation/conftest.py` | `MockRedisClient`, `MockDistributedLock` (factories에서 import) |
+
+### 5.3 테스트 결과
+
+```
+Audit (hash_chain_core + graceful_degradation): 80 passed
+```
+
+### 5.4 미구현 항목
+
+| 항목 | 사유 | 향후 계획 |
+|------|------|----------|
+| `builders.py` | 현재 복잡한 객체 빌더 필요 없음 | 필요시 추가 |
+| `constants.py` (별도 파일) | `DefaultValues`로 충분 | 필요시 분리 |
+
+### 5.5 사용 예시
+
+```python
+# 기본 사용
+from tests.factories import TestDataFactory, MockRedisClient
+from tests.factories import InMemoryCircuitBreakerRepository
+
+# CB 상태 생성
+state = TestDataFactory.circuit_breaker_state(service_name="payment-api")
+
+# Mock 객체 생성
+mock_entry = TestDataFactory.mock_failed_operation(domain="order", status="pending")
+
+# Redis Mock
+redis = MockRedisClient()
+redis.set("key", "value")
+
+# Repository
+repo = InMemoryCircuitBreakerRepository()
+state = repo.get_or_create("test_service")
+
+# Time Helpers
+from tests.factories import freeze_time, mock_sleep
+
+with freeze_time("2026-01-20 12:00:00"):
+    # datetime.now()가 고정됨
+    pass
+
+with mock_sleep() as sleep_mock:
+    time.sleep(10)  # 즉시 반환
+    assert sleep_mock.total_slept == 10
+```
