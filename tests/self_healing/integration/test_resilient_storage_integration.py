@@ -19,9 +19,13 @@ import tempfile
 import time
 from datetime import datetime, timezone
 
+# Import test constants for Redis configuration
+from tests.factories.constants import REDIS_CONFIG
 
 # Skip all tests if Redis is not available
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/15")  # Use DB 15 for tests
+# Uses RedisTestConfig.test_redis_url for Docker Compose test environment
+# TEST_PORT(16379) maps to container's 6379, uses DB 15 for test isolation
+REDIS_URL = os.getenv("REDIS_URL", REDIS_CONFIG.test_redis_url)
 
 
 def redis_available():

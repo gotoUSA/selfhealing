@@ -55,10 +55,17 @@ def reset_registry():
 
 @pytest.fixture
 def redis_available():
-    """Check if Redis is available."""
+    """
+    Check if Redis is available.
+    
+    Uses RedisTestConfig for consistent port configuration.
+    Docker Compose test environment uses TEST_PORT (16379).
+    """
     try:
         import redis
-        client = redis.Redis(host="localhost", port=6379)
+        from tests.factories.constants import REDIS_CONFIG
+        redis_port = int(os.environ.get("REDIS_PORT", REDIS_CONFIG.TEST_PORT))
+        client = redis.Redis(host=REDIS_CONFIG.DEFAULT_HOST, port=redis_port)
         client.ping()
         return True
     except Exception:

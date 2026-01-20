@@ -58,12 +58,18 @@ def reset_services():
 
 @pytest.fixture
 def redis_available():
-    """Redis 연결 가능 여부 확인."""
+    """
+    Redis 연결 가능 여부 확인.
+    
+    Uses RedisTestConfig for port configuration.
+    Docker Compose test environment uses TEST_PORT (16379).
+    """
     try:
         import redis
-        # Docker Compose 환경에서는 16379 포트 사용
-        redis_port = int(os.environ.get("REDIS_PORT", 16379))
-        client = redis.Redis(host="localhost", port=redis_port)
+        from tests.factories.constants import REDIS_CONFIG
+        # 환경변수 또는 RedisTestConfig.TEST_PORT 사용
+        redis_port = int(os.environ.get("REDIS_PORT", REDIS_CONFIG.TEST_PORT))
+        client = redis.Redis(host=REDIS_CONFIG.DEFAULT_HOST, port=redis_port)
         client.ping()
         return True
     except Exception:
@@ -416,13 +422,20 @@ class TestActiveRolloutsIntegration:
 
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_test_data():
-    """테스트 종료 후 데이터 정리."""
+    """
+    테스트 종료 후 데이터 정리.
+    
+    Cleans up canary-related Redis keys after test module completes.
+    Uses RedisTestConfig.TEST_PORT for Docker Compose environment.
+    """
     yield
     
     # 테스트 데이터 정리
     try:
         import redis
-        client = redis.Redis(host="localhost", port=6379)
+        from tests.factories.constants import REDIS_CONFIG
+        redis_port = int(os.environ.get("REDIS_PORT", REDIS_CONFIG.TEST_PORT))
+        client = redis.Redis(host=REDIS_CONFIG.DEFAULT_HOST, port=redis_port)
         
         # canary 관련 키 삭제
         pattern = "*canary*"

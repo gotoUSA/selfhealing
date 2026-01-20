@@ -2,28 +2,32 @@
 
 > **용도**: 새로운 세션에서 리팩토링 진행 시 체크리스트로 활용  
 > **관련 문서**: 60-64번 문서
+> **최종 업데이트**: 2026-01-20
 
 ---
 
-## Phase 1: 인프라 정리 (61번 문서)
+## Phase 1: 인프라 정리 (61번 문서) ✅ 완료
 
 ### 1.1 Docker Compose
 
-- [ ] `docker-compose.test.yml` Redis 포트 6379로 변경
-- [ ] `docker-compose.test.yml` celery-worker 서비스 추가
-- [ ] 서비스 healthcheck 확인
+- [x] `docker-compose.test.yml` Redis 포트 설정 확인 (16379:6379 - 호스트 충돌 방지)
+- [x] `docker-compose.test.yml` celery-worker 서비스 추가 (healthcheck 포함)
+- [x] 서비스 healthcheck 확인 (db, redis, celery-worker 모두 설정됨)
 
 ### 1.2 상수 정리
 
-- [ ] `tests/factories/constants.py` 포트 상수 확인
-- [ ] `tests/conftest.py` 기본 포트 6379로 변경
+- [x] `tests/factories/constants.py` 포트 상수 확인
+  - `RedisTestConfig.DEFAULT_PORT = 6379` (일반 docker-compose)
+  - `RedisTestConfig.TEST_PORT = 16379` (docker-compose.test.yml 호스트 포트)
+  - `RedisTestConfig.TEST_DB = 15` (테스트 격리용 DB)
+- [x] `tests/conftest.py` RedisTestConfig 사용하도록 수정 (하드코딩 제거)
 
 ### 1.3 하드코딩 제거
 
-- [ ] `tests/integration/selfhealing/test_canary_integration.py` 포트 수정
-- [ ] `tests/integration/test_hybrid_storage_integration.py` 포트 수정
-- [ ] `tests/self_healing/integration/test_multi_cluster_namespace.py` URL 수정
-- [ ] `tests/self_healing/integration/test_resilient_storage_integration.py` URL 수정
+- [x] `tests/integration/selfhealing/test_canary_integration.py` - `REDIS_CONFIG` 상수 사용
+- [x] `tests/integration/test_hybrid_storage_integration.py` - `REDIS_CONFIG` 상수 사용
+- [x] `tests/self_healing/integration/test_multi_cluster_namespace.py` - `REDIS_CONFIG.test_redis_url` 사용
+- [x] `tests/self_healing/integration/test_resilient_storage_integration.py` - `REDIS_CONFIG.test_redis_url` 사용
 
 ### 1.4 검증
 

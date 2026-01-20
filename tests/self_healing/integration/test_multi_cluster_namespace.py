@@ -15,8 +15,13 @@ import pytest
 import tempfile
 from datetime import datetime, timezone
 
-# Redis 연결 설정
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/15")  # Use DB 15 for tests
+# Import test constants for Redis configuration
+from tests.factories.constants import REDIS_CONFIG
+
+# Redis 연결 설정 - RedisTestConfig 사용
+# Docker Compose test 환경: TEST_PORT(16379), 일반 docker-compose: DEFAULT_PORT(6379)
+# 환경변수 REDIS_URL이 설정되면 해당 값 사용
+REDIS_URL = os.getenv("REDIS_URL", REDIS_CONFIG.test_redis_url)
 
 
 def redis_available():

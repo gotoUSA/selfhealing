@@ -162,5 +162,41 @@ services:
       redis:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Celery Worker - Integration Tests용 백그라운드 작업 처리
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - SELFHEALING_ENABLED=true
+    command: >
+      sh -c "
+        pip install -e /code/packages/selfhealing-python &&
+        celery -A myproject worker -l info -Q default,selfhealing,dlq,payment_critical,order_processing --concurrency=2
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A myproject inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:

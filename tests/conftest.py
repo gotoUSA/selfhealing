@@ -113,11 +113,12 @@ def redis_client():
     Real Redis client for integration tests.
     
     Requires Docker Compose: docker-compose -f docker-compose.test.yml up -d
-    Port: 16379 (mapped from container's 6379)
+    Uses RedisTestConfig.TEST_PORT (16379) which maps to container's 6379.
     """
     import redis
     
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    config = RedisTestConfig()
+    redis_url = os.environ.get("REDIS_URL", config.test_redis_url)
     client = redis.from_url(redis_url, decode_responses=True)
     
     # Verify connection
@@ -138,6 +139,7 @@ def redis_circuit_breaker_repository(redis_client):
     Real Redis-based Circuit Breaker Repository.
     
     Uses ResilientStorageBackend with actual Redis connection.
+    Port configuration from RedisTestConfig.TEST_PORT.
     """
     from selfhealing.adapters.resilient.backend import (
         ResilientStorageBackend,
@@ -145,8 +147,9 @@ def redis_circuit_breaker_repository(redis_client):
     )
     from selfhealing.adapters.redis.circuit_breaker import RedisCircuitBreakerStateRepository
     
-    # Create backend with test namespace
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    # Create backend with test namespace using RedisTestConfig
+    config_redis = RedisTestConfig()
+    redis_url = os.environ.get("REDIS_URL", config_redis.test_redis_url)
     config = ResilientStorageConfig(
         redis_url=redis_url,
         key_prefix="test:selfhealing:",
@@ -167,6 +170,7 @@ def redis_dlq_repository(redis_client):
     Real Redis-based DLQ Repository.
     
     Uses ResilientStorageBackend with actual Redis connection.
+    Port configuration from RedisTestConfig.TEST_PORT.
     """
     from selfhealing.adapters.resilient.backend import (
         ResilientStorageBackend,
@@ -174,7 +178,8 @@ def redis_dlq_repository(redis_client):
     )
     from selfhealing.adapters.redis.dlq import RedisDLQRepository
     
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:16379/0")
+    config_redis = RedisTestConfig()
+    redis_url = os.environ.get("REDIS_URL", config_redis.test_redis_url)
     config = ResilientStorageConfig(
         redis_url=redis_url,
         key_prefix="test:selfhealing:dlq:",
