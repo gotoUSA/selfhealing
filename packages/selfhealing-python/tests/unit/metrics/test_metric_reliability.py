@@ -45,18 +45,25 @@ class TestSyncInfo:
         assert info.last_sync_source == "push"
         assert info.last_sync_time is not None
 
-    @pytest.mark.skip(reason="Timing issue - stabilization_duration causes False during RECOVERING state")
     def test_staleness_detection(self):
-        """staleness 자동 감지."""
+        """staleness 자동 감지 - SYNCED 상태에서만 동작."""
         from selfhealing.metrics.safe_gauge import SyncInfo, SyncStatus
         
-        info = SyncInfo(staleness_threshold=0.1)  # 0.1초
+        info = SyncInfo(staleness_threshold=0.1, stabilization_duration=0.01)  # 빠른 안정화
         info.mark_synced("push")
         
-        # 즉시는 fresh
+        # UNKNOWN → RECOVERING 전환됨
+        assert info.status == SyncStatus.RECOVERING
+        
+        # RECOVERING 상태에서는 check_staleness가 False 반환 (정상 동작)
         assert info.check_staleness() is False
         
-        # 시간 경과 후 stale
+        # 안정화 기간 대기 후 다시 sync → SYNCED
+        time.sleep(0.02)
+        info.mark_synced("push")
+        assert info.status == SyncStatus.SYNCED
+        
+        # SYNCED 상태에서 시간 경과 후 stale
         time.sleep(0.15)
         assert info.check_staleness() is True
         assert info.status == SyncStatus.STALE
