@@ -252,11 +252,60 @@ tests/unit/audit/*.py
 
 ---
 
-## 6. 진행 결정 사항
+## 6. 진행 현황
 
-> ⚠️ **진행 전 확인 필요**
+### ✅ Phase 1 완료 (2026-01-20)
 
-1. [ ] Phase 1 (Foundation)부터 시작할지?
-2. [ ] 특정 도메인(CB/DLQ/Audit) 우선순위?
-3. [ ] `freezegun` 패키지 추가 허용?
-4. [ ] 기존 테스트 파일 인라인 수정 vs 새 파일 생성?
+**생성된 파일:**
+```
+packages/selfhealing-python/tests/factories/
+├── __init__.py           # 모듈 export
+├── data_factory.py       # TestDataFactory, DefaultValues
+├── redis.py              # MockRedisClient, MockPipeline, MockDistributedLock
+└── repositories.py       # InMemoryCircuitBreakerRepository, InMemoryRateLimitTracker, InMemoryDLQRepository
+```
+
+**구현 내용:**
+- `TestDataFactory`: 테스트 데이터 생성 Factory 클래스
+- `MockCircuitBreakerStateData`: CB 상태 데이터 Mock
+- `MockRedisClient`: 통합 Redis Mock (hash_chain_core + graceful_degradation)
+- `InMemoryCircuitBreakerRepository`: CB Repository 인메모리 구현
+- `InMemoryRateLimitTracker`: Rate Limit Tracker 인메모리 구현
+- `InMemoryDLQRepository`: DLQ Repository 인메모리 구현
+- `DefaultValues`: 하드코딩 값 중앙 관리 상수 클래스
+
+### ✅ Phase 2 완료 (2026-01-20)
+
+**리팩토링된 파일 (6개):**
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `test_service.py` | `MockCircuitBreakerStateData`, `MockRepository` 제거 → Factory 사용 |
+| `test_protection.py` | `MockCircuitBreakerStateData`, `MockRepository`, `MockRateLimitTracker` 제거 → Factory 사용 |
+| `test_manual_control.py` | `MockCircuitBreakerStateData`, `MockRepository` 제거 → Factory 사용 |
+| `test_convenience.py` | `MockCircuitBreakerStateData`, `MockRepository` 제거 → Factory 사용 |
+| `test_entry_operations.py` | `make_mock_entry` 함수 제거 → `TestDataFactory.mock_failed_operation` 사용 |
+| `test_list_operations.py` | `make_mock_entries` 함수 리팩토링 → `TestDataFactory.mock_failed_operation` 사용 |
+
+**테스트 결과:**
+- 로컬: 388 passed (CB) + 19 passed (DLQ)
+- Docker: 407 passed (전체)
+
+**제거된 중복 코드:**
+- `MockCircuitBreakerStateData` 정의 4개 → 1개 (Factory)
+- `MockRepository` 정의 4개 → 1개 (`InMemoryCircuitBreakerRepository`)
+- `MockRateLimitTracker` 정의 1개 → 1개 (`InMemoryRateLimitTracker`)
+- `make_mock_entry` 함수 → `TestDataFactory.mock_failed_operation`
+
+---
+
+## 7. 남은 작업
+
+### Phase 3: Audit Migration (예정)
+- `tests/unit/audit/hash_chain_core/conftest.py`의 `MockRedisClient` → `factories.MockRedisClient` 사용
+- `tests/unit/audit/graceful_degradation/conftest.py`의 `MockRedisClient` → `factories.MockRedisClient` 사용
+
+### Phase 4-5: Optimization (예정)
+- FreezeTime 도입
+- sleep 제거/모킹
+

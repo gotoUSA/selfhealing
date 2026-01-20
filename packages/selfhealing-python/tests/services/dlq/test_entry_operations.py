@@ -8,6 +8,9 @@ Tests for the Repository pattern implementation of:
 
 These methods use Repository pattern instead of direct Django ORM access
 (domain-free architecture).
+
+Refactored to use Factory Pattern (Phase 2):
+- make_mock_entry → TestDataFactory.mock_failed_operation
 """
 
 from datetime import datetime, timezone
@@ -18,32 +21,8 @@ import pytest
 from selfhealing.interfaces import FailedOperationData
 from selfhealing.services.dlq import DLQService, DLQConfig
 
-
-def make_mock_entry(
-    id: int = 1,
-    domain: str = "payment",
-    failure_type: str = "PG_TIMEOUT",
-    status: str = "pending",
-    retry_count: int = 0,
-    max_retries: int = 3,
-) -> Mock:
-    """Create a mock FailedOperationData for testing."""
-    entry = Mock(spec=FailedOperationData)
-    entry.id = id
-    entry.domain = domain
-    entry.failure_type = failure_type
-    entry.status = status
-    entry.retry_count = retry_count
-    entry.max_retries = max_retries
-    entry.created_at = datetime.now(timezone.utc)
-    entry.resolved_at = None
-    entry.error_code = "TIMEOUT"
-    entry.error_message = "Connection timed out"
-    entry.snapshot_data = {"order_id": "order-123"}
-    entry.request_data = {"method": "POST"}
-    entry.response_data = {"status_code": 500}
-    entry.metadata = {}
-    return entry
+# Factory Pattern imports
+from tests.factories import TestDataFactory
 
 
 class TestRetryEntry:
@@ -51,7 +30,7 @@ class TestRetryEntry:
 
     def test_retry_entry_success(self):
         """Test successful retry increments count."""
-        mock_entry = make_mock_entry(id=1, status="pending", retry_count=1)
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="pending", retry_count=1)
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -80,7 +59,7 @@ class TestRetryEntry:
 
     def test_retry_entry_resolved_fails(self):
         """Test retry on already resolved entry raises ValueError."""
-        mock_entry = make_mock_entry(id=1, status="resolved")
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="resolved")
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -92,7 +71,7 @@ class TestRetryEntry:
 
     def test_retry_entry_archived_fails(self):
         """Test retry on archived entry raises ValueError."""
-        mock_entry = make_mock_entry(id=1, status="archived")
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="archived")
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -108,7 +87,7 @@ class TestResolveEntry:
 
     def test_resolve_entry_success(self):
         """Test successful resolution marks entry as resolved."""
-        mock_entry = make_mock_entry(id=1, status="pending")
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="pending")
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -138,7 +117,7 @@ class TestResolveEntry:
 
     def test_resolve_entry_already_resolved(self):
         """Test resolve on already resolved entry raises ValueError."""
-        mock_entry = make_mock_entry(id=1, status="resolved")
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="resolved")
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -154,7 +133,7 @@ class TestGetEntry:
 
     def test_get_entry_success(self):
         """Test getting entry returns formatted dict."""
-        mock_entry = make_mock_entry(id=1, domain="payment")
+        mock_entry = TestDataFactory.mock_failed_operation(id=1, domain="payment")
         
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -182,7 +161,7 @@ class TestGetEntry:
 
     def test_get_entry_with_all_fields(self):
         """Test get_entry returns all expected fields."""
-        mock_entry = make_mock_entry(id=5)
+        mock_entry = TestDataFactory.mock_failed_operation(id=5)
         mock_entry.snapshot_data = {"order_id": "test-123"}
         
         mock_repo = Mock()

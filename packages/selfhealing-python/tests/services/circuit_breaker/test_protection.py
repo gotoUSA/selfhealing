@@ -5,78 +5,23 @@ Covers:
 - Rate limit cascade detection
 - Self-DDoS protection
 - Adaptive backoff calculation
+
+Refactored to use Factory Pattern (Phase 2):
+- MockCircuitBreakerStateData → factories.MockCircuitBreakerStateData
+- MockRepository → factories.InMemoryCircuitBreakerRepository
+- MockRateLimitTracker → factories.InMemoryRateLimitTracker
 """
 
 import pytest
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
 
-
-@dataclass
-class MockCircuitBreakerStateData:
-    """Mock circuit breaker state data."""
-    service_name: str
-    state: str = "closed"
-    opened_at: str = None
-    failure_count: int = 0
-    success_count: int = 0
-    last_failure_at: str = None
-    last_success_at: str = None
-
-
-class MockRepository:
-    """Mock CircuitBreakerStateRepository."""
-    
-    def __init__(self):
-        self._states = {}
-    
-    def get_or_create(self, service_name: str) -> MockCircuitBreakerStateData:
-        if service_name not in self._states:
-            self._states[service_name] = MockCircuitBreakerStateData(
-                service_name=service_name
-            )
-        return self._states[service_name]
-    
-    def atomic_force_open(self, service_name: str, reason: str, 
-                          controlled_by_id: int, ttl_minutes: int):
-        state = self.get_or_create(service_name)
-        previous_state = state.state
-        state.state = "open"
-        return (True, previous_state, "open")
-
-
-class MockRateLimitTracker:
-    """Mock RateLimitTracker for testing."""
-    
-    def __init__(self):
-        self._rate_limits = {}
-        self._requests = {}
-        self._backoff = {}
-    
-    def record_rate_limit(self, service_name: str):
-        self._rate_limits.setdefault(service_name, 0)
-        self._rate_limits[service_name] += 1
-    
-    def record_request(self, service_name: str):
-        self._requests.setdefault(service_name, 0)
-        self._requests[service_name] += 1
-    
-    def get_rate_limit_count(self, service_name: str, window_seconds: int) -> int:
-        return self._rate_limits.get(service_name, 0)
-    
-    def get_request_count(self, service_name: str, window_seconds: int) -> int:
-        return self._requests.get(service_name, 0)
-    
-    def get_backoff_level(self, service_name: str) -> int:
-        return self._backoff.get(service_name, 0)
-    
-    def increment_backoff(self, service_name: str) -> int:
-        self._backoff.setdefault(service_name, 0)
-        self._backoff[service_name] += 1
-        return self._backoff[service_name]
-    
-    def reset_backoff(self, service_name: str):
-        self._backoff[service_name] = 0
+# Factory Pattern imports
+from tests.factories import (
+    TestDataFactory,
+    MockCircuitBreakerStateData,
+    InMemoryCircuitBreakerRepository,
+    InMemoryRateLimitTracker,
+)
 
 
 class TestRateLimitCascadeDetection:
@@ -92,10 +37,10 @@ class TestRateLimitCascadeDetection:
             rate_limit_cascade_threshold=10,
             rate_limit_cascade_window_seconds=60,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._rate_limits["test_service"] = 5  # Below threshold
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -114,10 +59,10 @@ class TestRateLimitCascadeDetection:
             rate_limit_cascade_threshold=10,
             rate_limit_cascade_window_seconds=60,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._rate_limits["test_service"] = 15  # Above threshold
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -134,7 +79,7 @@ class TestRateLimitCascadeDetection:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=False)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         result = service.record_rate_limit_response("test_service")
@@ -149,10 +94,10 @@ class TestRateLimitCascadeDetection:
             enabled=True,
             rate_limit_cascade_threshold=10,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._rate_limits["test_service"] = 15
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -169,10 +114,10 @@ class TestRateLimitCascadeDetection:
             enabled=True,
             rate_limit_cascade_threshold=10,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._rate_limits["test_service"] = 5
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -195,10 +140,10 @@ class TestSelfDDoSProtection:
             self_ddos_request_threshold=100,
             self_ddos_window_seconds=10,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._requests["test_service"] = 50  # Below threshold
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -218,10 +163,10 @@ class TestSelfDDoSProtection:
             self_ddos_request_threshold=100,
             self_ddos_window_seconds=10,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._requests["test_service"] = 150  # Above threshold
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -237,14 +182,14 @@ class TestSelfDDoSProtection:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         mock_repo._states["test_service"] = MockCircuitBreakerStateData(
             service_name="test_service",
             state="open"
         )
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
             allowed, backoff = service.should_allow_with_ddos_protection("test_service")
@@ -261,10 +206,10 @@ class TestSelfDDoSProtection:
             enabled=True,
             self_ddos_protection_enabled=False,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._requests["test_service"] = 1000  # Very high
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -287,10 +232,10 @@ class TestAdaptiveBackoff:
             enabled=True,
             self_ddos_backoff_multiplier=2.0,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._backoff["test_service"] = 0
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
@@ -307,10 +252,10 @@ class TestAdaptiveBackoff:
             enabled=True,
             self_ddos_backoff_multiplier=2.0,
         )
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):
             # Level 0
@@ -335,10 +280,10 @@ class TestAdaptiveBackoff:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
-        mock_tracker = MockRateLimitTracker()
+        mock_tracker = InMemoryRateLimitTracker()
         mock_tracker._backoff["test_service"] = 1
         
         with patch('selfhealing.services.circuit_breaker.protection.get_rate_limit_tracker', return_value=mock_tracker):

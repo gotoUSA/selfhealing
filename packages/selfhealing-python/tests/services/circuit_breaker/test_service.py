@@ -7,55 +7,22 @@ Covers:
 - Repository integration
 - should_allow method
 - get_state method
+
+Refactored to use Factory Pattern (Phase 2):
+- MockCircuitBreakerStateData → factories.MockCircuitBreakerStateData
+- MockRepository → factories.InMemoryCircuitBreakerRepository
 """
 
 import pytest
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
 from datetime import datetime
 
-
-@dataclass
-class MockCircuitBreakerStateData:
-    """Mock circuit breaker state data."""
-    service_name: str
-    state: str = "closed"
-    failure_count: int = 0
-    success_count: int = 0
-    last_failure_time: datetime = None
-    last_success_time: datetime = None
-    opened_at: datetime = None
-    opened_by_id: int = None
-    opened_reason: str = ""
-
-
-class MockRepository:
-    """Mock CircuitBreakerStateRepository."""
-    
-    def __init__(self):
-        self._states = {}
-    
-    def get_or_create(self, service_name: str) -> MockCircuitBreakerStateData:
-        if service_name not in self._states:
-            self._states[service_name] = MockCircuitBreakerStateData(
-                service_name=service_name
-            )
-        return self._states[service_name]
-    
-    def atomic_force_open(self, service_name: str, reason: str, 
-                          controlled_by_id: int, ttl_minutes: int):
-        state = self.get_or_create(service_name)
-        previous_state = state.state
-        state.state = "open"
-        state.opened_reason = reason
-        return (True, previous_state, "open")
-    
-    def atomic_force_close(self, service_name: str, reason: str,
-                           controlled_by_id: int):
-        state = self.get_or_create(service_name)
-        previous_state = state.state
-        state.state = "closed"
-        return (True, previous_state, "closed")
+# Factory Pattern imports
+from tests.factories import (
+    TestDataFactory,
+    MockCircuitBreakerStateData,
+    InMemoryCircuitBreakerRepository,
+)
 
 
 class TestCircuitBreakerServiceInit:
@@ -67,7 +34,7 @@ class TestCircuitBreakerServiceInit:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
@@ -78,7 +45,7 @@ class TestCircuitBreakerServiceInit:
         """Test initialization without config loads from settings."""
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(repository=mock_repo)
         
         assert service.config is not None
@@ -89,7 +56,7 @@ class TestCircuitBreakerServiceInit:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         assert service.is_enabled is True
@@ -100,7 +67,7 @@ class TestCircuitBreakerServiceInit:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         assert service.is_enabled is False
@@ -115,7 +82,7 @@ class TestCircuitBreakerStateQuery:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         state = service.get_or_create_state("new_service")
@@ -129,7 +96,7 @@ class TestCircuitBreakerStateQuery:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         state = service.get_state("test_service")
@@ -141,7 +108,7 @@ class TestCircuitBreakerStateQuery:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         
         # Pre-populate with open state
         mock_repo._states["test_service"] = MockCircuitBreakerStateData(
@@ -164,7 +131,7 @@ class TestShouldAllow:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         assert service.should_allow("test_service") is True
@@ -175,7 +142,7 @@ class TestShouldAllow:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         mock_repo._states["test_service"] = MockCircuitBreakerStateData(
             service_name="test_service",
             state="open"
@@ -191,7 +158,7 @@ class TestShouldAllow:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=False)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         mock_repo._states["test_service"] = MockCircuitBreakerStateData(
             service_name="test_service",
             state="open"
@@ -208,7 +175,7 @@ class TestShouldAllow:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         mock_repo._states["test_service"] = MockCircuitBreakerStateData(
             service_name="test_service",
             state="half_open"
@@ -230,7 +197,7 @@ class TestRepositoryProperty:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig()
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         assert service.repository is mock_repo
@@ -244,7 +211,7 @@ class TestRepositoryProperty:
         
         # Mock the factory/registry to avoid DB connection
         with patch('selfhealing.factory.ProviderRegistry') as mock_registry:
-            mock_repo = MockRepository()
+            mock_repo = InMemoryCircuitBreakerRepository()
             mock_registry.get_circuit_breaker_repo.return_value = mock_repo
             
             service = CircuitBreakerService(config=config)
@@ -262,7 +229,7 @@ class TestCircuitBreakerServiceIntegration:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         # Initially closed
@@ -288,7 +255,7 @@ class TestCircuitBreakerServiceIntegration:
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
         
         config = CircuitBreakerConfig(enabled=True)
-        mock_repo = MockRepository()
+        mock_repo = InMemoryCircuitBreakerRepository()
         service = CircuitBreakerService(config=config, repository=mock_repo)
         
         # Open service A

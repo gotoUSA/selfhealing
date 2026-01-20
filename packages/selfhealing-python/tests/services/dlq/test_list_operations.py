@@ -6,6 +6,9 @@ Tests for the Repository pattern implementation of:
 
 Uses Repository pattern instead of direct Django ORM access
 (domain-free architecture).
+
+Refactored to use Factory Pattern (Phase 2):
+- make_mock_entries → TestDataFactory.mock_failed_operation
 """
 
 from datetime import datetime, timezone
@@ -15,20 +18,18 @@ import pytest
 
 from selfhealing.services.dlq import DLQService, DLQConfig
 
+# Factory Pattern imports
+from tests.factories import TestDataFactory
+
 
 def make_mock_entries(count: int, status: str = "pending") -> list:
     """Create a list of mock FailedOperationData for testing."""
     entries = []
     for i in range(count):
-        entry = Mock()
-        entry.id = i + 1
-        entry.domain = "payment"
-        entry.failure_type = "PG_TIMEOUT"
-        entry.status = status
-        entry.retry_count = 0
-        entry.created_at = datetime.now(timezone.utc)
-        entry.resolved_at = None
-        entries.append(entry)
+        entries.append(TestDataFactory.mock_failed_operation(
+            id=i + 1,
+            status=status,
+        ))
     return entries
 
 
