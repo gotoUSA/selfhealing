@@ -1,9 +1,62 @@
 # 73. Namespace-Aware Emergency (리전별 긴급 모드 격리)
 
-> **Version**: 1.2.0  
+> **Version**: 1.3.0  
 > **Created**: 2026-01-21  
+> **Updated**: 2026-01-22  
 > **Status**: Draft  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
+
+---
+
+## 구현 로드맵
+
+### Phase 1: 안전 기반 (P0 - 필수)
+
+| 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
+|------|----------|------|----------|------|
+| 1 | **FailFastClusterIdentity** | 리전 식별자 누락 시 시스템 기동 즉시 중단 | P0 | ⬜ |
+| 2 | **AtomicStateQuery** | Lua 스크립트 기반 원자적 Global+Regional 조회 | P0 | ⬜ |
+| 3 | **EscalationAuditTrail** | 오버라이드 의사결정 이유 Audit 로그 박제 | P0 | ⬜ |
+
+### Phase 2: 핵심 기능 (P1)
+
+| 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
+|------|----------|------|----------|------|
+| 4 | `NamespacedEmergencyTracker` | 네임스페이스별 Emergency 상태 관리 | P1 | ⬜ |
+| 5 | `ScopedEmergencyState` | 스코프 인지형 상태 모델 | P1 | ⬜ |
+| 6 | `RegionalCascadeDetector` | 다중 리전 연쇄 장애 감지 | P1 | ⬜ |
+
+### Phase 3: 고급 기능 (P2)
+
+| 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
+|------|----------|------|----------|------|
+| 7 | `EmergencyHealthPenalty` | Health Score 연동 | P2 | ⬜ |
+| 8 | `PartitionReconciliationService` | 네트워크 고립 복구 | P2 | ⬜ |
+
+### 구현 파일 목록
+
+```
+packages/selfhealing-python/src/selfhealing/
+├── core/
+│   └── cluster_identity.py          # FailFastClusterIdentity 강화
+├── services/
+│   └── namespace_emergency/
+│       ├── __init__.py
+│       ├── tracker.py                # NamespacedEmergencyTracker
+│       ├── atomic_query.py           # AtomicStateQuery (Lua 스크립트)
+│       ├── escalation_audit.py       # EscalationAuditTrail
+│       ├── cascade_detector.py       # RegionalCascadeDetector
+│       ├── health_penalty.py         # EmergencyHealthPenalty
+│       └── partition_reconciliation.py
+└── tests/
+    └── unit/services/namespace_emergency/
+        ├── test_fail_fast_identity.py
+        ├── test_atomic_query.py
+        ├── test_escalation_audit.py
+        └── ...
+```
+
+---
 
 ## 1. 개요
 
@@ -101,9 +154,934 @@ Global Emergency (전역 비상)
 
 ---
 
-## 3. 구현 상세
+## 3. 핵심 구현 (Phase 1 - P0)
 
-### 3.1 EmergencyScope Enum
+> **리뷰 반영**: 3가지 핵심 안전 기능을 최우선 구현합니다.
+
+### 3.1 Fail-Fast Cluster Identity (리전 식별자 필수화)
+
+**문제점**: 현재 `ClusterIdentity.validate()`가 `cluster_id`만 검증하고 **`region`은 검증하지 않음**.
+또한 `get_cluster_identity()`에서 `fail_fast=False`로 호출되어 Quarantine Mode로 빠짐.
+
+**코드 근거**:
+- [cluster_identity.py#L70-112](packages/selfhealing-python/src/selfhealing/core/cluster_identity.py#L70-L112): `validate()` 메서드
+- [cluster_identity.py#L148-149](packages/selfhealing-python/src/selfhealing/core/cluster_identity.py#L148-L149): `fail_fast=False` 호출
+
+```python
+# packages/selfhealing-python/src/selfhealing/core/cluster_identity.py
+
+@dataclass(frozen=True)
+class ClusterIdentity:
+    """
+    클러스터 식별 정보 (Immutable).
+    
+    Fail-Fast 강화:
+    - SELFHEALING_REGION 누락 시 시스템 기동 즉시 중단
+    - 엉뚱한 리전 네임스페이스 건드리는 사고 원천 차단
+    
+    Code reference:
+        tools/hold_row_lock.py#L160-162 (Fail-Fast 패턴)
+        apps.py#L287-295 (Quarantine Mode 패턴)
+    """
+    
+    cluster_id: str
+    region: Optional[str] = None
+    environment: str = "production"
+    tenant: Optional[str] = None
+    pod_id: str = field(
+        default_factory=lambda: os.environ.get("HOSTNAME", "unknown")
+    )
+    
+    def validate(self, fail_fast: Optional[bool] = None) -> bool:
+        """
+        클러스터 ID 및 리전 유효성 검증.
+        
+        Fail-Fast 강화:
+        - SELFHEALING_CLUSTER_ID 누락 시 프로세스 즉시 중단
+        - SELFHEALING_REGION 누락 시 프로세스 즉시 중단 (신규)
+        - 잘못된 네임스페이스 건드리는 것을 원천 방지
+        
+        Args:
+            fail_fast: True면 sys.exit(1), False면 Quarantine Mode
+                       None이면 환경변수 SELFHEALING_FAIL_FAST 참조 (기본: True)
+        
+        Returns:
+            유효하면 True, 아니면 False (fail_fast=False일 때만)
+        """
+        import sys
+        
+        # 환경변수에서 fail_fast 설정 읽기 (기본값: True로 변경!)
+        if fail_fast is None:
+            fail_fast = os.environ.get(
+                "SELFHEALING_FAIL_FAST", "true"  # ← 기본값 True
+            ).lower() == "true"
+        
+        errors = []
+        
+        # 1. cluster_id 검증
+        if not self.cluster_id or self.cluster_id in ("unknown", "default"):
+            errors.append(
+                f"SELFHEALING_CLUSTER_ID not set or invalid: '{self.cluster_id}'"
+            )
+        
+        # 2. region 검증 (신규 - 필수!)
+        if not self.region:
+            errors.append(
+                "SELFHEALING_REGION not set. "
+                "Cannot determine namespace - refusing to start."
+            )
+        
+        # 검증 실패 처리
+        if errors:
+            error_msg = (
+                "❌ [FATAL] ClusterIdentity validation failed:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+                + "\n\nRefusing to start to prevent namespace collision."
+            )
+            
+            if fail_fast:
+                logger.critical(error_msg)
+                sys.exit(1)  # Fail-Fast: 즉시 종료
+            else:
+                logger.error(
+                    f"{error_msg}\n"
+                    "Running in Quarantine Mode (SELFHEALING_FAIL_FAST=false)"
+                )
+                return False
+        
+        logger.info(
+            f"✅ [ClusterIdentity] Validated: "
+            f"cluster={self.cluster_id}, region={self.region}, "
+            f"env={self.environment}, pod={self.pod_id}"
+        )
+        return True
+
+
+# 싱글톤 팩토리 수정
+def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
+    """
+    ClusterIdentity 싱글톤 반환.
+    
+    Args:
+        skip_validation: True면 validation 스킵 (테스트용)
+    
+    Returns:
+        ClusterIdentity 인스턴스
+    
+    Raises:
+        SystemExit: SELFHEALING_FAIL_FAST=true이고 검증 실패 시
+    """
+    global _identity, _quarantine_mode
+    if _identity is None:
+        _identity = ClusterIdentity(
+            cluster_id=os.environ.get("SELFHEALING_CLUSTER_ID", "default"),
+            region=os.environ.get("SELFHEALING_REGION"),  # 필수!
+            environment=os.environ.get("SELFHEALING_ENV", "production"),
+            tenant=os.environ.get("SELFHEALING_TENANT"),
+        )
+        if not skip_validation:
+            # 기본값: fail_fast=True (프로덕션 안전)
+            # 개발 환경에서는 SELFHEALING_FAIL_FAST=false 설정
+            is_valid = _identity.validate()  # ← fail_fast=None → 환경변수 참조
+            if not is_valid:
+                _quarantine_mode = True
+                logger.warning(
+                    "⚠️ [QuarantineMode] System running in Quarantine Mode. "
+                    "Cross-cluster operations will be disabled."
+                )
+    return _identity
+```
+
+**테스트 케이스**:
+
+```python
+class TestFailFastClusterIdentity:
+    """Fail-Fast ClusterIdentity 테스트."""
+    
+    def test_missing_region_fails_validation(self):
+        """리전 누락 시 검증 실패."""
+        identity = ClusterIdentity(
+            cluster_id="seoul-prod-01",
+            region=None,  # ← 누락!
+        )
+        assert identity.validate(fail_fast=False) is False
+    
+    def test_missing_cluster_id_fails_validation(self):
+        """클러스터 ID 누락 시 검증 실패."""
+        identity = ClusterIdentity(
+            cluster_id="default",  # ← 무효
+            region="seoul",
+        )
+        assert identity.validate(fail_fast=False) is False
+    
+    def test_valid_identity_passes(self):
+        """유효한 식별자 검증 통과."""
+        identity = ClusterIdentity(
+            cluster_id="seoul-prod-01",
+            region="seoul",
+        )
+        assert identity.validate(fail_fast=False) is True
+    
+    def test_fail_fast_exits_process(self, monkeypatch):
+        """fail_fast=True 시 프로세스 종료."""
+        identity = ClusterIdentity(
+            cluster_id="default",
+            region=None,
+        )
+        with pytest.raises(SystemExit) as exc_info:
+            identity.validate(fail_fast=True)
+        assert exc_info.value.code == 1
+```
+
+---
+
+### 3.2 Lua Script 기반 원자적 조회 (AtomicStateQuery)
+
+**문제점**: 현재 `get_effective_state()`에서 Global과 Regional 상태를 **2번 Redis 조회**하여
+네트워크 왕복 시간 증가 및 Race Condition 가능성 존재.
+
+**코드 근거**:
+- [atomic_transition.py#L28-47](packages/selfhealing-python/src/selfhealing/services/coordination/atomic_transition.py#L28-L47): 기존 Lua 스크립트 패턴
+
+```python
+# packages/selfhealing-python/src/selfhealing/services/namespace_emergency/atomic_query.py
+
+"""
+Atomic State Query.
+
+Lua 스크립트로 Global + Regional 상태를 한 번에 조회하고
+우선순위 판단까지 원자적으로 처리합니다.
+
+네트워크 왕복: 2회 → 1회 (50% 절감)
+Race Condition: 원천 차단
+
+Code reference:
+    coordination/atomic_transition.py#L28-47 (Lua 스크립트 패턴)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Lua Scripts
+# =============================================================================
+
+ATOMIC_STATE_QUERY_SCRIPT = """
+-- KEYS[1]: global emergency state key
+-- KEYS[2]: regional emergency state key
+-- ARGV[1]: precedence level (0=AUTO, 1=MANUAL, 2=ADMIN_OVERRIDE, 3=KILL_SWITCH)
+
+local global_data = redis.call("GET", KEYS[1])
+local regional_data = redis.call("GET", KEYS[2])
+
+-- 파싱 (JSON)
+local global_state = global_data and cjson.decode(global_data) or nil
+local regional_state = regional_data and cjson.decode(regional_data) or nil
+
+-- 기본값 설정
+if not global_state then
+    global_state = {
+        namespace = "global",
+        scope = "global",
+        governance_mode = "NORMAL",
+        is_active = false,
+        emergency_level = 0
+    }
+end
+
+if not regional_state then
+    regional_state = {
+        namespace = KEYS[2]:match(":([^:]+):governance"),
+        scope = "regional",
+        governance_mode = "NORMAL",
+        is_active = false,
+        emergency_level = 0
+    }
+end
+
+local precedence = tonumber(ARGV[1]) or 0
+
+-- 1순위: Admin Override (precedence >= 2)
+if precedence >= 2 then
+    return {
+        cjson.encode(regional_state),
+        "ADMIN_OVERRIDE",
+        "Admin override active, using regional state"
+    }
+end
+
+-- 2순위: Safety-Max (둘 중 더 엄격한 상태)
+local global_is_strict = global_state.is_active and global_state.governance_mode == "STRICT"
+local regional_is_strict = regional_state.is_active and regional_state.governance_mode == "STRICT"
+
+if global_is_strict and regional_is_strict then
+    -- 둘 다 STRICT: Global 우선 (더 넓은 범위)
+    return {
+        cjson.encode(global_state),
+        "GLOBAL_OVERRIDE",
+        "Both Global and Regional STRICT, using Global state"
+    }
+elseif global_is_strict then
+    -- Global만 STRICT
+    return {
+        cjson.encode(global_state),
+        "GLOBAL_OVERRIDE",
+        "Global STRICT overrides regional " .. (regional_state.namespace or "unknown")
+    }
+elseif regional_is_strict then
+    -- Regional만 STRICT
+    return {
+        cjson.encode(regional_state),
+        "REGIONAL_STRICT",
+        "Regional STRICT active"
+    }
+else
+    -- 둘 다 NORMAL: Regional 반환
+    return {
+        cjson.encode(regional_state),
+        "REGIONAL_DEFAULT",
+        "Both states NORMAL, using regional"
+    }
+end
+"""
+
+
+class AtomicStateQuery:
+    """
+    원자적 상태 조회기.
+    
+    Lua 스크립트로 Global + Regional 상태를 한 번에 조회하고
+    우선순위 판단까지 원자적으로 처리합니다.
+    
+    Benefits:
+    - 네트워크 왕복 50% 절감 (2회 → 1회)
+    - Race Condition 원천 차단
+    - 우선순위 로직 서버사이드 처리
+    
+    Code reference:
+        coordination/atomic_transition.py (Lua 스크립트 패턴)
+    """
+    
+    # Precedence 레벨 매핑
+    PRECEDENCE_LEVELS = {
+        "AUTO": 0,
+        "MANUAL": 1,
+        "ADMIN_OVERRIDE": 2,
+        "KILL_SWITCH": 3,
+    }
+    
+    def __init__(
+        self,
+        redis_client: Any,
+        key_prefix: str = "selfhealing",
+    ):
+        """
+        Args:
+            redis_client: Redis 클라이언트 (redis-py)
+            key_prefix: Redis 키 접두사
+        """
+        self._redis = redis_client
+        self._key_prefix = key_prefix
+        self._script_sha: Optional[str] = None
+    
+    def _get_global_key(self) -> str:
+        """Global 상태 키."""
+        return f"{self._key_prefix}:governance:emergency_state"
+    
+    def _get_regional_key(self, namespace: str) -> str:
+        """Regional 상태 키."""
+        return f"{self._key_prefix}:{namespace}:governance:emergency_state"
+    
+    def query_effective_state(
+        self,
+        namespace: str,
+        precedence: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], str, str]:
+        """
+        유효한 상태 원자적 조회.
+        
+        Args:
+            namespace: 대상 네임스페이스
+            precedence: 명령 우선순위 ("AUTO", "MANUAL", "ADMIN_OVERRIDE", "KILL_SWITCH")
+        
+        Returns:
+            (effective_state, decision_type, decision_reason)
+            - effective_state: 유효한 상태 딕셔너리
+            - decision_type: 의사결정 유형
+            - decision_reason: 의사결정 이유 (Audit용)
+        
+        Example:
+            state, decision_type, reason = query.query_effective_state("seoul")
+            # state = {"namespace": "global", "governance_mode": "STRICT", ...}
+            # decision_type = "GLOBAL_OVERRIDE"
+            # reason = "Global STRICT overrides regional seoul"
+        """
+        global_key = self._get_global_key()
+        regional_key = self._get_regional_key(namespace)
+        precedence_level = self.PRECEDENCE_LEVELS.get(precedence or "AUTO", 0)
+        
+        try:
+            result = self._redis.eval(
+                ATOMIC_STATE_QUERY_SCRIPT,
+                2,  # KEYS count
+                global_key,
+                regional_key,
+                str(precedence_level),
+            )
+            
+            # 결과 파싱
+            state_json = result[0]
+            decision_type = result[1]
+            decision_reason = result[2]
+            
+            # bytes → str 변환
+            if isinstance(state_json, bytes):
+                state_json = state_json.decode("utf-8")
+            if isinstance(decision_type, bytes):
+                decision_type = decision_type.decode("utf-8")
+            if isinstance(decision_reason, bytes):
+                decision_reason = decision_reason.decode("utf-8")
+            
+            state = json.loads(state_json)
+            
+            logger.debug(
+                f"[AtomicStateQuery] namespace={namespace}, "
+                f"decision={decision_type}, reason={decision_reason}"
+            )
+            
+            return (state, decision_type, decision_reason)
+            
+        except Exception as e:
+            logger.error(f"[AtomicStateQuery] Error: {e}")
+            # 폴백: 안전한 기본값
+            return (
+                {
+                    "namespace": namespace,
+                    "scope": "regional",
+                    "governance_mode": "NORMAL",
+                    "is_active": False,
+                },
+                "FALLBACK",
+                f"Query failed, using safe default: {e}",
+            )
+    
+    def preload_script(self) -> str:
+        """
+        Lua 스크립트 사전 로드.
+        
+        SCRIPT LOAD로 SHA를 얻어 EVALSHA로 호출하면 성능 향상.
+        
+        Returns:
+            스크립트 SHA
+        """
+        if self._script_sha is None:
+            self._script_sha = self._redis.script_load(ATOMIC_STATE_QUERY_SCRIPT)
+            logger.info(f"[AtomicStateQuery] Script loaded: {self._script_sha[:8]}...")
+        return self._script_sha
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_atomic_query: Optional[AtomicStateQuery] = None
+
+
+def get_atomic_state_query() -> AtomicStateQuery:
+    """AtomicStateQuery 싱글톤 반환."""
+    global _atomic_query
+    if _atomic_query is None:
+        from selfhealing.core.state_backend import get_redis_client
+        _atomic_query = AtomicStateQuery(get_redis_client())
+    return _atomic_query
+```
+
+**테스트 케이스**:
+
+```python
+class TestAtomicStateQuery:
+    """AtomicStateQuery 테스트."""
+    
+    @pytest.fixture
+    def mock_redis(self):
+        """Mock Redis 클라이언트."""
+        return MagicMock()
+    
+    def test_global_override_regional(self, mock_redis):
+        """Global STRICT가 Regional NORMAL을 오버라이드."""
+        mock_redis.eval.return_value = [
+            b'{"namespace":"global","scope":"global","governance_mode":"STRICT","is_active":true}',
+            b"GLOBAL_OVERRIDE",
+            b"Global STRICT overrides regional seoul",
+        ]
+        
+        query = AtomicStateQuery(mock_redis)
+        state, decision_type, reason = query.query_effective_state("seoul")
+        
+        assert state["governance_mode"] == "STRICT"
+        assert decision_type == "GLOBAL_OVERRIDE"
+        assert "overrides regional seoul" in reason
+    
+    def test_admin_override_ignores_global(self, mock_redis):
+        """ADMIN_OVERRIDE는 Global을 무시하고 Regional 사용."""
+        mock_redis.eval.return_value = [
+            b'{"namespace":"seoul","scope":"regional","governance_mode":"NORMAL","is_active":false}',
+            b"ADMIN_OVERRIDE",
+            b"Admin override active, using regional state",
+        ]
+        
+        query = AtomicStateQuery(mock_redis)
+        state, decision_type, reason = query.query_effective_state(
+            "seoul",
+            precedence="ADMIN_OVERRIDE"
+        )
+        
+        assert state["namespace"] == "seoul"
+        assert decision_type == "ADMIN_OVERRIDE"
+    
+    def test_single_redis_call(self, mock_redis):
+        """단일 Redis 호출 확인."""
+        mock_redis.eval.return_value = [
+            b'{"namespace":"tokyo","governance_mode":"NORMAL"}',
+            b"REGIONAL_DEFAULT",
+            b"Both states NORMAL",
+        ]
+        
+        query = AtomicStateQuery(mock_redis)
+        query.query_effective_state("tokyo")
+        
+        # eval 한 번만 호출
+        assert mock_redis.eval.call_count == 1
+```
+
+---
+
+### 3.3 Audit Trail of Escalation (오버라이드 의사결정 기록)
+
+**문제점**: 리전 상태가 Global에 의해 강제 오버라이드되거나, Admin 오버라이드로 Global이 무시될 때
+**'왜 그런 결정이 내려졌는지'** Audit 로그에 기록되지 않음.
+
+**코드 근거**:
+- [coordinator.py#L36-84](packages/selfhealing-python/src/selfhealing/services/coordination/coordinator.py#L36-L84): DryRunAuditLogger 패턴
+- [critical_path_fallback.py#L214-246](packages/selfhealing-python/src/selfhealing/services/coordination/critical_path_fallback.py#L214-L246): append_audit_log 메서드
+
+```python
+# packages/selfhealing-python/src/selfhealing/services/namespace_emergency/escalation_audit.py
+
+"""
+Escalation Audit Trail.
+
+오버라이드 의사결정 이유를 Audit 로그에 박제합니다.
+- Global → Regional 강제 오버라이드
+- Admin Override로 Global 무시
+- Safety-Max 결정
+
+"왜 이 상태가 됐는지" 100% 추적 가능.
+
+Code reference:
+    coordination/coordinator.py#L47-58 (DryRunAuditLogger 패턴)
+    coordination/critical_path_fallback.py#L214-246 (append_audit_log)
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Decision Types
+# =============================================================================
+
+class EscalationDecisionType:
+    """오버라이드 의사결정 유형."""
+    
+    GLOBAL_OVERRIDE = "GLOBAL_OVERRIDE"
+    """Global STRICT가 Regional을 강제 오버라이드."""
+    
+    ADMIN_OVERRIDE = "ADMIN_OVERRIDE"
+    """Admin이 수동으로 Global을 무시하고 Regional 적용."""
+    
+    SAFETY_MAX = "SAFETY_MAX"
+    """Safety-Max: 둘 중 더 엄격한 상태 선택."""
+    
+    REGIONAL_DEFAULT = "REGIONAL_DEFAULT"
+    """둘 다 NORMAL, Regional 기본값 사용."""
+    
+    CASCADE_ESCALATION = "CASCADE_ESCALATION"
+    """다중 리전 연쇄 장애로 인한 Global 격상."""
+    
+    PARTITION_FALLBACK = "PARTITION_FALLBACK"
+    """네트워크 고립으로 인한 로컬 폴백."""
+
+
+@dataclass
+class EscalationAuditEntry:
+    """
+    오버라이드 의사결정 Audit 엔트리.
+    
+    scope와 namespace뿐 아니라 **'왜 이런 결정이 내려졌는지'**를
+    명시적으로 기록합니다.
+    """
+    
+    # 고유 식별자
+    event_id: str = field(
+        default_factory=lambda: f"esc-{uuid.uuid4().hex[:12]}"
+    )
+    
+    # 의사결정 정보 (핵심!)
+    decision_type: str = ""
+    """의사결정 유형 (GLOBAL_OVERRIDE, ADMIN_OVERRIDE, etc.)."""
+    
+    decision_reason: str = ""
+    """의사결정 이유 (예: 'Global STRICT overrides regional seoul (NORMAL)')."""
+    
+    # 상태 정보
+    namespace: str = ""
+    """대상 네임스페이스."""
+    
+    effective_state: Dict[str, Any] = field(default_factory=dict)
+    """최종 적용된 상태."""
+    
+    overridden_state: Optional[Dict[str, Any]] = None
+    """덮어씌워진 상태 (Before 스냅샷)."""
+    
+    # 행위자 정보
+    triggered_by: str = ""
+    """결정을 트리거한 주체 (user_id, 'system', 'AtomicStateQuery')."""
+    
+    precedence: Optional[str] = None
+    """명령 우선순위 (수동 오버라이드 시)."""
+    
+    # 메타데이터
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    
+    # Global 상태 스냅샷 (비교용)
+    global_state_snapshot: Optional[Dict[str, Any]] = None
+    """Global 상태 스냅샷 (결정 시점)."""
+    
+    regional_state_snapshot: Optional[Dict[str, Any]] = None
+    """Regional 상태 스냅샷 (결정 시점)."""
+    
+    # TTL 정보
+    ttl_minutes: Optional[int] = None
+    """Admin Override TTL (분)."""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """딕셔너리로 변환."""
+        return {
+            "event_id": self.event_id,
+            "decision_type": self.decision_type,
+            "decision_reason": self.decision_reason,
+            "namespace": self.namespace,
+            "effective_state": self.effective_state,
+            "overridden_state": self.overridden_state,
+            "triggered_by": self.triggered_by,
+            "precedence": self.precedence,
+            "timestamp": self.timestamp,
+            "global_state_snapshot": self.global_state_snapshot,
+            "regional_state_snapshot": self.regional_state_snapshot,
+            "ttl_minutes": self.ttl_minutes,
+        }
+
+
+class EscalationAuditTrail:
+    """
+    오버라이드 의사결정 Audit Trail.
+    
+    모든 상태 결정을 기록하여 "왜 이 상태가 됐는지" 100% 추적 가능.
+    
+    Code reference:
+        coordination/critical_path_fallback.py#L214-246 (append_audit_log)
+    """
+    
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._memory_buffer: List[EscalationAuditEntry] = []
+        self._max_buffer_size = 1000
+    
+    def log_decision(
+        self,
+        decision_type: str,
+        decision_reason: str,
+        namespace: str,
+        effective_state: Dict[str, Any],
+        overridden_state: Optional[Dict[str, Any]] = None,
+        triggered_by: str = "system",
+        precedence: Optional[str] = None,
+        global_state: Optional[Dict[str, Any]] = None,
+        regional_state: Optional[Dict[str, Any]] = None,
+        ttl_minutes: Optional[int] = None,
+    ) -> str:
+        """
+        의사결정 기록.
+        
+        Args:
+            decision_type: 의사결정 유형
+            decision_reason: 의사결정 이유 (상세!)
+            namespace: 대상 네임스페이스
+            effective_state: 최종 적용된 상태
+            overridden_state: 덮어씌워진 상태 (옵션)
+            triggered_by: 트리거 주체
+            precedence: 명령 우선순위
+            global_state: Global 상태 스냅샷
+            regional_state: Regional 상태 스냅샷
+            ttl_minutes: Admin Override TTL
+        
+        Returns:
+            생성된 event_id
+        """
+        entry = EscalationAuditEntry(
+            decision_type=decision_type,
+            decision_reason=decision_reason,
+            namespace=namespace,
+            effective_state=effective_state,
+            overridden_state=overridden_state,
+            triggered_by=triggered_by,
+            precedence=precedence,
+            global_state_snapshot=global_state,
+            regional_state_snapshot=regional_state,
+            ttl_minutes=ttl_minutes,
+        )
+        
+        with self._lock:
+            self._memory_buffer.append(entry)
+            
+            # 버퍼 크기 제한
+            if len(self._memory_buffer) > self._max_buffer_size:
+                self._memory_buffer = self._memory_buffer[-self._max_buffer_size:]
+        
+        # CriticalPathFallback 연동
+        self._persist_to_fallback(entry)
+        
+        # 로그 출력
+        log_level = logging.WARNING if decision_type in (
+            EscalationDecisionType.GLOBAL_OVERRIDE,
+            EscalationDecisionType.ADMIN_OVERRIDE,
+            EscalationDecisionType.CASCADE_ESCALATION,
+        ) else logging.INFO
+        
+        logger.log(
+            log_level,
+            f"[EscalationAudit] {decision_type}: {decision_reason} "
+            f"(namespace={namespace}, by={triggered_by})"
+        )
+        
+        return entry.event_id
+    
+    def log_global_override(
+        self,
+        namespace: str,
+        global_state: Dict[str, Any],
+        regional_state: Dict[str, Any],
+        triggered_by: str = "system",
+    ) -> str:
+        """
+        Global → Regional 강제 오버라이드 기록.
+        
+        Args:
+            namespace: 대상 네임스페이스
+            global_state: Global 상태
+            regional_state: Regional 상태 (덮어씌워짐)
+            triggered_by: 트리거 주체
+        
+        Returns:
+            생성된 event_id
+        """
+        reason = (
+            f"Global STRICT ({global_state.get('emergency_level', 'N/A')}) "
+            f"overrides regional {namespace} "
+            f"({regional_state.get('governance_mode', 'NORMAL')})"
+        )
+        
+        return self.log_decision(
+            decision_type=EscalationDecisionType.GLOBAL_OVERRIDE,
+            decision_reason=reason,
+            namespace=namespace,
+            effective_state=global_state,
+            overridden_state=regional_state,
+            triggered_by=triggered_by,
+            global_state=global_state,
+            regional_state=regional_state,
+        )
+    
+    def log_admin_override(
+        self,
+        namespace: str,
+        regional_state: Dict[str, Any],
+        global_state: Dict[str, Any],
+        triggered_by: str,
+        precedence: str,
+        ttl_minutes: Optional[int] = None,
+    ) -> str:
+        """
+        Admin Override 기록 (Global 무시).
+        
+        Args:
+            namespace: 대상 네임스페이스
+            regional_state: 적용된 Regional 상태
+            global_state: 무시된 Global 상태
+            triggered_by: Admin 사용자
+            precedence: 명령 우선순위
+            ttl_minutes: 오버라이드 TTL
+        
+        Returns:
+            생성된 event_id
+        """
+        reason = (
+            f"Admin override ({precedence}) by {triggered_by}: "
+            f"Using regional {namespace} ({regional_state.get('governance_mode', 'NORMAL')}) "
+            f"instead of Global ({global_state.get('governance_mode', 'NORMAL')})"
+        )
+        
+        if ttl_minutes:
+            reason += f" [TTL: {ttl_minutes}m]"
+        
+        return self.log_decision(
+            decision_type=EscalationDecisionType.ADMIN_OVERRIDE,
+            decision_reason=reason,
+            namespace=namespace,
+            effective_state=regional_state,
+            overridden_state=global_state,
+            triggered_by=triggered_by,
+            precedence=precedence,
+            global_state=global_state,
+            regional_state=regional_state,
+            ttl_minutes=ttl_minutes,
+        )
+    
+    def get_recent_decisions(
+        self,
+        namespace: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        최근 의사결정 조회.
+        
+        Args:
+            namespace: 필터링할 네임스페이스 (None이면 전체)
+            limit: 반환할 최대 개수
+        
+        Returns:
+            의사결정 목록 (최신순)
+        """
+        with self._lock:
+            entries = self._memory_buffer[-limit:]
+            if namespace:
+                entries = [e for e in entries if e.namespace == namespace]
+            return [e.to_dict() for e in reversed(entries)]
+    
+    def _persist_to_fallback(self, entry: EscalationAuditEntry) -> None:
+        """CriticalPathFallback에 영구 저장."""
+        try:
+            from selfhealing.services.coordination.critical_path_fallback import (
+                get_critical_path_fallback
+            )
+            fallback = get_critical_path_fallback()
+            fallback.append_audit_log(entry.to_dict())
+        except Exception as e:
+            logger.warning(f"[EscalationAudit] Fallback persist failed: {e}")
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_audit_trail: Optional[EscalationAuditTrail] = None
+
+
+def get_escalation_audit_trail() -> EscalationAuditTrail:
+    """EscalationAuditTrail 싱글톤 반환."""
+    global _audit_trail
+    if _audit_trail is None:
+        _audit_trail = EscalationAuditTrail()
+    return _audit_trail
+```
+
+**테스트 케이스**:
+
+```python
+class TestEscalationAuditTrail:
+    """EscalationAuditTrail 테스트."""
+    
+    @pytest.fixture
+    def audit_trail(self):
+        """새 AuditTrail 인스턴스."""
+        return EscalationAuditTrail()
+    
+    def test_log_global_override(self, audit_trail):
+        """Global 오버라이드 기록."""
+        event_id = audit_trail.log_global_override(
+            namespace="seoul",
+            global_state={
+                "governance_mode": "STRICT",
+                "emergency_level": 3,
+            },
+            regional_state={
+                "governance_mode": "NORMAL",
+                "emergency_level": 0,
+            },
+            triggered_by="system",
+        )
+        
+        assert event_id.startswith("esc-")
+        
+        decisions = audit_trail.get_recent_decisions(namespace="seoul")
+        assert len(decisions) == 1
+        assert decisions[0]["decision_type"] == "GLOBAL_OVERRIDE"
+        assert "overrides regional seoul" in decisions[0]["decision_reason"]
+    
+    def test_log_admin_override_with_ttl(self, audit_trail):
+        """Admin 오버라이드 기록 (TTL 포함)."""
+        event_id = audit_trail.log_admin_override(
+            namespace="tokyo",
+            regional_state={"governance_mode": "NORMAL"},
+            global_state={"governance_mode": "STRICT"},
+            triggered_by="admin@company.com",
+            precedence="ADMIN_OVERRIDE",
+            ttl_minutes=60,
+        )
+        
+        decisions = audit_trail.get_recent_decisions()
+        assert decisions[0]["decision_type"] == "ADMIN_OVERRIDE"
+        assert "[TTL: 60m]" in decisions[0]["decision_reason"]
+        assert decisions[0]["triggered_by"] == "admin@company.com"
+    
+    def test_overridden_state_preserved(self, audit_trail):
+        """덮어씌워진 상태 스냅샷 보존."""
+        global_state = {"governance_mode": "STRICT", "emergency_level": 3}
+        regional_state = {"governance_mode": "NORMAL", "emergency_level": 0}
+        
+        audit_trail.log_global_override(
+            namespace="oregon",
+            global_state=global_state,
+            regional_state=regional_state,
+        )
+        
+        decisions = audit_trail.get_recent_decisions()
+        assert decisions[0]["overridden_state"] == regional_state
+        assert decisions[0]["global_state_snapshot"] == global_state
+```
+
+---
+
+## 4. 기존 구현 상세
+
+### 4.1 EmergencyScope Enum
 
 ```python
 # packages/selfhealing-python/src/selfhealing/services/governance.py
@@ -125,7 +1103,7 @@ class EmergencyScope(str, Enum):
     """현재 인스턴스에만 적용 (테스트용)."""
 ```
 
-### 3.2 ScopedEmergencyState 모델
+### 4.2 ScopedEmergencyState 모델
 
 ```python
 @dataclass
@@ -193,7 +1171,7 @@ class ScopedEmergencyState:
         )
 ```
 
-### 3.3 NamespacedEmergencyTracker
+### 4.3 NamespacedEmergencyTracker
 
 ```python
 class NamespacedEmergencyTracker:
@@ -562,9 +1540,9 @@ def get_namespaced_emergency_tracker() -> NamespacedEmergencyTracker:
 
 ---
 
-## 4. 마이그레이션 전략
+## 5. 마이그레이션 전략
 
-### 4.1 하위 호환성 유지
+### 5.1 하위 호환성 유지
 
 기존 `EmergencyModeTracker` API를 유지하면서 내부 구현만 변경:
 
@@ -611,7 +1589,7 @@ class EmergencyModeTracker:
         }
 ```
 
-### 4.2 Feature Flag
+### 5.2 Feature Flag
 
 ```python
 # settings/feature_flags.py
@@ -633,9 +1611,9 @@ def get_emergency_tracker():
 
 ---
 
-## 5. 테스트
+## 6. 테스트
 
-### 5.1 단위 테스트
+### 6.1 단위 테스트
 
 ```python
 class TestNamespacedEmergencyTracker:
@@ -713,7 +1691,7 @@ class TestNamespacedEmergencyTracker:
                 f"Level {level} should map to {expected_mode}"
 ```
 
-### 5.2 통합 테스트
+### 6.2 통합 테스트
 
 ```python
 class TestNamespaceAwareEmergencyIntegration:
@@ -752,9 +1730,9 @@ class TestNamespaceAwareEmergencyIntegration:
 
 ---
 
-## 6. 고급 기능
+## 7. 고급 기능
 
-### 6.1 RegionalCascadeDetector (다중 리전 격상 감지)
+### 7.1 RegionalCascadeDetector (다중 리전 격상 감지)
 
 여러 리전이 동시에 STRICT 상태에 진입하면 **전역적 장애 징후**로 판단하고
 GLOBAL 긴급 모드 격상을 제안합니다.
@@ -870,7 +1848,7 @@ def get_cascade_detector() -> RegionalCascadeDetector:
     return _cascade_detector
 ```
 
-### 6.2 Audit 로그 스코프 태깅
+### 7.2 Audit 로그 스코프 태깅
 
 모든 Emergency 상태 변경은 `scope`와 `namespace` 필드를 필수로 포함하여
 Audit 로그에 기록됩니다.
@@ -1073,7 +2051,7 @@ def get_emergency_audit_logger() -> EmergencyAuditLogger:
     return _audit_logger
 ```
 
-### 6.3 SSOT Prefixing (키 네임스페이스 통합)
+### 7.3 SSOT Prefixing (키 네임스페이스 통합)
 
 모든 Redis 키는 `NamespaceSettings.get_key_prefix()`를 통해 생성되어
 하드코딩된 키가 없도록 합니다.
@@ -1110,7 +2088,7 @@ def _get_state_key(self, namespace: str) -> str:
 - 키 누수/오동작 방지
 - "하드코딩된 키가 단 하나도 없다"는 실사 증명 가능
 
-### 6.4 EmergencyHealthPenalty (Health Score 연동)
+### 7.4 EmergencyHealthPenalty (Health Score 연동)
 
 Emergency 상태가 Health Score에 자동 반영되어 대시보드에서
 "왜 점수가 떨어졌는지" 즉시 파악 가능합니다.
@@ -1269,7 +2247,7 @@ class EnhancedPropagationHealthMonitor(PropagationHealthMonitor):
         return metrics
 ```
 
-### 6.5 네트워크 고립 시 상태 관리
+### 7.5 네트워크 고립 시 상태 관리
 
 리전이 네트워크 고립(Partition)으로 인해 Global Redis와 연결이 끊긴 경우의
 상태 관리 정책입니다.
@@ -1440,9 +2418,9 @@ def get_partition_reconciliation_service() -> PartitionReconciliationService:
 
 ---
 
-## 7. 모니터링
+## 8. 모니터링
 
-### 7.1 메트릭
+### 8.1 메트릭
 
 ```python
 # Prometheus 메트릭
@@ -1465,7 +2443,7 @@ EMERGENCY_ACTIVATIONS_TOTAL = Counter(
 )
 ```
 
-### 7.2 대시보드 쿼리
+### 8.2 대시보드 쿼리
 
 ```promql
 # 리전별 Emergency 상태
@@ -1480,10 +2458,11 @@ increase(selfhealing_emergency_activations_total[24h])
 
 ---
 
-## 8. 변경 이력
+## 9. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 | 작성자 |
 |------|------|----------|--------|
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
 | 1.1.0 | 2026-01-21 | RegionalCascadeDetector, EmergencyAuditLogger 추가 | AI Assistant |
 | 1.2.0 | 2026-01-21 | get_effective_state Precedence-First Hierarchy, SSOT Prefixing, EmergencyHealthPenalty, PartitionReconciliationService 추가 | AI Assistant |
+| 1.3.0 | 2026-01-22 | Phase 1 P0 구현 추가: FailFastClusterIdentity, AtomicStateQuery(Lua), EscalationAuditTrail | AI Assistant |
