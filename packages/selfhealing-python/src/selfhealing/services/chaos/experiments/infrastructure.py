@@ -19,6 +19,13 @@ from selfhealing.services.chaos.base import (
     ExperimentType,
     _apply_chaos_config,
 )
+from selfhealing.services.chaos.experiments.hypothesis import (
+    CERTIFICATE_EXPIRY_HYPOTHESIS,
+    CLOCK_SKEW_HYPOTHESIS,
+    DNS_FAILURE_HYPOTHESIS,
+    SIMULATED_DISK_IO_HYPOTHESIS,
+    SIMULATED_TLS_FAILURE_HYPOTHESIS,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +44,9 @@ class CertificateExpiryExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.CERTIFICATE_EXPIRY.value
     requires_approval = True  # Can break TLS connections
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = CERTIFICATE_EXPIRY_HYPOTHESIS
     
     @property
     def days_until_expiry(self) -> int:
@@ -107,6 +117,9 @@ class ClockSkewExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.CLOCK_SKEW.value
     requires_approval = False  # Low risk, but noticeable impact
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = CLOCK_SKEW_HYPOTHESIS
     
     @property
     def skew_seconds(self) -> int:
@@ -182,6 +195,9 @@ class DNSFailureExperiment(ChaosExperiment):
     experiment_type = ExperimentType.DNS_FAILURE.value
     requires_approval = True  # Can break service discovery
     
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = DNS_FAILURE_HYPOTHESIS
+    
     @property
     def failure_rate(self) -> float:
         return self.config.parameters.get("failure_rate", 1.0)
@@ -256,6 +272,9 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
     experiment_type = ExperimentType.SIMULATED_DISK_IO.value
     requires_approval = False
     
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = SIMULATED_DISK_IO_HYPOTHESIS
+    
     @property
     def latency_ms(self) -> int:
         return self.config.parameters.get("latency_ms", 100)
@@ -329,6 +348,9 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.SIMULATED_TLS_FAILURE.value
     requires_approval = True  # Can break encrypted connections
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = SIMULATED_TLS_FAILURE_HYPOTHESIS
     
     @property
     def failure_rate(self) -> float:

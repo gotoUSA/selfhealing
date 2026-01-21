@@ -305,11 +305,10 @@ class TestCircuitBreakerTracingManager:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="WAL sequence number assertion fails - mock returns different value than expected")
 class TestLogCbStateChangeWithTraceAudit:
     """log_cb_state_change_with_trace_audit 함수 테스트."""
     
-    @patch('selfhealing.services.audit_helpers._write_to_wal')
+    @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_state_change_with_trace(self, mock_wal):
         """trace 정보 포함 상태 변경 로그 테스트."""
         from selfhealing.services.audit_helpers import log_cb_state_change_with_trace_audit
@@ -349,7 +348,7 @@ class TestLogCbStateChangeWithTraceAudit:
         assert details["triggering_request"] == triggering_info
         assert "debug_hint" in details
     
-    @patch('selfhealing.services.audit_helpers._write_to_wal')
+    @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_state_change_without_trace(self, mock_wal):
         """trace 정보 없이 상태 변경 로그 테스트."""
         from selfhealing.services.audit_helpers import log_cb_state_change_with_trace_audit
@@ -377,11 +376,10 @@ class TestLogCbStateChangeWithTraceAudit:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="WAL sequence number assertion fails - mock returns different value than expected")
 class TestLogGovernanceBlockedCbAudit:
     """log_governance_blocked_cb_audit 함수 테스트."""
     
-    @patch('selfhealing.services.audit_helpers._write_to_wal')
+    @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_governance_blocked_blast_radius(self, mock_wal):
         """Blast Radius CRITICAL로 인한 GOVERNANCE_BLOCKED 로그 테스트."""
         from selfhealing.services.audit_helpers import log_governance_blocked_cb_audit
@@ -420,7 +418,7 @@ class TestLogGovernanceBlockedCbAudit:
         assert "message" in details
         assert "Blast Radius: CRITICAL" in details["message"]
     
-    @patch('selfhealing.services.audit_helpers._write_to_wal')
+    @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_governance_blocked_no_affected_services(self, mock_wal):
         """영향받는 서비스 없는 GOVERNANCE_BLOCKED 로그 테스트."""
         from selfhealing.services.audit_helpers import log_governance_blocked_cb_audit
@@ -506,7 +504,6 @@ class TestConvenienceFunctions:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="WAL sequence number assertion fails - mock returns different value than expected")
 class TestTracingIntegration:
     """Tracing 통합 테스트."""
     
@@ -520,7 +517,7 @@ class TestTracingIntegration:
         from selfhealing.services.circuit_breaker.tracing import CircuitBreakerTracingManager
         CircuitBreakerTracingManager.reset_instance()
     
-    @patch('selfhealing.services.audit_helpers._write_to_wal')
+    @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_full_tracing_flow(self, mock_wal):
         """전체 Tracing 플로우 테스트: 실패 기록 → 상태 변경 로그."""
         from selfhealing.services.circuit_breaker.tracing import (

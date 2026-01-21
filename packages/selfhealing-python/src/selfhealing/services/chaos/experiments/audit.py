@@ -17,6 +17,10 @@ from selfhealing.services.chaos.base import (
     ExperimentType,
     _apply_chaos_config,
 )
+from selfhealing.services.chaos.experiments.hypothesis import (
+    AUDIT_STORAGE_FAILURE_HYPOTHESIS,
+    REPLAY_FLOOD_HYPOTHESIS,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -39,6 +43,9 @@ class AuditStorageFailureExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.AUDIT_STORAGE_FAILURE.value
     requires_approval = True  # Can affect audit integrity
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = AUDIT_STORAGE_FAILURE_HYPOTHESIS
     
     @property
     def failure_type(self) -> str:
@@ -178,6 +185,9 @@ class ReplayFloodExperiment(ChaosExperiment):
     
     experiment_type = ExperimentType.REPLAY_FLOOD.value
     requires_approval = True  # Can affect system performance
+    
+    # 복구 기대 가설 (클래스 레벨)
+    failure_hypothesis = REPLAY_FLOOD_HYPOTHESIS
     
     @property
     def flood_rate(self) -> int:

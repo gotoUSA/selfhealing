@@ -157,8 +157,8 @@ class TestPaymentTimeoutRecovery:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="CB uses Redis/Memory adapter - Django ORM state tracking is not applicable")
 @pytest.mark.django_db
+@pytest.mark.requires_redis
 class TestConnectionFailureRecovery:
     """
     Tests for handling network connection failures.
@@ -170,9 +170,11 @@ class TestConnectionFailureRecovery:
 
     These failures are generally safe to retry (the request never reached
     the server), but may indicate larger outage scenarios.
+    
+    Uses Redis-based repositories for integration testing with Docker services.
     """
 
-    def test_connection_error_triggers_circuit_breaker_record(self):
+    def test_connection_error_triggers_circuit_breaker_record(self, redis_circuit_breaker_repository):
         """
         Verify connection errors are recorded for Circuit Breaker analysis.
 
@@ -187,27 +189,22 @@ class TestConnectionFailureRecovery:
         from selfhealing.services import (
             CircuitBreakerService,
             CircuitBreakerConfig,
+            CircuitState,
         )
-        from shopping.models.failed_external_request import CircuitBreakerState
 
-        # Clean up any existing state
-        CircuitBreakerState.objects.filter(service_name="toss_payment").delete()
-
-        # Use explicit config to avoid Mock issues
+        # Use explicit config and Redis repository
         config = CircuitBreakerConfig(failure_threshold=5, success_threshold=3, minimum_calls=5)
-        cb_service = CircuitBreakerService(config=config)
+        cb_service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
 
         # Record multiple connection failures
-        # The record_failure method only takes service_name
         for i in range(5):
-            cb_service.record_failure(service_name="toss_payment")
+            cb_service.record_failure(service_name="toss_payment_conn_test")
 
-        # Check if circuit breaker considers opening
-        # The exact behavior depends on configuration
-        state = cb_service.get_or_create_state("toss_payment")
-        assert state.failure_count >= 5
+        # Check if circuit breaker opened
+        state = cb_service.get_state("toss_payment_conn_test")
+        assert state == CircuitState.OPEN, f"CB should be OPEN after 5 failures, got {state}"
 
-    def test_connection_failure_creates_retryable_dlq_entry(self):
+    def test_connection_failure_creates_retryable_dlq_entry(self, redis_dlq_repository):
         """
         Verify connection failures create DLQ entries marked as retryable.
 
@@ -218,14 +215,17 @@ class TestConnectionFailureRecovery:
         - DLQ entry is created
         - Entry is marked as retryable (auto_replay candidate)
         """
-        from shopping.models.failed_operation import FailedOperation
         from selfhealing.services import DLQService
+        from selfhealing.services.dlq_models import DLQConfig
 
-        dlq_service = DLQService()
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
+            repository=redis_dlq_repository,
+        )
 
         result = dlq_service.store_failure(
             domain="payment",
-            failure_type="CONNECTION_ERROR",
+            failure_type="CONNECTION_ERROR_TEST",
             error_code="ECONNREFUSED",
             error_message="Could not connect to Toss Payment API",
             metadata={
@@ -237,7 +237,14 @@ class TestConnectionFailureRecovery:
 
         assert result.success is True
         assert result.dlq_id is not None
-        # Note: DLQ uses Redis adapter, not Django ORM.
+        
+        # Verify entry exists in Redis repository
+        entries = redis_dlq_repository.find_by_failure_type("CONNECTION_ERROR_TEST")
+        assert len(entries) >= 1
+        entry = next((e for e in entries if e.id == result.dlq_id), None)
+        assert entry is not None
+        assert entry.failure_type == "CONNECTION_ERROR_TEST"
+        assert entry.metadata.get("is_retryable") is True
 
 
 # =============================================================================
@@ -429,8 +436,8 @@ class TestExponentialBackoffRetry:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="CB uses Redis/Memory adapter - Django ORM state tracking is not applicable")
 @pytest.mark.django_db
+@pytest.mark.requires_redis
 class TestCircuitBreakerExternalAPI:
     """
     Tests for Circuit Breaker behavior with external API failures.
@@ -439,9 +446,11 @@ class TestCircuitBreakerExternalAPI:
     - CLOSED: Normal operation, requests pass through
     - OPEN: Too many failures, requests blocked immediately
     - HALF_OPEN: Testing if service recovered, limited requests allowed
+    
+    Uses Redis-based repository for integration testing with Docker services.
     """
 
-    def test_repeated_failures_open_circuit_breaker(self):
+    def test_repeated_failures_open_circuit_breaker(self, redis_circuit_breaker_repository):
         """
         Verify repeated API failures cause Circuit Breaker to open.
 
@@ -458,28 +467,20 @@ class TestCircuitBreakerExternalAPI:
             CircuitBreakerConfig,
             CircuitState,
         )
-        from shopping.models.failed_external_request import CircuitBreakerState
 
-        # Clean up any existing state
-        CircuitBreakerState.objects.filter(service_name="api_failure_test").delete()
-
-        # Use explicit config to avoid Mock issues
+        # Use explicit config and Redis repository
         config = CircuitBreakerConfig(failure_threshold=5, success_threshold=3, minimum_calls=5)
-        cb_service = CircuitBreakerService(config=config)
+        cb_service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
 
         # Record failures up to threshold (FAILURE_THRESHOLD=5 in test settings)
-        # Need 5 failures to trigger OPEN state
         for i in range(6):
-            cb_service.record_failure(service_name="api_failure_test")
+            cb_service.record_failure(service_name="api_failure_test_redis")
 
         # Check Circuit Breaker state
-        state = cb_service.get_or_create_state("api_failure_test")
+        state = cb_service.get_state("api_failure_test_redis")
+        assert state == CircuitState.OPEN, f"CB should be OPEN after 6 failures, got {state}"
 
-        # After multiple failures, should transition towards OPEN
-        # (exact threshold depends on configuration)
-        assert state.failure_count >= 5
-
-    def test_circuit_breaker_blocks_requests_when_open(self):
+    def test_circuit_breaker_blocks_requests_when_open(self, redis_circuit_breaker_repository):
         """
         Verify Circuit Breaker blocks requests when in OPEN state.
 
@@ -495,19 +496,20 @@ class TestCircuitBreakerExternalAPI:
             CircuitBreakerService,
             CircuitBreakerConfig,
             CircuitState,
-            force_open_circuit,
         )
+        from shopping.tests.factories import UserFactory
 
-        # Use explicit config to avoid Mock issues
+        # Use explicit config and Redis repository
         config = CircuitBreakerConfig(failure_threshold=5, success_threshold=3, minimum_calls=5)
-        cb_service = CircuitBreakerService(config=config)
+        cb_service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
 
-        # Force the circuit breaker to OPEN state using the API
-        force_open_circuit("open_cb_test", reason="Test forced open")
+        # Force the circuit breaker to OPEN state using force_open
+        admin_user = UserFactory(is_staff=True)
+        result = cb_service.force_open("open_cb_test_redis", reason="Test forced open", controlled_by=admin_user)
+        assert result.success
 
         # should_allow should return False for OPEN state
-        is_allowed = cb_service.should_allow("open_cb_test")
-
+        is_allowed = cb_service.should_allow("open_cb_test_redis")
         assert is_allowed is False
 
 

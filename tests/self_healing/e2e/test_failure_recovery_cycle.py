@@ -192,8 +192,14 @@ class E2EPaymentFlowSimulator:
     ) -> FailedExternalRequest:
         """Move payment to DLQ after max retries."""
         dlq_entry = FailedExternalRequest.objects.create(
-            payment=payment,
-            order=payment.order,
+            # 도메인 중립 필드 사용 (entity_type/entity_id)
+            entity_type="payment",
+            entity_id=str(payment.id),
+            entity_refs={
+                "order_id": payment.order_id,
+                "user_id": payment.order.user_id,
+            },
+            user_id=payment.order.user_id,
             domain="payment",
             amount=payment.amount,
             status="pending",
@@ -424,7 +430,6 @@ class TestE2EFailureRetrySuccess:
 
 @pytest.mark.tier3_chaos
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.skip(reason="FailedExternalRequest model uses entity_type/entity_id - tests use deprecated payment/order fields")
 class TestE2EFailureDLQReplay:
     """
     Test complete failure through DLQ to admin replay.
@@ -561,7 +566,6 @@ class TestE2EFailureDLQReplay:
 
 @pytest.mark.tier3_chaos
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.skip(reason="FailedExternalRequest model uses entity_type/entity_id - tests use deprecated payment/order fields")
 class TestE2ERepeatedFailureRecoveryCycle:
     """
     Test repeated failure-recovery-failure cycles.
@@ -680,7 +684,6 @@ class TestE2ERepeatedFailureRecoveryCycle:
 
 @pytest.mark.tier3_chaos
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.skip(reason="FailedExternalRequest model uses entity_type/entity_id - tests use deprecated payment/order fields")
 class TestE2EUserInvisibleFlow:
     """
     Test user-invisible failure handling.
@@ -777,7 +780,6 @@ class TestE2EUserInvisibleFlow:
 
 @pytest.mark.tier3_chaos
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.skip(reason="FailedExternalRequest model uses entity_type/entity_id - tests use deprecated payment/order fields")
 class TestE2ECompleteAuditTrail:
     """
     Test complete audit trail for full cycle.
@@ -893,7 +895,6 @@ class TestE2ECompleteAuditTrail:
 
 @pytest.mark.tier3_chaos
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.skip(reason="FailedExternalRequest model uses entity_type/entity_id - tests use deprecated payment/order fields")
 class TestE2EFullLifecycle:
     """
     Test complete E2E lifecycle including edge cases.

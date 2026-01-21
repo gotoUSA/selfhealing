@@ -26,9 +26,7 @@ from selfhealing.utils.time import utc_now
 from rest_framework.test import APIRequestFactory
 from rest_framework import status as http_status
 
-# 테스트 환경에서 인증 바이패스
-os.environ["DISABLE_SELFHEALING_AUTH"] = "true"
-
+# Import 전에 환경변수 설정하지 않음 - fixture에서 patch로 처리
 from selfhealing.api.django.views.canary import (
     CanaryRolloutListView,
     CanaryRolloutDetailView,
@@ -79,6 +77,14 @@ def viewer_user():
     user.is_staff = True
     user.is_superuser = False
     return user
+
+
+@pytest.fixture(autouse=True)
+def disable_selfhealing_auth_for_canary_tests(monkeypatch):
+    """Canary 테스트에서 인증 바이패스 활성화 (테스트 범위 내에서만)."""
+    monkeypatch.setenv("DISABLE_SELFHEALING_AUTH", "true")
+    yield
+    # monkeypatch는 자동으로 원래 값으로 복원됨
 
 
 @pytest.fixture(autouse=True)

@@ -196,10 +196,15 @@ class TestCertificateExpiryExperiment:
         # CertificateExpiryExperiment requires approval because it can break TLS connections
         assert CertificateExpiryExperiment.requires_approval is True
     
-    @pytest.mark.skip(reason="failure_hypothesis not defined on CertificateExpiryExperiment")
     def test_has_failure_hypothesis(self):
         """Test experiment has failure_hypothesis."""
-        pass
+        from selfhealing.services.chaos.experiments import CertificateExpiryExperiment
+        from selfhealing.services.chaos.experiments.hypothesis import (
+            CERTIFICATE_EXPIRY_HYPOTHESIS,
+        )
+        
+        assert hasattr(CertificateExpiryExperiment, "failure_hypothesis")
+        assert CertificateExpiryExperiment.failure_hypothesis is CERTIFICATE_EXPIRY_HYPOTHESIS
     
     def test_days_until_expiry_default(self):
         """Test days_until_expiry default value."""
@@ -413,10 +418,15 @@ class TestClockSkewExperiment:
         """Test negative skew_seconds is capped correctly."""
         pass
     
-    @pytest.mark.skip(reason="failure_hypothesis not defined on ClockSkewExperiment")
     def test_has_failure_hypothesis(self):
         """Test experiment has failure_hypothesis."""
-        pass
+        from selfhealing.services.chaos.experiments import ClockSkewExperiment
+        from selfhealing.services.chaos.experiments.hypothesis import (
+            CLOCK_SKEW_HYPOTHESIS,
+        )
+        
+        assert hasattr(ClockSkewExperiment, "failure_hypothesis")
+        assert ClockSkewExperiment.failure_hypothesis is CLOCK_SKEW_HYPOTHESIS
     
     def test_is_expired_monotonic_uses_helper(self):
         """Test _is_expired_monotonic uses MonotonicTTLHelper."""
@@ -640,10 +650,15 @@ class TestDNSFailureExperiment:
         
         assert DNSFailureExperiment.requires_approval is True
     
-    @pytest.mark.skip(reason="failure_hypothesis not defined on DNSFailureExperiment")
     def test_failure_hypothesis_exists(self):
         """Test failure_hypothesis is defined."""
-        pass
+        from selfhealing.services.chaos.experiments import DNSFailureExperiment
+        from selfhealing.services.chaos.experiments.hypothesis import (
+            DNS_FAILURE_HYPOTHESIS,
+        )
+        
+        assert hasattr(DNSFailureExperiment, "failure_hypothesis")
+        assert DNSFailureExperiment.failure_hypothesis is DNS_FAILURE_HYPOTHESIS
     
     def test_default_failure_rate(self):
         """Test default failure_rate is 1.0 (100%)."""
@@ -1054,10 +1069,15 @@ class TestAuditStorageFailureExperiment:
         
         assert AuditStorageFailureExperiment.requires_approval is True
     
-    @pytest.mark.skip(reason="failure_hypothesis not defined on AuditStorageFailureExperiment")
     def test_failure_hypothesis_exists(self):
         """Test failure_hypothesis is defined."""
-        pass
+        from selfhealing.services.chaos.experiments import AuditStorageFailureExperiment
+        from selfhealing.services.chaos.experiments.hypothesis import (
+            AUDIT_STORAGE_FAILURE_HYPOTHESIS,
+        )
+        
+        assert hasattr(AuditStorageFailureExperiment, "failure_hypothesis")
+        assert AuditStorageFailureExperiment.failure_hypothesis is AUDIT_STORAGE_FAILURE_HYPOTHESIS
     
     def test_default_failure_type(self):
         """Test default failure_type is write_error."""

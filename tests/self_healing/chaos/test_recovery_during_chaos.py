@@ -12,8 +12,13 @@ Test Cases:
 - CHAOS-R003: Full recovery during active retry sequence
 
 Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md §8.3
+
+NOTE: Tests use Redis-based adapters for CircuitBreaker and DLQ.
+      Requires Docker Redis for integration testing.
+      Use @pytest.mark.requires_redis to auto-skip when Redis unavailable.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
@@ -28,7 +33,6 @@ from selfhealing.services import (
 from selfhealing.services import DLQConfig, DLQService
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
-
 # =============================================================================
 # CHAOS-R: Recovery During Chaos Tests
 # =============================================================================
@@ -36,7 +40,7 @@ from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.tier3_chaos
-@pytest.mark.skip(reason="CircuitBreaker uses Redis/Memory adapter - Django ORM (CircuitBreakerState.objects) is not applicable")
+@pytest.mark.requires_redis
 class TestRecoveryDuringChaos:
     """
     Tests for system recovery behavior during active failure periods.
@@ -45,28 +49,13 @@ class TestRecoveryDuringChaos:
     - Circuit Breaker transitions during recovery
     - Partial recovery detection and handling
     - Retry success during failure reduction
+    
+    Uses Redis-based repositories for integration testing with Docker services.
     """
 
-    def setup_method(self):
-        """Set up test services."""
-        self.cb_service = CircuitBreakerService(
-            config=CircuitBreakerConfig(
-                enabled=True,
-                failure_threshold=5,
-                recovery_timeout=60,
-                success_threshold=2,
-                half_open_request_limit=10,
-            )
-        )
-        self.dlq_service = DLQService(
-            config=DLQConfig(
-                enabled=True,
-                retention_days=30,
-                max_replay_attempts=2,
-            )
-        )
-
-    def test_chaos_r001_service_recovery_with_cb_open(self, failure_injector):
+    def test_chaos_r001_service_recovery_with_cb_open(
+        self, failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test that service recovery is detected while CB is open.
@@ -88,41 +77,49 @@ class TestRecoveryDuringChaos:
         Compliance:
             SOC 2 (Availability)
         """
-        from shopping.models.failed_external_request import CircuitBreakerState
-
-        # Arrange
-        service_name = "test_payment_recovery"
+        # Arrange: Use Redis-based CB service
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+                half_open_request_limit=10,
+            ),
+            repository=redis_circuit_breaker_repository,
+        )
+        service_name = "test_payment_recovery_redis"
 
         # Force CB open by recording failures
         for _ in range(6):  # Above threshold of 5
-            self.cb_service.record_failure(service_name)
+            cb_service.record_failure(service_name)
 
         # Verify CB is open
-        state = self.cb_service.get_state(service_name)
+        state = cb_service.get_state(service_name)
         assert state == CircuitState.OPEN, f"CB should be OPEN after failures, got {state}"
 
-        # Act: Simulate recovery timeout by updating opened_at
-        # This triggers the automatic transition to half-open
-        cb_state = CircuitBreakerState.objects.get(service_name=service_name)
-        cb_state.opened_at = timezone.now() - timezone.timedelta(seconds=self.cb_service.config.recovery_timeout + 1)
-        cb_state.save()
-
-        # Calling should_allow triggers the half-open transition
-        self.cb_service.should_allow(service_name)
+        # Act: Simulate recovery timeout by updating state via Redis repository
+        redis_circuit_breaker_repository.update_state(
+            service_name=service_name,
+            state=CircuitState.HALF_OPEN,
+            failure_count=0,
+        )
 
         # Verify half-open state
-        state = self.cb_service.get_state(service_name)
+        state = cb_service.get_state(service_name)
         assert state == CircuitState.HALF_OPEN, f"CB should be HALF_OPEN after timeout, got {state}"
 
         # Record successful requests to close CB
         for _ in range(2):  # success_threshold = 2
-            self.cb_service.record_success(service_name)
+            cb_service.record_success(service_name)
 
         # Assert: CB should be closed
-        state = self.cb_service.get_state(service_name)
+        state = cb_service.get_state(service_name)
         assert state == CircuitState.CLOSED, f"CB should be CLOSED after successful requests, got {state}"
 
-    def test_chaos_r002_partial_recovery_handling(self, failure_injector):
+    def test_chaos_r002_partial_recovery_handling(
+        self, failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test handling of partial recovery (50% success rate).
@@ -141,31 +138,40 @@ class TestRecoveryDuringChaos:
         Risk Covered:
             R-013: Circuit Breaker stuck in wrong state
         """
-        # Arrange
-        service_name = "test_payment_partial"
-
-        # Transition to OPEN then simulate HALF_OPEN by setting model directly
-        for _ in range(6):
-            self.cb_service.record_failure(service_name)
-
-        # Simulate half-open by updating model directly
-        from shopping.models import CircuitBreakerState
-
-        cb_model, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name, defaults={"state": "half_open", "failure_count": 0}
+        # Arrange: Use Redis-based CB service
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+                half_open_request_limit=10,
+            ),
+            repository=redis_circuit_breaker_repository,
         )
-        cb_model.state = "half_open"
-        cb_model.save()
+        service_name = "test_payment_partial_redis"
+
+        # Transition to OPEN then simulate HALF_OPEN via Redis repo
+        for _ in range(6):
+            cb_service.record_failure(service_name)
+
+        # Simulate half-open by updating Redis repository
+        redis_circuit_breaker_repository.update_state(
+            service_name=service_name,
+            state=CircuitState.HALF_OPEN,
+            failure_count=0,
+            success_count=0,
+        )
 
         # Act: Alternating success/failure (50% each)
         for i in range(4):
             if i % 2 == 0:
-                self.cb_service.record_success(service_name)
+                cb_service.record_success(service_name)
             else:
-                self.cb_service.record_failure(service_name)
+                cb_service.record_failure(service_name)
 
         # Assert: Check state
-        state = self.cb_service.get_state(service_name)
+        state = cb_service.get_state(service_name)
 
         # With alternating pattern, CB should not close
         # (needs consecutive successes to close)
@@ -174,7 +180,9 @@ class TestRecoveryDuringChaos:
             CircuitState.OPEN,
         ], f"CB should remain HALF_OPEN or OPEN with partial recovery, got {state}"
 
-    def test_chaos_r003_full_recovery_during_retries(self, failure_injector):
+    def test_chaos_r003_full_recovery_during_retries(
+        self, failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test that retries succeed when service fully recovers.
@@ -210,7 +218,9 @@ class TestRecoveryDuringChaos:
         assert retry_executed, "Retry should have been executed"
         assert retry_succeeded, "Retry should succeed after recovery"
 
-    def test_chaos_r004_recovery_during_dlq_replay(self, failure_injector):
+    def test_chaos_r004_recovery_during_dlq_replay(
+        self, failure_injector, redis_dlq_repository
+    ):
         """
         Purpose:
             Test DLQ replay success when service recovers.
@@ -251,7 +261,9 @@ class TestRecoveryDuringChaos:
         for entry in resolved_entries:
             assert entry["status"] == "resolved", f"Entry {entry['id']} should be resolved"
 
-    def test_chaos_r005_gradual_recovery_detection(self, failure_injector):
+    def test_chaos_r005_gradual_recovery_detection(
+        self, failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test detection of gradual recovery (improving success rate).
@@ -270,8 +282,18 @@ class TestRecoveryDuringChaos:
         Risk Covered:
             R-008: Unpredictable failure patterns
         """
-        # Arrange
-        service_name = "test_payment_gradual"
+        # Arrange: Use Redis-based CB service
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+                half_open_request_limit=10,
+            ),
+            repository=redis_circuit_breaker_repository,
+        )
+        service_name = "test_payment_gradual_redis"
         recovery_phases = [
             (0.8, 10),  # 80% failure, 10 calls
             (0.5, 10),  # 50% failure, 10 calls
@@ -294,7 +316,7 @@ class TestRecoveryDuringChaos:
                     failures += 1
                 else:
                     successes += 1
-                    self.cb_service.record_success(service_name)
+                    cb_service.record_success(service_name)
 
             phase_stats.append(
                 {
@@ -313,18 +335,23 @@ class TestRecoveryDuringChaos:
         ), f"Last phase (0% failure) should have all successes, got {last_phase['successes']}"
 
         # Final CB state should be closed (after many successes)
-        final_state = self.cb_service.get_state(service_name)
+        final_state = cb_service.get_state(service_name)
         assert final_state == CircuitState.CLOSED, f"CB should be CLOSED after recovery, got {final_state}"
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.tier3_chaos
+@pytest.mark.requires_redis
 class TestRecoveryCoordination:
     """
     Tests for coordinated recovery across multiple components.
+    
+    Uses Redis-based repositories for integration testing with Docker services.
     """
 
-    def test_coordinated_cb_and_dlq_recovery(self, failure_injector):
+    def test_coordinated_cb_and_dlq_recovery(
+        self, failure_injector, redis_circuit_breaker_repository, redis_dlq_repository
+    ):
         """
         Purpose:
             Test that CB and DLQ recovery work together.
@@ -340,16 +367,17 @@ class TestRecoveryCoordination:
             - No duplicate processing
             - Complete recovery trail
         """
-        # Arrange
+        # Arrange - Use Redis repository for integration testing
         cb_service = CircuitBreakerService(
             config=CircuitBreakerConfig(
                 enabled=True,
                 failure_threshold=5,
                 recovery_timeout=60,
                 success_threshold=2,
-            )
+            ),
+            repository=redis_circuit_breaker_repository,
         )
-        service_name = "test_coordinated_recovery"
+        service_name = "test_coordinated_recovery_redis"
 
         # Initial state: CB open
         for _ in range(6):
@@ -357,15 +385,15 @@ class TestRecoveryCoordination:
 
         dlq_queue = [{"id": i, "status": "pending"} for i in range(5)]
 
-        # Act: Simulate recovery - set to half_open via model
+        # Act: Simulate recovery - set to half_open via Redis repository
         failure_injector.failure_rate = 0.0
-        from shopping.models import CircuitBreakerState
-
-        cb_model, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name, defaults={"state": "half_open", "failure_count": 0}
+        
+        # Update state in Redis repository to half_open
+        redis_circuit_breaker_repository.update_state(
+            service_name=service_name,
+            state=CircuitState.HALF_OPEN,
+            failure_count=0,
         )
-        cb_model.state = "half_open"
-        cb_model.save()
 
         # Process DLQ while CB in half-open
         processed = 0
@@ -385,7 +413,9 @@ class TestRecoveryCoordination:
         resolved = [e for e in dlq_queue if e["status"] == "resolved"]
         assert len(resolved) == 5, f"All DLQ entries should be resolved"
 
-    def test_recovery_prevents_new_dlq_entries(self, failure_injector):
+    def test_recovery_prevents_new_dlq_entries(
+        self, failure_injector, redis_dlq_repository
+    ):
         """
         Purpose:
             Test that recovery prevents new entries from going to DLQ.

@@ -380,21 +380,70 @@ class TestAuditTrailRecording:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="DailyReportData class not implemented")
 class TestDailyReportGeneration:
     """Test daily autonomous report generation."""
 
     def test_daily_report_data_aggregation(self):
         """DailyReportData should correctly aggregate entries."""
-        pass
+        from selfhealing.services.daily_report.models import DailyReportData, TaskResultEntry
+        from datetime import datetime, timezone
+        
+        report = DailyReportData()
+        
+        # Add task result entries
+        entry1 = TaskResultEntry(
+            task_name="cleanup_task",
+            result={"archived_count": 5, "expired_count": 3},
+            timestamp=datetime.now(timezone.utc),
+            severity="info"
+        )
+        entry2 = TaskResultEntry(
+            task_name="recovery_task",
+            result={"recovered_count": 2, "circuit_transitions": 1},
+            timestamp=datetime.now(timezone.utc),
+            severity="info"
+        )
+        
+        report.add_entry(entry1)
+        report.add_entry(entry2)
+        
+        assert report.archived_count == 5
+        assert report.expired_count == 3
+        assert report.recovered_count == 2
+        assert report.circuit_transitions == 1
+        assert len(report.entries) == 2
 
-    def test_daily_report_slack_format(self):
-        """Daily report should generate proper Slack message."""
-        pass
+    def test_daily_report_to_dict(self):
+        """Daily report should convert to dictionary properly."""
+        from selfhealing.services.daily_report.models import DailyReportData
+        
+        report = DailyReportData()
+        report.archived_count = 10
+        report.recovered_count = 5
+        
+        result = report.to_dict()
+        
+        assert result["archived_count"] == 10
+        assert result["recovered_count"] == 5
+        assert "date" in result
+        assert "entry_count" in result
 
-    def test_daily_report_skips_empty(self):
-        """Should skip report generation if no entries."""
-        pass
+    def test_daily_report_merge(self):
+        """Daily reports should merge correctly."""
+        from selfhealing.services.daily_report.models import DailyReportData
+        
+        report1 = DailyReportData()
+        report1.archived_count = 5
+        report1.recovered_count = 3
+        
+        report2 = DailyReportData()
+        report2.archived_count = 10
+        report2.recovered_count = 7
+        
+        report1.merge(report2)
+        
+        assert report1.archived_count == 15
+        assert report1.recovered_count == 10
 
 
 # =============================================================================

@@ -25,6 +25,9 @@ Test Categories:
         - Rapid state transitions
         - Threshold boundary conditions
         - Recovery stability
+
+NOTE: Tests use Redis adapters via fixtures from conftest.py.
+      Requires: docker-compose -f docker-compose.test.yml up -d
 """
 
 import random
@@ -40,8 +43,8 @@ import pytest
 from django.db import connection, transaction
 from django.utils import timezone
 
-from shopping.models.failed_operation import FailedOperation
-from shopping.models.failed_external_request import CircuitBreakerState
+from selfhealing.interfaces.repositories import FailedOperationStatus
+
 from selfhealing.services import CircuitBreakerService, DLQService
 from selfhealing.services.circuit_breaker_service import (
     CircuitBreakerConfig,
@@ -166,9 +169,9 @@ def latency_injector(
 # =============================================================================
 
 
-@pytest.mark.skip(reason="DLQ uses Redis adapter - Django ORM queries are not applicable")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.chaos
+@pytest.mark.requires_redis
 class TestRandomFailureInjection:
     """
     Tests for system behavior under random failures.
@@ -177,13 +180,12 @@ class TestRandomFailureInjection:
     - System continues processing despite random failures
     - Failed operations are properly captured in DLQ
     - Success rate meets minimum threshold
+    
+    Uses Redis repository via fixture for real integration testing.
+    Requires: docker-compose -f docker-compose.test.yml up -d
     """
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
-
-    def test_dlq_captures_random_failures(self):
+    def test_dlq_captures_random_failures(self, redis_dlq_repository):
         """
         Purpose:
             Test that DLQ correctly captures randomly failed operations.
@@ -193,6 +195,11 @@ class TestRandomFailureInjection:
             2. Verify all failures are captured in DLQ
             3. Check DLQ entries have proper forensic context
         """
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
+            repository=redis_dlq_repository,
+        )
+        
         failure_rate = 0.3
         num_operations = 20
         injector = FailureInjector(failure_rate)
@@ -205,7 +212,7 @@ class TestRandomFailureInjection:
 
             if injector.should_fail():
                 # Simulate failure - store to DLQ
-                result = self.dlq_service.store_failure(
+                result = dlq_service.store_failure(
                     domain="payment",
                     failure_type="CHAOS_TEST_FAILURE",
                     entity_type="order",
@@ -220,24 +227,24 @@ class TestRandomFailureInjection:
             else:
                 success_count += 1
 
-        # Verify all failures are in DLQ
-        failed_entity_ids = [str(oid) for oid in failed_order_ids]
-        dlq_entries = FailedOperation.objects.filter(
-            failure_type="CHAOS_TEST_FAILURE",
-            entity_id__in=failed_entity_ids,
-        )
+        # Verify all failures are in DLQ (using Redis repository)
+        dlq_entries = redis_dlq_repository.find_by_failure_type("CHAOS_TEST_FAILURE")
+        matched_entries = [
+            e for e in dlq_entries 
+            if e.entity_id in [str(oid) for oid in failed_order_ids]
+        ]
 
-        assert dlq_entries.count() == len(failed_order_ids)
+        assert len(matched_entries) == len(failed_order_ids)
 
         # Check forensic context
-        for entry in dlq_entries:
+        for entry in matched_entries:
             assert entry.metadata.get("test_type") == "random_failure_injection"
             assert "iteration" in entry.snapshot_data
 
         stats = injector.get_stats()
         print(f"✓ Random failure test: {stats['failed_calls']}/{stats['total_calls']} failures captured")
 
-    def test_batch_operations_with_partial_failures(self):
+    def test_batch_operations_with_partial_failures(self, redis_dlq_repository):
         """
         Purpose:
             Test batch processing with partial failures.
@@ -248,6 +255,11 @@ class TestRandomFailureInjection:
             3. All failures captured in DLQ
             4. System remains stable
         """
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
+            repository=redis_dlq_repository,
+        )
+        
         batch_size = 50
         failure_rate = 0.3
         injector = FailureInjector(failure_rate)
@@ -257,7 +269,7 @@ class TestRandomFailureInjection:
 
         for order in orders:
             if injector.should_fail():
-                self.dlq_service.store_failure(
+                dlq_service.store_failure(
                     domain="payment",
                     failure_type="BATCH_CHAOS_FAILURE",
                     entity_type="order",
@@ -274,9 +286,9 @@ class TestRandomFailureInjection:
         # At least 50% should succeed (with 30% failure rate, expect ~70%)
         assert success_count >= batch_size * 0.5, f"Too many failures: {failure_count}/{batch_size}"
 
-        # All failures in DLQ
-        dlq_count = FailedOperation.objects.filter(failure_type="BATCH_CHAOS_FAILURE").count()
-        assert dlq_count == failure_count
+        # All failures in DLQ (using Redis repository)
+        dlq_entries = redis_dlq_repository.find_by_failure_type("BATCH_CHAOS_FAILURE")
+        assert len(dlq_entries) == failure_count
 
         print(f"✓ Batch test: {success_count} succeeded, {failure_count} in DLQ")
 
@@ -286,9 +298,9 @@ class TestRandomFailureInjection:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="DLQ uses Redis adapter - Django ORM queries are not applicable")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.chaos
+@pytest.mark.requires_redis
 class TestLatencyInjection:
     """
     Tests for system behavior under high latency conditions.
@@ -297,13 +309,12 @@ class TestLatencyInjection:
     - System handles variable latency gracefully
     - Timeout thresholds are respected
     - Performance remains within acceptable bounds
+    
+    Uses Redis repository via fixture for real integration testing.
+    Requires: docker-compose -f docker-compose.test.yml up -d
     """
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
-
-    def test_operations_complete_under_latency(self):
+    def test_operations_complete_under_latency(self, redis_dlq_repository):
         """
         Purpose:
             Test that operations complete despite added latency.
@@ -313,6 +324,11 @@ class TestLatencyInjection:
             2. Verify all operations complete
             3. Check total time is within acceptable bounds
         """
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
+            repository=redis_dlq_repository,
+        )
+        
         num_operations = 10
         min_latency_ms = 10
         max_latency_ms = 100
@@ -326,7 +342,7 @@ class TestLatencyInjection:
 
                 # Perform DLQ operation
                 order = OrderFactory()
-                result = self.dlq_service.store_failure(
+                result = dlq_service.store_failure(
                     domain="payment",
                     failure_type="LATENCY_TEST",
                     entity_type="order",
@@ -344,7 +360,7 @@ class TestLatencyInjection:
         avg_latency = stats["total_latency_ms"] / stats["total_calls"]
         print(f"✓ Latency test: avg={avg_latency:.1f}ms, total={elapsed_time:.2f}s")
 
-    def test_dlq_write_performance_under_load(self):
+    def test_dlq_write_performance_under_load(self, redis_dlq_repository):
         """
         Purpose:
             Test DLQ write performance under simulated load.
@@ -354,13 +370,18 @@ class TestLatencyInjection:
             2. Measure throughput
             3. Verify all entries persisted correctly
         """
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
+            repository=redis_dlq_repository,
+        )
+        
         num_entries = 100
         orders = [OrderFactory() for _ in range(num_entries)]
 
         start_time = time.time()
 
         for i, order in enumerate(orders):
-            result = self.dlq_service.store_failure(
+            result = dlq_service.store_failure(
                 domain="payment",
                 failure_type="PERFORMANCE_TEST",
                 entity_type="order",
@@ -373,9 +394,9 @@ class TestLatencyInjection:
         elapsed_time = time.time() - start_time
         throughput = num_entries / elapsed_time
 
-        # Verify all entries exist
-        count = FailedOperation.objects.filter(failure_type="PERFORMANCE_TEST").count()
-        assert count == num_entries
+        # Verify all entries exist (using Redis repository)
+        dlq_entries = redis_dlq_repository.find_by_failure_type("PERFORMANCE_TEST")
+        assert len(dlq_entries) == num_entries
 
         print(f"✓ Performance test: {throughput:.1f} writes/sec, {elapsed_time:.2f}s total")
 
@@ -385,9 +406,9 @@ class TestLatencyInjection:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="DLQ uses Redis adapter - Django ORM queries are not applicable")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.chaos
+@pytest.mark.requires_redis
 class TestConcurrentFailures:
     """
     Tests for handling concurrent failures.
@@ -396,13 +417,12 @@ class TestConcurrentFailures:
     - Multiple threads can write to DLQ concurrently
     - No race conditions in DLQ operations
     - Data integrity maintained under concurrency
+    
+    Uses Redis repository via fixture for real integration testing.
+    Requires: docker-compose -f docker-compose.test.yml up -d
     """
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.dlq_config = DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
-
-    def test_concurrent_dlq_writes(self):
+    def test_concurrent_dlq_writes(self, redis_dlq_repository):
         """
         Purpose:
             Test concurrent DLQ writes from multiple threads.
@@ -412,6 +432,8 @@ class TestConcurrentFailures:
             2. Write DLQ entries from 5 concurrent threads
             3. Verify no duplicates or missing entries
         """
+        dlq_config = DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
+        
         num_orders = 10
         num_threads = 5
         orders = [OrderFactory() for _ in range(num_orders)]
@@ -419,7 +441,7 @@ class TestConcurrentFailures:
 
         def write_dlq_entry(order, thread_id):
             """Write a single DLQ entry."""
-            dlq_service = DLQService(config=self.dlq_config)
+            dlq_service = DLQService(config=dlq_config, repository=redis_dlq_repository)
             result = dlq_service.store_failure(
                 domain="payment",
                 failure_type="CONCURRENT_TEST",
@@ -443,13 +465,13 @@ class TestConcurrentFailures:
         success_count = sum(1 for r in results if r["success"])
         assert success_count == num_orders, f"Expected {num_orders} successes, got {success_count}"
 
-        # Verify entries in database
-        db_count = FailedOperation.objects.filter(failure_type="CONCURRENT_TEST").count()
-        assert db_count == num_orders
+        # Verify entries in Redis storage
+        dlq_entries = redis_dlq_repository.find_by_failure_type("CONCURRENT_TEST")
+        assert len(dlq_entries) == num_orders
 
         print(f"✓ Concurrent test: {num_orders} entries written from {num_threads} threads")
 
-    def test_concurrent_failure_and_recovery(self):
+    def test_concurrent_failure_and_recovery(self, redis_dlq_repository):
         """
         Purpose:
             Test concurrent failures with mixed outcomes.
@@ -459,6 +481,7 @@ class TestConcurrentFailures:
             2. 50% fail and go to DLQ
             3. Verify correct counts and no data loss
         """
+        dlq_config = DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2)
         num_operations = 20
         results = []
 
@@ -470,7 +493,7 @@ class TestConcurrentFailures:
             should_fail = operation_id % 2 == 0
 
             if should_fail:
-                dlq_service = DLQService(config=self.dlq_config)
+                dlq_service = DLQService(config=dlq_config, repository=redis_dlq_repository)
                 result = dlq_service.store_failure(
                     domain="payment",
                     failure_type="CONCURRENT_MIXED_TEST",
@@ -499,9 +522,9 @@ class TestConcurrentFailures:
         # All failures should be in DLQ
         assert dlq_stored_count == failed_count
 
-        # Verify database
-        db_count = FailedOperation.objects.filter(failure_type="CONCURRENT_MIXED_TEST").count()
-        assert db_count == failed_count
+        # Verify Redis storage
+        dlq_entries = redis_dlq_repository.find_by_failure_type("CONCURRENT_MIXED_TEST")
+        assert len(dlq_entries) == failed_count
 
         print(f"✓ Mixed concurrent test: {failed_count} failures, all in DLQ")
 
@@ -511,9 +534,9 @@ class TestConcurrentFailures:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="CB uses Redis/Memory adapter - Django ORM queries are not applicable")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.chaos
+@pytest.mark.requires_redis
 class TestCircuitBreakerStress:
     """
     Tests for circuit breaker stability under stress.
@@ -522,19 +545,12 @@ class TestCircuitBreakerStress:
     - Rapid state transitions don't cause instability
     - Threshold boundaries are correctly enforced
     - Recovery behavior is predictable
+    
+    Uses Redis repository via fixture for real integration testing.
+    Requires: docker-compose -f docker-compose.test.yml up -d
     """
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.config = CircuitBreakerConfig(
-            enabled=True,
-            failure_threshold=5,
-            recovery_timeout=10,
-            success_threshold=2,
-        )
-        self.service = CircuitBreakerService(config=self.config)
-
-    def test_rapid_state_transitions(self):
+    def test_rapid_state_transitions(self, redis_circuit_breaker_repository):
         """
         Purpose:
             Test circuit breaker stability under rapid state changes.
@@ -544,37 +560,45 @@ class TestCircuitBreakerStress:
             2. Verify state consistency
             3. Check no orphaned records
         """
+        config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=5,
+            recovery_timeout=10,
+            success_threshold=2,
+        )
+        service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
+        
         service_name = "stress_test_service"
         admin_user = UserFactory(is_staff=True)
         num_transitions = 20
 
         for i in range(num_transitions):
             if i % 2 == 0:
-                result = self.service.force_open(
+                result = service.force_open(
                     service_name=service_name,
                     reason=f"Stress test open #{i}",
                     controlled_by=admin_user,
                 )
                 assert result.success
-                state = self.service.get_state(service_name)
+                state = service.get_state(service_name)
                 assert state == CircuitState.OPEN
             else:
-                result = self.service.force_close(
+                result = service.force_close(
                     service_name=service_name,
                     reason=f"Stress test close #{i}",
                     controlled_by=admin_user,
                 )
                 assert result.success
-                state = self.service.get_state(service_name)
+                state = service.get_state(service_name)
                 assert state == CircuitState.CLOSED
 
-        # Verify only one record exists for this service
-        cb_count = CircuitBreakerState.objects.filter(service_name=service_name).count()
-        assert cb_count == 1
+        # Verify state exists in Redis
+        cb_state = redis_circuit_breaker_repository.get_by_service_name(service_name)
+        assert cb_state is not None
 
         print(f"✓ Rapid transition test: {num_transitions} transitions completed")
 
-    def test_threshold_boundary_conditions(self):
+    def test_threshold_boundary_conditions(self, redis_circuit_breaker_repository):
         """
         Purpose:
             Test circuit breaker at threshold boundaries.
@@ -584,26 +608,34 @@ class TestCircuitBreakerStress:
             2. Record one more failure (should open)
             3. Verify precise threshold enforcement
         """
+        config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=5,
+            recovery_timeout=10,
+            success_threshold=2,
+        )
+        service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
+        
         service_name = "threshold_test_service"
-        threshold = self.config.failure_threshold
+        threshold = config.failure_threshold
 
         # Initialize state
-        self.service.get_or_create_state(service_name)
+        service.get_or_create_state(service_name)
 
         # Record threshold-1 failures - should stay closed
         for i in range(threshold - 1):
-            self.service.record_failure(service_name)
-            state = self.service.get_state(service_name)
+            service.record_failure(service_name)
+            state = service.get_state(service_name)
             assert state == CircuitState.CLOSED, f"Opened too early at failure {i+1}"
 
         # One more failure should trip the circuit
-        self.service.record_failure(service_name)
-        state = self.service.get_state(service_name)
+        service.record_failure(service_name)
+        state = service.get_state(service_name)
         assert state == CircuitState.OPEN, "Circuit should be open after threshold failures"
 
         print(f"✓ Threshold test: Circuit opened at exactly {threshold} failures")
 
-    def test_multiple_services_isolation(self):
+    def test_multiple_services_isolation(self, redis_circuit_breaker_repository):
         """
         Purpose:
             Test that multiple circuit breakers are isolated.
@@ -613,16 +645,24 @@ class TestCircuitBreakerStress:
             2. Open some, keep others closed
             3. Verify no cross-contamination
         """
+        config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=5,
+            recovery_timeout=10,
+            success_threshold=2,
+        )
+        service = CircuitBreakerService(config=config, repository=redis_circuit_breaker_repository)
+        
         num_services = 5
         admin_user = UserFactory(is_staff=True)
 
         for i in range(num_services):
             service_name = f"isolation_test_service_{i}"
-            self.service.get_or_create_state(service_name)
+            service.get_or_create_state(service_name)
 
             # Open only even-numbered services
             if i % 2 == 0:
-                self.service.force_open(
+                service.force_open(
                     service_name=service_name,
                     reason="Isolation test",
                     controlled_by=admin_user,
@@ -631,7 +671,7 @@ class TestCircuitBreakerStress:
         # Verify states
         for i in range(num_services):
             service_name = f"isolation_test_service_{i}"
-            state = self.service.get_state(service_name)
+            state = service.get_state(service_name)
 
             if i % 2 == 0:
                 assert state == CircuitState.OPEN, f"Service {i} should be open"
@@ -646,9 +686,9 @@ class TestCircuitBreakerStress:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="DLQ uses Redis adapter - Django ORM queries are not applicable")
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.chaos
+@pytest.mark.requires_redis
 class TestRecoveryStability:
     """
     Tests for recovery process stability.
@@ -657,13 +697,12 @@ class TestRecoveryStability:
     - DLQ entries are not lost during recovery
     - Partial recovery failures don't corrupt state
     - System can recover from recovery failures
+    
+    Uses Redis repository via fixture for real integration testing.
+    Requires: docker-compose -f docker-compose.test.yml up -d
     """
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.dlq_service = DLQService(config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2))
-
-    def test_dlq_state_consistency_after_failures(self):
+    def test_dlq_state_consistency_after_failures(self, redis_dlq_repository):
         """
         Purpose:
             Test DLQ state remains consistent after mixed operations.
@@ -673,13 +712,18 @@ class TestRecoveryStability:
             2. Simulate some successful and failed status updates
             3. Verify final state is consistent
         """
+        dlq_service = DLQService(
+            config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=2),
+            repository=redis_dlq_repository,
+        )
+        
         num_entries = 10
         entries = []
 
         # Create entries
         for i in range(num_entries):
             order = OrderFactory()
-            result = self.dlq_service.store_failure(
+            result = dlq_service.store_failure(
                 domain="payment",
                 failure_type="RECOVERY_STABILITY_TEST",
                 entity_type="order",
@@ -689,37 +733,31 @@ class TestRecoveryStability:
             assert result.success
             entries.append(result.dlq_id)
 
-        # Verify initial state
-        pending_count = FailedOperation.objects.filter(
-            failure_type="RECOVERY_STABILITY_TEST",
-            status=FailedOperation.Status.PENDING,
-        ).count()
-        assert pending_count == num_entries
+        # Verify initial state (Redis)
+        pending_entries = redis_dlq_repository.find_by_status(FailedOperationStatus.PENDING.value)
+        stability_entries = [e for e in pending_entries if e.failure_type == "RECOVERY_STABILITY_TEST"]
+        assert len(stability_entries) == num_entries
 
-        # Simulate mixed status updates
+        # Simulate mixed status updates via repository
         for i, entry_id in enumerate(entries):
-            entry = FailedOperation.objects.get(id=entry_id)
             if i % 3 == 0:
-                entry.status = FailedOperation.Status.RESOLVED
-                entry.resolved_at = timezone.now()
+                redis_dlq_repository.update_status(
+                    id=entry_id,
+                    status=FailedOperationStatus.RESOLVED.value,
+                    resolution_type="auto",
+                )
             elif i % 3 == 1:
-                entry.status = FailedOperation.Status.REVIEWING
+                redis_dlq_repository.update_status(
+                    id=entry_id,
+                    status=FailedOperationStatus.REVIEWING.value,
+                )
             # else stays PENDING
-            entry.save()
 
-        # Verify counts
-        resolved = FailedOperation.objects.filter(
-            failure_type="RECOVERY_STABILITY_TEST",
-            status=FailedOperation.Status.RESOLVED,
-        ).count()
-        reviewing = FailedOperation.objects.filter(
-            failure_type="RECOVERY_STABILITY_TEST",
-            status=FailedOperation.Status.REVIEWING,
-        ).count()
-        pending = FailedOperation.objects.filter(
-            failure_type="RECOVERY_STABILITY_TEST",
-            status=FailedOperation.Status.PENDING,
-        ).count()
+        # Verify counts (Redis)
+        all_entries = redis_dlq_repository.find_by_failure_type("RECOVERY_STABILITY_TEST")
+        resolved = len([e for e in all_entries if e.status == FailedOperationStatus.RESOLVED.value])
+        reviewing = len([e for e in all_entries if e.status == FailedOperationStatus.REVIEWING.value])
+        pending = len([e for e in all_entries if e.status == FailedOperationStatus.PENDING.value])
 
         # Calculate expected counts
         expected_resolved = len([i for i in range(num_entries) if i % 3 == 0])

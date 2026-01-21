@@ -13,6 +13,10 @@ Test Cases:
 - CHAOS-P004: Time-based failure window detection
 
 Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md §8.1
+
+NOTE: Tests use Redis-based adapters for DLQ and CircuitBreaker.
+      Requires Docker Redis for integration testing.
+      Use @pytest.mark.requires_redis to auto-skip when Redis unavailable.
 """
 
 import random
@@ -22,7 +26,6 @@ from unittest.mock import patch, MagicMock
 import pytest
 from django.utils import timezone
 
-from shopping.models.failed_external_request import CircuitBreakerState, FailedExternalRequest
 from selfhealing.services import CircuitBreakerService, DLQService
 from selfhealing.services.circuit_breaker_service import (
     CircuitBreakerConfig,
@@ -39,7 +42,7 @@ from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.tier3_chaos
-@pytest.mark.skip(reason="WAL is closed error - requires WAL lifecycle management between tests")
+@pytest.mark.requires_redis
 class TestPartialFailurePatterns:
     """
     Tests for system behavior under partial failure patterns.
@@ -48,27 +51,13 @@ class TestPartialFailurePatterns:
     - System continues processing despite random failures
     - Circuit Breaker triggers on sustained failures
     - DLQ captures all failed operations
+    
+    Uses Redis-based repositories for integration testing with Docker services.
     """
 
-    def setup_method(self):
-        """Set up test services."""
-        self.dlq_service = DLQService(
-            config=DLQConfig(
-                enabled=True,
-                retention_days=30,
-                max_replay_attempts=2,
-            )
-        )
-        self.cb_service = CircuitBreakerService(
-            config=CircuitBreakerConfig(
-                enabled=True,
-                failure_threshold=5,
-                recovery_timeout=60,
-                success_threshold=2,
-            )
-        )
-
-    def test_chaos_p001_random_failure_rate_handling(self, failure_injector):
+    def test_chaos_p001_random_failure_rate_handling(
+        self, failure_injector, redis_dlq_repository, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test system behavior with 30% random failure rate.
@@ -90,7 +79,25 @@ class TestPartialFailurePatterns:
         Compliance:
             NIST CP-2 (Contingency Planning)
         """
-        # Arrange
+        # Arrange: Use Redis-based services
+        dlq_service = DLQService(
+            config=DLQConfig(
+                enabled=True,
+                retention_days=30,
+                max_replay_attempts=2,
+            ),
+            repository=redis_dlq_repository,
+        )
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+            ),
+            repository=redis_circuit_breaker_repository,
+        )
+        
         failure_injector.failure_rate = 0.3
         operations = 100
         failures_captured = []
@@ -126,7 +133,9 @@ class TestPartialFailurePatterns:
         # Verify system continued processing
         assert stats["total_calls"] == operations, f"Expected {operations} total operations, got {stats['total_calls']}"
 
-    def test_chaos_p002_burst_failures_trigger_circuit_breaker(self, burst_failure_injector):
+    def test_chaos_p002_burst_failures_trigger_circuit_breaker(
+        self, burst_failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test that burst failures trigger Circuit Breaker.
@@ -148,10 +157,20 @@ class TestPartialFailurePatterns:
         Compliance:
             SOC 2 (Availability)
         """
-        # Arrange
+        # Arrange: Use Redis-based CB service
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+            ),
+            repository=redis_circuit_breaker_repository,
+        )
+        
         burst_failure_injector.burst_size = 10
         burst_failure_injector.burst_interval = 20
-        service_name = "test_payment_service"
+        service_name = "test_payment_service_burst"
         consecutive_failures = 0
         cb_triggered = False
 
@@ -162,15 +181,15 @@ class TestPartialFailurePatterns:
                 # Simulate CB check
                 if consecutive_failures >= 5 and not cb_triggered:
                     cb_triggered = True
-                    self.cb_service.record_failure(service_name)
-                    self.cb_service.record_failure(service_name)
-                    self.cb_service.record_failure(service_name)
-                    self.cb_service.record_failure(service_name)
-                    self.cb_service.record_failure(service_name)
+                    cb_service.record_failure(service_name)
+                    cb_service.record_failure(service_name)
+                    cb_service.record_failure(service_name)
+                    cb_service.record_failure(service_name)
+                    cb_service.record_failure(service_name)
             else:
                 consecutive_failures = 0
                 if cb_triggered:
-                    self.cb_service.record_success(service_name)
+                    cb_service.record_success(service_name)
 
         # Assert
         assert burst_failure_injector.failed_calls > 0, "Expected at least one burst of failures"
@@ -178,7 +197,9 @@ class TestPartialFailurePatterns:
         # Verify burst pattern occurred
         assert burst_failure_injector.total_calls == 100, f"Expected 100 operations, got {burst_failure_injector.total_calls}"
 
-    def test_chaos_p003_alternating_pattern_no_cb_trigger(self, failure_injector):
+    def test_chaos_p003_alternating_pattern_no_cb_trigger(
+        self, failure_injector, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test that alternating success/failure doesn't trigger CB.
@@ -199,8 +220,18 @@ class TestPartialFailurePatterns:
         Compliance:
             SOC 2 (Availability)
         """
-        # Arrange
-        service_name = "test_payment_alternating"
+        # Arrange: Use Redis-based CB service
+        cb_service = CircuitBreakerService(
+            config=CircuitBreakerConfig(
+                enabled=True,
+                failure_threshold=5,
+                recovery_timeout=60,
+                success_threshold=2,
+            ),
+            repository=redis_circuit_breaker_repository,
+        )
+        
+        service_name = "test_payment_alternating_redis"
         operations = 50
         consecutive_failures = 0
         max_consecutive = 0
@@ -210,21 +241,23 @@ class TestPartialFailurePatterns:
             if i % 2 == 0:
                 # Simulated success
                 consecutive_failures = 0
-                self.cb_service.record_success(service_name)
+                cb_service.record_success(service_name)
             else:
                 # Simulated failure
                 consecutive_failures += 1
                 max_consecutive = max(max_consecutive, consecutive_failures)
-                self.cb_service.record_failure(service_name)
+                cb_service.record_failure(service_name)
 
         # Assert
         assert max_consecutive < 5, f"Max consecutive failures ({max_consecutive}) should be below CB threshold (5)"
 
         # CB should remain closed
-        state = self.cb_service.get_state(service_name)
+        state = cb_service.get_state(service_name)
         assert state == CircuitState.CLOSED, f"CB should remain CLOSED with alternating pattern, got {state}"
 
-    def test_chaos_p004_time_based_failure_window(self, failure_injector):
+    def test_chaos_p004_time_based_failure_window(
+        self, failure_injector, redis_dlq_repository, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Test detection of time-based failure windows.
@@ -284,7 +317,9 @@ class TestPartialFailurePatterns:
         assert failure_window_start is not None, "Failure window start not detected"
         assert failure_window_end is not None, "Failure window end not detected"
 
-    def test_chaos_p005_mixed_failure_types_handling(self, failure_injector):
+    def test_chaos_p005_mixed_failure_types_handling(
+        self, failure_injector, redis_dlq_repository
+    ):
         """
         Purpose:
             Test handling of multiple failure types simultaneously.
@@ -333,15 +368,19 @@ class TestPartialFailurePatterns:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.tier3_chaos
-@pytest.mark.skip(reason="WAL is closed error - requires WAL lifecycle management between tests")
+@pytest.mark.requires_redis
 class TestPartialFailureRecovery:
     """
     Tests for recovery behavior under partial failure conditions.
 
     Validates that the system correctly recovers as failures reduce.
+    
+    Uses Redis-based repositories for integration testing with Docker services.
     """
 
-    def test_recovery_after_burst_ends(self, burst_failure_injector):
+    def test_recovery_after_burst_ends(
+        self, burst_failure_injector, redis_dlq_repository, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Verify system recovers normally after burst failures end.
@@ -375,7 +414,9 @@ class TestPartialFailureRecovery:
         assert failed_during_burst == 10, f"Expected 10 failures during burst, got {failed_during_burst}"
         assert success_after_burst == 5, f"Expected 5 successes after burst, got {success_after_burst}"
 
-    def test_gradual_failure_rate_reduction(self, failure_injector):
+    def test_gradual_failure_rate_reduction(
+        self, failure_injector, redis_dlq_repository, redis_circuit_breaker_repository
+    ):
         """
         Purpose:
             Verify system adapts as failure rate decreases.

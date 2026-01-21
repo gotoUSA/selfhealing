@@ -6,22 +6,26 @@ Global pytest configuration and fixtures.
     - Integration Test: 이 폴더 (실제 Docker 서비스 연결)
 
 Auto-skip logic for infrastructure-dependent tests.
-Shared fixtures from shopping/tests/conftest.py via pytest_plugins.
+Shared fixtures from shopping/tests/conftest.py via pytest testpaths.
 
 Factory/Builder Pattern:
     이 conftest는 tests/factories 패키지의 Factory/Builder 패턴을 활용합니다.
     - tests.factories.constants: 테스트 상수 (Domains, Services, Status, CircuitState)
     - tests.factories.builders: Builder 패턴 (CircuitBreakerStateBuilder, FailedOperationBuilder)
     - tests.factories.integration: 실제 Docker 연결 (RealRedisClientFactory, RealDatabaseFactory)
+
+Note:
+    pyproject.toml에서 testpaths = ["shopping/tests", "tests"]로 설정되어 있으므로
+    shopping/tests/conftest.py의 fixture들이 자동으로 사용 가능합니다.
+    pytest_plugins 사용 시 중복 등록 에러가 발생합니다.
 """
 import os
 import pytest
 
 # =============================================================================
-# pytest_plugins: shopping/tests/conftest.py의 fixture들을 이 conftest에서 사용 가능하게 함
-# 이렇게 하면 tests/hybrid/ 등에서 user_factory, product 등의 fixture 사용 가능
+# pytest_plugins 제거됨 - pyproject.toml의 testpaths 설정으로 fixture 공유
+# shopping/tests/conftest.py가 자동 로드되므로 pytest_plugins로 재등록하면 충돌 발생
 # =============================================================================
-pytest_plugins = ["shopping.tests.conftest"]
 
 
 # =============================================================================
