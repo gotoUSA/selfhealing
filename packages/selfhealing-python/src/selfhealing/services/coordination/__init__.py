@@ -16,6 +16,13 @@ Phase 1 구현:
 - AntiFlappingGuard (히스테리시스)
 - Dry-Run Mode
 
+Phase 2 구현:
+- CoordinationPolicyEngine: 정책 기반 액션 결정
+- CoordinationPolicy: 연계 정책 정의
+- CriticalPathFallback: Redis/Audit 장애 시 로컬 폴백
+- AtomicLevelTransition: Lua 스크립트 원자적 상태 변경
+- DomainAwareCrisisMultiplier: 도메인 인지형 가중치
+
 Reference:
     docs/self_healing/middleware_system/72_EMERGENCY_COORDINATION_LAYER.md
 """
@@ -43,6 +50,22 @@ from .coordinator import (
     EmergencyCoordinator,
     DryRunAuditLogger,
 )
+from .policy_engine import (
+    CoordinationPolicy,
+    CoordinationPolicyEngine,
+)
+from .critical_path_fallback import (
+    CriticalPathFallback,
+)
+from .atomic_transition import (
+    AtomicLevelTransition,
+    ATOMIC_TRANSITION_SCRIPT,
+)
+from .crisis_multiplier import (
+    DomainAwareCrisisMultiplier,
+    CrisisMultiplierRegistry,
+    MAX_CRISIS_MULTIPLIER,
+)
 
 
 __all__ = [
@@ -63,4 +86,16 @@ __all__ = [
     # Coordinator
     "EmergencyCoordinator",
     "DryRunAuditLogger",
+    # Phase 2: Policy Engine
+    "CoordinationPolicy",
+    "CoordinationPolicyEngine",
+    # Phase 2: Critical Path Fallback
+    "CriticalPathFallback",
+    # Phase 2: Atomic Transition
+    "AtomicLevelTransition",
+    "ATOMIC_TRANSITION_SCRIPT",
+    # Phase 2: Crisis Multiplier
+    "DomainAwareCrisisMultiplier",
+    "CrisisMultiplierRegistry",
+    "MAX_CRISIS_MULTIPLIER",
 ]
