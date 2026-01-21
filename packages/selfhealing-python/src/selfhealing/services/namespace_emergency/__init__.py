@@ -13,6 +13,10 @@ Phase 2 (P1) - 완료:
 - ScopedEmergencyState: 스코프 인지형 상태 모델 (coordination/models.py)
 - RegionalCascadeDetector: 다중 리전 연쇄 장애 감지
 
+Phase 3 (P2) - 완료:
+- EmergencyHealthPenalty: Health Score 연동 감점 계산
+- PartitionReconciliationService: 네트워크 고립 복구
+
 Reference:
     docs/self_healing/middleware_system/73_NAMESPACE_AWARE_EMERGENCY.md
 """
@@ -43,6 +47,22 @@ from selfhealing.services.namespace_emergency.cascade_detector import (
     reset_cascade_detector,
 )
 
+# Phase 3: 고급 기능
+from selfhealing.services.namespace_emergency.health_penalty import (
+    EmergencyHealthPenalty,
+    PenaltyBreakdown,
+    get_emergency_health_penalty,
+    reset_emergency_health_penalty,
+)
+from selfhealing.services.namespace_emergency.partition_reconciliation import (
+    PartitionReconciliationService,
+    PartitionStatus,
+    ReconciliationResult,
+    ReconciliationAction,
+    get_partition_reconciliation_service,
+    reset_partition_reconciliation_service,
+)
+
 # ScopedEmergencyState는 coordination/models.py에서 재export
 from selfhealing.services.coordination.models import ScopedEmergencyState
 
@@ -64,4 +84,15 @@ __all__ = [
     "get_cascade_detector",
     "reset_cascade_detector",
     "ScopedEmergencyState",
+    # Phase 3
+    "EmergencyHealthPenalty",
+    "PenaltyBreakdown",
+    "get_emergency_health_penalty",
+    "reset_emergency_health_penalty",
+    "PartitionReconciliationService",
+    "PartitionStatus",
+    "ReconciliationResult",
+    "ReconciliationAction",
+    "get_partition_reconciliation_service",
+    "reset_partition_reconciliation_service",
 ]

@@ -1,9 +1,9 @@
 # 73. Namespace-Aware Emergency (리전별 긴급 모드 격리)
 
-> **Version**: 1.5.0  
+> **Version**: 1.6.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: Phase 2 Complete  
+> **Status**: Phase 3 Complete  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ---
@@ -37,12 +37,18 @@
 
 **전체 테스트**: 112개 통과
 
-### Phase 3: 고급 기능 (P2)
+### Phase 3: 고급 기능 (P2) ✅ 완료
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
 |------|----------|------|----------|------|
-| 7 | `EmergencyHealthPenalty` | Health Score 연동 | P2 | ⬜ |
-| 8 | `PartitionReconciliationService` | 네트워크 고립 복구 | P2 | ⬜ |
+| 7 | `EmergencyHealthPenalty` | Health Score 연동 | P2 | ✅ |
+| 8 | `PartitionReconciliationService` | 네트워크 고립 복구 | P2 | ✅ |
+
+**Phase 3 테스트**: 45개 통과 (2026-01-22)
+- test_health_penalty.py: 19개
+- test_partition_reconciliation.py: 26개
+
+**전체 테스트**: 136개 통과
 
 ### 구현 파일 목록
 
@@ -52,13 +58,13 @@ packages/selfhealing-python/src/selfhealing/
 │   └── cluster_identity.py          # FailFastClusterIdentity 강화 ✅
 ├── services/
 │   └── namespace_emergency/
-│       ├── __init__.py               # Phase 1 + Phase 2 ✅
+│       ├── __init__.py               # Phase 1 + Phase 2 + Phase 3 ✅
 │       ├── tracker.py                # NamespacedEmergencyTracker ✅
 │       ├── atomic_query.py           # AtomicStateQuery (Lua 스크립트) ✅
 │       ├── escalation_audit.py       # EscalationAuditTrail ✅
 │       ├── cascade_detector.py       # RegionalCascadeDetector ✅
-│       ├── health_penalty.py         # EmergencyHealthPenalty
-│       └── partition_reconciliation.py
+│       ├── health_penalty.py         # EmergencyHealthPenalty ✅
+│       └── partition_reconciliation.py  # PartitionReconciliationService ✅
 └── tests/
     └── unit/
         ├── core/
@@ -68,7 +74,9 @@ packages/selfhealing-python/src/selfhealing/
             ├── test_atomic_query.py      # AtomicStateQuery 테스트 ✅
             ├── test_escalation_audit.py  # EscalationAuditTrail 테스트 ✅
             ├── test_tracker.py           # NamespacedEmergencyTracker 테스트 ✅
-            └── test_cascade_detector.py  # RegionalCascadeDetector 테스트 ✅
+            ├── test_cascade_detector.py  # RegionalCascadeDetector 테스트 ✅
+            ├── test_health_penalty.py    # EmergencyHealthPenalty 테스트 ✅
+            └── test_partition_reconciliation.py  # PartitionReconciliationService 테스트 ✅
 ```
 
 ---
