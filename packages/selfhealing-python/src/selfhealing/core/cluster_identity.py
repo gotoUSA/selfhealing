@@ -69,10 +69,11 @@ class ClusterIdentity:
     
     def validate(self, fail_fast: Optional[bool] = None) -> bool:
         """
-        클러스터 ID 유효성 검증.
+        클러스터 ID 및 리전 유효성 검증.
         
         Fail-Fast 강화:
         - SELFHEALING_CLUSTER_ID 누락 시 프로세스 즉시 중단 옵션
+        - SELFHEALING_REGION 누락 시 프로세스 즉시 중단 (Phase 1 추가)
         - 잘못된 네임스페이스 건드리는 것을 원천 방지
         
         코드 근거:
@@ -85,23 +86,43 @@ class ClusterIdentity:
         
         Returns:
             유효하면 True, 아니면 False (fail_fast=False일 때만)
+        
+        Raises:
+            SystemExit: fail_fast=True이고 검증 실패 시
         """
-        # 환경변수에서 fail_fast 설정 읽기
+        import sys
+        
+        # 환경변수에서 fail_fast 설정 읽기 (기본값: True로 변경)
         if fail_fast is None:
             fail_fast = os.environ.get(
                 "SELFHEALING_FAIL_FAST", "true"
             ).lower() == "true"
         
+        errors = []
+        
+        # 1. cluster_id 검증
         if not self.cluster_id or self.cluster_id in ("unknown", "default"):
+            errors.append(
+                f"SELFHEALING_CLUSTER_ID not set or invalid: '{self.cluster_id}'"
+            )
+        
+        # 2. region 검증 (Phase 1 추가 - 필수!)
+        if not self.region:
+            errors.append(
+                "SELFHEALING_REGION not set. "
+                "Cannot determine namespace - refusing to start."
+            )
+        
+        # 검증 실패 처리
+        if errors:
             error_msg = (
-                "❌ [FATAL] SELFHEALING_CLUSTER_ID not set or invalid. "
-                "Refusing to start to prevent namespace collision. "
-                f"Current value: '{self.cluster_id}'"
+                "❌ [FATAL] ClusterIdentity validation failed:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+                + "\n\nRefusing to start to prevent namespace collision."
             )
             
             if fail_fast:
                 logger.critical(error_msg)
-                import sys
                 sys.exit(1)  # Fail-Fast: 즉시 종료
             else:
                 logger.error(
@@ -111,8 +132,9 @@ class ClusterIdentity:
                 return False
         
         logger.info(
-            f"✅ [ClusterIdentity] Cluster: {self.cluster_id}, "
-            f"Region: {self.region}, Env: {self.environment}, Pod: {self.pod_id}"
+            f"✅ [ClusterIdentity] Validated: "
+            f"cluster={self.cluster_id}, region={self.region}, "
+            f"env={self.environment}, pod={self.pod_id}"
         )
         return True
 

@@ -157,6 +157,69 @@ class TestClusterIdentity:
         
         assert identity.validate(fail_fast=False) is False
     
+    def test_validate_missing_region_fails(self):
+        """region 누락 시 검증 실패 (Phase 1 FailFastClusterIdentity)."""
+        from selfhealing.core.cluster_identity import ClusterIdentity
+        
+        identity = ClusterIdentity(
+            cluster_id="seoul-prod-01",
+            region=None,  # 누락
+        )
+        
+        # region 필수 - 검증 실패
+        assert identity.validate(fail_fast=False) is False
+    
+    def test_validate_valid_cluster_and_region(self):
+        """cluster_id와 region 모두 유효할 때 통과."""
+        from selfhealing.core.cluster_identity import ClusterIdentity
+        
+        identity = ClusterIdentity(
+            cluster_id="seoul-prod-01",
+            region="seoul",
+        )
+        
+        assert identity.validate(fail_fast=False) is True
+    
+    def test_validate_fail_fast_exits_on_missing_region(self):
+        """fail_fast=True일 때 region 누락 시 SystemExit."""
+        from selfhealing.core.cluster_identity import ClusterIdentity
+        
+        identity = ClusterIdentity(
+            cluster_id="seoul-prod-01",
+            region=None,
+        )
+        
+        with pytest.raises(SystemExit) as exc_info:
+            identity.validate(fail_fast=True)
+        assert exc_info.value.code == 1
+    
+    def test_validate_fail_fast_exits_on_invalid_cluster_id(self):
+        """fail_fast=True일 때 cluster_id 무효 시 SystemExit."""
+        from selfhealing.core.cluster_identity import ClusterIdentity
+        
+        identity = ClusterIdentity(
+            cluster_id="default",
+            region="seoul",
+        )
+        
+        with pytest.raises(SystemExit) as exc_info:
+            identity.validate(fail_fast=True)
+        assert exc_info.value.code == 1
+    
+    def test_validate_multiple_errors_reported(self):
+        """cluster_id와 region 모두 무효할 때 두 에러 모두 보고."""
+        from selfhealing.core.cluster_identity import ClusterIdentity
+        import logging
+        
+        identity = ClusterIdentity(
+            cluster_id="default",
+            region=None,
+        )
+        
+        # fail_fast=False로 에러 수집
+        result = identity.validate(fail_fast=False)
+        assert result is False
+    
     def test_immutable(self):
         """ClusterIdentity는 불변."""
         from selfhealing.core.cluster_identity import ClusterIdentity
