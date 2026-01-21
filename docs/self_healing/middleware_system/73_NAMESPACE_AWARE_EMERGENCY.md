@@ -1,9 +1,9 @@
 # 73. Namespace-Aware Emergency (리전별 긴급 모드 격리)
 
-> **Version**: 1.4.0  
+> **Version**: 1.5.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: Phase 1 Complete  
+> **Status**: Phase 2 Complete  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ---
@@ -23,13 +23,19 @@
 - test_atomic_query.py: 24개  
 - test_escalation_audit.py: 26개
 
-### Phase 2: 핵심 기능 (P1)
+### Phase 2: 핵심 기능 (P1) ✅ 완료
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
 |------|----------|------|----------|------|
-| 4 | `NamespacedEmergencyTracker` | 네임스페이스별 Emergency 상태 관리 | P1 | ⬜ |
-| 5 | `ScopedEmergencyState` | 스코프 인지형 상태 모델 | P1 | ⬜ |
-| 6 | `RegionalCascadeDetector` | 다중 리전 연쇄 장애 감지 | P1 | ⬜ |
+| 4 | `NamespacedEmergencyTracker` | 네임스페이스별 Emergency 상태 관리 | P1 | ✅ |
+| 5 | `ScopedEmergencyState` | 스코프 인지형 상태 모델 | P1 | ✅ |
+| 6 | `RegionalCascadeDetector` | 다중 리전 연쇄 장애 감지 | P1 | ✅ |
+
+**Phase 2 테스트**: 41개 통과 (2026-01-22)
+- test_tracker.py: 22개
+- test_cascade_detector.py: 19개
+
+**전체 테스트**: 112개 통과
 
 ### Phase 3: 고급 기능 (P2)
 
@@ -46,11 +52,11 @@ packages/selfhealing-python/src/selfhealing/
 │   └── cluster_identity.py          # FailFastClusterIdentity 강화 ✅
 ├── services/
 │   └── namespace_emergency/
-│       ├── __init__.py               # Phase 1 ✅
-│       ├── tracker.py                # NamespacedEmergencyTracker
+│       ├── __init__.py               # Phase 1 + Phase 2 ✅
+│       ├── tracker.py                # NamespacedEmergencyTracker ✅
 │       ├── atomic_query.py           # AtomicStateQuery (Lua 스크립트) ✅
 │       ├── escalation_audit.py       # EscalationAuditTrail ✅
-│       ├── cascade_detector.py       # RegionalCascadeDetector
+│       ├── cascade_detector.py       # RegionalCascadeDetector ✅
 │       ├── health_penalty.py         # EmergencyHealthPenalty
 │       └── partition_reconciliation.py
 └── tests/
@@ -61,7 +67,8 @@ packages/selfhealing-python/src/selfhealing/
             ├── __init__.py               # ✅
             ├── test_atomic_query.py      # AtomicStateQuery 테스트 ✅
             ├── test_escalation_audit.py  # EscalationAuditTrail 테스트 ✅
-            └── ...
+            ├── test_tracker.py           # NamespacedEmergencyTracker 테스트 ✅
+            └── test_cascade_detector.py  # RegionalCascadeDetector 테스트 ✅
 ```
 
 ---
