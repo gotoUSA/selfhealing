@@ -34,6 +34,7 @@ from selfhealing.api.django.permissions import (
     IsSelfHealingAuthenticated,
     IsViewer,
     IsOperator,
+    IsPanicRollbackAuthorized,
 )
 from selfhealing.services.canary import (
     get_canary_rollout_service,
@@ -424,7 +425,7 @@ class CanaryPanicRollbackView(APIView):
             "emergency_code": "EMERGENCY-2024-001"  # 선택사항
         }
     """
-    permission_classes = [IsSelfHealingAdmin]  # TODO: IsPanicRollbackAuthorized
+    permission_classes = [IsPanicRollbackAuthorized]
     
     def post(self, request: Request) -> Response:
         """모든 활성 롤아웃 긴급 롤백."""

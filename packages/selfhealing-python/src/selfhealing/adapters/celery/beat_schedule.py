@@ -83,6 +83,7 @@ def get_selfhealing_beat_schedule(
     include_compliance: bool = True,
     include_traffic_aware: bool = True,
     include_canary_watchdog: bool = True,
+    include_governance: bool = True,
     include_legacy: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -94,6 +95,7 @@ def get_selfhealing_beat_schedule(
         include_compliance: Include 📋 증명 레인 tasks
         include_traffic_aware: Include 🚦 Traffic-Aware Replay tasks (Track 3)
         include_canary_watchdog: Include 🐤 Canary Watchdog tasks
+        include_governance: Include 🛡️ Governance tasks (emergency mode expiry)
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
     
     Returns:
@@ -148,6 +150,14 @@ def get_selfhealing_beat_schedule(
             logger.debug("[BeatSchedule] Added canary watchdog schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load canary watchdog tasks: {e}")
+    
+    if include_governance:
+        try:
+            from selfhealing.tasks.governance import get_governance_beat_schedule
+            schedule.update(get_governance_beat_schedule())
+            logger.debug("[BeatSchedule] Added governance schedules (emergency mode expiry)")
+        except ImportError as e:
+            logger.warning(f"[BeatSchedule] Could not load governance tasks: {e}")
     
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())
