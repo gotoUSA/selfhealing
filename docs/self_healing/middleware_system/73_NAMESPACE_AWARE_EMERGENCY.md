@@ -19,9 +19,9 @@
 | 3 | **EscalationAuditTrail** | 오버라이드 의사결정 이유 Audit 로그 박제 | P0 | ✅ |
 
 **Phase 1 테스트**: 71개 통과 (2026-01-22)
-- test_cluster_identity.py: 21개
-- test_atomic_query.py: 24개  
-- test_escalation_audit.py: 26개
+- test_cluster_identity.py: 21개 (tests/unit/core/)
+- test_atomic_query.py: 23개  
+- test_escalation_audit.py: 27개
 
 ### Phase 2: 핵심 기능 (P1) ✅ 완료
 
@@ -35,8 +35,6 @@
 - test_tracker.py: 22개
 - test_cascade_detector.py: 19개
 
-**전체 테스트**: 112개 통과
-
 ### Phase 3: 고급 기능 (P2) ✅ 완료
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
@@ -44,9 +42,14 @@
 | 7 | `EmergencyHealthPenalty` | Health Score 연동 | P2 | ✅ |
 | 8 | `PartitionReconciliationService` | 네트워크 고립 복구 | P2 | ✅ |
 
-**Phase 3 테스트**: 45개 통과 (2026-01-22)
+**Phase 3 테스트**: 48개 통과 (2026-01-22)
 - test_health_penalty.py: 19개
-- test_partition_reconciliation.py: 26개
+- test_partition_reconciliation.py: 29개
+
+**전체 테스트**: 160개 통과
+- Phase 1: 71개 (cluster_identity 21 + atomic_query 23 + escalation_audit 27)
+- Phase 2: 41개 (tracker 22 + cascade_detector 19)
+- Phase 3: 48개 (health_penalty 19 + partition_reconciliation 29)
 
 **전체 테스트**: 136개 통과
 

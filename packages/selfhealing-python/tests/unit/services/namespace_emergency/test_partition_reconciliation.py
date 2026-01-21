@@ -503,24 +503,82 @@ class TestSingleton:
 class TestFallbackWithoutTieredRedis:
     """TieredRedisProvider 없이 동작 테스트."""
     
-    def test_fallback_when_no_tiered_redis(self, mock_tracker):
-        """TieredRedisProvider 없으면 StateBackend로 폴백 시도."""
+    def test_fallback_to_state_backend_success(self, mock_tracker):
+        """TieredRedisProvider 없으면 StateBackend로 폴백 - 성공 케이스."""
         with patch.object(
-            PartitionReconciliationService, "_get_tiered_redis"
-        ) as mock_get_tiered:
-            mock_get_tiered.return_value = None
+            PartitionReconciliationService, "_get_tiered_redis", return_value=None
+        ):
+            service = PartitionReconciliationService(tracker=mock_tracker)
             
-            with patch.object(
-                PartitionReconciliationService, "_ping_global_redis"
-            ) as mock_ping:
-                # ping 실패 시 partitioned로 감지
-                mock_ping.return_value = False
+            # _ping_global_redis 내부에서 get_state_backend를 로컬 import하므로
+            # 실제 모듈을 패치
+            with patch(
+                "selfhealing.core.state_backend.get_state_backend"
+            ) as mock_get_backend:
+                mock_backend = MagicMock(spec=[])  # spec=[]로 ping 메서드 없음을 명시
+                mock_backend.get = MagicMock(return_value=None)  # get만 있음
+                mock_get_backend.return_value = mock_backend
                 
-                service = PartitionReconciliationService(
-                    tracker=mock_tracker,
-                )
+                # _ping_global_redis를 직접 호출하여 fallback 로직 테스트
+                result = service._ping_global_redis()
                 
+                # StateBackend.get() 호출됨
+                mock_backend.get.assert_called_once_with("__ping_test__")
+                assert result is True
+    
+    def test_fallback_to_state_backend_with_ping_method(self, mock_tracker):
+        """StateBackend에 ping 메서드가 있으면 사용."""
+        with patch.object(
+            PartitionReconciliationService, "_get_tiered_redis", return_value=None
+        ):
+            service = PartitionReconciliationService(tracker=mock_tracker)
+            
+            with patch(
+                "selfhealing.core.state_backend.get_state_backend"
+            ) as mock_get_backend:
+                mock_backend = MagicMock()
+                mock_backend.ping.return_value = True
+                mock_get_backend.return_value = mock_backend
+                
+                result = service._ping_global_redis()
+                
+                # ping 메서드 호출됨
+                mock_backend.ping.assert_called_once()
+                assert result is True
+    
+    def test_fallback_to_state_backend_failure(self, mock_tracker):
+        """StateBackend도 실패하면 partitioned로 감지."""
+        with patch.object(
+            PartitionReconciliationService, "_get_tiered_redis", return_value=None
+        ):
+            service = PartitionReconciliationService(tracker=mock_tracker)
+            
+            with patch(
+                "selfhealing.core.state_backend.get_state_backend"
+            ) as mock_get_backend:
+                mock_backend = MagicMock()
+                mock_backend.ping.side_effect = Exception("Connection refused")
+                mock_get_backend.return_value = mock_backend
+                
+                result = service._ping_global_redis()
+                
+                # 실패 시 False 반환
+                assert result is False
+    
+    def test_partition_status_when_fallback_fails(self, mock_tracker):
+        """Fallback 실패 시 check_partition_status가 partitioned 반환."""
+        with patch.object(
+            PartitionReconciliationService, "_get_tiered_redis", return_value=None
+        ):
+            with patch(
+                "selfhealing.core.state_backend.get_state_backend"
+            ) as mock_get_backend:
+                mock_backend = MagicMock()
+                mock_backend.ping.side_effect = Exception("No backend")
+                mock_get_backend.return_value = mock_backend
+                
+                service = PartitionReconciliationService(tracker=mock_tracker)
                 status = service.check_partition_status()
                 
-                # ping 실패로 partitioned
+                # 연결 실패로 partitioned
                 assert status.is_partitioned is True
