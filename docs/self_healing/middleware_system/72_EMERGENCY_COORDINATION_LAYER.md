@@ -405,15 +405,23 @@ class ScopedEmergencyState:
 
 ## 5. 구현 로드맵
 
-### Phase 1: 기반 구조 (Week 1-2)
+### Phase 1: 기반 구조 (Week 1-2) ✅ 완료
 
-| 태스크 | 설명 | 우선순위 |
-|--------|------|----------|
-| EmergencyScope enum | REGIONAL/GLOBAL 범위 정의 | P0 |
-| ScopedEmergencyState | 네임스페이스별 상태 모델 | P0 |
-| EmergencyCoordinator 골격 | 기본 구조 및 이벤트 핸들링 | P0 |
-| **AntiFlappingGuard** | 히스테리시스 로직 (플래핑 방지) | P0 |
-| **Dry-Run Mode** | 섀도우 모드 지원 | P1 |
+| 태스크 | 설명 | 우선순위 | 상태 |
+|--------|------|----------|------|
+| EmergencyScope enum | REGIONAL/GLOBAL 범위 정의 | P0 | ✅ |
+| ScopedEmergencyState | 네임스페이스별 상태 모델 | P0 | ✅ |
+| EmergencyCoordinator 골격 | 기본 구조 및 이벤트 핸들링 | P0 | ✅ |
+| **AntiFlappingGuard** | 히스테리시스 로직 (플래핑 방지) | P0 | ✅ |
+| **EMERGENCY_LEVEL_COOLDOWN_SECONDS** | SSOT 상수 정의 (300초) | P0 | ✅ |
+| **CoordinationAction.ttl_minutes** | TTL 강제 필드 추가 | P0 | ✅ |
+| **Dry-Run Mode** | 섀도우 모드 지원 | P1 | ✅ |
+
+**구현 파일**:
+- `selfhealing/services/coordination/enums.py` - EmergencyScope, ActionType, CommandPrecedence, RecoveryStatus
+- `selfhealing/services/coordination/models.py` - CoordinationAction, ScopedEmergencyState, OverrideTTLConfig
+- `selfhealing/services/coordination/anti_flapping.py` - AntiFlappingGuard, EMERGENCY_LEVEL_COOLDOWN_SECONDS
+- `selfhealing/services/coordination/coordinator.py` - EmergencyCoordinator, DryRunAuditLogger
 
 #### 5.1.1 AntiFlappingGuard (히스테리시스)
 
@@ -422,6 +430,19 @@ class ScopedEmergencyState:
 **코드 근거**: 기존 `RecoveryGateConfig`([models.py#L16-48](packages/selfhealing-python/src/selfhealing/services/emergency_mode/models.py#L16))의 `stabilization_period_seconds: int = 300` 패턴 확장
 
 ```python
+# SSOT: Emergency Level 쿨다운 상수 (3가지 보완사항 ③)
+EMERGENCY_LEVEL_COOLDOWN_SECONDS: int = 300
+"""
+Emergency Level 전환 간 최소 대기 시간 (초).
+
+장애 상황에서 지표가 경계선에 걸쳐 있어 레벨이 초 단위로 출렁거릴 때,
+시스템이 불필요하게 롤백과 복구를 반복하는 현상을 방지.
+
+Code reference:
+    models.py#L24 (RecoveryGateConfig.stabilization_period_seconds = 300)
+"""
+
+
 @dataclass
 class AntiFlappingGuard:
     """
@@ -433,6 +454,10 @@ class AntiFlappingGuard:
     Reference:
     - models.py#RecoveryGateConfig.stabilization_period_seconds
     """
+    
+    # 레벨 전환 간 최소 대기 시간 (초) - SSOT 사용
+    level_cooldown_seconds: int = EMERGENCY_LEVEL_COOLDOWN_SECONDS
+    """레벨 전환 후 다음 전환까지의 최소 대기 시간."""
     
     # 복구 후 대기 시간 (재활성화 제한)
     cooldown_after_recovery_seconds: int = 600  # 10분
@@ -493,6 +518,9 @@ class CoordinationAction:
     
     is_dry_run 플래그로 실제 동작 없이 Audit 로그에만 기록하는
     섀도우 모드를 지원합니다.
+    
+    Code reference:
+        circuit_breaker.py#L567 (ttl_minutes 패턴)
     """
     
     type: ActionType
@@ -506,6 +534,18 @@ class CoordinationAction:
     
     params: Dict[str, Any] = field(default_factory=dict)
     """추가 파라미터."""
+    
+    # 신규: TTL 강제 (3가지 보완사항 ①)
+    ttl_minutes: Optional[int] = None
+    """
+    액션 유효 시간 (분).
+    
+    오버라이드 액션에 TTL을 강제하여 '좀비 오버라이드' 방지.
+    None이면 OverrideTTLConfig.default_override_ttl_minutes 적용.
+    
+    Code reference:
+        circuit_breaker.py#L567 (ttl_minutes: int = 90 패턴)
+    """
     
     # 신규: Dry-Run 지원
     is_dry_run: bool = False
@@ -562,6 +602,7 @@ class DryRunAuditLogger:
 | CoordinationPolicyEngine | 정책 조회 및 매칭 | P0 |
 | DEFAULT_POLICIES | 기본 연계 정책 정의 | P1 |
 | **CriticalPathFallback** | 순환 의존성 방어 (로컬 폴백) | P0 |
+| **AtomicLevelTransition** | Lua 스크립트 원자적 상태 변경 (3가지 보완사항 ②) | P0 |
 | **DomainAwareCrisisMultiplier** | 도메인 인지형 가중치 | P1 |
 
 #### 5.2.1 CriticalPathFallback (순환 의존성 방어)
@@ -658,7 +699,116 @@ class CriticalPathFallback:
         return tier
 ```
 
-#### 5.2.2 DomainAwareCrisisMultiplier (도메인 인지형 가중치)
+#### 5.2.2 AtomicLevelTransition (Lua 스크립트 원자적 상태 변경)
+
+Redis 상태 변경 시 `[현재 레벨 확인 + 모드 변경 + 인과관계 ID 기록]`을 Lua 스크립트로 단일 트랜잭션 처리하여 Race Condition을 방지합니다.
+
+**코드 근거**: 기존 Lua 스크립트 패턴 ([locking.py#L177-187](packages/selfhealing-python/src/selfhealing/services/canary/locking.py#L177))
+
+```python
+class AtomicLevelTransition:
+    """
+    원자적 Emergency Level 전환.
+    
+    분산 환경에서 여러 노드가 동시에 상태를 바꿀 때 발생할 수 있는
+    데이터 경합(Race Condition)을 Lua 스크립트로 원천 차단합니다.
+    
+    Code reference:
+        locking.py#L177-187 (Lua 스크립트 원자적 처리)
+        locking.py#L279-289 (TTL 연장 Lua 스크립트)
+    """
+    
+    # Lua 스크립트: 레벨 확인 + 모드 변경 + 인과관계 ID 기록 (원자적)
+    ATOMIC_TRANSITION_SCRIPT = """
+    -- KEYS[1]: emergency state key (예: selfhealing:emergency:seoul)
+    -- ARGV[1]: expected current level (검증용)
+    -- ARGV[2]: new level
+    -- ARGV[3]: new governance mode
+    -- ARGV[4]: causation event id
+    -- ARGV[5]: updated_at timestamp
+    
+    local current_level = redis.call("HGET", KEYS[1], "level")
+    
+    -- Optimistic Lock: 현재 레벨이 예상과 다르면 실패
+    if current_level and current_level ~= ARGV[1] then
+        return {0, "level_mismatch", current_level}
+    end
+    
+    -- 원자적 상태 업데이트
+    redis.call("HMSET", KEYS[1], 
+        "level", ARGV[2],
+        "governance_mode", ARGV[3],
+        "causation_id", ARGV[4],
+        "updated_at", ARGV[5]
+    )
+    
+    return {1, "success", ARGV[2]}
+    """
+    
+    def __init__(self, redis_client):
+        self._redis = redis_client
+        self._script_sha: Optional[str] = None
+    
+    def transition(
+        self,
+        namespace: str,
+        expected_level: str,
+        new_level: str,
+        new_mode: str,
+        causation_id: str,
+    ) -> Tuple[bool, str, str]:
+        """
+        원자적 레벨 전환 실행.
+        
+        Args:
+            namespace: 대상 네임스페이스
+            expected_level: 예상 현재 레벨 (Optimistic Lock)
+            new_level: 새 레벨
+            new_mode: 새 Governance 모드
+            causation_id: 인과관계 이벤트 ID
+        
+        Returns:
+            (success, message, resulting_level)
+        """
+        from selfhealing.settings.namespace import get_key_prefix
+        
+        key = f"{get_key_prefix()}:emergency:{namespace}"
+        now = datetime.now(timezone.utc).isoformat()
+        
+        try:
+            result = self._redis.eval(
+                self.ATOMIC_TRANSITION_SCRIPT,
+                1,  # KEYS count
+                key,
+                expected_level,
+                new_level,
+                new_mode,
+                causation_id,
+                now,
+            )
+            
+            success = result[0] == 1
+            message = result[1]
+            level = result[2]
+            
+            if success:
+                logger.info(
+                    f"[AtomicTransition] Success: {namespace} -> {new_level}"
+                )
+            else:
+                logger.warning(
+                    f"[AtomicTransition] Failed: {message}, "
+                    f"current={level}, expected={expected_level}"
+                )
+            
+            return (success, message, level)
+            
+        except Exception as e:
+            logger.error(f"[AtomicTransition] Error: {e}")
+            return (False, str(e), expected_level)
+```
+
+#### 5.2.3 DomainAwareCrisisMultiplier (도메인 인지형 가중치)
 
 장애가 발생한 도메인과 연관된 에러에 대해서만 높은 가중치를 주고, 관련 없는 도메인의 에러는 일반 가중치를 유지합니다.
 
@@ -1303,3 +1453,4 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | 1.1.0 | 2026-01-21 | Phase 1: AntiFlappingGuard(히스테리시스), Dry-Run Mode 추가 | AI Assistant |
 | 1.2.0 | 2026-01-21 | Phase 2: CriticalPathFallback(순환 의존성 방어), DomainAwareCrisisMultiplier(도메인 인지형 가중치) 추가 | AI Assistant |
 | 1.3.0 | 2026-01-21 | Phase 4: RecoveryAccountability(READY_TO_RESTORE), OptimisticLocalAction, OverrideTTLEnforcement 추가 | AI Assistant |
+| 1.4.0 | 2026-01-21 | 3가지 보완사항 반영 (①TTL 강제, ②Lua 원자성, ③COOLDOWN SSOT) 및 Phase 1 구현 완료 | AI Assistant |
