@@ -412,6 +412,147 @@ class ScopedEmergencyState:
 | EmergencyScope enum | REGIONAL/GLOBAL 범위 정의 | P0 |
 | ScopedEmergencyState | 네임스페이스별 상태 모델 | P0 |
 | EmergencyCoordinator 골격 | 기본 구조 및 이벤트 핸들링 | P0 |
+| **AntiFlappingGuard** | 히스테리시스 로직 (플래핑 방지) | P0 |
+| **Dry-Run Mode** | 섀도우 모드 지원 | P1 |
+
+#### 5.1.1 AntiFlappingGuard (히스테리시스)
+
+레벨이 빈번하게 변하며 시스템이 요동치는 '플래핑(Flapping)' 현상을 방지합니다.
+
+**코드 근거**: 기존 `RecoveryGateConfig`([models.py#L16-48](packages/selfhealing-python/src/selfhealing/services/emergency_mode/models.py#L16))의 `stabilization_period_seconds: int = 300` 패턴 확장
+
+```python
+@dataclass
+class AntiFlappingGuard:
+    """
+    플래핑 방지를 위한 히스테리시스 가드.
+    
+    Recovery 시 안정성을 충분히 확인한 뒤에 자동화를 재개하는
+    신중한 복구 로직을 구현합니다.
+    
+    Reference:
+    - models.py#RecoveryGateConfig.stabilization_period_seconds
+    """
+    
+    # 복구 후 대기 시간 (재활성화 제한)
+    cooldown_after_recovery_seconds: int = 600  # 10분
+    """복구 완료 후 일정 시간 동안 재활성화 제한."""
+    
+    # 복구 전 최소 안정 유지 시간
+    min_stable_duration_before_recovery_seconds: int = 600  # 10분
+    """10분간 안정 상태 유지 후에만 복구 가능."""
+    
+    # 시간당 최대 전환 횟수
+    max_level_transitions_per_hour: int = 3
+    """플래핑 감지 임계값: 시간당 3회 초과 시 경고."""
+    
+    # 플래핑 감지 시 강제 쿨다운
+    flapping_lockout_minutes: int = 30
+    """플래핑 감지 시 30분간 레벨 변경 잠금."""
+    
+    def check_transition_allowed(
+        self,
+        transition_history: List[datetime],
+        now: Optional[datetime] = None,
+    ) -> Tuple[bool, str]:
+        """
+        레벨 전환 허용 여부 확인.
+        
+        Returns:
+            (is_allowed, reason): 전환 가능 여부와 사유
+        """
+        now = now or datetime.now(timezone.utc)
+        one_hour_ago = now - timedelta(hours=1)
+        
+        recent_transitions = [
+            t for t in transition_history if t > one_hour_ago
+        ]
+        
+        if len(recent_transitions) >= self.max_level_transitions_per_hour:
+            return (
+                False,
+                f"Flapping detected: {len(recent_transitions)} transitions "
+                f"in last hour (max: {self.max_level_transitions_per_hour}). "
+                f"Lockout for {self.flapping_lockout_minutes} minutes."
+            )
+        
+        return (True, "Transition allowed")
+```
+
+#### 5.1.2 Dry-Run / Shadow Mode
+
+프로덕션 적용 초기 단계에서 시스템의 '지능'을 안전하게 검증하기 위한 필수 장치입니다.
+
+**코드 근거**: 기존 `dry_run` 패턴 ([urls.py#L301-302](packages/selfhealing-python/src/selfhealing/api/django/urls.py#L301), [builders.py#L874-876](tests/factories/builders.py#L874))
+
+```python
+@dataclass
+class CoordinationAction:
+    """
+    연계 액션 정의.
+    
+    is_dry_run 플래그로 실제 동작 없이 Audit 로그에만 기록하는
+    섀도우 모드를 지원합니다.
+    """
+    
+    type: ActionType
+    """액션 유형."""
+    
+    immediate: bool = False
+    """즉시 실행 여부."""
+    
+    delay_seconds: int = 0
+    """지연 시간 (초)."""
+    
+    params: Dict[str, Any] = field(default_factory=dict)
+    """추가 파라미터."""
+    
+    # 신규: Dry-Run 지원
+    is_dry_run: bool = False
+    """
+    True면 실행하지 않고 감사 로그에만 "수행되었을 액션" 기록.
+    
+    용도:
+    - 프로덕션 적용 초기 검증
+    - 정책 변경 전 영향 분석
+    - 버그 있는 자동화 레이어의 위험 방지
+    """
+
+
+class DryRunAuditLogger:
+    """
+    Dry-Run 모드에서 "수행되었을 액션"을 감사 로그에 기록.
+    
+    Reference:
+    - api/django/urls.py#L301-302 (기존 dry-run 엔드포인트)
+    """
+    
+    def log_would_execute(
+        self,
+        action: CoordinationAction,
+        namespace: str,
+        context: Dict[str, Any],
+    ) -> str:
+        """수행되었을 액션을 Audit 로그에 기록."""
+        entry = {
+            "event_type": "DRY_RUN_ACTION",
+            "action_type": action.type.value,
+            "namespace": namespace,
+            "params": action.params,
+            "would_execute": True,
+            "actual_execution": False,
+            "context": context,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        # 기존 audit 시스템 활용
+        from selfhealing.services.audit_helpers import log_config_change
+        return log_config_change(
+            config_type="coordination_dry_run",
+            action="WOULD_EXECUTE",
+            details=entry,
+        )
+```
 
 ### Phase 2: 정책 엔진 (Week 3-4)
 
@@ -420,6 +561,184 @@ class ScopedEmergencyState:
 | CoordinationPolicy 모델 | 정책 데이터 구조 | P0 |
 | CoordinationPolicyEngine | 정책 조회 및 매칭 | P0 |
 | DEFAULT_POLICIES | 기본 연계 정책 정의 | P1 |
+| **CriticalPathFallback** | 순환 의존성 방어 (로컬 폴백) | P0 |
+| **DomainAwareCrisisMultiplier** | 도메인 인지형 가중치 | P1 |
+
+#### 5.2.1 CriticalPathFallback (순환 의존성 방어)
+
+CoordinationManager가 의존하는 서비스(Redis, Audit API)가 Emergency 상태로 인해 차단/지연될 경우 교착 상태를 방지합니다.
+
+**네이밍 선택**: `CriticalPathFallback`
+- **선택 이유**: 기존 코드베이스에서 `fallback` 패턴이 광범위하게 사용됨
+  - [fallback.py#L24-45](packages/selfhealing-python/src/selfhealing/audit/graceful_degradation/fallback.py#L24) - `HashChainFallbackChain`
+  - [manager.py#L61](packages/selfhealing-python/src/selfhealing/audit/graceful_degradation/manager.py#L61) - `local_fallback_path`
+  - [event_bus_redis.py#L139](packages/selfhealing-python/src/selfhealing/services/event_bus_redis.py#L139) - `fallback_to_local`
+- **대안 `CRITICAL_PATH_EXEMPT`**: Whitelist/Exempt 패턴보다 Fallback 패턴이 시스템에 더 일관됨
+
+```python
+class CriticalPathFallback:
+    """
+    연계 레이어 핵심 경로의 로컬 폴백.
+    
+    Redis/Audit API 장애 시에도 Emergency 상태 변경이 가능하도록
+    로컬 폴백 경로를 제공합니다.
+    
+    Pattern source:
+        audit/graceful_degradation/fallback.py#HashChainFallbackChain
+    """
+    
+    def __init__(
+        self,
+        local_state_path: Path = Path("/tmp/emergency_state.json"),
+        local_audit_path: Path = Path("/tmp/emergency_audit.jsonl"),
+    ):
+        self._local_state_path = local_state_path
+        self._local_audit_path = local_audit_path
+        self._memory_state: Optional[Dict[str, Any]] = None
+    
+    def load_state_with_fallback(self) -> Dict[str, Any]:
+        """
+        상태 로드 (Redis → Local File → Memory 순 폴백).
+        
+        Reference:
+            fallback.py#L84-130 (add_integrity 폴백 체인)
+        """
+        # 1. Redis Primary 시도
+        try:
+            from selfhealing.core.state_backend import get_state_backend
+            backend = get_state_backend()
+            data = backend.get("emergency_mode")
+            if data:
+                return data
+        except Exception as e:
+            logger.warning(f"[CriticalPathFallback] Redis failed: {e}")
+        
+        # 2. Local File 시도
+        try:
+            if self._local_state_path.exists():
+                with open(self._local_state_path) as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"[CriticalPathFallback] Local file failed: {e}")
+        
+        # 3. Memory 폴백
+        if self._memory_state:
+            return self._memory_state
+        
+        # 4. 기본 상태 반환 (최후 수단)
+        return {"level": "NORMAL", "is_active": False}
+    
+    def save_state_with_fallback(self, state: Dict[str, Any]) -> str:
+        """
+        상태 저장 (Redis + Local File 동시 저장).
+        
+        Returns:
+            저장된 tier ('redis', 'local', 'memory')
+        """
+        tier = "memory"
+        self._memory_state = state  # 항상 메모리에 유지
+        
+        # Local File 저장 (항상 시도)
+        try:
+            with open(self._local_state_path, "w") as f:
+                json.dump(state, f)
+            tier = "local"
+        except Exception as e:
+            logger.warning(f"[CriticalPathFallback] Local save failed: {e}")
+        
+        # Redis 저장 시도
+        try:
+            from selfhealing.core.state_backend import get_state_backend
+            backend = get_state_backend()
+            backend.set("emergency_mode", state)
+            tier = "redis"
+        except Exception as e:
+            logger.warning(f"[CriticalPathFallback] Redis save failed: {e}")
+        
+        return tier
+```
+
+#### 5.2.2 DomainAwareCrisisMultiplier (도메인 인지형 가중치)
+
+장애가 발생한 도메인과 연관된 에러에 대해서만 높은 가중치를 주고, 관련 없는 도메인의 에러는 일반 가중치를 유지합니다.
+
+**네이밍 선택**: `DomainAwareCrisisMultiplier`
+- **선택 이유**: 기존 코드베이스의 도메인 가중치 패턴과 일관성 유지
+  - [shadow_calculator.py#L222](packages/selfhealing-python/src/selfhealing/services/error_budget/reconciliation/shadow_calculator.py#L222) - `domain_multiplier = self._get_domain_weight(domain)`
+  - [30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md#L357](docs/self_healing/middleware_system/30_SHADOW_BUDGET_WEIGHTED_CALCULATION.md#L357) - 동일 패턴
+- **대안 `ContextualBudgetMultiplier`**: 도메인 개념이 이미 코드에 정착되어 있어 Domain-Aware가 더 직관적
+
+```python
+@dataclass
+class DomainAwareCrisisMultiplier:
+    """
+    도메인 인지형 위기 가중치.
+    
+    장애 도메인과 에러 도메인이 일치할 때만 높은 가중치를 적용하여,
+    관련 없는 도메인의 에러가 불필요하게 증폭되지 않도록 합니다.
+    
+    Reference:
+        shadow_calculator.py#L222 (_get_domain_weight 패턴)
+    """
+    
+    # 기본 위기 가중치
+    base_crisis_multiplier: float = 5.0
+    
+    # 도메인 인지 기능 활성화 여부
+    domain_aware_enabled: bool = True
+    
+    # 도메인별 민감도 가중치
+    domain_sensitivity: Dict[str, float] = field(default_factory=lambda: {
+        "payment": 10.0,      # 결제 도메인: 최고 민감도
+        "order": 5.0,         # 주문 도메인: 높은 민감도
+        "inventory": 3.0,     # 재고 도메인: 중간 민감도
+        "notification": 1.5,  # 알림 도메인: 낮은 민감도
+        "analytics": 1.0,     # 분석 도메인: 기본 민감도
+    })
+    
+    def get_multiplier(
+        self,
+        crisis_domain: str,
+        error_domain: str,
+        crisis_level: EmergencyLevel,
+    ) -> float:
+        """
+        도메인 기반 가중치 계산.
+        
+        Args:
+            crisis_domain: 현재 위기가 발생한 도메인
+            error_domain: 에러가 발생한 도메인
+            crisis_level: 현재 Emergency 레벨
+        
+        Returns:
+            적용할 가중치 (1.0 ~ 10.0)
+        """
+        if not self.domain_aware_enabled:
+            # 도메인 인지 비활성화 시 레벨 기반 일괄 적용
+            return self._get_level_multiplier(crisis_level)
+        
+        # 동일 도메인: 전체 가중치 적용
+        if crisis_domain == error_domain:
+            domain_weight = self.domain_sensitivity.get(
+                error_domain, 1.0
+            )
+            return min(
+                self._get_level_multiplier(crisis_level) * domain_weight,
+                10.0,  # MAX_CRISIS_MULTIPLIER cap
+            )
+        
+        # 다른 도메인: 기본 가중치 유지
+        return 1.0
+    
+    def _get_level_multiplier(self, level: EmergencyLevel) -> float:
+        """레벨 기반 기본 가중치."""
+        return {
+            EmergencyLevel.NORMAL: 1.0,
+            EmergencyLevel.LEVEL_1: 1.5,
+            EmergencyLevel.LEVEL_2: 3.0,
+            EmergencyLevel.LEVEL_3: self.base_crisis_multiplier,
+        }.get(level, 1.0)
+```
 
 ### Phase 3: 연계 구현 (Week 5-8)
 
@@ -437,6 +756,325 @@ class ScopedEmergencyState:
 | RecoveryCoordinator | 역순 복구 조율 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
 | Recovery Health Checks | 단계별 검증 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
 | Recovery Policy | 복구 정책 정의 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
+| **RecoveryAccountability** | 복구 책임 추적성 | 본 문서 §5.4.1 |
+| **OptimisticLocalAction** | 낙관적 선조치 패턴 | 본 문서 §5.4.2 |
+| **OverrideTTLEnforcement** | 오버라이드 TTL 강제 | 본 문서 §5.4.3 |
+
+#### 5.4.1 RecoveryAccountability (복구 책임 추적성)
+
+대규모 장애 후 자동 복구 시 "왜 사람이 확인하지 않았는가"에 대한 책임 추적성을 보장합니다.
+
+**코드 근거**: 기존 `acknowledge_warning()` 패턴 ([governance.py#L404-420](packages/selfhealing-python/src/selfhealing/services/governance.py#L404))
+
+```python
+class RecoveryStatus(str, Enum):
+    """복구 상태 (확장)."""
+    
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    HEALTH_CHECK = "health_check"
+    
+    # 신규: 수동 승인 대기 상태
+    READY_TO_RESTORE = "ready_to_restore"
+    """
+    8시간 자동 만료 조건 충족 + requires_manual_acknowledgement=True일 때,
+    즉시 NORMAL 복구 대신 이 상태로 전환.
+    
+    사람이 마지막 Acknowledge 버튼을 누른 시점을 Audit 로그에 박제하여
+    "복구 결정의 최종 책임은 사람에게 있었다"는 점을 명확히 함.
+    """
+    
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ABORTED = "aborted"
+
+
+@dataclass
+class RecoveryAccountabilityConfig:
+    """
+    복구 책임 추적 설정.
+    
+    Reference:
+        governance.py#L404 (acknowledge_warning 패턴)
+    """
+    
+    # 수동 승인 필수 여부
+    requires_manual_acknowledgement: bool = False
+    """
+    True일 때:
+    - 8시간 경과해도 자동 NORMAL 복구하지 않음
+    - READY_TO_RESTORE 상태로 전환
+    - Admin의 acknowledge() 호출 시에만 복구 완료
+    """
+    
+    # READY_TO_RESTORE 상태 최대 유지 시간
+    ready_to_restore_timeout_hours: int = 24
+    """24시간 내 승인 없으면 알림 에스컬레이션."""
+    
+    # 승인 가능 역할
+    acknowledgement_required_roles: List[str] = field(
+        default_factory=lambda: ["admin", "sre_lead"]
+    )
+
+
+class RecoveryCoordinatorWithAccountability:
+    """
+    책임 추적성이 포함된 복구 조율자.
+    """
+    
+    def check_auto_restore_eligibility(self) -> Tuple[bool, str, RecoveryStatus]:
+        """
+        자동 복구 가능 여부 확인.
+        
+        Returns:
+            (can_auto_restore, reason, next_status)
+        """
+        expiry_status = self._tracker.check_expiry_status()
+        
+        if not expiry_status["should_auto_restore"]:
+            return (False, "Not yet eligible", RecoveryStatus.IN_PROGRESS)
+        
+        if self._config.requires_manual_acknowledgement:
+            return (
+                False,
+                "Manual acknowledgement required",
+                RecoveryStatus.READY_TO_RESTORE,  # 대기 상태로 전환
+            )
+        
+        return (True, "Auto restore allowed", RecoveryStatus.COMPLETED)
+    
+    def acknowledge_recovery(
+        self,
+        acknowledged_by: str,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """
+        수동 복구 승인 (READY_TO_RESTORE → COMPLETED).
+        
+        Audit 로그에 승인자 정보를 박제합니다.
+        """
+        if self._current_status != RecoveryStatus.READY_TO_RESTORE:
+            raise ValueError(
+                f"Cannot acknowledge: current status is {self._current_status}"
+            )
+        
+        # Audit 로그에 "최종 복구 결정" 기록
+        self._audit_recovery_decision(
+            decision="MANUAL_ACKNOWLEDGE",
+            acknowledged_by=acknowledged_by,
+            reason=reason,
+            auto_restore_was_eligible=True,
+        )
+        
+        # 실제 복구 수행
+        return self._execute_recovery_steps()
+```
+
+#### 5.4.2 OptimisticLocalAction (낙관적 선조치 패턴)
+
+LEVEL_3 발생 시 3초 이내 연계 완료를 위해, 중앙 DB 상태 업데이트를 기다리지 않고 로컬에서 즉시 행동합니다.
+
+**코드 근거**: 
+- [73_NAMESPACE_AWARE_EMERGENCY.md#L216-220](docs/self_healing/middleware_system/73_NAMESPACE_AWARE_EMERGENCY.md#L216) - `_local_cache` 패턴
+- [versioning.py#L74](packages/selfhealing-python/src/selfhealing/services/canary/versioning.py#L74) - Optimistic Locking 패턴
+
+```python
+class OptimisticLocalActionExecutor:
+    """
+    낙관적 선조치 실행기.
+    
+    이벤트 수신 시 로컬 캐시를 즉시 업데이트하고,
+    사후에 중앙 상태와 동기화합니다.
+    
+    Pattern source:
+        canary/versioning.py#L74 (Optimistic Locking)
+        73_NAMESPACE_AWARE_EMERGENCY.md#L216 (_local_cache)
+    
+    가치: 
+        네트워크 지연에 상관없이 각 리전이 1초 내에
+        Safety-Shut 할 수 있는 속도 보장.
+    """
+    
+    def __init__(self, redis_client: Optional[Any] = None):
+        self._redis = redis_client
+        self._local_cache: Dict[str, Any] = {}
+        self._pending_sync: List[Dict[str, Any]] = []
+        self._lock = threading.RLock()
+    
+    def execute_with_optimistic_action(
+        self,
+        action: CoordinationAction,
+        namespace: str,
+    ) -> ActionResult:
+        """
+        낙관적 선조치 실행.
+        
+        Flow:
+        1. 로컬 캐시 즉시 업데이트 (< 10ms)
+        2. 액션 실행 (동기)
+        3. 중앙 상태 비동기 동기화 (백그라운드)
+        """
+        # Step 1: 로컬 캐시 즉시 업데이트
+        with self._lock:
+            self._local_cache[f"{namespace}:governance_mode"] = "STRICT"
+            self._local_cache[f"{namespace}:updated_at"] = (
+                datetime.now(timezone.utc).isoformat()
+            )
+        
+        # Step 2: 액션 실행
+        result = self._execute_action_locally(action, namespace)
+        
+        # Step 3: 비동기 동기화 예약
+        self._schedule_central_sync(action, namespace, result)
+        
+        return result
+    
+    def _schedule_central_sync(
+        self,
+        action: CoordinationAction,
+        namespace: str,
+        result: ActionResult,
+    ) -> None:
+        """중앙 상태 비동기 동기화 예약."""
+        sync_entry = {
+            "action": action,
+            "namespace": namespace,
+            "result": result,
+            "local_timestamp": datetime.now(timezone.utc).isoformat(),
+            "sync_status": "pending",
+        }
+        
+        with self._lock:
+            self._pending_sync.append(sync_entry)
+        
+        # 백그라운드 태스크로 동기화 (Celery 또는 threading)
+        try:
+            from selfhealing.tasks.coordination import sync_to_central
+            sync_to_central.delay(sync_entry)
+        except Exception as e:
+            logger.warning(f"[OptimisticAction] Async sync failed: {e}")
+            # 폴백: 동기 재시도는 다음 주기에
+```
+
+#### 5.4.3 OverrideTTLEnforcement (오버라이드 TTL 강제)
+
+Admin이 force_normal=True 설정 후 깜빡 잊고 퇴근했을 때, 시스템이 영원히 장애를 방치하는 '좀비 오버라이드'를 방지합니다.
+
+**코드 근거**: 기존 `manual_override_expires_at` 패턴 ([circuit_breaker.py#L567-598](packages/selfhealing-python/src/selfhealing/adapters/redis/circuit_breaker.py#L567))
+
+```python
+@dataclass
+class OverrideTTLConfig:
+    """
+    오버라이드 TTL 강제 설정.
+    
+    Reference:
+        circuit_breaker.py#L567 (manual_override TTL 패턴)
+        test_time_based_behaviors.py#L478 (TTL 테스트)
+    """
+    
+    # 기본 오버라이드 TTL (분)
+    default_override_ttl_minutes: int = 120  # 2시간
+    """
+    Admin이 TTL을 명시하지 않을 경우 적용되는 기본값.
+    Circuit Breaker의 90분보다 길게 설정 (더 신중한 복구).
+    """
+    
+    # 최대 허용 TTL (분)
+    max_override_ttl_minutes: int = 480  # 8시간
+    """아무리 길게 설정해도 8시간을 초과할 수 없음."""
+    
+    # TTL 없는 영구 오버라이드 허용 여부
+    allow_permanent_override: bool = False
+    """
+    False (권장): 모든 오버라이드에 TTL 강제
+    True: 특수 권한(super_admin)만 영구 오버라이드 가능
+    """
+    
+    # 영구 오버라이드 허용 역할
+    permanent_override_roles: List[str] = field(
+        default_factory=lambda: ["super_admin"]
+    )
+
+
+class CommandPrecedence(IntEnum):
+    """
+    명령 우선순위.
+    
+    숫자가 높을수록 우선.
+    """
+    
+    SYSTEM_AUTO = 1
+    """시스템 자동 감지 (기본)."""
+    
+    OPERATOR_COMMAND = 2
+    """운영자 수동 명령."""
+    
+    ADMIN_OVERRIDE = 3
+    """Admin 강제 오버라이드 (TTL 필수)."""
+    
+    MAINTENANCE_MODE = 4
+    """
+    유지보수 모드 (신규).
+    
+    운영자가 긴급 점검을 위해 의도적으로 에러를 발생시키는
+    상황에서 시스템 자동 대응을 일시 중지.
+    
+    반드시 TTL이 설정되어야 하며, 만료 시 자동 해제.
+    """
+    
+    KILL_SWITCH = 5
+    """최우선: Kill Switch (모든 자동화 중지)."""
+
+
+def resolve_precedence(
+    manual_command: Dict[str, Any],
+    system_detected: Dict[str, Any],
+    ttl_config: OverrideTTLConfig,
+) -> Dict[str, Any]:
+    """
+    운영자 명령 vs 시스템 감지 우선순위 해결.
+    
+    기본 원칙: 안전 우선 (시스템 감지 우선)
+    예외: Admin + force_override + TTL 설정 시 수동 명령 우선
+    
+    Args:
+        manual_command: 운영자 수동 명령
+        system_detected: 시스템 자동 감지 결과
+        ttl_config: TTL 설정
+    
+    Returns:
+        최종 적용할 명령
+    """
+    # Kill Switch는 항상 최우선
+    if system_detected.get("is_kill_switch"):
+        return system_detected
+    
+    # 유지보수 모드 확인
+    if manual_command.get("maintenance_mode"):
+        ttl = manual_command.get("ttl_minutes")
+        if not ttl:
+            # TTL 없는 유지보수 모드 거부
+            raise ValueError(
+                "MAINTENANCE_MODE requires TTL to prevent zombie override"
+            )
+        if ttl > ttl_config.max_override_ttl_minutes:
+            ttl = ttl_config.max_override_ttl_minutes
+            logger.warning(
+                f"[Precedence] TTL capped to {ttl} minutes"
+            )
+        return {**manual_command, "ttl_minutes": ttl}
+    
+    # Admin 강제 오버라이드
+    if manual_command.get("force_override") and manual_command.get("role") == "admin":
+        ttl = manual_command.get("ttl_minutes", ttl_config.default_override_ttl_minutes)
+        if ttl > ttl_config.max_override_ttl_minutes:
+            ttl = ttl_config.max_override_ttl_minutes
+        return {**manual_command, "ttl_minutes": ttl, "ttl_enforced": True}
+    
+    # 기본: 시스템 감지 우선 (안전 우선 원칙)
+    return system_detected
+```
 
 ---
 
@@ -646,6 +1284,14 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | **Safety Interlock** | 위험 상황에서 자동으로 작동하는 안전 장치 |
 | **Crisis Multiplier** | 위기 상황에서 에러 버짓 소진율을 증가시키는 계수 |
 | **Recovery Coordinator** | 복구 시 역순으로 안전하게 시스템을 정상화하는 컴포넌트 |
+| **AntiFlappingGuard** | 레벨 변경이 빈번하게 발생하는 플래핑 현상을 방지하는 히스테리시스 가드 |
+| **Dry-Run Mode** | 실제 동작 없이 "수행되었을 액션"을 Audit 로그에만 기록하는 검증 모드 |
+| **CriticalPathFallback** | Redis/Audit 장애 시에도 Emergency 상태 변경이 가능한 로컬 폴백 경로 |
+| **DomainAwareCrisisMultiplier** | 장애 도메인과 에러 도메인의 연관성을 고려한 가중치 계산 |
+| **READY_TO_RESTORE** | 자동 복구 조건 충족 후 수동 승인 대기 상태 (책임 추적성 보장) |
+| **OptimisticLocalAction** | 중앙 동기화 전 로컬에서 즉시 행동하는 낙관적 선조치 패턴 |
+| **OverrideTTLEnforcement** | 수동 오버라이드에 TTL을 강제하여 좀비 상태 방지 |
+| **MAINTENANCE_MODE** | 의도적 장애 유발 시 시스템 자동 대응을 일시 중지하는 유지보수 모드 |
 
 ---
 
@@ -654,3 +1300,6 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | 버전 | 날짜 | 변경 내용 | 작성자 |
 |------|------|----------|--------|
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
+| 1.1.0 | 2026-01-21 | Phase 1: AntiFlappingGuard(히스테리시스), Dry-Run Mode 추가 | AI Assistant |
+| 1.2.0 | 2026-01-21 | Phase 2: CriticalPathFallback(순환 의존성 방어), DomainAwareCrisisMultiplier(도메인 인지형 가중치) 추가 | AI Assistant |
+| 1.3.0 | 2026-01-21 | Phase 4: RecoveryAccountability(READY_TO_RESTORE), OptimisticLocalAction, OverrideTTLEnforcement 추가 | AI Assistant |
