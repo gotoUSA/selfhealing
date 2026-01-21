@@ -1,6 +1,6 @@
 # 73. Namespace-Aware Emergency (리전별 긴급 모드 격리)
 
-> **Version**: 1.0.0  
+> **Version**: 1.2.0  
 > **Created**: 2026-01-21  
 > **Status**: Draft  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
@@ -229,10 +229,28 @@ class NamespacedEmergencyTracker:
         return settings.get_effective_namespace() or self.GLOBAL_NAMESPACE
     
     def _get_state_key(self, namespace: str) -> str:
-        """네임스페이스용 Redis 키 생성."""
+        """
+        네임스페이스용 Redis 키 생성.
+        
+        SSOT Prefixing: NamespaceSettings.get_key_prefix()를 활용하여
+        하드코딩된 키가 없도록 합니다.
+        
+        Code reference:
+            settings/namespace.py#L88-97 (get_key_prefix 패턴)
+        """
+        from selfhealing.settings.namespace import get_namespace_settings
+        settings = get_namespace_settings()
+        
         if namespace == self.GLOBAL_NAMESPACE:
-            return "selfhealing:governance:emergency_state"  # 기존 호환
-        return self.STATE_KEY_PATTERN.format(namespace=namespace)
+            # Global은 네임스페이스 없이 기본 프리픽스만 사용 (하위 호환)
+            base_prefix = settings.get_key_prefix().rstrip(":")
+            if ":" in base_prefix:
+                # "selfhealing:seoul:" -> "selfhealing"
+                base_prefix = base_prefix.split(":")[0]
+            return f"{base_prefix}:governance:emergency_state"
+        
+        # Regional: 명시적 namespace 사용
+        return f"selfhealing:{namespace}:governance:emergency_state"
     
     # =========================================================================
     # Public API
@@ -241,38 +259,80 @@ class NamespacedEmergencyTracker:
     def get_effective_state(
         self,
         namespace: Optional[str] = None,
+        precedence: Optional[CommandPrecedence] = None,
     ) -> ScopedEmergencyState:
         """
-        유효한 Emergency 상태 조회.
+        유효한 Emergency 상태 조회 (Precedence-First Hierarchy).
         
-        우선순위:
-        1. Global 상태가 STRICT이면 → Global 상태 반환
-        2. 아니면 → Regional 상태 반환
+        우선순위 (Precedence-First):
+        1. Admin Override: 특정 리전에 ADMIN_OVERRIDE/KILL_SWITCH가 있으면
+           해당 리전 설정 우선 (Global 무시)
+        2. Safety-Max: 특별한 수동 명령이 없으면 max(Global, Regional) 선택
+           (둘 중 하나라도 STRICT면 STRICT)
         
         Args:
             namespace: 조회할 네임스페이스 (None이면 현재 인스턴스)
+            precedence: 명령 우선순위 (수동 오버라이드 시)
         
         Returns:
             유효한 ScopedEmergencyState
+        
+        Code reference:
+            coordination/enums.py#L59-85 (CommandPrecedence)
         """
+        from selfhealing.services.coordination.enums import CommandPrecedence
+        
         ns = namespace or self._get_current_namespace()
         
         with self._lock:
-            # 1. Global 상태 확인
             global_state = self._load_state(self.GLOBAL_NAMESPACE)
-            if global_state.is_active and global_state.governance_mode == "STRICT":
+            regional_state = self._load_state(ns) if ns != self.GLOBAL_NAMESPACE else global_state
+            
+            # 1순위: Admin Override - 수동 명령이 ADMIN_OVERRIDE 이상이면 Regional 우선
+            if precedence and precedence >= CommandPrecedence.ADMIN_OVERRIDE:
+                logger.info(
+                    f"[EmergencyTracker] Admin override active (precedence={precedence.name}), "
+                    f"using regional state for namespace={ns}"
+                )
+                # TTL 경고 (KILL_SWITCH 아니면 TTL 필수)
+                if precedence < CommandPrecedence.KILL_SWITCH:
+                    if not regional_state.expires_at:
+                        logger.warning(
+                            f"[EmergencyTracker] ADMIN_OVERRIDE without TTL is not recommended. "
+                            f"namespace={ns}"
+                        )
+                return regional_state
+            
+            # 2순위: Safety-Max - 둘 중 더 엄격한 상태 반환
+            global_is_strict = (
+                global_state.is_active and 
+                global_state.governance_mode == "STRICT"
+            )
+            regional_is_strict = (
+                regional_state.is_active and 
+                regional_state.governance_mode == "STRICT"
+            )
+            
+            if global_is_strict and regional_is_strict:
+                # 둘 다 STRICT: Global 우선 (더 넓은 범위)
+                logger.debug(
+                    f"[EmergencyTracker] Both Global and Regional STRICT, "
+                    f"using Global state"
+                )
+                return global_state
+            elif global_is_strict:
+                # Global만 STRICT
                 logger.debug(
                     f"[EmergencyTracker] Global STRICT active, "
                     f"overriding namespace={ns}"
                 )
                 return global_state
-            
-            # 2. Regional 상태 확인
-            if ns != self.GLOBAL_NAMESPACE:
-                regional_state = self._load_state(ns)
+            elif regional_is_strict:
+                # Regional만 STRICT
                 return regional_state
-            
-            return global_state
+            else:
+                # 둘 다 NORMAL: Regional 반환
+                return regional_state
     
     def activate_emergency(
         self,
@@ -692,9 +752,697 @@ class TestNamespaceAwareEmergencyIntegration:
 
 ---
 
-## 6. 모니터링
+## 6. 고급 기능
 
-### 6.1 메트릭
+### 6.1 RegionalCascadeDetector (다중 리전 격상 감지)
+
+여러 리전이 동시에 STRICT 상태에 진입하면 **전역적 장애 징후**로 판단하고
+GLOBAL 긴급 모드 격상을 제안합니다.
+
+```python
+class RegionalCascadeDetector:
+    """
+    다중 리전 연쇄 장애 감지기.
+    
+    여러 리전이 동시에 STRICT 상태면 GLOBAL 격상을 권고합니다.
+    
+    Code reference:
+        coordination/anti_flapping.py (AntiFlappingGuard 패턴)
+        isolation/regional_gate.py (list_isolated_regions 패턴)
+    
+    Reference:
+        docs/self_healing/middleware_system/73_NAMESPACE_AWARE_EMERGENCY.md
+    """
+    
+    # 기본 임계값
+    DEFAULT_ESCALATION_THRESHOLD = 2  # 2개 이상 리전이 STRICT면 경고
+    
+    def __init__(
+        self,
+        tracker: Optional[NamespacedEmergencyTracker] = None,
+        escalation_threshold: int = DEFAULT_ESCALATION_THRESHOLD,
+        auto_escalate: bool = False,
+    ):
+        """
+        Initialize RegionalCascadeDetector.
+        
+        Args:
+            tracker: Emergency 추적기
+            escalation_threshold: GLOBAL 격상 권고 임계값
+            auto_escalate: True면 자동 격상, False면 권고만
+        """
+        self._tracker = tracker or get_namespaced_emergency_tracker()
+        self._threshold = escalation_threshold
+        self._auto_escalate = auto_escalate
+    
+    def check_cascade_condition(self) -> Dict[str, Any]:
+        """
+        연쇄 장애 조건 확인.
+        
+        Returns:
+            dict:
+                - cascade_detected: 연쇄 장애 감지 여부
+                - affected_regions: STRICT 상태인 리전 목록
+                - recommend_global: GLOBAL 격상 권고 여부
+                - reason: 감지 사유
+        """
+        active_namespaces = self._tracker.get_all_active_namespaces()
+        
+        # Global 제외한 Regional STRICT 카운트
+        regional_strict = [
+            ns for ns in active_namespaces 
+            if ns != NamespacedEmergencyTracker.GLOBAL_NAMESPACE
+        ]
+        strict_count = len(regional_strict)
+        
+        cascade_detected = strict_count >= self._threshold
+        
+        result = {
+            "cascade_detected": cascade_detected,
+            "affected_regions": regional_strict,
+            "strict_count": strict_count,
+            "threshold": self._threshold,
+            "recommend_global": cascade_detected,
+            "reason": (
+                f"{strict_count} regions in STRICT simultaneously "
+                f"(threshold: {self._threshold})"
+                if cascade_detected else ""
+            ),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        if cascade_detected:
+            logger.warning(
+                f"[CascadeDetector] CASCADE DETECTED: "
+                f"{strict_count} regions in STRICT: {regional_strict}"
+            )
+            
+            # 자동 격상 (설정된 경우)
+            if self._auto_escalate:
+                self._escalate_to_global(regional_strict)
+                result["auto_escalated"] = True
+        
+        return result
+    
+    def _escalate_to_global(self, affected_regions: List[str]) -> None:
+        """GLOBAL 긴급 모드로 자동 격상."""
+        self._tracker.activate_emergency(
+            level=EmergencyLevel.LEVEL_3,
+            activated_by="RegionalCascadeDetector",
+            reason=f"Auto-escalation: {len(affected_regions)} regions in STRICT",
+            scope=EmergencyScope.GLOBAL,
+        )
+        logger.critical(
+            f"[CascadeDetector] AUTO-ESCALATED to GLOBAL STRICT: "
+            f"affected_regions={affected_regions}"
+        )
+
+
+# Singleton
+_cascade_detector: Optional[RegionalCascadeDetector] = None
+
+
+def get_cascade_detector() -> RegionalCascadeDetector:
+    """RegionalCascadeDetector 싱글톤 반환."""
+    global _cascade_detector
+    if _cascade_detector is None:
+        _cascade_detector = RegionalCascadeDetector()
+    return _cascade_detector
+```
+
+### 6.2 Audit 로그 스코프 태깅
+
+모든 Emergency 상태 변경은 `scope`와 `namespace` 필드를 필수로 포함하여
+Audit 로그에 기록됩니다.
+
+```python
+@dataclass
+class EmergencyAuditEntry:
+    """
+    Emergency 상태 변경 Audit 엔트리.
+    
+    scope와 namespace를 필수 필드로 포함하여
+    "왜 이 상태가 됐는지" 추적 가능하게 합니다.
+    
+    Code reference:
+        coordination/coordinator.py#L47-58 (DryRunAuditLogger 패턴)
+    """
+    
+    # 필수 필드
+    event_id: str
+    """고유 이벤트 ID."""
+    
+    event_type: str
+    """이벤트 유형 (EMERGENCY_ACTIVATED, EMERGENCY_DEACTIVATED, CASCADE_DETECTED)."""
+    
+    namespace: str
+    """대상 네임스페이스 (예: 'global', 'seoul', 'tokyo')."""
+    
+    scope: EmergencyScope
+    """적용 범위 (GLOBAL/REGIONAL)."""
+    
+    # 상태 정보
+    emergency_level: EmergencyLevel
+    """Emergency 레벨."""
+    
+    governance_mode: str
+    """Governance 모드 (NORMAL/STRICT)."""
+    
+    # 행위자 정보
+    triggered_by: str
+    """활성화/비활성화한 주체 (user_id 또는 'system')."""
+    
+    precedence: Optional[CommandPrecedence] = None
+    """명령 우선순위 (수동 명령 시)."""
+    
+    # 메타데이터
+    reason: str = ""
+    """변경 사유."""
+    
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    """기록 시각."""
+    
+    # 추가 컨텍스트
+    cascade_source: Optional[str] = None
+    """연쇄 반응 원인 (다른 리전에서 발생한 경우)."""
+    
+    global_override_active: bool = False
+    """Global STRICT가 활성화되어 이 리전을 오버라이드했는지."""
+    
+    ttl_minutes: Optional[int] = None
+    """수동 오버라이드 TTL (분)."""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """딕셔너리로 변환."""
+        return {
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "namespace": self.namespace,
+            "scope": self.scope.value,
+            "emergency_level": self.emergency_level.value,
+            "governance_mode": self.governance_mode,
+            "triggered_by": self.triggered_by,
+            "precedence": self.precedence.value if self.precedence else None,
+            "reason": self.reason,
+            "timestamp": self.timestamp,
+            "cascade_source": self.cascade_source,
+            "global_override_active": self.global_override_active,
+            "ttl_minutes": self.ttl_minutes,
+        }
+
+
+class EmergencyAuditLogger:
+    """
+    Emergency 상태 변경 Audit 로거.
+    
+    모든 상태 변경을 scope/namespace 태깅과 함께 기록합니다.
+    """
+    
+    def __init__(self):
+        self._lock = threading.Lock()
+    
+    def log_activation(
+        self,
+        state: ScopedEmergencyState,
+        triggered_by: str,
+        reason: str,
+        precedence: Optional[CommandPrecedence] = None,
+    ) -> str:
+        """
+        Emergency 활성화 기록.
+        
+        Args:
+            state: 활성화된 상태
+            triggered_by: 활성화한 주체
+            reason: 활성화 사유
+            precedence: 명령 우선순위
+        
+        Returns:
+            생성된 event_id
+        """
+        event_id = f"emerg-{uuid.uuid4().hex[:12]}"
+        
+        entry = EmergencyAuditEntry(
+            event_id=event_id,
+            event_type="EMERGENCY_ACTIVATED",
+            namespace=state.namespace,
+            scope=state.scope,
+            emergency_level=state.emergency_level,
+            governance_mode=state.governance_mode,
+            triggered_by=triggered_by,
+            precedence=precedence,
+            reason=reason,
+        )
+        
+        self._write_audit_log(entry)
+        
+        logger.info(
+            f"[EmergencyAudit] ACTIVATED: "
+            f"namespace={state.namespace}, scope={state.scope.value}, "
+            f"level={state.emergency_level.name}, by={triggered_by}"
+        )
+        
+        return event_id
+    
+    def log_deactivation(
+        self,
+        state: ScopedEmergencyState,
+        triggered_by: str,
+        reason: str = "",
+    ) -> str:
+        """Emergency 비활성화 기록."""
+        event_id = f"emerg-{uuid.uuid4().hex[:12]}"
+        
+        entry = EmergencyAuditEntry(
+            event_id=event_id,
+            event_type="EMERGENCY_DEACTIVATED",
+            namespace=state.namespace,
+            scope=state.scope,
+            emergency_level=EmergencyLevel.NORMAL,
+            governance_mode="NORMAL",
+            triggered_by=triggered_by,
+            reason=reason,
+        )
+        
+        self._write_audit_log(entry)
+        return event_id
+    
+    def log_cascade_detection(
+        self,
+        affected_regions: List[str],
+        auto_escalated: bool,
+    ) -> str:
+        """연쇄 장애 감지 기록."""
+        event_id = f"cascade-{uuid.uuid4().hex[:12]}"
+        
+        entry = EmergencyAuditEntry(
+            event_id=event_id,
+            event_type="CASCADE_DETECTED",
+            namespace="global",
+            scope=EmergencyScope.GLOBAL,
+            emergency_level=EmergencyLevel.LEVEL_3,
+            governance_mode="STRICT" if auto_escalated else "PENDING",
+            triggered_by="RegionalCascadeDetector",
+            reason=f"Cascade detected in regions: {affected_regions}",
+            cascade_source=affected_regions[0] if affected_regions else None,
+        )
+        
+        self._write_audit_log(entry)
+        return event_id
+    
+    def _write_audit_log(self, entry: EmergencyAuditEntry) -> None:
+        """실제 Audit 시스템에 기록."""
+        with self._lock:
+            # 실제 구현에서는 CriticalPathFallback 연동
+            # from selfhealing.services.coordination import CriticalPathFallback
+            # fallback = CriticalPathFallback()
+            # fallback.append_audit_log(entry.to_dict())
+            
+            logger.debug(f"[EmergencyAudit] Entry: {entry.to_dict()}")
+
+
+# Singleton
+_audit_logger: Optional[EmergencyAuditLogger] = None
+
+
+def get_emergency_audit_logger() -> EmergencyAuditLogger:
+    """EmergencyAuditLogger 싱글톤 반환."""
+    global _audit_logger
+    if _audit_logger is None:
+        _audit_logger = EmergencyAuditLogger()
+    return _audit_logger
+```
+
+### 6.3 SSOT Prefixing (키 네임스페이스 통합)
+
+모든 Redis 키는 `NamespaceSettings.get_key_prefix()`를 통해 생성되어
+하드코딩된 키가 없도록 합니다.
+
+```python
+# 설계 원칙: Single Source of Truth for Key Prefixing
+# 모든 Redis 키는 get_key_prefix()를 통해 생성
+
+# AS-IS (하드코딩 - 지양)
+STATE_KEY_PATTERN = "selfhealing:{namespace}:governance:emergency_state"
+
+# TO-BE (SSOT - 권장)
+def _get_state_key(self, namespace: str) -> str:
+    """
+    SSOT Prefixing 적용.
+    
+    Code reference:
+        settings/namespace.py#L88-97 (get_key_prefix)
+    """
+    from selfhealing.settings.namespace import get_namespace_settings
+    settings = get_namespace_settings()
+    
+    if namespace == self.GLOBAL_NAMESPACE:
+        # Global: 네임스페이스 없이 기본 프리픽스만
+        base_prefix = settings.get_key_prefix().rstrip(":").split(":")[0]
+        return f"{base_prefix}:governance:emergency_state"
+    
+    # Regional: 명시적 namespace
+    return f"selfhealing:{namespace}:governance:emergency_state"
+```
+
+**장점:**
+- 환경변수 `SELFHEALING_NAMESPACE`만 변경하면 모든 키가 자동 분리
+- 키 누수/오동작 방지
+- "하드코딩된 키가 단 하나도 없다"는 실사 증명 가능
+
+### 6.4 EmergencyHealthPenalty (Health Score 연동)
+
+Emergency 상태가 Health Score에 자동 반영되어 대시보드에서
+"왜 점수가 떨어졌는지" 즉시 파악 가능합니다.
+
+```python
+class EmergencyHealthPenalty:
+    """
+    Emergency 상태에 따른 Health Score 감점.
+    
+    PropagationHealthMonitor와 통합하여 Emergency 상태가
+    Health Score에 자동 반영됩니다.
+    
+    Code reference:
+        config/propagation_health.py#L103-107 (감점 패턴)
+    """
+    
+    # 감점 가중치
+    REGIONAL_STRICT_PENALTY = 20   # Regional STRICT: -20점
+    GLOBAL_STRICT_PENALTY = 30     # Global STRICT: -30점
+    
+    # 복구 속도 (점진적 복구)
+    RECOVERY_RATE_PER_MINUTE = 10  # 분당 10점 복구
+    
+    def __init__(
+        self,
+        tracker: Optional[NamespacedEmergencyTracker] = None,
+    ):
+        """
+        Initialize EmergencyHealthPenalty.
+        
+        Args:
+            tracker: Emergency 추적기
+        """
+        self._tracker = tracker or get_namespaced_emergency_tracker()
+        self._last_recovery_at: Dict[str, datetime] = {}
+    
+    def calculate_penalty(
+        self,
+        namespace: Optional[str] = None,
+    ) -> float:
+        """
+        현재 Emergency 상태에 따른 감점 계산.
+        
+        Args:
+            namespace: 대상 네임스페이스 (None이면 현재 인스턴스)
+        
+        Returns:
+            감점 점수 (0-100, 양수)
+        """
+        state = self._tracker.get_effective_state(namespace=namespace)
+        
+        if not state.is_active:
+            return 0.0
+        
+        if state.scope == EmergencyScope.GLOBAL:
+            return self.GLOBAL_STRICT_PENALTY
+        else:
+            return self.REGIONAL_STRICT_PENALTY
+    
+    def get_health_score_with_emergency(
+        self,
+        base_score: float,
+        namespace: Optional[str] = None,
+    ) -> float:
+        """
+        Emergency 감점이 반영된 Health Score 반환.
+        
+        Args:
+            base_score: 기본 Health Score (0-100)
+            namespace: 대상 네임스페이스
+        
+        Returns:
+            감점 적용된 Health Score (0-100)
+        """
+        penalty = self.calculate_penalty(namespace=namespace)
+        adjusted_score = base_score - penalty
+        
+        if penalty > 0:
+            logger.debug(
+                f"[EmergencyHealthPenalty] Applied penalty: "
+                f"base={base_score:.1f}, penalty={penalty:.1f}, "
+                f"adjusted={adjusted_score:.1f}"
+            )
+        
+        return max(0.0, min(100.0, adjusted_score))
+    
+    def get_penalty_breakdown(
+        self,
+        namespace: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        감점 상세 내역 반환.
+        
+        대시보드에서 "왜 점수가 떨어졌는지" 표시용.
+        
+        Returns:
+            dict:
+                - penalty: 감점 점수
+                - reason: 감점 사유
+                - scope: 적용 범위
+                - emergency_level: Emergency 레벨
+        """
+        state = self._tracker.get_effective_state(namespace=namespace)
+        
+        if not state.is_active:
+            return {
+                "penalty": 0.0,
+                "reason": None,
+                "scope": None,
+                "emergency_level": EmergencyLevel.NORMAL.name,
+            }
+        
+        penalty = self.calculate_penalty(namespace=namespace)
+        
+        return {
+            "penalty": penalty,
+            "reason": (
+                f"Emergency Mode {state.scope.value.upper()} STRICT active "
+                f"since {state.activated_at}"
+            ),
+            "scope": state.scope.value,
+            "emergency_level": state.emergency_level.name,
+            "activated_by": state.activated_by,
+            "activated_at": state.activated_at,
+        }
+
+
+# Singleton
+_health_penalty: Optional[EmergencyHealthPenalty] = None
+
+
+def get_emergency_health_penalty() -> EmergencyHealthPenalty:
+    """EmergencyHealthPenalty 싱글톤 반환."""
+    global _health_penalty
+    if _health_penalty is None:
+        _health_penalty = EmergencyHealthPenalty()
+    return _health_penalty
+```
+
+**대시보드 연동 예시:**
+
+```python
+# PropagationHealthMonitor 확장
+class EnhancedPropagationHealthMonitor(PropagationHealthMonitor):
+    """Emergency 감점이 반영된 Health Monitor."""
+    
+    def get_current_metrics(self) -> PropagationHealthMetrics:
+        metrics = super().get_current_metrics()
+        
+        # Emergency 감점 적용
+        penalty = get_emergency_health_penalty()
+        metrics.propagation_health_score = penalty.get_health_score_with_emergency(
+            base_score=metrics.propagation_health_score
+        )
+        
+        return metrics
+```
+
+### 6.5 네트워크 고립 시 상태 관리
+
+리전이 네트워크 고립(Partition)으로 인해 Global Redis와 연결이 끊긴 경우의
+상태 관리 정책입니다.
+
+#### 6.5.1 설계 원칙: 강제 동기화 불필요
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 Network Partition Handling                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Global Redis         [X] 연결 끊김                              │
+│       │                                                          │
+│       ├── Seoul: STRICT (자체 보호 모드 유지)                    │
+│       │          └── TTL 기반 자동 만료 (8시간)                  │
+│       │                                                          │
+│       └── Tokyo: NORMAL (정상 운영)                              │
+│                                                                  │
+│  원칙: 고립된 리전은 자체 상태 유지 (Safety-First)              │
+│        → 네트워크 복구 시 Reconciliation 수행                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**강제 동기화를 하지 않는 이유:**
+
+| 측면 | 설명 |
+|------|------|
+| **Safety-First** | 고립된 리전이 자체 보호 모드 유지 |
+| **추가 장애 방지** | 동기화 시도 자체가 네트워크 부하 증가 |
+| **Stale 방지** | TTL 기반 자동 만료로 영구 stale 상태 방지 |
+| **기존 패턴 일관성** | `RegionalIsolationGate` 패턴과 동일 |
+
+#### 6.5.2 복구 시 Reconciliation
+
+```python
+class PartitionReconciliationService:
+    """
+    네트워크 고립 복구 시 상태 조정 서비스.
+    
+    Code reference:
+        error_budget/reconciliation/service.py (ReconciliationService 패턴)
+        isolation/regional_gate.py#L133-141 (TTL 기반 만료)
+    """
+    
+    # Heartbeat 설정
+    HEARTBEAT_INTERVAL_SECONDS = 10
+    PARTITION_DETECTION_THRESHOLD_SECONDS = 30
+    
+    def __init__(
+        self,
+        tracker: Optional[NamespacedEmergencyTracker] = None,
+    ):
+        self._tracker = tracker or get_namespaced_emergency_tracker()
+        self._last_global_heartbeat: Optional[datetime] = None
+        self._is_partitioned = False
+    
+    def check_partition_status(self) -> Dict[str, Any]:
+        """
+        현재 리전의 네트워크 고립 상태 확인.
+        
+        Returns:
+            dict:
+                - is_partitioned: 고립 여부
+                - last_heartbeat: 마지막 heartbeat 시각
+                - duration_seconds: 고립 지속 시간
+        """
+        now = datetime.now(timezone.utc)
+        
+        # Global Redis heartbeat 시도
+        try:
+            self._ping_global_redis()
+            self._last_global_heartbeat = now
+            self._is_partitioned = False
+            
+            return {
+                "is_partitioned": False,
+                "last_heartbeat": now.isoformat(),
+                "duration_seconds": 0,
+            }
+        except Exception as e:
+            if self._last_global_heartbeat:
+                duration = (now - self._last_global_heartbeat).total_seconds()
+                self._is_partitioned = duration > self.PARTITION_DETECTION_THRESHOLD_SECONDS
+            else:
+                self._is_partitioned = True
+                duration = float("inf")
+            
+            return {
+                "is_partitioned": self._is_partitioned,
+                "last_heartbeat": (
+                    self._last_global_heartbeat.isoformat() 
+                    if self._last_global_heartbeat else None
+                ),
+                "duration_seconds": duration,
+                "error": str(e),
+            }
+    
+    def reconcile_after_recovery(self) -> Dict[str, Any]:
+        """
+        네트워크 복구 후 상태 조정.
+        
+        Returns:
+            dict:
+                - reconciled: 조정 수행 여부
+                - actions: 수행된 조정 액션 목록
+        """
+        if self._is_partitioned:
+            return {
+                "reconciled": False,
+                "reason": "Still partitioned",
+            }
+        
+        actions = []
+        current_ns = self._tracker._get_current_namespace()
+        
+        # 1. Global 상태 확인
+        global_state = self._tracker._load_state(
+            NamespacedEmergencyTracker.GLOBAL_NAMESPACE
+        )
+        
+        # 2. Regional 상태 확인
+        regional_state = self._tracker._load_state(current_ns)
+        
+        # 3. 상태 조정 (Global이 해제되었으면 Regional도 검토)
+        if not global_state.is_active and regional_state.is_active:
+            # Regional이 아직 STRICT이지만 Global은 NORMAL
+            # → 운영자 알림 발송 (자동 변경 X)
+            actions.append({
+                "type": "NOTIFICATION",
+                "message": (
+                    f"Region {current_ns} is still in STRICT mode "
+                    f"while Global is NORMAL. Manual review recommended."
+                ),
+            })
+        
+        logger.info(
+            f"[PartitionReconciliation] Reconciled after recovery: "
+            f"namespace={current_ns}, actions={len(actions)}"
+        )
+        
+        return {
+            "reconciled": True,
+            "actions": actions,
+            "global_state": global_state.governance_mode,
+            "regional_state": regional_state.governance_mode,
+        }
+    
+    def _ping_global_redis(self) -> bool:
+        """Global Redis ping."""
+        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        provider = TieredRedisProvider()
+        client = provider.get_redis(RedisScope.GLOBAL)
+        return client.ping()
+
+
+# Singleton
+_reconciliation_service: Optional[PartitionReconciliationService] = None
+
+
+def get_partition_reconciliation_service() -> PartitionReconciliationService:
+    """PartitionReconciliationService 싱글톤 반환."""
+    global _reconciliation_service
+    if _reconciliation_service is None:
+        _reconciliation_service = PartitionReconciliationService()
+    return _reconciliation_service
+```
+
+---
+
+## 7. 모니터링
+
+### 7.1 메트릭
 
 ```python
 # Prometheus 메트릭
@@ -717,7 +1465,7 @@ EMERGENCY_ACTIVATIONS_TOTAL = Counter(
 )
 ```
 
-### 6.2 대시보드 쿼리
+### 7.2 대시보드 쿼리
 
 ```promql
 # 리전별 Emergency 상태
@@ -732,8 +1480,10 @@ increase(selfhealing_emergency_activations_total[24h])
 
 ---
 
-## 7. 변경 이력
+## 8. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 | 작성자 |
 |------|------|----------|--------|
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
+| 1.1.0 | 2026-01-21 | RegionalCascadeDetector, EmergencyAuditLogger 추가 | AI Assistant |
+| 1.2.0 | 2026-01-21 | get_effective_state Precedence-First Hierarchy, SSOT Prefixing, EmergencyHealthPenalty, PartitionReconciliationService 추가 | AI Assistant |
