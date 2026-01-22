@@ -1,9 +1,9 @@
 # 75. Crisis Budget Multiplier (위기 가중치 버짓팅)
 
-> **Version**: 2.4.0  
+> **Version**: 2.5.0  
 > **Created**: 2026-01-21  
-> **Updated**: 2026-01-22  
-> **Status**: Phase 2-A, 2-B Implemented  
+> **Updated**: 2026-01-23  
+> **Status**: Phase 2-A, 2-B, 2-C, 2-D Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 0. 확장 기능 요약
@@ -12,9 +12,9 @@
 
 | # | 기능명 | 카테고리 | 설명 | 파일 | 상태 |
 |---|--------|----------|------|------|------|
-| 1 | **EmergencyBackfillCalculator** | 리뷰①: 소급 적용 | 장애 선포 전 에러에 가중치 소급 적용 | `backfill.py` | Phase 2 |
-| 2 | **MultiplierSmoother** | 리뷰②: 평활화 | 레벨 전환 시 가중치 점진적 변경 | `smoother.py` | Phase 2 |
-| 3 | **DomainPropagationMultiplier** | 리뷰③: 도메인 전파 | 의존성 그래프 기반 가중치 감쇠 전파 | `propagation.py` | Phase 2 |
+| 1 | **EmergencyBackfillCalculator** | 리뷰①: 소급 적용 | 장애 선포 전 에러에 가중치 소급 적용 | `backfill.py` | ✅ Phase 2-C |
+| 2 | **MultiplierSmoother** | 리뷰②: 평활화 | 레벨 전환 시 가중치 점진적 변경 | `smoother.py` | ✅ Phase 2-C |
+| 3 | **DomainPropagationMultiplier** | 리뷰③: 도메인 전파 | 의존성 그래프 기반 가중치 감쇠 전파 | `propagation.py` | ✅ Phase 2-C |
 | 4 | **CanaryMultiplierRollout** | 리뷰④: 카나리 배포 | 가중치 설정값의 안전한 점진 배포 | `canary_multiplier.py` | Phase 2 |
 | 5 | **CheckOnUseMultiplierProvider** | Q1: 컨텍스트 획득 | 매 사용 시점에 Emergency Level 조회 | `provider.py` | ✅ Phase 2-A |
 | 6 | **@domain_tag 데코레이터** | Q2: 도메인 식별 | 에러 발생 시 도메인 자동 태깅 | `decorators/domain_tag.py` | ✅ Phase 2-A |
@@ -24,7 +24,7 @@
 | 10 | **AdminOverrideInvalidator** | Q6: Override 충돌 | Admin Override 시 캐시 즉시 무효화 | `admin_invalidator.py` | Phase 2 |
 | 11 | **통합 Cap 상수 (SSOT)** | Q7: Cap 통합 | 모든 가중치 Cap의 단일 진실 공급원 | `constants.py` | ✅ Phase 2-A |
 | 12 | **BudgetRefundProposalService** | Q8: 오탐 환불 | 오탐 시 초과 소진 버짓 환불 제안 | `refund.py` | Phase 2 |
-| 13 | **EscalationTriggeredInvalidation** | 추가: 격상 무효화 | Emergency 격상 시 캐시 푸시 무효화 | `escalation_invalidation.py` | Phase 2 |
+| 13 | **EscalationTriggeredInvalidation** | 추가: 격상 무효화 | Emergency 격상 시 캐시 푸시 무효화 | `escalation_invalidation.py` | ✅ Phase 2-D |
 | 14 | **MultiplierPrecedenceResolver** | 추가: 충돌 해결 | Level/Domain 가중치 결합 전략 | `precedence.py` | ✅ Phase 2-B |
 | 15 | **DomainContext 컨텍스트 매니저** | Q2 보조 | with 문 기반 도메인 컨텍스트 | `decorators/domain_tag.py` | ✅ Phase 2-A |
 
@@ -118,8 +118,8 @@ Phase 2-B: 핵심 로직 (Week 2) ✅ Implemented
               tests/unit/services/error_budget/test_atomic_consumer.py (14개 통과)
               tests/unit/services/error_budget/test_weighted_audit.py (18개 통과)
 
-Phase 2-C: 고급 기능 (Week 3)
-────────────────────────────
+Phase 2-C: 고급 기능 (Week 3) ✅ Implemented
+────────────────────────────────────────────
   ┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
   │ 1. backfill.py        │   │ 2. smoother.py        │   │ 3. propagation.py     │
   │ (Backfill)            │   │ (Smoother)            │   │ (Propagation)         │
@@ -130,14 +130,22 @@ Phase 2-C: 고급 기능 (Week 3)
                                                           │ visited Set 사용    │
                                                           └─────────────────────┘
 
-Phase 2-D: 운영 기능 (Week 4)
-────────────────────────────
+  구현 파일: services/error_budget/backfill.py, smoother.py, propagation.py
+  테스트 파일: tests/unit/services/error_budget/test_backfill.py (15개 통과)
+              tests/unit/services/error_budget/test_smoother.py (20개 통과)
+              tests/unit/services/error_budget/test_propagation.py (25개 통과)
+
+Phase 2-D: 운영 기능 (Week 4) ✅ Implemented
+────────────────────────────────────────────
   ┌───────────────────────────────────────────────────────────────────────────┐
   │ 13. escalation_invalidation.py (EscalationTriggeredInvalidation)          │
   │     - CrisisMultiplierProvider.invalidate_cache() 연동                    │
   │     - 이벤트 버스: EMERGENCY_LEVEL_CHANGED 구독                            │
   │     - 격상(Escalation) 시에만 Push 무효화 (하강은 TTL 대기)               │
   └───────────────────────────────────────────────────────────────────────────┘
+
+  구현 파일: services/error_budget/escalation_invalidation.py
+  테스트 파일: tests/unit/services/error_budget/test_escalation_invalidation.py (27개 통과)
                           │
   ┌───────────────────────┼───────────────────────┐
   ▼                       ▼                       ▼
