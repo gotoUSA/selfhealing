@@ -1,9 +1,9 @@
 # 75. Crisis Budget Multiplier (위기 가중치 버짓팅)
 
-> **Version**: 2.3.0  
+> **Version**: 2.4.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: Phase 1 Implemented  
+> **Status**: Phase 2-A, 2-B Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 0. 확장 기능 요약
@@ -16,17 +16,17 @@
 | 2 | **MultiplierSmoother** | 리뷰②: 평활화 | 레벨 전환 시 가중치 점진적 변경 | `smoother.py` | Phase 2 |
 | 3 | **DomainPropagationMultiplier** | 리뷰③: 도메인 전파 | 의존성 그래프 기반 가중치 감쇠 전파 | `propagation.py` | Phase 2 |
 | 4 | **CanaryMultiplierRollout** | 리뷰④: 카나리 배포 | 가중치 설정값의 안전한 점진 배포 | `canary_multiplier.py` | Phase 2 |
-| 5 | **CheckOnUseMultiplierProvider** | Q1: 컨텍스트 획득 | 매 사용 시점에 Emergency Level 조회 | `provider.py` | Phase 2 |
-| 6 | **@domain_tag 데코레이터** | Q2: 도메인 식별 | 에러 발생 시 도메인 자동 태깅 | `decorators/domain_tag.py` | Phase 2 |
-| 7 | **AtomicBudgetConsumer** | Q3: 원자성 보장 | Redis Lock 기반 버짓 소진 원자성 | `atomic_consumer.py` | Phase 2 |
-| 8 | **WeightedBudgetAuditEntry** | Q4: Hash chain 무결성 | 가중치 근거 포함 무결성 로그 스키마 | `weighted_audit.py` | Phase 2 |
+| 5 | **CheckOnUseMultiplierProvider** | Q1: 컨텍스트 획득 | 매 사용 시점에 Emergency Level 조회 | `provider.py` | ✅ Phase 2-A |
+| 6 | **@domain_tag 데코레이터** | Q2: 도메인 식별 | 에러 발생 시 도메인 자동 태깅 | `decorators/domain_tag.py` | ✅ Phase 2-A |
+| 7 | **AtomicBudgetConsumer** | Q3: 원자성 보장 | Redis Lock 기반 버짓 소진 원자성 | `atomic_consumer.py` | ✅ Phase 2-B |
+| 8 | **WeightedBudgetAuditEntry** | Q4: Hash chain 무결성 | 가중치 근거 포함 무결성 로그 스키마 | `weighted_audit.py` | ✅ Phase 2-B |
 | 9 | **CRDTBudgetSynchronizer** | Q5: 글로벌 동기화 | 멀티 리전 버짓 상태 동기화 | `crdt_sync.py` | Phase 2 |
 | 10 | **AdminOverrideInvalidator** | Q6: Override 충돌 | Admin Override 시 캐시 즉시 무효화 | `admin_invalidator.py` | Phase 2 |
-| 11 | **통합 Cap 상수 (SSOT)** | Q7: Cap 통합 | 모든 가중치 Cap의 단일 진실 공급원 | `constants.py` | Phase 2 |
+| 11 | **통합 Cap 상수 (SSOT)** | Q7: Cap 통합 | 모든 가중치 Cap의 단일 진실 공급원 | `constants.py` | ✅ Phase 2-A |
 | 12 | **BudgetRefundProposalService** | Q8: 오탐 환불 | 오탐 시 초과 소진 버짓 환불 제안 | `refund.py` | Phase 2 |
 | 13 | **EscalationTriggeredInvalidation** | 추가: 격상 무효화 | Emergency 격상 시 캐시 푸시 무효화 | `escalation_invalidation.py` | Phase 2 |
-| 14 | **MultiplierPrecedenceResolver** | 추가: 충돌 해결 | Level/Domain 가중치 결합 전략 | `precedence.py` | Phase 2 |
-| 15 | **DomainContext 컨텍스트 매니저** | Q2 보조 | with 문 기반 도메인 컨텍스트 | `decorators/domain_tag.py` | Phase 2 |
+| 14 | **MultiplierPrecedenceResolver** | 추가: 충돌 해결 | Level/Domain 가중치 결합 전략 | `precedence.py` | ✅ Phase 2-B |
+| 15 | **DomainContext 컨텍스트 매니저** | Q2 보조 | with 문 기반 도메인 컨텍스트 | `decorators/domain_tag.py` | ✅ Phase 2-A |
 
 ### 0.2 파일 구조
 
@@ -79,7 +79,7 @@ Phase 1: 핵심 기반 ✅ (2026-01-22 구현 완료)
   구현 파일: services/error_budget/multiplier.py
   테스트 파일: tests/unit/services/test_crisis_multiplier.py (30개 통과)
 
-Phase 2-A: 기반 인프라 (Week 1)
+Phase 2-A: 기반 인프라 (Week 1) ✅ Implemented
 ────────────────────────────────
   ┌─────────────────────────────────────────────────────────┐
   │ 11. constants.py (SSOT)                                 │ ◀── 모든 컴포넌트가 참조
@@ -95,7 +95,12 @@ Phase 2-A: 기반 인프라 (Week 1)
   │ 6. decorators/domain_tag.py (@domain_tag)               │ ◀── 도메인 식별 기반
   └─────────────────────────────────────────────────────────┘
 
-Phase 2-B: 핵심 로직 (Week 2)
+  구현 파일: services/error_budget/constants.py, provider.py, decorators/domain_tag.py
+  테스트 파일: tests/unit/services/error_budget/test_constants.py (20개 통과)
+              tests/unit/services/error_budget/test_provider.py (16개 통과)
+              tests/unit/decorators/test_domain_tag.py (21개 통과)
+
+Phase 2-B: 핵심 로직 (Week 2) ✅ Implemented
 ────────────────────────────
   ┌─────────────────────────┐   ┌─────────────────────────┐
   │ 14. precedence.py       │   │ 7. atomic_consumer.py   │
@@ -107,6 +112,11 @@ Phase 2-B: 핵심 로직 (Week 2)
   ┌─────────────────────────────────────────────────────────┐
   │ 8. weighted_audit.py (WeightedBudgetAuditEntry)         │ ◀── Hash Chain 통합
   └─────────────────────────────────────────────────────────┘
+
+  구현 파일: services/error_budget/precedence.py, atomic_consumer.py, weighted_audit.py
+  테스트 파일: tests/unit/services/error_budget/test_precedence.py (26개 통과)
+              tests/unit/services/error_budget/test_atomic_consumer.py (14개 통과)
+              tests/unit/services/error_budget/test_weighted_audit.py (18개 통과)
 
 Phase 2-C: 고급 기능 (Week 3)
 ────────────────────────────
