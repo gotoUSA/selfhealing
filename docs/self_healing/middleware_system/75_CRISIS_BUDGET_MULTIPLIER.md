@@ -840,6 +840,575 @@ class TestCrisisMultiplierIntegration:
         assert new_status.current_crisis_multiplier == 5.0
 ```
 
+### 5.3 Phase 2 테스트 목록
+
+각 Phase 2 컴포넌트에 대한 테스트 파일 구조:
+
+```
+packages/selfhealing-python/tests/unit/services/error_budget/
+├── __init__.py
+├── test_constants.py              # 11. 통합 Cap 상수
+├── test_provider.py               # 5. CheckOnUseMultiplierProvider
+├── test_backfill.py               # 1. EmergencyBackfillCalculator
+├── test_smoother.py               # 2. MultiplierSmoother
+├── test_propagation.py            # 3. DomainPropagationMultiplier
+├── test_canary_multiplier.py      # 4. CanaryMultiplierRollout
+├── test_atomic_consumer.py        # 7. AtomicBudgetConsumer
+├── test_weighted_audit.py         # 8. WeightedBudgetAuditEntry
+├── test_crdt_sync.py              # 9. CRDTBudgetSynchronizer
+├── test_admin_invalidator.py      # 10. AdminOverrideInvalidator
+├── test_refund.py                 # 12. BudgetRefundProposalService
+├── test_escalation_invalidation.py # 13. EscalationTriggeredInvalidation
+└── test_precedence.py             # 14. MultiplierPrecedenceResolver
+
+packages/selfhealing-python/tests/unit/decorators/
+└── test_domain_tag.py             # 6, 15. @domain_tag, DomainContext
+```
+
+#### 5.3.1 Phase 2-A 테스트 (기반 인프라)
+
+```python
+# tests/unit/services/error_budget/test_constants.py
+class TestBudgetConstants:
+    """통합 Cap 상수 테스트."""
+    
+    def test_max_crisis_multiplier_cap_value(self):
+        """MAX_CRISIS_MULTIPLIER_CAP = 10.0 확인."""
+        from selfhealing.services.error_budget.constants import (
+            MAX_CRISIS_MULTIPLIER_CAP,
+        )
+        assert MAX_CRISIS_MULTIPLIER_CAP == 10.0
+    
+    def test_max_domain_multiplier_value(self):
+        """MAX_DOMAIN_MULTIPLIER = 24.0 확인."""
+        from selfhealing.services.error_budget.constants import (
+            MAX_DOMAIN_MULTIPLIER,
+        )
+        assert MAX_DOMAIN_MULTIPLIER == 24.0
+
+
+# tests/unit/services/error_budget/test_provider.py
+class TestCheckOnUseMultiplierProvider:
+    """CheckOnUseMultiplierProvider 테스트."""
+    
+    def test_returns_multiplier_context(self):
+        """MultiplierContext 반환 확인."""
+        provider = CheckOnUseMultiplierProvider()
+        ctx = provider.get_current_multiplier(namespace="test")
+        
+        assert isinstance(ctx, MultiplierContext)
+        assert ctx.level_multiplier >= 1.0
+    
+    def test_realtime_level_lookup(self, mock_emergency_tracker):
+        """매 호출마다 실시간 조회 확인."""
+        mock_emergency_tracker.get_level.side_effect = [
+            EmergencyLevel.NORMAL,
+            EmergencyLevel.LEVEL_3,
+        ]
+        
+        provider = CheckOnUseMultiplierProvider(
+            emergency_tracker=mock_emergency_tracker
+        )
+        
+        ctx1 = provider.get_current_multiplier()
+        ctx2 = provider.get_current_multiplier()
+        
+        assert ctx1.level_multiplier == 1.0
+        assert ctx2.level_multiplier == 5.0
+
+
+# tests/unit/decorators/test_domain_tag.py
+class TestDomainTag:
+    """@domain_tag 데코레이터 테스트."""
+    
+    def test_sets_domain_context(self):
+        """함수 실행 중 도메인 컨텍스트 설정 확인."""
+        from selfhealing.decorators.domain_tag import (
+            domain_tag, get_current_domain,
+        )
+        
+        @domain_tag("payment")
+        def process_payment():
+            return get_current_domain()
+        
+        assert process_payment() == "payment"
+    
+    def test_context_cleared_after_function(self):
+        """함수 종료 후 컨텍스트 해제 확인."""
+        from selfhealing.decorators.domain_tag import (
+            domain_tag, get_current_domain,
+        )
+        
+        @domain_tag("payment")
+        def process_payment():
+            pass
+        
+        process_payment()
+        assert get_current_domain() is None
+    
+    def test_domain_context_manager(self):
+        """DomainContext with 문 테스트."""
+        from selfhealing.decorators.domain_tag import (
+            DomainContext, get_current_domain,
+        )
+        
+        with DomainContext("order"):
+            assert get_current_domain() == "order"
+        
+        assert get_current_domain() is None
+```
+
+#### 5.3.2 Phase 2-B 테스트 (핵심 로직)
+
+```python
+# tests/unit/services/error_budget/test_precedence.py
+class TestMultiplierPrecedenceResolver:
+    """MultiplierPrecedenceResolver 테스트."""
+    
+    def test_max_strategy(self):
+        """MAX 전략: 더 큰 값 선택."""
+        resolver = MultiplierPrecedenceResolver(
+            config=MultiplierPrecedenceConfig(
+                combine_strategy=MultiplierCombineStrategy.MAX
+            )
+        )
+        
+        result = resolver.resolve(level_multiplier=3.0, domain_multiplier=5.0)
+        assert result == 5.0
+    
+    def test_cap_applied(self):
+        """Cap 초과 시 제한."""
+        resolver = MultiplierPrecedenceResolver(
+            config=MultiplierPrecedenceConfig(
+                combine_strategy=MultiplierCombineStrategy.MULTIPLY,
+                max_combined_multiplier=10.0,
+            )
+        )
+        
+        # 3.0 * 5.0 = 15.0 → 10.0으로 제한
+        result = resolver.resolve(level_multiplier=3.0, domain_multiplier=5.0)
+        assert result == 10.0
+
+
+# tests/unit/services/error_budget/test_atomic_consumer.py
+class TestAtomicBudgetConsumer:
+    """AtomicBudgetConsumer 테스트."""
+    
+    def test_acquire_and_release_lock(self, mock_redis):
+        """Lock 획득 및 해제."""
+        consumer = AtomicBudgetConsumer(redis_client=mock_redis)
+        
+        result = consumer.consume_atomic(
+            namespace="test",
+            raw_minutes=1.0,
+            multiplier=5.0,
+            budget_key="budget:test",
+        )
+        
+        assert result.success is True
+        assert result.lock_acquired is True
+        assert result.consumed_minutes == 5.0
+    
+    def test_degraded_mode_without_lock(self, failing_redis):
+        """Lock 실패 시 degraded mode."""
+        consumer = AtomicBudgetConsumer(
+            redis_client=failing_redis,
+            allow_degraded_mode=True,
+        )
+        
+        result = consumer.consume_atomic(
+            namespace="test",
+            raw_minutes=1.0,
+            multiplier=5.0,
+            budget_key="budget:test",
+        )
+        
+        assert result.lock_acquired is False
+        # degraded mode에서도 성공 가능
+
+
+# tests/unit/services/error_budget/test_weighted_audit.py
+class TestWeightedBudgetAuditEntry:
+    """WeightedBudgetAuditEntry 테스트."""
+    
+    def test_to_dict(self):
+        """딕셔너리 변환."""
+        entry = WeightedBudgetAuditEntry(
+            raw_consumption_minutes=1.0,
+            weighted_consumption_minutes=5.0,
+            level_multiplier=5.0,
+            emergency_id="emg_123",
+        )
+        
+        data = entry.to_dict()
+        
+        assert data["raw_consumption_minutes"] == 1.0
+        assert data["weighted_consumption_minutes"] == 5.0
+        assert data["emergency_id"] == "emg_123"
+    
+    def test_to_hash_chain_entry(self):
+        """Hash Chain 엔트리 변환."""
+        entry = WeightedBudgetAuditEntry(
+            raw_consumption_minutes=1.0,
+            weighted_consumption_minutes=5.0,
+            level_multiplier=5.0,
+        )
+        
+        chain_entry = entry.to_hash_chain_entry()
+        
+        assert chain_entry["type"] == "weighted_budget_consumption"
+        assert "multipliers" in chain_entry
+```
+
+#### 5.3.3 Phase 2-C 테스트 (고급 기능)
+
+```python
+# tests/unit/services/error_budget/test_backfill.py
+class TestEmergencyBackfillCalculator:
+    """EmergencyBackfillCalculator 테스트."""
+    
+    def test_estimate_incident_start(self):
+        """장애 시작 시점 추정."""
+        calculator = EmergencyBackfillCalculator()
+        
+        declared_at = datetime(2026, 1, 22, 10, 0, 0)
+        estimated = calculator.estimate_incident_start(declared_at)
+        
+        # 기본: 30분 전
+        expected = declared_at - timedelta(minutes=30)
+        assert estimated == expected
+    
+    def test_calculate_backfill(self, mock_error_records):
+        """소급 계산."""
+        calculator = EmergencyBackfillCalculator(
+            get_error_records=lambda **kw: mock_error_records,
+        )
+        
+        result = calculator.calculate_backfill(
+            emergency_id="emg_123",
+            declared_at=datetime(2026, 1, 22, 10, 0, 0),
+            target_level=EmergencyLevel.LEVEL_3,
+        )
+        
+        assert result.errors_affected > 0
+        assert result.adjustment_delta_minutes > 0
+
+
+# tests/unit/services/error_budget/test_smoother.py
+class TestMultiplierSmoother:
+    """MultiplierSmoother 테스트."""
+    
+    def test_initial_value(self):
+        """초기값 1.0."""
+        smoother = MultiplierSmoother()
+        assert smoother.get_current_value() == 1.0
+    
+    def test_gradual_increase(self):
+        """점진적 증가."""
+        smoother = MultiplierSmoother(
+            config=MultiplierSmootherConfig(smoothing_factor=0.5)
+        )
+        
+        smoother.set_target(5.0)
+        
+        # 첫 번째 샘플링
+        value1 = smoother.get_smoothed_value()
+        assert 1.0 < value1 < 5.0
+        
+        # 목표값에 점진적으로 접근
+        assert smoother.is_transitioning()
+    
+    def test_disabled_returns_target_immediately(self):
+        """비활성화 시 즉시 목표값 반환."""
+        smoother = MultiplierSmoother(
+            config=MultiplierSmootherConfig(enabled=False)
+        )
+        
+        smoother.set_target(5.0)
+        assert smoother.get_smoothed_value() == 5.0
+
+
+# tests/unit/services/error_budget/test_propagation.py
+class TestDomainPropagationMultiplier:
+    """DomainPropagationMultiplier 테스트."""
+    
+    def test_same_domain_full_multiplier(self):
+        """동일 도메인: 전체 가중치."""
+        propagator = DomainPropagationMultiplier(
+            dependency_graph={"order": ["payment"]}
+        )
+        
+        multiplier = propagator.get_multiplier(
+            crisis_domain="payment",
+            error_domain="payment",
+            crisis_level=EmergencyLevel.LEVEL_3,
+        )
+        
+        assert multiplier == 5.0  # base_multiplier
+    
+    def test_1_hop_decayed_multiplier(self):
+        """1-hop: 50% 감쇠."""
+        propagator = DomainPropagationMultiplier(
+            config=PropagationConfig(base_multiplier=5.0, decay_per_hop=0.5),
+            dependency_graph={"order": ["payment"]}
+        )
+        
+        multiplier = propagator.get_multiplier(
+            crisis_domain="payment",
+            error_domain="order",
+            crisis_level=EmergencyLevel.LEVEL_3,
+        )
+        
+        assert multiplier == 2.5  # 5.0 * 0.5
+    
+    def test_max_hops_limit(self):
+        """max_hops 제한."""
+        propagator = DomainPropagationMultiplier(
+            config=PropagationConfig(max_hops=2),
+            dependency_graph={
+                "b": ["a"],
+                "c": ["b"],
+                "d": ["c"],  # 3-hop
+            }
+        )
+        
+        hop = propagator.get_hop_distance("a", "d")
+        assert hop == -1  # max_hops=2 초과로 연결 없음
+    
+    def test_cycle_prevention(self):
+        """순환 참조 방지 (visited Set)."""
+        propagator = DomainPropagationMultiplier(
+            dependency_graph={
+                "a": ["b"],
+                "b": ["c"],
+                "c": ["a"],  # 순환!
+            }
+        )
+        
+        # 무한 루프 없이 완료되어야 함
+        hop = propagator.get_hop_distance("a", "x")
+        assert hop == -1
+```
+
+#### 5.3.4 Phase 2-D 테스트 (운영 기능)
+
+```python
+# tests/unit/services/error_budget/test_escalation_invalidation.py
+class TestEscalationTriggeredInvalidation:
+    """EscalationTriggeredInvalidation 테스트."""
+    
+    def test_escalation_triggers_invalidation(self):
+        """격상 시 무효화 호출."""
+        invalidation = EscalationTriggeredInvalidation()
+        mock_invalidate = MagicMock()
+        invalidation.register_target(mock_invalidate)
+        
+        # Escalation 이벤트 시뮬레이션
+        event = MagicMock()
+        event.data = {"old_level": "LEVEL_1", "new_level": "LEVEL_3"}
+        
+        invalidation._on_level_changed(event)
+        
+        mock_invalidate.assert_called_once()
+    
+    def test_deescalation_does_not_trigger(self):
+        """하강 시 무효화 미호출."""
+        invalidation = EscalationTriggeredInvalidation()
+        mock_invalidate = MagicMock()
+        invalidation.register_target(mock_invalidate)
+        
+        # De-escalation 이벤트
+        event = MagicMock()
+        event.data = {"old_level": "LEVEL_3", "new_level": "LEVEL_1"}
+        
+        invalidation._on_level_changed(event)
+        
+        mock_invalidate.assert_not_called()
+
+
+# tests/unit/services/error_budget/test_crdt_sync.py
+class TestCRDTBudgetSynchronizer:
+    """CRDTBudgetSynchronizer 테스트."""
+    
+    def test_local_consumption_recorded(self, mock_redis):
+        """로컬 소진 기록."""
+        sync = CRDTBudgetSynchronizer(
+            redis_client=mock_redis,
+            current_region="seoul",
+        )
+        
+        total = sync.record_local_consumption("test", 10.0)
+        
+        assert total == 10.0
+    
+    def test_g_counter_merge(self):
+        """G-Counter 병합."""
+        state1 = GCounterState(counters={"seoul": 10.0})
+        state2 = GCounterState(counters={"tokyo": 20.0})
+        
+        merged = state1.merge(state2)
+        
+        assert merged.get_total() == 30.0
+        assert merged.counters["seoul"] == 10.0
+        assert merged.counters["tokyo"] == 20.0
+    
+    def test_g_counter_merge_max(self):
+        """G-Counter 병합 시 max 사용."""
+        state1 = GCounterState(counters={"seoul": 10.0, "tokyo": 15.0})
+        state2 = GCounterState(counters={"seoul": 12.0, "tokyo": 5.0})
+        
+        merged = state1.merge(state2)
+        
+        assert merged.counters["seoul"] == 12.0  # max(10, 12)
+        assert merged.counters["tokyo"] == 15.0  # max(15, 5)
+
+
+# tests/unit/services/error_budget/test_refund.py
+class TestBudgetRefundProposalService:
+    """BudgetRefundProposalService 테스트."""
+    
+    def test_create_proposal(self):
+        """환불 제안 생성."""
+        service = BudgetRefundProposalService()
+        
+        proposal = service.create_proposal(
+            emergency_id="emg_123",
+            false_positive_start=datetime(2026, 1, 22, 9, 0),
+            false_positive_end=datetime(2026, 1, 22, 10, 0),
+        )
+        
+        assert proposal.status == RefundStatus.PROPOSED
+        assert proposal.refund_ratio == 0.5  # 기본 50%
+    
+    def test_approve_proposal(self):
+        """환불 제안 승인."""
+        service = BudgetRefundProposalService()
+        proposal = service.create_proposal(
+            emergency_id="emg_123",
+            false_positive_start=datetime(2026, 1, 22, 9, 0),
+            false_positive_end=datetime(2026, 1, 22, 10, 0),
+        )
+        
+        approved = service.approve(
+            proposal_id=proposal.proposal_id,
+            approved_by="admin@example.com",
+        )
+        
+        assert approved.status == RefundStatus.APPROVED
+        assert approved.approved_by == "admin@example.com"
+    
+    def test_proposal_expires(self):
+        """24시간 후 만료."""
+        service = BudgetRefundProposalService()
+        proposal = service.create_proposal(
+            emergency_id="emg_123",
+            false_positive_start=datetime(2026, 1, 22, 9, 0),
+            false_positive_end=datetime(2026, 1, 22, 10, 0),
+        )
+        
+        # 시간 조작: 25시간 후
+        proposal.expires_at = datetime(2026, 1, 21, 10, 0)  # 과거
+        
+        pending = service.get_pending_proposals()
+        
+        assert proposal not in pending
+        assert proposal.status == RefundStatus.EXPIRED
+```
+
+### 5.4 Phase 2 통합 테스트
+
+```python
+# tests/integration/services/error_budget/test_crisis_multiplier_integration.py
+
+class TestPhase2Integration:
+    """Phase 2 전체 통합 테스트."""
+    
+    def test_escalation_invalidates_and_recalculates(
+        self,
+        crisis_multiplier_provider,
+        escalation_invalidation,
+        emergency_manager,
+    ):
+        """
+        격상 시 캐시 무효화 → 새 가중치 조회 통합 테스트.
+        """
+        # Given: NORMAL 상태에서 캐시된 값
+        ctx1 = crisis_multiplier_provider.get_current_multiplier()
+        assert ctx1.level_multiplier == 1.0
+        
+        # When: LEVEL_3로 격상
+        emergency_manager.escalate_to(EmergencyLevel.LEVEL_3)
+        
+        # Then: 캐시 무효화되어 새 값 반환
+        ctx2 = crisis_multiplier_provider.get_current_multiplier()
+        assert ctx2.level_multiplier == 5.0
+    
+    def test_domain_propagation_with_precedence(
+        self,
+        domain_propagator,
+        precedence_resolver,
+    ):
+        """
+        도메인 전파 + 가중치 결합 통합 테스트.
+        """
+        # Level 가중치: 3.0, Domain 가중치: 2.5
+        level_mult = 3.0
+        domain_mult = domain_propagator.get_multiplier(
+            crisis_domain="payment",
+            error_domain="order",  # 1-hop
+            crisis_level=EmergencyLevel.LEVEL_2,
+        )
+        
+        final = precedence_resolver.resolve(level_mult, domain_mult)
+        
+        # MAX 전략: max(3.0, 2.5) = 3.0
+        assert final == 3.0
+    
+    def test_full_budget_consumption_flow(
+        self,
+        check_on_use_provider,
+        atomic_consumer,
+        weighted_audit_recorder,
+        mock_redis,
+    ):
+        """
+        전체 버짓 소진 흐름 통합 테스트:
+        1. 컨텍스트 조회 (Check on Use)
+        2. 원자적 소진
+        3. 감사 로그 기록
+        """
+        # 1. 컨텍스트 조회
+        ctx = check_on_use_provider.get_current_multiplier(
+            namespace="seoul",
+            domain="payment",
+        )
+        
+        # 2. 원자적 소진
+        result = atomic_consumer.consume_atomic(
+            namespace="seoul",
+            raw_minutes=1.0,
+            multiplier=ctx.final_multiplier,
+            budget_key="budget:seoul",
+        )
+        
+        assert result.success is True
+        
+        # 3. 감사 로그
+        entry = WeightedBudgetAuditEntry(
+            raw_consumption_minutes=1.0,
+            weighted_consumption_minutes=result.consumed_minutes,
+            level_multiplier=ctx.level_multiplier,
+            domain_multiplier=ctx.domain_multiplier,
+            final_multiplier=ctx.final_multiplier,
+            emergency_id=ctx.emergency_id,
+        )
+        
+        weighted_audit_recorder.record(entry)
+        
+        # 검증
+        assert entry.weighted_consumption_minutes == ctx.final_multiplier
+```
+
 ---
 
 ## 6. 모니터링
