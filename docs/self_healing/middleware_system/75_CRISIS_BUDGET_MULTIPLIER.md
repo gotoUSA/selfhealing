@@ -1,9 +1,9 @@
 # 75. Crisis Budget Multiplier (위기 가중치 버짓팅)
 
-> **Version**: 2.2.0  
+> **Version**: 2.3.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: Draft  
+> **Status**: Phase 1 Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 0. 확장 기능 요약
@@ -55,26 +55,29 @@ packages/selfhealing-python/src/selfhealing/
 ### 0.3 구현 순서 (의존성 기반)
 
 ```
-Phase 1: 핵심 기반 (이미 구현됨 - Section 3)
+Phase 1: 핵심 기반 ✅ (2026-01-22 구현 완료)
 ────────────────────────────────────────────
   ┌─────────────────────────────────────────────────────────┐
-  │ CrisisMultiplierConfig (§3.1)                           │ ◀── 가중치 설정
+  │ CrisisMultiplierConfig (§3.1)                           │ ◀── 가중치 설정 ✅
   └─────────────────────────────────────────────────────────┘
                             │
                             ▼
   ┌─────────────────────────────────────────────────────────┐
-  │ CrisisMultiplierProvider (§3.2)                         │ ◀── 30초 캐시 + invalidate_cache()
+  │ CrisisMultiplierProvider (§3.2)                         │ ◀── 30초 캐시 + invalidate_cache() ✅
   └─────────────────────────────────────────────────────────┘
                             │
                             ▼
   ┌─────────────────────────────────────────────────────────┐
-  │ ErrorBudgetCalculator 수정 (§3.3)                       │ ◀── 가중치 적용 로직
+  │ ErrorBudgetCalculator 수정 (§3.3)                       │ ◀── 가중치 적용 로직 (Phase 2)
   └─────────────────────────────────────────────────────────┘
                             │
                             ▼
   ┌─────────────────────────────────────────────────────────┐
-  │ ErrorRecord 모델 확장 (§3.4)                            │ ◀── 가중치 기록
+  │ ErrorRecord 모델 확장 (§3.4)                            │ ◀── 가중치 기록 (Phase 2)
   └─────────────────────────────────────────────────────────┘
+
+  구현 파일: services/error_budget/multiplier.py
+  테스트 파일: tests/unit/services/test_crisis_multiplier.py (30개 통과)
 
 Phase 2-A: 기반 인프라 (Week 1)
 ────────────────────────────────

@@ -79,6 +79,19 @@ from selfhealing.services.error_budget.reconciliation import (
     configure_reconciliation_service,
 )
 
+from selfhealing.services.error_budget.multiplier import (
+    # Config
+    CrisisMultiplierConfig,
+    # Provider
+    CrisisMultiplierProvider,
+    # Factory
+    get_crisis_multiplier_provider,
+    configure_crisis_multiplier_provider,
+    reset_crisis_multiplier_provider,
+    # Constants
+    DEFAULT_CRISIS_MULTIPLIERS,
+)
+
 
 __all__ = [
     # Enums
@@ -116,4 +129,11 @@ __all__ = [
     "get_period_tracker",
     "get_reconciliation_service",
     "configure_reconciliation_service",
+    # Crisis Multiplier
+    "CrisisMultiplierConfig",
+    "CrisisMultiplierProvider",
+    "get_crisis_multiplier_provider",
+    "configure_crisis_multiplier_provider",
+    "reset_crisis_multiplier_provider",
+    "DEFAULT_CRISIS_MULTIPLIERS",
 ]
