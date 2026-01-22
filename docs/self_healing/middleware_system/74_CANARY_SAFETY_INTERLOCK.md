@@ -1,9 +1,9 @@
 # 74. Canary Safety Interlock (Canary 자동 제동 장치)
 
-> **Version**: 1.3.0  
+> **Version**: 1.4.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: In Progress  
+> **Status**: Completed  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ---
@@ -30,10 +30,10 @@
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
 |------|----------|------|----------|------|
-| 7 | `EmergencyStateRefresher` | 주기적 상태 동기화 (§3.11) | P2 | ⬜ TODO |
-| 8 | `MidApplyInterlockCheck` | 적용 중 인터락 재체크 (§3.12) | P2 | ⬜ TODO |
-| 9 | `RollbackValueResolver` | 다단계 롤백 폴백 (§3.13) | P2 | ⬜ TODO |
-| 10 | `InterlockBypassAudit` | 우회 시 PIR 강제 마킹 (§3.14) | P2 | ⬜ TODO |
+| 7 | `EmergencyStateRefresher` | 주기적 상태 동기화 (§3.11) | P2 | ✅ DONE |
+| 8 | `MidApplyInterlockChecker` | 적용 중 인터락 재체크 (§3.12) | P2 | ✅ DONE |
+| 9 | `RollbackValueResolver` | 다단계 롤백 폴백 (§3.13) | P2 | ✅ DONE |
+| 10 | `InterlockBypassAuditor` | 우회 시 PIR 강제 마킹 (§3.14) | P2 | ✅ DONE |
 
 ---
 
@@ -3202,9 +3202,9 @@ dashboard:
 | ③ PAUSED 상태 확장 | §3.6, §3.10 | `pause_reason`, `pause_triggered_by`, `PauseContext`, CausationChain 연동 |
 | ④ Fail-Safe 보안 장치 | §3.7 | `FailClosedConfig`, `check_with_fail_safe()`, 재시도 로직 |
 | 신뢰성: 상태 동기화 | §3.11 | `EmergencyStateRefresher` (30초 폴링, 지터, Fail-Closed 폴백) |
-| Race Condition 방어 | §3.12 | `apply_with_mid_check()`, `_rollback_applied_clusters()` 부분 롤백 |
+| Race Condition 방어 | §3.12 | `MidApplyInterlockChecker`, 부분 롤백 지원 |
 | 데이터 무결성: 롤백 폴백 | §3.13 | `RollbackValueResolver` (3-tier: previous → history → default) |
-| 거버넌스: PIR 강제 | §3.14 | `InterlockBypassAuditEntry.requires_incident_review`, 48시간 마감 |
+| 거버넌스: PIR 강제 | §3.14 | `InterlockBypassAuditor`, `InterlockBypassAuditEntry`, 48시간 마감 |
 
 ---
 
@@ -3214,3 +3214,6 @@ dashboard:
 |------|------|----------|--------|
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
 | 1.1.0 | 2026-01-21 | 리뷰 반영: Break Glass, 리전 격리, PAUSED 확장, Fail-Safe, 상태 동기화, Mid-Apply Check, Rollback Resolver, PIR 거버넌스 추가 | AI Assistant |
+| 1.2.0 | 2026-01-22 | Phase 2 구현 완료: EmergencyOverridePolicy, RegionalInterlockPolicy, PauseReasonTracker | AI Assistant |
+| 1.3.0 | 2026-01-22 | Phase 2 테스트 작성 및 통과 (66개 테스트) | AI Assistant |
+| 1.4.0 | 2026-01-22 | Phase 3 구현 완료: EmergencyStateRefresher, MidApplyInterlockChecker, RollbackValueResolver, InterlockBypassAuditor (103개 테스트 통과) | AI Assistant |
