@@ -1,9 +1,9 @@
 # 76. Cascade Event Audit (연계 이벤트 감사 추적)
 
-> **Version**: 1.2.0  
+> **Version**: 1.4.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-23  
-> **Status**: Draft  
+> **Status**: Phase 1,2 Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 1. 개요
@@ -2488,3 +2488,16 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | | | - ⑥ Fail-Soft / CriticalPathFallback 재사용 (3.9) | |
 | | | - ⑦ Context 전파 원자성 / task_prerun 시그널 (3.2.4) | |
 | | | - Phase 5, 6 업데이트 | |
+| 1.4.0 | 2026-01-23 | **Phase 1, 2 구현 완료** | AI Assistant |
+| | | **Phase 1 구현:** | |
+| | | - CascadeEffect, CascadeTrigger, CascadeEvent 모델 (`audit/cascade_event.py`) | |
+| | | - ExternalTraceContext, ManualInterventionEffect 모델 | |
+| | | - CascadeEventAuditor (`audit/cascade_auditor.py`) | |
+| | | - 37개 단위 테스트 통과 (`tests/unit/audit/test_cascade_event.py`) | |
+| | | **Phase 2 구현:** | |
+| | | - CausationInfo, CausationContext (`context/causation_context.py`) | |
+| | | - Celery/Kafka 헤더 전파 함수 | |
+| | | - CascadeChainConfig (`audit/cascade_config.py`) | |
+| | | - check_chain_depth, detect_cycle (`audit/cascade_chain.py`) | |
+| | | - 예외 클래스 (`audit/cascade_exceptions.py`) | |
+| | | - 45개 단위 테스트 통과 (`tests/unit/audit/test_causation_context.py`) | |
