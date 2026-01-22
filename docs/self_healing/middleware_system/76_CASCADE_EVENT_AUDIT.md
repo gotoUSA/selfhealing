@@ -1,9 +1,9 @@
 # 76. Cascade Event Audit (연계 이벤트 감사 추적)
 
-> **Version**: 1.7.0  
+> **Version**: 1.8.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-23  
-> **Status**: Phase 1,2,3,4,5,6,7 Implemented  
+> **Status**: Phase 1,2,3,4,5,6,7,8,9 Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 1. 개요
@@ -2546,3 +2546,27 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | | | - Cascade 기록 실패 시 Emergency 처리 중단 방지 (graceful 처리) | |
 | | | - 19개 단위 테스트 통과 (`tests/unit/services/coordination/test_coordinator_cascade.py`) | |
 | | | **총 181개 테스트 통과** | |
+| 1.8.0 | 2026-01-23 | **Phase 8, 9 구현 완료** | AI Assistant |
+| | | **Phase 8 구현 (API 엔드포인트):** | |
+| | | - CascadeEventListView: 이벤트 목록 조회 (`api/django/views/cascade.py`) | |
+| | | - CascadeEventDetailView: 이벤트 상세 조회 | |
+| | | - CascadeChainVerifyView: Hash Chain 무결성 검증 | |
+| | | - CausationTraceView: 인과관계 추적 (forward/backward) | |
+| | | - CascadeCheckpointView: 체크포인트 조회/생성 | |
+| | | - CascadeLoadSheddingStatusView: Load Shedding 상태 조회 | |
+| | | - URL 라우팅 6개 엔드포인트 등록 (`api/django/urls.py`) | |
+| | | - 13개 단위 테스트 통과 (`tests/unit/api/test_cascade_api.py`) | |
+| | | **Phase 9 구현 (모니터링):** | |
+| | | - CascadeMetrics: Prometheus 호환 메트릭 클래스 (`audit/cascade_metrics.py`) | |
+| | | - cascade_events_total, cascade_effects_total, cascade_chain_depth_max | |
+| | | - cascade_integrity_checks_total, cascade_load_shedding_drops_total | |
+| | | - cascade_fallback_writes_total, cascade_backpressure_current | |
+| | | - to_prometheus_format: Prometheus 형식 출력 | |
+| | | - cascade_integrity_alert: 무결성 위반 알림 (`audit/cascade_notifications.py`) | |
+| | | - cascade_depth_alert: 체인 깊이 임계치 알림 | |
+| | | - cascade_load_shedding_alert: Load Shedding 상태 알림 | |
+| | | - cascade_summary: 주기적 요약 알림 | |
+| | | - cascade_fallback_recovery_alert: 폴백 복구 결과 알림 | |
+| | | - Grafana 대시보드 (`docker/grafana/provisioning/dashboards/cascade_event_audit.json`) | |
+| | | - 11개 메트릭 테스트 + 12개 알림 테스트 = 23개 통과 | |
+| | | **총 217개 테스트 통과 (Phase 1~9 완료)** | |

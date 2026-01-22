@@ -299,6 +299,26 @@ class CascadeEventAuditor:
         
         return events
     
+    def get_event_count(self, namespace: str) -> int:
+        """
+        네임스페이스의 Cascade Event 총 개수 조회.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            이벤트 개수
+        """
+        backend = self._get_backend()
+        index_key = self.CASCADE_INDEX_KEY.format(namespace=namespace)
+        
+        index_data = backend.get(index_key)
+        if not index_data:
+            return 0
+        
+        cascade_ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
+        return len(cascade_ids)
+    
     def verify_chain_integrity(
         self,
         namespace: str,

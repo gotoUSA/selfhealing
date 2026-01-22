@@ -256,6 +256,16 @@ from selfhealing.api.django.views.canary import (
     CanaryHistoryView,
 )
 
+# Cascade Event Audit API Views (Phase 8)
+from selfhealing.api.django.views.cascade import (
+    CascadeEventListView,
+    CascadeEventDetailView,
+    CascadeChainVerifyView,
+    CausationTraceView,
+    CascadeCheckpointView,
+    CascadeLoadSheddingStatusView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -397,6 +407,17 @@ urlpatterns = [
     path("emergency/history/", EmergencyHistoryView.as_view(), name="emergency-history"),
     path("emergency/config/", EmergencyConfigView.as_view(), name="emergency-config"),
     path("emergency/levels/", EmergencyLevelsView.as_view(), name="emergency-levels"),
+    # =========================================================================
+    # Cascade Event Audit API (Phase 8)
+    # 연계 이벤트 감사 추적: 인과관계 조회, Hash Chain 무결성 검증
+    # Reference: docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
+    # =========================================================================
+    path("cascade/events/", CascadeEventListView.as_view(), name="cascade-event-list"),
+    path("cascade/events/<str:cascade_id>/", CascadeEventDetailView.as_view(), name="cascade-event-detail"),
+    path("cascade/verify/", CascadeChainVerifyView.as_view(), name="cascade-chain-verify"),
+    path("cascade/trace/<str:event_id>/", CausationTraceView.as_view(), name="cascade-causation-trace"),
+    path("cascade/checkpoint/", CascadeCheckpointView.as_view(), name="cascade-checkpoint"),
+    path("cascade/load-shedding/status/", CascadeLoadSheddingStatusView.as_view(), name="cascade-load-shedding-status"),
     # =========================================================================
     # Auto Tuning API - 자율 조정 제어
     # =========================================================================
