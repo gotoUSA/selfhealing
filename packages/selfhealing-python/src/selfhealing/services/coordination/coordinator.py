@@ -4,12 +4,17 @@ Emergency Coordinator.
 Emergency Coordination Layer의 중앙 조율자.
 Emergency 이벤트를 수신하고 정책에 따라 연계 액션을 실행합니다.
 
+Phase 7 Integration:
+- CascadeEventAuditor를 주입받아 Emergency Level 변경 시 Cascade Event 자동 기록
+- 인과관계 추적으로 연계 액션 감사 완전성 보장
+
 Code reference:
     governance.py#L307 (check_expiry_status 패턴)
     locking.py#L177 (Lua 스크립트 원자적 처리 패턴)
 
 Reference:
     docs/self_healing/middleware_system/72_EMERGENCY_COORDINATION_LAYER.md
+    docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List, Callable
+from typing import TYPE_CHECKING, Dict, Any, Optional, List, Callable
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from .enums import ActionType, EmergencyScope
@@ -29,6 +34,9 @@ from .models import (
     OverrideTTLConfig,
 )
 from .anti_flapping import AntiFlappingGuard
+
+if TYPE_CHECKING:
+    from selfhealing.audit.cascade_auditor import CascadeEventAuditor
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +100,16 @@ class EmergencyCoordinator:
     역할:
     - Emergency 이벤트 수신 및 라우팅
     - 정책 기반 연계 액션 실행
-    - 인과관계 추적 및 감사 로깅
+    - 인과관계 추적 및 감사 로깅 (CascadeEventAuditor 연동)
     - 플래핑 방지 (AntiFlappingGuard)
+    
+    Phase 7 Integration:
+    - cascade_auditor 주입으로 Emergency Level 변경 시 Cascade Event 자동 기록
+    - 연계 액션의 인과관계 완전 추적
     
     Code reference:
         governance.py#L307-375 (check_expiry_status 패턴)
+        docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
     """
     
     def __init__(
@@ -104,17 +117,20 @@ class EmergencyCoordinator:
         anti_flapping_guard: Optional[AntiFlappingGuard] = None,
         ttl_config: Optional[OverrideTTLConfig] = None,
         dry_run_mode: bool = False,
+        cascade_auditor: Optional["CascadeEventAuditor"] = None,
     ):
         """
         Args:
             anti_flapping_guard: 플래핑 방지 가드
             ttl_config: TTL 강제 설정
             dry_run_mode: 전역 Dry-Run 모드
+            cascade_auditor: Cascade Event 감사기 (Phase 7)
         """
         self._anti_flapping_guard = anti_flapping_guard or AntiFlappingGuard()
         self._ttl_config = ttl_config or OverrideTTLConfig()
         self._dry_run_mode = dry_run_mode
         self._dry_run_logger = DryRunAuditLogger()
+        self._cascade_auditor = cascade_auditor
         
         # 네임스페이스별 상태
         self._namespace_states: Dict[str, ScopedEmergencyState] = {}
@@ -149,9 +165,13 @@ class EmergencyCoordinator:
         trigger_event_id: str,
         actions: Optional[List[CoordinationAction]] = None,
         force: bool = False,
+        request: Optional[Any] = None,
     ) -> CoordinationResult:
         """
-        Emergency Level 변경 시 연계 액션 실행.
+        Emergency Level 변경 시 연계 액션 실행 및 Cascade Event 기록.
+        
+        Phase 7: CascadeEventAuditor를 통해 Emergency Level 변경과
+        연계 액션을 인과관계와 함께 기록합니다.
         
         Args:
             old_level: 이전 레벨
@@ -160,6 +180,7 @@ class EmergencyCoordinator:
             trigger_event_id: 트리거 이벤트 ID
             actions: 실행할 액션 목록 (없으면 기본 정책 사용)
             force: 강제 실행 (플래핑 가드 무시)
+            request: Django HttpRequest (W3C Trace Context 추출용)
         
         Returns:
             조율 결과
@@ -214,8 +235,16 @@ class EmergencyCoordinator:
             f"on namespace={namespace}"
         )
         
-        # 4. 액션이 없으면 빈 결과 반환
+        # 4. 액션이 없으면 빈 결과 반환 (Cascade 기록 없음)
         if not actions:
+            # Cascade Event 기록: 액션 없이 레벨 변경만 기록
+            self._record_cascade_event(
+                old_level=old_level,
+                new_level=new_level,
+                namespace=namespace,
+                results=[],
+                request=request,
+            )
             return CoordinationResult(
                 success=True,
                 cascade_event_id=cascade_event_id,
@@ -230,7 +259,16 @@ class EmergencyCoordinator:
             result = self._execute_action(action, namespace, trigger_event_id)
             results.append(result)
         
-        # 6. 결과 반환
+        # 6. Cascade Event 기록 (Phase 7)
+        self._record_cascade_event(
+            old_level=old_level,
+            new_level=new_level,
+            namespace=namespace,
+            results=results,
+            request=request,
+        )
+        
+        # 7. 결과 반환
         return CoordinationResult(
             success=all(r.success for r in results),
             cascade_event_id=cascade_event_id,
@@ -238,6 +276,109 @@ class EmergencyCoordinator:
             trigger_type="EMERGENCY_LEVEL_CHANGED",
             namespace=namespace,
         )
+    
+    def _record_cascade_event(
+        self,
+        old_level: EmergencyLevel,
+        new_level: EmergencyLevel,
+        namespace: str,
+        results: List[ActionResult],
+        request: Optional[Any] = None,
+    ) -> None:
+        """
+        Cascade Event 기록 (Phase 7).
+        
+        Emergency Level 변경 트리거와 연계 액션 결과를 
+        CascadeEventAuditor를 통해 인과관계와 함께 기록합니다.
+        
+        Args:
+            old_level: 이전 Emergency Level
+            new_level: 새 Emergency Level
+            namespace: 네임스페이스
+            results: 액션 실행 결과 목록
+            request: Django HttpRequest (W3C Trace Context 추출용)
+        """
+        if not self._cascade_auditor:
+            # cascade_auditor가 주입되지 않으면 기록 생략
+            logger.debug(
+                "[Coordinator] Cascade audit skipped: no auditor configured"
+            )
+            return
+        
+        try:
+            # 트리거 상세 정보
+            trigger_details = {
+                "old_level": old_level.name,
+                "new_level": new_level.name,
+                "transition_type": self._get_transition_type(old_level, new_level),
+            }
+            
+            # 효과 목록 (액션 실행 결과)
+            effects = []
+            for result in results:
+                effect = {
+                    "action_type": result.action_type.value,
+                    "success": result.success,
+                    "details": result.details or {},
+                }
+                if result.error:
+                    effect["error_message"] = result.error
+                if result.was_dry_run:
+                    effect["details"]["dry_run"] = True
+                effects.append(effect)
+            
+            # Cascade Event 기록
+            if request:
+                self._cascade_auditor.record_with_external_trace(
+                    trigger_type="EMERGENCY_LEVEL_CHANGED",
+                    trigger_details=trigger_details,
+                    effects=effects,
+                    namespace=namespace,
+                    request=request,
+                    triggered_by="system",
+                )
+            else:
+                self._cascade_auditor.record(
+                    trigger_type="EMERGENCY_LEVEL_CHANGED",
+                    trigger_details=trigger_details,
+                    effects=effects,
+                    namespace=namespace,
+                    triggered_by="system",
+                )
+            
+            logger.debug(
+                f"[Coordinator] Cascade event recorded: "
+                f"{old_level.name} -> {new_level.name}, effects={len(effects)}"
+            )
+        except Exception as e:
+            # Cascade 기록 실패는 Emergency 처리를 중단시키면 안 됨
+            logger.warning(
+                f"[Coordinator] Failed to record cascade event: {e}"
+            )
+    
+    def _get_transition_type(
+        self,
+        old_level: EmergencyLevel,
+        new_level: EmergencyLevel,
+    ) -> str:
+        """
+        Emergency Level 전환 유형 결정.
+        
+        Args:
+            old_level: 이전 레벨
+            new_level: 새 레벨
+        
+        Returns:
+            전환 유형: ESCALATION, DE_ESCALATION, ACTIVATION, DEACTIVATION
+        """
+        if old_level == EmergencyLevel.NORMAL:
+            return "ACTIVATION"
+        elif new_level == EmergencyLevel.NORMAL:
+            return "DEACTIVATION"
+        elif new_level.value > old_level.value:
+            return "ESCALATION"
+        else:
+            return "DE_ESCALATION"
     
     def _execute_action(
         self,
@@ -358,3 +499,38 @@ class EmergencyCoordinator:
     def clear_flapping_lockout(self) -> None:
         """플래핑 잠금 수동 해제."""
         self._anti_flapping_guard.clear_lockout()
+    
+    # =========================================================================
+    # Cascade Auditor Methods (Phase 7)
+    # =========================================================================
+    
+    def set_cascade_auditor(self, auditor: "CascadeEventAuditor") -> None:
+        """
+        CascadeEventAuditor 설정.
+        
+        런타임에 CascadeEventAuditor를 주입합니다.
+        생성자에서 주입하지 않은 경우 이 메서드로 설정할 수 있습니다.
+        
+        Args:
+            auditor: CascadeEventAuditor 인스턴스
+        """
+        self._cascade_auditor = auditor
+        logger.info("[Coordinator] Cascade auditor configured")
+    
+    def get_cascade_auditor(self) -> Optional["CascadeEventAuditor"]:
+        """
+        현재 설정된 CascadeEventAuditor 반환.
+        
+        Returns:
+            CascadeEventAuditor 또는 None
+        """
+        return self._cascade_auditor
+    
+    def has_cascade_auditor(self) -> bool:
+        """
+        CascadeEventAuditor 설정 여부.
+        
+        Returns:
+            True면 auditor가 설정됨
+        """
+        return self._cascade_auditor is not None
