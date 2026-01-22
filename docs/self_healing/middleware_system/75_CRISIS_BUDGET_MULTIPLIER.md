@@ -1,6 +1,6 @@
 # 75. Crisis Budget Multiplier (위기 가중치 버짓팅)
 
-> **Version**: 2.1.0  
+> **Version**: 2.2.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
 > **Status**: Draft  
@@ -55,6 +55,27 @@ packages/selfhealing-python/src/selfhealing/
 ### 0.3 구현 순서 (의존성 기반)
 
 ```
+Phase 1: 핵심 기반 (이미 구현됨 - Section 3)
+────────────────────────────────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │ CrisisMultiplierConfig (§3.1)                           │ ◀── 가중치 설정
+  └─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ CrisisMultiplierProvider (§3.2)                         │ ◀── 30초 캐시 + invalidate_cache()
+  └─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ ErrorBudgetCalculator 수정 (§3.3)                       │ ◀── 가중치 적용 로직
+  └─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ ErrorRecord 모델 확장 (§3.4)                            │ ◀── 가중치 기록
+  └─────────────────────────────────────────────────────────┘
+
 Phase 2-A: 기반 인프라 (Week 1)
 ────────────────────────────────
   ┌─────────────────────────────────────────────────────────┐
@@ -90,24 +111,44 @@ Phase 2-C: 고급 기능 (Week 3)
   │ 1. backfill.py        │   │ 2. smoother.py        │   │ 3. propagation.py     │
   │ (Backfill)            │   │ (Smoother)            │   │ (Propagation)         │
   └───────────────────────┘   └───────────────────────┘   └───────────────────────┘
+                                                                     │
+                                                          ┌──────────┴──────────┐
+                                                          │ max_hops=3 (순환방지)│
+                                                          │ visited Set 사용    │
+                                                          └─────────────────────┘
 
 Phase 2-D: 운영 기능 (Week 4)
 ────────────────────────────
-  ┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
-  │ 4. canary_multiplier  │   │ 13. escalation_inv    │   │ 10. admin_invalidator │
-  │ (CanaryRollout)       │   │ (EscalationInvalid)   │   │ (AdminOverride)       │
-  └───────────────────────┘   └───────────────────────┘   └───────────────────────┘
+  ┌───────────────────────────────────────────────────────────────────────────┐
+  │ 13. escalation_invalidation.py (EscalationTriggeredInvalidation)          │
+  │     - CrisisMultiplierProvider.invalidate_cache() 연동                    │
+  │     - 이벤트 버스: EMERGENCY_LEVEL_CHANGED 구독                            │
+  │     - 격상(Escalation) 시에만 Push 무효화 (하강은 TTL 대기)               │
+  └───────────────────────────────────────────────────────────────────────────┘
                           │
-                          ▼
-  ┌─────────────────────────────────────────────────────────┐
-  │ 9. crdt_sync.py (CRDTBudgetSynchronizer)                │ ◀── 멀티 리전
-  └─────────────────────────────────────────────────────────┘
+  ┌───────────────────────┼───────────────────────┐
+  ▼                       ▼                       ▼
+  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
+  │ 4. canary_mult    │   │ 10. admin_inval   │   │ 9. crdt_sync.py   │
+  │ (CanaryRollout)   │   │ (AdminOverride)   │   │ (CRDTSync)        │
+  └───────────────────┘   └───────────────────┘   └───────────────────┘
                           │
                           ▼
   ┌─────────────────────────────────────────────────────────┐
   │ 12. refund.py (BudgetRefundProposalService)             │ ◀── 최종 (Admin UI 연동)
   └─────────────────────────────────────────────────────────┘
 ```
+
+### 0.4 리뷰 반영 현황
+
+| 리뷰 | 내용 | 구현 상태 | 코드 근거 |
+|------|------|----------|----------|
+| §3.1 Push-based Invalidation | 격상 시 30초 캐시 대기 없이 즉시 무효화 | ✅ 구현됨 (§8.5) | `tracker.py#L446` invalidate_cache(), `EscalationTriggeredInvalidation` |
+| §3.2.3 Depth Limit | 순환 참조 방지를 위한 깊이 제한 | ✅ 구현됨 (§8.3) | `propagation.py` max_hops=3, visited Set 사용 |
+
+**추가 보완 사항:**
+- §3.1: `CrisisMultiplierProvider`를 `EscalationTriggeredInvalidation`에 등록하는 연동 코드 추가 필요
+- §3.2.3: 순환 참조 감지 시 메트릭 `domain_propagation_cycle_detected_total` 추가 권장
 
 ## 1. 개요
 
@@ -870,6 +911,7 @@ View Dashboard: https://dashboard/error-budget
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
 | 2.0.0 | 2026-01-22 | Phase 2 확장 기능 8개 추가 | AI Assistant |
 | 2.1.0 | 2026-01-22 | 누락된 7개 기능 추가 (총 15개 완성), 파일 분리 구조 및 구현 순서 추가 | AI Assistant |
+| 2.2.0 | 2026-01-22 | 리뷰 반영: Phase 1 기존 컴포넌트 구현 순서에 추가, §3.1 Push-based Invalidation 연동 코드 추가, §3.2.3 깊이 제한 메트릭 추가 | AI Assistant |
 
 ---
 
@@ -1696,6 +1738,11 @@ class DomainPropagationMultiplier:
         """
         장애 도메인으로부터의 홉 거리 계산 (BFS).
         
+        순환 참조 방지:
+        - visited Set으로 이미 방문한 노드 추적
+        - max_hops 제한으로 무한 루프 방지
+        - 리뷰 §3.2.3 반영: 깊이 제한(Depth Limit) 적용
+        
         Args:
             crisis_domain: 장애 발생 도메인
             error_domain: 에러 발생 도메인
@@ -1712,11 +1759,14 @@ class DomainPropagationMultiplier:
         # BFS로 최단 거리 찾기
         visited: Set[str] = {crisis}
         queue: List[tuple] = [(crisis, 0)]  # (domain, distance)
+        depth_limit_reached = False
         
         while queue:
             current, distance = queue.pop(0)
             
+            # 깊이 제한 확인 (리뷰 §3.2.3)
             if distance >= self.config.max_hops:
+                depth_limit_reached = True
                 continue
             
             # 역방향 탐색: 현재 도메인에 의존하는 도메인들
@@ -1726,6 +1776,42 @@ class DomainPropagationMultiplier:
                         return distance + 1
                     visited.add(domain)
                     queue.append((domain, distance + 1))
+        
+        # 깊이 제한으로 탐색 중단된 경우 메트릭 기록
+        if depth_limit_reached:
+            self._record_depth_limit_metric(crisis, error)
+        
+        return -1  # 연결 없음
+    
+    def _record_depth_limit_metric(
+        self,
+        crisis_domain: str,
+        error_domain: str,
+    ) -> None:
+        """깊이 제한 도달 시 메트릭 기록."""
+        try:
+            from prometheus_client import Counter
+            
+            # 메트릭 정의 (lazy)
+            if not hasattr(self, '_depth_limit_counter'):
+                self._depth_limit_counter = Counter(
+                    "selfhealing_domain_propagation_depth_limit_reached_total",
+                    "Number of times domain propagation hit depth limit",
+                    ["crisis_domain", "error_domain"],
+                )
+            
+            self._depth_limit_counter.labels(
+                crisis_domain=crisis_domain,
+                error_domain=error_domain,
+            ).inc()
+            
+            logger.debug(
+                f"[DomainPropagation] Depth limit reached: "
+                f"crisis={crisis_domain}, error={error_domain}, "
+                f"max_hops={self.config.max_hops}"
+            )
+        except Exception:
+            pass  # 메트릭 실패는 무시
         
         return -1  # 연결 없음
     
@@ -2103,6 +2189,43 @@ def get_escalation_triggered_invalidation() -> EscalationTriggeredInvalidation:
         _escalation_invalidation = EscalationTriggeredInvalidation()
         _escalation_invalidation.register_event_handler()
     return _escalation_invalidation
+
+
+# =============================================================================
+# CrisisMultiplierProvider 연동 (리뷰 §3.1 반영)
+# =============================================================================
+
+def setup_crisis_multiplier_invalidation() -> None:
+    """
+    CrisisMultiplierProvider를 EscalationTriggeredInvalidation에 등록.
+    
+    애플리케이션 시작 시 호출하여 Push-based Invalidation을 활성화합니다.
+    
+    Usage:
+        # app startup
+        from selfhealing.services.error_budget.escalation_invalidation import (
+            setup_crisis_multiplier_invalidation,
+        )
+        setup_crisis_multiplier_invalidation()
+    
+    Reference:
+        리뷰 §3.1: "Emergency Level이 격상될 때, 30초 캐시를 기다리지 않고 
+        즉시 무효화하는 로직을 EmergencyModeTracker와 연동"
+    """
+    from selfhealing.services.error_budget.multiplier import (
+        get_crisis_multiplier_provider,
+    )
+    
+    invalidation = get_escalation_triggered_invalidation()
+    provider = get_crisis_multiplier_provider()
+    
+    # CrisisMultiplierProvider의 캐시를 무효화 대상으로 등록
+    invalidation.register_target(provider.invalidate_cache)
+    
+    logger.info(
+        "[EscalationInvalidation] CrisisMultiplierProvider registered for "
+        "push-based invalidation on escalation events"
+    )
 ```
 
 ---
