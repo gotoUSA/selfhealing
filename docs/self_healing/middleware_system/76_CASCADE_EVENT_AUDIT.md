@@ -1,9 +1,9 @@
 # 76. Cascade Event Audit (연계 이벤트 감사 추적)
 
-> **Version**: 1.4.0  
+> **Version**: 1.5.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-23  
-> **Status**: Phase 1,2 Implemented  
+> **Status**: Phase 1,2,3,4 Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 1. 개요
@@ -2501,3 +2501,20 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | | | - check_chain_depth, detect_cycle (`audit/cascade_chain.py`) | |
 | | | - 예외 클래스 (`audit/cascade_exceptions.py`) | |
 | | | - 45개 단위 테스트 통과 (`tests/unit/audit/test_causation_context.py`) | |
+| 1.5.0 | 2026-01-23 | **Phase 3, 4 구현 완료** | AI Assistant |
+| | | **Phase 3 구현 (Hash Chain 및 체크포인트):** | |
+| | | - create_checkpoint: 체크포인트 생성 (`audit/cascade_auditor.py`) | |
+| | | - get_checkpoint: 체크포인트 조회 | |
+| | | - verify_chain_integrity_from_checkpoint: 체크포인트 기반 무결성 검증 | |
+| | | - get_events_after_timestamp: 특정 시각 이후 이벤트 조회 | |
+| | | - 20개 단위 테스트 통과 (`tests/unit/audit/test_hash_chain.py`) | |
+| | | **Phase 4 구현 (보관 정책 및 정리 태스크):** | |
+| | | - CascadeRetentionConfig: 계층별 보관 정책 설정 (`audit/cascade_config.py`) | |
+| | | - archive_cascade_events: Redis → PostgreSQL 이관 태스크 | |
+| | | - purge_old_cascade_events: 오래된 이벤트 영구 삭제 태스크 | |
+| | | - create_cascade_daily_checkpoint: 일일 체크포인트 생성 태스크 | |
+| | | - verify_cascade_chain_integrity: 체인 무결성 검증 태스크 | |
+| | | - recover_cascade_from_fallback: 로컬 폴백 복구 태스크 | |
+| | | - CASCADE_CLEANUP_SCHEDULE: Celery Beat 스케줄 정의 | |
+| | | - 16개 단위 테스트 통과 (`tests/unit/tasks/test_cascade_cleanup.py`) | |
+| | | **총 118개 테스트 통과** | |

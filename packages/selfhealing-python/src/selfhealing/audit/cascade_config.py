@@ -128,3 +128,116 @@ def get_cascade_chain_config() -> CascadeChainConfig:
                 "SELFHEALING_CASCADE_DETECT_CYCLES", "true"
             ).lower() == "true",
         )
+
+
+# =============================================================================
+# CascadeRetentionConfig (Phase 4)
+# =============================================================================
+
+
+@dataclass
+class CascadeRetentionConfig:
+    """
+    Cascade 데이터 보관 정책.
+    
+    Hot/Warm/Cold 계층별 보관 기간을 정의합니다.
+    
+    Tiered Storage:
+    - Hot (Redis): 실시간 조회용, 짧은 보관
+    - Warm (PostgreSQL): 복잡한 쿼리, 중간 보관
+    - Cold (Archive): 법적 요구사항, 장기 보관
+    
+    Attributes:
+        hot_retention_days: Redis 내 보관 기간
+        hot_max_count: Redis 내 최대 개수
+        warm_retention_days: PostgreSQL 내 보관 기간
+        cold_retention_days: 아카이브 보관 기간
+        index_retention_days: 인덱스 키 보관 기간
+        anchor_retention_days: 체크포인트 보관 기간
+    
+    Code reference:
+        tasks/cleanup_tasks.py (archive_old_dlq_entries 패턴)
+        audit/integrity/anchor.py#L46 (DEFAULT_RETENTION_DAYS)
+    """
+    
+    # Hot 데이터 (Redis)
+    hot_retention_days: int = 7
+    """Redis 내 보관 기간 (빠른 조회용)."""
+    
+    hot_max_count: int = 10000
+    """Redis 내 최대 개수 (메모리 제한)."""
+    
+    # Warm 데이터 (PostgreSQL)
+    warm_retention_days: int = 90
+    """PostgreSQL 내 보관 기간 (Audit 대응용)."""
+    
+    # Cold 데이터 (Archive)
+    cold_retention_days: int = 365
+    """아카이브 보관 기간 (법적 요구사항)."""
+    
+    # Index 보관
+    index_retention_days: int = 30
+    """인덱스 키 보관 기간."""
+    
+    # Hash Chain Anchor
+    anchor_retention_days: int = 90
+    """체크포인트 보관 기간 (anchor.py 패턴)."""
+
+
+DEFAULT_CASCADE_RETENTION_CONFIG = CascadeRetentionConfig()
+"""기본 Cascade 보관 정책."""
+
+
+def get_cascade_retention_config() -> CascadeRetentionConfig:
+    """
+    Cascade 보관 정책 반환.
+    
+    Django settings 또는 환경 변수에서 설정을 로드합니다.
+    """
+    import os
+    
+    try:
+        from django.conf import settings
+        
+        return CascadeRetentionConfig(
+            hot_retention_days=getattr(
+                settings, "SELFHEALING_CASCADE_HOT_RETENTION_DAYS", 7
+            ),
+            hot_max_count=getattr(
+                settings, "SELFHEALING_CASCADE_HOT_MAX_COUNT", 10000
+            ),
+            warm_retention_days=getattr(
+                settings, "SELFHEALING_CASCADE_WARM_RETENTION_DAYS", 90
+            ),
+            cold_retention_days=getattr(
+                settings, "SELFHEALING_CASCADE_COLD_RETENTION_DAYS", 365
+            ),
+            index_retention_days=getattr(
+                settings, "SELFHEALING_CASCADE_INDEX_RETENTION_DAYS", 30
+            ),
+            anchor_retention_days=getattr(
+                settings, "SELFHEALING_CASCADE_ANCHOR_RETENTION_DAYS", 90
+            ),
+        )
+    except Exception:
+        # Django 없는 환경에서는 환경 변수 사용
+        return CascadeRetentionConfig(
+            hot_retention_days=int(
+                os.environ.get("SELFHEALING_CASCADE_HOT_RETENTION_DAYS", "7")
+            ),
+            hot_max_count=int(
+                os.environ.get("SELFHEALING_CASCADE_HOT_MAX_COUNT", "10000")
+            ),
+            warm_retention_days=int(
+                os.environ.get("SELFHEALING_CASCADE_WARM_RETENTION_DAYS", "90")
+            ),
+            cold_retention_days=int(
+                os.environ.get("SELFHEALING_CASCADE_COLD_RETENTION_DAYS", "365")
+            ),
+            index_retention_days=int(
+                os.environ.get("SELFHEALING_CASCADE_INDEX_RETENTION_DAYS", "30")
+            ),
+            anchor_retention_days=int(
+                os.environ.get("SELFHEALING_CASCADE_ANCHOR_RETENTION_DAYS", "90")
+            ),
+        )

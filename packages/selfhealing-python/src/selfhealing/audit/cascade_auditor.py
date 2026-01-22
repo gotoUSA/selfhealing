@@ -442,6 +442,235 @@ class CascadeEventAuditor:
         )
     
     # =========================================================================
+    # Checkpoint Methods (Phase 3)
+    # =========================================================================
+    
+    # 체크포인트 Redis 키 패턴
+    CHECKPOINT_KEY = "selfhealing:{namespace}:audit:cascade_checkpoint"
+    
+    def create_checkpoint(self, namespace: str) -> Dict[str, Any]:
+        """
+        현재 상태를 체크포인트로 저장.
+        
+        체크포인트는 특정 시점의 Hash Chain 상태를 기록하여
+        이후 무결성 검증 시 처음부터 검증하지 않고 체크포인트
+        이후만 검증할 수 있게 합니다.
+        
+        Daily Celery Beat에서 호출됩니다.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            생성된 체크포인트 정보
+        
+        Code reference:
+            audit/integrity/anchor.py (DailyHashAnchor 패턴)
+        """
+        from datetime import datetime, timezone
+        
+        backend = self._get_backend()
+        
+        # 최신 이벤트의 해시 조회
+        last_hash = self._get_last_hash(namespace)
+        
+        # 이벤트 수 계산
+        index_data = backend.get(
+            self.CASCADE_INDEX_KEY.format(namespace=namespace)
+        )
+        if index_data:
+            ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
+            event_count = len(ids)
+        else:
+            event_count = 0
+        
+        checkpoint = {
+            "last_hash": last_hash,
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "event_count": event_count,
+            "namespace": namespace,
+            "version": "1.0",
+        }
+        
+        key = self.CHECKPOINT_KEY.format(namespace=namespace)
+        backend.set(key, checkpoint)
+        
+        logger.info(
+            f"[CascadeAudit] Checkpoint created: namespace={namespace}, "
+            f"event_count={event_count}, hash={last_hash[:16] if last_hash else 'None'}..."
+        )
+        
+        return checkpoint
+    
+    def get_checkpoint(self, namespace: str) -> Optional[Dict[str, Any]]:
+        """
+        체크포인트 조회.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            체크포인트 정보 또는 None
+        """
+        backend = self._get_backend()
+        key = self.CHECKPOINT_KEY.format(namespace=namespace)
+        return backend.get(key)
+    
+    def verify_chain_integrity_from_checkpoint(
+        self,
+        namespace: str,
+    ) -> Dict[str, Any]:
+        """
+        체크포인트 이후만 검증 (효율적).
+        
+        기존 verify_chain_integrity()는 처음부터 검증하지만,
+        이 메서드는 마지막 체크포인트 이후만 검증합니다.
+        O(1) 체크포인트 조회 + O(n) 신규 이벤트 검증.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            검증 결과 딕셔너리:
+            - valid: 무결성 유효 여부
+            - checked: 검증한 이벤트 수
+            - from_checkpoint: 체크포인트 시각 (있는 경우)
+            - errors: 오류 목록
+        
+        Code reference:
+            audit/integrity/anchor.py (DailyHashAnchor 패턴)
+            audit/integrity/health_score.py#L71 (last_verified_sequence)
+        """
+        # 1. 체크포인트 조회
+        checkpoint = self.get_checkpoint(namespace)
+        
+        if not checkpoint or not checkpoint.get("last_hash"):
+            # 체크포인트 없으면 전체 검증
+            return self.verify_chain_integrity(namespace)
+        
+        # 2. 전체 이벤트 조회 (최신순)
+        events = self.get_recent_events(namespace, limit=10000)
+        
+        if not events:
+            return {
+                "valid": True,
+                "checked": 0,
+                "from_checkpoint": checkpoint.get("verified_at"),
+                "errors": [],
+            }
+        
+        # 3. 체크포인트 이후 이벤트 필터링
+        #    체크포인트의 last_hash와 일치하는 이벤트를 찾아 그 이후만 검증
+        checkpoint_hash = checkpoint.get("last_hash")
+        events_after_checkpoint = []
+        checkpoint_found = False
+        
+        for event in events:
+            if event.current_hash == checkpoint_hash:
+                checkpoint_found = True
+                break
+            events_after_checkpoint.append(event)
+        
+        if not checkpoint_found:
+            # 체크포인트 해시를 찾을 수 없음 (데이터 불일치)
+            logger.warning(
+                f"[CascadeAudit] Checkpoint hash not found, "
+                f"falling back to full verification: namespace={namespace}"
+            )
+            return self.verify_chain_integrity(namespace)
+        
+        if not events_after_checkpoint:
+            return {
+                "valid": True,
+                "checked": 0,
+                "from_checkpoint": checkpoint.get("verified_at"),
+                "errors": [],
+            }
+        
+        # 4. 체크포인트 이후 이벤트만 검증
+        errors = []
+        
+        # 첫 번째 이벤트(체크포인트 직후)의 previous_hash가 체크포인트와 연결되는지 확인
+        first_event = events_after_checkpoint[-1]  # 가장 오래된 것
+        if first_event.previous_hash != checkpoint_hash:
+            errors.append({
+                "cascade_id": first_event.id,
+                "error": "checkpoint_mismatch",
+                "expected_previous": checkpoint_hash,
+                "actual_previous": first_event.previous_hash,
+            })
+        
+        # 나머지 체인 검증
+        for i, event in enumerate(events_after_checkpoint):
+            # 해시 재계산
+            recalculated = event.calculate_hash()
+            if recalculated != event.current_hash:
+                errors.append({
+                    "cascade_id": event.id,
+                    "error": "hash_mismatch",
+                    "expected": event.current_hash,
+                    "actual": recalculated,
+                })
+            
+            # 체인 연결 확인
+            if i < len(events_after_checkpoint) - 1:
+                older_event = events_after_checkpoint[i + 1]
+                if event.previous_hash != older_event.current_hash:
+                    errors.append({
+                        "cascade_id": event.id,
+                        "error": "chain_broken",
+                        "expected_previous": older_event.current_hash,
+                        "actual_previous": event.previous_hash,
+                    })
+        
+        return {
+            "valid": len(errors) == 0,
+            "checked": len(events_after_checkpoint),
+            "from_checkpoint": checkpoint.get("verified_at"),
+            "errors": errors,
+        }
+    
+    def get_events_after_timestamp(
+        self,
+        namespace: str,
+        after_timestamp: str,
+        limit: int = 1000,
+    ) -> List[CascadeEvent]:
+        """
+        특정 시각 이후의 이벤트 조회.
+        
+        Args:
+            namespace: 네임스페이스
+            after_timestamp: 이 시각 이후의 이벤트만 조회 (ISO format)
+            limit: 최대 개수
+        
+        Returns:
+            CascadeEvent 목록 (최신순)
+        """
+        from datetime import datetime
+        
+        all_events = self.get_recent_events(namespace, limit=limit)
+        
+        try:
+            cutoff = datetime.fromisoformat(after_timestamp.replace('Z', '+00:00'))
+        except ValueError:
+            return all_events
+        
+        filtered = []
+        for event in all_events:
+            try:
+                event_time = datetime.fromisoformat(
+                    event.timestamp.replace('Z', '+00:00')
+                )
+                if event_time > cutoff:
+                    filtered.append(event)
+            except ValueError:
+                # 파싱 실패 시 포함
+                filtered.append(event)
+        
+        return filtered
+    
+    # =========================================================================
     # Private Methods
     # =========================================================================
     
