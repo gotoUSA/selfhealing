@@ -47,7 +47,79 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import IntEnum
 from typing import Any, Dict, List, Optional
+
+
+# =============================================================================
+# CascadeEventPriority (Phase 5: Load Shedding)
+# =============================================================================
+
+
+class CascadeEventPriority(IntEnum):
+    """
+    Cascade Event 우선순위.
+    
+    Load Shedding 시 우선순위가 낮은 이벤트부터 드롭됩니다.
+    
+    Priority Order (높을수록 중요):
+        CRITICAL (3): 절대 드롭 불가 - Emergency Level 변경, 수동 개입
+        HIGH (2): 가능한 유지 - Canary 롤백, Circuit Breaker 상태 변경
+        MEDIUM (1): 버퍼 임계치 초과 시 드롭 - 일반 자동화 액션
+        LOW (0): 버퍼 경고 임계치 초과 시 드롭 - 정보성 이벤트
+    
+    Code reference:
+        services/circuit_breaker/load_shedding.py (priority 패턴)
+    """
+    
+    LOW = 0
+    """정보성 이벤트 - 버퍼 경고 시 드롭."""
+    
+    MEDIUM = 1
+    """일반 자동화 액션 - 버퍼 임계치 초과 시 드롭."""
+    
+    HIGH = 2
+    """중요 액션 (Canary 롤백 등) - 가능한 유지."""
+    
+    CRITICAL = 3
+    """Emergency 상태 변경, 수동 개입 - 절대 드롭 불가."""
+
+
+# Trigger Type별 기본 우선순위 매핑
+TRIGGER_TYPE_PRIORITY: Dict[str, CascadeEventPriority] = {
+    # CRITICAL: 절대 드롭 불가
+    "EMERGENCY_LEVEL_CHANGED": CascadeEventPriority.CRITICAL,
+    "MANUAL_INTERVENTION": CascadeEventPriority.CRITICAL,
+    "MANUAL_ACTIVATION": CascadeEventPriority.CRITICAL,
+    "CIRCUIT_BREAKER_OPENED": CascadeEventPriority.CRITICAL,
+    
+    # HIGH: 가능한 유지
+    "CANARY_ROLLBACK": CascadeEventPriority.HIGH,
+    "GOVERNANCE_MODE_CHANGED": CascadeEventPriority.HIGH,
+    "ERROR_BUDGET_EXHAUSTED": CascadeEventPriority.HIGH,
+    
+    # MEDIUM: 임계치 초과 시 드롭 가능
+    "BUDGET_MULTIPLIER_APPLIED": CascadeEventPriority.MEDIUM,
+    "CIRCUIT_BREAKER_HALF_OPENED": CascadeEventPriority.MEDIUM,
+    "CIRCUIT_BREAKER_CLOSED": CascadeEventPriority.MEDIUM,
+    
+    # LOW: 경고 시 드롭 가능
+    "METRICS_UPDATED": CascadeEventPriority.LOW,
+    "HEALTH_CHECK": CascadeEventPriority.LOW,
+}
+
+
+def get_priority_for_trigger(trigger_type: str) -> CascadeEventPriority:
+    """
+    트리거 타입에 대한 우선순위 반환.
+    
+    Args:
+        trigger_type: 트리거 타입
+    
+    Returns:
+        우선순위 (매핑되지 않은 경우 MEDIUM)
+    """
+    return TRIGGER_TYPE_PRIORITY.get(trigger_type, CascadeEventPriority.MEDIUM)
 
 
 # =============================================================================

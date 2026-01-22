@@ -241,3 +241,127 @@ def get_cascade_retention_config() -> CascadeRetentionConfig:
                 os.environ.get("SELFHEALING_CASCADE_ANCHOR_RETENTION_DAYS", "90")
             ),
         )
+
+
+# =============================================================================
+# AuditBackpressureConfig (Phase 5)
+# =============================================================================
+
+
+@dataclass
+class AuditBackpressureConfig:
+    """
+    Audit Backpressure 설정.
+    
+    고부하 상황에서 Audit 시스템이 시스템 전체 장애로 번지지 않도록
+    Load Shedding을 적용합니다.
+    
+    Attributes:
+        load_shedding_enabled: Load Shedding 활성화 여부
+        buffer_warning_threshold: 버퍼 경고 임계치 (기본값 0.7 = 70%)
+        buffer_critical_threshold: 버퍼 임계치 (기본값 0.9 = 90%)
+        max_events_per_second: 초당 최대 이벤트 처리량
+        fallback_enabled: 로컬 폴백 활성화 여부
+        metrics_enabled: 메트릭 기록 활성화 여부
+    
+    Code reference:
+        test_lazy_import.py#L105-117 (get_load_shedding_manager 패턴)
+    """
+    
+    load_shedding_enabled: bool = True
+    """Load Shedding 활성화 여부."""
+    
+    buffer_warning_threshold: float = 0.7
+    """
+    버퍼 경고 임계치 (0.0 ~ 1.0).
+    
+    이 비율을 초과하면 LOW 우선순위 이벤트 드롭 시작.
+    """
+    
+    buffer_critical_threshold: float = 0.9
+    """
+    버퍼 임계치 (0.0 ~ 1.0).
+    
+    이 비율을 초과하면 MEDIUM 우선순위 이벤트도 드롭.
+    """
+    
+    max_events_per_second: int = 1000
+    """
+    초당 최대 이벤트 처리량.
+    
+    이를 초과하면 Load Shedding 적용.
+    """
+    
+    fallback_enabled: bool = True
+    """로컬 폴백 활성화 여부."""
+    
+    metrics_enabled: bool = True
+    """메트릭 기록 활성화 여부."""
+    
+    def __post_init__(self) -> None:
+        """설정값 검증."""
+        if not 0.0 <= self.buffer_warning_threshold <= 1.0:
+            self.buffer_warning_threshold = 0.7
+        if not 0.0 <= self.buffer_critical_threshold <= 1.0:
+            self.buffer_critical_threshold = 0.9
+        if self.buffer_warning_threshold >= self.buffer_critical_threshold:
+            self.buffer_warning_threshold = self.buffer_critical_threshold - 0.2
+
+
+DEFAULT_BACKPRESSURE_CONFIG = AuditBackpressureConfig()
+"""기본 Backpressure 설정."""
+
+
+def get_audit_backpressure_config() -> AuditBackpressureConfig:
+    """
+    Audit Backpressure 설정 반환.
+    
+    Django settings 또는 환경 변수에서 설정을 로드합니다.
+    """
+    import os
+    
+    try:
+        from django.conf import settings
+        
+        return AuditBackpressureConfig(
+            load_shedding_enabled=getattr(
+                settings, "SELFHEALING_AUDIT_LOAD_SHEDDING_ENABLED", True
+            ),
+            buffer_warning_threshold=getattr(
+                settings, "SELFHEALING_AUDIT_BUFFER_WARNING_THRESHOLD", 0.7
+            ),
+            buffer_critical_threshold=getattr(
+                settings, "SELFHEALING_AUDIT_BUFFER_CRITICAL_THRESHOLD", 0.9
+            ),
+            max_events_per_second=getattr(
+                settings, "SELFHEALING_AUDIT_MAX_EVENTS_PER_SECOND", 1000
+            ),
+            fallback_enabled=getattr(
+                settings, "SELFHEALING_AUDIT_FALLBACK_ENABLED", True
+            ),
+            metrics_enabled=getattr(
+                settings, "SELFHEALING_AUDIT_METRICS_ENABLED", True
+            ),
+        )
+    except Exception:
+        # Django 없는 환경에서는 환경 변수 사용
+        return AuditBackpressureConfig(
+            load_shedding_enabled=os.environ.get(
+                "SELFHEALING_AUDIT_LOAD_SHEDDING_ENABLED", "true"
+            ).lower() == "true",
+            buffer_warning_threshold=float(
+                os.environ.get("SELFHEALING_AUDIT_BUFFER_WARNING_THRESHOLD", "0.7")
+            ),
+            buffer_critical_threshold=float(
+                os.environ.get("SELFHEALING_AUDIT_BUFFER_CRITICAL_THRESHOLD", "0.9")
+            ),
+            max_events_per_second=int(
+                os.environ.get("SELFHEALING_AUDIT_MAX_EVENTS_PER_SECOND", "1000")
+            ),
+            fallback_enabled=os.environ.get(
+                "SELFHEALING_AUDIT_FALLBACK_ENABLED", "true"
+            ).lower() == "true",
+            metrics_enabled=os.environ.get(
+                "SELFHEALING_AUDIT_METRICS_ENABLED", "true"
+            ).lower() == "true",
+        )

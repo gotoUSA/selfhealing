@@ -357,6 +357,111 @@ def on_task_retry(
 
 
 # =============================================================================
+# Phase 6: Causation Context 자동 복원/정리
+# =============================================================================
+
+
+# Causation 컨텍스트 token 저장용 (task.request 속성)
+_CAUSATION_TOKEN_ATTR = "_selfhealing_causation_token"
+
+
+def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
+    """
+    Celery Task 시작 시 Causation Context 자동 복원.
+    
+    task.request.headers에서 causation 정보를 추출하여
+    CausationContext를 설정합니다.
+    
+    Code reference:
+        context/actor_context.py#L447-478 (restore_actor_from_celery 패턴)
+        audit/trace.py#L300-320 (set_celery_context 패턴)
+    """
+    try:
+        from selfhealing.context.causation_context import (
+            CausationInfo,
+            _current_causation,
+            CELERY_HEADER_CASCADE_ID,
+            CELERY_HEADER_PARENT_EVENT,
+            CELERY_HEADER_CHAIN_DEPTH,
+            CELERY_HEADER_NAMESPACE,
+        )
+        from datetime import datetime, timezone
+        
+        request = sender.request if sender else None
+        if not request:
+            return
+        
+        headers = getattr(request, "headers", None) or {}
+        
+        # Causation 헤더 추출
+        cascade_id = headers.get(CELERY_HEADER_CASCADE_ID)
+        
+        if not cascade_id:
+            # Causation 헤더 없음 - 컨텍스트 설정 생략
+            return
+        
+        # 컨텍스트 복원 (원자성 보장 - 새 인스턴스 생성)
+        info = CausationInfo(
+            cascade_id=cascade_id,
+            parent_event_id=headers.get(CELERY_HEADER_PARENT_EVENT, ""),
+            chain_depth=int(headers.get(CELERY_HEADER_CHAIN_DEPTH, "0")) + 1,  # 깊이 증가
+            namespace=headers.get(CELERY_HEADER_NAMESPACE, "global"),
+            metadata={
+                "restored_from": "celery_signal",
+                "restored_at": datetime.now(timezone.utc).isoformat(),
+                "task_id": task_id,
+                "task_name": task_name,
+            },
+        )
+        
+        # ContextVar에 설정 (token 저장)
+        token = _current_causation.set(info)
+        
+        # token을 task.request에 저장 (postrun에서 정리용)
+        setattr(request, _CAUSATION_TOKEN_ATTR, token)
+        
+        logger.debug(
+            f"[SelfHealing Signal] Causation context restored: "
+            f"cascade={cascade_id}, depth={info.chain_depth}, task={task_name}"
+        )
+        
+    except ImportError:
+        # causation_context 모듈 없음 - 생략
+        pass
+    except Exception as e:
+        logger.debug(f"[SelfHealing Signal] Causation setup failed: {e}")
+
+
+def _cleanup_causation_context(sender: Any) -> None:
+    """
+    Celery Task 종료 시 Causation Context 정리.
+    
+    Worker 재사용 시 이전 Task의 causation 컨텍스트 잔존 방지.
+    
+    Code reference:
+        audit/trace.py#L333-340 (clear_celery_context 패턴)
+    """
+    try:
+        from selfhealing.context.causation_context import _current_causation
+        
+        request = sender.request if sender else None
+        if not request:
+            return
+        
+        token = getattr(request, _CAUSATION_TOKEN_ATTR, None)
+        
+        if token:
+            _current_causation.reset(token)
+            delattr(request, _CAUSATION_TOKEN_ATTR)
+            logger.debug("[SelfHealing Signal] Causation context cleaned up")
+    
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"[SelfHealing Signal] Causation cleanup failed: {e}")
+
+
+# =============================================================================
 # Celery Task trace_id 표준화 - Prerun/Postrun 핸들러
 # =============================================================================
 
@@ -425,6 +530,9 @@ def on_task_prerun(
         }
         _celery_context_var.set(context)
         
+        # Phase 6: Causation Context 자동 복원
+        _setup_causation_context(sender, task_id, task_name)
+        
         logger.debug(
             f"[SelfHealing Signal] Task prerun: {task_name}, "
             f"task_id={task_id}, trace_id={trace_id}"
@@ -463,6 +571,9 @@ def on_task_postrun(
         from selfhealing.audit.trace import clear_celery_context
         
         clear_celery_context()
+        
+        # Phase 6: Causation Context 정리
+        _cleanup_causation_context(sender)
         
         logger.debug(
             f"[SelfHealing Signal] Task postrun: {task_name}, "

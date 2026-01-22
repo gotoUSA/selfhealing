@@ -1,9 +1,9 @@
 # 76. Cascade Event Audit (연계 이벤트 감사 추적)
 
-> **Version**: 1.5.0  
+> **Version**: 1.6.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-23  
-> **Status**: Phase 1,2,3,4 Implemented  
+> **Status**: Phase 1,2,3,4,5,6 Implemented  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ## 1. 개요
@@ -2518,3 +2518,20 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | | | - CASCADE_CLEANUP_SCHEDULE: Celery Beat 스케줄 정의 | |
 | | | - 16개 단위 테스트 통과 (`tests/unit/tasks/test_cascade_cleanup.py`) | |
 | | | **총 118개 테스트 통과** | |
+| 1.6.0 | 2026-01-23 | **Phase 5, 6 구현 완료** | AI Assistant |
+| | | **Phase 5 구현 (Backpressure, Load Shedding 및 Fail-Soft):** | |
+| | | - AuditBackpressureConfig: Backpressure 설정 (`audit/cascade_config.py`) | |
+| | | - CascadeEventPriority: 이벤트 우선순위 정의 (`audit/cascade_event.py`) | |
+| | | - TRIGGER_TYPE_PRIORITY: 트리거별 우선순위 매핑 | |
+| | | - CascadeLoadShedding: 우선순위 기반 Load Shedding (`audit/cascade_load_shedding.py`) | |
+| | | - record_with_load_shedding: Load Shedding 적용 기록 | |
+| | | - _save_to_local_fallback: 로컬 폴백 저장 | |
+| | | - recover_from_local_fallback: 폴백 복구 | |
+| | | - get_load_shedding_status: 상태 조회 | |
+| | | - 27개 단위 테스트 통과 (`tests/unit/audit/test_cascade_load_shedding.py`) | |
+| | | **Phase 6 구현 (Context 원자성 및 Celery 시그널):** | |
+| | | - _setup_causation_context: task_prerun 시그널 Causation 복원 | |
+| | | - _cleanup_causation_context: task_postrun 시그널 Causation 정리 | |
+| | | - chain_depth 자동 증가 (부모-자식 관계 추적) | |
+| | | - 17개 단위 테스트 통과 (`tests/unit/audit/test_celery_causation_signals.py`) | |
+| | | **총 162개 테스트 통과** | |

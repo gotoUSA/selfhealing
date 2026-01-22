@@ -53,9 +53,19 @@ from selfhealing.audit.cascade_event import (
     generate_cascade_id,
     generate_event_id,
     get_current_timestamp,
+    get_priority_for_trigger,
+    CascadeEventPriority,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Local Fallback Path (Fail-Soft)
+# =============================================================================
+
+LOCAL_CASCADE_FALLBACK_PATH = "/tmp/cascade_audit_fallback.jsonl"
+"""로컬 폴백 파일 경로."""
 
 
 class CascadeEventAuditor:
@@ -69,6 +79,8 @@ class CascadeEventAuditor:
     - Hash Chain 연결
     - 무결성 검증
     - 인과관계 조회
+    - Load Shedding (Phase 5)
+    - Fail-Soft 로컬 폴백 (Phase 5)
     """
     
     # Redis 키 패턴
@@ -79,13 +91,26 @@ class CascadeEventAuditor:
     # 인덱스 최대 크기
     MAX_INDEX_SIZE = 10000
     
-    def __init__(self) -> None:
+    def __init__(self, enable_load_shedding: bool = True) -> None:
+        """
+        Args:
+            enable_load_shedding: Load Shedding 활성화 여부
+        """
         self._lock = threading.RLock()
+        self._enable_load_shedding = enable_load_shedding
+        self._load_shedding = None  # Lazy init
     
     def _get_backend(self):
         """State backend 획득."""
         from selfhealing.core.state_backend import get_state_backend
         return get_state_backend()
+    
+    def _get_load_shedding(self):
+        """Load Shedding 관리자 획득 (Lazy init)."""
+        if self._load_shedding is None and self._enable_load_shedding:
+            from selfhealing.audit.cascade_load_shedding import get_cascade_load_shedding
+            self._load_shedding = get_cascade_load_shedding()
+        return self._load_shedding
     
     def record(
         self,
@@ -109,6 +134,9 @@ class CascadeEventAuditor:
         
         Returns:
             생성된 CascadeEvent
+        
+        Note:
+            Phase 5 Fail-Soft: Redis 장애 시 로컬 폴백으로 저장
         """
         with self._lock:
             # 1. ID 생성
@@ -144,10 +172,16 @@ class CascadeEventAuditor:
             # 6. 해시 계산 및 설정
             cascade_event.current_hash = cascade_event.calculate_hash()
             
-            # 7. 저장
-            self._save_cascade_event(cascade_event)
-            self._update_last_hash(namespace, cascade_event.current_hash)
-            self._add_to_index(namespace, cascade_id)
+            # 7. 저장 (Fail-Soft: Redis 실패 시 로컬 폴백)
+            try:
+                self._save_cascade_event(cascade_event)
+                self._update_last_hash(namespace, cascade_event.current_hash)
+                self._add_to_index(namespace, cascade_id)
+            except Exception as e:
+                logger.warning(
+                    f"[CascadeAudit] Redis save failed, using fallback: {e}"
+                )
+                self._save_to_local_fallback(cascade_event)
             
             logger.info(
                 f"[CascadeAudit] Recorded: id={cascade_id}, "
@@ -718,6 +752,304 @@ class CascadeEventAuditor:
             ids = ids[:self.MAX_INDEX_SIZE]
         
         backend.set(key, {"ids": ids})
+    
+    # =========================================================================
+    # Phase 5: Load Shedding + Fail-Soft Methods
+    # =========================================================================
+    
+    def record_with_load_shedding(
+        self,
+        trigger_type: str,
+        trigger_details: Dict[str, Any],
+        effects: List[Dict[str, Any]],
+        namespace: str,
+        triggered_by: Optional[str] = None,
+        external_trace: Optional[ExternalTraceContext] = None,
+    ) -> Optional[CascadeEvent]:
+        """
+        Load Shedding을 적용하여 Cascade Event 기록.
+        
+        버퍼 사용률에 따라 우선순위가 낮은 이벤트를 드롭합니다.
+        CRITICAL 이벤트는 절대 드롭하지 않으며, 필요시 로컬 폴백을 사용합니다.
+        
+        Args:
+            trigger_type: 트리거 유형
+            trigger_details: 트리거 상세 정보
+            effects: 연쇄 효과 목록
+            namespace: 네임스페이스
+            triggered_by: 트리거 주체
+            external_trace: 외부 분산 추적 컨텍스트
+        
+        Returns:
+            생성된 CascadeEvent 또는 None (드롭된 경우)
+        """
+        load_shedding = self._get_load_shedding()
+        
+        if not load_shedding:
+            # Load Shedding 비활성화 시 일반 기록
+            return self.record(
+                trigger_type=trigger_type,
+                trigger_details=trigger_details,
+                effects=effects,
+                namespace=namespace,
+                triggered_by=triggered_by,
+                external_trace=external_trace,
+            )
+        
+        # 버퍼 상태 확인
+        backend = self._get_backend()
+        index_key = self.CASCADE_INDEX_KEY.format(namespace=namespace)
+        index_data = backend.get(index_key) or {}
+        ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
+        buffer_size = len(ids)
+        
+        # Load Shedding 결정
+        decision = load_shedding.should_accept(
+            trigger_type=trigger_type,
+            buffer_size=buffer_size,
+            buffer_capacity=self.MAX_INDEX_SIZE,
+        )
+        
+        if not decision["accepted"]:
+            # 드롭
+            logger.warning(
+                f"[CascadeAudit] Event dropped by load shedding: "
+                f"trigger={trigger_type}, reason={decision['reason']}"
+            )
+            
+            # 폴백 권장 시 로컬에 저장
+            if decision.get("use_fallback"):
+                self._record_dropped_to_fallback(
+                    trigger_type=trigger_type,
+                    trigger_details=trigger_details,
+                    effects=effects,
+                    namespace=namespace,
+                    reason=decision["reason"],
+                )
+            
+            return None
+        
+        # 정상 기록
+        return self.record(
+            trigger_type=trigger_type,
+            trigger_details=trigger_details,
+            effects=effects,
+            namespace=namespace,
+            triggered_by=triggered_by,
+            external_trace=external_trace,
+        )
+    
+    def _save_to_local_fallback(self, event: CascadeEvent) -> None:
+        """
+        로컬 폴백 파일에 Cascade Event 저장.
+        
+        Redis 장애 시 로컬 파일에 JSONL 형식으로 저장합니다.
+        이후 recover_from_local_fallback 태스크로 Redis에 복구됩니다.
+        
+        Args:
+            event: 저장할 CascadeEvent
+        """
+        from pathlib import Path
+        import json
+        
+        try:
+            fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+            fallback_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(fallback_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event.to_dict()) + "\n")
+            
+            logger.info(
+                f"[CascadeAudit] Saved to local fallback: cascade={event.id}"
+            )
+        except Exception as e:
+            logger.error(
+                f"[CascadeAudit] Local fallback save failed: {e}"
+            )
+    
+    def _record_dropped_to_fallback(
+        self,
+        trigger_type: str,
+        trigger_details: Dict[str, Any],
+        effects: List[Dict[str, Any]],
+        namespace: str,
+        reason: str,
+    ) -> None:
+        """
+        드롭된 이벤트 정보를 폴백에 기록.
+        
+        Load Shedding으로 드롭된 이벤트의 최소 정보를 기록하여
+        이후 분석 및 복구에 사용합니다.
+        """
+        from pathlib import Path
+        from datetime import datetime, timezone
+        import json
+        
+        try:
+            fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+            fallback_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            dropped_record = {
+                "type": "dropped",
+                "trigger_type": trigger_type,
+                "namespace": namespace,
+                "reason": reason,
+                "effects_count": len(effects),
+                "dropped_at": datetime.now(timezone.utc).isoformat(),
+            }
+            
+            with open(fallback_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(dropped_record) + "\n")
+        except Exception as e:
+            logger.debug(f"[CascadeAudit] Dropped record save failed: {e}")
+    
+    def recover_from_local_fallback(
+        self,
+        namespace: str = "global",
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        로컬 폴백에서 Redis로 복구.
+        
+        Redis 장애 복구 후 로컬에 쌓인 이벤트를 Redis로 이관합니다.
+        
+        Args:
+            namespace: 네임스페이스
+            dry_run: True면 실제 복구 없이 대상만 확인
+        
+        Returns:
+            복구 결과 통계
+        """
+        from pathlib import Path
+        import json
+        
+        fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+        
+        if not fallback_path.exists():
+            return {
+                "status": "no_fallback_data",
+                "namespace": namespace,
+                "recovered": 0,
+                "failed": 0,
+            }
+        
+        entries = []
+        
+        # 폴백 파일에서 해당 네임스페이스 이벤트 읽기
+        with open(fallback_path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get("namespace") == namespace and entry.get("type") != "dropped":
+                        entries.append(entry)
+                except json.JSONDecodeError:
+                    continue
+        
+        if dry_run:
+            logger.info(
+                f"[CascadeAudit] Fallback recovery dry run: "
+                f"found {len(entries)} entries, namespace={namespace}"
+            )
+            return {
+                "status": "dry_run",
+                "namespace": namespace,
+                "entries_to_recover": len(entries),
+                "recovered": 0,
+            }
+        
+        # Redis로 복구
+        recovered = 0
+        failed = 0
+        
+        for entry in entries:
+            try:
+                event = CascadeEvent.from_dict(entry)
+                self._save_cascade_event(event)
+                self._add_to_index(namespace, event.id)
+                recovered += 1
+            except Exception as e:
+                logger.error(f"[CascadeAudit] Recovery failed: {e}")
+                failed += 1
+        
+        # 복구 완료 후 해당 네임스페이스 엔트리 제거
+        if recovered > 0 and failed == 0:
+            self._remove_namespace_from_fallback(namespace)
+        
+        logger.info(
+            f"[CascadeAudit] Fallback recovery completed: "
+            f"recovered={recovered}, failed={failed}, namespace={namespace}"
+        )
+        
+        return {
+            "status": "completed",
+            "namespace": namespace,
+            "recovered": recovered,
+            "failed": failed,
+        }
+    
+    def _remove_namespace_from_fallback(self, namespace: str) -> None:
+        """폴백 파일에서 특정 네임스페이스 엔트리 제거."""
+        from pathlib import Path
+        import json
+        
+        fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+        
+        if not fallback_path.exists():
+            return
+        
+        remaining = []
+        
+        with open(fallback_path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get("namespace") != namespace:
+                        remaining.append(line)
+                except json.JSONDecodeError:
+                    remaining.append(line)
+        
+        if remaining:
+            with open(fallback_path, "w", encoding="utf-8") as f:
+                f.writelines(remaining)
+        else:
+            fallback_path.unlink(missing_ok=True)
+    
+    def get_load_shedding_status(
+        self,
+        namespace: str = "global",
+    ) -> Dict[str, Any]:
+        """
+        Load Shedding 상태 조회.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            Load Shedding 상태 정보
+        """
+        load_shedding = self._get_load_shedding()
+        
+        if not load_shedding:
+            return {
+                "enabled": False,
+                "status": "DISABLED",
+            }
+        
+        # 버퍼 상태 확인
+        backend = self._get_backend()
+        index_key = self.CASCADE_INDEX_KEY.format(namespace=namespace)
+        index_data = backend.get(index_key) or {}
+        ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
+        buffer_size = len(ids)
+        
+        status = load_shedding.get_status(
+            buffer_size=buffer_size,
+            buffer_capacity=self.MAX_INDEX_SIZE,
+        )
+        status["enabled"] = True
+        status["namespace"] = namespace
+        
+        return status
 
 
 # =============================================================================
