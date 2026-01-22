@@ -119,6 +119,16 @@ from selfhealing.services.canary.feature_flag import (
     reset_canary_feature_flag,
 )
 
+# Safety Interlock (Step 7)
+from selfhealing.services.canary.interlock import (
+    InterlockAction,
+    InterlockCheckFailure,
+    InterlockResult,
+    CanarySafetyInterlock,
+    get_canary_safety_interlock,
+    reset_canary_safety_interlock,
+)
+
 __all__ = [
     # Data Models
     "CanaryState",
@@ -165,4 +175,11 @@ __all__ = [
     "CanaryConfigMiddleware",
     "get_canary_feature_flag",
     "reset_canary_feature_flag",
+    # Safety Interlock (Step 7)
+    "InterlockAction",
+    "InterlockCheckFailure",
+    "InterlockResult",
+    "CanarySafetyInterlock",
+    "get_canary_safety_interlock",
+    "reset_canary_safety_interlock",
 ]

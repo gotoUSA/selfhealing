@@ -1,9 +1,9 @@
 # 74. Canary Safety Interlock (Canary 자동 제동 장치)
 
-> **Version**: 1.1.0  
+> **Version**: 1.2.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
-> **Status**: Draft  
+> **Status**: In Progress  
 > **Parent**: [72_EMERGENCY_COORDINATION_LAYER.md](72_EMERGENCY_COORDINATION_LAYER.md)
 
 ---
@@ -14,9 +14,9 @@
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
 |------|----------|------|----------|------|
-| 1 | `CanarySafetyInterlock` | Emergency Level 기반 자동 제동 | P0 | ⬜ TODO |
-| 2 | `FailClosedPolicy` | Redis 장애 시 안전 모드 (§3.7) | P0 | ⬜ TODO |
-| 3 | `InterlockAction` / `InterlockResult` | 액션 및 결과 모델 | P0 | ⬜ TODO |
+| 1 | `CanarySafetyInterlock` | Emergency Level 기반 자동 제동 | P0 | ✅ DONE |
+| 2 | `FailClosedPolicy` | Redis 장애 시 안전 모드 (§3.7) | P0 | ✅ DONE |
+| 3 | `InterlockAction` / `InterlockResult` | 액션 및 결과 모델 | P0 | ✅ DONE |
 
 ### Phase 2: 안전 강화 (P1)
 
