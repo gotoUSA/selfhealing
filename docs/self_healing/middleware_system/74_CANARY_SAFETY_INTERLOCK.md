@@ -1,6 +1,6 @@
 # 74. Canary Safety Interlock (Canary 자동 제동 장치)
 
-> **Version**: 1.2.0  
+> **Version**: 1.3.0  
 > **Created**: 2026-01-21  
 > **Updated**: 2026-01-22  
 > **Status**: In Progress  
@@ -22,9 +22,9 @@
 
 | 순서 | 컴포넌트 | 설명 | 우선순위 | 상태 |
 |------|----------|------|----------|------|
-| 4 | `EmergencyOverridePolicy` | Break Glass 긴급 우회 (§3.8) | P1 | ⬜ TODO |
-| 5 | `RegionalInterlockPolicy` | 리전별 격리 정책 (§3.9) | P1 | ⬜ TODO |
-| 6 | `PauseReasonTracker` | PAUSED 상태 사유 추적 (§3.10) | P1 | ⬜ TODO |
+| 4 | `EmergencyOverridePolicy` | Break Glass 긴급 우회 (§3.8) | P1 | ✅ DONE |
+| 5 | `RegionalInterlockPolicy` | 리전별 격리 정책 (§3.9) | P1 | ✅ DONE |
+| 6 | `PauseReasonTracker` | PAUSED 상태 사유 추적 (§3.10) | P1 | ✅ DONE |
 
 ### Phase 3: 신뢰성 및 거버넌스 (P2)
 
