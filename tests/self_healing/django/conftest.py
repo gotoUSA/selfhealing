@@ -7,20 +7,10 @@ Django/shopping 앱에 의존하는 테스트용 fixtures.
 mock_external_services를 사용하지 않습니다 - 실제 외부 의존성 테스트가 목적입니다.
 
 실행 방법:
-    docker-compose -f docker-compose.test.yml exec web pytest tests/self_healing/django/ -v
+    docker-compose -f docker-compose.test.yml run --rm test-hybrid-storage \
+        python -m pytest tests/self_healing/django/ -v --no-cov -n 0 -m ""
+
+NOTE: 이 폴더의 테스트는 docker-compose 환경에서만 실행됩니다.
+      DB/Redis가 항상 가용하므로 requires_db 마커를 사용하지 않습니다.
 """
 import pytest
-
-
-# =============================================================================
-# Django 테스트 마커 자동 적용
-# =============================================================================
-def pytest_collection_modifyitems(config, items):
-    """
-    이 폴더의 모든 테스트에 requires_db 마커 자동 적용.
-    """
-    for item in items:
-        # 이 conftest가 적용되는 테스트에만 마커 추가
-        if "self_healing/django" in str(item.fspath):
-            if "requires_db" not in [m.name for m in item.iter_markers()]:
-                item.add_marker(pytest.mark.requires_db)
