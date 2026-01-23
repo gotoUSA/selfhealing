@@ -2,13 +2,15 @@
 Pydantic-DRF Serializer Integration Tests.
 
 Pydantic 모델에서 DRF Serializer 자동 생성 및 검증 테스트.
+
+Note:
+    이 테스트는 tests/self_healing/django/ 디렉토리에 위치합니다.
+    Django 초기화는 conftest.py에서 자동으로 처리됩니다.
+    
+    실행 방법:
+        docker-compose -f docker-compose.test.yml run --rm test-hybrid-storage \
+            python -m pytest tests/self_healing/django/test_pydantic_drf_integration.py -v
 """
-
-import os
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
-
-import django
-django.setup()
 
 import pytest
 from rest_framework import serializers
