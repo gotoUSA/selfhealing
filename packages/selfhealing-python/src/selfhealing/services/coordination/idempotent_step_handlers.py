@@ -755,6 +755,19 @@ class IdempotentStepHandlerRegistry:
         with self._lock:
             return self._handlers.get(step_type)
     
+    def has_handler(self, step_type: RecoveryStepType) -> bool:
+        """
+        핸들러 존재 여부 확인.
+        
+        Args:
+            step_type: 단계 유형
+        
+        Returns:
+            True if 핸들러가 등록됨
+        """
+        with self._lock:
+            return step_type in self._handlers
+    
     def execute(
         self,
         session: RecoverySession,

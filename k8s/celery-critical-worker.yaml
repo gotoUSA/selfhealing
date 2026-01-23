@@ -1,0 +1,192 @@
+# Critical Path Dedicated Worker Deployment
+#
+# P0 태스크 전용 Celery Worker
+#
+# 목적: Recovery, Emergency, CircuitBreaker 관련 태스크를
+#       일반 태스크와 분리하여 우선순위 보장
+#
+# Reference:
+#   docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.2
+#   packages/selfhealing-python/src/selfhealing/services/coordination/critical_worker.py
+#
+# 적용 방법:
+#   kubectl apply -f k8s/celery-critical-worker.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-critical-worker
+  namespace: selfhealing
+  labels:
+    app: celery-critical-worker
+    component: selfhealing
+    tier: worker
+    priority: p0
+spec:
+  # P0 Worker는 최소 2개 유지 (HA)
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-critical-worker
+  template:
+    metadata:
+      labels:
+        app: celery-critical-worker
+        component: selfhealing
+        priority: p0
+      annotations:
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      # 전용 노드 스케줄링 (선택사항)
+      # nodeSelector:
+      #   selfhealing.io/worker-type: critical
+      
+      # 다른 P0 Worker와 같은 노드에 배치 방지 (Anti-Affinity)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: priority
+                      operator: In
+                      values:
+                        - p0
+                topologyKey: kubernetes.io/hostname
+      
+      # 우선순위 클래스 (높은 우선순위)
+      priorityClassName: high-priority
+      
+      containers:
+        - name: worker
+          image: myproject:latest
+          command:
+            - celery
+            - -A
+            - myproject
+            - worker
+            - --loglevel=info
+            # selfhealing.critical 큐만 처리
+            - -Q
+            - selfhealing.critical
+            # Prefetch 1 (한 번에 하나씩 처리)
+            - --prefetch-multiplier=1
+            # Concurrency 2 (동시 처리 2개)
+            - -c
+            - "2"
+          env:
+            - name: CELERY_WORKER_POOL
+              value: "prefork"
+            - name: CELERY_WORKER_HIJACK_ROOT_LOGGER
+              value: "false"
+            # Worker 식별자
+            - name: CELERY_WORKER_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Redis URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: broker-url
+            # Django Settings
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # Recovery 진행 중 Worker 종료 방지 (SIGTERM 처리)
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  # RecoveryAwareShutdownHook 스크립트 호출
+                  - |
+                    echo "PreStop hook started"
+                    # Recovery 진행 중인지 확인 (최대 300초 대기)
+                    python -c "
+                    import time
+                    from selfhealing.services.coordination.recovery_shutdown import (
+                        RecoveryAwareShutdownHook,
+                    )
+                    hook = RecoveryAwareShutdownHook()
+                    hook.wait_for_safe_shutdown(max_wait_seconds=300)
+                    "
+                    echo "PreStop hook completed"
+      # 종료 유예 시간 (5분)
+      terminationGracePeriodSeconds: 300
+
+---
+# PodDisruptionBudget - P0 Worker 최소 1개 유지
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-critical-worker-pdb
+  namespace: selfhealing
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-critical-worker
+
+---
+# HorizontalPodAutoscaler (선택사항)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: celery-critical-worker-hpa
+  namespace: selfhealing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: celery-critical-worker
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    # CPU 사용률 기반 스케일링
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # 메모리 사용률 기반 스케일링
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

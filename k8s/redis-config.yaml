@@ -1,0 +1,168 @@
+# Redis ConfigMap for Self-Healing System
+#
+# Redis 메모리 정책 설정 - P0 키 보호
+#
+# 문제: Redis maxmemory 도달 시 중요한 키가 삭제될 수 있음
+# 해결: volatile-lru 정책 + P0 키에 TTL 없음 (영구 보관)
+#
+# Reference:
+#   docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.1
+#
+# 적용 방법:
+#   kubectl apply -f k8s/redis-config.yaml
+#   kubectl rollout restart deployment/redis
+#
+# 키 우선순위 (redis_key_guard.py 참조):
+#   P0: Emergency state, Recovery locks, Circuit breaker state
+#   P1: Session data, Metrics cache
+#   P2: Analytics, Logs
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: selfhealing
+  labels:
+    app: redis
+    component: selfhealing
+    tier: infrastructure
+data:
+  redis.conf: |
+    # ==========================================================================
+    # Memory Management
+    # ==========================================================================
+    # 최대 메모리 설정 (환경에 맞게 조정)
+    maxmemory 512mb
+    
+    # 메모리 정책: volatile-lru (TTL이 있는 키 중 LRU 삭제)
+    # P0 키는 TTL 없음 → 삭제되지 않음
+    maxmemory-policy volatile-lru
+    
+    # LRU 샘플링 개수 (정확도 vs 성능 트레이드오프)
+    maxmemory-samples 10
+    
+    # ==========================================================================
+    # Persistence (Optional - 중요 데이터 백업)
+    # ==========================================================================
+    # RDB 스냅샷 설정
+    save 900 1      # 900초(15분) 내 1개 이상 변경 시
+    save 300 10     # 300초(5분) 내 10개 이상 변경 시
+    save 60 10000   # 60초(1분) 내 10000개 이상 변경 시
+    
+    # RDB 파일명
+    dbfilename selfhealing-dump.rdb
+    
+    # AOF 비활성화 (RDB만 사용)
+    appendonly no
+    
+    # ==========================================================================
+    # Connection Settings
+    # ==========================================================================
+    # 최대 클라이언트 연결 수
+    maxclients 10000
+    
+    # TCP keepalive (초)
+    tcp-keepalive 300
+    
+    # 연결 타임아웃 (0 = 비활성화)
+    timeout 0
+    
+    # ==========================================================================
+    # Security
+    # ==========================================================================
+    # 위험한 명령어 비활성화 (production 환경)
+    # rename-command FLUSHALL ""
+    # rename-command FLUSHDB ""
+    # rename-command DEBUG ""
+    
+    # ==========================================================================
+    # Logging
+    # ==========================================================================
+    loglevel notice
+    
+    # ==========================================================================
+    # Slow Log
+    # ==========================================================================
+    # 10ms 이상 걸리는 쿼리 로깅
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: selfhealing
+  labels:
+    app: redis
+    component: selfhealing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: selfhealing
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+          volumeMounts:
+            - name: redis-config
+              mountPath: /etc/redis
+            - name: redis-data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+        - name: redis-data
+          emptyDir: {}
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: selfhealing
+  labels:
+    app: redis
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis

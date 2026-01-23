@@ -196,6 +196,13 @@ class RecoverySession:
 
     cascade_event_id: Optional[str] = None
     """연결된 Cascade Event ID."""
+    
+    metadata: Optional[Dict[str, Any]] = None
+    """
+    추가 메타데이터.
+    
+    Phase 3.7: requires_approval, approved_by, approved_at 등 저장.
+    """
 
     def get_current_step(self) -> Optional[RecoveryStep]:
         """
@@ -255,6 +262,7 @@ class RecoverySession:
             "initiated_by": self.initiated_by,
             "abort_reason": self.abort_reason,
             "cascade_event_id": self.cascade_event_id,
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -277,4 +285,5 @@ class RecoverySession:
             initiated_by=data.get("initiated_by", "system"),
             abort_reason=data.get("abort_reason"),
             cascade_event_id=data.get("cascade_event_id"),
+            metadata=data.get("metadata"),
         )

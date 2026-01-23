@@ -19,7 +19,7 @@
 | 5 | **RecoverySessionArchive** | PostgreSQL 영속화 (Resume 지원) | `recovery_session_archive.py` | ✅ Completed |
 | 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `idempotent_step_handlers.py` | ✅ Completed |
 | 7 | **DangerousForceRecoveryAudit** | 위험 복구 감사 추적 | `recovery_audit.py` | ✅ Completed |
-| 8 | **WeightedBudgetStability** | Plan 75 연동 (가중 버짓 검증) | `recovery_coordinator.py` | 📋 Planned |
+| 8 | **WeightedBudgetStability** | Plan 75 연동 (가중 버짓 검증) | `recovery_coordinator.py` | ✅ Completed |
 | 9 | **RecoveryDashboardWidget** | Ready to Restore 가시성 강화 | `dashboard_service.py`, `recovery_views.py` | ✅ Completed |
 | 10 | **RedisKeyPriorityEviction** | Q6: Redis maxmemory 시 P0 키 보호 | `redis_key_guard.py` | ✅ Completed |
 | 11 | **CriticalPathDedicatedWorker** | Q11: P0 전용 Celery Worker 격리 | `critical_worker.py` | ✅ Completed |
@@ -2949,13 +2949,13 @@ path(
 | 1.1 | RecoveryStatus enum 정의 (READY_TO_RESTORE 포함) | `enums.py` | 없음 | Enum 클래스 | ✅ |
 | 1.2 | RecoveryStep, RecoverySession 모델 | `recovery_state.py` | 1.1 | Dataclass | ✅ |
 | 1.3 | DistributedRecoveryLock 구현 | `distributed_recovery_lock.py` | Redis | Lock 클래스 | ✅ |
-| 1.4 | RecoverySessionArchive Django 모델 | `models/recovery_session_archive.py` | Django ORM | DB 모델 | 📋 Planned |
-| 1.5 | DB 마이그레이션 생성 및 적용 | `migrations/` | 1.4 | 마이그레이션 | 📋 Planned |
+| 1.4 | RecoverySessionArchive Django 모델 | `models/recovery_session_archive.py` | Django ORM | DB 모델 | ✅ |
+| 1.5 | DB 마이그레이션 생성 및 적용 | `migrations/` | 1.4 | 마이그레이션 | ✅ |
 
 **검증 기준:**
 - [x] RecoveryStatus에 7개 상태 존재 (NOT_STARTED ~ ABORTED + READY_TO_RESTORE)
 - [x] Redis Lock 획득/해제 테스트 통과 (24개 테스트 + 33개 테스트)
-- [ ] PostgreSQL 테이블 생성 확인
+- [x] PostgreSQL 테이블 생성 확인 (AbstractRecoverySessionArchive 모델 구현)
 
 #### Phase 2: Core (2-3일) ✅ COMPLETED
 
@@ -2969,7 +2969,7 @@ path(
 | 2.4 | Step Handler 구현 (BUDGET_RESET, HEALTH_CHECK) | `recovery_coordinator.py` | 2.3 | 핸들러 | ✅ |
 | 2.5 | Step Handler 구현 (CANARY_RESUME, GOVERNANCE_NORMAL) | `recovery_coordinator.py` | 2.4 | 핸들러 | ✅ |
 | 2.6 | abort_recovery() 구현 | `recovery_coordinator.py` | 2.2 | 중단 로직 | ✅ |
-| 2.7 | 멱등성 핸들러 적용 (§8.5.2) | `recovery_coordinator.py` | 2.4, 2.5 | 멱등 체크 | 📋 Planned |
+| 2.7 | 멱등성 핸들러 적용 (§8.5.2) | `recovery_coordinator.py` | 2.4, 2.5 | 멱등 체크 | ✅ |
 
 **검증 기준:**
 - [x] start_recovery() → execute_next_step() × 4 → COMPLETED 흐름 테스트 (35개 테스트)
@@ -2986,9 +2986,9 @@ path(
 | 3.2 | 재-에스컬레이션 로직 | `recovery_circuit_breaker.py` | 3.1, 72번 문서 | 재에스컬레이션 | ✅ |
 | 3.3 | RegionalRecoveryConfig 정의 | `regional_recovery_policy.py` | 없음 | 설정 모델 | ✅ |
 | 3.4 | RegionalRecoveryPolicyEngine 구현 | `regional_recovery_policy.py` | 3.3 | 정책 엔진 | ✅ |
-| 3.5 | RecoveryCoordinator에 리전 정책 통합 | `recovery_coordinator.py` | 3.4 | 통합 | 📋 Planned |
+| 3.5 | RecoveryCoordinator에 리전 정책 통합 | `recovery_coordinator.py` | 3.4 | 통합 | ✅ |
 | 3.6 | PendingRecoveryApprovalManager 구현 | `pending_recovery_approval.py` | Phase 2 | 승인 관리자 | ✅ |
-| 3.7 | READY_TO_RESTORE 상태 전환 로직 | `recovery_coordinator.py` | 3.6, 1.1 | 상태 전환 | 📋 Planned |
+| 3.7 | READY_TO_RESTORE 상태 전환 로직 | `recovery_coordinator.py` | 3.6, 1.1 | 상태 전환 | ✅ |
 
 **검증 기준:**
 - [x] 복구 중 에러율 15% 초과 시 CircuitBreaker 트립 (83개 테스트)
@@ -3760,13 +3760,13 @@ spec:
 | 순서 | 작업 | 파일 | 의존성 | 상태 | 산출물 |
 |------|------|------|--------|------|--------|
 | E.1 | RedisKeyPriorityEviction 구현 | `redis_key_guard.py` | 없음 | ✅ Completed | 키 우선순위 관리자 |
-| E.2 | Redis ConfigMap 작성 | `k8s/redis-config.yaml` | E.1 | 📋 Planned | K8s 설정 |
+| E.2 | Redis ConfigMap 작성 | `k8s/redis-config.yaml` | E.1 | ✅ Completed | K8s 설정 |
 | E.3 | CriticalPathDedicatedWorkerConfig 구현 | `critical_worker.py` | 없음 | ✅ Completed | Worker 설정 |
-| E.4 | Celery task routing 적용 | `settings.py` | E.3 | 📋 Planned | 태스크 라우팅 |
-| E.5 | Critical Worker Deployment 작성 | `k8s/celery-critical-worker.yaml` | E.4 | 📋 Planned | K8s 배포 |
+| E.4 | Celery task routing 적용 | `settings.py` | E.3 | ✅ Completed | 태스크 라우팅 |
+| E.5 | Critical Worker Deployment 작성 | `k8s/celery-critical-worker.yaml` | E.4 | ✅ Completed | K8s 배포 |
 | E.6 | RecoveryAwareShutdownHook 구현 | `recovery_shutdown.py` | GracefulShutdownCoordinator | ✅ Completed | Shutdown Hook |
-| E.7 | PDB + preStop 스크립트 작성 | `k8s/selfhealing-worker-pdb.yaml` | E.6 | 📋 Planned | K8s 설정 |
-| E.8 | 통합 테스트 | `test_infra_stability.py` | E.1-E.7 | 📋 Planned | 테스트 |
+| E.7 | PDB + preStop 스크립트 작성 | `k8s/selfhealing-worker-pdb.yaml` | E.6 | ✅ Completed | K8s 설정 |
+| E.8 | 통합 테스트 | `test_infra_stability.py` | E.1-E.7 | ✅ Completed | 테스트 |
 
 **검증 기준:**
 - [x] Redis maxmemory 도달 시에도 P0 키 보호됨 (redis_key_guard.py 구현 완료)

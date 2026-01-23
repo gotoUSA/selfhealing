@@ -1,0 +1,211 @@
+# Self-Healing Worker PodDisruptionBudget + PreStop Scripts
+#
+# Recovery 진행 중 Worker 종료 방지 설정
+#
+# 목적:
+# 1. PDB: Kubernetes 업그레이드/노드 drain 시 최소 Worker 수 보장
+# 2. PreStop: Recovery 진행 중인 경우 종료 대기
+#
+# Reference:
+#   docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.3
+#   packages/selfhealing-python/src/selfhealing/services/coordination/recovery_shutdown.py
+#
+# 적용 방법:
+#   kubectl apply -f k8s/selfhealing-worker-pdb.yaml
+
+# =============================================================================
+# PodDisruptionBudget for Default Workers
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-default-worker-pdb
+  namespace: selfhealing
+  labels:
+    app: celery-worker
+    component: selfhealing
+spec:
+  # 최소 50% Worker 유지 (또는 minAvailable: 1 사용)
+  minAvailable: 50%
+  selector:
+    matchLabels:
+      app: celery-worker
+
+---
+# =============================================================================
+# PodDisruptionBudget for Payment Workers
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-payment-worker-pdb
+  namespace: selfhealing
+  labels:
+    app: celery-payment-worker
+    component: payment
+spec:
+  # 결제 Worker는 최소 1개 유지
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-payment-worker
+
+---
+# =============================================================================
+# ConfigMap: PreStop Hook Scripts
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: worker-prestop-scripts
+  namespace: selfhealing
+  labels:
+    component: selfhealing
+data:
+  # Recovery-aware graceful shutdown script
+  prestop-recovery-aware.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "[PreStop] Recovery-aware shutdown started at $(date)"
+    
+    # Python 스크립트로 Recovery 상태 확인
+    python3 << 'EOF'
+    import sys
+    import time
+    import logging
+    
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("prestop")
+    
+    MAX_WAIT_SECONDS = 300  # 최대 5분 대기
+    CHECK_INTERVAL = 5      # 5초마다 확인
+    
+    try:
+        from selfhealing.services.coordination.recovery_shutdown import (
+            RecoveryAwareShutdownHook,
+        )
+        hook = RecoveryAwareShutdownHook()
+        
+        start_time = time.time()
+        
+        while True:
+            elapsed = time.time() - start_time
+            
+            if elapsed >= MAX_WAIT_SECONDS:
+                logger.warning(
+                    f"[PreStop] Max wait time ({MAX_WAIT_SECONDS}s) reached, "
+                    f"proceeding with shutdown"
+                )
+                break
+            
+            if hook.is_safe_to_shutdown():
+                logger.info("[PreStop] Safe to shutdown - no recovery in progress")
+                break
+            
+            logger.info(
+                f"[PreStop] Recovery in progress, waiting... "
+                f"(elapsed: {elapsed:.0f}s/{MAX_WAIT_SECONDS}s)"
+            )
+            time.sleep(CHECK_INTERVAL)
+        
+        # 마지막으로 진행 중인 태스크 완료 대기
+        hook.wait_for_tasks_completion(timeout=30)
+        
+    except ImportError:
+        logger.info("[PreStop] selfhealing package not available, proceeding")
+    except Exception as e:
+        logger.error(f"[PreStop] Error during shutdown check: {e}")
+    
+    logger.info("[PreStop] Shutdown check completed")
+    EOF
+    
+    echo "[PreStop] Recovery-aware shutdown completed at $(date)"
+  
+  # Simple graceful shutdown (Recovery 체크 없음)
+  prestop-simple.sh: |
+    #!/bin/bash
+    echo "[PreStop] Simple shutdown started at $(date)"
+    
+    # 현재 처리 중인 태스크 완료 대기 (최대 30초)
+    sleep 30
+    
+    echo "[PreStop] Simple shutdown completed at $(date)"
+
+---
+# =============================================================================
+# Worker Deployment with PreStop Hook
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: selfhealing
+  labels:
+    app: celery-worker
+    component: selfhealing
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        component: selfhealing
+    spec:
+      containers:
+        - name: worker
+          image: myproject:latest
+          command:
+            - celery
+            - -A
+            - myproject
+            - worker
+            - --loglevel=info
+            - -Q
+            - default,notifications
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: broker-url
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: prestop-scripts
+              mountPath: /scripts
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/bash
+                  - /scripts/prestop-recovery-aware.sh
+      volumes:
+        - name: prestop-scripts
+          configMap:
+            name: worker-prestop-scripts
+            defaultMode: 0755
+      # 종료 유예 시간 (5분 + 30초 버퍼)
+      terminationGracePeriodSeconds: 330
+
+---
+# =============================================================================
+# PriorityClass for Critical Workers
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "Priority class for critical self-healing workers"

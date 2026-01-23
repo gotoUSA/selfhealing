@@ -265,9 +265,48 @@ app.conf.update(
             "exchange_type": "direct",
             "routing_key": "notifications",
         },
+        # ======================================================================
+        # Self-Healing Critical Queue (P0 태스크 전용)
+        # Reference: 77_RECOVERY_COORDINATOR.md#11.2
+        # ======================================================================
+        "selfhealing.critical": {
+            "exchange": "selfhealing.critical",
+            "exchange_type": "direct",
+            "routing_key": "selfhealing.critical",
+        },
+        "chaos": {  # Chaos Engineering 태스크
+            "exchange": "chaos",
+            "exchange_type": "direct",
+            "routing_key": "chaos",
+        },
+        "chaos_monitoring": {  # Chaos 모니터링 태스크
+            "exchange": "chaos_monitoring",
+            "exchange_type": "direct",
+            "routing_key": "chaos.monitoring",
+        },
     },
     # 라우팅 설정
     task_routes={
+        # ======================================================================
+        # Self-Healing Critical Tasks (P0 - 전용 Worker에서 처리)
+        # Reference: 77_RECOVERY_COORDINATOR.md#E.4
+        # ======================================================================
+        "selfhealing.celery_tasks.execute_recovery_step": {
+            "queue": "selfhealing.critical",
+            "routing_key": "selfhealing.critical",
+        },
+        "selfhealing.celery_tasks.check_recovery_trigger": {
+            "queue": "selfhealing.critical",
+            "routing_key": "selfhealing.critical",
+        },
+        "selfhealing.celery_tasks.monitor_recovery_health": {
+            "queue": "selfhealing.critical",
+            "routing_key": "selfhealing.critical",
+        },
+        "selfhealing.celery_tasks.check_circuit_breaker_recovery": {
+            "queue": "selfhealing.critical",
+            "routing_key": "selfhealing.critical",
+        },
         # 결제 관련 (최우선)
         "shopping.tasks.payment_tasks.*": {
             "queue": "payment_critical",

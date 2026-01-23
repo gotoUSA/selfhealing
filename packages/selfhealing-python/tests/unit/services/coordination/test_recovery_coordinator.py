@@ -82,14 +82,19 @@ class TestRecoveryCoordinatorInit:
 
 
 class TestStartRecovery:
-    """start_recovery() 테스트."""
+    """시작_recovery() 테스트."""
 
     @pytest.fixture
     def coordinator(self):
         """테스트용 코디네이터."""
         backend = MemoryStateBackend()
         lock = InMemoryRecoveryLock()
-        return RecoveryCoordinator(backend=backend, recovery_lock=lock)
+        return RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
 
     def test_start_recovery_success(self, coordinator):
         """복구 시작 성공."""
@@ -266,7 +271,12 @@ class TestExecuteNextStep:
         """핸들러 실패 시 세션 실패."""
         backend = MemoryStateBackend()
         lock = InMemoryRecoveryLock()
-        coordinator = RecoveryCoordinator(backend=backend, recovery_lock=lock)
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
         
         # BUDGET_RESET 핸들러를 실패로 모킹
         coordinator.register_step_handler(
@@ -292,7 +302,12 @@ class TestExecuteNextStep:
         """핸들러 예외 시 세션 실패."""
         backend = MemoryStateBackend()
         lock = InMemoryRecoveryLock()
-        coordinator = RecoveryCoordinator(backend=backend, recovery_lock=lock)
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
         
         def failing_handler(session, step):
             raise Exception("Handler exception")
@@ -392,7 +407,12 @@ class TestFullRecoveryFlow:
         """테스트용 코디네이터 (핸들러 모킹)."""
         backend = MemoryStateBackend()
         lock = InMemoryRecoveryLock()
-        coord = RecoveryCoordinator(backend=backend, recovery_lock=lock)
+        coord = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
         
         # 모든 핸들러를 성공으로 모킹
         for step_type in RecoveryStepType:

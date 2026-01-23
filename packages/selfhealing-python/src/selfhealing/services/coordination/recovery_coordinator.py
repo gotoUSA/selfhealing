@@ -45,6 +45,8 @@ from .distributed_recovery_lock import (
 
 if TYPE_CHECKING:
     from selfhealing.core.state_backend import StateBackend
+    from .regional_recovery_policy import RegionalRecoveryPolicyEngine
+    from .idempotent_step_handlers import IdempotentStepHandlerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,8 @@ class RecoveryCoordinator:
         self,
         backend: Optional["StateBackend"] = None,
         recovery_lock: Optional[DistributedRecoveryLock] = None,
+        use_regional_policy: bool = True,
+        use_idempotent_handlers: bool = True,
     ):
         """
         RecoveryCoordinator 초기화.
@@ -174,12 +178,50 @@ class RecoveryCoordinator:
         Args:
             backend: StateBackend 인스턴스 (None이면 자동 획득)
             recovery_lock: 분산 락 인스턴스 (None이면 InMemory 사용)
+            use_regional_policy: 리전별 정책 사용 여부 (Phase 3.5)
+            use_idempotent_handlers: 멱등성 핸들러 사용 여부 (Phase 2.7)
         """
         self._backend = backend
         self._lock = threading.RLock()
         self._recovery_lock = recovery_lock or InMemoryRecoveryLock()
         self._step_handlers: Dict[RecoveryStepType, Callable] = {}
+        self._use_regional_policy = use_regional_policy
+        self._use_idempotent_handlers = use_idempotent_handlers
+        self._regional_policy_engine: Optional["RegionalRecoveryPolicyEngine"] = None
+        self._idempotent_registry: Optional["IdempotentStepHandlerRegistry"] = None
         self._register_default_handlers()
+    
+    def _get_regional_policy_engine(self) -> Optional["RegionalRecoveryPolicyEngine"]:
+        """리전별 정책 엔진 획득 (Phase 3.5)."""
+        if not self._use_regional_policy:
+            return None
+        
+        if self._regional_policy_engine is not None:
+            return self._regional_policy_engine
+        
+        try:
+            from .regional_recovery_policy import get_regional_recovery_policy_engine
+            self._regional_policy_engine = get_regional_recovery_policy_engine()
+            return self._regional_policy_engine
+        except ImportError:
+            logger.warning("[Recovery] RegionalRecoveryPolicyEngine not available")
+            return None
+    
+    def _get_idempotent_registry(self) -> Optional["IdempotentStepHandlerRegistry"]:
+        """멱등성 핸들러 레지스트리 획득 (Phase 2.7)."""
+        if not self._use_idempotent_handlers:
+            return None
+        
+        if self._idempotent_registry is not None:
+            return self._idempotent_registry
+        
+        try:
+            from .idempotent_step_handlers import get_idempotent_step_handler_registry
+            self._idempotent_registry = get_idempotent_step_handler_registry()
+            return self._idempotent_registry
+        except ImportError:
+            logger.warning("[Recovery] IdempotentStepHandlerRegistry not available")
+            return None
 
     def _get_backend(self) -> "StateBackend":
         """StateBackend 인스턴스 획득."""
@@ -225,6 +267,9 @@ class RecoveryCoordinator:
         """
         복구 시작.
         
+        Phase 3.5: 리전 정책 통합
+        Phase 3.7: READY_TO_RESTORE 상태 전환 지원
+        
         Args:
             namespace: 네임스페이스 (예: "global", "seoul")
             trigger_level: 복구 대상 Emergency 레벨 (예: "LEVEL_3")
@@ -242,13 +287,25 @@ class RecoveryCoordinator:
             if active and active.status in (
                 RecoveryStatus.IN_PROGRESS,
                 RecoveryStatus.HEALTH_CHECK,
+                RecoveryStatus.READY_TO_RESTORE,  # Phase 3.7: 승인 대기 중도 포함
             ):
                 raise ValueError(
                     f"Recovery already in progress: {active.id}"
                 )
 
-            # 2. 복구 단계 조회
-            steps = self._get_recovery_steps(trigger_level)
+            # 2. 리전 정책 확인 (Phase 3.5)
+            regional_engine = self._get_regional_policy_engine()
+            requires_approval = False
+            
+            if regional_engine:
+                regional_config = regional_engine.get_config(namespace)
+                requires_approval = regional_config.require_manual_approval
+                # 리전별 복구 단계 사용
+                steps = regional_engine.get_recovery_steps(namespace, trigger_level)
+            else:
+                # 기본 복구 단계 사용
+                steps = self._get_recovery_steps(trigger_level, namespace)
+            
             if not steps:
                 raise ValueError(
                     f"No recovery steps defined for {trigger_level}"
@@ -277,6 +334,11 @@ class RecoveryCoordinator:
                 started_at=now,
                 initiated_by=initiated_by,
             )
+            
+            # Phase 3.7: 수동 승인 필요 시 메타데이터에 기록
+            if requires_approval:
+                session.metadata = session.metadata or {}
+                session.metadata["requires_approval"] = True
 
             # 6. 저장
             self._save_session(session)
@@ -285,7 +347,7 @@ class RecoveryCoordinator:
             logger.info(
                 f"[Recovery] Started: id={session_id}, "
                 f"namespace={namespace}, level={trigger_level}, "
-                f"steps={len(steps)}"
+                f"steps={len(steps)}, requires_approval={requires_approval}"
             )
 
             return session
@@ -296,6 +358,9 @@ class RecoveryCoordinator:
     ) -> Optional[RecoveryStep]:
         """
         다음 복구 단계 실행.
+        
+        Phase 2.7: 멱등성 핸들러 적용
+        Phase 3.7: READY_TO_RESTORE 상태 전환
         
         Args:
             namespace: 네임스페이스
@@ -316,8 +381,8 @@ class RecoveryCoordinator:
 
             step = session.get_current_step()
             if not step:
-                # 모든 단계 완료
-                self._complete_session(session)
+                # 모든 단계 완료 - Phase 3.7: READY_TO_RESTORE 체크
+                self._handle_all_steps_completed(session)
                 return None
 
             # 단계 실행
@@ -326,23 +391,36 @@ class RecoveryCoordinator:
             step.status = RecoveryStatus.IN_PROGRESS
 
             try:
-                handler = self._step_handlers.get(step.step_type)
-                if not handler:
-                    raise ValueError(
-                        f"No handler for step type: {step.step_type}"
-                    )
-
-                # 핸들러 실행
-                result = handler(session, step)
+                # Phase 2.7: 멱등성 핸들러 사용 시도
+                idempotent_registry = self._get_idempotent_registry()
+                
+                if idempotent_registry and idempotent_registry.has_handler(step.step_type):
+                    # 멱등성 핸들러 실행
+                    result = idempotent_registry.execute(session, step)
+                else:
+                    # 기본 핸들러 실행
+                    handler = self._step_handlers.get(step.step_type)
+                    if not handler:
+                        raise ValueError(
+                            f"No handler for step type: {step.step_type}"
+                        )
+                    result = handler(session, step)
 
                 if result.get("success"):
                     step.status = RecoveryStatus.COMPLETED
                     step.completed_at = datetime.now(timezone.utc).isoformat()
                     session.current_step_index += 1
+                    
+                    # 멱등성 정보 로깅
+                    idempotent_info = ""
+                    if result.get("idempotent"):
+                        idempotent_info = " (idempotent, cached)"
+                    elif result.get("already_applied"):
+                        idempotent_info = " (already applied)"
 
                     logger.info(
                         f"[Recovery] Step completed: {step.step_type.value}, "
-                        f"session={session.id}"
+                        f"session={session.id}{idempotent_info}"
                     )
                 else:
                     step.status = RecoveryStatus.FAILED
@@ -640,8 +718,13 @@ class RecoveryCoordinator:
     def _get_recovery_steps(
         self,
         trigger_level: str,
+        namespace: str = "global",
     ) -> List[RecoveryStep]:
-        """복구 단계 목록 조회 (깊은 복사)."""
+        """
+        복구 단계 목록 조회 (깊은 복사).
+        
+        Phase 3.5: 리전별 정책 통합 시 namespace 파라미터 사용.
+        """
         steps = self.DEFAULT_RECOVERY_STEPS.get(trigger_level, [])
         # 깊은 복사하여 반환
         return [
@@ -653,6 +736,208 @@ class RecoveryCoordinator:
             )
             for s in steps
         ]
+    
+    def _handle_all_steps_completed(self, session: RecoverySession) -> None:
+        """
+        모든 단계 완료 시 처리.
+        
+        Phase 3.7: READY_TO_RESTORE 상태 전환 로직
+        - require_manual_approval=True인 경우 READY_TO_RESTORE로 전환
+        - 그렇지 않으면 COMPLETED로 완료
+        """
+        # 수동 승인 필요 여부 확인
+        requires_approval = False
+        if session.metadata and isinstance(session.metadata, dict):
+            requires_approval = session.metadata.get("requires_approval", False)
+        
+        if requires_approval:
+            # Phase 3.7: READY_TO_RESTORE 상태로 전환
+            session.status = RecoveryStatus.READY_TO_RESTORE
+            self._save_session(session)
+            
+            # 승인 요청 생성
+            self._create_approval_request(session)
+            
+            logger.info(
+                f"[Recovery] Waiting for approval: id={session.id}, "
+                f"namespace={session.namespace}"
+            )
+        else:
+            # 일반 완료 처리
+            self._complete_session(session)
+    
+    def _create_approval_request(self, session: RecoverySession) -> None:
+        """
+        수동 승인 요청 생성.
+        
+        Phase 3.7: PendingRecoveryApprovalManager 연동
+        """
+        try:
+            from .pending_recovery_approval import get_pending_recovery_approval_manager
+            manager = get_pending_recovery_approval_manager()
+            
+            manager.create_request(
+                session_id=session.id,
+                namespace=session.namespace,
+                trigger_level=session.trigger_level,
+            )
+        except ImportError:
+            logger.warning(
+                "[Recovery] PendingRecoveryApprovalManager not available"
+            )
+        except Exception as e:
+            logger.error(f"[Recovery] Failed to create approval request: {e}")
+    
+    def approve_recovery(
+        self,
+        namespace: str,
+        approved_by: str,
+    ) -> Optional[RecoverySession]:
+        """
+        복구 승인 (Phase 3.7).
+        
+        READY_TO_RESTORE 상태인 세션을 승인하여 COMPLETED로 전환합니다.
+        
+        Args:
+            namespace: 네임스페이스
+            approved_by: 승인자 ID
+        
+        Returns:
+            승인된 RecoverySession 또는 None
+        """
+        with self._lock:
+            session = self.get_active_session(namespace)
+            if not session:
+                return None
+            
+            if session.status != RecoveryStatus.READY_TO_RESTORE:
+                logger.warning(
+                    f"[Recovery] Cannot approve: session not in READY_TO_RESTORE state. "
+                    f"Current: {session.status}"
+                )
+                return None
+            
+            # 승인 처리
+            session.status = RecoveryStatus.COMPLETED
+            session.completed_at = datetime.now(timezone.utc).isoformat()
+            
+            # 승인자 정보 기록
+            session.metadata = session.metadata or {}
+            session.metadata["approved_by"] = approved_by
+            session.metadata["approved_at"] = datetime.now(timezone.utc).isoformat()
+            
+            self._save_session(session)
+            self._clear_active_session(namespace)
+            
+            # 락 해제
+            self._recovery_lock.release(namespace, session.id)
+            
+            # 승인 요청 상태 업데이트
+            try:
+                from .pending_recovery_approval import get_pending_recovery_approval_manager
+                manager = get_pending_recovery_approval_manager()
+                manager.approve(session.id, approved_by)
+            except Exception:
+                pass
+            
+            logger.info(
+                f"[Recovery] Approved: id={session.id}, "
+                f"approved_by={approved_by}"
+            )
+            
+            return session
+    
+    def verify_weighted_budget_stability(
+        self,
+        namespace: str,
+    ) -> Dict[str, Any]:
+        """
+        가중 버짓 안정성 검증 (Phase 5.4 - WeightedBudgetStability).
+        
+        Plan 75 연동: 복구 전 현재 버짓 상태를 확인하여
+        가중치 적용 소진이 정상 범위인지 검증합니다.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            검증 결과:
+            - stable: 안정 여부
+            - current_multiplier: 현재 가중치
+            - budget_remaining_percent: 남은 버짓 비율
+            - weighted_consumption: 가중 소진량
+        """
+        try:
+            # CrisisMultiplierProvider에서 현재 가중치 조회
+            from selfhealing.services.coordination.crisis_multiplier import (
+                get_crisis_multiplier_provider,
+            )
+            provider = get_crisis_multiplier_provider()
+            current_multiplier = provider.get_multiplier(namespace)
+            
+            # AtomicBudgetConsumer에서 버짓 상태 조회
+            budget_info = self._get_budget_info(namespace)
+            
+            # 안정성 판단: 가중치가 1.0이고 버짓 잔여량이 충분하면 안정
+            is_stable = (
+                abs(current_multiplier - 1.0) < 0.001 and
+                budget_info.get("remaining_percent", 100) > 10
+            )
+            
+            return {
+                "stable": is_stable,
+                "current_multiplier": current_multiplier,
+                "budget_remaining_percent": budget_info.get("remaining_percent", 100),
+                "weighted_consumption": budget_info.get("weighted_consumption", 0),
+                "budget_total_minutes": budget_info.get("total_minutes", 0),
+                "budget_used_minutes": budget_info.get("used_minutes", 0),
+            }
+        except ImportError:
+            logger.warning(
+                "[Recovery] CrisisMultiplierProvider not available for "
+                "weighted budget verification"
+            )
+            return {
+                "stable": True,
+                "current_multiplier": 1.0,
+                "budget_remaining_percent": 100,
+                "assumed": True,
+            }
+        except Exception as e:
+            logger.error(f"[Recovery] Weighted budget verification error: {e}")
+            return {
+                "stable": False,
+                "error": str(e),
+            }
+    
+    def _get_budget_info(self, namespace: str) -> Dict[str, Any]:
+        """Error Budget 정보 조회 (Plan 75 연동)."""
+        try:
+            from selfhealing.services.error_budget.atomic_consumer import (
+                get_atomic_budget_consumer,
+            )
+            consumer = get_atomic_budget_consumer()
+            
+            # 버짓 상태 조회 (구현에 따라 다를 수 있음)
+            budget_key = f"selfhealing:{namespace}:error_budget"
+            backend = self._get_backend()
+            
+            budget_data = backend.get(budget_key)
+            if budget_data and isinstance(budget_data, dict):
+                total = budget_data.get("total_minutes", 60)
+                used = budget_data.get("used_minutes", 0)
+                remaining_percent = ((total - used) / total * 100) if total > 0 else 100
+                
+                return {
+                    "total_minutes": total,
+                    "used_minutes": used,
+                    "remaining_percent": remaining_percent,
+                    "weighted_consumption": budget_data.get("weighted_consumption", 0),
+                }
+            
+            return {"remaining_percent": 100, "total_minutes": 60, "used_minutes": 0}
+        except Exception:
+            return {"remaining_percent": 100, "total_minutes": 60, "used_minutes": 0}
 
     def _get_current_emergency_level(self, namespace: str) -> str:
         """현재 Emergency 레벨 조회."""

@@ -217,7 +217,7 @@ services:
     command: >
       sh -c "
         pip install -e /code/packages/selfhealing-python --no-deps -q &&
-        celery -A myproject worker -l info -Q default,selfhealing,dlq,payment_critical,order_processing,selfhealing_recovery,selfhealing_notifications,selfhealing_maintenance --concurrency=2
+        celery -A myproject worker -l info -Q default,selfhealing,selfhealing.critical,dlq,payment_critical,order_processing,selfhealing_recovery,selfhealing_notifications,selfhealing_maintenance --concurrency=2
       "
     healthcheck:
       test: ["CMD-SHELL", "celery -A myproject inspect ping -d celery@$$HOSTNAME || exit 1"]
