@@ -39,7 +39,10 @@ middleware_system/
 ├── 81_PHASE1_DEPRECATED_FUNCTIONS.md      ← Phase 1: Deprecated 함수 정리 (NEW)
 ├── 82_PHASE2_DEPRECATED_MODULES.md        ← Phase 2: Deprecated 모듈 정리 (NEW)
 ├── 83_PHASE3_REEXPORT_CLEANUP.md          ← Phase 3: Re-export 정리 (NEW)
-└── 84_PHASE4_API_DEPRECATION.md           ← Phase 4: Deprecated API 제거 (NEW)
+├── 84_PHASE4_API_DEPRECATION.md           ← Phase 4: Deprecated API 제거 (NEW)
+├── 85_AUDIT_INTEGRATION_OVERVIEW.md       ← Audit 연동 누락 서비스 통합 개요 (NEW)
+├── 86_AUDIT_INTEGRATION_SECURITY_ISOLATION.md ← Security/Isolation/BlastRadius Audit 연동 (NEW)
+└── 87_AUDIT_INTEGRATION_LEARNING_RECOVERY.md  ← Learning/Throttle/Cleanup/Config Audit 연동 (NEW)
 ```
 
 ---
@@ -403,6 +406,7 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 3.0.0 | 2026-01-24 | 85-87_AUDIT_INTEGRATION 문서 시리즈 추가 - Audit 연동 누락 기능 통합 가이드 |
 | 2.9.0 | 2026-01-23 | 80-84_DEPRECATION_CLEANUP 문서 시리즈 추가 - Deprecated/Re-export 패턴 정리 가이드 |
 | 2.8.0 | 2026-01-19 | 70_MULTI_CLUSTER_ARCHITECTURE.md 대폭 확장 - ClusterIdentity, TieredRedisProvider, PropagationHealthMonitor 추가 |
 | 2.7.0 | 2026-01-09 | 70_MULTI_CLUSTER_ARCHITECTURE.md, 71_CANARY_CONFIG_ROLLOUT.md 추가 |
