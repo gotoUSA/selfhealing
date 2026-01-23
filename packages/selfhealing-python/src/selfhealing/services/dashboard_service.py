@@ -84,10 +84,12 @@ class DashboardSummary:
     alerts: AlertInfo
     resolution_rate_percent: float = 0.0
     recommendations: List[str] = field(default_factory=list)
+    # Recovery Coordinator 통합 (77_RECOVERY_COORDINATOR.md#10.2.4.13)
+    recovery_summary: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response."""
-        return {
+        result = {
             "timestamp": self.timestamp,
             "health_status": self.health_status,
             "overview": {
@@ -114,6 +116,10 @@ class DashboardSummary:
             },
             "recommendations": self.recommendations,
         }
+        # Recovery 요약 추가 (있을 경우)
+        if self.recovery_summary:
+            result["recovery"] = self.recovery_summary
+        return result
 
 
 # =============================================================================
@@ -249,6 +255,9 @@ class DashboardService:
             failed=status_counts.failed,
         )
 
+        # Recovery summary (77_RECOVERY_COORDINATOR.md#10.2.4.13)
+        recovery_summary = self._get_recovery_summary()
+
         summary = DashboardSummary(
             timestamp=current_time.isoformat(),
             health_status=health_status,
@@ -258,6 +267,7 @@ class DashboardService:
             alerts=alerts,
             resolution_rate_percent=resolution_rate,
             recommendations=[],  # Future: add AI recommendations
+            recovery_summary=recovery_summary,
         )
 
         # Cache the result
@@ -298,7 +308,34 @@ class DashboardService:
             ),
             resolution_rate_percent=overview.get("resolution_rate_percent", 0.0),
             recommendations=data.get("recommendations", []),
+            recovery_summary=data.get("recovery"),
         )
+
+    def _get_recovery_summary(self) -> Optional[Dict[str, Any]]:
+        """
+        Get recovery system summary.
+
+        Integrates with RecoveryDashboardService to provide
+        recovery-related statistics for the main dashboard.
+
+        Reference:
+            77_RECOVERY_COORDINATOR.md#10.2.4.13
+
+        Returns:
+            Recovery summary dict or None if unavailable
+        """
+        try:
+            from selfhealing.services.coordination.recovery_dashboard import (
+                get_recovery_dashboard_service,
+            )
+            recovery_service = get_recovery_dashboard_service()
+            return recovery_service.get_recovery_summary()
+        except ImportError:
+            logger.debug("[Dashboard] RecoveryDashboardService not available")
+            return None
+        except Exception as e:
+            logger.warning(f"[Dashboard] Failed to get recovery summary: {e}")
+            return None
 
     def get_status_counts(self) -> StatusCounts:
         """

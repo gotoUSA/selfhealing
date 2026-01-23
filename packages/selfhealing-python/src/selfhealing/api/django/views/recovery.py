@@ -38,6 +38,11 @@ from selfhealing.services.coordination.pending_recovery_approval import (
 from selfhealing.services.coordination.regional_recovery_policy import (
     get_regional_recovery_policy_engine,
 )
+from selfhealing.services.coordination.recovery_dashboard import (
+    get_recovery_dashboard_service,
+    get_status_display,
+    get_status_color,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -557,6 +562,8 @@ class RecoveryDashboardWidgetView(APIView):
     GET /api/self-healing/recovery/widget/
     
     대시보드에 표시할 요약 정보를 반환합니다.
+    
+    비즈니스 로직은 RecoveryDashboardService로 분리되어 있습니다.
     """
 
     permission_classes = [IsAuthenticated]
@@ -566,59 +573,9 @@ class RecoveryDashboardWidgetView(APIView):
         namespace = request.query_params.get("namespace", "global")
         
         try:
-            coordinator = get_recovery_coordinator()
-            circuit_breaker = get_recovery_circuit_breaker()
-            approval_manager = get_pending_recovery_approval_manager()
-            policy_engine = get_regional_recovery_policy_engine()
-            
-            # 현재 상태
-            current_status = coordinator.get_current_status(namespace)
-            
-            # 활성 세션
-            active_session = coordinator.get_active_session(namespace)
-            
-            # 대기 중인 승인
-            pending = approval_manager.list_pending_requests()
-            
-            # 방치된 승인
-            stale = approval_manager.list_stale_requests(stale_threshold_minutes=30)
-            
-            # 통계
-            stats = approval_manager.get_stats()
-            
-            # 리전별 상태
-            namespaces = policy_engine.get_namespaces_by_priority()
-            regional_status = []
-            for ns in namespaces[:5]:  # 상위 5개만
-                cb_status = circuit_breaker.get_status(ns)
-                config = policy_engine.get_config(ns)
-                regional_status.append({
-                    "namespace": ns,
-                    "circuit_breaker_state": cb_status.get("state", "unknown"),
-                    "require_manual_approval": config.require_manual_approval,
-                })
-            
-            return Response({
-                "status": current_status.value,
-                "status_display": _get_status_display(current_status),
-                "status_color": _get_status_color(current_status),
-                "active_session": {
-                    "session_id": active_session.session_id if active_session else None,
-                    "progress": _get_session_progress(active_session),
-                } if active_session else None,
-                "pending_approvals": {
-                    "count": len(pending),
-                    "stale_count": len(stale),
-                    "urgent": len(stale) > 0,
-                },
-                "stats": {
-                    "total_recoveries": stats.get("total_requests", 0),
-                    "approved": stats.get("approved_count", 0),
-                    "rejected": stats.get("rejected_count", 0),
-                },
-                "regional_status": regional_status,
-                "actions": _get_available_actions(current_status, active_session, pending),
-            })
+            service = get_recovery_dashboard_service()
+            widget_data = service.get_widget_data(namespace=namespace)
+            return Response(widget_data.to_dict())
             
         except Exception as e:
             logger.exception(f"[RecoveryDashboardWidgetView] Error: {e}")
@@ -629,10 +586,10 @@ class RecoveryDashboardWidgetView(APIView):
 
 
 # =============================================================================
-# Helper Functions
+# Helper Functions (deprecated - use recovery_dashboard.py instead)
 # =============================================================================
 
-def _get_status_display(status: RecoveryStatus) -> str:
+def _get_status_display(recovery_status: RecoveryStatus) -> str:
     """상태 표시 문자열."""
     displays = {
         RecoveryStatus.NORMAL: "정상",

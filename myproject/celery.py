@@ -199,6 +199,48 @@ app.conf.beat_schedule = {
             "queue": "chaos",
         },
     },
+    # =========================================================================
+    # Recovery Coordinator Tasks (77_RECOVERY_COORDINATOR.md §10.2.4)
+    # =========================================================================
+    # Check recovery trigger conditions - 매분
+    # Emergency 상태에서 복구 조건(error_rate < 10%, 10분 유지) 충족 시 복구 시작
+    "check-recovery-trigger": {
+        "task": "selfhealing.check_recovery_trigger",
+        "schedule": 60.0,  # 매분
+        "options": {
+            "expires": 55,
+            "queue": "selfhealing.critical",
+        },
+    },
+    # Monitor recovery health - 30초마다
+    # 복구 진행 중 시스템 건강 상태 확인, 재장애 시 CircuitBreaker 트립
+    "monitor-recovery-health": {
+        "task": "selfhealing.monitor_recovery_health",
+        "schedule": 30.0,  # 30초마다
+        "options": {
+            "expires": 25,
+            "queue": "selfhealing.critical",
+        },
+    },
+    # Check stale pending recoveries - 10분마다
+    # 방치된 수동 승인 요청에 대해 알림 발송
+    "check-stale-pending-recoveries": {
+        "task": "selfhealing.check_stale_pending_recoveries",
+        "schedule": 600.0,  # 10분마다
+        "options": {
+            "expires": 590,
+            "queue": "selfhealing.critical",
+        },
+    },
+    # Cleanup old recovery sessions - 매일 새벽 6시
+    # 오래된 복구 세션 정리
+    "cleanup-old-recovery-sessions": {
+        "task": "selfhealing.cleanup_old_recovery_sessions",
+        "schedule": crontab(hour=6, minute=0),  # 매일 06:00
+        "options": {
+            "expires": 3600,
+        },
+    },
     # 테스트용: 5분마다 실행 (개발 환경에서만 사용)
     # 'test-periodic-task': {
     #     'task': 'shopping.tasks.test_periodic_task',

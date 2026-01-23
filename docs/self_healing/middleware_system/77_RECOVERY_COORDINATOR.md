@@ -3020,6 +3020,9 @@ path(
 - [x] POST /api/recovery/start/ → 복구 시작
 - [x] GET /api/recovery/pending-approvals/ → 대기 목록
 - [x] 10분마다 방치된 복구 알림 발송 (check_stale_pending_recoveries_task 구현 완료)
+- [x] Beat Schedule 등록 완료 (celery.py에 4개 태스크 스케줄 추가)
+- [x] RecoveryDashboardService 구현 완료 (recovery_dashboard.py)
+- [x] DashboardSummaryView Recovery 통합 완료 (dashboard_service.py에 _get_recovery_summary 추가)
 
 #### Phase 5: Audit & Monitoring (1-2일)
 
