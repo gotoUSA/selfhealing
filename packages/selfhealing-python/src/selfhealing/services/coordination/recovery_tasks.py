@@ -263,7 +263,7 @@ def execute_recovery_step_task(
         coordinator = get_recovery_coordinator()
         
         # 세션 확인
-        session = coordinator.get_session(session_id)
+        session = coordinator.get_session(namespace, session_id)
         if session is None:
             return {
                 "error": f"Session not found: {session_id}",
@@ -353,7 +353,7 @@ def execute_recovery_step_task(
         wait_seconds = result.get("wait_before_next", 0)
         
         # 다음 단계가 있으면 예약
-        session = coordinator.get_session(session_id)
+        session = coordinator.get_session(namespace, session_id)
         if session and session.status == RecoveryStatus.RECOVERING:
             if wait_seconds > 0:
                 # 지연 후 다음 단계

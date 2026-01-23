@@ -794,8 +794,14 @@ class RecoveryCoordinator:
         # Emergency 레벨 확인
         emergency_level = self._get_current_emergency_level(namespace)
         
-        if emergency_level and emergency_level.value >= 3:
-            return RecoveryStatus.EMERGENCY
+        # emergency_level은 문자열 (예: "LEVEL_3", "LEVEL_2", "NORMAL", "UNKNOWN")
+        if emergency_level and emergency_level.startswith("LEVEL_"):
+            try:
+                level_num = int(emergency_level.split("_")[1])
+                if level_num >= 3:
+                    return RecoveryStatus.EMERGENCY
+            except (ValueError, IndexError):
+                pass
         
         return RecoveryStatus.NORMAL
     
