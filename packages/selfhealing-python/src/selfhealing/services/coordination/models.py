@@ -304,3 +304,77 @@ class CoordinationResult:
             "trigger_type": self.trigger_type,
             "namespace": self.namespace,
         }
+
+
+# =============================================================================
+# Phase 4: Recovery Accountability (72번 문서 §5.4.1)
+# =============================================================================
+
+
+@dataclass
+class RecoveryAccountabilityConfig:
+    """
+    복구 책임 추적 설정.
+    
+    대규모 장애 후 자동 복구 시 "왜 사람이 확인하지 않았는가"에 대한
+    책임 추적성을 보장합니다.
+    
+    Code reference:
+        governance.py#L404 (acknowledge_warning 패턴)
+    
+    Reference:
+        72_EMERGENCY_COORDINATION_LAYER.md#§5.4.1
+    """
+    
+    requires_manual_acknowledgement: bool = False
+    """
+    수동 승인 필수 여부.
+    
+    True일 때:
+    - 8시간 경과해도 자동 NORMAL 복구하지 않음
+    - READY_TO_RESTORE 상태로 전환
+    - Admin의 acknowledge() 호출 시에만 복구 완료
+    """
+    
+    ready_to_restore_timeout_hours: int = 24
+    """READY_TO_RESTORE 상태 최대 유지 시간. 초과 시 알림 에스컬레이션."""
+    
+    acknowledgement_required_roles: List[str] = field(
+        default_factory=lambda: ["admin", "sre_lead"]
+    )
+    """복구 승인 가능 역할."""
+    
+    auto_restore_after_hours: float = 8.0
+    """자동 복구까지 대기 시간 (시간). requires_manual_acknowledgement=False일 때만 적용."""
+    
+    escalation_channels: List[str] = field(
+        default_factory=lambda: ["slack", "pagerduty"]
+    )
+    """에스컬레이션 알림 채널."""
+    
+    def can_acknowledge(self, role: str) -> bool:
+        """
+        역할이 복구 승인 가능한지 확인.
+        
+        Args:
+            role: 사용자 역할
+        
+        Returns:
+            승인 가능 여부
+        """
+        return role in self.acknowledgement_required_roles
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """딕셔너리로 변환."""
+        return {
+            "requires_manual_acknowledgement": self.requires_manual_acknowledgement,
+            "ready_to_restore_timeout_hours": self.ready_to_restore_timeout_hours,
+            "acknowledgement_required_roles": self.acknowledgement_required_roles,
+            "auto_restore_after_hours": self.auto_restore_after_hours,
+            "escalation_channels": self.escalation_channels,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RecoveryAccountabilityConfig":
+        """딕셔너리에서 생성."""
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})

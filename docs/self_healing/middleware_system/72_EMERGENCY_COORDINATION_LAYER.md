@@ -974,16 +974,24 @@ class DomainAwareCrisisMultiplier:
 | Crisis Budget Multiplier | 위기 가중치 | [75_CRISIS_BUDGET_MULTIPLIER.md](75_CRISIS_BUDGET_MULTIPLIER.md) |
 | Cascade Event Audit | 연계 감사 추적 | [76_CASCADE_EVENT_AUDIT.md](76_CASCADE_EVENT_AUDIT.md) |
 
-### Phase 4: 복구 조율 (Week 9-10)
+### Phase 4: 복구 조율 (Week 9-10) ✅ 완료
 
-| 태스크 | 설명 | 문서 |
-|--------|------|------|
-| RecoveryCoordinator | 역순 복구 조율 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
-| Recovery Health Checks | 단계별 검증 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
-| Recovery Policy | 복구 정책 정의 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) |
-| **RecoveryAccountability** | 복구 책임 추적성 | 본 문서 §5.4.1 |
-| **OptimisticLocalAction** | 낙관적 선조치 패턴 | 본 문서 §5.4.2 |
-| **OverrideTTLEnforcement** | 오버라이드 TTL 강제 | 본 문서 §5.4.3 |
+| 태스크 | 설명 | 문서 | 상태 |
+|--------|------|------|------|
+| RecoveryCoordinator | 역순 복구 조율 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) | ✅ |
+| Recovery Health Checks | 단계별 검증 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) | ✅ |
+| Recovery Policy | 복구 정책 정의 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) | ✅ |
+| **RecoveryAccountability** | 복구 책임 추적성 (RecoveryAccountabilityConfig) | 본 문서 §5.4.1 | ✅ |
+| **OptimisticLocalAction** | 낙관적 선조치 패턴 (OptimisticLocalActionExecutor) | 본 문서 §5.4.2 | ✅ |
+| **OverrideTTLEnforcement** | 오버라이드 TTL 강제 (OverrideTTLConfig) | 본 문서 §5.4.3 | ✅ |
+| **recovery_hysteresis_factor** | 복구 히스테리시스 팩터 (§5.1.1) | 본 문서 §5.1.1 | ✅ |
+
+**구현 파일**:
+- `selfhealing/services/coordination/recovery_coordinator.py` - RecoveryCoordinator
+- `selfhealing/services/coordination/recovery_state.py` - RecoverySession, RecoveryStep
+- `selfhealing/services/coordination/models.py` - RecoveryAccountabilityConfig
+- `selfhealing/services/coordination/optimistic_action.py` - OptimisticLocalActionExecutor
+- `selfhealing/services/coordination/anti_flapping.py` - recovery_hysteresis_factor, get_effective_stability_duration()
 
 #### 5.4.1 RecoveryAccountability (복구 책임 추적성)
 
@@ -1532,3 +1540,4 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | 1.3.0 | 2026-01-21 | Phase 4: RecoveryAccountability(READY_TO_RESTORE), OptimisticLocalAction, OverrideTTLEnforcement 추가 | AI Assistant |
 | 1.4.0 | 2026-01-21 | 3가지 보완사항 반영 (①TTL 강제, ②Lua 원자성, ③COOLDOWN SSOT) 및 Phase 1 구현 완료 | AI Assistant |
 | 1.5.0 | 2026-01-21 | Phase 2 구현 완료: policy_engine, critical_path_fallback, atomic_transition, crisis_multiplier (132개 테스트 통과) | AI Assistant |
+| 1.6.0 | 2026-01-21 | Phase 4 구현 완료: RecoveryAccountabilityConfig, OptimisticLocalActionExecutor, recovery_hysteresis_factor, get_effective_stability_duration() (295개 테스트 통과) | AI Assistant |

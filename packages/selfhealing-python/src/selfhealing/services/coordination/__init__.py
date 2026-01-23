@@ -13,7 +13,7 @@ Phase 1 구현:
 - EmergencyScope enum
 - ScopedEmergencyState 모델
 - EmergencyCoordinator 골격
-- AntiFlappingGuard (히스테리시스)
+- AntiFlappingGuard (히스테리시스 + recovery_hysteresis_factor)
 - Dry-Run Mode
 
 Phase 2 구현:
@@ -22,6 +22,10 @@ Phase 2 구현:
 - CriticalPathFallback: Redis/Audit 장애 시 로컬 폴백
 - AtomicLevelTransition: Lua 스크립트 원자적 상태 변경
 - DomainAwareCrisisMultiplier: 도메인 인지형 가중치
+
+Phase 4 구현:
+- RecoveryAccountabilityConfig: 복구 책임 추적 설정
+- OptimisticLocalActionExecutor: 낙관적 선조치 실행기
 
 Reference:
     docs/self_healing/middleware_system/72_EMERGENCY_COORDINATION_LAYER.md
@@ -41,6 +45,7 @@ from .models import (
     OverrideTTLConfig,
     ActionResult,
     CoordinationResult,
+    RecoveryAccountabilityConfig,
 )
 from .anti_flapping import (
     AntiFlappingGuard,
@@ -66,6 +71,12 @@ from .crisis_multiplier import (
     CrisisMultiplierRegistry,
     MAX_CRISIS_MULTIPLIER,
 )
+from .optimistic_action import (
+    OptimisticLocalActionExecutor,
+    OptimisticActionResult,
+    get_optimistic_action_executor,
+    reset_optimistic_action_executor,
+)
 
 
 __all__ = [
@@ -80,6 +91,8 @@ __all__ = [
     "OverrideTTLConfig",
     "ActionResult",
     "CoordinationResult",
+    # Phase 4: Recovery Accountability
+    "RecoveryAccountabilityConfig",
     # Anti-Flapping
     "AntiFlappingGuard",
     "EMERGENCY_LEVEL_COOLDOWN_SECONDS",
@@ -98,4 +111,9 @@ __all__ = [
     "DomainAwareCrisisMultiplier",
     "CrisisMultiplierRegistry",
     "MAX_CRISIS_MULTIPLIER",
+    # Phase 4: Optimistic Action
+    "OptimisticLocalActionExecutor",
+    "OptimisticActionResult",
+    "get_optimistic_action_executor",
+    "reset_optimistic_action_executor",
 ]
