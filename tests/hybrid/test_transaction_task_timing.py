@@ -257,7 +257,7 @@ class TestDLQTransactionPatterns:
                     error_message="Payment gateway timeout after 30s",
                 )
 
-                from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+                from selfhealing.celery_tasks import replay_single_dlq_entry
 
                 # Schedule task after commit
                 transaction.on_commit(

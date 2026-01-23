@@ -1,11 +1,31 @@
 """
-DLQ Replay Tasks - Django Adapter
+DLQ Replay Tasks - Django Adapter (DEPRECATED)
 
-This module re-exports DLQ-related Celery tasks from the selfhealing package
-for backward compatibility.
+.. deprecated:: 2.0.0
+    이 모듈은 하위 호환성을 위해서만 유지됩니다.
+    직접 selfhealing.celery_tasks에서 import하세요.
+    이 모듈은 v3.0.0에서 제거될 예정입니다.
 
-For new code, prefer importing directly from selfhealing.celery_tasks.
+Migration Guide:
+    Before (deprecated):
+        from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+    
+    After (recommended):
+        from selfhealing.celery_tasks import replay_single_dlq_entry
+    
+    Note: replay_on_circuit_breaker_close 별칭은 
+          conditional_replay_on_circuit_close로 직접 import하세요.
 """
+
+import warnings
+
+warnings.warn(
+    "Importing from 'shopping.tasks.dlq_replay_tasks' is deprecated. "
+    "Import directly from 'selfhealing.celery_tasks' instead. "
+    "This module will be removed in v3.0.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from selfhealing.celery_tasks import (
     cleanup_resolved_dlq_entries,

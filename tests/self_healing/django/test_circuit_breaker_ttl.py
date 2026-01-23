@@ -22,7 +22,7 @@ from selfhealing.services import (
     CircuitState,
     get_circuit_breaker_service,
 )
-from shopping.tasks.self_healing_tasks import expire_manual_overrides
+from selfhealing.celery_tasks import expire_manual_overrides
 from shopping.tests.factories import UserFactory
 
 

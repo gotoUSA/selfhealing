@@ -14,7 +14,7 @@ class TestDriftDetectionIntegration:
 
     def test_full_drift_detection_cycle(self):
         """Test full drift detection cycle with real data."""
-        from shopping.tasks.drift_detection_tasks import check_sla_drift
+        from selfhealing.celery_tasks import check_sla_drift
 
         result = check_sla_drift()
 

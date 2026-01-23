@@ -22,7 +22,7 @@ class TestCollectSelfHealingMetricsTask:
         Purpose:
             Verify metric collection task executes successfully.
         """
-        from shopping.tasks.self_healing_tasks import collect_self_healing_metrics
+        from selfhealing.celery_tasks import collect_self_healing_metrics
 
         mock_collect.return_value = {
             "dlq_pending_by_domain": {"payment": 5},
@@ -44,7 +44,7 @@ class TestCollectSelfHealingMetricsTask:
         Purpose:
             Verify task handles exceptions gracefully.
         """
-        from shopping.tasks.self_healing_tasks import collect_self_healing_metrics
+        from selfhealing.celery_tasks import collect_self_healing_metrics
 
         mock_collect.side_effect = Exception("Database connection error")
 
@@ -65,7 +65,7 @@ class TestCheckAndReportSLABreachesTask:
         Purpose:
             Verify task returns correctly when no SLA breaches exist.
         """
-        from shopping.tasks.self_healing_tasks import check_and_report_sla_breaches
+        from selfhealing.celery_tasks import check_and_report_sla_breaches
 
         mock_service = MagicMock()
         mock_service.get_sla_breached_entries.return_value = []
@@ -84,7 +84,7 @@ class TestCheckAndReportSLABreachesTask:
         Purpose:
             Verify SLA breaches are counted and recorded correctly.
         """
-        from shopping.tasks.self_healing_tasks import check_and_report_sla_breaches
+        from selfhealing.celery_tasks import check_and_report_sla_breaches
 
         # Create mock breached entries
         mock_entry1 = MagicMock()
@@ -118,7 +118,7 @@ class TestCheckAndReportSLABreachesTask:
         Purpose:
             Verify task handles exceptions gracefully.
         """
-        from shopping.tasks.self_healing_tasks import check_and_report_sla_breaches
+        from selfhealing.celery_tasks import check_and_report_sla_breaches
 
         mock_get_service.side_effect = Exception("Service unavailable")
 
@@ -149,20 +149,20 @@ class TestSelfHealingTaskExports:
         Purpose:
             Verify tasks have proper Celery task names.
         """
-        from shopping.tasks.self_healing_tasks import (
+        from selfhealing.celery_tasks import (
             check_and_report_sla_breaches,
             collect_self_healing_metrics,
         )
 
-        assert collect_self_healing_metrics.name == "shopping.tasks.self_healing_tasks.collect_self_healing_metrics"
-        assert check_and_report_sla_breaches.name == "shopping.tasks.self_healing_tasks.check_and_report_sla_breaches"
+        assert collect_self_healing_metrics.name == "selfhealing.celery_tasks.collect_self_healing_metrics"
+        assert check_and_report_sla_breaches.name == "selfhealing.celery_tasks.check_and_report_sla_breaches"
 
     def test_task_queues_configured(self):
         """
         Purpose:
             Verify tasks are assigned to correct queues.
         """
-        from shopping.tasks.self_healing_tasks import (
+        from selfhealing.celery_tasks import (
             check_and_report_sla_breaches,
             collect_self_healing_metrics,
         )

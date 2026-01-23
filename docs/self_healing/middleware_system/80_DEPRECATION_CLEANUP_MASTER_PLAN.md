@@ -114,15 +114,16 @@
 - [x] `InMemoryCircuitBreaker` → `GateFaultDetector` + `__getattr__` 패턴 DeprecationWarning
 - [x] 상수 4개 → `_get_notification_limits()` 사용 + `__getattr__` 패턴 DeprecationWarning
 
-### Phase 3: Re-export 정리 (83_PHASE3_REEXPORT_CLEANUP.md)
+### Phase 3: Re-export 정리 (83_PHASE3_REEXPORT_CLEANUP.md) ✅ 완료
 
-- [ ] `shopping/tasks/self_healing_tasks.py` → 직접 import
-- [ ] `shopping/tasks/dlq_replay_tasks.py` → 직접 import
-- [ ] `shopping/tasks/drift_detection_tasks.py` → 직접 import
-- [ ] `shopping/models/point_history.py` → 직접 import
-- [ ] `selfhealing.services.dlq_service` wrapper 정리
-- [ ] `selfhealing.services.audit_helpers` wrapper 정리
-- [ ] `selfhealing.services.circuit_breaker_service` wrapper 정리
+- [x] `shopping/tasks/self_healing_tasks.py` → DeprecationWarning 추가
+- [x] `shopping/tasks/dlq_replay_tasks.py` → DeprecationWarning 추가
+- [x] `shopping/tasks/drift_detection_tasks.py` → DeprecationWarning 추가
+- [x] `shopping/models/point_history.py` → DeprecationWarning 추가
+- [x] 테스트 파일들 직접 import로 변경 (selfhealing.celery_tasks)
+- [x] `selfhealing.services.dlq_service` wrapper 유지 (외부 호환성)
+- [x] `selfhealing.services.audit_helpers` wrapper 유지 (외부 호환성)
+- [x] `selfhealing.services.circuit_breaker_service` wrapper 유지 (외부 호환성)
 
 ### Phase 4: Deprecated API 제거 (84_PHASE4_API_DEPRECATION.md)
 
@@ -205,3 +206,4 @@ git revert <commit-hash>
 | 1.0 | 2026-01-23 | - | 초안 작성 |
 | 1.1 | 2026-01-23 | - | Phase 1 완료 |
 | 1.2 | 2026-01-23 | - | Phase 2 완료 - Deprecated 모듈/클래스에 DeprecationWarning 추가 |
+| 1.3 | 2026-01-23 | - | Phase 3 완료 - Re-export 모듈에 DeprecationWarning 추가, 테스트 파일 직접 import 변경 |

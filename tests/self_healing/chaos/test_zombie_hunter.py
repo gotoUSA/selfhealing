@@ -24,13 +24,13 @@ class TestHuntZombieExperimentsTask:
     
     def test_celery_task_adapter_exists(self):
         """Test hunt_zombie_experiments Celery task adapter exists."""
-        from shopping.tasks.self_healing_tasks import hunt_zombie_experiments
+        from selfhealing.celery_tasks import hunt_zombie_experiments
         
         assert callable(hunt_zombie_experiments)
     
     def test_celery_task_name(self):
         """Test hunt_zombie_experiments Celery task has correct name."""
-        from shopping.tasks.self_healing_tasks import hunt_zombie_experiments
+        from selfhealing.celery_tasks import hunt_zombie_experiments
         
         assert hunt_zombie_experiments.name == "selfhealing.celery_tasks.hunt_zombie_experiments"
     

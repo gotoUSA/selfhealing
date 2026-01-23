@@ -292,19 +292,19 @@ class TestCheckRecoveryMonitoringTask:
     
     def test_task_exists(self):
         """Test check_recovery_monitoring_experiments task exists."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         
         assert callable(check_recovery_monitoring_experiments)
     
     def test_task_name(self):
         """Test task has correct name."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         
         assert check_recovery_monitoring_experiments.name == "selfhealing.celery_tasks.check_recovery_monitoring"
     
     def test_task_returns_correct_format(self):
         """Test task returns expected dictionary format."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         from selfhealing.services.chaos.base import ExperimentStatus
         
         # Patch where the import happens (inside the function)
@@ -323,7 +323,7 @@ class TestCheckRecoveryMonitoringTask:
     
     def test_task_completes_recovery_monitoring(self):
         """Test task completes experiments when canary recovery is done."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         from selfhealing.services.chaos.base import ExperimentStatus
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
@@ -346,7 +346,7 @@ class TestCheckRecoveryMonitoringTask:
     
     def test_task_force_completes_on_hard_ttl(self):
         """Test task force completes experiments when hard TTL expired."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         from selfhealing.services.chaos.base import ExperimentStatus
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
@@ -370,7 +370,7 @@ class TestCheckRecoveryMonitoringTask:
     
     def test_task_handles_errors_gracefully(self):
         """Test task handles errors without crashing."""
-        from shopping.tasks.self_healing_tasks import check_recovery_monitoring_experiments
+        from selfhealing.celery_tasks import check_recovery_monitoring_experiments
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:
             mock_get_scheduler.side_effect = Exception("Test error")

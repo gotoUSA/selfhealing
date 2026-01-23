@@ -23,7 +23,7 @@ from django.utils import timezone
 pytestmark = pytest.mark.requires_db
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.tasks.dlq_replay_tasks import cleanup_resolved_dlq_entries
+from selfhealing.celery_tasks import cleanup_resolved_dlq_entries
 from shopping.tests.factories import OrderFactory, UserFactory
 
 

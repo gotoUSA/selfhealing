@@ -64,7 +64,7 @@ class TestCeleryAsyncBehavior:
         - AsyncResult is returned with PENDING state
         - apply_async is called with correct arguments
         """
-        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Configure mock to return a pending task result
             mock_result = MagicMock()
             mock_result.id = "test-task-id-12345"
@@ -72,7 +72,7 @@ class TestCeleryAsyncBehavior:
             mock_apply.return_value = mock_result
 
             # Import and call the task via apply_async
-            from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+            from selfhealing.celery_tasks import replay_single_dlq_entry
 
             result = replay_single_dlq_entry.apply_async(args=[999])
 
@@ -94,13 +94,13 @@ class TestCeleryAsyncBehavior:
         - apply_async is called with countdown parameter
         - The countdown value matches the requested delay
         """
-        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "delayed-task-id"
             mock_result.state = states.PENDING
             mock_apply.return_value = mock_result
 
-            from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+            from selfhealing.celery_tasks import replay_single_dlq_entry
 
             # Call with countdown (delay) parameter
             delay_seconds = 60
@@ -125,11 +125,11 @@ class TestCeleryAsyncBehavior:
         - OperationalError is raised when broker is unavailable
         - Calling code can catch and handle the exception
         """
-        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Simulate broker connection failure
             mock_apply.side_effect = OperationalError("Connection refused")
 
-            from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+            from selfhealing.celery_tasks import replay_single_dlq_entry
 
             # Verify that the exception is raised
             with pytest.raises(OperationalError) as exc_info:
@@ -149,13 +149,13 @@ class TestCeleryAsyncBehavior:
         - Task uses the queue specified in its decorator
         - Queue routing is applied correctly
         """
-        with patch("shopping.tasks.self_healing_tasks.conditional_replay_on_circuit_close.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.conditional_replay_on_circuit_close.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "cb-recovery-task"
             mock_result.state = states.PENDING
             mock_apply.return_value = mock_result
 
-            from shopping.tasks.self_healing_tasks import conditional_replay_on_circuit_close
+            from selfhealing.celery_tasks import conditional_replay_on_circuit_close
 
             # Trigger task with queue specification
             conditional_replay_on_circuit_close.apply_async(
@@ -196,7 +196,7 @@ class TestCeleryRetrySimulation:
         - DLQ replay tasks have max_retries=0
         - Retry configuration matches the task decorator
         """
-        from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+        from selfhealing.celery_tasks import replay_single_dlq_entry
 
         # Verify DLQ replay task does not auto-retry
         # (failures are stored in DLQ, not retried automatically)
@@ -214,8 +214,8 @@ class TestCeleryRetrySimulation:
         - Tasks have both time_limit and soft_time_limit set
         - soft_time_limit < time_limit (to allow graceful shutdown)
         """
-        from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
-        from shopping.tasks.self_healing_tasks import conditional_replay_on_circuit_close
+        from selfhealing.celery_tasks import replay_single_dlq_entry
+        from selfhealing.celery_tasks import conditional_replay_on_circuit_close
 
         # Verify time limits are set
         assert replay_single_dlq_entry.time_limit is not None
@@ -237,8 +237,8 @@ class TestCeleryRetrySimulation:
         Expected behavior:
         - Critical tasks have acks_late=True
         """
-        from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
-        from shopping.tasks.self_healing_tasks import conditional_replay_on_circuit_close
+        from selfhealing.celery_tasks import replay_single_dlq_entry
+        from selfhealing.celery_tasks import conditional_replay_on_circuit_close
 
         # Verify acks_late is enabled for reliability
         assert replay_single_dlq_entry.acks_late is True
@@ -273,7 +273,7 @@ class TestBrokerFailureRecovery:
 
         This test ensures the error type is correct for proper handling.
         """
-        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             # Simulate various broker failure scenarios
             broker_errors = [
                 OperationalError("Connection refused"),
@@ -284,7 +284,7 @@ class TestBrokerFailureRecovery:
             for error in broker_errors:
                 mock_apply.side_effect = error
 
-                from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+                from selfhealing.celery_tasks import replay_single_dlq_entry
 
                 with pytest.raises(OperationalError):
                     replay_single_dlq_entry.apply_async(args=[789])
@@ -300,7 +300,7 @@ class TestBrokerFailureRecovery:
         - Timeout or connection errors when fetching results
         - Application can continue without blocking
         """
-        with patch("shopping.tasks.dlq_replay_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
+        with patch("selfhealing.celery_tasks.replay_single_dlq_entry.apply_async") as mock_apply:
             mock_result = MagicMock()
             mock_result.id = "queued-task-id"
             mock_result.state = states.PENDING
@@ -309,7 +309,7 @@ class TestBrokerFailureRecovery:
             mock_result.get.side_effect = OperationalError("Result backend unavailable")
             mock_apply.return_value = mock_result
 
-            from shopping.tasks.dlq_replay_tasks import replay_single_dlq_entry
+            from selfhealing.celery_tasks import replay_single_dlq_entry
 
             result = replay_single_dlq_entry.apply_async(args=[111])
 
