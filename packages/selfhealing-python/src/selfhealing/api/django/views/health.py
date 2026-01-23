@@ -365,8 +365,9 @@ class ErrorBudgetGateResetView(APIView):
                 gate.reset_rate_limiter()
                 reset_actions.append("rate_limiter")
 
+            # Use reset_fault_detector() instead of deprecated reset_circuit_breaker()
             if component in ("all", "circuit_breaker"):
-                gate.reset_circuit_breaker()
+                gate.reset_fault_detector()
                 reset_actions.append("circuit_breaker")
 
             if component in ("all", "alerts"):

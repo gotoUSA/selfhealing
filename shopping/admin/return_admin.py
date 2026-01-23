@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 from shopping.models import Return, ReturnItem
+from shopping.services.return_service import ReturnService
 
 
 # ============================================
@@ -223,11 +224,15 @@ class ReturnAdmin(admin.ModelAdmin):
 
     @admin.action(description="Approve selected returns")
     def approve_returns(self, request, queryset):
-        """Approve selected return requests."""
+        """
+        Approve selected return requests.
+        
+        Uses ReturnService.approve_return() instead of deprecated model method.
+        """
         count = 0
         for return_obj in queryset.filter(status="requested"):
             try:
-                return_obj.approve()
+                ReturnService.approve_return(return_obj)
                 count += 1
             except ValueError as e:
                 self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")
@@ -236,11 +241,15 @@ class ReturnAdmin(admin.ModelAdmin):
 
     @admin.action(description="Reject selected returns")
     def reject_returns(self, request, queryset):
-        """Reject selected return requests."""
+        """
+        Reject selected return requests.
+        
+        Uses ReturnService.reject_return() instead of deprecated model method.
+        """
         count = 0
         for return_obj in queryset.filter(status="requested"):
             try:
-                return_obj.reject("Batch rejected by admin")
+                ReturnService.reject_return(return_obj, reason="Batch rejected by admin")
                 count += 1
             except ValueError as e:
                 self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")
@@ -249,11 +258,15 @@ class ReturnAdmin(admin.ModelAdmin):
 
     @admin.action(description="Mark selected as RECEIVED")
     def mark_as_received(self, request, queryset):
-        """Mark selected returns as received."""
+        """
+        Mark selected returns as received.
+        
+        Uses ReturnService.confirm_receive_return() instead of deprecated model method.
+        """
         count = 0
         for return_obj in queryset.filter(status="shipping"):
             try:
-                return_obj.confirm_receive()
+                ReturnService.confirm_receive_return(return_obj)
                 count += 1
             except ValueError as e:
                 self.message_user(request, f"{return_obj.return_number}: {str(e)}", level="error")

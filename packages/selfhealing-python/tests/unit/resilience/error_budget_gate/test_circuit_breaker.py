@@ -81,10 +81,14 @@ class TestInMemoryCircuitBreaker:
 
 
 class TestGateCircuitBreakerIntegration:
-    """Gate와 Circuit Breaker 통합 테스트."""
+    """Gate와 Circuit Breaker (Fault Detector) 통합 테스트."""
     
-    def test_gate_circuit_breaker_status(self):
-        """Gate에서 Circuit Breaker 상태 조회."""
+    def test_gate_fault_detector_status(self):
+        """
+        Gate에서 Fault Detector 상태 조회.
+        
+        Uses get_fault_detector_status() instead of deprecated get_circuit_breaker_status().
+        """
         from selfhealing.services.error_budget_gate import (
             ErrorBudgetGate,
             ErrorBudgetGateConfig,
@@ -98,14 +102,19 @@ class TestGateCircuitBreakerIntegration:
         )
         gate = ErrorBudgetGate(config=config)
         
-        cb_status = gate.get_circuit_breaker_status()
+        # Use new method get_fault_detector_status() instead of deprecated get_circuit_breaker_status()
+        cb_status = gate.get_fault_detector_status()
         
         assert cb_status["enabled"] is True
         assert cb_status["failure_threshold"] == 5
         assert cb_status["state"] == "healthy"  # GateFaultState.HEALTHY
     
-    def test_gate_reset_circuit_breaker(self):
-        """Gate에서 Circuit Breaker 리셋."""
+    def test_gate_reset_fault_detector(self):
+        """
+        Gate에서 Fault Detector 리셋.
+        
+        Uses reset_fault_detector() instead of deprecated reset_circuit_breaker().
+        """
         from selfhealing.services.error_budget_gate import (
             ErrorBudgetGate,
             ErrorBudgetGateConfig,
@@ -122,9 +131,10 @@ class TestGateCircuitBreakerIntegration:
         gate._fault_detector.record_failure()
         gate._fault_detector.record_failure()
         
-        assert gate.get_circuit_breaker_status()["state"] == "degraded"  # GateFaultState.DEGRADED
+        # Use new method get_fault_detector_status()
+        assert gate.get_fault_detector_status()["state"] == "degraded"  # GateFaultState.DEGRADED
         
-        # 리셋
-        gate.reset_circuit_breaker()
+        # 리셋 - Use new method reset_fault_detector()
+        gate.reset_fault_detector()
         
-        assert gate.get_circuit_breaker_status()["state"] == "healthy"  # GateFaultState.HEALTHY
+        assert gate.get_fault_detector_status()["state"] == "healthy"  # GateFaultState.HEALTHY

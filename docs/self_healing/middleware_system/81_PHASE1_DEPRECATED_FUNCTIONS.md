@@ -169,11 +169,15 @@ pytest tests/ -W error::DeprecationWarning
 
 ## 4. 완료 체크리스트
 
-- [ ] Return 모델 7개 메서드에 DeprecationWarning 추가
-- [ ] gate.py 2개 메서드에 DeprecationWarning 추가
-- [ ] 사용처 마이그레이션 완료
-- [ ] 관련 테스트 업데이트
-- [ ] 통합 테스트 통과
+- [x] Return 모델 7개 메서드에 DeprecationWarning 추가 ✅ (2026-01-23)
+- [x] gate.py 2개 메서드에 DeprecationWarning 추가 ✅ (2026-01-23)
+- [x] 사용처 마이그레이션 완료 ✅ (2026-01-23)
+  - return_admin.py: ReturnService 직접 호출로 변경
+  - health.py: reset_fault_detector() 사용으로 변경
+- [x] 관련 테스트 업데이트 ✅ (2026-01-23)
+  - test_circuit_breaker.py: get_fault_detector_status(), reset_fault_detector() 사용
+- [x] 통합 테스트 통과 ✅ (2026-01-23)
+  - error_budget_gate 테스트 62개 통과
 - [ ] 코드 리뷰 완료
 
 ---
@@ -183,3 +187,4 @@ pytest tests/ -W error::DeprecationWarning
 | 버전 | 날짜 | 내용 |
 |------|------|------|
 | 1.0 | 2026-01-23 | 초안 작성 |
+| 1.1 | 2026-01-23 | Phase 1 구현 완료 - DeprecationWarning 추가 및 사용처 마이그레이션 |

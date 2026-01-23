@@ -96,13 +96,14 @@
 
 ## 4. Phase별 상세 체크리스트
 
-### Phase 1: Deprecated 함수/메서드 (81_PHASE1_DEPRECATED_FUNCTIONS.md)
+### Phase 1: Deprecated 함수/메서드 (81_PHASE1_DEPRECATED_FUNCTIONS.md) ✅ 완료
 
-- [ ] Return 모델 메서드 7개 → ReturnService 호출로 전환
-- [ ] `track_replay()` 데코레이터 → 새 위치 사용
-- [ ] `store_with_forensic_context()` → `store_failure()` 사용
-- [ ] `get_circuit_breaker_status()` → `get_fault_detector_status()` 전환
-- [ ] `_should_bypass_for_xtest()` → `_check_bypass_registry()` 전환
+- [x] Return 모델 메서드 7개 → ReturnService 호출로 전환 + DeprecationWarning
+- [x] `track_replay()` 데코레이터 → 이미 DeprecationWarning 있음
+- [x] `store_with_forensic_context()` → 이미 NotImplementedError 발생
+- [x] `get_circuit_breaker_status()` → `get_fault_detector_status()` 전환 + DeprecationWarning
+- [x] `reset_circuit_breaker()` → `reset_fault_detector()` 전환 + DeprecationWarning
+- [x] `_should_bypass_for_xtest()` → 이미 DeprecationWarning 있음
 
 ### Phase 2: Deprecated 모듈/클래스 (82_PHASE2_DEPRECATED_MODULES.md)
 

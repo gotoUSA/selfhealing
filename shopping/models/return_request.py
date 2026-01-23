@@ -259,19 +259,39 @@ class Return(models.Model):
 
     def generate_return_number(self) -> str:
         """
-        교환/환불 번호 자동 생성
+        교환/환불 번호 자동 생성.
 
-        DEPRECATED: ReturnService.generate_return_number() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.generate_return_number` instead.
+            Will be removed in version 3.0.0.
         """
+        import warnings
+        warnings.warn(
+            "Return.generate_return_number() is deprecated. "
+            "Use ReturnService.generate_return_number() instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         return ReturnService.generate_return_number()
 
     def calculate_refund_amount(self) -> Decimal:
         """
-        환불 금액 계산
+        환불 금액 계산.
 
-        DEPRECATED: ReturnService.calculate_refund_amount() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.calculate_refund_amount` instead.
+            Will be removed in version 3.0.0.
         """
+        import warnings
+        warnings.warn(
+            "Return.calculate_refund_amount() is deprecated. "
+            "Use ReturnService.calculate_refund_amount() instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         return ReturnService.calculate_refund_amount(self.return_items.all())
 
@@ -364,54 +384,104 @@ class Return(models.Model):
 
     def approve(self, admin_user: User | None = None) -> None:
         """
-        판매자 승인 처리
+        판매자 승인 처리.
 
-        DEPRECATED: ReturnService.approve_return() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.approve_return` instead.
+            Will be removed in version 3.0.0.
 
         Args:
             admin_user: 승인한 관리자 (향후 이력 관리용)
         """
+        import warnings
+        warnings.warn(
+            "Return.approve() is deprecated. "
+            "Use ReturnService.approve_return(return_obj, admin_user) instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         ReturnService.approve_return(self, admin_user=admin_user)
 
     def reject(self, reason: str) -> None:
         """
-        판매자 거부 처리
+        판매자 거부 처리.
 
-        DEPRECATED: ReturnService.reject_return() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.reject_return` instead.
+            Will be removed in version 3.0.0.
 
         Args:
             reason: 거부 사유
         """
+        import warnings
+        warnings.warn(
+            "Return.reject() is deprecated. "
+            "Use ReturnService.reject_return(return_obj, reason) instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         ReturnService.reject_return(self, reason=reason)
 
     def confirm_receive(self) -> None:
         """
-        반품 도착 확인 (판매자)
+        반품 도착 확인 (판매자).
 
-        DEPRECATED: ReturnService.confirm_receive_return() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.confirm_receive_return` instead.
+            Will be removed in version 3.0.0.
 
         반품 상품을 수령했음을 확인
         """
+        import warnings
+        warnings.warn(
+            "Return.confirm_receive() is deprecated. "
+            "Use ReturnService.confirm_receive_return(return_obj) instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         ReturnService.confirm_receive_return(self)
 
     def complete_refund(self) -> None:
         """
-        환불 완료 처리
+        환불 완료 처리.
 
-        DEPRECATED: ReturnService.complete_refund() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.complete_refund` instead.
+            Will be removed in version 3.0.0.
         """
+        import warnings
+        warnings.warn(
+            "Return.complete_refund() is deprecated. "
+            "Use ReturnService.complete_refund(return_obj) instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         ReturnService.complete_refund(self)
 
     def complete_exchange(self) -> None:
         """
-        교환 완료 처리
+        교환 완료 처리.
 
-        DEPRECATED: ReturnService.complete_exchange() 사용 권장
+        .. deprecated:: 2.0.0
+            Use :meth:`ReturnService.complete_exchange` instead.
+            Will be removed in version 3.0.0.
         """
+        import warnings
+        warnings.warn(
+            "Return.complete_exchange() is deprecated. "
+            "Use ReturnService.complete_exchange(return_obj, ...) instead. "
+            "This method will be removed in v3.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from shopping.services.return_service import ReturnService
         # 교환 송장번호는 이미 저장되어 있어야 함
         if not self.exchange_tracking_number or not self.exchange_shipping_company:
