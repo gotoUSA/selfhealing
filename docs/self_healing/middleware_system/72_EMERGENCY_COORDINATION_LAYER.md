@@ -430,6 +430,11 @@ class ScopedEmergencyState:
 **코드 근거**: 기존 `RecoveryGateConfig`([models.py#L16-48](packages/selfhealing-python/src/selfhealing/services/emergency_mode/models.py#L16))의 `stabilization_period_seconds: int = 300` 패턴 확장
 
 ```python
+import os
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Tuple
+
 # SSOT: Emergency Level 쿨다운 상수 (3가지 보완사항 ③)
 EMERGENCY_LEVEL_COOLDOWN_SECONDS: int = 300
 """
@@ -475,6 +480,34 @@ class AntiFlappingGuard:
     flapping_lockout_minutes: int = 30
     """플래핑 감지 시 30분간 레벨 변경 잠금."""
     
+    # 신규: Recovery Hysteresis Factor (§3.11 권장사항)
+    recovery_hysteresis_factor: float = field(
+        default_factory=lambda: float(
+            os.environ.get("SELFHEALING_RECOVERY_HYSTERESIS_FACTOR", "1.15")
+        )
+    )
+    """
+    복구 윈도우 히스테리시스 팩터.
+    
+    긴급 상황 전파 속도보다 복구 승인 속도를 의도적으로 느리게 하여
+    이차 장애 발생 가능성을 낮춥니다.
+    
+    - 1.0: 비대칭 없음 (Emergency와 동일한 속도로 복구)
+    - 1.15: 복구 조건 확인에 15% 더 긴 시간 필요 (권장)
+    - 1.20: 복구 조건 확인에 20% 더 긴 시간 필요 (보수적)
+    
+    계산 예시:
+        - 기본 안정화 대기 시간: 600초 (10분)
+        - 히스테리시스 적용 후: 600 * 1.15 = 690초 (11.5분)
+    
+    환경 변수:
+        SELFHEALING_RECOVERY_HYSTERESIS_FACTOR (기본값: 1.15)
+    
+    Reference:
+        §3.11 복구 윈도우의 '히스테리시스' 설정 권장사항
+        77_RECOVERY_COORDINATOR.md#RecoveryCircuitBreaker
+    """
+    
     def check_transition_allowed(
         self,
         transition_history: List[datetime],
@@ -502,6 +535,36 @@ class AntiFlappingGuard:
             )
         
         return (True, "Transition allowed")
+    
+    def get_effective_stability_duration(self, is_recovery: bool = False) -> int:
+        """
+        유효 안정화 대기 시간 계산 (히스테리시스 적용).
+        
+        복구 시에는 히스테리시스 팩터를 적용하여
+        Emergency 전파보다 느린 속도로 복구합니다.
+        
+        Args:
+            is_recovery: True면 복구 방향 (NORMAL로 전환),
+                        False면 장애 방향 (STRICT/Emergency로 전환)
+        
+        Returns:
+            초 단위 안정화 대기 시간
+            
+        Example:
+            >>> guard = AntiFlappingGuard(recovery_hysteresis_factor=1.15)
+            >>> guard.get_effective_stability_duration(is_recovery=False)
+            600  # 기본 10분
+            >>> guard.get_effective_stability_duration(is_recovery=True)
+            690  # 10분 * 1.15 = 11.5분
+        """
+        base_duration = self.min_stable_duration_before_recovery_seconds
+        
+        if is_recovery:
+            # 복구 시 히스테리시스 적용: 더 보수적으로 대기
+            return int(base_duration * self.recovery_hysteresis_factor)
+        
+        # 장애 전파 시: 기본값 그대로 (빠른 대응)
+        return base_duration
 ```
 
 #### 5.1.2 Dry-Run / Shadow Mode
