@@ -127,8 +127,6 @@ from selfhealing.api.django.views.governance import (
     GovernanceModeView,
     GovernanceRBACStatusView,
     GovernanceConfigView,
-    DeprecatedMetricSyncView,
-    DeprecatedDriftReportView,
     # 4-Eyes Approval & L2 Storage
     ApprovalRequestListView,
     ApprovalRequestApproveView,
@@ -351,14 +349,7 @@ urlpatterns = [
     path("config/drift-thresholds/", DriftThresholdConfigView.as_view(), name="config-drift-thresholds"),
     path("config/drift-thresholds/reset/", DriftThresholdResetView.as_view(), name="config-drift-thresholds-reset"),
     # =========================================================================
-    # Metric Sync API - DEPRECATED
-    # 새로운 API: /metrics/status/, /governance/reconcile/, /governance/mode/
-    # =========================================================================
-    # Deprecated endpoints (with Warning headers + redirect to new endpoints)
-    path("metrics/sync/", DeprecatedMetricSyncView.as_view(), name="metrics-sync"),
-    path("metrics/drift-report/", DeprecatedDriftReportView.as_view(), name="metrics-drift-report"),
-    # =========================================================================
-    # Governance API (New Unified Hub)
+    # Governance API (Unified Hub)
     # 관찰(Observability): GET /metrics/status/
     # 제어(Control): POST /governance/reconcile/, POST /governance/mode/
     # =========================================================================

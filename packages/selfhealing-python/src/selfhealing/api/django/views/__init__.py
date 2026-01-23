@@ -149,7 +149,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "GradeHistoryView": ("selfhealing.api.django.views.chaos", "GradeHistoryView"),
     "PendingApprovalsView": ("selfhealing.api.django.views.chaos", "PendingApprovalsView"),
     # -------------------------------------------------------------------------
-    # governance/ (9 symbols)
+    # governance/ (7 symbols) - Deprecated views removed
     # -------------------------------------------------------------------------
     "GovernanceService": ("selfhealing.api.django.views.governance", "GovernanceService"),
     "get_governance_service": ("selfhealing.api.django.views.governance", "get_governance_service"),
@@ -157,8 +157,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "MetricStatusView": ("selfhealing.api.django.views.governance", "MetricStatusView"),
     "GovernanceReconcileView": ("selfhealing.api.django.views.governance", "GovernanceReconcileView"),
     "GovernanceModeView": ("selfhealing.api.django.views.governance", "GovernanceModeView"),
-    "DeprecatedMetricSyncView": ("selfhealing.api.django.views.governance", "DeprecatedMetricSyncView"),
-    "DeprecatedDriftReportView": ("selfhealing.api.django.views.governance", "DeprecatedDriftReportView"),
     # -------------------------------------------------------------------------
     # xtest_mode.py (7 symbols)
     # -------------------------------------------------------------------------
@@ -332,8 +330,6 @@ if TYPE_CHECKING:
         MetricStatusView,
         GovernanceReconcileView,
         GovernanceModeView,
-        DeprecatedMetricSyncView,
-        DeprecatedDriftReportView,
     )
     # X-Test-Mode Views (Stage 48: Chaos Proof)
     from selfhealing.api.django.views.xtest_mode import (
@@ -457,8 +453,6 @@ __all__ = [
     "MetricStatusView",
     "GovernanceReconcileView",
     "GovernanceModeView",
-    "DeprecatedMetricSyncView",
-    "DeprecatedDriftReportView",
     # X-Test-Mode Views (Stage 48)
     "XTestModeMixin",
     "InjectCBFailureView",

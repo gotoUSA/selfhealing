@@ -125,12 +125,12 @@
 - [x] `selfhealing.services.audit_helpers` wrapper 유지 (외부 호환성)
 - [x] `selfhealing.services.circuit_breaker_service` wrapper 유지 (외부 호환성)
 
-### Phase 4: Deprecated API 제거 (84_PHASE4_API_DEPRECATION.md)
+### Phase 4: Deprecated API 제거 (84_PHASE4_API_DEPRECATION.md) ✅ 완료
 
-- [ ] `DeprecatedMetricSyncView` 제거
-- [ ] `DeprecatedDriftReportView` 제거
-- [ ] URL 패턴에서 deprecated 엔드포인트 제거
-- [ ] 관련 테스트 업데이트/제거
+- [x] `DeprecatedMetricSyncView` 제거
+- [x] `DeprecatedDriftReportView` 제거
+- [x] URL 패턴에서 deprecated 엔드포인트 제거
+- [x] 관련 테스트 업데이트/제거
 
 ---
 
@@ -207,3 +207,4 @@ git revert <commit-hash>
 | 1.1 | 2026-01-23 | - | Phase 1 완료 |
 | 1.2 | 2026-01-23 | - | Phase 2 완료 - Deprecated 모듈/클래스에 DeprecationWarning 추가 |
 | 1.3 | 2026-01-23 | - | Phase 3 완료 - Re-export 모듈에 DeprecationWarning 추가, 테스트 파일 직접 import 변경 |
+| 1.4 | 2026-01-23 | - | Phase 4 완료 - Deprecated API (DeprecatedMetricSyncView, DeprecatedDriftReportView) 및 URL 패턴 제거 |

@@ -25,8 +25,6 @@ from selfhealing.api.django.views.governance import (
     MetricStatusView,
     GovernanceReconcileView,
     GovernanceModeView,
-    DeprecatedMetricSyncView,
-    DeprecatedDriftReportView,
     get_governance_service,
     reset_governance_service,
 )
@@ -427,82 +425,6 @@ class TestGovernanceModeView:
 
 
 # =============================================================================
-# Deprecated API Tests
-# =============================================================================
-
-
-class TestDeprecatedMetricSyncView:
-    """POST /metrics/sync/ (Deprecated) 테스트."""
-    
-    @patch("selfhealing.api.django.views.metric_sync.get_metric_sync_service")
-    def test_deprecated_sync_adds_warning_header(
-        self, mock_get_sync, api_factory, admin_user
-    ):
-        """Deprecated API는 Warning 헤더를 추가하는지 확인."""
-        mock_sync_service = Mock()
-        mock_sync_service.sync_metrics.return_value = {
-            "status": "completed",
-            "synced_at": datetime.now(timezone.utc).isoformat(),
-            "actor": "admin",
-            "dry_run": False,
-            "results": {},
-            "summary": {"total_drifts_detected": 0, "total_drifts_corrected": 0},
-        }
-        mock_get_sync.return_value = mock_sync_service
-        
-        request = api_factory.post(
-            "/api/self-healing/metrics/sync/",
-            data={},
-            format="json",
-        )
-        request.user = admin_user
-        
-        view = DeprecatedMetricSyncView.as_view()
-        response = view(request)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert "Warning" in response
-        assert "Deprecated" in response["Warning"]
-        assert "Deprecation" in response
-        assert response["Deprecation"] == "true"
-        assert "Link" in response
-        assert "/governance/reconcile/" in response["Link"]
-
-
-class TestDeprecatedDriftReportView:
-    """GET /metrics/drift-report/ (Deprecated) 테스트."""
-    
-    @patch("selfhealing.api.django.views.metric_sync.get_metric_sync_service")
-    def test_deprecated_drift_report_adds_warning_header(
-        self, mock_get_sync, api_factory, admin_user
-    ):
-        """Deprecated API는 Warning 헤더를 추가하는지 확인."""
-        mock_sync_service = Mock()
-        mock_sync_service.get_drift_report.return_value = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "metrics": {},
-            "overall_health": "healthy",
-            "max_drift_percent": 0.0,
-            "recommendation": "",
-        }
-        mock_get_sync.return_value = mock_sync_service
-        
-        request = api_factory.get("/api/self-healing/metrics/drift-report/")
-        request.user = admin_user
-        
-        view = DeprecatedDriftReportView.as_view()
-        response = view(request)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert "Warning" in response
-        assert "Deprecated" in response["Warning"]
-        assert "Deprecation" in response
-        assert response["Deprecation"] == "true"
-        assert "Link" in response
-        assert "/metrics/status/" in response["Link"]
-
-
-# =============================================================================
 # Integration Tests
 # =============================================================================
 
@@ -518,7 +440,3 @@ class TestAPIURLRouting:
         assert reverse("selfhealing:metrics-status")
         assert reverse("selfhealing:governance-reconcile")
         assert reverse("selfhealing:governance-mode")
-        
-        # Deprecated API (여전히 존재해야 함)
-        assert reverse("selfhealing:metrics-sync")
-        assert reverse("selfhealing:metrics-drift-report")
