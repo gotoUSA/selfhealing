@@ -186,10 +186,13 @@ services:
       - TEST_DB_AVAILABLE=true
       - TEST_REDIS_AVAILABLE=true
       - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
+      - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      celery-worker:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------

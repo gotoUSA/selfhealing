@@ -22,11 +22,8 @@ from celery import current_app
 
 from django.conf import settings
 
-# Skip if not in Docker environment
-pytestmark = pytest.mark.skipif(
-    os.environ.get("TEST_REDIS_AVAILABLE") != "true",
-    reason="Redis not available - run in Docker Compose"
-)
+# 이 테스트는 Docker Compose 환경에서만 실행됨 (docker-compose.test.yml)
+# 환경변수 분기 없이 실제 연결 테스트
 
 
 class TestCeleryConnectionIntegration:
@@ -45,32 +42,51 @@ class TestCeleryConnectionIntegration:
         app = current_app
         assert app.conf.broker_url is not None
 
-    @pytest.mark.skip(reason="Requires running Celery worker in same Docker network")
     def test_celery_ping_worker(self):
-        """Celery 워커 ping 테스트."""
+        """Celery 워커 ping 테스트 - 실제 worker와 통신 확인."""
         app = current_app
         
-        # Ping workers with short timeout
-        inspector = app.control.inspect(timeout=5.0)
-        ping_result = inspector.ping()
+        # Ping workers with timeout - worker가 준비될 때까지 재시도
+        max_retries = 3
+        ping_result = None
+        
+        for attempt in range(max_retries):
+            inspector = app.control.inspect(timeout=10.0)
+            ping_result = inspector.ping()
+            if ping_result:
+                break
+            time.sleep(2)  # worker 준비 대기
         
         # Should have at least one worker responding
-        assert ping_result is not None, "No Celery workers responded to ping"
+        assert ping_result is not None, "No Celery workers responded to ping - worker가 실행 중인지 확인"
         assert len(ping_result) > 0, "No active Celery workers found"
 
-    @pytest.mark.skip(reason="Requires running Celery worker in same Docker network")
     def test_celery_registered_tasks(self):
-        """등록된 Celery 태스크 확인."""
+        """등록된 Celery 태스크 확인 - recovery 태스크가 등록되어 있는지."""
         app = current_app
         
-        inspector = app.control.inspect(timeout=5.0)
-        registered = inspector.registered()
+        # 재시도 로직 - worker가 준비될 때까지
+        max_retries = 3
+        registered = None
         
-        assert registered is not None, "Could not get registered tasks"
+        for attempt in range(max_retries):
+            inspector = app.control.inspect(timeout=10.0)
+            registered = inspector.registered()
+            if registered:
+                break
+            time.sleep(2)
+        
+        assert registered is not None, "Could not get registered tasks - worker가 실행 중인지 확인"
         
         # Check that at least one worker has tasks
+        all_tasks = []
         for worker, tasks in registered.items():
             assert len(tasks) > 0, f"Worker {worker} has no registered tasks"
+            all_tasks.extend(tasks)
+        
+        # Recovery 관련 태스크가 등록되어 있는지 확인
+        recovery_tasks = [t for t in all_tasks if 'recovery' in t.lower()]
+        assert len(recovery_tasks) > 0, f"No recovery tasks registered. All tasks: {all_tasks[:10]}"
 
 
 class TestCheckRecoveryTriggerTaskIntegration:
