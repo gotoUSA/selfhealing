@@ -411,5 +411,5 @@ class TestRecoveryStatusEnum:
         assert RecoveryStatus.ABORTED == "aborted"
 
     def test_recovery_status_count(self):
-        """7개의 복구 상태."""
-        assert len(RecoveryStatus) == 7
+        """10개의 복구 상태 (7개 기본 + 3개 추가: NORMAL, EMERGENCY, RECOVERING)."""
+        assert len(RecoveryStatus) == 10

@@ -767,6 +767,71 @@ class RecoveryCoordinator:
         logger.error(
             f"[Recovery] Failed: id={session.id}, error={error}"
         )
+    
+    # =========================================================================
+    # Status & History Methods
+    # =========================================================================
+    
+    def get_current_status(
+        self,
+        namespace: str = "global",
+    ) -> RecoveryStatus:
+        """
+        현재 복구 상태 조회.
+        
+        Args:
+            namespace: 네임스페이스
+        
+        Returns:
+            현재 RecoveryStatus
+        """
+        # 활성 세션 확인
+        active = self.get_active_session(namespace)
+        
+        if active:
+            return active.status
+        
+        # Emergency 레벨 확인
+        emergency_level = self._get_current_emergency_level(namespace)
+        
+        if emergency_level and emergency_level.value >= 3:
+            return RecoveryStatus.EMERGENCY
+        
+        return RecoveryStatus.NORMAL
+    
+    def get_session_history(
+        self,
+        namespace: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[RecoverySession]:
+        """
+        복구 세션 히스토리 조회.
+        
+        Args:
+            namespace: 필터링할 네임스페이스 (없으면 전체)
+            limit: 최대 개수
+        
+        Returns:
+            세션 목록 (최신순)
+        """
+        backend = self._get_backend()
+        
+        # 히스토리 키 패턴
+        history_key = f"recovery:history:{namespace or '*'}"
+        
+        try:
+            # Redis backend인 경우 히스토리에서 조회
+            history_data = backend.get(history_key)
+            if history_data and isinstance(history_data, list):
+                sessions = [
+                    RecoverySession.from_dict(s) for s in history_data[:limit]
+                ]
+                return sessions
+        except Exception:
+            pass
+        
+        # 히스토리가 없으면 빈 리스트
+        return []
 
 
 # =============================================================================

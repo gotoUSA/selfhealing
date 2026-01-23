@@ -102,6 +102,18 @@ from selfhealing.api.django.views.drift_threshold import (
     DriftThresholdResetView,
 )
 
+# Recovery API Views
+from selfhealing.api.django.views.recovery import (
+    RecoveryStatusView,
+    RecoveryStartView,
+    RecoveryAbortView,
+    RecoveryPendingApprovalsView,
+    RecoveryApproveView,
+    RecoveryRejectView,
+    RecoveryHistoryView,
+    RecoveryDashboardWidgetView,
+)
+
 # Metric Sync Views
 from selfhealing.api.django.views.metric_sync import (
     MetricSyncView,
@@ -706,6 +718,23 @@ urlpatterns += [
     path("xtest/record-healing-event/", RecordHealingEventView.as_view(), name="xtest-record-healing-event"),
     path("xtest/healing-incidents/", GetHealingIncidentsView.as_view(), name="xtest-healing-incidents"),
     path("xtest/multi-blast-radius/", MultiServiceBlastRadiusView.as_view(), name="xtest-multi-blast-radius"),
+    # =========================================================================
+    # Recovery Coordinator API - 복구 프로세스 관리
+    # Reference: docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md
+    # =========================================================================
+    # Recovery Status
+    path("recovery/status/", RecoveryStatusView.as_view(), name="recovery-status"),
+    # Recovery Actions
+    path("recovery/start/", RecoveryStartView.as_view(), name="recovery-start"),
+    path("recovery/abort/", RecoveryAbortView.as_view(), name="recovery-abort"),
+    # Pending Approvals
+    path("recovery/pending-approvals/", RecoveryPendingApprovalsView.as_view(), name="recovery-pending-approvals"),
+    path("recovery/approve/", RecoveryApproveView.as_view(), name="recovery-approve"),
+    path("recovery/reject/", RecoveryRejectView.as_view(), name="recovery-reject"),
+    # Recovery History
+    path("recovery/history/", RecoveryHistoryView.as_view(), name="recovery-history"),
+    # Dashboard Widget
+    path("recovery/widget/", RecoveryDashboardWidgetView.as_view(), name="recovery-widget"),
     # =========================================================================
     # Canary Rollout API - 설정 변경의 점진적 배포
     # Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md

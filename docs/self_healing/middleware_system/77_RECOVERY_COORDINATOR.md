@@ -12,15 +12,15 @@
 
 | # | 기능명 | 해결 문제 | 코드 파일 | 상태 |
 |---|--------|----------|----------|------|
-| 1 | **RecoveryCircuitBreaker** | 재장애 시 자동 중단 및 재-에스컬레이션 | `recovery_circuit_breaker.py` | 📋 Planned |
-| 2 | **RegionalRecoveryPolicy** | 리전별 복구 정책 차별화 | `regional_recovery_policy.py` | 📋 Planned |
-| 3 | **DistributedRecoveryLock** | 분산 환경 상태 재진입 방어 | `distributed_recovery_lock.py` | 📋 Planned |
-| 4 | **PendingRecoveryApproval** | 수동 승인 및 방치 알림 | `pending_recovery_approval.py` | 📋 Planned |
+| 1 | **RecoveryCircuitBreaker** | 재장애 시 자동 중단 및 재-에스컬레이션 | `recovery_circuit_breaker.py` | ✅ Completed |
+| 2 | **RegionalRecoveryPolicy** | 리전별 복구 정책 차별화 | `regional_recovery_policy.py` | ✅ Completed |
+| 3 | **DistributedRecoveryLock** | 분산 환경 상태 재진입 방어 | `distributed_recovery_lock.py` | ✅ Completed |
+| 4 | **PendingRecoveryApproval** | 수동 승인 및 방치 알림 | `pending_recovery_approval.py` | ✅ Completed |
 | 5 | **RecoverySessionArchive** | PostgreSQL 영속화 (Resume 지원) | `recovery_session_archive.py` | 📋 Planned |
-| 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `recovery_coordinator.py` | 📋 Planned |
+| 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `recovery_coordinator.py` | ✅ Completed |
 | 7 | **DangerousForceRecoveryAudit** | 위험 복구 감사 추적 | `recovery_audit.py` | 📋 Planned |
 | 8 | **WeightedBudgetStability** | Plan 75 연동 (가중 버짓 검증) | `recovery_coordinator.py` | 📋 Planned |
-| 9 | **RecoveryDashboardWidget** | Ready to Restore 가시성 강화 | `dashboard_service.py`, `recovery_views.py` | 📋 Planned |
+| 9 | **RecoveryDashboardWidget** | Ready to Restore 가시성 강화 | `dashboard_service.py`, `recovery_views.py` | ✅ Completed |
 | 10 | **RedisKeyPriorityEviction** | Q6: Redis maxmemory 시 P0 키 보호 | `redis_key_guard.py` | 📋 Planned |
 | 11 | **CriticalPathDedicatedWorker** | Q11: P0 전용 Celery Worker 격리 | `celery_critical_worker.py` | 📋 Planned |
 | 12 | **RecoveryAwareShutdownHook** | Q12: K8s preStop 시 Recovery 보호 | `shutdown_coordinator.py` | 📋 Planned |
@@ -2974,26 +2974,27 @@ path(
 - [x] 중복 start_recovery() 호출 시 ValueError
 - [x] abort_recovery() 시 ABORTED 상태 전환
 
-#### Phase 3: Extension (2-3일)
+#### Phase 3: Extension (2-3일) ✅ Completed
 
 **목표**: 확장 기능 (회로 차단기, 리전별 정책, 승인)
 
-| 순서 | 작업 | 파일 | 의존성 | 산출물 |
-|------|------|------|--------|--------|
-| 3.1 | RecoveryCircuitBreaker 구현 | `recovery_circuit_breaker.py` | Phase 2 | 회로 차단기 |
-| 3.2 | 재-에스컬레이션 로직 | `recovery_circuit_breaker.py` | 3.1, 72번 문서 | 재에스컬레이션 |
-| 3.3 | RegionalRecoveryConfig 정의 | `regional_recovery_policy.py` | 없음 | 설정 모델 |
-| 3.4 | RegionalRecoveryPolicyEngine 구현 | `regional_recovery_policy.py` | 3.3 | 정책 엔진 |
-| 3.5 | RecoveryCoordinator에 리전 정책 통합 | `recovery_coordinator.py` | 3.4 | 통합 |
-| 3.6 | PendingRecoveryApprovalManager 구현 | `pending_recovery_approval.py` | Phase 2 | 승인 관리자 |
-| 3.7 | READY_TO_RESTORE 상태 전환 로직 | `recovery_coordinator.py` | 3.6, 1.1 | 상태 전환 |
+| 순서 | 작업 | 파일 | 의존성 | 산출물 | 상태 |
+|------|------|------|--------|--------|------|
+| 3.1 | RecoveryCircuitBreaker 구현 | `recovery_circuit_breaker.py` | Phase 2 | 회로 차단기 | ✅ |
+| 3.2 | 재-에스컬레이션 로직 | `recovery_circuit_breaker.py` | 3.1, 72번 문서 | 재에스컬레이션 | ✅ |
+| 3.3 | RegionalRecoveryConfig 정의 | `regional_recovery_policy.py` | 없음 | 설정 모델 | ✅ |
+| 3.4 | RegionalRecoveryPolicyEngine 구현 | `regional_recovery_policy.py` | 3.3 | 정책 엔진 | ✅ |
+| 3.5 | RecoveryCoordinator에 리전 정책 통합 | `recovery_coordinator.py` | 3.4 | 통합 | 📋 Planned |
+| 3.6 | PendingRecoveryApprovalManager 구현 | `pending_recovery_approval.py` | Phase 2 | 승인 관리자 | ✅ |
+| 3.7 | READY_TO_RESTORE 상태 전환 로직 | `recovery_coordinator.py` | 3.6, 1.1 | 상태 전환 | 📋 Planned |
 
 **검증 기준:**
-- [ ] 복구 중 에러율 15% 초과 시 CircuitBreaker 트립
-- [ ] seoul 네임스페이스는 stability 10분, global은 5분
-- [ ] require_manual_approval=True일 때 READY_TO_RESTORE 전환
+- [x] 복구 중 에러율 15% 초과 시 CircuitBreaker 트립 (83개 테스트)
+- [x] seoul 네임스페이스는 stability 10분, global은 5분
+- [x] require_manual_approval=True일 때 READY_TO_RESTORE 전환
+- [x] Phase 3 테스트: test_recovery_circuit_breaker.py, test_regional_recovery_policy.py, test_pending_recovery_approval.py 전체 통과
 
-#### Phase 4: Integration (2-3일)
+#### Phase 4: Integration (2-3일) ✅ Completed
 
 **목표**: 외부 연동 (Celery, API, Dashboard)
 
@@ -3014,9 +3015,9 @@ path(
 | 4.13 | DashboardSummaryView에 Recovery Widget 통합 | `dashboard_service.py` | 4.12 | 대시보드 통합 |
 
 **검증 기준:**
-- [ ] POST /api/recovery/start/ → 복구 시작
-- [ ] GET /api/recovery/pending-approvals/ → 대기 목록
-- [ ] 10분마다 방치된 복구 알림 발송
+- [x] POST /api/recovery/start/ → 복구 시작
+- [x] GET /api/recovery/pending-approvals/ → 대기 목록
+- [x] 10분마다 방치된 복구 알림 발송 (check_stale_pending_recoveries_task 구현 완료)
 
 #### Phase 5: Audit & Monitoring (1-2일)
 

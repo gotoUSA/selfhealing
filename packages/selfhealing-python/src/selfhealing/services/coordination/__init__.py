@@ -78,6 +78,30 @@ from .optimistic_action import (
     reset_optimistic_action_executor,
 )
 
+# Phase 3: Recovery Extension
+from .recovery_circuit_breaker import (
+    RecoveryCircuitBreaker,
+    RecoveryCircuitBreakerConfig,
+    RecoveryCircuitState,
+    RecoveryMetricsSnapshot,
+    get_recovery_circuit_breaker,
+    reset_recovery_circuit_breaker,
+)
+from .regional_recovery_policy import (
+    RegionalRecoveryConfig,
+    RegionalRecoveryPolicyEngine,
+    DEFAULT_REGIONAL_CONFIGS,
+    get_regional_recovery_policy_engine,
+    reset_regional_recovery_policy_engine,
+)
+from .pending_recovery_approval import (
+    RecoveryApprovalStatus,
+    RecoveryApprovalRequest,
+    PendingRecoveryApprovalManager,
+    get_pending_recovery_approval_manager,
+    reset_pending_recovery_approval_manager,
+)
+
 
 __all__ = [
     # Enums
@@ -116,4 +140,23 @@ __all__ = [
     "OptimisticActionResult",
     "get_optimistic_action_executor",
     "reset_optimistic_action_executor",
+    # Phase 3: Recovery Circuit Breaker
+    "RecoveryCircuitBreaker",
+    "RecoveryCircuitBreakerConfig",
+    "RecoveryCircuitState",
+    "RecoveryMetricsSnapshot",
+    "get_recovery_circuit_breaker",
+    "reset_recovery_circuit_breaker",
+    # Phase 3: Regional Recovery Policy
+    "RegionalRecoveryConfig",
+    "RegionalRecoveryPolicyEngine",
+    "DEFAULT_REGIONAL_CONFIGS",
+    "get_regional_recovery_policy_engine",
+    "reset_regional_recovery_policy_engine",
+    # Phase 3: Pending Recovery Approval
+    "RecoveryApprovalStatus",
+    "RecoveryApprovalRequest",
+    "PendingRecoveryApprovalManager",
+    "get_pending_recovery_approval_manager",
+    "reset_pending_recovery_approval_manager",
 ]

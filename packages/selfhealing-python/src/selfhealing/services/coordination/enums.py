@@ -95,11 +95,20 @@ class RecoveryStatus(str, Enum):
     Emergency 복구 프로세스의 현재 단계를 나타냄.
     """
     
+    NORMAL = "normal"
+    """정상 상태 (복구 불필요)."""
+    
+    EMERGENCY = "emergency"
+    """긴급 상태 (복구 대기)."""
+    
     NOT_STARTED = "not_started"
     """복구 시작 전."""
     
     IN_PROGRESS = "in_progress"
     """복구 진행 중."""
+    
+    RECOVERING = "recovering"
+    """복구 진행 중 (alias for IN_PROGRESS)."""
     
     HEALTH_CHECK = "health_check"
     """헬스 체크 수행 중."""
