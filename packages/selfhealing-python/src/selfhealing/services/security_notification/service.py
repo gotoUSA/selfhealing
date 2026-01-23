@@ -23,8 +23,7 @@ from .models import (
     NotificationConfig,
     NotificationResult,
     SecurityNotificationResult,
-    DESCRIPTION_MAX_LENGTH,
-    TITLE_MAX_LENGTH,
+    _get_notification_limits,
 )
 from .slack_handler import SlackHandlerMixin
 from .email_handler import EmailHandlerMixin
@@ -200,11 +199,16 @@ class SecurityNotificationService(
 
         from selfhealing.core.timezone import now
 
+        # Get notification limits from config (not deprecated constants)
+        limits = _get_notification_limits()
+        title_max = limits.title_max_length
+        description_max = limits.description_max_length
+
         # Format message for Slack
         formatted_message = {
-            "title": self._truncate_with_ellipsis(title, TITLE_MAX_LENGTH),
+            "title": self._truncate_with_ellipsis(title, title_max),
             "severity": severity.upper(),
-            "description": self._truncate_with_ellipsis(message, DESCRIPTION_MAX_LENGTH),
+            "description": self._truncate_with_ellipsis(message, description_max),
             "detected_at": now().isoformat(),
             "metadata": metadata,
         }
@@ -301,17 +305,23 @@ class SecurityNotificationService(
         Returns:
             Formatted message dictionary
         """
-        from .models import DESCRIPTION_MAX_LENGTH, ACTION_TAKEN_MAX_LENGTH, TITLE_MAX_LENGTH
+        from .models import _get_notification_limits
+        
+        # Get notification limits from config (not deprecated constants)
+        limits = _get_notification_limits()
+        description_max = limits.description_max_length
+        action_taken_max = limits.action_taken_max_length
+        title_max = limits.title_max_length
         
         config = get_config()
         admin_url = f"{config.site_url}/admin/security-incident/{incident_id}/"
 
         # Truncate fields to prevent API limit issues
-        desc = self._truncate_with_ellipsis(description, DESCRIPTION_MAX_LENGTH)
-        action = self._truncate_with_ellipsis(action_taken, ACTION_TAKEN_MAX_LENGTH) if action_taken else "N/A"
+        desc = self._truncate_with_ellipsis(description, description_max)
+        action = self._truncate_with_ellipsis(action_taken, action_taken_max) if action_taken else "N/A"
 
         return {
-            "title": f"🚨 Security Incident: {incident_type}"[:TITLE_MAX_LENGTH],
+            "title": f"🚨 Security Incident: {incident_type}"[:title_max],
             "severity": severity.upper(),
             "incident_id": incident_id,
             "type": incident_type,

@@ -105,14 +105,14 @@
 - [x] `reset_circuit_breaker()` → `reset_fault_detector()` 전환 + DeprecationWarning
 - [x] `_should_bypass_for_xtest()` → 이미 DeprecationWarning 있음
 
-### Phase 2: Deprecated 모듈/클래스 (82_PHASE2_DEPRECATED_MODULES.md)
+### Phase 2: Deprecated 모듈/클래스 (82_PHASE2_DEPRECATED_MODULES.md) ✅ 완료
 
-- [ ] `selfhealing.audit.hash_chain_performance` → `selfhealing.audit.performance`
-- [ ] `selfhealing.services.factory` (단일 모듈) → 패키지 직접 import
-- [ ] `selfhealing.metrics.jitter` → `selfhealing.utils.jitter`
-- [ ] `CircuitState` → `GateFaultState`
-- [ ] `InMemoryCircuitBreaker` → `GateFaultDetector`
-- [ ] 상수 4개 → `_get_notification_limits()` 사용
+- [x] `selfhealing.audit.hash_chain_performance` → 이미 DeprecationWarning 있음 (유지)
+- [x] `selfhealing.services.factory` (단일 모듈) → DeprecationWarning 추가
+- [x] `selfhealing.metrics.jitter` → 이미 DeprecationWarning 있음 (유지)
+- [x] `CircuitState` → `GateFaultState` + `__getattr__` 패턴 DeprecationWarning
+- [x] `InMemoryCircuitBreaker` → `GateFaultDetector` + `__getattr__` 패턴 DeprecationWarning
+- [x] 상수 4개 → `_get_notification_limits()` 사용 + `__getattr__` 패턴 DeprecationWarning
 
 ### Phase 3: Re-export 정리 (83_PHASE3_REEXPORT_CLEANUP.md)
 
@@ -203,3 +203,5 @@ git revert <commit-hash>
 | 버전 | 날짜 | 작성자 | 내용 |
 |------|------|--------|------|
 | 1.0 | 2026-01-23 | - | 초안 작성 |
+| 1.1 | 2026-01-23 | - | Phase 1 완료 |
+| 1.2 | 2026-01-23 | - | Phase 2 완료 - Deprecated 모듈/클래스에 DeprecationWarning 추가 |

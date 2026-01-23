@@ -25,12 +25,48 @@ from .models import (
     NotificationConfig,
     NotificationResult,
     SecurityNotificationResult,
-    SLACK_BLOCK_TEXT_LIMIT,
-    DESCRIPTION_MAX_LENGTH,
-    ACTION_TAKEN_MAX_LENGTH,
-    TITLE_MAX_LENGTH,
     _get_notification_limits,
 )
+
+# =============================================================================
+# Deprecated Constants - Lazy import with DeprecationWarning
+# =============================================================================
+
+# Deprecated 상수는 __getattr__을 통해 접근 시 경고 발생
+# 새 코드에서는 _get_notification_limits() 사용 권장
+_DEPRECATED_CONSTANT_NAMES = {
+    "SLACK_BLOCK_TEXT_LIMIT",
+    "DESCRIPTION_MAX_LENGTH", 
+    "ACTION_TAKEN_MAX_LENGTH",
+    "TITLE_MAX_LENGTH",
+}
+
+_init_deprecated_warned: set = set()
+
+
+def __getattr__(name: str):
+    """
+    Deprecated 상수 접근 시 DeprecationWarning 발생.
+    
+    .. deprecated:: 2.0.0
+        Use _get_notification_limits() instead.
+        These constants will be removed in version 3.0.0.
+    """
+    import warnings
+    from .models import _DEPRECATED_CONSTANTS
+    
+    if name in _DEPRECATED_CONSTANT_NAMES:
+        if name not in _init_deprecated_warned:
+            warnings.warn(
+                f"'{name}' is deprecated. Use _get_notification_limits() instead. "
+                f"This constant will be removed in v3.0.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _init_deprecated_warned.add(name)
+        # models 모듈의 _DEPRECATED_CONSTANTS에서 직접 값 반환 (중복 경고 방지)
+        return _DEPRECATED_CONSTANTS[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Handlers (for extension/testing)
 from .slack_handler import SlackHandlerMixin

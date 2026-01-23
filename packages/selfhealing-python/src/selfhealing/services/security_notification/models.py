@@ -30,12 +30,42 @@ def _get_notification_limits():
     return get_notification_limits()
 
 
-# For backward compatibility, expose as module-level but load lazily
-# Use _get_notification_limits() for actual values
-SLACK_BLOCK_TEXT_LIMIT = 3000  # Deprecated: use _get_notification_limits()
-DESCRIPTION_MAX_LENGTH = 500  # Deprecated: use _get_notification_limits()
-ACTION_TAKEN_MAX_LENGTH = 200  # Deprecated: use _get_notification_limits()
-TITLE_MAX_LENGTH = 150  # Deprecated: use _get_notification_limits()
+# =============================================================================
+# Deprecated 상수 - 모듈 레벨 __getattr__로 경고 발생
+# =============================================================================
+
+# 기본값 (하위 호환성용) - 새 코드는 _get_notification_limits() 사용 권장
+_DEPRECATED_CONSTANTS = {
+    "SLACK_BLOCK_TEXT_LIMIT": 3000,
+    "DESCRIPTION_MAX_LENGTH": 500,
+    "ACTION_TAKEN_MAX_LENGTH": 200,
+    "TITLE_MAX_LENGTH": 150,
+}
+
+_deprecated_constant_warned: set = set()
+
+
+def __getattr__(name: str):
+    """
+    Deprecated 상수 접근 시 DeprecationWarning 발생.
+    
+    .. deprecated:: 2.0.0
+        Use _get_notification_limits() instead.
+        These constants will be removed in version 3.0.0.
+    """
+    import warnings
+    
+    if name in _DEPRECATED_CONSTANTS:
+        if name not in _deprecated_constant_warned:
+            warnings.warn(
+                f"'{name}' is deprecated. Use _get_notification_limits() instead. "
+                f"This constant will be removed in v3.0.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _deprecated_constant_warned.add(name)
+        return _DEPRECATED_CONSTANTS[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # =============================================================================

@@ -125,18 +125,47 @@ class GateFaultDetector:
 
 
 # =============================================================================
-# 하위 호환성 별칭 (Deprecated)
+# 하위 호환성 별칭 (Deprecated) - __getattr__ 패턴으로 경고 발생
 # =============================================================================
 
-# 기존 이름 유지 - 추후 제거 예정
-CircuitState = GateFaultState  # Deprecated: use GateFaultState
-InMemoryCircuitBreaker = GateFaultDetector  # Deprecated: use GateFaultDetector
+# Deprecated 별칭 매핑 - 접근 시 DeprecationWarning 발생
+_DEPRECATED_ALIASES = {
+    "CircuitState": ("GateFaultState", GateFaultState),
+    "InMemoryCircuitBreaker": ("GateFaultDetector", GateFaultDetector),
+}
+
+_deprecated_warned: set = set()
+
+
+def __getattr__(name: str):
+    """
+    Deprecated 별칭 접근 시 DeprecationWarning 발생.
+    
+    .. deprecated:: 2.0.0
+        CircuitState -> GateFaultState
+        InMemoryCircuitBreaker -> GateFaultDetector
+        Will be removed in version 3.0.0.
+    """
+    import warnings
+    
+    if name in _DEPRECATED_ALIASES:
+        new_name, actual_class = _DEPRECATED_ALIASES[name]
+        if name not in _deprecated_warned:
+            warnings.warn(
+                f"'{name}' is deprecated. Use '{new_name}' instead. "
+                f"This alias will be removed in v3.0.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _deprecated_warned.add(name)
+        return actual_class
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
     "GateFaultState",
     "GateFaultDetector",
-    # Deprecated aliases
+    # Deprecated aliases (접근 시 DeprecationWarning 발생)
     "CircuitState",
     "InMemoryCircuitBreaker",
 ]
