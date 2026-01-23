@@ -16,14 +16,16 @@
 | 2 | **RegionalRecoveryPolicy** | 리전별 복구 정책 차별화 | `regional_recovery_policy.py` | ✅ Completed |
 | 3 | **DistributedRecoveryLock** | 분산 환경 상태 재진입 방어 | `distributed_recovery_lock.py` | ✅ Completed |
 | 4 | **PendingRecoveryApproval** | 수동 승인 및 방치 알림 | `pending_recovery_approval.py` | ✅ Completed |
-| 5 | **RecoverySessionArchive** | PostgreSQL 영속화 (Resume 지원) | `recovery_session_archive.py` | 📋 Planned |
-| 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `recovery_coordinator.py` | ✅ Completed |
+| 5 | **RecoverySessionArchive** | PostgreSQL 영속화 (Resume 지원) | `recovery_session_archive.py` | ✅ Completed |
+| 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `idempotent_step_handlers.py` | ✅ Completed |
 | 7 | **DangerousForceRecoveryAudit** | 위험 복구 감사 추적 | `recovery_audit.py` | ✅ Completed |
 | 8 | **WeightedBudgetStability** | Plan 75 연동 (가중 버짓 검증) | `recovery_coordinator.py` | 📋 Planned |
 | 9 | **RecoveryDashboardWidget** | Ready to Restore 가시성 강화 | `dashboard_service.py`, `recovery_views.py` | ✅ Completed |
 | 10 | **RedisKeyPriorityEviction** | Q6: Redis maxmemory 시 P0 키 보호 | `redis_key_guard.py` | ✅ Completed |
 | 11 | **CriticalPathDedicatedWorker** | Q11: P0 전용 Celery Worker 격리 | `critical_worker.py` | ✅ Completed |
 | 12 | **RecoveryAwareShutdownHook** | Q12: K8s preStop 시 Recovery 보호 | `recovery_shutdown.py` | ✅ Completed |
+| 13 | **RecoveryMetrics** | Prometheus 복구 프로세스 모니터링 지표 | `recovery_metrics.py` | ✅ Completed |
+| 14 | **RecoveryNotifications** | Slack/Teams 알림 템플릿 | `recovery_notifications.py` | ✅ Completed |
 
 ### 0.2 네이밍 선택 근거
 

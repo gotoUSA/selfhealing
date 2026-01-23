@@ -137,6 +137,52 @@ from .recovery_shutdown import (
     run_prestop_check,
 )
 
+# Phase 1.4: Recovery Session Archive
+from .recovery_session_archive import (
+    RecoveryStepArchiveData,
+    RecoverySessionArchiveData,
+    RecoverySessionArchiveService,
+    get_recovery_session_archive_service,
+    reset_recovery_session_archive_service,
+)
+
+# Phase 2.7: Idempotent Step Handlers
+from .idempotent_step_handlers import (
+    IdempotencyStatus,
+    IdempotencyRecord,
+    IdempotentStepHandler,
+    IdempotentBudgetResetHandler,
+    IdempotentHealthCheckHandler,
+    IdempotentCanaryResumeHandler,
+    IdempotentGovernanceNormalHandler,
+    IdempotentStepHandlerRegistry,
+    get_idempotent_step_handler_registry,
+    reset_idempotent_step_handler_registry,
+    generate_idempotency_key,
+)
+
+# Phase 5.5: Recovery Metrics
+from .recovery_metrics import (
+    RecoveryMetricsRecorder,
+    StepTimer,
+    get_recovery_metrics_recorder,
+    reset_recovery_metrics_recorder,
+    PROMETHEUS_AVAILABLE,
+)
+
+# Phase 5.6: Recovery Notifications
+from .recovery_notifications import (
+    recovery_started_notification,
+    recovery_completed_notification,
+    recovery_failed_notification,
+    recovery_aborted_notification,
+    recovery_approval_required_notification,
+    recovery_stale_approval_reminder,
+    recovery_circuit_breaker_trip_notification,
+    recovery_step_progress_notification,
+    recovery_daily_summary_notification,
+)
+
 
 __all__ = [
     # Enums
@@ -221,4 +267,38 @@ __all__ = [
     "RecoveryAwareShutdownHook",
     "create_recovery_aware_shutdown_hook",
     "run_prestop_check",
+    # Phase 1.4: Recovery Session Archive
+    "RecoveryStepArchiveData",
+    "RecoverySessionArchiveData",
+    "RecoverySessionArchiveService",
+    "get_recovery_session_archive_service",
+    "reset_recovery_session_archive_service",
+    # Phase 2.7: Idempotent Step Handlers
+    "IdempotencyStatus",
+    "IdempotencyRecord",
+    "IdempotentStepHandler",
+    "IdempotentBudgetResetHandler",
+    "IdempotentHealthCheckHandler",
+    "IdempotentCanaryResumeHandler",
+    "IdempotentGovernanceNormalHandler",
+    "IdempotentStepHandlerRegistry",
+    "get_idempotent_step_handler_registry",
+    "reset_idempotent_step_handler_registry",
+    "generate_idempotency_key",
+    # Phase 5.5: Recovery Metrics
+    "RecoveryMetricsRecorder",
+    "StepTimer",
+    "get_recovery_metrics_recorder",
+    "reset_recovery_metrics_recorder",
+    "PROMETHEUS_AVAILABLE",
+    # Phase 5.6: Recovery Notifications
+    "recovery_started_notification",
+    "recovery_completed_notification",
+    "recovery_failed_notification",
+    "recovery_aborted_notification",
+    "recovery_approval_required_notification",
+    "recovery_stale_approval_reminder",
+    "recovery_circuit_breaker_trip_notification",
+    "recovery_step_progress_notification",
+    "recovery_daily_summary_notification",
 ]
