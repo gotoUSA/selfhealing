@@ -32,8 +32,14 @@ middleware_system/
 ├── 32_CHAOS_SYSTEM_INTEGRATION.md     ← Self-Healing 시스템 연동 계획
 ├── 33_CHAOS_INDUSTRY_EXPERIMENTS.md   ← 업계 표준 Chaos 실험 추가 계획
 ├── ...
-├── 70_MULTI_CLUSTER_ARCHITECTURE.md   ← 다중 클러스터/리전 아키텍처 (NEW)
-└── 71_CANARY_CONFIG_ROLLOUT.md        ← 카나리 설정 롤아웃 시스템 (NEW)
+├── 70_MULTI_CLUSTER_ARCHITECTURE.md   ← 다중 클러스터/리전 아키텍처
+├── 71_CANARY_CONFIG_ROLLOUT.md        ← 카나리 설정 롤아웃 시스템
+├── ...
+├── 80_DEPRECATION_CLEANUP_MASTER_PLAN.md  ← Deprecated/Re-export 정리 마스터 플랜 (NEW)
+├── 81_PHASE1_DEPRECATED_FUNCTIONS.md      ← Phase 1: Deprecated 함수 정리 (NEW)
+├── 82_PHASE2_DEPRECATED_MODULES.md        ← Phase 2: Deprecated 모듈 정리 (NEW)
+├── 83_PHASE3_REEXPORT_CLEANUP.md          ← Phase 3: Re-export 정리 (NEW)
+└── 84_PHASE4_API_DEPRECATION.md           ← Phase 4: Deprecated API 제거 (NEW)
 ```
 
 ---
@@ -397,6 +403,7 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 2.9.0 | 2026-01-23 | 80-84_DEPRECATION_CLEANUP 문서 시리즈 추가 - Deprecated/Re-export 패턴 정리 가이드 |
 | 2.8.0 | 2026-01-19 | 70_MULTI_CLUSTER_ARCHITECTURE.md 대폭 확장 - ClusterIdentity, TieredRedisProvider, PropagationHealthMonitor 추가 |
 | 2.7.0 | 2026-01-09 | 70_MULTI_CLUSTER_ARCHITECTURE.md, 71_CANARY_CONFIG_ROLLOUT.md 추가 |
 | 2.6.0 | 2026-01-09 | 31_CHAOS_EXPERIMENT_EXPANSION.md, 32_CHAOS_SYSTEM_INTEGRATION.md, 33_CHAOS_INDUSTRY_EXPERIMENTS.md 추가 |
