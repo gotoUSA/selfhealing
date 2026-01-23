@@ -2367,7 +2367,7 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | 순서 | 작업 | 파일 | 의존성 |
 |------|------|------|--------|
 | 4-1 | CascadeRetentionConfig 설정 | `audit/cascade_config.py` | 없음 |
-| 4-2 | PostgreSQL 테이블 DDL (파티셔닝) | `migrations/xxxx_cascade_events.py` | 없음 |
+| 4-2 | PostgreSQL Django 모델 정의 | `models/cascade_event_archive.py` ✅ | 없음 |
 | 4-3 | archive_cascade_events_to_postgres 태스크 | `tasks/cascade_cleanup_tasks.py` | 4-1, 4-2 |
 | 4-4 | purge_old_cascade_events 태스크 | `tasks/cascade_cleanup_tasks.py` | 4-1 |
 | 4-5 | Celery Beat 스케줄 등록 | `celery_app.py` | 4-3, 4-4 |
@@ -2570,3 +2570,22 @@ View Details: https://dashboard/cascade/cascade-evt-abc123
 | | | - Grafana 대시보드 (`docker/grafana/provisioning/dashboards/cascade_event_audit.json`) | |
 | | | - 11개 메트릭 테스트 + 12개 알림 테스트 = 23개 통과 | |
 | | | **총 217개 테스트 통과 (Phase 1~9 완료)** | |
+| 1.9.0 | 2026-01-24 | **Phase 4-2 보완 및 WAL 용어 통일** | AI Assistant |
+| | | **PostgreSQL Django 모델 추가:** | |
+| | | - AbstractCascadeEventArchive: 추상 Django 모델 (`models/cascade_event_archive.py`) | |
+| | | - CascadeEventArchive: 구체 모델 (테이블명: selfhealing_cascade_events) | |
+| | | - TriggerType TextChoices: 트리거 타입 Enum | |
+| | | - from_cascade_event 팩토리 메서드: CascadeEvent → Django 모델 변환 | |
+| | | - verify_hash_integrity 메서드: 저장된 해시 무결성 검증 | |
+| | | - get_causation_chain_display 메서드: Causation Chain 시각화 | |
+| | | - 월별 파티셔닝용 인덱스 정의 (namespace+timestamp, trigger_type, current_hash) | |
+| | | - models/__init__.py exports 추가 | |
+| | | **WAL 용어 통일 (fallback → WAL):** | |
+| | | - LOCAL_CASCADE_FALLBACK_PATH → LOCAL_CASCADE_WAL_PATH (`audit/cascade_auditor.py`) | |
+| | | - _save_to_local_fallback → _save_to_local_wal | |
+| | | - recover_from_local_fallback → recover_from_local_wal | |
+| | | - 동일 변경사항 (`tasks/cascade_cleanup_tasks.py`) | |
+| | | - 하위 호환성 별칭 유지 (fallback 메서드 → wal 메서드 참조) | |
+| | | - WAL 경로: /var/log/selfhealing/cascade_wal/cascade_audit_wal.jsonl | |
+| | | - 14개 단위 테스트 통과 (`tests/unit/models/test_cascade_event_archive.py`) | |
+| | | **총 231개 테스트 통과** | |

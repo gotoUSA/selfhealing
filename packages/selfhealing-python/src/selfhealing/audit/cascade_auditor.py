@@ -61,11 +61,17 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Local Fallback Path (Fail-Soft)
+# Local WAL Path (Fail-Soft)
 # =============================================================================
 
-LOCAL_CASCADE_FALLBACK_PATH = "/tmp/cascade_audit_fallback.jsonl"
-"""로컬 폴백 파일 경로."""
+LOCAL_CASCADE_WAL_DIR = "/var/log/selfhealing/cascade_wal"
+"""로컬 WAL 디렉토리 경로 (시스템 전반 WAL 용어 통일)."""
+
+LOCAL_CASCADE_WAL_PATH = f"{LOCAL_CASCADE_WAL_DIR}/cascade_audit_wal.jsonl"
+"""로컬 WAL 파일 경로."""
+
+# 하위 호환성을 위한 별칭
+LOCAL_CASCADE_FALLBACK_PATH = LOCAL_CASCADE_WAL_PATH
 
 
 class CascadeEventAuditor:
@@ -859,12 +865,16 @@ class CascadeEventAuditor:
             external_trace=external_trace,
         )
     
-    def _save_to_local_fallback(self, event: CascadeEvent) -> None:
+    def _save_to_local_wal(self, event: CascadeEvent) -> None:
         """
-        로컬 폴백 파일에 Cascade Event 저장.
+        로컬 WAL에 Cascade Event 저장.
         
-        Redis 장애 시 로컬 파일에 JSONL 형식으로 저장합니다.
-        이후 recover_from_local_fallback 태스크로 Redis에 복구됩니다.
+        Redis 장애 시 로컬 WAL 파일에 JSONL 형식으로 저장합니다.
+        이후 recover_from_local_wal 태스크로 Redis에 복구됩니다.
+        
+        WAL 용어 통일:
+            시스템 전반에서 wal_dir, WriteAheadLog 등 WAL 용어 사용.
+            (backend.py, services/audit/base.py, audit/wal.py 참조)
         
         Args:
             event: 저장할 CascadeEvent
@@ -873,21 +883,24 @@ class CascadeEventAuditor:
         import json
         
         try:
-            fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
-            fallback_path.parent.mkdir(parents=True, exist_ok=True)
+            wal_path = Path(LOCAL_CASCADE_WAL_PATH)
+            wal_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(fallback_path, "a", encoding="utf-8") as f:
+            with open(wal_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event.to_dict()) + "\n")
             
             logger.info(
-                f"[CascadeAudit] Saved to local fallback: cascade={event.id}"
+                f"[CascadeAudit] Saved to local WAL: cascade={event.id}"
             )
         except Exception as e:
             logger.error(
-                f"[CascadeAudit] Local fallback save failed: {e}"
+                f"[CascadeAudit] Local WAL save failed: {e}"
             )
     
-    def _record_dropped_to_fallback(
+    # 하위 호환성
+    _save_to_local_fallback = _save_to_local_wal
+    
+    def _record_dropped_to_wal(
         self,
         trigger_type: str,
         trigger_details: Dict[str, Any],
@@ -896,7 +909,7 @@ class CascadeEventAuditor:
         reason: str,
     ) -> None:
         """
-        드롭된 이벤트 정보를 폴백에 기록.
+        드롭된 이벤트 정보를 WAL에 기록.
         
         Load Shedding으로 드롭된 이벤트의 최소 정보를 기록하여
         이후 분석 및 복구에 사용합니다.
@@ -906,8 +919,8 @@ class CascadeEventAuditor:
         import json
         
         try:
-            fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
-            fallback_path.parent.mkdir(parents=True, exist_ok=True)
+            wal_path = Path(LOCAL_CASCADE_WAL_PATH)
+            wal_path.parent.mkdir(parents=True, exist_ok=True)
             
             dropped_record = {
                 "type": "dropped",
@@ -918,20 +931,27 @@ class CascadeEventAuditor:
                 "dropped_at": datetime.now(timezone.utc).isoformat(),
             }
             
-            with open(fallback_path, "a", encoding="utf-8") as f:
+            with open(wal_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(dropped_record) + "\n")
         except Exception as e:
             logger.debug(f"[CascadeAudit] Dropped record save failed: {e}")
     
-    def recover_from_local_fallback(
+    # 하위 호환성
+    _record_dropped_to_fallback = _record_dropped_to_wal
+    
+    def recover_from_local_wal(
         self,
         namespace: str = "global",
         dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
-        로컬 폴백에서 Redis로 복구.
+        로컬 WAL에서 Redis로 복구.
         
-        Redis 장애 복구 후 로컬에 쌓인 이벤트를 Redis로 이관합니다.
+        Redis 장애 복구 후 로컬 WAL에 쌓인 이벤트를 Redis로 이관합니다.
+        
+        WAL 용어 통일:
+            시스템 전반에서 wal_dir, WriteAheadLog 등 WAL 용어 사용.
+            (backend.py, services/audit/base.py, audit/wal.py 참조)
         
         Args:
             namespace: 네임스페이스
@@ -943,11 +963,11 @@ class CascadeEventAuditor:
         from pathlib import Path
         import json
         
-        fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+        wal_path = Path(LOCAL_CASCADE_WAL_PATH)
         
-        if not fallback_path.exists():
+        if not wal_path.exists():
             return {
-                "status": "no_fallback_data",
+                "status": "no_wal_data",
                 "namespace": namespace,
                 "recovered": 0,
                 "failed": 0,
@@ -955,8 +975,8 @@ class CascadeEventAuditor:
         
         entries = []
         
-        # 폴백 파일에서 해당 네임스페이스 이벤트 읽기
-        with open(fallback_path, "r", encoding="utf-8") as f:
+        # WAL 파일에서 해당 네임스페이스 이벤트 읽기
+        with open(wal_path, "r", encoding="utf-8") as f:
             for line in f:
                 try:
                     entry = json.loads(line.strip())
@@ -967,7 +987,7 @@ class CascadeEventAuditor:
         
         if dry_run:
             logger.info(
-                f"[CascadeAudit] Fallback recovery dry run: "
+                f"[CascadeAudit] WAL recovery dry run: "
                 f"found {len(entries)} entries, namespace={namespace}"
             )
             return {
@@ -993,10 +1013,10 @@ class CascadeEventAuditor:
         
         # 복구 완료 후 해당 네임스페이스 엔트리 제거
         if recovered > 0 and failed == 0:
-            self._remove_namespace_from_fallback(namespace)
+            self._remove_namespace_from_wal(namespace)
         
         logger.info(
-            f"[CascadeAudit] Fallback recovery completed: "
+            f"[CascadeAudit] WAL recovery completed: "
             f"recovered={recovered}, failed={failed}, namespace={namespace}"
         )
         
@@ -1007,19 +1027,22 @@ class CascadeEventAuditor:
             "failed": failed,
         }
     
-    def _remove_namespace_from_fallback(self, namespace: str) -> None:
-        """폴백 파일에서 특정 네임스페이스 엔트리 제거."""
+    # 하위 호환성
+    recover_from_local_fallback = recover_from_local_wal
+    
+    def _remove_namespace_from_wal(self, namespace: str) -> None:
+        """WAL 파일에서 특정 네임스페이스 엔트리 제거."""
         from pathlib import Path
         import json
         
-        fallback_path = Path(LOCAL_CASCADE_FALLBACK_PATH)
+        wal_path = Path(LOCAL_CASCADE_WAL_PATH)
         
-        if not fallback_path.exists():
+        if not wal_path.exists():
             return
         
         remaining = []
         
-        with open(fallback_path, "r", encoding="utf-8") as f:
+        with open(wal_path, "r", encoding="utf-8") as f:
             for line in f:
                 try:
                     entry = json.loads(line.strip())
@@ -1029,10 +1052,13 @@ class CascadeEventAuditor:
                     remaining.append(line)
         
         if remaining:
-            with open(fallback_path, "w", encoding="utf-8") as f:
+            with open(wal_path, "w", encoding="utf-8") as f:
                 f.writelines(remaining)
         else:
-            fallback_path.unlink(missing_ok=True)
+            wal_path.unlink(missing_ok=True)
+    
+    # 하위 호환성
+    _remove_namespace_from_fallback = _remove_namespace_from_wal
     
     def get_load_shedding_status(
         self,

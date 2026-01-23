@@ -8,7 +8,11 @@ Tasks:
 - purge_old_cascade_events: 오래된 이벤트 영구 삭제
 - create_cascade_daily_checkpoint: 일일 체크포인트 생성
 - verify_cascade_chain_integrity: 체인 무결성 검증
-- recover_cascade_from_fallback: 로컬 폴백 복구
+- recover_cascade_from_wal: 로컬 WAL 복구
+
+WAL 용어 통일:
+    시스템 전반에서 wal_dir, WriteAheadLog 등 WAL 용어 사용.
+    (backend.py, services/audit/base.py, audit/wal.py 참조)
 
 Reference:
     docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
@@ -369,21 +373,32 @@ def verify_cascade_chain_integrity(
 
 
 # =============================================================================
-# Fallback Recovery Task
+# WAL Recovery Task
 # =============================================================================
 
 
-LOCAL_FALLBACK_PATH = Path("/tmp/cascade_audit_fallback.jsonl")
+LOCAL_CASCADE_WAL_DIR = Path("/var/log/selfhealing/cascade_wal")
+"""로컬 WAL 디렉토리 경로 (시스템 전반 WAL 용어 통일)."""
+
+LOCAL_CASCADE_WAL_PATH = LOCAL_CASCADE_WAL_DIR / "cascade_audit_wal.jsonl"
+"""로컬 WAL 파일 경로."""
+
+# 하위 호환성
+LOCAL_FALLBACK_PATH = LOCAL_CASCADE_WAL_PATH
 
 
-def recover_cascade_from_fallback(
+def recover_cascade_from_wal(
     namespace: str = "global",
     dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
-    로컬 폴백에서 Redis로 복구.
+    로컬 WAL에서 Redis로 복구.
     
-    Redis 장애 복구 후 로컬에 쌓인 엔트리를 Redis로 이관합니다.
+    Redis 장애 복구 후 로컬 WAL에 쌓인 엔트리를 Redis로 이관합니다.
+    
+    WAL 용어 통일:
+        시스템 전반에서 wal_dir, WriteAheadLog 등 WAL 용어 사용.
+        (backend.py, services/audit/base.py, audit/wal.py 참조)
     
     Args:
         namespace: 네임스페이스
@@ -398,9 +413,9 @@ def recover_cascade_from_fallback(
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
     from selfhealing.audit.cascade_event import CascadeEvent
     
-    if not LOCAL_FALLBACK_PATH.exists():
+    if not LOCAL_CASCADE_WAL_PATH.exists():
         return {
-            "status": "no_fallback_data",
+            "status": "no_wal_data",
             "namespace": namespace,
             "recovered": 0,
             "failed": 0,
@@ -409,8 +424,8 @@ def recover_cascade_from_fallback(
     auditor = get_cascade_event_auditor()
     entries = []
     
-    # 폴백 파일에서 해당 네임스페이스 엔트리 읽기
-    with open(LOCAL_FALLBACK_PATH, "r", encoding="utf-8") as f:
+    # WAL 파일에서 해당 네임스페이스 엔트리 읽기
+    with open(LOCAL_CASCADE_WAL_PATH, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line.strip())
@@ -421,7 +436,7 @@ def recover_cascade_from_fallback(
     
     if dry_run:
         logger.info(
-            f"[CascadeCleanup] Fallback recovery dry run: "
+            f"[CascadeCleanup] WAL recovery dry run: "
             f"found {len(entries)} entries, namespace={namespace}"
         )
         return {
@@ -447,12 +462,12 @@ def recover_cascade_from_fallback(
             )
             failed += 1
     
-    # 복구 완료 후 fallback 파일에서 해당 네임스페이스 엔트리 제거
+    # 복구 완료 후 WAL 파일에서 해당 네임스페이스 엔트리 제거
     if recovered > 0 and failed == 0:
-        _remove_namespace_from_fallback(namespace)
+        _remove_namespace_from_wal(namespace)
     
     logger.info(
-        f"[CascadeCleanup] Fallback recovery completed: "
+        f"[CascadeCleanup] WAL recovery completed: "
         f"recovered={recovered}, failed={failed}, namespace={namespace}"
     )
     
@@ -464,14 +479,18 @@ def recover_cascade_from_fallback(
     }
 
 
-def _remove_namespace_from_fallback(namespace: str) -> None:
-    """폴백 파일에서 특정 네임스페이스 엔트리 제거."""
-    if not LOCAL_FALLBACK_PATH.exists():
+# 하위 호환성
+recover_cascade_from_fallback = recover_cascade_from_wal
+
+
+def _remove_namespace_from_wal(namespace: str) -> None:
+    """WAL 파일에서 특정 네임스페이스 엔트리 제거."""
+    if not LOCAL_CASCADE_WAL_PATH.exists():
         return
     
     remaining = []
     
-    with open(LOCAL_FALLBACK_PATH, "r", encoding="utf-8") as f:
+    with open(LOCAL_CASCADE_WAL_PATH, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line.strip())
@@ -481,10 +500,14 @@ def _remove_namespace_from_fallback(namespace: str) -> None:
                 remaining.append(line)
     
     if remaining:
-        with open(LOCAL_FALLBACK_PATH, "w", encoding="utf-8") as f:
+        with open(LOCAL_CASCADE_WAL_PATH, "w", encoding="utf-8") as f:
             f.writelines(remaining)
     else:
-        LOCAL_FALLBACK_PATH.unlink(missing_ok=True)
+        LOCAL_CASCADE_WAL_PATH.unlink(missing_ok=True)
+
+
+# 하위 호환성
+_remove_namespace_from_fallback = _remove_namespace_from_wal
 
 
 # =============================================================================
