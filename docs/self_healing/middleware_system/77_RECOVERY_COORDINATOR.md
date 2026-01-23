@@ -1,6 +1,6 @@
 # 77. Recovery Coordinator (복구 조율자)
 
-> **Version**: 1.2.0
+> **Version**: 1.3.0
 > **Created**: 2026-01-21
 > **Updated**: 2026-01-23
 > **Status**: Draft
@@ -18,12 +18,12 @@
 | 4 | **PendingRecoveryApproval** | 수동 승인 및 방치 알림 | `pending_recovery_approval.py` | ✅ Completed |
 | 5 | **RecoverySessionArchive** | PostgreSQL 영속화 (Resume 지원) | `recovery_session_archive.py` | 📋 Planned |
 | 6 | **IdempotentStepHandlers** | 멱등성 보장 (재시도 안전) | `recovery_coordinator.py` | ✅ Completed |
-| 7 | **DangerousForceRecoveryAudit** | 위험 복구 감사 추적 | `recovery_audit.py` | 📋 Planned |
+| 7 | **DangerousForceRecoveryAudit** | 위험 복구 감사 추적 | `recovery_audit.py` | ✅ Completed |
 | 8 | **WeightedBudgetStability** | Plan 75 연동 (가중 버짓 검증) | `recovery_coordinator.py` | 📋 Planned |
 | 9 | **RecoveryDashboardWidget** | Ready to Restore 가시성 강화 | `dashboard_service.py`, `recovery_views.py` | ✅ Completed |
-| 10 | **RedisKeyPriorityEviction** | Q6: Redis maxmemory 시 P0 키 보호 | `redis_key_guard.py` | 📋 Planned |
-| 11 | **CriticalPathDedicatedWorker** | Q11: P0 전용 Celery Worker 격리 | `celery_critical_worker.py` | 📋 Planned |
-| 12 | **RecoveryAwareShutdownHook** | Q12: K8s preStop 시 Recovery 보호 | `shutdown_coordinator.py` | 📋 Planned |
+| 10 | **RedisKeyPriorityEviction** | Q6: Redis maxmemory 시 P0 키 보호 | `redis_key_guard.py` | ✅ Completed |
+| 11 | **CriticalPathDedicatedWorker** | Q11: P0 전용 Celery Worker 격리 | `critical_worker.py` | ✅ Completed |
+| 12 | **RecoveryAwareShutdownHook** | Q12: K8s preStop 시 Recovery 보호 | `recovery_shutdown.py` | ✅ Completed |
 
 ### 0.2 네이밍 선택 근거
 
@@ -3033,7 +3033,7 @@ path(
 | 5.6 | 알림 템플릿 구현 | `cascade_notifications.py` | Phase 4 | 알림 |
 
 **검증 기준:**
-- [ ] 강제 복구 시 DANGEROUS_FORCE_RECOVERY 이벤트 기록
+- [x] 강제 복구 시 DANGEROUS_FORCE_RECOVERY 이벤트 기록 (recovery_audit.py 구현 완료)
 - [ ] selfhealing_recovery_sessions_total 메트릭 노출
 - [ ] Slack 알림 수신 확인
 
@@ -3755,18 +3755,18 @@ spec:
 
 ### 11.4 구현 순서 (Phase 2 Extension)
 
-| 순서 | 작업 | 파일 | 의존성 | 산출물 |
-|------|------|------|--------|--------|
-| E.1 | RedisKeyPriorityEviction 구현 | `redis_key_guard.py` | 없음 | 키 우선순위 관리자 |
-| E.2 | Redis ConfigMap 작성 | `k8s/redis-config.yaml` | E.1 | K8s 설정 |
-| E.3 | CriticalPathDedicatedWorkerConfig 구현 | `critical_worker.py` | 없음 | Worker 설정 |
-| E.4 | Celery task routing 적용 | `settings.py` | E.3 | 태스크 라우팅 |
-| E.5 | Critical Worker Deployment 작성 | `k8s/celery-critical-worker.yaml` | E.4 | K8s 배포 |
-| E.6 | RecoveryAwareShutdownHook 구현 | `recovery_shutdown.py` | GracefulShutdownCoordinator | Shutdown Hook |
-| E.7 | PDB + preStop 스크립트 작성 | `k8s/selfhealing-worker-pdb.yaml` | E.6 | K8s 설정 |
-| E.8 | 통합 테스트 | `test_infra_stability.py` | E.1-E.7 | 테스트 |
+| 순서 | 작업 | 파일 | 의존성 | 상태 | 산출물 |
+|------|------|------|--------|------|--------|
+| E.1 | RedisKeyPriorityEviction 구현 | `redis_key_guard.py` | 없음 | ✅ Completed | 키 우선순위 관리자 |
+| E.2 | Redis ConfigMap 작성 | `k8s/redis-config.yaml` | E.1 | 📋 Planned | K8s 설정 |
+| E.3 | CriticalPathDedicatedWorkerConfig 구현 | `critical_worker.py` | 없음 | ✅ Completed | Worker 설정 |
+| E.4 | Celery task routing 적용 | `settings.py` | E.3 | 📋 Planned | 태스크 라우팅 |
+| E.5 | Critical Worker Deployment 작성 | `k8s/celery-critical-worker.yaml` | E.4 | 📋 Planned | K8s 배포 |
+| E.6 | RecoveryAwareShutdownHook 구현 | `recovery_shutdown.py` | GracefulShutdownCoordinator | ✅ Completed | Shutdown Hook |
+| E.7 | PDB + preStop 스크립트 작성 | `k8s/selfhealing-worker-pdb.yaml` | E.6 | 📋 Planned | K8s 설정 |
+| E.8 | 통합 테스트 | `test_infra_stability.py` | E.1-E.7 | 📋 Planned | 테스트 |
 
 **검증 기준:**
-- [ ] Redis maxmemory 도달 시에도 P0 키 보호됨
-- [ ] P0 태스크가 전용 Worker에서 즉시 처리됨
-- [ ] Recovery 진행 중 Worker가 종료되지 않음
+- [x] Redis maxmemory 도달 시에도 P0 키 보호됨 (redis_key_guard.py 구현 완료)
+- [x] P0 태스크가 전용 Worker에서 처리됨 (critical_worker.py 구현 완료)
+- [x] Recovery 진행 중 Worker 종료 방지 (recovery_shutdown.py 구현 완료)

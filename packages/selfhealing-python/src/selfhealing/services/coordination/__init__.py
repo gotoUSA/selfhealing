@@ -102,6 +102,41 @@ from .pending_recovery_approval import (
     reset_pending_recovery_approval_manager,
 )
 
+# Phase 5: Audit & Monitoring
+from .recovery_audit import (
+    ForceRecoveryType,
+    RecoveryAuditEventType,
+    DangerousForceRecoveryAuditEntry,
+    RecoveryAuditEntry,
+    RecoveryAuditRecorder,
+    get_recovery_audit_recorder,
+    record_dangerous_force_recovery,
+    record_recovery_event,
+)
+
+# Phase 5 Extension: Infrastructure Stability
+from .redis_key_guard import (
+    RedisKeyPriority,
+    RedisMemoryInfo,
+    KeyPatternConfig,
+    RedisKeyPriorityEviction,
+    get_redis_key_guard,
+)
+from .critical_worker import (
+    CriticalTaskPriority,
+    WorkerQueueConfig,
+    CriticalPathDedicatedWorkerConfig,
+    get_critical_worker_config,
+    get_task_queue,
+)
+from .recovery_shutdown import (
+    RecoveryAwareShutdownConfig,
+    RecoveryShutdownStats,
+    RecoveryAwareShutdownHook,
+    create_recovery_aware_shutdown_hook,
+    run_prestop_check,
+)
+
 
 __all__ = [
     # Enums
@@ -159,4 +194,31 @@ __all__ = [
     "PendingRecoveryApprovalManager",
     "get_pending_recovery_approval_manager",
     "reset_pending_recovery_approval_manager",
+    # Phase 5: Audit & Monitoring
+    "ForceRecoveryType",
+    "RecoveryAuditEventType",
+    "DangerousForceRecoveryAuditEntry",
+    "RecoveryAuditEntry",
+    "RecoveryAuditRecorder",
+    "get_recovery_audit_recorder",
+    "record_dangerous_force_recovery",
+    "record_recovery_event",
+    # Phase 5 Extension: Redis Key Guard
+    "RedisKeyPriority",
+    "RedisMemoryInfo",
+    "KeyPatternConfig",
+    "RedisKeyPriorityEviction",
+    "get_redis_key_guard",
+    # Phase 5 Extension: Critical Worker
+    "CriticalTaskPriority",
+    "WorkerQueueConfig",
+    "CriticalPathDedicatedWorkerConfig",
+    "get_critical_worker_config",
+    "get_task_queue",
+    # Phase 5 Extension: Recovery Shutdown
+    "RecoveryAwareShutdownConfig",
+    "RecoveryShutdownStats",
+    "RecoveryAwareShutdownHook",
+    "create_recovery_aware_shutdown_hook",
+    "run_prestop_check",
 ]
