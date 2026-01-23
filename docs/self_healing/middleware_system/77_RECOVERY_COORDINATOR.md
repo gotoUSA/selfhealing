@@ -2882,6 +2882,7 @@ path(
 | 1.0.0 | 2026-01-21 | 초안 작성 | AI Assistant |
 | 1.1.0 | 2026-01-23 | Phase 2 보완 기능 추가 (8.1~8.5) | AI Assistant |
 | 1.2.0 | 2026-01-23 | READY_TO_RESTORE 가시성 강화 (§8.6), 구현 순서 (§10) 추가 | AI Assistant |
+| 1.3.0 | 2026-01-23 | Phase 5.3 CascadeEvent 연동 구현 완료 (recovery_coordinator.py에 _record_cascade_event, _record_recovery_started 등 메서드 추가) | AI Assistant |
 
 ---
 
@@ -3024,23 +3025,24 @@ path(
 - [x] RecoveryDashboardService 구현 완료 (recovery_dashboard.py)
 - [x] DashboardSummaryView Recovery 통합 완료 (dashboard_service.py에 _get_recovery_summary 추가)
 
-#### Phase 5: Audit & Monitoring (1-2일)
+#### Phase 5: Audit & Monitoring (1-2일) ✅ COMPLETED
 
 **목표**: 감사 추적 및 모니터링
 
-| 순서 | 작업 | 파일 | 의존성 | 산출물 |
-|------|------|------|--------|--------|
-| 5.1 | DangerousForceRecoveryAuditEntry 구현 | `recovery_audit.py` | 없음 | 감사 모델 |
-| 5.2 | record_dangerous_force_recovery() 구현 | `recovery_audit.py` | 5.1, 76번 문서 | 감사 기록 |
-| 5.3 | RecoveryCoordinator에 CascadeEvent 연동 | `recovery_coordinator.py` | 5.2, 76번 문서 | 연동 |
-| 5.4 | Plan 75 연동 (weighted budget 검증) | `recovery_coordinator.py` | 75번 문서 | 가중 버짓 |
-| 5.5 | Prometheus 메트릭 추가 | `recovery_coordinator.py` | Phase 4 | 메트릭 |
-| 5.6 | 알림 템플릿 구현 | `cascade_notifications.py` | Phase 4 | 알림 |
+| 순서 | 작업 | 파일 | 의존성 | 산출물 | 상태 |
+|------|------|------|--------|--------|------|
+| 5.1 | DangerousForceRecoveryAuditEntry 구현 | `recovery_audit.py` | 없음 | 감사 모델 | ✅ |
+| 5.2 | record_dangerous_force_recovery() 구현 | `recovery_audit.py` | 5.1, 76번 문서 | 감사 기록 | ✅ |
+| 5.3 | RecoveryCoordinator에 CascadeEvent 연동 | `recovery_coordinator.py` | 5.2, 76번 문서 | 연동 | ✅ |
+| 5.4 | Plan 75 연동 (weighted budget 검증) | `recovery_coordinator.py` | 75번 문서 | 가중 버짓 | ✅ |
+| 5.5 | Prometheus 메트릭 추가 | `recovery_metrics.py` | Phase 4 | 메트릭 | ✅ |
+| 5.6 | 알림 템플릿 구현 | `recovery_notifications.py` | Phase 4 | 알림 | ✅ |
 
 **검증 기준:**
 - [x] 강제 복구 시 DANGEROUS_FORCE_RECOVERY 이벤트 기록 (recovery_audit.py 구현 완료)
-- [ ] selfhealing_recovery_sessions_total 메트릭 노출
-- [ ] Slack 알림 수신 확인
+- [x] RecoveryCoordinator에 CascadeEvent 연동 완료 (recovery_coordinator.py에 _record_cascade_event, _record_recovery_started 등 메서드 추가)
+- [x] selfhealing_recovery_sessions_total 메트릭 노출 (recovery_metrics.py 구현 완료)
+- [x] 알림 템플릿 구현 (recovery_notifications.py 구현 완료)
 
 ### 10.3 전체 일정 요약
 

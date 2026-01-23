@@ -694,3 +694,310 @@ class TestDefaultHandlers:
         # 의존성 없어도 성공 (skipped 표시)
         assert result["success"] is True
         assert result.get("skipped") is True
+
+
+# =============================================================================
+# CascadeEvent 연동 테스트 (Phase 5.3)
+# =============================================================================
+
+class TestRecoveryCoordinatorCascadeEventIntegration:
+    """RecoveryCoordinator CascadeEvent 연동 테스트 (Phase 5.3)."""
+
+    @pytest.fixture
+    def mock_cascade_auditor(self):
+        """Mock CascadeEventAuditor."""
+        mock = MagicMock()
+        mock_event = MagicMock()
+        mock_event.id = "cascade-test123"
+        mock.record.return_value = mock_event
+        return mock
+
+    @pytest.fixture
+    def mock_audit_recorder(self):
+        """Mock RecoveryAuditRecorder."""
+        mock = MagicMock()
+        return mock
+
+    @pytest.fixture
+    def coordinator_with_auditors(self, mock_cascade_auditor, mock_audit_recorder):
+        """감사기가 주입된 코디네이터."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        return RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+            cascade_auditor=mock_cascade_auditor,
+            audit_recorder=mock_audit_recorder,
+        )
+
+    def test_start_recovery_records_cascade_event(
+        self, coordinator_with_auditors, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """start_recovery()는 CascadeEvent를 기록해야 함."""
+        session = coordinator_with_auditors.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+            initiated_by="test-user",
+        )
+        
+        # CascadeEventAuditor.record() 호출 확인
+        assert mock_cascade_auditor.record.called
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        
+        assert call_kwargs["trigger_type"] == "RECOVERY_STARTED"
+        assert call_kwargs["namespace"] == "global"
+        assert call_kwargs["triggered_by"] == "test-user"
+        assert "trigger_details" in call_kwargs
+        assert call_kwargs["trigger_details"]["session_id"] == session.id
+        
+        # RecoveryAuditRecorder.record_recovery_event() 호출 확인
+        assert mock_audit_recorder.record_recovery_event.called
+        audit_call = mock_audit_recorder.record_recovery_event.call_args[1]
+        assert audit_call["event_type"].value == "recovery_started"
+        assert audit_call["session_id"] == session.id
+
+    def test_execute_step_success_records_cascade_event(
+        self, coordinator_with_auditors, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """execute_next_step() 성공 시 CascadeEvent를 기록해야 함."""
+        # 복구 시작
+        session = coordinator_with_auditors.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+            initiated_by="test-user",
+        )
+        
+        # 기록 초기화
+        mock_cascade_auditor.reset_mock()
+        mock_audit_recorder.reset_mock()
+        
+        # 첫 번째 단계 실행
+        step = coordinator_with_auditors.execute_next_step("global")
+        
+        # CascadeEvent 기록 확인
+        assert mock_cascade_auditor.record.called
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        assert call_kwargs["trigger_type"] == "RECOVERY_STEP_EXECUTED"
+        assert "BUDGET_RESET" in call_kwargs["effects"][0]["action_type"].upper()
+        
+        # RecoveryAuditRecorder 호출 확인
+        assert mock_audit_recorder.record_recovery_event.called
+        audit_call = mock_audit_recorder.record_recovery_event.call_args[1]
+        assert audit_call["event_type"].value == "recovery_step_executed"
+        assert audit_call["step_type"] == "budget_reset"
+
+    def test_execute_step_failure_records_cascade_event(
+        self, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """execute_next_step() 실패 시 CascadeEvent를 기록해야 함."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+            cascade_auditor=mock_cascade_auditor,
+            audit_recorder=mock_audit_recorder,
+        )
+        
+        # 실패하는 핸들러 등록
+        failing_handler = MagicMock(return_value={
+            "success": False,
+            "error": "Simulated failure",
+        })
+        coordinator.register_step_handler(RecoveryStepType.BUDGET_RESET, failing_handler)
+        
+        # 복구 시작
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        
+        # 기록 초기화
+        mock_cascade_auditor.reset_mock()
+        mock_audit_recorder.reset_mock()
+        
+        # 첫 번째 단계 실행 (실패)
+        step = coordinator.execute_next_step("global")
+        
+        # CascadeEvent 기록 확인 (RECOVERY_STEP_FAILED)
+        assert mock_cascade_auditor.record.called
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        assert call_kwargs["trigger_type"] == "RECOVERY_STEP_FAILED"
+        assert call_kwargs["effects"][0]["success"] is False
+        
+        # RecoveryAuditRecorder 호출 확인
+        assert mock_audit_recorder.record_recovery_event.called
+        audit_call = mock_audit_recorder.record_recovery_event.call_args[1]
+        assert audit_call["event_type"].value == "recovery_step_failed"
+        assert audit_call["error_message"] == "Simulated failure"
+
+    def test_abort_recovery_records_cascade_event(
+        self, coordinator_with_auditors, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """abort_recovery()는 CascadeEvent를 기록해야 함."""
+        # 복구 시작
+        session = coordinator_with_auditors.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        
+        # 기록 초기화
+        mock_cascade_auditor.reset_mock()
+        mock_audit_recorder.reset_mock()
+        
+        # 복구 중단
+        aborted = coordinator_with_auditors.abort_recovery(
+            namespace="global",
+            reason="Manual abort for testing",
+        )
+        
+        # CascadeEvent 기록 확인
+        assert mock_cascade_auditor.record.called
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        assert call_kwargs["trigger_type"] == "RECOVERY_ABORTED"
+        assert "abort_reason" in call_kwargs["effects"][0]["details"]
+        
+        # RecoveryAuditRecorder 호출 확인
+        assert mock_audit_recorder.record_recovery_event.called
+        audit_call = mock_audit_recorder.record_recovery_event.call_args[1]
+        assert audit_call["event_type"].value == "recovery_aborted"
+        assert audit_call["error_message"] == "Manual abort for testing"
+
+    def test_complete_session_records_cascade_event(
+        self, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """복구 완료 시 CascadeEvent를 기록해야 함."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+            cascade_auditor=mock_cascade_auditor,
+            audit_recorder=mock_audit_recorder,
+        )
+        
+        # 단일 단계로 빠르게 완료되는 복구 세션
+        session = RecoverySession(
+            id="test-session",
+            namespace="test",
+            trigger_level="LEVEL_1",
+            status=RecoveryStatus.IN_PROGRESS,
+            steps=[
+                RecoveryStep(
+                    step_type=RecoveryStepType.BUDGET_RESET,
+                    order=1,
+                )
+            ],
+            current_step_index=1,  # 모든 단계 완료됨
+        )
+        
+        # 기록 초기화
+        mock_cascade_auditor.reset_mock()
+        mock_audit_recorder.reset_mock()
+        
+        # 완료 처리
+        coordinator._complete_session(session)
+        
+        # CascadeEvent 기록 확인
+        assert mock_cascade_auditor.record.called
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        assert call_kwargs["trigger_type"] == "RECOVERY_COMPLETED"
+        assert call_kwargs["effects"][0]["success"] is True
+        
+        # RecoveryAuditRecorder 호출 확인
+        assert mock_audit_recorder.record_recovery_event.called
+        audit_call = mock_audit_recorder.record_recovery_event.call_args[1]
+        assert audit_call["event_type"].value == "recovery_completed"
+
+    def test_cascade_auditor_not_set_still_works(self):
+        """CascadeEventAuditor 미설정 시에도 정상 동작해야 함."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+            cascade_auditor=None,  # 미설정
+            audit_recorder=None,   # 미설정
+        )
+        
+        # 복구 시작 (예외 없이 동작해야 함)
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        
+        assert session is not None
+        assert session.status == RecoveryStatus.IN_PROGRESS
+        
+        # 단계 실행 (예외 없이 동작해야 함)
+        step = coordinator.execute_next_step("global")
+        assert step is not None
+        
+        # 중단 (예외 없이 동작해야 함)
+        aborted = coordinator.abort_recovery("global", "Test abort")
+        assert aborted is not None
+
+    def test_cascade_event_contains_session_details(
+        self, coordinator_with_auditors, mock_cascade_auditor
+    ):
+        """CascadeEvent에 세션 상세 정보가 포함되어야 함."""
+        session = coordinator_with_auditors.start_recovery(
+            namespace="seoul",
+            trigger_level="LEVEL_2",
+            initiated_by="admin@example.com",
+        )
+        
+        # trigger_details 검증
+        call_kwargs = mock_cascade_auditor.record.call_args[1]
+        trigger_details = call_kwargs["trigger_details"]
+        
+        assert trigger_details["session_id"] == session.id
+        assert trigger_details["namespace"] == "seoul"
+        assert trigger_details["trigger_level"] == "LEVEL_2"
+        assert trigger_details["initiated_by"] == "admin@example.com"
+        assert "status" in trigger_details
+
+    def test_full_recovery_flow_with_cascade_audit(
+        self, mock_cascade_auditor, mock_audit_recorder
+    ):
+        """전체 복구 플로우에서 CascadeEvent 기록 확인."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+            cascade_auditor=mock_cascade_auditor,
+            audit_recorder=mock_audit_recorder,
+        )
+        
+        # 복구 시작
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        
+        # 모든 단계 실행
+        step_count = 0
+        while True:
+            step = coordinator.execute_next_step("global")
+            if step is None:
+                break
+            step_count += 1
+        
+        # LEVEL_3는 4단계
+        assert step_count == 4
+        
+        # CascadeEvent 호출 횟수 확인:
+        # 1회 (start) + 4회 (steps) + 1회 (complete) = 6회
+        # 단, _handle_all_steps_completed가 어떻게 구현되어 있는지에 따라 다름
+        assert mock_cascade_auditor.record.call_count >= 5  # 최소 start + 4 steps

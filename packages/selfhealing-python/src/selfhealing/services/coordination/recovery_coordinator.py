@@ -42,9 +42,15 @@ from .distributed_recovery_lock import (
     DistributedRecoveryLock,
     InMemoryRecoveryLock,
 )
+from .recovery_audit import (
+    RecoveryAuditRecorder,
+    RecoveryAuditEventType,
+    get_recovery_audit_recorder,
+)
 
 if TYPE_CHECKING:
     from selfhealing.core.state_backend import StateBackend
+    from selfhealing.audit.cascade_auditor import CascadeEventAuditor
     from .regional_recovery_policy import RegionalRecoveryPolicyEngine
     from .idempotent_step_handlers import IdempotentStepHandlerRegistry
 
@@ -171,6 +177,8 @@ class RecoveryCoordinator:
         recovery_lock: Optional[DistributedRecoveryLock] = None,
         use_regional_policy: bool = True,
         use_idempotent_handlers: bool = True,
+        cascade_auditor: Optional["CascadeEventAuditor"] = None,
+        audit_recorder: Optional[RecoveryAuditRecorder] = None,
     ):
         """
         RecoveryCoordinator 초기화.
@@ -180,6 +188,8 @@ class RecoveryCoordinator:
             recovery_lock: 분산 락 인스턴스 (None이면 InMemory 사용)
             use_regional_policy: 리전별 정책 사용 여부 (Phase 3.5)
             use_idempotent_handlers: 멱등성 핸들러 사용 여부 (Phase 2.7)
+            cascade_auditor: CascadeEventAuditor 인스턴스 (Phase 5.3)
+            audit_recorder: RecoveryAuditRecorder 인스턴스 (Phase 5.3)
         """
         self._backend = backend
         self._lock = threading.RLock()
@@ -189,6 +199,8 @@ class RecoveryCoordinator:
         self._use_idempotent_handlers = use_idempotent_handlers
         self._regional_policy_engine: Optional["RegionalRecoveryPolicyEngine"] = None
         self._idempotent_registry: Optional["IdempotentStepHandlerRegistry"] = None
+        self._cascade_auditor = cascade_auditor
+        self._audit_recorder = audit_recorder
         self._register_default_handlers()
     
     def _get_regional_policy_engine(self) -> Optional["RegionalRecoveryPolicyEngine"]:
@@ -221,6 +233,98 @@ class RecoveryCoordinator:
             return self._idempotent_registry
         except ImportError:
             logger.warning("[Recovery] IdempotentStepHandlerRegistry not available")
+            return None
+
+    def _get_audit_recorder(self) -> RecoveryAuditRecorder:
+        """
+        RecoveryAuditRecorder 획득 (Phase 5.3).
+        
+        Returns:
+            RecoveryAuditRecorder 인스턴스
+        """
+        if self._audit_recorder is not None:
+            return self._audit_recorder
+        
+        return get_recovery_audit_recorder()
+    
+    def _get_cascade_auditor(self) -> Optional["CascadeEventAuditor"]:
+        """
+        CascadeEventAuditor 획득 (Phase 5.3).
+        
+        Returns:
+            CascadeEventAuditor 인스턴스 또는 None
+        """
+        if self._cascade_auditor is not None:
+            return self._cascade_auditor
+        
+        try:
+            from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
+            return get_cascade_event_auditor()
+        except ImportError:
+            logger.debug("[Recovery] CascadeEventAuditor not available")
+            return None
+
+    def _record_cascade_event(
+        self,
+        session: RecoverySession,
+        trigger_type: str,
+        effects: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        """
+        CascadeEvent 기록 (Phase 5.3).
+        
+        복구 프로세스의 각 이벤트를 CascadeEventAuditor를 통해 기록합니다.
+        인과관계 추적을 위해 76번 문서의 CascadeEvent 패턴을 따릅니다.
+        
+        Args:
+            session: RecoverySession 인스턴스
+            trigger_type: 트리거 유형 (RECOVERY_STARTED, RECOVERY_COMPLETED 등)
+            effects: 연쇄 효과 목록
+        
+        Returns:
+            생성된 cascade_event_id 또는 None
+        
+        Reference:
+            docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
+        """
+        cascade_auditor = self._get_cascade_auditor()
+        if not cascade_auditor:
+            logger.debug(
+                f"[Recovery] CascadeEvent skipped: no auditor, "
+                f"trigger={trigger_type}, session={session.id}"
+            )
+            return None
+        
+        try:
+            trigger_details = {
+                "session_id": session.id,
+                "namespace": session.namespace,
+                "trigger_level": session.trigger_level,
+                "initiated_by": session.initiated_by,
+                "current_step_index": session.current_step_index,
+                "status": session.status.value if hasattr(session.status, 'value') else str(session.status),
+            }
+            
+            cascade_event = cascade_auditor.record(
+                trigger_type=trigger_type,
+                trigger_details=trigger_details,
+                effects=effects or [],
+                namespace=session.namespace,
+                triggered_by=session.initiated_by,
+            )
+            
+            logger.debug(
+                f"[Recovery] CascadeEvent recorded: id={cascade_event.id}, "
+                f"trigger={trigger_type}, session={session.id}"
+            )
+            
+            return cascade_event.id
+            
+        except Exception as e:
+            logger.warning(
+                f"[Recovery] CascadeEvent recording failed: {e}, "
+                f"trigger={trigger_type}, session={session.id}"
+            )
             return None
 
     def _get_backend(self) -> "StateBackend":
@@ -344,6 +448,9 @@ class RecoveryCoordinator:
             self._save_session(session)
             self._set_active_session(namespace, session_id)
 
+            # 7. 감사 기록 (Phase 5.3: CascadeEvent 연동)
+            self._record_recovery_started(session)
+
             logger.info(
                 f"[Recovery] Started: id={session_id}, "
                 f"namespace={namespace}, level={trigger_level}, "
@@ -418,6 +525,9 @@ class RecoveryCoordinator:
                     elif result.get("already_applied"):
                         idempotent_info = " (already applied)"
 
+                    # Phase 5.3: 단계 완료 감사 기록
+                    self._record_step_executed(session, step, success=True, result=result)
+
                     logger.info(
                         f"[Recovery] Step completed: {step.step_type.value}, "
                         f"session={session.id}{idempotent_info}"
@@ -425,6 +535,13 @@ class RecoveryCoordinator:
                 else:
                     step.status = RecoveryStatus.FAILED
                     step.error_message = result.get("error", "Unknown error")
+                    
+                    # Phase 5.3: 단계 실패 감사 기록
+                    self._record_step_executed(
+                        session, step, success=False,
+                        error_message=step.error_message, result=result
+                    )
+                    
                     self._fail_session(session, step.error_message)
 
                     logger.error(
@@ -435,6 +552,13 @@ class RecoveryCoordinator:
             except Exception as e:
                 step.status = RecoveryStatus.FAILED
                 step.error_message = str(e)
+                
+                # Phase 5.3: 예외 발생 감사 기록
+                self._record_step_executed(
+                    session, step, success=False,
+                    error_message=str(e), result=None
+                )
+                
                 self._fail_session(session, str(e))
 
                 logger.exception(
@@ -476,6 +600,9 @@ class RecoveryCoordinator:
             session.status = RecoveryStatus.ABORTED
             session.abort_reason = reason
             session.completed_at = datetime.now(timezone.utc).isoformat()
+
+            # Phase 5.3: 복구 중단 감사 기록
+            self._record_recovery_aborted(session, reason)
 
             self._save_session(session)
             self._clear_active_session(namespace)
@@ -1022,6 +1149,9 @@ class RecoveryCoordinator:
         session.status = RecoveryStatus.COMPLETED
         session.completed_at = datetime.now(timezone.utc).isoformat()
 
+        # Phase 5.3: 복구 완료 감사 기록
+        self._record_recovery_completed(session)
+
         self._save_session(session)
         self._clear_active_session(session.namespace)
         
@@ -1042,6 +1172,8 @@ class RecoveryCoordinator:
         session.status = RecoveryStatus.FAILED
         session.abort_reason = error
         session.completed_at = datetime.now(timezone.utc).isoformat()
+
+        # Phase 5.3: 복구 실패 감사 기록 (CascadeEvent는 _record_step_executed에서 기록)
 
         self._save_session(session)
         self._clear_active_session(session.namespace)
@@ -1123,6 +1255,204 @@ class RecoveryCoordinator:
         
         # 히스토리가 없으면 빈 리스트
         return []
+
+    # =========================================================================
+    # Audit Recording Methods (Phase 5.3)
+    # =========================================================================
+
+    def _record_recovery_started(self, session: RecoverySession) -> None:
+        """
+        복구 시작 감사 기록 (Phase 5.3).
+        
+        Args:
+            session: RecoverySession 인스턴스
+        """
+        # 1. RecoveryAuditRecorder에 기록
+        audit_recorder = self._get_audit_recorder()
+        audit_recorder.record_recovery_event(
+            event_type=RecoveryAuditEventType.RECOVERY_STARTED,
+            session_id=session.id,
+            namespace=session.namespace,
+            executed_by=session.initiated_by,
+            metadata={
+                "trigger_level": session.trigger_level,
+                "total_steps": len(session.steps),
+                "step_types": [s.step_type.value for s in session.steps],
+            },
+        )
+        
+        # 2. CascadeEvent 기록
+        effects = [
+            {
+                "action_type": "RECOVERY_INITIATED",
+                "success": True,
+                "target": session.id,
+                "details": {
+                    "trigger_level": session.trigger_level,
+                    "total_steps": len(session.steps),
+                },
+            }
+        ]
+        self._record_cascade_event(
+            session=session,
+            trigger_type="RECOVERY_STARTED",
+            effects=effects,
+        )
+
+    def _record_step_executed(
+        self,
+        session: RecoverySession,
+        step: RecoveryStep,
+        success: bool,
+        error_message: Optional[str] = None,
+        result: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        복구 단계 실행 감사 기록 (Phase 5.3).
+        
+        Args:
+            session: RecoverySession 인스턴스
+            step: 실행된 RecoveryStep
+            success: 성공 여부
+            error_message: 에러 메시지 (실패 시)
+            result: 핸들러 결과
+        """
+        # 1. RecoveryAuditRecorder에 기록
+        audit_recorder = self._get_audit_recorder()
+        event_type = (
+            RecoveryAuditEventType.RECOVERY_STEP_EXECUTED
+            if success
+            else RecoveryAuditEventType.RECOVERY_STEP_FAILED
+        )
+        
+        metadata = {
+            "trigger_level": session.trigger_level,
+            "step_params": step.params,
+        }
+        if result:
+            metadata["idempotent"] = result.get("idempotent", False)
+            metadata["already_applied"] = result.get("already_applied", False)
+        
+        audit_recorder.record_recovery_event(
+            event_type=event_type,
+            session_id=session.id,
+            namespace=session.namespace,
+            step_type=step.step_type.value,
+            step_order=step.order,
+            executed_by=session.initiated_by,
+            success=success,
+            error_message=error_message,
+            metadata=metadata,
+        )
+        
+        # 2. CascadeEvent 기록
+        effects = [
+            {
+                "action_type": f"RECOVERY_STEP_{step.step_type.value.upper()}",
+                "success": success,
+                "target": step.step_type.value,
+                "details": {
+                    "step_order": step.order,
+                    "error_message": error_message,
+                },
+            }
+        ]
+        trigger_type = (
+            "RECOVERY_STEP_EXECUTED"
+            if success
+            else "RECOVERY_STEP_FAILED"
+        )
+        self._record_cascade_event(
+            session=session,
+            trigger_type=trigger_type,
+            effects=effects,
+        )
+
+    def _record_recovery_completed(self, session: RecoverySession) -> None:
+        """
+        복구 완료 감사 기록 (Phase 5.3).
+        
+        Args:
+            session: RecoverySession 인스턴스
+        """
+        # 1. RecoveryAuditRecorder에 기록
+        audit_recorder = self._get_audit_recorder()
+        audit_recorder.record_recovery_event(
+            event_type=RecoveryAuditEventType.RECOVERY_COMPLETED,
+            session_id=session.id,
+            namespace=session.namespace,
+            executed_by=session.initiated_by,
+            metadata={
+                "trigger_level": session.trigger_level,
+                "completed_steps": session.current_step_index,
+                "total_steps": len(session.steps),
+            },
+        )
+        
+        # 2. CascadeEvent 기록
+        effects = [
+            {
+                "action_type": "RECOVERY_COMPLETED",
+                "success": True,
+                "target": session.id,
+                "details": {
+                    "trigger_level": session.trigger_level,
+                    "completed_steps": session.current_step_index,
+                },
+            }
+        ]
+        self._record_cascade_event(
+            session=session,
+            trigger_type="RECOVERY_COMPLETED",
+            effects=effects,
+        )
+
+    def _record_recovery_aborted(
+        self,
+        session: RecoverySession,
+        reason: str,
+    ) -> None:
+        """
+        복구 중단 감사 기록 (Phase 5.3).
+        
+        Args:
+            session: RecoverySession 인스턴스
+            reason: 중단 사유
+        """
+        # 1. RecoveryAuditRecorder에 기록
+        audit_recorder = self._get_audit_recorder()
+        audit_recorder.record_recovery_event(
+            event_type=RecoveryAuditEventType.RECOVERY_ABORTED,
+            session_id=session.id,
+            namespace=session.namespace,
+            executed_by=session.initiated_by,
+            success=False,
+            error_message=reason,
+            metadata={
+                "trigger_level": session.trigger_level,
+                "aborted_at_step": session.current_step_index,
+                "total_steps": len(session.steps),
+            },
+        )
+        
+        # 2. CascadeEvent 기록
+        effects = [
+            {
+                "action_type": "RECOVERY_ABORTED",
+                "success": False,
+                "target": session.id,
+                "details": {
+                    "trigger_level": session.trigger_level,
+                    "abort_reason": reason,
+                    "aborted_at_step": session.current_step_index,
+                },
+            }
+        ]
+        self._record_cascade_event(
+            session=session,
+            trigger_type="RECOVERY_ABORTED",
+            effects=effects,
+        )
 
 
 # =============================================================================
