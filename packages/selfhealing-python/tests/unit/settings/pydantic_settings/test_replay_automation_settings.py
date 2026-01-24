@@ -1,7 +1,10 @@
 """
-Tests for other Settings classes not categorized in Weeks 1-4.
+DLQ Replay 자동화 Settings 테스트.
 
-ReplayAutomationSettings
+ReplayAutomationSettings:
+- Track 1: CB 복구 시 이벤트 기반 자동 Replay
+- Track 2: Scheduled Batch (5분 주기)
+- 도메인별 차등 정책 지원
 """
 
 import pytest

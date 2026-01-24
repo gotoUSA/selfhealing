@@ -1,8 +1,17 @@
 """
-Tests for Week 3 MEDIUM Settings.
+Chaos Engineering 및 알림 Settings 테스트.
 
-ChaosBlastRadiusSettings, ChaosExperimentSettings, CorruptionShieldSettings,
-NotificationChannelSettings, CascadeRetentionSettings, CircuitBreakerAdvancedSettings
+Chaos Engineering:
+- ChaosBlastRadiusSettings: Chaos 실험 폭발 반경 제한 설정
+- ChaosExperimentSettings: Chaos 실험 기본 설정
+
+데이터 보호 및 알림:
+- CorruptionShieldSettings: 데이터 손상 방지 설정
+- NotificationChannelSettings: 알림 채널 설정
+
+회로 차단기 고급:
+- CascadeRetentionSettings: 캐스케이드 보존 설정
+- CircuitBreakerAdvancedSettings: 서킷브레이커 고급 설정
 """
 
 import pytest

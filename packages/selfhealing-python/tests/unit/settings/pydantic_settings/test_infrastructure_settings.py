@@ -1,9 +1,24 @@
 """
-Tests for Week 4 LOW Settings.
+인프라 및 API Settings 테스트.
 
-DashboardSettings, BatchSettings, AuditSettings, CeleryTaskSettings,
-ApiViewSettings, DomainSensitivitySettings, SlackChannelSettings,
-AuditIntegritySettings, RegionalRecoveryPolicySettings
+대시보드 및 배치:
+- DashboardSettings: 대시보드 캐시 TTL 설정
+- BatchSettings: 배치 처리 크기 및 간격 설정
+
+감사 및 모니터링:
+- AuditSettings: 감사 로그 기록 설정
+- AuditIntegritySettings: 감사 무결성 검증 설정
+
+API 및 태스크:
+- ApiViewSettings: API 페이지네이션 설정
+- CeleryTaskSettings: Celery 태스크 재시도 설정
+
+도메인 및 알림:
+- DomainSensitivitySettings: 도메인별 민감도 설정
+- SlackChannelSettings: Slack 채널 및 메시지 제한 설정
+
+지역 복구:
+- RegionalRecoveryPolicySettings: 지역별 복구 정책 설정
 """
 
 import pytest

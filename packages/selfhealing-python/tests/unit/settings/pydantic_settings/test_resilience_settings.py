@@ -1,8 +1,11 @@
 """
-Tests for Week 2 HIGH Settings.
+복원력(Resilience) Settings 테스트.
 
-ErrorBudgetPropagationSettings, AntiFlappingSettings, 
-DistributedLockSettings, CriticalWorkerSettings
+시스템 안정성 및 복원력 관련 설정들:
+- ErrorBudgetPropagationSettings: 에러 버짓 전파 설정
+- AntiFlappingSettings: 플래핑 방지 설정
+- DistributedLockSettings: 분산 락 설정
+- CriticalWorkerSettings: 중요 워커 설정
 """
 
 import pytest

@@ -1,8 +1,11 @@
 """
-Tests for Week 1 CRITICAL Settings.
+Recovery 핵심 Settings 테스트.
 
-RecoveryCircuitBreakerSettings, RedisKeyGuardSettings, 
-RecoveryShutdownSettings, ResilientRecorderSettings
+복구 프로세스의 핵심 구성 요소들:
+- RecoveryCircuitBreakerSettings: 복구용 서킷브레이커 설정
+- RedisKeyGuardSettings: Redis 키 TTL 및 메모리 보호 설정
+- RecoveryShutdownSettings: Recovery-aware 종료 설정
+- ResilientRecorderSettings: 장애 허용 레코더 설정
 """
 
 import pytest
