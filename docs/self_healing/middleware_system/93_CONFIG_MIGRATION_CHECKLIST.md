@@ -139,7 +139,7 @@
 |------|------|------|------|
 | A | `settings/error_budget_propagation.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `error_budget_propagation.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `error_budget/propagation.py` 하드코딩 대체 | ✅ | PropagationConfig.from_settings() |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -156,7 +156,7 @@
 |------|------|------|------|
 | A | `settings/anti_flapping.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `anti_flapping.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `coordination/anti_flapping.py` 하드코딩 대체 | ✅ | field default_factory 사용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -191,7 +191,7 @@
 |------|------|------|------|
 | A | `settings/throttle.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `throttle/config.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `throttle/config.py` 하드코딩 대체 | ✅ | ThrottleConfig.from_settings() |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -214,7 +214,7 @@
 |------|------|------|------|
 | A | `settings/critical_worker.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `critical_worker.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `coordination/critical_worker.py` 하드코딩 대체 | ✅ | field default_factory 사용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -597,3 +597,4 @@
 | 2026-01-24 | 92 문서와 동기화 (26개 클래스 전체 반영) | - |
 | 2026-01-24 | Week 4 구현 완료 (9개 Settings 클래스) | - |
 | 2026-01-25 | Week 3 C단계 완료 (6개 파일 하드코딩 대체) | - |
+| 2026-01-25 | Week 2 C단계 완료 확인 (4개 파일 기존 구현됨) | - |
