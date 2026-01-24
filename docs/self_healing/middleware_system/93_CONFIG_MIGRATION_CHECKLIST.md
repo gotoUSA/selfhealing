@@ -245,7 +245,7 @@
 |------|------|------|------|
 | A | `settings/chaos_experiment.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `chaos_experiment_manager.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `chaos/base/models.py` 하드코딩 대체 | ✅ | field default_factory로 구현 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -264,7 +264,7 @@
 |------|------|------|------|
 | A | `settings/chaos_blast_radius.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `blast_radius.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `blast_radius.py` 하드코딩 대체 | ✅ | BlastRadiusPolicy.from_settings() 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -287,7 +287,7 @@
 |------|------|------|------|
 | A | `settings/corruption_shield.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `corruption_shield.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `corruption_shield/config.py` 하드코딩 대체 | ✅ | from_settings() 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -307,7 +307,7 @@
 |------|------|------|------|
 | A | `settings/notification_channel.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `notification_config.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `unified_notification.py` 하드코딩 대체 | ✅ | RoutingPolicy.from_settings() 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -326,7 +326,7 @@
 |------|------|------|------|
 | A | `settings/cascade_retention.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `cascade_storage.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `cascade_config.py` 하드코딩 대체 | ✅ | get_cascade_retention_config() 내 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -346,7 +346,7 @@
 |------|------|------|------|
 | A | `settings/distributed_lock.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `distributed_lock.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `distributed_recovery_lock.py` 하드코딩 대체 | ✅ | _get_default_lock_timeout() 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -596,3 +596,4 @@
 | 2026-01-24 | 초안 작성 | - |
 | 2026-01-24 | 92 문서와 동기화 (26개 클래스 전체 반영) | - |
 | 2026-01-24 | Week 4 구현 완료 (9개 Settings 클래스) | - |
+| 2026-01-25 | Week 3 C단계 완료 (6개 파일 하드코딩 대체) | - |

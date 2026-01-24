@@ -530,18 +530,18 @@ cache_ttl = settings.cache_ttl_seconds
 
 ### 5.4 작업 체크리스트
 
-- [ ] CRITICAL 설정 마이그레이션 (4개 파일)
+- [x] CRITICAL 설정 마이그레이션 (4개 파일) - Week 1 완료
 - [ ] HIGH 설정 마이그레이션 (10+ 파일)
 - [ ] MEDIUM 설정 마이그레이션 (15+ 파일)
 - [ ] LOW 설정 마이그레이션 (5+ 파일)
 - [ ] Error Budget 관련 마이그레이션 (7개 항목)
-- [ ] Chaos Engineering 마이그레이션 (6개 항목)
-- [ ] Corruption Shield 마이그레이션 (6개 항목)
-- [ ] Coordination 마이그레이션 (7개 항목)
-- [ ] Notification 마이그레이션 (4개 항목)
+- [x] Chaos Engineering 마이그레이션 (6개 항목) - Week 3 완료 (chaos/base/models.py, blast_radius.py)
+- [x] Corruption Shield 마이그레이션 (6개 항목) - Week 3 완료 (corruption_shield/config.py)
+- [x] Coordination 마이그레이션 (7개 항목) - Week 3 완료 (distributed_recovery_lock.py)
+- [x] Notification 마이그레이션 (4개 항목) - Week 3 완료 (unified_notification.py)
 - [ ] DLQ/Throttle 마이그레이션 (7개 항목)
-- [ ] Storage/Retention 마이그레이션 (5개 항목)
-- [ ] 각 단계 후 단위 테스트 실행
+- [x] Storage/Retention 마이그레이션 (5개 항목) - Week 3 완료 (cascade_config.py)
+- [x] 각 단계 후 단위 테스트 실행 - Week 3 1087개 통과
 
 ---
 

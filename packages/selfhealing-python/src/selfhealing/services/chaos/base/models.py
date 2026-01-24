@@ -10,6 +10,16 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from selfhealing.services.chaos.base.enums import TrafficType
+from selfhealing.settings import get_layered_settings, ChaosExperimentSettings
+
+
+def _get_experiment_defaults() -> ChaosExperimentSettings:
+    """
+    LayeredSettings에서 실험 기본값 가져오기.
+    
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [12] ChaosExperimentSettings 참조.
+    """
+    return get_layered_settings(ChaosExperimentSettings, "chaos_experiment")
 
 
 @dataclass
@@ -23,14 +33,14 @@ class ExperimentConfig:
 
     # Injection parameters
     injection_rate: float = 0.001  # 0.1% default
-    duration_seconds: int = 300  # 5 minutes
+    duration_seconds: int = field(default_factory=lambda: _get_experiment_defaults().default_duration_seconds)
 
     # Traffic targeting
     traffic_type: str = TrafficType.SYNTHETIC.value
 
     # Rollback configuration
     auto_rollback_on_sla_breach: bool = True
-    sla_breach_threshold_percent: float = 1.0  # 1% error rate triggers rollback
+    sla_breach_threshold_percent: float = field(default_factory=lambda: _get_experiment_defaults().sla_breach_threshold_percent)
 
     # Additional parameters (experiment-specific)
     parameters: Dict[str, Any] = field(default_factory=dict)
@@ -40,8 +50,8 @@ class ExperimentConfig:
     """Soft TTL: 장애 주입 종료 시간 (초). None이면 기본값 사용."""
 
     # Soft/Hard TTL 이중 구조: Soft TTL 후 Grace Period 동안 복구 모니터링
-    grace_period_seconds: int = 300
-    """Grace Period: Canary 복구 대기 시간 (기본 5분)."""
+    grace_period_seconds: int = field(default_factory=lambda: _get_experiment_defaults().grace_period_seconds)
+    """Grace Period: Canary 복구 대기 시간 (ChaosExperimentSettings에서 로드)."""
 
     @property
     def hard_ttl_seconds(self) -> int:
@@ -51,7 +61,8 @@ class ExperimentConfig:
         Soft TTL + Grace Period.
         Canary 복구가 완료되지 않더라도 강제 종료.
         """
-        base_ttl = self.ttl_seconds or 600  # 기본 10분
+        defaults = _get_experiment_defaults()
+        base_ttl = self.ttl_seconds or defaults.default_ttl_seconds
         return base_ttl + self.grace_period_seconds
 
     # Dry Run mode

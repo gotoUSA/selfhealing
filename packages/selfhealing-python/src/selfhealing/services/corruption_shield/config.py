@@ -1,11 +1,21 @@
 """
 Corruption Shield Configuration.
+
+92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [14] CorruptionShieldSettings 참조.
+91_CONFIG_INVENTORY.md §9.5 참조.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Set
+
+from selfhealing.settings import get_layered_settings, CorruptionShieldSettings
+
+
+def _get_corruption_shield_defaults() -> CorruptionShieldSettings:
+    """LayeredSettings에서 Corruption Shield 기본값 가져오기."""
+    return get_layered_settings(CorruptionShieldSettings, "corruption_shield")
 
 
 @dataclass
@@ -34,6 +44,34 @@ class CorruptionShieldConfig:
     # Logging
     log_violations: bool = True
     log_to_security_incident: bool = True
+    
+    @classmethod
+    def from_settings(cls) -> "CorruptionShieldConfig":
+        """
+        LayeredSettings에서 설정 로드.
+        
+        92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [14] 참조.
+        
+        Returns:
+            Settings 기반 CorruptionShieldConfig
+        """
+        settings = _get_corruption_shield_defaults()
+        
+        return cls(
+            l1_enabled=settings.l1_enabled,
+            l2_enabled=settings.l2_enabled,
+            l3_enabled=settings.l3_enabled,
+            required_fields=settings.required_fields,
+            max_string_length=settings.max_string_length,
+            min_amount=settings.min_amount,
+            max_amount=settings.max_amount,
+            allowed_statuses=set(settings.allowed_statuses),
+            z_score_threshold=settings.z_score_threshold,
+            iqr_multiplier=settings.iqr_multiplier,
+            min_samples_for_anomaly=settings.min_samples_for_anomaly,
+            log_violations=settings.log_violations,
+            log_to_security_incident=settings.log_to_security_incident,
+        )
     
     @classmethod
     def from_dict(cls, data: dict) -> "CorruptionShieldConfig":

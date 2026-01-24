@@ -18,6 +18,9 @@ Key Features:
 - Emergency level escalation
 
 중앙화된 알림 라우팅 및 관리를 제공합니다.
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [15] NotificationChannelSettings 참조.
 """
 
 from __future__ import annotations
@@ -28,7 +31,14 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
+from selfhealing.settings import get_layered_settings, NotificationChannelSettings
+
 logger = logging.getLogger(__name__)
+
+
+def _get_notification_channel_settings() -> NotificationChannelSettings:
+    """LayeredSettings에서 알림 채널 설정 가져오기."""
+    return get_layered_settings(NotificationChannelSettings, "notification_channel")
 
 
 # =============================================================================
@@ -142,6 +152,8 @@ class RoutingPolicy:
     Notification routing policy.
 
     Defines which channels to use based on priority and category.
+    
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [15] NotificationChannelSettings 참조.
     """
 
     # Channel mapping by priority
@@ -168,16 +180,40 @@ class RoutingPolicy:
     cooldown_seconds: Dict[NotificationCategory, int] = field(
         default_factory=lambda: {
             NotificationCategory.SECURITY: 60,  # 1 min
-            NotificationCategory.OPERATIONS: 300,  # 5 min
+            NotificationCategory.OPERATIONS: _get_notification_channel_settings().cooldown_seconds,
             NotificationCategory.SLA: 1800,  # 30 min
-            NotificationCategory.CIRCUIT_BREAKER: 300,  # 5 min
+            NotificationCategory.CIRCUIT_BREAKER: _get_notification_channel_settings().cooldown_seconds,
             NotificationCategory.GOVERNANCE: 900,  # 15 min
             NotificationCategory.APPROVAL: 0,  # No cooldown
             NotificationCategory.REPORT: 0,  # No cooldown
             NotificationCategory.ERROR: 60,  # 1 min
-            NotificationCategory.CHAOS: 300,  # 5 min - Chaos experiments
+            NotificationCategory.CHAOS: _get_notification_channel_settings().cooldown_seconds,
         }
     )
+    
+    @classmethod
+    def from_settings(cls) -> "RoutingPolicy":
+        """
+        LayeredSettings에서 라우팅 정책 생성.
+        
+        Returns:
+            Settings 기반 RoutingPolicy
+        """
+        settings = _get_notification_channel_settings()
+        
+        return cls(
+            cooldown_seconds={
+                NotificationCategory.SECURITY: 60,
+                NotificationCategory.OPERATIONS: settings.cooldown_seconds,
+                NotificationCategory.SLA: 1800,
+                NotificationCategory.CIRCUIT_BREAKER: settings.cooldown_seconds,
+                NotificationCategory.GOVERNANCE: 900,
+                NotificationCategory.APPROVAL: 0,
+                NotificationCategory.REPORT: 0,
+                NotificationCategory.ERROR: 60,
+                NotificationCategory.CHAOS: settings.cooldown_seconds,
+            }
+        )
 
     def get_channels(
         self,

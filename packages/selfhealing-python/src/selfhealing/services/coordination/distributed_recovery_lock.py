@@ -25,6 +25,8 @@ from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any, Generator, Optional
 
+from selfhealing.settings import get_layered_settings, DistributedLockSettings
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,9 +90,6 @@ class DistributedRecoveryLock:
     # Redis 키 패턴: {prefix}recovery:lock:{namespace}
     LOCK_KEY_TEMPLATE = "selfhealing:{namespace}:recovery:lock"
     
-    # 락 타임아웃: 복구 최대 예상 시간
-    DEFAULT_LOCK_TIMEOUT = timedelta(minutes=30)
-    
     # Lua 스크립트: 소유자 확인 후 삭제 (원자적)
     RELEASE_SCRIPT = """
     if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -109,6 +108,16 @@ class DistributedRecoveryLock:
     end
     """
 
+    @staticmethod
+    def _get_default_lock_timeout() -> timedelta:
+        """
+        LayeredSettings에서 기본 락 타임아웃 가져오기.
+        
+        92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [17] DistributedLockSettings 참조.
+        """
+        settings = get_layered_settings(DistributedLockSettings, "distributed_lock")
+        return timedelta(minutes=settings.timeout_minutes)
+
     def __init__(
         self,
         redis_client: Optional[Any] = None,
@@ -119,10 +128,10 @@ class DistributedRecoveryLock:
         
         Args:
             redis_client: Redis 클라이언트 인스턴스 (None이면 자동 획득)
-            lock_timeout: 락 자동 만료 시간 (기본 30분)
+            lock_timeout: 락 자동 만료 시간 (기본: DistributedLockSettings.timeout_minutes)
         """
         self._redis = redis_client
-        self._lock_timeout = lock_timeout or self.DEFAULT_LOCK_TIMEOUT
+        self._lock_timeout = lock_timeout or self._get_default_lock_timeout()
         self._acquired_locks: dict[str, str] = {}  # namespace -> session_id
         self._local_lock = threading.Lock()
 

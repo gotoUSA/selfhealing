@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from selfhealing.core.timezone import now
+from selfhealing.settings import get_layered_settings, ChaosBlastRadiusSettings
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,36 @@ class BlastRadiusPolicy:
             "excluded_services": self.excluded_services,
             "excluded_domains": self.excluded_domains,
         }
+
+    @classmethod
+    def from_settings(cls) -> "BlastRadiusPolicy":
+        """
+        LayeredSettings에서 정책 로드.
+        
+        92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [13] ChaosBlastRadiusSettings 참조.
+        91_CONFIG_INVENTORY.md §6.12, §12.1 참조.
+        
+        Returns:
+            Settings 기반 BlastRadiusPolicy
+        """
+        settings = get_layered_settings(ChaosBlastRadiusSettings, "chaos_blast_radius")
+        
+        return cls(
+            instance_max_concurrent=settings.instance_max_concurrent,
+            service_max_concurrent=settings.service_max_concurrent,
+            region_max_concurrent=settings.region_max_concurrent,
+            instance_auto_approve=settings.instance_auto_approve,
+            service_auto_approve=settings.service_auto_approve,
+            region_auto_approve=settings.region_auto_approve,
+            allowed_hours_start=settings.allowed_hours_start,
+            allowed_hours_end=settings.allowed_hours_end,
+            allow_outside_window=settings.allow_outside_window,
+            max_traffic_percent_instance=settings.max_traffic_percent_instance,
+            max_traffic_percent_service=settings.max_traffic_percent_service,
+            max_traffic_percent_region=settings.max_traffic_percent_region,
+            excluded_services=settings.excluded_services,
+            excluded_domains=settings.excluded_domains,
+        )
 
     @classmethod
     def from_env(cls) -> "BlastRadiusPolicy":

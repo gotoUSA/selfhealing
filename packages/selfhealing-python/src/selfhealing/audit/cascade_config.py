@@ -10,11 +10,14 @@ Settings:
 
 Reference:
     docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
+    docs/self_healing/middleware_system/92_CONFIG_IMPLEMENTATION_GUIDE.md (Week 3 [16])
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from selfhealing.settings import get_layered_settings, CascadeRetentionSettings
 
 
 # =============================================================================
@@ -192,55 +195,20 @@ def get_cascade_retention_config() -> CascadeRetentionConfig:
     """
     Cascade 보관 정책 반환.
     
-    Django settings 또는 환경 변수에서 설정을 로드합니다.
-    """
-    import os
+    LayeredSettings를 통해 4계층 설정을 병합하여 반환합니다.
     
-    try:
-        from django.conf import settings
-        
-        return CascadeRetentionConfig(
-            hot_retention_days=getattr(
-                settings, "SELFHEALING_CASCADE_HOT_RETENTION_DAYS", 7
-            ),
-            hot_max_count=getattr(
-                settings, "SELFHEALING_CASCADE_HOT_MAX_COUNT", 10000
-            ),
-            warm_retention_days=getattr(
-                settings, "SELFHEALING_CASCADE_WARM_RETENTION_DAYS", 90
-            ),
-            cold_retention_days=getattr(
-                settings, "SELFHEALING_CASCADE_COLD_RETENTION_DAYS", 365
-            ),
-            index_retention_days=getattr(
-                settings, "SELFHEALING_CASCADE_INDEX_RETENTION_DAYS", 30
-            ),
-            anchor_retention_days=getattr(
-                settings, "SELFHEALING_CASCADE_ANCHOR_RETENTION_DAYS", 90
-            ),
-        )
-    except Exception:
-        # Django 없는 환경에서는 환경 변수 사용
-        return CascadeRetentionConfig(
-            hot_retention_days=int(
-                os.environ.get("SELFHEALING_CASCADE_HOT_RETENTION_DAYS", "7")
-            ),
-            hot_max_count=int(
-                os.environ.get("SELFHEALING_CASCADE_HOT_MAX_COUNT", "10000")
-            ),
-            warm_retention_days=int(
-                os.environ.get("SELFHEALING_CASCADE_WARM_RETENTION_DAYS", "90")
-            ),
-            cold_retention_days=int(
-                os.environ.get("SELFHEALING_CASCADE_COLD_RETENTION_DAYS", "365")
-            ),
-            index_retention_days=int(
-                os.environ.get("SELFHEALING_CASCADE_INDEX_RETENTION_DAYS", "30")
-            ),
-            anchor_retention_days=int(
-                os.environ.get("SELFHEALING_CASCADE_ANCHOR_RETENTION_DAYS", "90")
-            ),
-        )
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [16] CascadeRetentionSettings 참조.
+    """
+    settings = get_layered_settings(CascadeRetentionSettings, "cascade_retention")
+    
+    return CascadeRetentionConfig(
+        hot_retention_days=settings.hot_retention_days,
+        hot_max_count=settings.hot_max_count,
+        warm_retention_days=settings.warm_retention_days,
+        cold_retention_days=settings.cold_retention_days,
+        index_retention_days=settings.index_retention_days,
+        anchor_retention_days=settings.anchor_retention_days,
+    )
 
 
 # =============================================================================
