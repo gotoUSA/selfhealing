@@ -1,185 +1,355 @@
 # Configuration Migration Checklist
 
 > 마이그레이션 진행 상황 추적을 위한 체크리스트
+> 
+> **참조**: 구현 방법은 [92_CONFIG_IMPLEMENTATION_GUIDE.md](92_CONFIG_IMPLEMENTATION_GUIDE.md) 참조
 
-## 진행 상황 요약
+---
 
-| Phase | 상태 | 완료일 | 담당자 |
-|-------|------|--------|--------|
-| Phase 1 | ⬜ 대기 | - | - |
-| Phase 2 | ⬜ 대기 | - | - |
-| Phase 3 | ⬜ 대기 | - | - |
-| Phase 4.1 | ⬜ 대기 | - | - |
-| Phase 4.2 | ⬜ 대기 | - | - |
-| Phase 4.3 | ⬜ 대기 | - | - |
-| Phase 4.4 | ⬜ 대기 | - | - |
-| Phase 5 | ⬜ 대기 | - | - |
-| Phase 6 | ⬜ 대기 | - | - |
+## 📊 전체 진행률
+
+| 주차 | 대상 | 클래스 수 | 상태 | 완료율 |
+|------|------|----------|------|--------|
+| Week 1 | CRITICAL | 5개 | ⬜ 대기 | 0% |
+| Week 2 | HIGH | 6개 | ⬜ 대기 | 0% |
+| Week 3 | MEDIUM | 6개 | ⬜ 대기 | 0% |
+| Week 4 | LOW + 마무리 | 9개 | ⬜ 대기 | 0% |
+| **합계** | - | **26개** | - | **0%** |
 
 **상태**: ⬜ 대기 | 🔄 진행중 | ✅ 완료 | ❌ 보류
 
 ---
 
-## Phase 1: 기존 인프라 확인
+## Week 1: CRITICAL Settings (5개)
 
-### 체크리스트
+### [1] SecuritySettings
 
-- [ ] `STORAGE_KEYS` 현재 목록 확인
-- [ ] `CONFIG_CLASSES` 현재 목록 확인
-- [ ] 새로 추가할 설정 카테고리 최종 결정
-- [ ] 네이밍 규칙 문서화
-
-### 산출물
-
-- [ ] 현재 등록된 설정 타입 목록
-- [ ] 추가할 설정 타입 최종 목록
-
----
-
-## Phase 2: 새 설정 타입 정의
-
-### Settings 클래스 생성
-
-| 클래스 | 파일 | 상태 | 비고 |
-|--------|------|------|------|
-| `DashboardSettings` | `settings/dashboard.py` | ⬜ | |
-| `RecoverySettings` | `settings/recovery.py` | ⬜ | |
-| `BatchSettings` | `settings/batch.py` | ⬜ | |
-| `AuditSettings` | `settings/audit_settings.py` | ⬜ | |
-| `CeleryTaskSettings` | `settings/celery_task.py` | ⬜ | |
-| `ApiViewSettings` | `settings/api_view.py` | ⬜ | |
-
-### 필수 작업
-
-- [ ] 각 클래스에 필드 정의 완료
-- [ ] Field validation 규칙 추가
-- [ ] 환경변수 prefix 설정
-- [ ] `__init__.py` 내보내기 추가
-- [ ] 단위 테스트 작성
-
----
-
-## Phase 3: RuntimeConfigManager 등록
-
-### constants.py 수정
-
-| 작업 | 상태 | 비고 |
-|------|------|------|
-| import 문 추가 | ⬜ | |
-| `STORAGE_KEYS` 추가 | ⬜ | 6개 키 |
-| `CONFIG_CLASSES` 추가 | ⬜ | 6개 매핑 |
-
-### 검증
-
-- [ ] 기존 테스트 통과
-- [ ] 새 설정 타입 조회 테스트
-- [ ] 새 설정 타입 저장/로드 테스트
-
----
-
-## Phase 4.1: CRITICAL 설정 마이그레이션
-
-### 대상 파일
-
-| 파일 | 설정 | 상태 | 비고 |
+| 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| `anti_flapping.py` | `anti_flapping_window` | ⬜ | |
-| `anti_flapping.py` | `min_stability_period` | ⬜ | |
-| `recovery_coordinator.py` | `max_recovery_attempts` | ⬜ | |
-| `recovery_coordinator.py` | `recovery_cooldown` | ⬜ | |
-| `escalation.py` | `escalation_threshold` | ⬜ | |
+| A | `settings/security.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `security/models.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
 
-### 검증
+**필드 (91 문서 참조)**:
+- [ ] `rate_limit_per_minute` (기본값: 60)
+- [ ] `ip_ban_threshold` (기본값: 10)
+- [ ] `ip_ban_duration_minutes` (기본값: 30)
+- [ ] `injection_max_depth` (기본값: 10)
+- [ ] `max_key_length` (기본값: 100)
+- [ ] `max_value_length` (기본값: 10000)
 
-- [ ] 각 파일 단위 테스트 통과
-- [ ] 통합 테스트 통과
-- [ ] 기존 동작과 동일 확인
+### [2] RecoveryCircuitBreakerSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/recovery_circuit_breaker.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `recovery_circuit_breaker.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `failure_rate_threshold` (기본값: 0.3)
+- [ ] `failure_count_threshold` (기본값: 10)
+- [ ] `sampling_window_seconds` (기본값: 60)
+
+### [3] RedisKeyGuardSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/redis_key_guard.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `redis_key_guard.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `memory_critical_threshold` (기본값: 90.0)
+- [ ] `memory_warning_threshold` (기본값: 80.0)
+
+### [4] RecoveryShutdownSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/recovery_shutdown.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `recovery_shutdown.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `max_shutdown_wait_seconds` (기본값: 600.0)
+- [ ] `recovery_extension_seconds` (기본값: 300.0)
+- [ ] `graceful_shutdown_timeout` (기본값: 30.0)
+
+### [5] ResilientRecorderSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/resilient_recorder.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `resilient_recorder.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `circuit_failure_threshold` (기본값: 3)
+- [ ] `buffer_capacity` (기본값: 10000)
+- [ ] `flush_batch_size` (기본값: 100)
+- [ ] `flush_timeout_seconds` (기본값: 5.0)
+- [ ] `retry_delay_seconds` (기본값: 1.0)
+- [ ] `max_retries` (기본값: 3)
+- [ ] `circuit_reset_timeout` (기본값: 60.0)
 
 ---
 
-## Phase 4.2: HIGH 설정 마이그레이션
+## Week 2: HIGH Settings (6개)
 
-### 대상 파일
+### [6] ErrorBudgetSettings
 
-| 파일 | 설정 | 상태 | 비고 |
+| 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| `dashboard_service.py` | `CACHE_TTL_SECONDS` | ⬜ | |
-| `dashboard_service.py` | `CACHE_TTL_STATUS` | ⬜ | |
-| `dashboard_service.py` | `CACHE_TTL_ACTIVITY` | ⬜ | |
-| `health_penalty.py` | `_cache_ttl_seconds` | ⬜ | |
-| `tracker.py` | `CACHE_TTL_SECONDS` | ⬜ | |
-| 다수 파일 | `batch_size=100` | ⬜ | |
-| 다수 task 파일 | `max_retries=3` | ⬜ | |
+| A | `settings/error_budget.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `error_budget_gate.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
 
-### 검증
+**필드**:
+- [ ] `warning_threshold` (기본값: 0.8)
+- [ ] `critical_threshold` (기본값: 0.5)
+- [ ] `exhausted_threshold` (기본값: 0.0)
+- [ ] `budget_reset_interval_hours` (기본값: 24)
 
-- [ ] 각 파일 단위 테스트 통과
-- [ ] Dashboard 기능 테스트
-- [ ] Recovery 기능 테스트
+### [7] ErrorBudgetPropagationSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/error_budget_propagation.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `error_budget_propagation.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `decay_factor` (기본값: 0.8)
+- [ ] `max_hops` (기본값: 3)
+- [ ] `propagation_delay_ms` (기본값: 100)
+
+### [8] AntiFlappingSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/anti_flapping.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `anti_flapping.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `cooldown_period` (기본값: 300)
+- [ ] `hysteresis_margin` (기본값: 0.1)
+- [ ] `max_transitions` (기본값: 5)
+- [ ] `recovery_hysteresis_factor` (기본값: 1.15)
+
+### [9] DLQSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/dlq.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `dlq_models.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `retention_hours` (기본값: 168)
+- [ ] `max_retry_attempts` (기본값: 3)
+- [ ] `replay_batch_size` (기본값: 100)
+
+### [10] ThrottleSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/throttle.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `throttle/config.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `min_rtt_ms` (기본값: 50)
+- [ ] `tolerance` (기본값: 2.0)
+- [ ] `probe_multiplier` (기본값: 2.0)
+- [ ] `smoothing` (기본값: 0.2)
+- [ ] `initial_limit` (기본값: 20)
+
+### [11] CriticalWorkerSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/critical_worker.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `critical_worker.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `queue_name` (기본값: "recovery_critical")
+- [ ] `worker_count` (기본값: 3)
+- [ ] `prefetch_count` (기본값: 1)
+- [ ] `task_timeout_seconds` (기본값: 300)
 
 ---
 
-## Phase 4.3: MEDIUM 설정 마이그레이션
+## Week 3: MEDIUM Settings (6개)
 
-### 대상 파일
+### [12] ChaosExperimentSettings
 
-| 파일 | 설정 | 상태 | 비고 |
+| 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| `async_logger.py` | `BATCH_SIZE` | ⬜ | |
-| `async_logger.py` | `FLUSH_INTERVAL` | ⬜ | |
-| API 뷰 파일들 | `default_limit` | ⬜ | |
-| API 뷰 파일들 | `default_offset` | ⬜ | |
-| 네트워크 어댑터 | `connection_timeout` | ⬜ | |
+| A | `settings/chaos_experiment.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `chaos_experiment_manager.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
 
-### 검증
+**필드**:
+- [ ] `max_duration_seconds` (기본값: 3600)
+- [ ] `grace_period_seconds` (기본값: 60)
+- [ ] `result_ttl` (기본값: 86400)
 
-- [ ] 로깅 기능 테스트
-- [ ] API 페이징 테스트
-- [ ] 네트워크 타임아웃 테스트
+### [13] ChaosBlastRadiusSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/chaos_blast_radius.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `blast_radius.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `max_affected_services` (기본값: 0.3)
+- [ ] `max_concurrent` (기본값: 5)
+- [ ] `maintenance_window_start_hour` (기본값: 2)
+- [ ] `maintenance_window_end_hour` (기본값: 6)
+
+### [14] CorruptionShieldSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/corruption_shield.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `corruption_shield.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `z_score_threshold` (기본값: 3.0)
+- [ ] `iqr_multiplier` (기본값: 1.5)
+- [ ] `min_samples` (기본값: 30)
+- [ ] `quarantine_ttl` (기본값: 3600)
+
+### [15] NotificationChannelSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/notification_channel.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `notification_config.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `rate_limit_per_minute` (기본값: 10)
+- [ ] `max_retry` (기본값: 3)
+- [ ] `default_channel` (기본값: "slack")
+
+### [16] CascadeRetentionSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/cascade_retention.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `cascade_storage.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `hot_tier_days` (기본값: 7)
+- [ ] `warm_tier_days` (기본값: 30)
+- [ ] `cold_tier_days` (기본값: 365)
+
+### [17] DistributedLockSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/distributed_lock.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `distributed_lock.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `lock_timeout` (기본값: 30)
+- [ ] `retry_interval` (기본값: 0.1)
 
 ---
 
-## Phase 4.4: LOW 설정 마이그레이션
+## Week 4: LOW Settings + 마무리 (9개)
 
-### 대상 파일
+### [18] DashboardSettings
 
-| 파일 | 설정 | 상태 | 비고 |
+| 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| `pending_config.py` | `MAX_HISTORY` | ⬜ | |
-| audit 관련 파일 | `retention_days` | ⬜ | |
-| WAL 관련 파일 | `wal_max_size` | ⬜ | |
+| A | `settings/dashboard.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | `dashboard_service.py` 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
 
-### 검증
+**필드**:
+- [ ] `cache_ttl_seconds` (기본값: 30)
+- [ ] `cache_ttl_status` (기본값: 60)
+- [ ] `cache_ttl_activity` (기본값: 120)
 
-- [ ] 설정 이력 기능 테스트
-- [ ] 감사 로그 기능 테스트
-- [ ] WAL 기능 테스트
+### [19] BatchSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/batch.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | 다수 파일 `batch_size` 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `default_batch_size` (기본값: 100)
+- [ ] `logger_batch_size` (기본값: 50)
+- [ ] `flush_interval` (기본값: 10.0)
+
+### [20] AuditSettings
+
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|------|------|
+| A | `settings/audit_settings.py` 생성 | ⬜ | |
+| B | constants.py 등록 | ⬜ | |
+| C | 감사 관련 파일 하드코딩 대체 | ⬜ | |
+| D | 단위 테스트 | ⬜ | |
+
+**필드**:
+- [ ] `max_history` (기본값: 50)
+- [ ] `retention_days` (기본값: 90)
+
+### [21-26] 추가 Settings
+
+| 번호 | 클래스 | 상태 | 비고 |
+|------|--------|------|------|
+| 21 | `CeleryTaskSettings` | ⬜ | max_retries, task_timeout |
+| 22 | `ApiViewSettings` | ⬜ | default_limit, default_offset |
+| 23 | `DomainSensitivitySettings` | ⬜ | 도메인별 가중치 |
+| 24 | `SlackChannelSettings` | ⬜ | 채널 설정 |
+| 25 | `AuditIntegritySettings` | ⬜ | sequence_ttl 등 |
+| 26 | `RegionalRecoveryPolicySettings` | ⬜ | 지역별 복구 정책 |
 
 ---
 
 ## Phase 5: API 엔드포인트 추가
 
-### Serializer 생성
+### ViewSet 생성 (총 26개)
 
-| 클래스 | 상태 | 비고 |
-|--------|------|------|
-| `DashboardConfigSerializer` | ⬜ | |
-| `RecoveryConfigSerializer` | ⬜ | |
-| `BatchConfigSerializer` | ⬜ | |
-| `AuditConfigSerializer` | ⬜ | |
-| `TaskConfigSerializer` | ⬜ | |
-| `ApiViewConfigSerializer` | ⬜ | |
-
-### ViewSet 생성
-
-| 클래스 | 엔드포인트 | 상태 | 비고 |
-|--------|-----------|------|------|
-| `DashboardConfigViewSet` | `/api/v1/config/dashboard/` | ⬜ | |
-| `RecoveryConfigViewSet` | `/api/v1/config/recovery/` | ⬜ | |
-| `BatchConfigViewSet` | `/api/v1/config/batch/` | ⬜ | |
-| `AuditConfigViewSet` | `/api/v1/config/audit/` | ⬜ | |
-| `TaskConfigViewSet` | `/api/v1/config/task/` | ⬜ | |
-| `ApiViewConfigViewSet` | `/api/v1/config/api-view/` | ⬜ | |
+| 그룹 | 엔드포인트 수 | 상태 |
+|------|-------------|------|
+| 기본 설정 | 6개 | ⬜ |
+| Error Budget | 4개 | ⬜ |
+| Chaos Engineering | 3개 | ⬜ |
+| Corruption Shield | 2개 | ⬜ |
+| Coordination | 5개 | ⬜ |
+| 기타 | 6개 | ⬜ |
 
 ### 검증
 
@@ -191,59 +361,23 @@
 
 ## Phase 6: 테스트 및 검증
 
-### 단위 테스트
+### 테스트 통과 현황
 
-| 테스트 | 상태 | 비고 |
-|--------|------|------|
-| Settings 클래스 테스트 | ⬜ | |
-| RuntimeConfigManager 테스트 | ⬜ | |
-| LayeredProvider 테스트 | ⬜ | |
-| API 엔드포인트 테스트 | ⬜ | |
+| 테스트 유형 | 대상 | 상태 |
+|------------|------|------|
+| 단위 테스트 | 26개 Settings 클래스 | ⬜ |
+| 통합 테스트 | LayeredProvider | ⬜ |
+| API 테스트 | 26개 엔드포인트 | ⬜ |
+| 부하 테스트 | 설정 읽기/쓰기 | ⬜ |
 
-### 통합 테스트
+### 배포 체크리스트
 
-| 시나리오 | 상태 | 비고 |
-|----------|------|------|
-| 설정 변경 → 즉시 반영 | ⬜ | |
-| ENV 오버라이드 | ⬜ | |
-| Request 오버라이드 | ⬜ | |
-| 재시작 후 설정 유지 | ⬜ | |
-
-### 부하 테스트
-
-| 시나리오 | 상태 | 비고 |
-|----------|------|------|
-| 설정 읽기 성능 | ⬜ | |
-| 동시 변경 | ⬜ | |
-| 대량 설정 | ⬜ | |
-
----
-
-## 배포 체크리스트
-
-### Staging 배포
-
-- [ ] 모든 테스트 통과
-- [ ] Staging 환경 배포
-- [ ] Staging 환경 검증 (24시간)
-- [ ] 성능 메트릭 확인
-- [ ] 로그 이상 없음 확인
-
-### Production 배포
-
-- [ ] 롤백 절차 확인
-- [ ] Production 배포
-- [ ] 모니터링 (1시간)
-- [ ] 기능 정상 동작 확인
-- [ ] 메트릭 정상 확인
-
----
-
-## 이슈 트래킹
-
-| 이슈 번호 | 설명 | 상태 | 해결일 |
-|-----------|------|------|--------|
-| - | - | - | - |
+| 환경 | 작업 | 상태 |
+|------|------|------|
+| Staging | 배포 | ⬜ |
+| Staging | 24시간 검증 | ⬜ |
+| Production | 배포 | ⬜ |
+| Production | 모니터링 | ⬜ |
 
 ---
 
@@ -252,3 +386,4 @@
 | 날짜 | 변경 내용 | 작성자 |
 |------|----------|--------|
 | 2026-01-24 | 초안 작성 | - |
+| 2026-01-24 | 92 문서와 동기화 (26개 클래스 전체 반영) | - |

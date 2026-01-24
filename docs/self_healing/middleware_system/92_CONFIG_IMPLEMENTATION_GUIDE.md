@@ -2,6 +2,98 @@
 
 > 하드코딩된 설정값을 계층형 설정 시스템으로 마이그레이션하기 위한 구현 가이드
 
+---
+
+## 📌 문서 역할 및 참조 가이드
+
+### 각 문서의 역할
+
+| 문서 | 역할 | 언제 참조? |
+|------|------|-----------|
+| **91_CONFIG_INVENTORY.md** | 하드코딩된 값 목록 (What) | Settings 클래스 필드 정의 시 기본값/타입 확인 |
+| **92_CONFIG_IMPLEMENTATION_GUIDE.md** | 구현 방법 가이드 (How) | **주 작업 문서** - 순서대로 따라가며 구현 |
+| **93_CONFIG_MIGRATION_CHECKLIST.md** | 진행 상황 체크리스트 | 각 단계 완료 시 체크 표시용 |
+
+### 작업 시 문서 참조 흐름
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  92 문서 (이 문서)를 기준으로 순서대로 진행                    │
+│                                                              │
+│  Step 1: 92 문서에서 현재 단계 확인                           │
+│      ↓                                                       │
+│  Step 2: 91 문서에서 해당 카테고리의 설정값 확인               │
+│      ↓                                                       │
+│  Step 3: Settings 클래스 구현                                 │
+│      ↓                                                       │
+│  Step 4: 93 문서에 완료 체크                                  │
+│      ↓                                                       │
+│  Step 5: 다음 단계로 이동 (반복)                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 실행 순서 요약 (한눈에 보기)
+
+### 전체 구현 로드맵
+
+```
+Week 1: CRITICAL (필수)
+├── [1] SecuritySettings (6개 필드)
+├── [2] RecoveryCircuitBreakerSettings (3개 필드)
+├── [3] RedisKeyGuardSettings (2개 필드)
+├── [4] RecoveryShutdownSettings (3개 필드)
+└── [5] ResilientRecorderSettings (7개 필드)
+
+Week 2: HIGH (핵심)
+├── [6] ErrorBudgetSettings (4개 필드)
+├── [7] ErrorBudgetPropagationSettings (3개 필드)
+├── [8] AntiFlappingSettings (4개 필드)
+├── [9] DLQSettings (3개 필드)
+├── [10] ThrottleSettings (5개 필드)
+└── [11] CriticalWorkerSettings (4개 필드)
+
+Week 3: MEDIUM (중요)
+├── [12] ChaosExperimentSettings (3개 필드)
+├── [13] ChaosBlastRadiusSettings (4개 필드)
+├── [14] CorruptionShieldSettings (4개 필드)
+├── [15] NotificationChannelSettings (3개 필드)
+├── [16] CascadeRetentionSettings (3개 필드)
+└── [17] DistributedLockSettings (2개 필드)
+
+Week 4: LOW + 마무리
+├── [18] DashboardSettings (3개 필드)
+├── [19] BatchSettings (3개 필드)
+├── [20] AuditSettings (2개 필드)
+├── [21-26] 나머지 클래스들
+└── API 엔드포인트 및 테스트
+```
+
+### 각 Settings 클래스 구현 시 작업 순서
+
+```
+매 클래스마다 아래 4단계 반복:
+
+[A] Settings 클래스 생성
+    파일: selfhealing/settings/{category}.py
+    참조: 91 문서에서 해당 카테고리 설정값 확인
+    
+[B] constants.py 등록
+    파일: selfhealing/services/runtime_config/constants.py
+    - STORAGE_KEYS에 키 추가
+    - CONFIG_CLASSES에 매핑 추가
+    
+[C] 하드코딩 값 대체
+    파일: 91 문서에 명시된 원본 파일들
+    패턴: get_layered_settings() 사용
+    
+[D] 테스트 실행
+    명령: pytest tests/ -k "해당_클래스명"
+```
+
+---
+
 ## 1. 구현 순서 개요
 
 ```
