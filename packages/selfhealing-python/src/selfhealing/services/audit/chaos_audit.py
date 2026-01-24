@@ -383,6 +383,34 @@ def log_emergency_mode_audit(
     return wal_seq
 
 
+# =============================================================================
+# Error Budget Audit Helpers (Complexity Reduction)
+# =============================================================================
+
+def _extract_trace_id(provided_trace_id: Optional[str]) -> Optional[str]:
+    """Extract trace ID from provided value or current context."""
+    if provided_trace_id is not None:
+        return provided_trace_id
+    try:
+        from selfhealing.audit.trace import get_trace_id
+        return get_trace_id()
+    except (ImportError, Exception):
+        return None
+
+
+def _extract_actor_roles(provided_roles: Optional[list]) -> list:
+    """Extract actor roles from provided value or current context."""
+    if provided_roles is not None:
+        return provided_roles
+    try:
+        from selfhealing.context.actor_context import ActorContext
+        if ActorContext.is_set():
+            return ActorContext.get_current().roles
+    except (ImportError, Exception):
+        pass
+    return []
+
+
 def log_error_budget_blocked_audit(
     action: str,
     gate_status: str,
@@ -390,7 +418,6 @@ def log_error_budget_blocked_audit(
     threshold_percent: Optional[float] = None,
     reason: Optional[str] = None,
     request: Any = None,
-    # 포렌식 필드: 명시적 전달 또는 자동 추출
     blocked_request_trace_id: Optional[str] = None,
     actor_roles: Optional[list] = None,
 ) -> Optional[int]:
@@ -407,48 +434,16 @@ def log_error_budget_blocked_audit(
         threshold_percent: 차단 임계치 (%)
         reason: 차단 사유
         request: Django request 객체 (선택)
-        blocked_request_trace_id: 차단된 요청의 Trace ID.
-                                  None이면 현재 컨텍스트에서 자동 추출.
-        actor_roles: 실행 주체의 역할 목록.
-                    None이면 현재 컨텍스트에서 자동 추출.
+        blocked_request_trace_id: 차단된 요청의 Trace ID (자동 추출 가능)
+        actor_roles: 실행 주체의 역할 목록 (자동 추출 가능)
     
     Returns:
         WAL 시퀀스 번호 (성공 시), None (실패 시)
-    
-    Example:
-        >>> log_error_budget_blocked_audit(
-        ...     action="dlq_auto_replay",
-        ...     gate_status="CRITICAL",
-        ...     error_budget_percent=5.2,
-        ...     threshold_percent=10.0,
-        ...     reason="에러 예산 부족으로 자동 실행 차단",
-        ... )
     """
     import time
     
-    # trace_id 자동 추출 (명시적으로 전달되지 않은 경우)
-    if blocked_request_trace_id is None:
-        try:
-            from selfhealing.audit.trace import get_trace_id
-            blocked_request_trace_id = get_trace_id()
-        except ImportError:
-            pass
-        except Exception:
-            blocked_request_trace_id = None
-    
-    # actor_roles 자동 추출 (명시적으로 전달되지 않은 경우)
-    final_actor_roles = actor_roles
-    if final_actor_roles is None:
-        try:
-            from selfhealing.context.actor_context import ActorContext
-            if ActorContext.is_set():
-                final_actor_roles = ActorContext.get_current().roles
-            else:
-                final_actor_roles = []
-        except ImportError:
-            final_actor_roles = []
-        except Exception:
-            final_actor_roles = []
+    trace_id = _extract_trace_id(blocked_request_trace_id)
+    final_actor_roles = _extract_actor_roles(actor_roles)
     
     details = {
         "action": action,
@@ -457,8 +452,7 @@ def log_error_budget_blocked_audit(
         "threshold_percent": threshold_percent,
         "reason": reason,
         "manual_mode_enforced": True,
-        # 포렌식 필드: 차단 시점의 컨텍스트 정보
-        "blocked_request_trace_id": blocked_request_trace_id,
+        "blocked_request_trace_id": trace_id,
         "actor_roles_at_block": final_actor_roles,
         "blocked_at": time.time(),
     }
@@ -471,15 +465,13 @@ def log_error_budget_blocked_audit(
         success=False,
         error_message=reason,
         target_id=action,
-        # 명시적 전달 (WAL 최상위 레벨에도 기록)
         actor_roles=final_actor_roles,
-        trace_id=blocked_request_trace_id,
+        trace_id=trace_id,
     )
     
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.ERROR_BUDGET_BLOCKED,
@@ -495,7 +487,7 @@ def log_error_budget_blocked_audit(
             pass
     
     budget_str = f"{error_budget_percent:.1f}%" if error_budget_percent is not None else "N/A"
-    trace_str = blocked_request_trace_id[:8] if blocked_request_trace_id else "N/A"
+    trace_str = trace_id[:8] if trace_id else "N/A"
     logger.warning(
         f"[ErrorBudgetAudit] BLOCKED | action={action} | "
         f"budget={budget_str} | status={gate_status} | trace_id={trace_str}"

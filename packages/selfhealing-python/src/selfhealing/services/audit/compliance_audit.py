@@ -23,6 +23,40 @@ from selfhealing.services.audit.base import _write_to_wal, _try_add_to_buffer
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Security Audit Helpers (Complexity Reduction)
+# =============================================================================
+
+# Event type mapping based on action
+_SECURITY_EVENT_TYPE_MAP = {
+    "block_ip": "SECURITY_IP_BLOCKED",
+    "invalidate_session": "SECURITY_SESSION_INVALIDATED",
+}
+
+
+def _get_security_event_type(action: str) -> str:
+    """Get event type based on action."""
+    return _SECURITY_EVENT_TYPE_MAP.get(action, "SECURITY_VIOLATION")
+
+
+def _get_buffer_event_type(action: str):
+    """Get buffer event type based on action."""
+    from selfhealing.audit.event_buffer import AuditEventType
+    
+    mapping = {
+        "block_ip": AuditEventType.SECURITY_IP_BLOCKED,
+        "invalidate_session": AuditEventType.SECURITY_SESSION_INVALIDATED,
+    }
+    return mapping.get(action, AuditEventType.SECURITY_VIOLATION)
+
+
+def _log_security_event(event_type: str, violation_type: str, action: str, target: str, result: str, severity: str):
+    """Log security event with appropriate level based on severity."""
+    log_msg = f"[SecurityAudit] {event_type} | type={violation_type} | action={action} | target={target} | result={result}"
+    severity_logger = {"critical": logger.critical, "high": logger.warning}.get(severity, logger.info)
+    severity_logger(log_msg)
+
+
 def log_security_violation_audit(
     violation_type: str,
     action: str,
@@ -38,9 +72,6 @@ def log_security_violation_audit(
 ) -> Optional[int]:
     """
     보안 위반 처리 이벤트를 Audit 로그에 기록.
-    
-    보안 위반 감지, IP 차단, 세션 무효화 등의 보안 조치를 기록합니다.
-    WAL 기반 누락 0 보장.
     
     Args:
         violation_type: 위반 유형 (e.g., "token_forged", "injection_attempt")
@@ -73,66 +104,38 @@ def log_security_violation_audit(
         audit_details["extra_details"] = details
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
     
-    # 이벤트 타입 결정: action에 따라 세분화
-    if action == "block_ip":
-        event_type = "SECURITY_IP_BLOCKED"
-    elif action == "invalidate_session":
-        event_type = "SECURITY_SESSION_INVALIDATED"
-    else:
-        event_type = "SECURITY_VIOLATION"
-    
+    event_type = _get_security_event_type(action)
     success = result == "success"
+    error_message = None if success else f"Security action failed: {result}"
+    target_id = str(incident_id) if incident_id else None
     
     wal_seq = _write_to_wal(
         event_type=event_type,
         source="SecurityViolationService",
         details=audit_details,
         success=success,
-        error_message=None if success else f"Security action failed: {result}",
-        target_id=str(incident_id) if incident_id else None,
+        error_message=error_message,
+        target_id=target_id,
     )
     
     if request is not None:
         try:
-            from selfhealing.audit.event_buffer import AuditEventType
-            
-            if action == "block_ip":
-                buffer_event_type = AuditEventType.SECURITY_IP_BLOCKED
-            elif action == "invalidate_session":
-                buffer_event_type = AuditEventType.SECURITY_SESSION_INVALIDATED
-            else:
-                buffer_event_type = AuditEventType.SECURITY_VIOLATION
-            
+            buffer_event_type = _get_buffer_event_type(action)
             added = _try_add_to_buffer(
                 request=request,
                 event_type=buffer_event_type,
                 source="SecurityViolationService",
                 details=audit_details,
                 success=success,
-                error_message=None if success else f"Security action failed: {result}",
-                target_id=str(incident_id) if incident_id else None,
+                error_message=error_message,
+                target_id=target_id,
             )
             if added:
                 return wal_seq
         except ImportError:
             pass
     
-    # 보안 이벤트는 심각도에 따라 로그 레벨 결정
-    if severity == "critical":
-        logger.critical(
-            f"[SecurityAudit] {event_type} | type={violation_type} | "
-            f"action={action} | target={target} | result={result}"
-        )
-    elif severity == "high":
-        logger.warning(
-            f"[SecurityAudit] {event_type} | type={violation_type} | "
-            f"action={action} | target={target} | result={result}"
-        )
-    else:
-        logger.info(
-            f"[SecurityAudit] {event_type} | type={violation_type} | "
-            f"action={action} | target={target} | result={result}"
-        )
+    _log_security_event(event_type, violation_type, action, target, result, severity)
     
     return wal_seq
 

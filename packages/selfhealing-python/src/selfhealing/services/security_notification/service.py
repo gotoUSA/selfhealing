@@ -156,6 +156,43 @@ class SecurityNotificationService(
             action_taken=getattr(incident, "action_taken", ""),
         )
 
+    # =========================================================================
+    # Alert Channel Handlers (Complexity Reduction)
+    # =========================================================================
+
+    def _get_slack_channel_for_severity(self, severity: str) -> str:
+        """Get appropriate Slack channel based on severity."""
+        channel_map = {
+            "critical": self.config.slack_critical_channel,
+            "warning": self.config.slack_high_channel,
+            "high": self.config.slack_high_channel,
+        }
+        return channel_map.get(severity, self.config.slack_medium_channel)
+
+    def _send_to_slack(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+        """Send alert to Slack channel."""
+        channel = self._get_slack_channel_for_severity(severity)
+        result.add_result(self._send_slack_alert(formatted_message, channel))
+
+    def _send_to_email(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+        """Send alert to email recipients."""
+        recipients = (
+            self.config.email_critical_recipients if severity == "critical" 
+            else self.config.email_high_recipients
+        )
+        if recipients:
+            result.add_result(self._send_email_alert(formatted_message, recipients))
+
+    def _send_to_sms(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+        """Send SMS alert for critical severity."""
+        if severity == "critical" and self.config.sms_critical_recipients:
+            result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
+
+    def _send_to_pagerduty(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+        """Send PagerDuty alert for critical severity."""
+        if severity == "critical" and self.config.pagerduty_enabled:
+            result.add_result(self._send_pagerduty_alert(formatted_message))
+
     def send_alert(
         self,
         title: str,
@@ -167,9 +204,6 @@ class SecurityNotificationService(
         """
         Send a general-purpose alert notification.
 
-        This method is for alerts that are not tied to a specific security incident,
-        such as SLA drift warnings, system health alerts, or operational notifications.
-
         Args:
             title: Alert title (short summary)
             message: Alert message (detailed description)
@@ -179,15 +213,6 @@ class SecurityNotificationService(
 
         Returns:
             SecurityNotificationResult with results from all channels
-
-        Example:
-            service = get_security_notification_service()
-            service.send_alert(
-                title="[SLA Drift] payment",
-                message="SLA 위반율이 25%입니다.",
-                severity="warning",
-                metadata={"domain": "payment", "breach_rate": 25.0}
-            )
         """
         if not self.config.enabled:
             logger.debug("[Security Notification] Notifications disabled")
@@ -199,50 +224,30 @@ class SecurityNotificationService(
 
         from selfhealing.core.timezone import now
 
-        # Get notification limits from config (not deprecated constants)
         limits = _get_notification_limits()
-        title_max = limits.title_max_length
-        description_max = limits.description_max_length
-
-        # Format message for Slack
         formatted_message = {
-            "title": self._truncate_with_ellipsis(title, title_max),
+            "title": self._truncate_with_ellipsis(title, limits.title_max_length),
             "severity": severity.upper(),
-            "description": self._truncate_with_ellipsis(message, description_max),
+            "description": self._truncate_with_ellipsis(message, limits.description_max_length),
             "detected_at": now().isoformat(),
             "metadata": metadata,
         }
 
-        # Determine channel based on severity
-        if "slack" in channels:
-            if severity == "critical":
-                channel = self.config.slack_critical_channel
-            elif severity in ("warning", "high"):
-                channel = self.config.slack_high_channel
-            else:
-                channel = self.config.slack_medium_channel
-            result.add_result(self._send_slack_alert(formatted_message, channel))
+        # Channel handlers
+        channel_handlers = {
+            "slack": self._send_to_slack,
+            "email": self._send_to_email,
+            "sms": self._send_to_sms,
+            "pagerduty": self._send_to_pagerduty,
+        }
 
-        if "email" in channels:
-            if severity == "critical":
-                recipients = self.config.email_critical_recipients
-            else:
-                recipients = self.config.email_high_recipients
-            if recipients:
-                result.add_result(self._send_email_alert(formatted_message, recipients))
+        for channel in channels:
+            handler = channel_handlers.get(channel)
+            if handler:
+                handler(formatted_message, severity, result)
 
-        if "sms" in channels and severity == "critical":
-            if self.config.sms_critical_recipients:
-                result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
-
-        if "pagerduty" in channels and severity == "critical":
-            if self.config.pagerduty_enabled:
-                result.add_result(self._send_pagerduty_alert(formatted_message))
-
-        # Log results
         success_count = sum(1 for r in result.results if r.success)
-        total_count = len(result.results)
-        logger.info(f"[Security Notification] Alert '{title}': {success_count}/{total_count} notifications sent")
+        logger.info(f"[Security Notification] Alert '{title}': {success_count}/{len(result.results)} notifications sent")
 
         return result
 

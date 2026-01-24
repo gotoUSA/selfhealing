@@ -206,6 +206,59 @@ def _extract_service_name(task_name: str, exception: Optional[Exception] = None)
 _signals_connected = False
 
 
+def _should_store_to_dlq(sender) -> bool:
+    """Determine if failed task should be stored to DLQ."""
+    request = sender.request if sender else None
+    retries = getattr(request, "retries", 0) if request else 0
+    max_retries = getattr(sender, "max_retries", None) if sender else None
+    
+    # Store to DLQ if:
+    # 1. max_retries is None or 0 (no retry configured)
+    # 2. retries >= max_retries (all retries exhausted)
+    return max_retries is None or max_retries == 0 or retries >= max_retries
+
+
+def _handle_task_failure_internal(
+    sender, task_id: str, exception: Exception,
+    args: tuple, kwargs: dict, einfo: Any,
+) -> None:
+    """Internal handler for task failure - separated for complexity reduction."""
+    task_name = sender.name if sender else "unknown"
+    domain = _extract_domain_from_task_name(task_name)
+    service_name = _extract_service_name(task_name, exception)
+
+    # 1. Circuit Breaker: Record failure
+    if _config.cb_enabled:
+        _record_circuit_breaker_failure(service_name, task_name, exception)
+
+    # 2. DLQ: Store failed operation (if max retries exceeded)
+    if _config.dlq_enabled and _should_store_to_dlq(sender):
+        _store_to_dlq(
+            domain=domain,
+            task_name=task_name,
+            task_id=task_id,
+            exception=exception,
+            args=args,
+            kwargs=kwargs,
+            einfo=einfo,
+        )
+
+    # 3. Metrics: Record failure
+    if _config.metrics_enabled:
+        _record_failure_metrics(domain, task_name, exception)
+
+    # 4. Forensics: Capture context
+    if _config.forensics_enabled:
+        _capture_forensic_context(
+            task_name=task_name,
+            task_id=task_id,
+            exception=exception,
+            args=args,
+            kwargs=kwargs,
+            einfo=einfo,
+        )
+
+
 @task_failure.connect
 def on_task_failure(
     sender=None,
@@ -242,51 +295,7 @@ def on_task_failure(
     )
 
     try:
-        domain = _extract_domain_from_task_name(task_name)
-        service_name = _extract_service_name(task_name, exception)
-
-        # 1. Circuit Breaker: Record failure
-        if _config.cb_enabled:
-            _record_circuit_breaker_failure(service_name, task_name, exception)
-
-        # 2. DLQ: Store failed operation
-        if _config.dlq_enabled:
-            # Check if this is the final retry (max retries exceeded)
-            request = sender.request if sender else None
-            retries = getattr(request, "retries", 0) if request else 0
-            max_retries = getattr(sender, "max_retries", None) if sender else None
-
-            # Store to DLQ if:
-            # 1. max_retries is None or 0 (no retry configured)
-            # 2. retries >= max_retries (all retries exhausted)
-            should_store = max_retries is None or max_retries == 0 or retries >= max_retries
-
-            if should_store:
-                _store_to_dlq(
-                    domain=domain,
-                    task_name=task_name,
-                    task_id=task_id,
-                    exception=exception,
-                    args=args,
-                    kwargs=kwargs,
-                    einfo=einfo,
-                )
-
-        # 3. Metrics: Record failure
-        if _config.metrics_enabled:
-            _record_failure_metrics(domain, task_name, exception)
-
-        # 4. Forensics: Capture context
-        if _config.forensics_enabled:
-            _capture_forensic_context(
-                task_name=task_name,
-                task_id=task_id,
-                exception=exception,
-                args=args,
-                kwargs=kwargs,
-                einfo=einfo,
-            )
-
+        _handle_task_failure_internal(sender, task_id, exception, args, kwargs, einfo)
     except Exception as e:
         # Never let signal handler crash affect task execution
         logger.error(f"[SelfHealing Signal] Error in failure handler: {e}")
@@ -727,40 +736,41 @@ def _store_to_dlq(
         logger.error(f"[SelfHealing DLQ] Failed to store: {e}")
 
 
+# =============================================================================
+# Failure Classification (Complexity Reduction via Pattern Matching)
+# =============================================================================
+
+# Exception type name patterns → failure type
+_EXCEPTION_TYPE_PATTERNS = {
+    "NETWORK_ERROR": ["connection", "timeout", "network", "socket"],
+}
+
+# Exception message patterns → failure type (order matters, first match wins)
+_EXCEPTION_MESSAGE_PATTERNS = [
+    (["rate limit", "too many requests", "429"], "RATE_LIMITED"),
+    (["auth", "unauthorized", "401", "403"], "AUTH_ERROR"),
+    (["validation", "invalid", "400"], "VALIDATION_ERROR"),
+    (["502", "503", "504", "bad gateway"], "EXTERNAL_SERVICE_ERROR"),
+    (["gateway", "provider", "external"], "GATEWAY_ERROR"),
+    (["timeout"], "TIMEOUT"),
+    (["connection"], "CONNECTION_ERROR"),
+]
+
+
 def _classify_failure_type(exception: Exception) -> str:
-    """Classify exception into failure type."""
-    exc_type = type(exception).__name__
+    """Classify exception into failure type using pattern matching."""
+    exc_type = type(exception).__name__.lower()
     exc_str = str(exception).lower()
 
-    # Network/Connection errors
-    if any(keyword in exc_type.lower() for keyword in ["connection", "timeout", "network", "socket"]):
-        return "NETWORK_ERROR"
+    # Check exception type name patterns
+    for failure_type, keywords in _EXCEPTION_TYPE_PATTERNS.items():
+        if any(keyword in exc_type for keyword in keywords):
+            return failure_type
 
-    if "timeout" in exc_str:
-        return "TIMEOUT"
-
-    if "connection" in exc_str:
-        return "CONNECTION_ERROR"
-
-    # Rate limit errors
-    if any(keyword in exc_str for keyword in ["rate limit", "too many requests", "429"]):
-        return "RATE_LIMITED"
-
-    # Authentication errors
-    if any(keyword in exc_str for keyword in ["auth", "unauthorized", "401", "403"]):
-        return "AUTH_ERROR"
-
-    # Validation errors
-    if any(keyword in exc_str for keyword in ["validation", "invalid", "400"]):
-        return "VALIDATION_ERROR"
-
-    # External service errors
-    if any(keyword in exc_str for keyword in ["502", "503", "504", "bad gateway"]):
-        return "EXTERNAL_SERVICE_ERROR"
-
-    # Domain-specific errors (customize via configuration)
-    if any(keyword in exc_str for keyword in ["gateway", "provider", "external"]):
-        return "GATEWAY_ERROR"
+    # Check exception message patterns
+    for keywords, failure_type in _EXCEPTION_MESSAGE_PATTERNS:
+        if any(keyword in exc_str for keyword in keywords):
+            return failure_type
 
     return "UNKNOWN_ERROR"
 

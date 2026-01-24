@@ -298,6 +298,65 @@ class CanaryRolloutDetailView(APIView):
         })
 
 
+# =============================================================================
+# Action Handlers for CanaryRolloutActionView (Complexity Reduction)
+# =============================================================================
+
+def _action_start(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle start action."""
+    success = service.start_rollout(rollout_id)
+    error_msg = None if success else f"Cannot start rollout in state: {rollout.state.value}"
+    return success, error_msg
+
+
+def _action_promote(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle promote action."""
+    force = request.data.get("force", False)
+    success = service.promote(rollout_id, force=force)
+    error_msg = None if success else "Promotion failed - check metrics or state"
+    return success, error_msg
+
+
+def _action_rollback(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle rollback action."""
+    reason = request.data.get("reason", f"Manual rollback by {_get_username(request)}")
+    success = service.rollback(rollout_id, reason=reason)
+    error_msg = None if success else "Rollback failed - rollout may be in terminal state"
+    return success, error_msg
+
+
+def _action_pause(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle pause action."""
+    success = service.pause(rollout_id)
+    error_msg = None if success else "Cannot pause - rollout is not in CANARY state"
+    return success, error_msg
+
+
+def _action_resume(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle resume action."""
+    success = service.resume(rollout_id)
+    error_msg = None if success else "Cannot resume - rollout is not in PAUSED state"
+    return success, error_msg
+
+
+def _action_cancel(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
+    """Handle cancel action."""
+    success = service.cancel(rollout_id)
+    error_msg = None if success else "Cannot cancel - rollout may be in terminal state"
+    return success, error_msg
+
+
+# Action handler registry
+_ACTION_HANDLERS = {
+    "start": _action_start,
+    "promote": _action_promote,
+    "rollback": _action_rollback,
+    "pause": _action_pause,
+    "resume": _action_resume,
+    "cancel": _action_cancel,
+}
+
+
 class CanaryRolloutActionView(APIView):
     """
     Canary 롤아웃 액션 API.
@@ -318,7 +377,7 @@ class CanaryRolloutActionView(APIView):
     """
     permission_classes = [IsSelfHealingAdmin]
     
-    VALID_ACTIONS = ["start", "promote", "rollback", "pause", "resume", "cancel"]
+    VALID_ACTIONS = list(_ACTION_HANDLERS.keys())
     
     def post(self, request: Request, rollout_id: str, action: str) -> Response:
         """롤아웃 액션 실행."""
@@ -341,45 +400,9 @@ class CanaryRolloutActionView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         
-        # 액션 실행
-        success = False
-        error_message = None
-        
         try:
-            if action == "start":
-                success = service.start_rollout(rollout_id)
-                if not success:
-                    error_message = f"Cannot start rollout in state: {rollout.state.value}"
-                    
-            elif action == "promote":
-                force = request.data.get("force", False)
-                success = service.promote(rollout_id, force=force)
-                if not success:
-                    error_message = "Promotion failed - check metrics or state"
-                    
-            elif action == "rollback":
-                reason = request.data.get(
-                    "reason", f"Manual rollback by {_get_username(request)}"
-                )
-                success = service.rollback(rollout_id, reason=reason)
-                if not success:
-                    error_message = "Rollback failed - rollout may be in terminal state"
-                    
-            elif action == "pause":
-                success = service.pause(rollout_id)
-                if not success:
-                    error_message = "Cannot pause - rollout is not in CANARY state"
-                    
-            elif action == "resume":
-                success = service.resume(rollout_id)
-                if not success:
-                    error_message = "Cannot resume - rollout is not in PAUSED state"
-                    
-            elif action == "cancel":
-                success = service.cancel(rollout_id)
-                if not success:
-                    error_message = "Cannot cancel - rollout may be in terminal state"
-                    
+            handler = _ACTION_HANDLERS[action]
+            success, error_message = handler(service, rollout_id, rollout, request)
         except Exception as e:
             logger.exception(f"[CanaryAPI] Action failed: {action}")
             return Response(

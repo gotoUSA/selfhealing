@@ -296,6 +296,80 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
             )
 
 
+# =============================================================================
+# Postmortem Generation Helpers (Complexity Reduction)
+# =============================================================================
+
+def _collect_service_states(cb_service) -> tuple[list, list]:
+    """Collect affected and unaffected services from CB states."""
+    all_states = cb_service.repository.get_all_states()
+    affected = [s.service_name for s in all_states if s.state == "open"]
+    unaffected = [s.service_name for s in all_states if s.state != "open"]
+    return affected, unaffected
+
+
+def _build_timeline(history: list, local_events: list) -> list:
+    """Build sorted timeline from history and local events."""
+    timeline = []
+    
+    # CB 상태 변경 이벤트 필터링
+    cb_events = [
+        e for e in history
+        if "circuit_breaker" in e.get("event_type", "").lower() 
+        or e.get("data", {}).get("state_change")
+    ]
+    
+    for e in cb_events[:20]:
+        timeline.append({
+            "timestamp": e.get("timestamp"),
+            "event_type": e.get("event_type"),
+            "details": e.get("data", {}),
+        })
+    
+    for e in local_events:
+        timeline.append({
+            "timestamp": e.get("recorded_at"),
+            "event_type": e.get("event_type"),
+            "details": e,
+        })
+    
+    timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
+    return timeline
+
+
+def _generate_postmortem_data(
+    incident_id: str, timeline: list, affected: list, 
+    unaffected: list, fast_fail_count: int, snapshot: dict
+) -> dict:
+    """Generate postmortem data structure."""
+    return {
+        "incident_id": incident_id,
+        "generated_at": timezone.now().isoformat(),
+        "started_at": timeline[0]["timestamp"] if timeline else None,
+        "resolved_at": timezone.now().isoformat(),
+        "duration_seconds": None,
+        "summary": {
+            "affected_services": affected,
+            "unaffected_services": unaffected,
+            "fast_fail_count": fast_fail_count,
+            "total_events": len(timeline),
+        },
+        "timeline": timeline[:30],
+        "system_snapshot": snapshot,
+        "auto_actions": [
+            "✅ Circuit Breaker 자동 감지",
+            "✅ Fast Fail 활성화",
+            "✅ 연쇄 장애 차단 (Blast Radius 격리)",
+            "✅ 자동 복구 시도",
+        ],
+        "recommendations": [
+            "장애 근본 원인 분석 필요",
+            "복구 시간 개선 검토",
+            "모니터링 알림 설정 확인",
+        ],
+    }
+
+
 class PostmortemGeneratorView(XTestModeMixin, APIView):
     """
     Stage 51: 자동 Post-mortem 리포트 생성 API.
@@ -317,90 +391,28 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
         incident_id = request.data.get("incident_id")
 
         try:
-            # 최근 이벤트 수집
             from selfhealing.services.event_bus import get_event_bus
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
             bus = get_event_bus()
             history = bus.get_history(limit=100)
-
             cb_service = get_circuit_breaker_service()
 
-            # 현재 상태 수집
-            all_states = cb_service.repository.get_all_states()
-
-            affected_services = []
-            unaffected_services = []
-
-            for state in all_states:
-                if state.state == "open":
-                    affected_services.append(state.service_name)
-                else:
-                    unaffected_services.append(state.service_name)
-
-            # 스냅샷 수집
+            affected, unaffected = _collect_service_states(cb_service)
             snapshot = collect_system_snapshot()
-
-            # CB 상태 변경 이벤트 필터링
-            cb_events = [
-                e
-                for e in history
-                if "circuit_breaker" in e.get("event_type", "").lower() or e.get("data", {}).get("state_change")
-            ]
-
-            # 타임라인 생성
-            timeline = []
-            for e in cb_events[:20]:
-                timeline.append(
-                    {"timestamp": e.get("timestamp"), "event_type": e.get("event_type"), "details": e.get("data", {})}
-                )
-
-            # 로컬 이벤트 추가
             local_events = get_healing_events(20)
+            timeline = _build_timeline(history, local_events)
 
-            for e in local_events:
-                timeline.append({"timestamp": e.get("recorded_at"), "event_type": e.get("event_type"), "details": e})
-
-            # 시간순 정렬
-            timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
-
-            # 인시던트 ID 생성
             if not incident_id:
                 incident_id = f"HEAL-{timezone.now().strftime('%Y-%m%d-%H%M')}"
 
-            # Fast Fail 통계 (추정)
             fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
 
-            postmortem = {
-                "incident_id": incident_id,
-                "generated_at": timezone.now().isoformat(),
-                "started_at": timeline[0]["timestamp"] if timeline else None,
-                "resolved_at": timezone.now().isoformat(),
-                "duration_seconds": None,
-                "summary": {
-                    "affected_services": affected_services,
-                    "unaffected_services": unaffected_services,
-                    "fast_fail_count": fast_fail_count,
-                    "total_events": len(timeline),
-                },
-                "timeline": timeline[:30],
-                "system_snapshot": snapshot,
-                "auto_actions": [
-                    "✅ Circuit Breaker 자동 감지",
-                    "✅ Fast Fail 활성화",
-                    "✅ 연쇄 장애 차단 (Blast Radius 격리)",
-                    "✅ 자동 복구 시도",
-                ],
-                "recommendations": [
-                    "장애 근본 원인 분석 필요",
-                    "복구 시간 개선 검토",
-                    "모니터링 알림 설정 확인",
-                ],
-            }
+            postmortem = _generate_postmortem_data(
+                incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
+            )
 
-            # 인시던트 기록
             add_healing_incident(postmortem)
-
             logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
 
             return Response({"status": "success", "postmortem": postmortem, "timestamp": timezone.now().isoformat()})

@@ -996,14 +996,56 @@ class ChaosExperiment(abc.ABC):
     # Internal Helpers
     # =========================================================================
     
+    def _handle_ttl_expiry(self) -> bool:
+        """Handle TTL expiry. Returns True if expired."""
+        if not self.is_expired():
+            return False
+        
+        logger.warning(f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping")
+        self._kill_requested = True
+        self._stop_condition_violation = "TTL expired"
+        self._audit("auto_abort_ttl_expired", {
+            "expires_at": self._expires_at.isoformat() if self._expires_at else "",
+            "ttl_seconds": self._effective_ttl,
+        })
+        return True
+    
+    def _handle_stop_condition_check(self, stop_checker) -> bool:
+        """Check stop conditions. Returns True if should stop."""
+        stop_result = stop_checker.check(
+            experiment_id=self.experiment_id,
+            target_service=self.config.target_service,
+        )
+        if not stop_result.should_stop:
+            return False
+        
+        violation_messages = [v.message for v in stop_result.violations]
+        logger.error(
+            f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}"
+        )
+        self._kill_requested = True
+        self._stop_condition_violation = "; ".join(violation_messages)
+        self._audit("auto_abort_stop_condition", {
+            "violations": [v.to_dict() for v in stop_result.violations],
+            "consecutive_breaches": stop_result.consecutive_breach_count,
+        })
+        return True
+    
+    def _handle_sla_breach_fallback(self) -> bool:
+        """Handle SLA breach when no stop checker. Returns True if should stop."""
+        if not self.config.auto_rollback_on_sla_breach:
+            return False
+        if not self._check_sla_breach():
+            return False
+        
+        self._kill_requested = True
+        self._stop_condition_violation = "SLA breach threshold exceeded"
+        self._audit("auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"})
+        return True
+    
     def _monitor_with_kill_switch(self) -> Dict[str, int]:
         """Monitor experiment impact with periodic kill switch check."""
-        metrics = {
-            "total_requests": 0,
-            "errors_injected": 0,
-            "sla_breaches": 0,
-        }
-        
+        metrics = {"total_requests": 0, "errors_injected": 0, "sla_breaches": 0}
         duration = self.config.duration_seconds or self.default_duration_seconds
         poll_interval = min(5.0, duration / 10)
         elapsed = 0.0
@@ -1018,43 +1060,19 @@ class ChaosExperiment(abc.ABC):
             if self._kill_requested:
                 break
             
-            if self.is_expired():
-                logger.warning(f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping")
-                self._kill_requested = True
-                self._stop_condition_violation = "TTL expired"
-                self._audit("auto_abort_ttl_expired", {
-                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
-                    "ttl_seconds": self._effective_ttl,
-                })
+            if self._handle_ttl_expiry():
                 break
             
             current_metrics = self._collect_impact_metrics()
             for key in metrics:
                 metrics[key] += current_metrics.get(key, 0)
             
-            if stop_checker:
-                stop_result = stop_checker.check(
-                    experiment_id=self.experiment_id,
-                    target_service=self.config.target_service,
-                )
-                if stop_result.should_stop:
-                    violation_messages = [v.message for v in stop_result.violations]
-                    logger.error(
-                        f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}"
-                    )
-                    self._kill_requested = True
-                    self._stop_condition_violation = "; ".join(violation_messages)
-                    self._audit("auto_abort_stop_condition", {
-                        "violations": [v.to_dict() for v in stop_result.violations],
-                        "consecutive_breaches": stop_result.consecutive_breach_count,
-                    })
-                    break
-            elif self.config.auto_rollback_on_sla_breach:
-                if self._check_sla_breach():
-                    self._kill_requested = True
-                    self._stop_condition_violation = "SLA breach threshold exceeded"
-                    self._audit("auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"})
-                    break
+            should_stop = (
+                self._handle_stop_condition_check(stop_checker) if stop_checker
+                else self._handle_sla_breach_fallback()
+            )
+            if should_stop:
+                break
             
             time.sleep(poll_interval)
             elapsed += poll_interval

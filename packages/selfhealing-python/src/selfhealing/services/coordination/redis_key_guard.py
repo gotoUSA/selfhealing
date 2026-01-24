@@ -385,6 +385,30 @@ class RedisKeyPriorityEviction:
             "keys_without_ttl": info.keys_total - info.keys_with_ttl,
         }
     
+    def _delete_keys_by_pattern(
+        self,
+        redis_client,
+        pattern: str,
+        target_used: float,
+        counter_key: str,
+        result: Dict[str, int],
+    ) -> bool:
+        """Delete keys matching pattern until target usage reached. Returns True if target reached."""
+        try:
+            for key in redis_client.scan_iter(pattern):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                if not self.should_protect_key(key_str):
+                    redis_client.delete(key)
+                    result[counter_key] += 1
+                    
+                    if result[counter_key] % 100 == 0:
+                        info = self.get_memory_info(redis_client)
+                        if info.used_percent <= target_used:
+                            return True
+        except Exception as e:
+            logger.error(f"[RedisKeyPriorityEviction] {counter_key} cleanup error: {e}")
+        return False
+    
     def emergency_cleanup(
         self,
         redis_client,
@@ -421,39 +445,17 @@ class RedisKeyPriorityEviction:
         )
         
         # P4 키 삭제 (audit 7일 경과)
-        try:
-            for key in redis_client.scan_iter("audit:event:*"):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                if not self.should_protect_key(key_str):
-                    redis_client.delete(key)
-                    result["deleted_p4"] += 1
-                    
-                    # 중간 체크
-                    if result["deleted_p4"] % 100 == 0:
-                        info = self.get_memory_info(redis_client)
-                        if info.used_percent <= target_used:
-                            break
-        except Exception as e:
-            logger.error(f"[RedisKeyPriorityEviction] P4 cleanup error: {e}")
+        if self._delete_keys_by_pattern(redis_client, "audit:event:*", target_used, "deleted_p4", result):
+            return result
         
         # 메모리 확인 후 P3도 필요 시 삭제
         info = self.get_memory_info(redis_client)
         
         if info.used_percent > target_used:
-            try:
-                for pattern in ["cache:*", "metrics:*", "temp:*"]:
-                    for key in redis_client.scan_iter(pattern):
-                        key_str = key.decode() if isinstance(key, bytes) else key
-                        if not self.should_protect_key(key_str):
-                            redis_client.delete(key)
-                            result["deleted_p3"] += 1
-                            
-                            if result["deleted_p3"] % 100 == 0:
-                                info = self.get_memory_info(redis_client)
-                                if info.used_percent <= target_used:
-                                    break
-            except Exception as e:
-                logger.error(f"[RedisKeyPriorityEviction] P3 cleanup error: {e}")
+            p3_patterns = ["cache:*", "metrics:*", "temp:*"]
+            for pattern in p3_patterns:
+                if self._delete_keys_by_pattern(redis_client, pattern, target_used, "deleted_p3", result):
+                    break
         
         logger.warning(
             f"[RedisKeyPriorityEviction] Emergency cleanup completed: "

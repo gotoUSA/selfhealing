@@ -365,6 +365,47 @@ def heavy_concurrent_query(request):
 # "특정 비즈니스 테이블을 건드리지 않고도 pg_advisory_lock으로 완벽한 비침투적 테스트"
 # =============================================================================
 
+def _try_acquire_lock(cursor, lock_id: int, exclusive: bool, wait: bool) -> bool:
+    """Try to acquire advisory lock. Returns True if acquired."""
+    if exclusive:
+        if wait:
+            cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
+            return True
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
+    else:
+        if wait:
+            cursor.execute("SELECT pg_advisory_lock_shared(%s)", [lock_id])
+            return True
+        cursor.execute("SELECT pg_try_advisory_lock_shared(%s)", [lock_id])
+    
+    result = cursor.fetchone()
+    return result[0] if result else False
+
+
+def _release_lock(cursor, lock_id: int, exclusive: bool) -> None:
+    """Release advisory lock."""
+    if exclusive:
+        cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
+    else:
+        cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
+
+
+def _parse_lock_request_body(request) -> dict:
+    """Parse lock request body with defaults."""
+    import json
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        body = {}
+    
+    return {
+        "lock_id": int(body.get("lock_id", 12345)),
+        "hold_seconds": min(int(body.get("hold_seconds", 5)), 60),
+        "exclusive": body.get("exclusive", True),
+        "wait": body.get("wait", True),
+    }
+
+
 @csrf_exempt
 def advisory_lock_acquire(request):
     """
@@ -391,42 +432,17 @@ def advisory_lock_acquire(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     
-    import json
-    try:
-        body = json.loads(request.body) if request.body else {}
-    except json.JSONDecodeError:
-        body = {}
-    
-    lock_id = int(body.get("lock_id", 12345))
-    hold_seconds = min(int(body.get("hold_seconds", 5)), 60)  # 최대 60초
-    exclusive = body.get("exclusive", True)
-    wait = body.get("wait", True)
+    params = _parse_lock_request_body(request)
+    lock_id = params["lock_id"]
+    hold_seconds = params["hold_seconds"]
+    exclusive = params["exclusive"]
+    wait = params["wait"]
     
     start = time.time()
-    lock_acquired = False
     
     try:
         with connection.cursor() as cursor:
-            # 락 획득 시도
-            if exclusive:
-                if wait:
-                    # 대기 모드: 락 획득까지 블로킹
-                    cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
-                    lock_acquired = True
-                else:
-                    # 비대기 모드: 즉시 성공/실패 반환
-                    cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
-                    result = cursor.fetchone()
-                    lock_acquired = result[0] if result else False
-            else:
-                # 공유 락 (Shared Lock)
-                if wait:
-                    cursor.execute("SELECT pg_advisory_lock_shared(%s)", [lock_id])
-                    lock_acquired = True
-                else:
-                    cursor.execute("SELECT pg_try_advisory_lock_shared(%s)", [lock_id])
-                    result = cursor.fetchone()
-                    lock_acquired = result[0] if result else False
+            lock_acquired = _try_acquire_lock(cursor, lock_id, exclusive, wait)
             
             if not lock_acquired:
                 elapsed = time.time() - start
@@ -441,15 +457,10 @@ def advisory_lock_acquire(request):
                     status=409,
                 )
             
-            # 락 유지
             logger.info(f"[AdvisoryLock] Lock {lock_id} acquired, holding for {hold_seconds}s")
             time.sleep(hold_seconds)
             
-            # 락 해제
-            if exclusive:
-                cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-            else:
-                cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
+            _release_lock(cursor, lock_id, exclusive)
         
         elapsed = time.time() - start
         logger.info(f"[AdvisoryLock] Lock {lock_id} released after {elapsed:.2f}s")

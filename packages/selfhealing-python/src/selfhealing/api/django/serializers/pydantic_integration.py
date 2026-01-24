@@ -9,10 +9,93 @@ DRF Serializer 자동 생성 및 Pydantic 모델 통합.
 - 중복 코드 제거
 """
 
-from typing import Any, Dict, Type, Optional
+from typing import Any, Dict, Type, Optional, Callable
 
 from pydantic import BaseModel
 from rest_framework import serializers
+
+
+# =============================================================================
+# Type Handlers for pydantic_schema_to_drf_field (Complexity Reduction)
+# =============================================================================
+
+def _add_numeric_constraints(kwargs: Dict[str, Any], props: Dict[str, Any]) -> None:
+    """Add min/max constraints for numeric fields."""
+    if "minimum" in props:
+        kwargs["min_value"] = props["minimum"]
+    if "maximum" in props:
+        kwargs["max_value"] = props["maximum"]
+
+
+def _handle_integer(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle integer type."""
+    _add_numeric_constraints(kwargs, props)
+    return serializers.IntegerField(**kwargs)
+
+
+def _handle_number(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle number (float) type."""
+    _add_numeric_constraints(kwargs, props)
+    return serializers.FloatField(**kwargs)
+
+
+def _handle_boolean(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle boolean type."""
+    return serializers.BooleanField(**kwargs)
+
+
+def _handle_string(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle string type."""
+    if "maxLength" in props:
+        kwargs["max_length"] = props["maxLength"]
+    if "enum" in props:
+        kwargs["choices"] = props["enum"]
+        return serializers.ChoiceField(**kwargs)
+    return serializers.CharField(**kwargs)
+
+
+def _handle_array(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle array type."""
+    items = props.get("items", {})
+    kwargs.pop("help_text", None)  # ListField doesn't take help_text on child
+    
+    # Handle $ref or complex items (skip and use generic ListField)
+    if not isinstance(items, dict) or "$ref" in items:
+        return serializers.ListField(child=serializers.DictField(), **kwargs)
+    
+    child_field = pydantic_schema_to_drf_field(items, f"{field_name}_item", required=False)
+    return serializers.ListField(child=child_field, **kwargs)
+
+
+def _get_child_serializer_for_type(child_type: str) -> serializers.Field:
+    """Get child serializer based on type string."""
+    type_mapping = {
+        "integer": serializers.IntegerField,
+        "number": serializers.FloatField,
+        "boolean": serializers.BooleanField,
+    }
+    return type_mapping.get(child_type, serializers.CharField)()
+
+
+def _handle_object(props: Dict[str, Any], kwargs: Dict[str, Any], field_name: str) -> serializers.Field:
+    """Handle object/dict type."""
+    additional_props = props.get("additionalProperties", {})
+    if additional_props and isinstance(additional_props, dict):
+        child_type = additional_props.get("type", "string")
+        child = _get_child_serializer_for_type(child_type)
+        return serializers.DictField(child=child, **kwargs)
+    return serializers.DictField(**kwargs)
+
+
+# Type handler registry
+_TYPE_HANDLERS: Dict[str, Callable[[Dict[str, Any], Dict[str, Any], str], serializers.Field]] = {
+    "integer": _handle_integer,
+    "number": _handle_number,
+    "boolean": _handle_boolean,
+    "string": _handle_string,
+    "array": _handle_array,
+    "object": _handle_object,
+}
 
 
 def pydantic_schema_to_drf_field(
@@ -37,67 +120,14 @@ def pydantic_schema_to_drf_field(
         "help_text": props.get("description", ""),
     }
     
-    # Default value
     if "default" in props:
         kwargs["default"] = props["default"]
     
-    # Integer field
-    if field_type == "integer":
-        if "minimum" in props:
-            kwargs["min_value"] = props["minimum"]
-        if "maximum" in props:
-            kwargs["max_value"] = props["maximum"]
-        return serializers.IntegerField(**kwargs)
+    # Use handler from registry, fallback to CharField
+    handler = _TYPE_HANDLERS.get(field_type)
+    if handler:
+        return handler(props, kwargs, field_name)
     
-    # Number (float) field
-    elif field_type == "number":
-        if "minimum" in props:
-            kwargs["min_value"] = props["minimum"]
-        if "maximum" in props:
-            kwargs["max_value"] = props["maximum"]
-        return serializers.FloatField(**kwargs)
-    
-    # Boolean field
-    elif field_type == "boolean":
-        return serializers.BooleanField(**kwargs)
-    
-    # String field
-    elif field_type == "string":
-        if "maxLength" in props:
-            kwargs["max_length"] = props["maxLength"]
-        if "enum" in props:
-            kwargs["choices"] = props["enum"]
-            return serializers.ChoiceField(**kwargs)
-        return serializers.CharField(**kwargs)
-    
-    # Array field
-    elif field_type == "array":
-        items = props.get("items", {})
-        # Handle $ref or complex items (skip and use generic ListField)
-        if not isinstance(items, dict) or "$ref" in items:
-            kwargs.pop("help_text", None)
-            return serializers.ListField(child=serializers.DictField(), **kwargs)
-        child_field = pydantic_schema_to_drf_field(items, f"{field_name}_item", required=False)
-        kwargs.pop("help_text", None)  # ListField doesn't take help_text on child
-        return serializers.ListField(child=child_field, **kwargs)
-    
-    # Object/Dict field
-    elif field_type == "object":
-        additional_props = props.get("additionalProperties", {})
-        if additional_props and isinstance(additional_props, dict):
-            child_type = additional_props.get("type", "string")
-            if child_type == "integer":
-                child = serializers.IntegerField()
-            elif child_type == "number":
-                child = serializers.FloatField()
-            elif child_type == "boolean":
-                child = serializers.BooleanField()
-            else:
-                child = serializers.CharField()
-            return serializers.DictField(child=child, **kwargs)
-        return serializers.DictField(**kwargs)
-    
-    # Fallback to CharField
     return serializers.CharField(**kwargs)
 
 

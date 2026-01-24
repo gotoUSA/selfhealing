@@ -485,6 +485,12 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         except Exception as e:
             logger.warning(f"[LayeredRepo] Failed to submit L2 sync task: {e}")
 
+    def _sync_state_after_l1_change(self, service_name: str) -> None:
+        """L1 상태 변경 후 L2로 동기화하는 공통 헬퍼."""
+        updated = self._l1.get_by_service_name(service_name)
+        if updated:
+            self._sync_to_l2_async(service_name, updated)
+
     # =========================================================================
     # CircuitBreakerStateRepository Interface Implementation (L1 Priority)
     # =========================================================================
@@ -544,12 +550,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             success_count=success_count,
             opened_at=opened_at,
         )
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def increment_failure_count(
@@ -559,33 +561,21 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> int:
         """L1에서 카운트 증가 후 L2 동기화."""
         result = self._l1.increment_failure_count(service_name, last_failure_at)
-
-        updated = self._l1.get_by_service_name(service_name)
-        if updated:
-            self._sync_to_l2_async(service_name, updated)
-
+        self._sync_state_after_l1_change(service_name)
         return result
 
     def reset_failure_count(self, service_name: str) -> bool:
         """L1에서 리셋 후 L2 동기화."""
         result = self._l1.reset_failure_count(service_name)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def set_half_open(self, service_name: str) -> bool:
         """L1에서 half-open 설정 후 L2 동기화."""
         result = self._l1.set_half_open(service_name)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def set_open(
@@ -595,23 +585,15 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> bool:
         """L1에서 open 설정 후 L2 동기화."""
         result = self._l1.set_open(service_name, opened_at)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def set_closed(self, service_name: str, reason: Optional[str] = None) -> tuple:
         """L1에서 closed 설정 후 L2 동기화."""
         result = self._l1.set_closed(service_name, reason)
-
         if result[0]:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def get_all_open(self) -> List[CircuitBreakerStateData]:
@@ -661,12 +643,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def reset(self, service_name: str) -> bool:
         """L1에서 리셋 후 L2 동기화."""
         result = self._l1.reset(service_name)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def atomic_force_open(
@@ -678,12 +656,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
         result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
-
         if result[0]:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def atomic_force_close(
@@ -694,12 +668,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> tuple:
         """L1에서 강제 close 후 L2 동기화."""
         result = self._l1.atomic_force_close(service_name, reason, controlled_by_id)
-
         if result[0]:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def atomic_reset(
@@ -710,12 +680,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> tuple:
         """L1에서 리셋 후 L2 동기화."""
         result = self._l1.atomic_reset(service_name, reason, controlled_by_id)
-
         if result[0]:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def set_manual_control(
@@ -727,23 +693,15 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
         result = self._l1.set_manual_control(service_name, controlled_by_id, reason, ttl_minutes)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     def clear_manual_control(self, service_name: str, reason: str = "") -> bool:
         """L1에서 수동 제어 해제 후 L2 동기화."""
         result = self._l1.clear_manual_control(service_name, reason)
-
         if result:
-            updated = self._l1.get_by_service_name(service_name)
-            if updated:
-                self._sync_to_l2_async(service_name, updated)
-
+            self._sync_state_after_l1_change(service_name)
         return result
 
     # =========================================================================

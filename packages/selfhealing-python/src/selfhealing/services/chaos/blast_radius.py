@@ -412,6 +412,71 @@ class BlastRadiusManager:
     # Blast Radius Validation
     # =========================================================================
     
+    def _check_exclusions(
+        self, target_service: str, target_domain: str, violations: list
+    ) -> None:
+        """Check if service/domain is excluded."""
+        if target_service in self._policy.excluded_services:
+            violations.append(f"Service '{target_service}' is excluded from chaos experiments")
+        if target_domain and target_domain in self._policy.excluded_domains:
+            violations.append(f"Domain '{target_domain}' is excluded from chaos experiments")
+    
+    def _check_time_window_violation(self, violations: list) -> bool:
+        """Check time window and add violation if needed. Returns within_window."""
+        within_window = self._check_time_window()
+        if not within_window and not self._policy.allow_outside_window:
+            violations.append(
+                f"Outside allowed experiment window "
+                f"({self._policy.allowed_hours_start}:00 - {self._policy.allowed_hours_end}:00 UTC)"
+            )
+        return within_window
+    
+    def _check_concurrent_limit(
+        self, blast_radius: BlastRadius, violations: list
+    ) -> tuple[int, int]:
+        """Check concurrent limit. Returns (current, max)."""
+        current = self._count_concurrent(blast_radius)
+        max_limit = self._get_max_concurrent(blast_radius)
+        if current >= max_limit:
+            violations.append(
+                f"Concurrent experiment limit reached for {blast_radius.value}: {current}/{max_limit}"
+            )
+        return current, max_limit
+    
+    def _check_traffic_limit(
+        self, blast_radius: BlastRadius, traffic_percent: float, violations: list
+    ) -> float:
+        """Check traffic limit. Returns max_traffic."""
+        max_traffic = self._get_max_traffic(blast_radius)
+        if traffic_percent > max_traffic:
+            violations.append(
+                f"Traffic percent {traffic_percent}% exceeds limit {max_traffic}% "
+                f"for {blast_radius.value} level"
+            )
+        return max_traffic
+    
+    def _check_approval_requirements(
+        self, blast_radius: BlastRadius, experiment_id: str, violations: list
+    ) -> tuple[bool, str]:
+        """Check approval requirements. Returns (requires_approval, approval_status)."""
+        if blast_radius == BlastRadius.REGION:
+            approval_status = self._get_approval_status(experiment_id)
+            if approval_status != ApprovalStatus.APPROVED.value:
+                violations.append(
+                    f"REGION level experiments require manual approval. Current status: {approval_status}"
+                )
+            return True, approval_status
+        
+        if blast_radius == BlastRadius.SERVICE and not self._policy.service_auto_approve:
+            approval_status = self._get_approval_status(experiment_id)
+            if approval_status not in (ApprovalStatus.APPROVED.value, ApprovalStatus.NOT_REQUIRED.value):
+                violations.append(
+                    f"SERVICE level experiments require approval. Current status: {approval_status}"
+                )
+            return True, approval_status
+        
+        return False, ApprovalStatus.NOT_REQUIRED.value
+    
     def check(
         self,
         blast_radius: BlastRadius | str,
@@ -437,63 +502,15 @@ class BlastRadiusManager:
             blast_radius = BlastRadius(blast_radius)
         
         violations = []
-        requires_approval = False
-        approval_status = ApprovalStatus.NOT_REQUIRED.value
         
         with self._lock:
-            # 1. Check excluded services/domains
-            if target_service in self._policy.excluded_services:
-                violations.append(f"Service '{target_service}' is excluded from chaos experiments")
-            
-            if target_domain and target_domain in self._policy.excluded_domains:
-                violations.append(f"Domain '{target_domain}' is excluded from chaos experiments")
-            
-            # 2. Check time window
-            within_window = self._check_time_window()
-            if not within_window and not self._policy.allow_outside_window:
-                violations.append(
-                    f"Outside allowed experiment window "
-                    f"({self._policy.allowed_hours_start}:00 - {self._policy.allowed_hours_end}:00 UTC)"
-                )
-            
-            # 3. Check concurrent limits
-            current_concurrent = self._count_concurrent(blast_radius)
-            max_concurrent = self._get_max_concurrent(blast_radius)
-            
-            if current_concurrent >= max_concurrent:
-                violations.append(
-                    f"Concurrent experiment limit reached for {blast_radius.value}: "
-                    f"{current_concurrent}/{max_concurrent}"
-                )
-            
-            # 4. Check traffic limits
-            max_traffic = self._get_max_traffic(blast_radius)
-            if traffic_percent > max_traffic:
-                violations.append(
-                    f"Traffic percent {traffic_percent}% exceeds limit {max_traffic}% "
-                    f"for {blast_radius.value} level"
-                )
-            
-            # 5. Check approval requirements
-            if blast_radius == BlastRadius.REGION:
-                requires_approval = True
-                approval_status = self._get_approval_status(experiment_id)
-                
-                if approval_status != ApprovalStatus.APPROVED.value:
-                    violations.append(
-                        f"REGION level experiments require manual approval. "
-                        f"Current status: {approval_status}"
-                    )
-            
-            elif blast_radius == BlastRadius.SERVICE and not self._policy.service_auto_approve:
-                requires_approval = True
-                approval_status = self._get_approval_status(experiment_id)
-                
-                if approval_status not in (ApprovalStatus.APPROVED.value, ApprovalStatus.NOT_REQUIRED.value):
-                    violations.append(
-                        f"SERVICE level experiments require approval. "
-                        f"Current status: {approval_status}"
-                    )
+            self._check_exclusions(target_service, target_domain, violations)
+            within_window = self._check_time_window_violation(violations)
+            current_concurrent, max_concurrent = self._check_concurrent_limit(blast_radius, violations)
+            max_traffic = self._check_traffic_limit(blast_radius, traffic_percent, violations)
+            requires_approval, approval_status = self._check_approval_requirements(
+                blast_radius, experiment_id, violations
+            )
         
         result = BlastRadiusCheckResult(
             allowed=len(violations) == 0,
