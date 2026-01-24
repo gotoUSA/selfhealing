@@ -22,6 +22,11 @@ from selfhealing.settings import (
     L2StorageSettings,
     ChaosSettings,
     ReplayAutomationSettings,
+    # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    RecoveryCircuitBreakerSettings,
+    RedisKeyGuardSettings,
+    RecoveryShutdownSettings,
+    ResilientRecorderSettings,
 )
 
 # Legacy aliases for backward compatibility
@@ -42,6 +47,11 @@ DriftThresholdConfig = DriftThresholdSettings
 L2StorageConfig = L2StorageSettings
 ChaosConfig = ChaosSettings
 ReplayAutomationConfig = ReplayAutomationSettings
+# Week 1 CRITICAL Settings aliases
+RecoveryCircuitBreakerConfig = RecoveryCircuitBreakerSettings
+RedisKeyGuardConfig = RedisKeyGuardSettings
+RecoveryShutdownConfig = RecoveryShutdownSettings
+ResilientRecorderConfig = ResilientRecorderSettings
 
 # Storage keys for each config type
 STORAGE_KEYS = {
@@ -66,6 +76,11 @@ STORAGE_KEYS = {
     "approval_requests": "runtime_config:approval_requests",
     # Replay Automation
     "replay_automation": "runtime_config:replay_automation",
+    # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "recovery_circuit_breaker": "runtime_config:recovery_circuit_breaker",
+    "redis_key_guard": "runtime_config:redis_key_guard",
+    "recovery_shutdown": "runtime_config:recovery_shutdown",
+    "resilient_recorder": "runtime_config:resilient_recorder",
 }
 
 # Default config classes
@@ -90,6 +105,11 @@ CONFIG_CLASSES = {
     "approval_requests": None,  # ApprovalRequest는 리스트로 저장
     # Replay Automation
     "replay_automation": ReplayAutomationConfig,
+    # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "recovery_circuit_breaker": RecoveryCircuitBreakerConfig,
+    "redis_key_guard": RedisKeyGuardConfig,
+    "recovery_shutdown": RecoveryShutdownConfig,
+    "resilient_recorder": ResilientRecorderConfig,
 }
 
 # Default SLO configuration

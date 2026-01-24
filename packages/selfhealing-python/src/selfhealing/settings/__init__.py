@@ -111,6 +111,28 @@ from selfhealing.settings.replay_automation import (
     reset_replay_automation_settings,
 )
 
+# Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.recovery_circuit_breaker import (
+    RecoveryCircuitBreakerSettings,
+    get_recovery_circuit_breaker_settings,
+    reset_recovery_circuit_breaker_settings,
+)
+from selfhealing.settings.redis_key_guard import (
+    RedisKeyGuardSettings,
+    get_redis_key_guard_settings,
+    reset_redis_key_guard_settings,
+)
+from selfhealing.settings.recovery_shutdown import (
+    RecoveryShutdownSettings,
+    get_recovery_shutdown_settings,
+    reset_recovery_shutdown_settings,
+)
+from selfhealing.settings.resilient_recorder import (
+    ResilientRecorderSettings,
+    get_resilient_recorder_settings,
+    reset_resilient_recorder_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -260,4 +282,21 @@ __all__ = [
     "SecretsSettings",
     "get_secrets",
     "reset_secrets",
+    # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    # Recovery Circuit Breaker
+    "RecoveryCircuitBreakerSettings",
+    "get_recovery_circuit_breaker_settings",
+    "reset_recovery_circuit_breaker_settings",
+    # Redis Key Guard
+    "RedisKeyGuardSettings",
+    "get_redis_key_guard_settings",
+    "reset_redis_key_guard_settings",
+    # Recovery Shutdown
+    "RecoveryShutdownSettings",
+    "get_recovery_shutdown_settings",
+    "reset_recovery_shutdown_settings",
+    # Resilient Recorder
+    "ResilientRecorderSettings",
+    "get_resilient_recorder_settings",
+    "reset_resilient_recorder_settings",
 ]

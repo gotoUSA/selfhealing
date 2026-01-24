@@ -27,6 +27,11 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 
+from selfhealing.settings import (
+    RecoveryCircuitBreakerSettings,
+    get_recovery_circuit_breaker_settings,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,8 +93,31 @@ class RecoveryCircuitBreakerConfig:
     
     # 재-에스컬레이션 대상 레벨
     re_escalation_level: str = "LEVEL_3"
-    """재-에스컬레이션 시 전환할 레벨."""
-
+    """재-에스컬레이션 시 전환할 레벨."""    
+    @classmethod
+    def from_settings(
+        cls, settings: Optional[RecoveryCircuitBreakerSettings] = None
+    ) -> "RecoveryCircuitBreakerConfig":
+        """
+        RecoveryCircuitBreakerSettings에서 Config 생성.
+        
+        Args:
+            settings: Pydantic Settings 인스턴스 (None이면 기본값 사용)
+        
+        Returns:
+            RecoveryCircuitBreakerConfig 인스턴스
+        """
+        s = settings or get_recovery_circuit_breaker_settings()
+        return cls(
+            error_rate_threshold=s.error_rate_threshold,
+            sampling_window_seconds=s.sampling_window_seconds,
+            min_samples=s.min_samples,
+            open_duration_seconds=s.open_duration_seconds,
+            half_open_max_requests=s.half_open_max_requests,
+            max_consecutive_trips=s.max_consecutive_trips,
+            re_escalation_enabled=s.re_escalation_enabled,
+            re_escalation_level=s.re_escalation_level,
+        )
 
 @dataclass
 class RecoveryMetricsSnapshot:

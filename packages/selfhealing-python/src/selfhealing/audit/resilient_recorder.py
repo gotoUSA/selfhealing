@@ -36,6 +36,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
+from selfhealing.settings import (
+    ResilientRecorderSettings,
+    get_resilient_recorder_settings,
+)
 
 from .checksum import compute_crc32
 from .config import AuditConfig
@@ -78,23 +82,48 @@ class ResilientRecorderConfig:
     enable_syslog_fallback: bool = True
 
     @classmethod
-    def from_env(cls) -> "ResilientRecorderConfig":
-        """환경변수에서 설정 로드."""
-        return cls(
-            buffer_capacity=int(os.environ.get("AUDIT_BUFFER_CAPACITY", 10000)),
-            flush_interval_seconds=float(
-                os.environ.get("AUDIT_FLUSH_INTERVAL", 1.0)
-            ),
-            flush_batch_size=int(os.environ.get("AUDIT_FLUSH_BATCH_SIZE", 100)),
-            circuit_failure_threshold=int(
-                os.environ.get("AUDIT_CIRCUIT_BREAKER_THRESHOLD", 3)
-            ),
-            circuit_timeout_seconds=float(
-                os.environ.get("AUDIT_CIRCUIT_BREAKER_TIMEOUT", 30.0)
-            ),
-            fallback_file_path=os.environ.get("AUDIT_FALLBACK_FILE"),
-            enable_syslog_fallback=os.environ.get("AUDIT_SYSLOG_ENABLED", "true").lower() == "true",
+    def from_settings(
+        cls, settings: Optional[ResilientRecorderSettings] = None
+    ) -> "ResilientRecorderConfig":
+        """
+        ResilientRecorderSettings에서 Config 생성.
+        
+        Args:
+            settings: Pydantic Settings 인스턴스 (None이면 기본값 사용)
+        
+        Returns:
+            ResilientRecorderConfig 인스턴스
+        """
+        s = settings or get_resilient_recorder_settings()
+        
+        # backpressure_strategy 문자열 -> enum 변환
+        strategy_map = {
+            "DROP_OLDEST": BackpressureStrategy.DROP_OLDEST,
+            "DROP_NEWEST": BackpressureStrategy.DROP_NEWEST,
+            "BLOCK": BackpressureStrategy.BLOCK,
+        }
+        strategy = strategy_map.get(
+            s.backpressure_strategy, 
+            BackpressureStrategy.DROP_OLDEST
         )
+        
+        return cls(
+            buffer_capacity=s.buffer_capacity,
+            backpressure_strategy=strategy,
+            enable_background_flush=s.enable_background_flush,
+            flush_interval_seconds=s.flush_interval_seconds,
+            flush_batch_size=s.flush_batch_size,
+            circuit_failure_threshold=s.circuit_failure_threshold,
+            circuit_success_threshold=s.circuit_success_threshold,
+            circuit_timeout_seconds=s.circuit_timeout_seconds,
+            fallback_file_path=s.fallback_file_path,
+            enable_syslog_fallback=s.enable_syslog_fallback,
+        )
+
+    @classmethod
+    def from_env(cls) -> "ResilientRecorderConfig":
+        """환경변수에서 설정 로드. (Deprecated: from_settings 사용 권장)"""
+        return cls.from_settings()
 
 
 class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):

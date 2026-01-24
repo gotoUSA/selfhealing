@@ -10,11 +10,11 @@
 
 | 주차 | 대상 | 클래스 수 | 상태 | 완료율 |
 |------|------|----------|------|--------|
-| Week 1 | CRITICAL | 5개 | ⬜ 대기 | 0% |
+| Week 1 | CRITICAL | 5개 | ✅ 완료 | 100% |
 | Week 2 | HIGH | 6개 | ⬜ 대기 | 0% |
 | Week 3 | MEDIUM | 6개 | ⬜ 대기 | 0% |
 | Week 4 | LOW + 마무리 | 9개 | ⬜ 대기 | 0% |
-| **합계** | - | **26개** | - | **0%** |
+| **합계** | - | **26개** | - | **19%** |
 
 **상태**: ⬜ 대기 | 🔄 진행중 | ✅ 완료 | ❌ 보류
 
@@ -26,77 +26,93 @@
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/security.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `security/models.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/security.py` 생성 | ✅ | 기존 구현됨 |
+| B | constants.py 등록 | ✅ | 기존 구현됨 |
+| C | `security/models.py` 하드코딩 대체 | ✅ | 기존 구현됨 |
+| D | 단위 테스트 | ✅ | 테스트 통과 |
 
 **필드 (91 문서 참조)**:
-- [ ] `rate_limit_per_minute` (기본값: 60)
-- [ ] `ip_ban_threshold` (기본값: 10)
-- [ ] `ip_ban_duration_minutes` (기본값: 30)
-- [ ] `injection_max_depth` (기본값: 10)
-- [ ] `max_key_length` (기본값: 100)
-- [ ] `max_value_length` (기본값: 10000)
+- [x] `rate_limit_max_requests` (기본값: 100)
+- [x] `rate_limit_window_seconds` (기본값: 60)
+- [x] `injection_ban_hours` (기본값: 24)
+- [x] `injection_sensitivity` (기본값: "HIGH")
+- [x] `max_key_length` (기본값: 100)
+- [x] `max_value_length` (기본값: 10000)
 
 ### [2] RecoveryCircuitBreakerSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/recovery_circuit_breaker.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `recovery_circuit_breaker.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/recovery_circuit_breaker.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `recovery_circuit_breaker.py` 하드코딩 대체 | ✅ | from_settings() 추가 |
+| D | 단위 테스트 | ✅ | 25개 테스트 통과 |
 
 **필드**:
-- [ ] `failure_rate_threshold` (기본값: 0.3)
-- [ ] `failure_count_threshold` (기본값: 10)
-- [ ] `sampling_window_seconds` (기본값: 60)
+- [x] `error_rate_threshold` (기본값: 0.15)
+- [x] `sampling_window_seconds` (기본값: 60)
+- [x] `min_samples` (기본값: 10)
+- [x] `open_duration_seconds` (기본값: 300)
+- [x] `half_open_max_requests` (기본값: 5)
+- [x] `max_consecutive_trips` (기본값: 3)
+- [x] `re_escalation_enabled` (기본값: True)
+- [x] `re_escalation_level` (기본값: "LEVEL_3")
 
 ### [3] RedisKeyGuardSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/redis_key_guard.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `redis_key_guard.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/redis_key_guard.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `redis_key_guard.py` 하드코딩 대체 | ✅ | field default_factory 사용 |
+| D | 단위 테스트 | ✅ | 24개 테스트 통과 |
 
 **필드**:
-- [ ] `memory_critical_threshold` (기본값: 90.0)
-- [ ] `memory_warning_threshold` (기본값: 80.0)
+- [x] `memory_warning_threshold` (기본값: 80.0)
+- [x] `memory_critical_threshold` (기본값: 90.0)
+- [x] `target_free_percent` (기본값: 20.0)
+- [x] `recovery_session_ttl_seconds` (기본값: 3600)
+- [x] `recovery_state_ttl_seconds` (기본값: 86400)
+- [x] `temp_key_ttl_seconds` (기본값: 300)
+- [x] `telemetry_ttl_seconds` (기본값: 3600)
 
 ### [4] RecoveryShutdownSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/recovery_shutdown.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `recovery_shutdown.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/recovery_shutdown.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `recovery_shutdown.py` 하드코딩 대체 | ✅ | field default_factory 사용 |
+| D | 단위 테스트 | ✅ | 16개 테스트 통과 |
 
 **필드**:
-- [ ] `max_shutdown_wait_seconds` (기본값: 600.0)
-- [ ] `recovery_extension_seconds` (기본값: 300.0)
-- [ ] `graceful_shutdown_timeout` (기본값: 30.0)
+- [x] `default_drain_timeout_seconds` (기본값: 30.0)
+- [x] `recovery_extension_seconds` (기본값: 300.0)
+- [x] `max_shutdown_wait_seconds` (기본값: 600.0)
+- [x] `recovery_check_interval_seconds` (기본값: 5.0)
+- [x] `log_interval_seconds` (기본값: 15.0)
+- [x] `allow_force_shutdown` (기본값: True)
 
 ### [5] ResilientRecorderSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/resilient_recorder.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `resilient_recorder.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/resilient_recorder.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `resilient_recorder.py` 하드코딩 대체 | ✅ | from_settings() 추가 |
+| D | 단위 테스트 | ✅ | 14개 테스트 통과 |
 
 **필드**:
-- [ ] `circuit_failure_threshold` (기본값: 3)
-- [ ] `buffer_capacity` (기본값: 10000)
-- [ ] `flush_batch_size` (기본값: 100)
-- [ ] `flush_timeout_seconds` (기본값: 5.0)
-- [ ] `retry_delay_seconds` (기본값: 1.0)
-- [ ] `max_retries` (기본값: 3)
-- [ ] `circuit_reset_timeout` (기본값: 60.0)
+- [x] `buffer_capacity` (기본값: 10000)
+- [x] `backpressure_strategy` (기본값: "DROP_OLDEST")
+- [x] `flush_interval_seconds` (기본값: 1.0)
+- [x] `flush_batch_size` (기본값: 100)
+- [x] `circuit_failure_threshold` (기본값: 3)
+- [x] `circuit_success_threshold` (기본값: 2)
+- [x] `circuit_timeout_seconds` (기본값: 30.0)
+- [x] `fallback_directory` (기본값: "/tmp/selfhealing_fallback")
+- [x] `fallback_max_files` (기본값: 100)
+- [x] `fallback_max_size_mb` (기본값: 100.0)
 
 ---
 

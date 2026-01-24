@@ -27,6 +27,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from selfhealing.settings import (
+    RecoveryShutdownSettings,
+    get_recovery_shutdown_settings,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,28 +48,34 @@ class RecoveryAwareShutdownConfig:
         GracefulShutdownCoordinator (shutdown_coordinator.py)
     """
     
-    default_drain_timeout_seconds: float = field(default_factory=lambda: float(
-        os.environ.get("SELFHEALING_DRAIN_TIMEOUT", "30.0")
-    ))
+    default_drain_timeout_seconds: float = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().default_drain_timeout_seconds
+    )
     """기본 drain 타임아웃 (초)."""
     
-    recovery_extension_seconds: float = field(default_factory=lambda: float(
-        os.environ.get("SELFHEALING_RECOVERY_EXTENSION", "300.0")
-    ))
+    recovery_extension_seconds: float = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().recovery_extension_seconds
+    )
     """Recovery Session 진행 중일 때 추가 대기 시간 (초)."""
     
-    max_shutdown_wait_seconds: float = field(default_factory=lambda: float(
-        os.environ.get("SELFHEALING_MAX_SHUTDOWN_WAIT", "600.0")
-    ))
+    max_shutdown_wait_seconds: float = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().max_shutdown_wait_seconds
+    )
     """최대 대기 시간 (초) - Kubernetes terminationGracePeriodSeconds와 일치해야 함."""
     
-    recovery_check_interval_seconds: float = 5.0
+    recovery_check_interval_seconds: float = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().recovery_check_interval_seconds
+    )
     """Recovery Session 체크 간격 (초)."""
     
-    log_interval_seconds: float = 15.0
+    log_interval_seconds: float = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().log_interval_seconds
+    )
     """로그 출력 간격 (초)."""
     
-    allow_force_shutdown: bool = True
+    allow_force_shutdown: bool = field(default_factory=lambda: 
+        get_recovery_shutdown_settings().allow_force_shutdown
+    )
     """최대 대기 시간 초과 시 강제 종료 허용 여부."""
 
 

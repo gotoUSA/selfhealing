@@ -30,6 +30,11 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Set
 
+from selfhealing.settings import (
+    RedisKeyGuardSettings,
+    get_redis_key_guard_settings,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,15 +166,15 @@ class RedisKeyPriorityEviction:
         "temp:*": 300,                # 5분
     })
     
-    # 메모리 경고 임계값 (%)
-    memory_warning_threshold: float = field(default_factory=lambda: float(
-        os.environ.get("REDIS_MEMORY_WARNING_THRESHOLD", "80.0")
-    ))
+    # 메모리 경고 임계값 (%) - Settings에서 로드
+    memory_warning_threshold: float = field(default_factory=lambda: 
+        get_redis_key_guard_settings().memory_warning_threshold
+    )
     
-    # 메모리 위험 임계값 (%)
-    memory_critical_threshold: float = field(default_factory=lambda: float(
-        os.environ.get("REDIS_MEMORY_CRITICAL_THRESHOLD", "90.0")
-    ))
+    # 메모리 위험 임계값 (%) - Settings에서 로드
+    memory_critical_threshold: float = field(default_factory=lambda: 
+        get_redis_key_guard_settings().memory_critical_threshold
+    )
     
     # 키 패턴별 상세 설정
     key_pattern_configs: List[KeyPatternConfig] = field(default_factory=lambda: [
