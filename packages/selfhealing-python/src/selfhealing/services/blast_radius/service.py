@@ -1,5 +1,11 @@
 """
 Blast Radius DNA Service - 장애 영향 범위 관리 서비스
+
+Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
+- 정책 설정: log_blast_radius_audit (action="set_policy")
+- 의존성 추가: log_blast_radius_audit (action="add_dependency")
+- 서비스 격리: log_blast_radius_audit (action="isolate_service")
+- 격리 해제: log_blast_radius_audit (action="release_isolation")
 """
 
 import logging
@@ -15,6 +21,7 @@ from .models import (
     ImpactAssessment,
     ServiceDependency,
 )
+from selfhealing.services.audit import log_blast_radius_audit
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +89,19 @@ class BlastRadiusService:
         )
         self._policies[stage_name] = policy
         logger.info(f"Blast radius policy set for {stage_name}: {level.value}")
+        
+        # === Audit 기록: 정책 설정 (85_AUDIT_INTEGRATION Phase 1) ===
+        log_blast_radius_audit(
+            experiment_id=policy_id,
+            blast_radius=level.value,
+            target_service=stage_name,
+            action="set_policy",
+            allowed=True,
+            target_domain=stage_name,
+            traffic_percent=max_affected_percentage,
+            reason=f"Policy configured with auto_isolate={auto_isolate}",
+        )
+        
         return policy
     
     def get_policy(self, stage_name: str) -> Optional[BlastRadiusPolicy]:
@@ -114,6 +134,18 @@ class BlastRadiusService:
             criticality=criticality,
         )
         self._dependencies.append(dependency)
+        
+        # === Audit 기록: 의존성 추가 (85_AUDIT_INTEGRATION Phase 1) ===
+        log_blast_radius_audit(
+            experiment_id=f"dep-{source_service}-{target_service}",
+            blast_radius=criticality,
+            target_service=target_service,
+            action="add_dependency",
+            allowed=True,
+            target_domain=source_service,
+            reason=f"Dependency added: {source_service} -> {target_service} ({dependency_type})",
+        )
+        
         return dependency
     
     def get_dependencies(self, service: str) -> Dict[str, List[ServiceDependency]]:
@@ -351,12 +383,33 @@ class BlastRadiusService:
             if service not in self._isolated_services:
                 self._isolated_services.add(service)
                 logger.warning(f"Service auto-isolated: {service}")
+                
+                # === Audit 기록: 자동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
+                log_blast_radius_audit(
+                    experiment_id=f"auto-isolate-{service}",
+                    blast_radius="auto",
+                    target_service=service,
+                    action="auto_isolate",
+                    allowed=True,
+                    reason="Auto-isolation triggered by impact assessment",
+                )
     
     def isolate_service(self, service: str) -> bool:
         """수동 격리"""
         if service not in self._isolated_services:
             self._isolated_services.add(service)
             logger.info(f"Service isolated: {service}")
+            
+            # === Audit 기록: 수동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
+            log_blast_radius_audit(
+                experiment_id=f"manual-isolate-{service}",
+                blast_radius="manual",
+                target_service=service,
+                action="isolate_service",
+                allowed=True,
+                reason="Manual service isolation",
+            )
+            
             return True
         return False
     
@@ -365,6 +418,17 @@ class BlastRadiusService:
         if service in self._isolated_services:
             self._isolated_services.discard(service)
             logger.info(f"Service isolation released: {service}")
+            
+            # === Audit 기록: 격리 해제 (85_AUDIT_INTEGRATION Phase 1) ===
+            log_blast_radius_audit(
+                experiment_id=f"release-{service}",
+                blast_radius="released",
+                target_service=service,
+                action="release_isolation",
+                allowed=True,
+                reason="Service isolation released",
+            )
+            
             return True
         return False
     

@@ -90,6 +90,27 @@ class AuditEventType(Enum):
     # 롤백 관련
     ROLLBACK_PERFORMED = "rollback_performed"
     
+    # ═══════════════════════════════════════════════════════════
+    # Security Violation 관련 (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1)
+    # ═══════════════════════════════════════════════════════════
+    SECURITY_VIOLATION = "security_violation"
+    """보안 위반 감지 및 처리."""
+    
+    SECURITY_IP_BLOCKED = "security_ip_blocked"
+    """IP 차단 (임시 또는 영구)."""
+    
+    SECURITY_SESSION_INVALIDATED = "security_session_invalidated"
+    """사용자 세션 무효화."""
+    
+    # ═══════════════════════════════════════════════════════════
+    # Regional Isolation 관련 (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1)
+    # ═══════════════════════════════════════════════════════════
+    REGION_ISOLATED = "region_isolated"
+    """리전 격리 활성화."""
+    
+    REGION_RESTORED = "region_restored"
+    """리전 격리 해제."""
+    
     # Chaos 실험 관련
     CHAOS_EXPERIMENT_STARTED = "chaos_experiment_started"
     CHAOS_EXPERIMENT_COMPLETED = "chaos_experiment_completed"

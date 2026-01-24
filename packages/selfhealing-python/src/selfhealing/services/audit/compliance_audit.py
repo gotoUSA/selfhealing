@@ -1,11 +1,12 @@
 """
-Compliance & FinOps Audit Helpers
+Compliance, Security, FinOps Audit Helpers
 
-규정 준수, Blast Radius, FinOps 비용, 데이터 접근 관련 Audit 로깅.
+규정 준수, 보안 위반, Blast Radius, FinOps 비용, 데이터 접근 관련 Audit 로깅.
 
 Usage:
     from selfhealing.services.audit.compliance_audit import (
         log_compliance_audit,
+        log_security_violation_audit,
         log_blast_radius_audit,
         log_finops_audit,
         log_data_access_audit,
@@ -20,6 +21,209 @@ from typing import Any, Dict, Optional
 from selfhealing.services.audit.base import _write_to_wal, _try_add_to_buffer
 
 logger = logging.getLogger(__name__)
+
+
+def log_security_violation_audit(
+    violation_type: str,
+    action: str,
+    target: str,
+    result: str,
+    severity: str = "medium",
+    operator: str = "system",
+    incident_id: Optional[int] = None,
+    source_ip: Optional[str] = None,
+    user_id: Optional[int] = None,
+    details: Optional[Dict[str, Any]] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    보안 위반 처리 이벤트를 Audit 로그에 기록.
+    
+    보안 위반 감지, IP 차단, 세션 무효화 등의 보안 조치를 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        violation_type: 위반 유형 (e.g., "token_forged", "injection_attempt")
+        action: 수행된 조치 (e.g., "block_ip", "invalidate_session", "handle_violation")
+        target: 조치 대상 (e.g., "ip:1.2.3.4", "user:123")
+        result: 결과 (e.g., "success", "failed")
+        severity: 심각도 (low, medium, high, critical)
+        operator: 수행 주체 (e.g., "system", "admin@example.com")
+        incident_id: 보안 인시던트 ID
+        source_ip: 원본 IP 주소
+        user_id: 관련 사용자 ID
+        details: 추가 상세 정보
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "violation_type": violation_type,
+        "action": action,
+        "target": target,
+        "result": result,
+        "severity": severity,
+        "operator": operator,
+        "incident_id": incident_id,
+        "source_ip": source_ip,
+        "user_id": user_id,
+    }
+    if details:
+        audit_details["extra_details"] = details
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    # 이벤트 타입 결정: action에 따라 세분화
+    if action == "block_ip":
+        event_type = "SECURITY_IP_BLOCKED"
+    elif action == "invalidate_session":
+        event_type = "SECURITY_SESSION_INVALIDATED"
+    else:
+        event_type = "SECURITY_VIOLATION"
+    
+    success = result == "success"
+    
+    wal_seq = _write_to_wal(
+        event_type=event_type,
+        source="SecurityViolationService",
+        details=audit_details,
+        success=success,
+        error_message=None if success else f"Security action failed: {result}",
+        target_id=str(incident_id) if incident_id else None,
+    )
+    
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            if action == "block_ip":
+                buffer_event_type = AuditEventType.SECURITY_IP_BLOCKED
+            elif action == "invalidate_session":
+                buffer_event_type = AuditEventType.SECURITY_SESSION_INVALIDATED
+            else:
+                buffer_event_type = AuditEventType.SECURITY_VIOLATION
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="SecurityViolationService",
+                details=audit_details,
+                success=success,
+                error_message=None if success else f"Security action failed: {result}",
+                target_id=str(incident_id) if incident_id else None,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    # 보안 이벤트는 심각도에 따라 로그 레벨 결정
+    if severity == "critical":
+        logger.critical(
+            f"[SecurityAudit] {event_type} | type={violation_type} | "
+            f"action={action} | target={target} | result={result}"
+        )
+    elif severity == "high":
+        logger.warning(
+            f"[SecurityAudit] {event_type} | type={violation_type} | "
+            f"action={action} | target={target} | result={result}"
+        )
+    else:
+        logger.info(
+            f"[SecurityAudit] {event_type} | type={violation_type} | "
+            f"action={action} | target={target} | result={result}"
+        )
+    
+    return wal_seq
+
+
+def log_region_isolation_audit(
+    region: str,
+    action: str,
+    result: str,
+    reason: Optional[str] = None,
+    duration_seconds: Optional[int] = None,
+    operator: str = "system",
+    details: Optional[Dict[str, Any]] = None,
+    request: Any = None,
+) -> Optional[int]:
+    """
+    리전 격리/복원 이벤트를 Audit 로그에 기록.
+    
+    리전 단위 트래픽 차단 및 복원을 기록합니다.
+    WAL 기반 누락 0 보장.
+    
+    Args:
+        region: 대상 리전 (e.g., "tokyo", "seoul")
+        action: 수행된 조치 ("isolate" 또는 "restore")
+        result: 결과 (e.g., "success", "failed")
+        reason: 격리/복원 사유
+        duration_seconds: 격리 지속 시간 (초)
+        operator: 수행 주체 (클러스터 ID 또는 운영자)
+        details: 추가 상세 정보
+        request: Django HttpRequest 객체 (있으면 버퍼에 적재)
+        
+    Returns:
+        WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
+    """
+    audit_details = {
+        "region": region,
+        "action": action,
+        "result": result,
+        "reason": reason,
+        "duration_seconds": duration_seconds,
+        "operator": operator,
+    }
+    if details:
+        audit_details["extra_details"] = details
+    audit_details = {k: v for k, v in audit_details.items() if v is not None}
+    
+    event_type = "REGION_ISOLATED" if action == "isolate" else "REGION_RESTORED"
+    success = result == "success"
+    
+    wal_seq = _write_to_wal(
+        event_type=event_type,
+        source="RegionalIsolationGate",
+        details=audit_details,
+        success=success,
+        error_message=None if success else f"Region {action} failed",
+        target_id=region,
+    )
+    
+    if request is not None:
+        try:
+            from selfhealing.audit.event_buffer import AuditEventType
+            
+            buffer_event_type = (
+                AuditEventType.REGION_ISOLATED if action == "isolate" 
+                else AuditEventType.REGION_RESTORED
+            )
+            
+            added = _try_add_to_buffer(
+                request=request,
+                event_type=buffer_event_type,
+                source="RegionalIsolationGate",
+                details=audit_details,
+                success=success,
+                error_message=None if success else f"Region {action} failed",
+                target_id=region,
+            )
+            if added:
+                return wal_seq
+        except ImportError:
+            pass
+    
+    if action == "isolate":
+        logger.warning(
+            f"[RegionIsolationAudit] ISOLATED | region={region} | "
+            f"reason={reason} | duration={duration_seconds}s | by={operator}"
+        )
+    else:
+        logger.info(
+            f"[RegionIsolationAudit] RESTORED | region={region} | by={operator}"
+        )
+    
+    return wal_seq
 
 
 def log_compliance_audit(

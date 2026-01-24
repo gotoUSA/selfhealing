@@ -57,18 +57,18 @@
 > View에서 직접 audit을 호출하지 않으며, 서비스 레이어가 헬퍼를 호출하면 AuditMiddleware가 자동으로 수집합니다.
 > (56_AUDIT_MIDDLEWARE_DESIGN.md 참조)
 
-### 4.1 Services - Audit 연동 완전 누락 (8개 확인됨)
+### 4.1 Services - Audit 연동 상태 (8개)
 
-| 서비스 | 파일 | 누락된 기능 | 우선순위 |
-|--------|------|------------|----------|
-| SecurityViolationService | `services/security/service.py` | 보안 위반 처리, IP 차단, 세션 무효화 | **P0** |
-| RegionalIsolationGate | `services/isolation/regional_gate.py` | 리전 격리/해제 | **P0** |
-| BlastRadiusService | `services/blast_radius/service.py` | set_policy, add_dependency, isolate_service | **P0** |
-| CleanupService | `services/cleanup_service.py` | archive_old_dlq_entries, cleanup_expired_config, purge_archived_dlq_entries | **P1** |
-| PendingConfigService | `services/pending_config.py` | cancel_pending_change | **P1** |
-| ConfigHistoryService | `services/config_history.py` | 설정 버전 저장/롤백 | **P1** |
-| AdaptiveThrottle | `services/throttle/adaptive.py` | 동적 속도 제한 조절 | **P1** |
-| LearningService | `services/learning/service.py` | 파라미터 블랙리스트 등록, 패턴 학습 | **P1** |
+| 서비스 | 파일 | 누락된 기능 | 우선순위 | 상태 |
+|--------|------|------------|----------|------|
+| SecurityViolationService | `services/security/service.py` | 보안 위반 처리, IP 차단, 세션 무효화 | **P0** | ✅ 완료 (2026-01-24) |
+| RegionalIsolationGate | `services/isolation/regional_gate.py` | 리전 격리/해제 | **P0** | ✅ 완료 (2026-01-24) |
+| BlastRadiusService | `services/blast_radius/service.py` | set_policy, add_dependency, isolate_service | **P0** | ✅ 완료 (2026-01-24) |
+| CleanupService | `services/cleanup_service.py` | archive_old_dlq_entries, cleanup_expired_config, purge_archived_dlq_entries | **P1** | ⏳ 대기 |
+| PendingConfigService | `services/pending_config.py` | cancel_pending_change | **P1** | ⏳ 대기 |
+| ConfigHistoryService | `services/config_history.py` | 설정 버전 저장/롤백 | **P1** | ⏳ 대기 |
+| AdaptiveThrottle | `services/throttle/adaptive.py` | 동적 속도 제한 조절 | **P1** | ⏳ 대기 |
+| LearningService | `services/learning/service.py` | 파라미터 블랙리스트 등록, 패턴 학습 | **P1** | ⏳ 대기 |
 
 ### 4.2 서비스 레이어에서 이미 연동된 항목 (참고)
 
@@ -147,23 +147,23 @@
 
 ### 6.1 문서별 구현 대상
 
-| 문서 | 대상 | 파일 수 |
-|------|------|---------|
-| 86_AUDIT_INTEGRATION_SECURITY_ISOLATION.md | Security, Isolation, BlastRadius 서비스 | 3개 서비스 |
-| 87_AUDIT_INTEGRATION_LEARNING_RECOVERY.md | Learning, Throttle, Cleanup, PendingConfig, ConfigHistory 서비스 | 5개 서비스 |
+| 문서 | 대상 | 파일 수 | 상태 |
+|------|------|---------|------|
+| 86_AUDIT_INTEGRATION_SECURITY_ISOLATION.md | Security, Isolation, BlastRadius 서비스 | 3개 서비스 | ✅ 완료 |
+| 87_AUDIT_INTEGRATION_LEARNING_RECOVERY.md | Learning, Throttle, Cleanup, PendingConfig, ConfigHistory 서비스 | 5개 서비스 | ⏳ 대기 |
 
 > **삭제된 문서**: 88, 89번은 View 레벨 audit을 다루었으나, 이 프로젝트의 표준 패턴에 따라 View는 서비스를 호출하므로 별도 문서 불필요.
 
 ### 6.2 구현 순서 (Phase별) - 서비스 레이어만
 
-#### Phase 1: Critical (즉시 - 1주 내)
+#### Phase 1: Critical (즉시 - 1주 내) ✅ 완료 (2026-01-24)
 **문서 참조**: 86
 
-| 순서 | 파일 | 이유 |
-|------|------|------|
-| 1 | `services/security/service.py` | 보안 위반 - 컴플라이언스 필수 |
-| 2 | `services/isolation/regional_gate.py` | 리전 격리 - 운영 영향도 높음 |
-| 3 | `services/blast_radius/service.py` | 서비스 격리 - 장애 범위 제어 |
+| 순서 | 파일 | 이유 | 상태 |
+|------|------|------|------|
+| 1 | `services/security/service.py` | 보안 위반 - 컴플라이언스 필수 | ✅ 완료 |
+| 2 | `services/isolation/regional_gate.py` | 리전 격리 - 운영 영향도 높음 | ✅ 완료 |
+| 3 | `services/blast_radius/service.py` | 서비스 격리 - 장애 범위 제어 | ✅ 완료 |
 
 #### Phase 2: High (1-2주)
 **문서 참조**: 87

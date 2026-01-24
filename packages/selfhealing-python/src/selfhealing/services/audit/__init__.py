@@ -77,10 +77,12 @@ from selfhealing.services.audit.chaos_audit import (
 )
 
 # ============================================================
-# Compliance & FinOps Audit Functions
+# Compliance, Security & FinOps Audit Functions
 # ============================================================
 from selfhealing.services.audit.compliance_audit import (
     log_compliance_audit,
+    log_security_violation_audit,
+    log_region_isolation_audit,
     log_blast_radius_audit,
     log_finops_audit,
     log_data_access_audit,
@@ -133,8 +135,10 @@ __all__ = [
     "log_panic_threshold_audit",
     "log_freeze_mode_audit",
     "log_error_budget_blocked_audit",
-    # Compliance & FinOps
+    # Compliance, Security & FinOps
     "log_compliance_audit",
+    "log_security_violation_audit",
+    "log_region_isolation_audit",
     "log_blast_radius_audit",
     "log_finops_audit",
     "log_data_access_audit",

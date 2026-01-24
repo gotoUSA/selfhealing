@@ -6,6 +6,10 @@ Regional Isolation Gate.
 특정 리전(클러스터 그룹)이 불안정할 때 
 해당 리전으로의 트래픽을 전역적으로 차단.
 
+Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
+- 리전 격리: log_region_isolation_audit (action="isolate")
+- 리전 복원: log_region_isolation_audit (action="restore")
+
 코드 근거:
 - blast_radius.py#L40: REGION 레벨 이미 존재
 - guard.py#L827-836: 전역 차단 패턴 존재
@@ -19,6 +23,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
+
+from selfhealing.services.audit import log_region_isolation_audit
 
 logger = logging.getLogger(__name__)
 
@@ -157,12 +163,14 @@ class RegionalIsolationGate:
                 tz=timezone.utc
             )
             
+            operator = self._identity.cluster_id if self._identity else "unknown"
+            
             isolation_info = IsolationInfo(
                 region=region,
                 isolated=True,
                 reason=reason,
                 isolated_at=now,
-                isolated_by=self._identity.cluster_id if self._identity else "unknown",
+                isolated_by=operator,
                 expires_at=expires_at,
             )
             
@@ -182,12 +190,35 @@ class RegionalIsolationGate:
             logger.warning(
                 f"[RegionalIsolationGate] Region ISOLATED: {region} "
                 f"reason='{reason}' duration={duration_seconds}s "
-                f"by={isolation_info.isolated_by}"
+                f"by={operator}"
             )
+            
+            # === Audit 기록: 리전 격리 (85_AUDIT_INTEGRATION Phase 1) ===
+            log_region_isolation_audit(
+                region=region,
+                action="isolate",
+                result="success",
+                reason=reason,
+                duration_seconds=duration_seconds,
+                operator=operator,
+            )
+            
             return True
             
         except Exception as e:
             logger.error(f"[RegionalIsolationGate] Failed to isolate region {region}: {e}")
+            
+            # === Audit 기록: 리전 격리 실패 ===
+            log_region_isolation_audit(
+                region=region,
+                action="isolate",
+                result="failed",
+                reason=reason,
+                duration_seconds=duration_seconds,
+                operator=self._identity.cluster_id if self._identity else "unknown",
+                details={"error": str(e)},
+            )
+            
             return False
     
     def is_region_isolated(self, region: str) -> Tuple[bool, Optional[str]]:
@@ -266,6 +297,8 @@ class RegionalIsolationGate:
         if not self._redis:
             return False
         
+        operator = self._identity.cluster_id if self._identity else "unknown"
+        
         try:
             key = self.GATE_KEY_TEMPLATE.format(region=region)
             
@@ -282,17 +315,42 @@ class RegionalIsolationGate:
                     region=region,
                     isolated=False,
                     reason="Manual restore",
-                    isolated_by=self._identity.cluster_id if self._identity else "unknown",
+                    isolated_by=operator,
                 )
                 self._publish_event("restored", restore_info)
                 
                 logger.info(f"[RegionalIsolationGate] Region RESTORED: {region}")
+                
+                # === Audit 기록: 리전 복원 (85_AUDIT_INTEGRATION Phase 1) ===
+                log_region_isolation_audit(
+                    region=region,
+                    action="restore",
+                    result="success",
+                    reason="Manual restore",
+                    operator=operator,
+                    details={
+                        "previous_reason": existing.reason if existing else None,
+                        "was_isolated_by": existing.isolated_by if existing else None,
+                    },
+                )
+                
                 return True
             
             return False
             
         except Exception as e:
             logger.error(f"[RegionalIsolationGate] Failed to restore region {region}: {e}")
+            
+            # === Audit 기록: 리전 복원 실패 ===
+            log_region_isolation_audit(
+                region=region,
+                action="restore",
+                result="failed",
+                reason="Manual restore",
+                operator=operator,
+                details={"error": str(e)},
+            )
+            
             return False
     
     def list_isolated_regions(self) -> Dict[str, IsolationInfo]:

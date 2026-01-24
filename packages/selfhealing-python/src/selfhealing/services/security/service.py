@@ -3,6 +3,11 @@ Security Violation Service.
 
 Handles security violations that should NEVER self-heal.
 Security incidents are immediately blocked and routed to the security team.
+
+Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
+- 보안 위반 처리: log_security_violation_audit
+- IP 차단: log_security_violation_audit (action="block_ip")
+- 세션 무효화: log_security_violation_audit (action="invalidate_session")
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from selfhealing.services.security.models import (
     SecurityConfig,
     SecurityViolationResult,
 )
+from selfhealing.services.audit import log_security_violation_audit
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import SecurityIncidentRepository
@@ -169,6 +175,23 @@ class SecurityViolationService:
                 f"incident_id={incident.id} action={action_taken}"
             )
 
+            # === Audit 기록: 보안 위반 처리 (85_AUDIT_INTEGRATION Phase 1) ===
+            log_security_violation_audit(
+                violation_type=violation_type_str,
+                action="handle_violation",
+                target=f"ip:{source_ip}" if source_ip else f"user:{user_id}" if user_id else "unknown",
+                result="success",
+                severity=severity.value,
+                operator="system",
+                incident_id=incident.id,
+                source_ip=source_ip,
+                user_id=user_id,
+                details={
+                    "action_taken": action_taken,
+                    "description": description,
+                },
+            )
+
             # Trigger notification (async if possible)
             try:
                 self._send_security_notification(
@@ -311,9 +334,34 @@ class SecurityViolationService:
             cache_key = f"user_session:{user_id}"
             self.cache.delete(cache_key)
             logger.info(f"[Security] Invalidated sessions for user {user_id}")
+            
+            # === Audit 기록: 세션 무효화 (85_AUDIT_INTEGRATION Phase 1) ===
+            log_security_violation_audit(
+                violation_type="session_invalidation",
+                action="invalidate_session",
+                target=f"user:{user_id}",
+                result="success",
+                severity="high",
+                operator="system",
+                user_id=user_id,
+            )
+            
             return f"User sessions cache cleared for user {user_id}"
         except Exception as e:
             logger.error(f"[Security] Failed to invalidate sessions: {e}")
+            
+            # === Audit 기록: 세션 무효화 실패 ===
+            log_security_violation_audit(
+                violation_type="session_invalidation",
+                action="invalidate_session",
+                target=f"user:{user_id}",
+                result="failed",
+                severity="high",
+                operator="system",
+                user_id=user_id,
+                details={"error": str(e)},
+            )
+            
             return f"Session invalidation attempted but failed: {e}"
 
     def _log_suspicious_ip(self, ip_address: str) -> str:
@@ -345,6 +393,19 @@ class SecurityViolationService:
             ttl=timedelta(hours=hours),
         )
         logger.info(f"[Security] IP temporarily banned: {ip_address} for {hours} hours")
+        
+        # === Audit 기록: 임시 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
+        log_security_violation_audit(
+            violation_type="ip_ban_temporary",
+            action="block_ip",
+            target=f"ip:{ip_address}",
+            result="success",
+            severity="high",
+            operator="system",
+            source_ip=ip_address,
+            details={"ban_type": "temporary", "duration_hours": hours},
+        )
+        
         return f"IP {ip_address} temporarily banned for {hours} hour(s)"
 
     def _permanent_ip_ban(self, ip_address: str) -> str:
@@ -352,6 +413,19 @@ class SecurityViolationService:
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
         self.cache.set(cache_key, {"banned": True, "type": "permanent"}, ttl=None)
         logger.warning(f"[Security] IP permanently banned: {ip_address}")
+        
+        # === Audit 기록: 영구 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
+        log_security_violation_audit(
+            violation_type="ip_ban_permanent",
+            action="block_ip",
+            target=f"ip:{ip_address}",
+            result="success",
+            severity="critical",
+            operator="system",
+            source_ip=ip_address,
+            details={"ban_type": "permanent"},
+        )
+        
         return f"IP {ip_address} permanently banned"
 
     def _remove_ip_ban(self, ip_address: str) -> str:
