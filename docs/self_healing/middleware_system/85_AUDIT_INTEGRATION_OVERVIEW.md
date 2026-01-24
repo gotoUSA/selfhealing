@@ -64,9 +64,9 @@
 | SecurityViolationService | `services/security/service.py` | 보안 위반 처리, IP 차단, 세션 무효화 | **P0** | ✅ 완료 (2026-01-24) |
 | RegionalIsolationGate | `services/isolation/regional_gate.py` | 리전 격리/해제 | **P0** | ✅ 완료 (2026-01-24) |
 | BlastRadiusService | `services/blast_radius/service.py` | set_policy, add_dependency, isolate_service | **P0** | ✅ 완료 (2026-01-24) |
-| CleanupService | `services/cleanup_service.py` | archive_old_dlq_entries, cleanup_expired_config, purge_archived_dlq_entries | **P1** | ⏳ 대기 |
-| PendingConfigService | `services/pending_config.py` | cancel_pending_change | **P1** | ⏳ 대기 |
-| ConfigHistoryService | `services/config_history.py` | 설정 버전 저장/롤백 | **P1** | ⏳ 대기 |
+| CleanupService | `services/cleanup_service.py` | archive_old_dlq_entries, cleanup_expired_config, purge_archived_dlq_entries | **P1** | ✅ 완료 (2026-01-24) |
+| PendingConfigService | `services/pending_config.py` | cancel_pending_change | **P1** | ✅ 완료 (2026-01-24) |
+| ConfigHistoryService | `services/config_history.py` | 설정 버전 저장/롤백 | **P1** | ✅ 완료 (2026-01-24) |
 | AdaptiveThrottle | `services/throttle/adaptive.py` | 동적 속도 제한 조절 | **P1** | ⏳ 대기 |
 | LearningService | `services/learning/service.py` | 파라미터 블랙리스트 등록, 패턴 학습 | **P1** | ⏳ 대기 |
 
@@ -93,12 +93,9 @@
 
 ### 4.3 더미 Adapter 사용 (Refactoring Required)
 
-| 컴포넌트 | 파일 | 문제점 | 해결방안 | 우선순위 |
-|----------|------|--------|----------|----------|
-| auto_tuning view | `api/django/views/auto_tuning.py` | DummyAuditAdapter 사용, logger.info만 호출 | `ProviderRegistry.get_audit_adapter()` 교체 | **P1** |
-
-> **상세**: `_create_default_service()`에서 DummyAuditAdapter 클래스 삭제 후, 
-> `ProviderRegistry.get_audit_adapter()`로 실제 audit adapter 주입. (87번 문서 섹션 7 참조)
+| 컴포넌트 | 파일 | 문제점 | 해결방안 | 우선순위 | 상태 |
+|----------|------|--------|----------|----------|------|
+| auto_tuning view | `api/django/views/auto_tuning.py` | DummyAuditAdapter 사용 | `ProviderRegistry.get_audit_adapter()` 및 AuditAdapterWrapper 사용 | **P1** | ✅ 완료 (2026-01-24) |
 
 ### 4.4 독립 Audit 시스템 (통합 검토 필요)
 
@@ -150,14 +147,13 @@
 | 문서 | 대상 | 파일 수 | 상태 |
 |------|------|---------|------|
 | 86_AUDIT_INTEGRATION_SECURITY_ISOLATION.md | Security, Isolation, BlastRadius 서비스 | 3개 서비스 | ✅ 완료 |
-| 87_AUDIT_INTEGRATION_LEARNING_RECOVERY.md | Learning, Throttle, Cleanup, PendingConfig, ConfigHistory 서비스 | 5개 서비스 | ⏳ 대기 |
+| 87_AUDIT_INTEGRATION_LEARNING_RECOVERY.md | Learning, Throttle 서비스 | 2개 서비스 | ⏳ 대기 |
 
 > **삭제된 문서**: 88, 89번은 View 레벨 audit을 다루었으나, 이 프로젝트의 표준 패턴에 따라 View는 서비스를 호출하므로 별도 문서 불필요.
 
 ### 6.2 구현 순서 (Phase별) - 서비스 레이어만
 
 #### Phase 1: Critical (즉시 - 1주 내) ✅ 완료 (2026-01-24)
-**문서 참조**: 86
 
 | 순서 | 파일 | 이유 | 상태 |
 |------|------|------|------|
@@ -165,26 +161,27 @@
 | 2 | `services/isolation/regional_gate.py` | 리전 격리 - 운영 영향도 높음 | ✅ 완료 |
 | 3 | `services/blast_radius/service.py` | 서비스 격리 - 장애 범위 제어 | ✅ 완료 |
 
-#### Phase 2: High (1-2주)
-**문서 참조**: 87
+#### Phase 2: High (1-2주) ✅ 완료 (2026-01-24)
 
-| 순서 | 파일 | 이유 |
-|------|------|------|
-| 4 | `services/cleanup_service.py` | 데이터 삭제/아카이브 |
-| 5 | `services/pending_config.py` | 설정 변경 예약/취소 |
-| 6 | `services/config_history.py` | 설정 버전 이력 |
-| 7 | `api/django/views/auto_tuning.py` | DummyAuditAdapter → ProviderRegistry.get_audit_adapter() 교체 |
+| 순서 | 파일 | 이유 | 상태 |
+|------|------|------|------|
+| 4 | `services/cleanup_service.py` | 데이터 삭제/아카이브 | ✅ 완료 |
+| 5 | `services/pending_config.py` | 설정 변경 예약/취소 | ✅ 완료 |
+| 6 | `services/config_history.py` | 설정 버전 이력 | ✅ 완료 |
+| 7 | `api/django/views/auto_tuning.py` | DummyAuditAdapter → AuditAdapterWrapper 교체 | ✅ 완료 |
 
-> **7번 상세**: DummyAuditAdapter 클래스 삭제 후 `ProviderRegistry.get_audit_adapter()` 호출로 교체.
-> 자세한 구현 방안은 87번 문서 섹션 7 참조.
+**구현 내역**:
+- CleanupService: `log_system_control_audit` (archive_dlq, cleanup_expired_config, purge_dlq_permanent, purge_dlq_dry_run)
+- PendingConfigService: `log_config_apply_audit` (status="cancelled")
+- ConfigHistoryService: `log_config_apply_audit` (save_version), `log_rollback_audit` (rollback)
+- auto_tuning: DummyAuditAdapter 삭제, ProviderRegistry.get_audit_adapter() 및 AuditAdapterWrapper 사용
 
 #### Phase 3: Medium (2-3주)
-**문서 참조**: 87
 
-| 순서 | 파일 | 이유 |
-|------|------|------|
-| 8 | `services/throttle/adaptive.py` | 동적 속도 제한 |
-| 9 | `services/learning/service.py` | 자가학습 패턴 |
+| 순서 | 파일 | 이유 | 상태 |
+|------|------|------|------|
+| 8 | `services/throttle/adaptive.py` | 동적 속도 제한 | ⏳ 대기 |
+| 9 | `services/learning/service.py` | 자가학습 패턴 | ⏳ 대기 |
 
 ## 7. 관련 문서
 

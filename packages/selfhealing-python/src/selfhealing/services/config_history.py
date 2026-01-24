@@ -31,6 +31,10 @@ Usage:
         target_version=1,
         rolled_back_by="admin",
     )
+
+Audit:
+- save_version: log_config_apply_audit(status="applied")
+- rollback: log_rollback_audit(state="completed")
 """
 import json
 import time
@@ -38,6 +42,8 @@ import logging
 import hashlib
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict
+
+from selfhealing.services.audit import log_config_apply_audit, log_rollback_audit
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +237,21 @@ class ConfigHistoryService:
                 f"version={version_num}, by={changed_by}, reason={reason}"
             )
             
+            # === Audit 기록: 설정 버전 저장 ===
+            log_config_apply_audit(
+                pending_id=None,
+                config_key=config_type,
+                old_value=None,
+                new_value=values,
+                status="applied",
+                details={
+                    "version": version_num,
+                    "changed_by": changed_by,
+                    "reason": reason,
+                    "hash": config_hash,
+                },
+            )
+            
             return version
             
         except Exception as e:
@@ -363,6 +384,18 @@ class ConfigHistoryService:
             logger.info(
                 f"[ConfigHistory] Rollback successful: {config_type} "
                 f"v{target_version} -> v{new_version.version} by {rolled_back_by}"
+            )
+            
+            # === Audit 기록: 설정 롤백 ===
+            log_rollback_audit(
+                request_id=f"config-rollback-{config_type}-{new_version.version}",
+                stage_name=config_type,
+                state="completed",
+                triggered_by=rolled_back_by,
+                reason=f"Rollback to version {target_version}",
+                source_version=str(new_version.version - 1) if new_version.version > 1 else None,
+                target_version=str(target_version),
+                affected_components=[config_type],
             )
         
         return new_version

@@ -6,6 +6,11 @@ Handles cleanup and archival operations for DLQ, Config, and Approvals.
 Thin Task, Fat Service 원칙:
 - Task는 단순 위임자 역할
 - 모든 비즈니스 로직은 이 서비스에서 처리
+
+Audit:
+- archive_old_dlq_entries: log_system_control_audit(action="archive_dlq")
+- cleanup_expired_config: log_system_control_audit(action="cleanup_expired_config")
+- purge_archived_dlq_entries: log_system_control_audit(action="purge_dlq_permanent|purge_dlq_dry_run")
 """
 
 from __future__ import annotations
@@ -13,6 +18,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
+
+from selfhealing.services.audit import (
+    log_system_control_audit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +88,15 @@ class CleanupService:
 
             logger.info(f"[CleanupService] Archived {count} DLQ entries")
 
+            # === Audit 기록: DLQ 아카이브 ===
+            log_system_control_audit(
+                action="archive_dlq",
+                actor="system",
+                old_state={"archived_count": 0},
+                new_state={"archived_count": count},
+                reason=f"Archive DLQ entries older than {older_than_days} days",
+            )
+
             return CleanupResult(
                 success=True,
                 operation="archived",
@@ -119,6 +137,15 @@ class CleanupService:
             count = pending_service.cleanup_expired(max_age_hours=older_than_hours)
 
             logger.info(f"[CleanupService] Cleaned up {count} expired configs")
+
+            # === Audit 기록: 만료된 Pending Config 정리 ===
+            log_system_control_audit(
+                action="cleanup_expired_config",
+                actor="system",
+                old_state={"expired_count": 0},
+                new_state={"expired_count": count},
+                reason=f"Cleanup expired pending configs older than {older_than_hours} hours",
+            )
 
             return CleanupResult(
                 success=True,
@@ -215,10 +242,28 @@ class CleanupService:
                 logger.info(
                     f"[CleanupService] DRY RUN: Would purge {count} archived entries"
                 )
+
+                # === Audit 기록: DRY RUN 모드 (실제 삭제 없음) ===
+                log_system_control_audit(
+                    action="purge_dlq_dry_run",
+                    actor="system",
+                    old_state={"purged_count": 0},
+                    new_state={"would_purge_count": count, "dry_run": True},
+                    reason=f"DRY RUN: Would purge {count} archived entries older than {older_than_days} days",
+                )
             else:
                 count = dlq_service.purge_archived(older_than_days=older_than_days)
                 logger.warning(
                     f"[CleanupService] ⚠️ PERMANENTLY DELETED {count} entries"
+                )
+
+                # === Audit 기록: 영구 삭제 (고위험, 복구 불가) ===
+                log_system_control_audit(
+                    action="purge_dlq_permanent",
+                    actor="system",
+                    old_state={"purged_count": 0},
+                    new_state={"purged_count": count, "permanent": True, "unrecoverable": True},
+                    reason=f"PERMANENT DELETION: Purged {count} archived entries older than {older_than_days} days - UNRECOVERABLE",
                 )
 
             return CleanupResult(

@@ -34,6 +34,7 @@ def _get_auto_tuning_service():
 def _create_default_service():
     """기본 AutoTuningService 생성"""
     from selfhealing.services.auto_tuning import AutoTuningService
+    from selfhealing.factory import ProviderRegistry
     
     # 기본 어댑터들
     class DummyMetricsAdapter:
@@ -64,15 +65,34 @@ def _create_default_service():
             self._values[parameter] = value
             return True
     
-    class DummyAuditAdapter:
-        def log(self, entry):
-            logger.info(f"[Audit] {entry}")
+    # ProviderRegistry에서 실제 Audit Adapter 획득
+    # DummyAuditAdapter 대신 실제 audit 시스템과 연동
+    try:
+        audit_adapter = ProviderRegistry.get_audit_adapter()
+    except (ValueError, ImportError):
+        # Fallback: 실제 audit 헬퍼 함수를 사용하는 래퍼
+        from selfhealing.services.audit import log_system_control_audit
+        
+        class AuditAdapterWrapper:
+            """audit 헬퍼 함수를 사용하는 Audit Adapter 래퍼"""
+            
+            def log(self, entry):
+                """AutoTuning 이벤트를 실제 audit 시스템에 기록"""
+                log_system_control_audit(
+                    action=entry.get("action", "auto_tuning"),
+                    actor=entry.get("actor", "system"),
+                    old_state=entry.get("old_state"),
+                    new_state=entry.get("new_state"),
+                    reason=entry.get("reason", str(entry)),
+                )
+        
+        audit_adapter = AuditAdapterWrapper()
     
     return AutoTuningService(
         metrics_adapter=DummyMetricsAdapter(),
         config_provider=DummyConfigProvider(),
         config_applier=DummyConfigApplier(),
-        audit_adapter=DummyAuditAdapter(),
+        audit_adapter=audit_adapter,
     )
 
 

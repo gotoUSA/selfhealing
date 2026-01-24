@@ -5,9 +5,12 @@ Manages scheduled/pending configuration changes that are waiting to be applied.
 
 Features:
 - Store pending changes with scheduled apply time
-- Cancel pending changes before they're applied
+- Cancel pending changes before they's applied
 - Apply changes when the scheduled time arrives
 - Track change history
+
+Audit:
+- cancel_pending_change: log_config_apply_audit(status="cancelled")
 """
 
 import logging
@@ -20,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from selfhealing.core.apply_strategy import ApplyStrategy, ApplyOptions
 from selfhealing.core.state_backend import get_state_backend
+from selfhealing.services.audit import log_config_apply_audit
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +234,21 @@ class PendingConfigService:
             self._save_state()
 
             logger.info(f"[PendingConfig] Cancelled pending change {change_id}")
+
+            # === Audit 기록: 예약된 설정 변경 취소 ===
+            log_config_apply_audit(
+                pending_id=change_id,
+                config_key=change.config_type,
+                old_value=change.previous_values,
+                new_value=change.changes,
+                status="cancelled",
+                details={
+                    "cancelled_by": cancelled_by,
+                    "scheduled_at": change.scheduled_at,
+                    "strategy": change.strategy,
+                },
+            )
+
             return change
 
     def mark_applied(
