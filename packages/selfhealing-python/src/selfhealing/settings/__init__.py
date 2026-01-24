@@ -187,6 +187,53 @@ from selfhealing.settings.distributed_lock import (
     reset_distributed_lock_settings,
 )
 
+# Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.dashboard import (
+    DashboardSettings,
+    get_dashboard_settings,
+    reset_dashboard_settings,
+)
+from selfhealing.settings.batch import (
+    BatchSettings,
+    get_batch_settings,
+    reset_batch_settings,
+)
+from selfhealing.settings.audit_settings import (
+    AuditSettings,
+    get_audit_settings,
+    reset_audit_settings,
+)
+from selfhealing.settings.celery_task import (
+    CeleryTaskSettings,
+    get_celery_task_settings,
+    reset_celery_task_settings,
+)
+from selfhealing.settings.api_view import (
+    ApiViewSettings,
+    get_api_view_settings,
+    reset_api_view_settings,
+)
+from selfhealing.settings.domain_sensitivity import (
+    DomainSensitivitySettings,
+    get_domain_sensitivity_settings,
+    reset_domain_sensitivity_settings,
+)
+from selfhealing.settings.slack_channel import (
+    SlackChannelSettings,
+    get_slack_channel_settings,
+    reset_slack_channel_settings,
+)
+from selfhealing.settings.audit_integrity import (
+    AuditIntegritySettings,
+    get_audit_integrity_settings,
+    reset_audit_integrity_settings,
+)
+from selfhealing.settings.regional_recovery_policy import (
+    RegionalRecoveryPolicySettings,
+    get_regional_recovery_policy_settings,
+    reset_regional_recovery_policy_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -395,4 +442,41 @@ __all__ = [
     "DistributedLockSettings",
     "get_distributed_lock_settings",
     "reset_distributed_lock_settings",
+    # Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    # Dashboard
+    "DashboardSettings",
+    "get_dashboard_settings",
+    "reset_dashboard_settings",
+    # Batch
+    "BatchSettings",
+    "get_batch_settings",
+    "reset_batch_settings",
+    # Audit
+    "AuditSettings",
+    "get_audit_settings",
+    "reset_audit_settings",
+    # Celery Task
+    "CeleryTaskSettings",
+    "get_celery_task_settings",
+    "reset_celery_task_settings",
+    # API View
+    "ApiViewSettings",
+    "get_api_view_settings",
+    "reset_api_view_settings",
+    # Domain Sensitivity
+    "DomainSensitivitySettings",
+    "get_domain_sensitivity_settings",
+    "reset_domain_sensitivity_settings",
+    # Slack Channel
+    "SlackChannelSettings",
+    "get_slack_channel_settings",
+    "reset_slack_channel_settings",
+    # Audit Integrity
+    "AuditIntegritySettings",
+    "get_audit_integrity_settings",
+    "reset_audit_integrity_settings",
+    # Regional Recovery Policy
+    "RegionalRecoveryPolicySettings",
+    "get_regional_recovery_policy_settings",
+    "reset_regional_recovery_policy_settings",
 ]

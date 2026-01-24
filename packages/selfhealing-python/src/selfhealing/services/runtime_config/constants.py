@@ -39,6 +39,16 @@ from selfhealing.settings import (
     NotificationChannelSettings,
     CascadeRetentionSettings,
     DistributedLockSettings,
+    # Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    DashboardSettings,
+    BatchSettings,
+    AuditSettings,
+    CeleryTaskSettings,
+    ApiViewSettings,
+    DomainSensitivitySettings,
+    SlackChannelSettings,
+    AuditIntegritySettings,
+    RegionalRecoveryPolicySettings,
 )
 
 # Legacy aliases for backward compatibility
@@ -76,6 +86,16 @@ CorruptionShieldConfig = CorruptionShieldSettings
 NotificationChannelConfig = NotificationChannelSettings
 CascadeRetentionConfig = CascadeRetentionSettings
 DistributedLockConfig = DistributedLockSettings
+# Week 4 LOW Settings aliases (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+DashboardConfig = DashboardSettings
+BatchConfig = BatchSettings
+AuditConfig = AuditSettings
+CeleryTaskConfig = CeleryTaskSettings
+ApiViewConfig = ApiViewSettings
+DomainSensitivityConfig = DomainSensitivitySettings
+SlackChannelConfig = SlackChannelSettings
+AuditIntegrityConfig = AuditIntegritySettings
+RegionalRecoveryPolicyConfig = RegionalRecoveryPolicySettings
 
 # Storage keys for each config type
 STORAGE_KEYS = {
@@ -117,6 +137,16 @@ STORAGE_KEYS = {
     "notification_channel": "runtime_config:notification_channel",
     "cascade_retention": "runtime_config:cascade_retention",
     "distributed_lock": "runtime_config:distributed_lock",
+    # Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "dashboard": "runtime_config:dashboard",
+    "batch": "runtime_config:batch",
+    "audit": "runtime_config:audit",
+    "celery_task": "runtime_config:celery_task",
+    "api_view": "runtime_config:api_view",
+    "domain_sensitivity": "runtime_config:domain_sensitivity",
+    "slack_channel": "runtime_config:slack_channel",
+    "audit_integrity": "runtime_config:audit_integrity",
+    "regional_recovery_policy": "runtime_config:regional_recovery_policy",
 }
 
 # Default config classes
@@ -158,6 +188,16 @@ CONFIG_CLASSES = {
     "notification_channel": NotificationChannelConfig,
     "cascade_retention": CascadeRetentionConfig,
     "distributed_lock": DistributedLockConfig,
+    # Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "dashboard": DashboardConfig,
+    "batch": BatchConfig,
+    "audit": AuditConfig,
+    "celery_task": CeleryTaskConfig,
+    "api_view": ApiViewConfig,
+    "domain_sensitivity": DomainSensitivityConfig,
+    "slack_channel": SlackChannelConfig,
+    "audit_integrity": AuditIntegrityConfig,
+    "regional_recovery_policy": RegionalRecoveryPolicyConfig,
 }
 
 # Default SLO configuration
