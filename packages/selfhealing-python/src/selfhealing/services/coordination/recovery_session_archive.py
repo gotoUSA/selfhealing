@@ -515,25 +515,35 @@ class RecoverySessionArchiveService:
                 end_date=end_date,
             )
         
-        # 인메모리
+        return self._get_history_from_memory(
+            namespace=namespace,
+            status=status,
+            limit=limit,
+            offset=offset,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    
+    def _get_history_from_memory(
+        self,
+        namespace: Optional[str],
+        status: Optional[str],
+        limit: int,
+        offset: int,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+    ) -> List[RecoverySessionArchiveData]:
+        """인메모리 스토리지에서 히스토리 조회."""
         with self._lock:
             sessions = list(self._memory_storage.values())
         
-        # 필터링
-        if namespace:
-            sessions = [s for s in sessions if s.namespace == namespace]
-        if status:
-            sessions = [s for s in sessions if s.status == status]
-        if start_date:
-            sessions = [
-                s for s in sessions
-                if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) >= start_date
-            ]
-        if end_date:
-            sessions = [
-                s for s in sessions
-                if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) <= end_date
-            ]
+        sessions = self._apply_history_filters(
+            sessions=sessions,
+            namespace=namespace,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
         
         # 정렬 (최신순)
         sessions.sort(
@@ -542,6 +552,47 @@ class RecoverySessionArchiveService:
         )
         
         return sessions[offset:offset + limit]
+    
+    def _apply_history_filters(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+        namespace: Optional[str],
+        status: Optional[str],
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+    ) -> List[RecoverySessionArchiveData]:
+        """세션 목록에 필터 조건 적용."""
+        if namespace:
+            sessions = [s for s in sessions if s.namespace == namespace]
+        if status:
+            sessions = [s for s in sessions if s.status == status]
+        if start_date:
+            sessions = self._filter_by_start_date(sessions, start_date)
+        if end_date:
+            sessions = self._filter_by_end_date(sessions, end_date)
+        return sessions
+    
+    def _filter_by_start_date(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+        start_date: datetime,
+    ) -> List[RecoverySessionArchiveData]:
+        """시작 날짜 이후 세션 필터링."""
+        return [
+            s for s in sessions
+            if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) >= start_date
+        ]
+    
+    def _filter_by_end_date(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+        end_date: datetime,
+    ) -> List[RecoverySessionArchiveData]:
+        """종료 날짜 이전 세션 필터링."""
+        return [
+            s for s in sessions
+            if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) <= end_date
+        ]
     
     def _get_history_from_django(
         self,
@@ -661,44 +712,64 @@ class RecoverySessionArchiveService:
             limit=1000,
         )
         
-        total = len(all_sessions)
-        completed = sum(1 for s in all_sessions if s.status == "completed")
-        failed = sum(1 for s in all_sessions if s.status == "failed")
-        aborted = sum(1 for s in all_sessions if s.status == "aborted")
+        status_counts = self._count_session_statuses(all_sessions)
+        avg_duration = self._calculate_average_duration(all_sessions)
+        step_failure_rates = self._calculate_step_failure_rates(all_sessions)
         
-        # 평균 소요 시간
+        total = len(all_sessions)
+        return {
+            "period_days": days,
+            "namespace": namespace,
+            "total_sessions": total,
+            "completed": status_counts["completed"],
+            "failed": status_counts["failed"],
+            "aborted": status_counts["aborted"],
+            "success_rate": (status_counts["completed"] / total * 100) if total > 0 else 0,
+            "average_duration_seconds": avg_duration,
+            "step_failure_rates": step_failure_rates,
+        }
+    
+    def _count_session_statuses(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+    ) -> Dict[str, int]:
+        """세션 상태별 개수 집계."""
+        return {
+            "completed": sum(1 for s in sessions if s.status == "completed"),
+            "failed": sum(1 for s in sessions if s.status == "failed"),
+            "aborted": sum(1 for s in sessions if s.status == "aborted"),
+        }
+    
+    def _calculate_average_duration(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+    ) -> float:
+        """완료된 세션들의 평균 소요 시간 계산."""
         durations = [
             s.total_duration_seconds
-            for s in all_sessions
+            for s in sessions
             if s.total_duration_seconds is not None and s.status == "completed"
         ]
-        avg_duration = sum(durations) / len(durations) if durations else 0
-        
-        # 단계별 실패율
+        return sum(durations) / len(durations) if durations else 0
+    
+    def _calculate_step_failure_rates(
+        self,
+        sessions: List[RecoverySessionArchiveData],
+    ) -> Dict[str, float]:
+        """단계별 실패율 계산."""
         step_failures: Dict[str, int] = {}
         step_totals: Dict[str, int] = {}
-        for session in all_sessions:
+        
+        for session in sessions:
             for step in session.steps:
                 step_totals[step.step_type] = step_totals.get(step.step_type, 0) + 1
                 if step.status == "failed":
                     step_failures[step.step_type] = step_failures.get(step.step_type, 0) + 1
         
-        step_failure_rates = {
+        return {
             step_type: step_failures.get(step_type, 0) / count * 100
             for step_type, count in step_totals.items()
             if count > 0
-        }
-        
-        return {
-            "period_days": days,
-            "namespace": namespace,
-            "total_sessions": total,
-            "completed": completed,
-            "failed": failed,
-            "aborted": aborted,
-            "success_rate": (completed / total * 100) if total > 0 else 0,
-            "average_duration_seconds": avg_duration,
-            "step_failure_rates": step_failure_rates,
         }
     
     def cleanup_old_archives(
