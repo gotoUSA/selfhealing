@@ -54,8 +54,14 @@ from typing import Any, Dict, List, Optional, Callable
 
 from selfhealing.utils.time import utc_now
 from selfhealing.settings.namespace import get_key_prefix
+from selfhealing.settings.slack_channel import get_slack_channel_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _get_default_slack_channel() -> str:
+    """Get default Slack channel from settings."""
+    return get_slack_channel_settings().default_channel
 
 
 # =============================================================================
@@ -422,7 +428,10 @@ class CrossClusterNotifier:
         ))
     """
 
-    DEFAULT_CHANNEL = "#selfhealing-alerts"
+    @property
+    def DEFAULT_CHANNEL(self) -> str:
+        """Get default channel from SlackChannelSettings."""
+        return _get_default_slack_channel()
 
     def __init__(
         self,
@@ -445,7 +454,7 @@ class CrossClusterNotifier:
         )
         self.other_clusters = other_clusters or []
         self.notification_backend = notification_backend or self._create_default_backend()
-        self.default_channel = default_channel or self.DEFAULT_CHANNEL
+        self.default_channel = default_channel or _get_default_slack_channel()
 
     def _create_default_backend(self) -> NotificationBackend:
         """기본 알림 백엔드 생성."""
@@ -605,7 +614,7 @@ class CrossClusterPropagationRequest:
         self.notification_backend = notification_backend or LoggingNotificationBackend()
         self.default_expiry_hours = default_expiry_hours
         self.on_apply = on_apply
-        self.default_channel = default_channel or "#selfhealing-alerts"
+        self.default_channel = default_channel or _get_default_slack_channel()
 
         # 메모리 저장소 (Redis 미사용 시 fallback)
         self._memory_store: Dict[str, PropagationRequest] = {}

@@ -35,6 +35,9 @@ Usage:
 Audit:
 - save_version: log_config_apply_audit(status="applied")
 - rollback: log_rollback_audit(state="completed")
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [20] AuditSettings 참조.
 """
 import json
 import time
@@ -44,6 +47,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict
 
 from selfhealing.services.audit import log_config_apply_audit, log_rollback_audit
+from selfhealing.settings.audit_settings import get_audit_settings
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +88,15 @@ def _get_config_current_key(config_type: str) -> str:
 CONFIG_HISTORY_KEY = "selfhealing:config:history:{config_type}"
 CONFIG_VERSION_COUNTER_KEY = "selfhealing:config:version:{config_type}"
 CONFIG_CURRENT_KEY = "selfhealing:config:current:{config_type}"
-MAX_HISTORY_ENTRIES = 50  # 최대 보관 버전 수
+
+
+def _get_max_history_entries() -> int:
+    """Get max history entries from AuditSettings."""
+    return get_audit_settings().config_history_entries
+
+
+# Legacy constant for backward compatibility
+MAX_HISTORY_ENTRIES = 50  # Deprecated: use _get_max_history_entries() instead
 
 
 @dataclass
@@ -226,9 +238,10 @@ class ConfigHistoryService:
             )
             
             # 히스토리에 추가 (LPUSH + LTRIM)
+            max_entries = _get_max_history_entries()
             pipe = self.redis_client.pipeline()
             pipe.lpush(history_key, json.dumps(version.to_dict()))
-            pipe.ltrim(history_key, 0, MAX_HISTORY_ENTRIES - 1)
+            pipe.ltrim(history_key, 0, max_entries - 1)
             pipe.set(current_key, json.dumps(version.to_dict()))
             pipe.execute()
             
@@ -283,7 +296,8 @@ class ConfigHistoryService:
         
         try:
             history_key = _get_config_history_key(config_type)
-            entries = self.redis_client.lrange(history_key, 0, min(limit - 1, MAX_HISTORY_ENTRIES - 1))
+            max_entries = _get_max_history_entries()
+            entries = self.redis_client.lrange(history_key, 0, min(limit - 1, max_entries - 1))
             
             versions = []
             for entry in entries:
@@ -335,7 +349,7 @@ class ConfigHistoryService:
         version: int
     ) -> Optional[ConfigVersion]:
         """특정 버전 조회."""
-        history = self.get_history(config_type, limit=MAX_HISTORY_ENTRIES)
+        history = self.get_history(config_type, limit=_get_max_history_entries())
         
         for v in history:
             if v.version == version:

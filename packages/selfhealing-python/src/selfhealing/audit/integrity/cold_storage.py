@@ -17,6 +17,9 @@ Industry Standards:
     - HIPAA: 6 years minimum
     - PCI-DSS: 1 year + 3 months readily accessible, then 7 years archived
     - GDPR: Depends on purpose, but audit trails often 5+ years
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [25] AuditIntegritySettings 참조.
 """
 
 from __future__ import annotations
@@ -31,7 +34,19 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
+
 logger = logging.getLogger(__name__)
+
+
+def _get_archive_threshold_days() -> int:
+    """Get archive threshold from settings."""
+    return get_audit_integrity_settings().archive_threshold_days
+
+
+def _get_cold_retention_years() -> int:
+    """Get cold retention years from settings."""
+    return get_audit_integrity_settings().cold_retention_years
 
 
 class ColdStorageBackend(Protocol):
@@ -235,6 +250,7 @@ class AnchorColdStorage:
         - Support retrieval for historical audits
     """
     
+    # Legacy constants for backward compatibility
     ARCHIVE_THRESHOLD_DAYS = 7  # Archive when TTL < 7 days
     DEFAULT_COLD_RETENTION_YEARS = 7  # Keep cold archives for 7 years
     
@@ -244,8 +260,8 @@ class AnchorColdStorage:
         cold_backend: Optional[ColdStorageBackend] = None,
         base_dir: Optional[Path] = None,
         key_prefix: str = "selfhealing:",
-        archive_threshold_days: int = ARCHIVE_THRESHOLD_DAYS,
-        cold_retention_years: int = DEFAULT_COLD_RETENTION_YEARS,
+        archive_threshold_days: Optional[int] = None,
+        cold_retention_years: Optional[int] = None,
     ):
         """
         Initialize AnchorColdStorage.
@@ -255,13 +271,13 @@ class AnchorColdStorage:
             cold_backend: Cold storage backend (default: LocalFileColdStorage)
             base_dir: Base directory for local cold storage
             key_prefix: Redis key prefix
-            archive_threshold_days: Archive when TTL < this many days
-            cold_retention_years: Years to retain cold archives
+            archive_threshold_days: Archive when TTL < this many days (default from AuditIntegritySettings)
+            cold_retention_years: Years to retain cold archives (default from AuditIntegritySettings)
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._archive_threshold = archive_threshold_days
-        self._cold_retention_years = cold_retention_years
+        self._archive_threshold = archive_threshold_days if archive_threshold_days is not None else _get_archive_threshold_days()
+        self._cold_retention_years = cold_retention_years if cold_retention_years is not None else _get_cold_retention_years()
         
         # Default to local filesystem backend
         if cold_backend is None:

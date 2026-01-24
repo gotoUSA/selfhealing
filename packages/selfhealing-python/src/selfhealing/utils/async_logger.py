@@ -4,6 +4,9 @@
 
 Zero-Latency Logging을 위한 비동기 이벤트 버퍼링
 복구 경로에서 ~100ms 단축
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [19] BatchSettings 참조.
 """
 
 import queue
@@ -12,6 +15,8 @@ import time
 import logging
 from enum import Enum
 from typing import Dict, List, Callable, Optional, Any
+
+from selfhealing.settings.batch import get_batch_settings
 
 __all__ = ["AsyncHealingLogger", "EventSeverity"]
 
@@ -52,10 +57,9 @@ class AsyncHealingLogger:
     _worker_thread: Optional[threading.Thread] = None
     _flush_callback: Optional[Callable[[List[Dict]], None]] = None
     _lock = threading.RLock()
+    _settings_cache: Optional[Any] = None
     
-    # 설정
-    BATCH_SIZE = 10
-    FLUSH_INTERVAL = 5.0  # 초
+    # 설정은 BatchSettings에서 가져옴
     IMMEDIATE_SEVERITIES = {EventSeverity.CRITICAL}
     
     # 통계
@@ -66,6 +70,23 @@ class AsyncHealingLogger:
         'batch_flushes': 0,
         'flush_errors': 0,
     }
+    
+    @classmethod
+    def _get_settings(cls):
+        """Get BatchSettings (cached for performance)."""
+        if cls._settings_cache is None:
+            cls._settings_cache = get_batch_settings()
+        return cls._settings_cache
+    
+    @classmethod
+    def _get_batch_size(cls) -> int:
+        """Get batch size from settings."""
+        return cls._get_settings().logger_batch_size
+    
+    @classmethod
+    def _get_flush_interval(cls) -> float:
+        """Get flush interval from settings."""
+        return cls._get_settings().flush_interval
     
     @classmethod
     def configure(cls, flush_callback: Callable[[List[Dict]], None]) -> None:
@@ -174,10 +195,12 @@ class AsyncHealingLogger:
             except queue.Empty:
                 pass
             
-            # 배치 사이즈 도달 또는 시간 경과 시 전송
+            # 배치 사이즈 도달 또는 시간 경과 시 전송 (설정에서 가져옴)
+            batch_size = cls._get_batch_size()
+            flush_interval = cls._get_flush_interval()
             should_flush = (
-                len(batch) >= cls.BATCH_SIZE or
-                (batch and time.time() - last_flush >= cls.FLUSH_INTERVAL)
+                len(batch) >= batch_size or
+                (batch and time.time() - last_flush >= flush_interval)
             )
             
             if should_flush:

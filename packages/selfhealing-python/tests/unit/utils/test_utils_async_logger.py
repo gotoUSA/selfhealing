@@ -47,16 +47,18 @@ class TestAsyncHealingLoggerConfiguration:
         AsyncHealingLogger._flush_callback = None
 
     def test_default_batch_size(self):
-        """Should have default batch size."""
+        """Should have default batch size from settings."""
         from selfhealing.utils.async_logger import AsyncHealingLogger
 
-        assert AsyncHealingLogger.BATCH_SIZE == 10
+        # 동적 설정을 통해 기본값 확인 (BatchSettings.logger_batch_size 기본값: 10)
+        assert AsyncHealingLogger._get_batch_size() == 10
 
     def test_default_flush_interval(self):
-        """Should have default flush interval."""
+        """Should have default flush interval from settings."""
         from selfhealing.utils.async_logger import AsyncHealingLogger
 
-        assert AsyncHealingLogger.FLUSH_INTERVAL == 5.0
+        # 동적 설정을 통해 기본값 확인 (BatchSettings.flush_interval 기본값: 5.0)
+        assert AsyncHealingLogger._get_flush_interval() == 5.0
 
 
 class TestAsyncHealingLoggerLifecycle:

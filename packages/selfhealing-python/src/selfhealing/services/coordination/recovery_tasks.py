@@ -11,6 +11,7 @@ Celery 기반 복구 태스크 모듈입니다.
 
 Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [21] CeleryTaskSettings 참조.
 """
 
 import logging
@@ -41,22 +42,45 @@ from selfhealing.services.coordination.pending_recovery_approval import (
 from selfhealing.services.coordination.regional_recovery_policy import (
     get_regional_recovery_policy_engine,
 )
+from selfhealing.settings.celery_task import get_celery_task_settings
 
 
 logger = logging.getLogger(__name__)
 
 
+def _get_task_settings():
+    """Get CeleryTaskSettings (cached)."""
+    return get_celery_task_settings()
+
+
 # =============================================================================
-# Constants
+# Constants (from CeleryTaskSettings)
 # =============================================================================
 
-# 복구 트리거 체크 간격 (초)
+def _get_trigger_check_interval() -> int:
+    """Get trigger check interval from settings."""
+    return _get_task_settings().trigger_check_interval
+
+def _get_health_monitor_interval() -> int:
+    """Get health monitor interval from settings."""
+    return _get_task_settings().health_monitor_interval
+
+def _get_stale_check_interval() -> int:
+    """Get stale check interval from settings."""
+    return _get_task_settings().stale_check_interval
+
+def _get_max_retries() -> int:
+    """Get max retries from settings."""
+    return _get_task_settings().max_retries
+
+def _get_default_retry_delay() -> int:
+    """Get default retry delay from settings."""
+    return _get_task_settings().default_retry_delay
+
+
+# Legacy constants for backward compatibility (deprecated)
 DEFAULT_TRIGGER_CHECK_INTERVAL = 60
-
-# 복구 건강 모니터링 간격 (초)
 DEFAULT_HEALTH_MONITOR_INTERVAL = 30
-
-# 방치된 복구 체크 간격 (분)
 DEFAULT_STALE_CHECK_INTERVAL = 10
 
 

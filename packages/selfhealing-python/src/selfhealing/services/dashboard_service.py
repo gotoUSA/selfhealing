@@ -12,6 +12,9 @@ Features:
 - Resolution rate and retry count statistics
 - **Redis caching for high-traffic scenarios**
 - **Hybrid storage support via ProviderRegistry**
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [18] DashboardSettings 참조.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from selfhealing.core.timezone import now
+from selfhealing.settings.dashboard import get_dashboard_settings
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
@@ -147,7 +151,7 @@ class DashboardService:
     Uses Redis caching to prevent database overload during high-traffic scenarios.
 
     Cache Strategy:
-    - Summary data is cached for 30 seconds (configurable)
+    - Summary data is cached for configurable seconds (via DashboardSettings)
     - Individual components (status, activity, distribution) use shorter TTL
     - Cache is invalidated on significant state changes
 
@@ -157,18 +161,36 @@ class DashboardService:
 
         # Force fresh data (bypass cache)
         summary = service.get_summary(skip_cache=True)
+    
+    Reference:
+        92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [18] DashboardSettings 참조.
     """
-
-    # Cache configuration
-    CACHE_PREFIX = "selfhealing:dashboard:"
-    CACHE_TTL_SECONDS = 30  # Default TTL for dashboard data
-    CACHE_TTL_STATUS = 15   # Shorter TTL for status counts
-    CACHE_TTL_ACTIVITY = 60 # Longer TTL for activity stats
 
     def __init__(self, cache: "CacheProviderInterface | None" = None):
         """Initialize DashboardService with optional cache provider."""
         self._stats_repo = None
         self._cache = cache
+        self._settings = get_dashboard_settings()
+
+    @property
+    def CACHE_PREFIX(self) -> str:
+        """Get cache prefix from settings."""
+        return self._settings.cache_prefix
+
+    @property
+    def CACHE_TTL_SECONDS(self) -> int:
+        """Get default cache TTL from settings."""
+        return self._settings.cache_ttl_seconds
+
+    @property
+    def CACHE_TTL_STATUS(self) -> int:
+        """Get status cache TTL from settings."""
+        return self._settings.cache_ttl_status
+
+    @property
+    def CACHE_TTL_ACTIVITY(self) -> int:
+        """Get activity cache TTL from settings."""
+        return self._settings.cache_ttl_activity
 
     @property
     def stats_repo(self):

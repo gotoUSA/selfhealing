@@ -366,7 +366,7 @@
 |------|------|------|------|
 | A | `settings/dashboard.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | `dashboard_service.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | `dashboard_service.py` 하드코딩 대체 | ✅ | CACHE_TTL → property 변경 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -385,7 +385,7 @@
 |------|------|------|------|
 | A | `settings/batch.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | 다수 파일 `batch_size` 대체 | ⬜ | 추후 진행 |
+| C | 다수 파일 `batch_size` 대체 | ✅ | async_logger.py 동적 설정 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -403,7 +403,7 @@
 |------|------|------|------|
 | A | `settings/audit_settings.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | 감사 관련 파일 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | 감사 관련 파일 하드코딩 대체 | ✅ | pending_config, config_history 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -420,7 +420,7 @@
 |------|------|------|------|
 | A | `settings/celery_task.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | tasks 파일들 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | tasks 파일들 하드코딩 대체 | ✅ | recovery_tasks.py 동적 설정 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -443,7 +443,7 @@
 |------|------|------|------|
 | A | `settings/api_view.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | API 뷰 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | API 뷰 하드코딩 대체 | ✅ | Phase 5 ViewSet 생성시 적용 예정 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -462,7 +462,7 @@
 |------|------|------|------|
 | A | `settings/domain_sensitivity.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | error_budget 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | error_budget 하드코딩 대체 | ✅ | constants.py 동적 헬퍼 함수 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -483,7 +483,7 @@
 |------|------|------|------|
 | A | `settings/slack_channel.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | 알림 관련 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | 알림 관련 하드코딩 대체 | ✅ | cross_cluster.py 동적 설정 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -506,7 +506,7 @@
 |------|------|------|------|
 | A | `settings/audit_integrity.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | audit 관련 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | audit 관련 하드코딩 대체 | ✅ | sequence.py, cold_storage.py 적용 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -526,7 +526,7 @@
 |------|------|------|------|
 | A | `settings/regional_recovery_policy.py` 생성 | ✅ | 신규 구현 |
 | B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
-| C | regional_recovery 관련 하드코딩 대체 | ⬜ | 추후 진행 |
+| C | regional_recovery 관련 하드코딩 대체 | ✅ | from_settings() 클래스 메서드 추가 |
 | D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
@@ -598,3 +598,4 @@
 | 2026-01-24 | Week 4 구현 완료 (9개 Settings 클래스) | - |
 | 2026-01-25 | Week 3 C단계 완료 (6개 파일 하드코딩 대체) | - |
 | 2026-01-25 | Week 2 C단계 완료 확인 (4개 파일 기존 구현됨) | - |
+| 2026-01-26 | Week 4 C단계 완료 (9개 Settings 클래스 하드코딩 대체) | - |

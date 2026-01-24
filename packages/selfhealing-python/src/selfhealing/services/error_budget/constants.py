@@ -18,11 +18,13 @@ Usage:
 
 Reference:
     docs/self_healing/middleware_system/75_CRISIS_BUDGET_MULTIPLIER.md §0.1 (11번)
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [23] DomainSensitivitySettings 참조.
 """
 
 from typing import Dict
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
+from selfhealing.settings.domain_sensitivity import get_domain_sensitivity_settings
 
 
 # =============================================================================
@@ -69,6 +71,18 @@ CrisisMultiplierProvider 기본 캐시 TTL (30초).
 # Emergency Level별 기본 가중치
 # =============================================================================
 
+def _get_level_multipliers() -> Dict[EmergencyLevel, float]:
+    """DomainSensitivitySettings에서 레벨 승수 가져오기."""
+    settings = get_domain_sensitivity_settings()
+    return {
+        EmergencyLevel.NORMAL: settings.level_multiplier_normal,
+        EmergencyLevel.LEVEL_1: settings.level_multiplier_level_1,
+        EmergencyLevel.LEVEL_2: settings.level_multiplier_level_2,
+        EmergencyLevel.LEVEL_3: settings.level_multiplier_level_3,
+    }
+
+
+# Legacy constant for backward compatibility
 DEFAULT_LEVEL_MULTIPLIERS: Dict[EmergencyLevel, float] = {
     EmergencyLevel.NORMAL: 1.0,   # 기본 소진율
     EmergencyLevel.LEVEL_1: 1.5,  # 경미한 위기: 1.5배
@@ -77,8 +91,7 @@ DEFAULT_LEVEL_MULTIPLIERS: Dict[EmergencyLevel, float] = {
 }
 """
 Emergency Level별 Error Budget 소진 가중치.
-
-NORMAL → LEVEL_3로 갈수록 에러 1건당 더 많은 버짓 소진.
+Deprecated: Use _get_level_multipliers() for dynamic settings.
 """
 
 
@@ -86,6 +99,13 @@ NORMAL → LEVEL_3로 갈수록 에러 1건당 더 많은 버짓 소진.
 # 도메인별 기본 민감도
 # =============================================================================
 
+def _get_domain_sensitivity() -> Dict[str, float]:
+    """DomainSensitivitySettings에서 도메인 민감도 가져오기."""
+    settings = get_domain_sensitivity_settings()
+    return settings.as_domain_dict()
+
+
+# Legacy constant for backward compatibility
 DEFAULT_DOMAIN_SENSITIVITY: Dict[str, float] = {
     "payment": 10.0,      # 결제 도메인: 최고 민감도 (SLA 1h)
     "order": 5.0,         # 주문 도메인: 높은 민감도 (SLA 4h)
@@ -95,9 +115,7 @@ DEFAULT_DOMAIN_SENSITIVITY: Dict[str, float] = {
 }
 """
 도메인별 민감도 가중치.
-
-SLA가 짧은 도메인일수록 높은 민감도.
-Code reference: coordination/crisis_multiplier.py#L45
+Deprecated: Use _get_domain_sensitivity() for dynamic settings.
 """
 
 

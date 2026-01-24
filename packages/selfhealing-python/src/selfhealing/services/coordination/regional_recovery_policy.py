@@ -15,6 +15,7 @@ Code reference:
 
 Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#8.2
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [26] RegionalRecoveryPolicySettings 참조.
 """
 
 from __future__ import annotations
@@ -27,8 +28,14 @@ from typing import Any, Dict, List, Optional
 
 from .recovery_state import RecoveryStep, RecoveryStepType
 from .enums import RecoveryStatus
+from selfhealing.settings.regional_recovery_policy import get_regional_recovery_policy_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _get_settings():
+    """Get RegionalRecoveryPolicySettings."""
+    return get_regional_recovery_policy_settings()
 
 
 @dataclass
@@ -130,6 +137,50 @@ class RegionalRecoveryConfig:
     def from_dict(cls, data: Dict[str, Any]) -> "RegionalRecoveryConfig":
         """딕셔너리에서 생성."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+    @classmethod
+    def from_settings(cls, namespace: str = "global", **overrides) -> "RegionalRecoveryConfig":
+        """
+        RegionalRecoveryPolicySettings에서 기본값을 가져와 생성.
+        
+        Args:
+            namespace: 네임스페이스 이름
+            **overrides: 기본값을 덮어쓸 설정
+            
+        Returns:
+            RegionalRecoveryConfig with defaults from settings
+        """
+        settings = _get_settings()
+        return cls(
+            namespace=namespace,
+            stability_check_duration_minutes=overrides.get(
+                "stability_check_duration_minutes",
+                settings.stability_check_duration_minutes
+            ),
+            error_rate_threshold=overrides.get(
+                "error_rate_threshold",
+                settings.error_rate_threshold
+            ),
+            success_rate_threshold=overrides.get(
+                "success_rate_threshold",
+                settings.success_rate_threshold
+            ),
+            approval_timeout_minutes=overrides.get(
+                "approval_timeout_minutes",
+                settings.approval_timeout_minutes
+            ),
+            approval_escalation_intervals=overrides.get(
+                "approval_escalation_intervals",
+                [settings.escalation_interval_1, settings.escalation_interval_2, settings.escalation_interval_3]
+            ),
+            **{k: v for k, v in overrides.items() if k not in [
+                "stability_check_duration_minutes",
+                "error_rate_threshold",
+                "success_rate_threshold",
+                "approval_timeout_minutes",
+                "approval_escalation_intervals",
+            ]}
+        )
 
 
 # =============================================================================

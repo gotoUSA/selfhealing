@@ -79,10 +79,12 @@ class PendingConfigService:
     Service for managing pending configuration changes.
 
     Thread-safe singleton that tracks scheduled config changes.
+    
+    Reference:
+        92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [20] AuditSettings 참조.
     """
 
     STORAGE_KEY = "pending_config_changes"
-    MAX_HISTORY = 100  # Keep last 100 changes in history
 
     def __init__(self):
         """Initialize PendingConfigService."""
@@ -90,7 +92,13 @@ class PendingConfigService:
         self._backend = get_state_backend()
         self._pending: Dict[str, PendingConfigChange] = {}
         self._history: List[PendingConfigChange] = []
+        self._settings = get_audit_settings()
         self._load_state()
+
+    @property
+    def MAX_HISTORY(self) -> int:
+        """Get max history from settings."""
+        return self._settings.max_history
 
     def _load_state(self) -> None:
         """Load state from storage."""

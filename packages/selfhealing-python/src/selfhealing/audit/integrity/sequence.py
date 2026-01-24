@@ -3,6 +3,9 @@ Pending Sequence Manager.
 
 Contains:
 - PendingSequenceManager: Tracks incomplete hash chain writes to ensure atomicity
+
+Reference:
+    92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [25] AuditIntegritySettings 참조.
 """
 
 from __future__ import annotations
@@ -11,8 +14,19 @@ import logging
 import threading
 from typing import Any, List, Optional
 
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _get_pending_ttl_seconds() -> int:
+    """Get pending TTL from settings."""
+    return get_audit_integrity_settings().pending_ttl_seconds
+
+
+def _get_orphan_ttl_seconds() -> int:
+    """Get orphan TTL from settings."""
+    return get_audit_integrity_settings().orphan_ttl_seconds
 
 
 class PendingSequenceManager:
@@ -44,6 +58,8 @@ class PendingSequenceManager:
     
     PENDING_KEY_PREFIX = "audit:hash_chain:pending:"
     ORPHANED_KEY_PREFIX = "audit:hash_chain:orphaned:"
+    
+    # Legacy constants for backward compatibility
     DEFAULT_PENDING_TTL_SECONDS = 30
     DEFAULT_ORPHAN_TTL_SECONDS = 86400  # 24 hours
     
@@ -51,8 +67,8 @@ class PendingSequenceManager:
         self,
         redis_client: Any,
         key_prefix: str = "selfhealing:",
-        pending_ttl_seconds: int = DEFAULT_PENDING_TTL_SECONDS,
-        orphan_ttl_seconds: int = DEFAULT_ORPHAN_TTL_SECONDS,
+        pending_ttl_seconds: Optional[int] = None,
+        orphan_ttl_seconds: Optional[int] = None,
     ):
         """
         Initialize PendingSequenceManager.
@@ -60,13 +76,13 @@ class PendingSequenceManager:
         Args:
             redis_client: Redis client instance
             key_prefix: Key prefix for Redis keys
-            pending_ttl_seconds: TTL for PENDING keys (auto-cleanup if process crashes)
-            orphan_ttl_seconds: TTL for ORPHANED keys (time window for reconciliation)
+            pending_ttl_seconds: TTL for PENDING keys (default from AuditIntegritySettings)
+            orphan_ttl_seconds: TTL for ORPHANED keys (default from AuditIntegritySettings)
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._pending_ttl = pending_ttl_seconds
-        self._orphan_ttl = orphan_ttl_seconds
+        self._pending_ttl = pending_ttl_seconds if pending_ttl_seconds is not None else _get_pending_ttl_seconds()
+        self._orphan_ttl = orphan_ttl_seconds if orphan_ttl_seconds is not None else _get_orphan_ttl_seconds()
         self._local_lock = threading.RLock()
     
     def _get_pending_key(self, sequence: int) -> str:
