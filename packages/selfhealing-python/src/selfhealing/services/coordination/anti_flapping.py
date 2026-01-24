@@ -19,10 +19,11 @@ Reference:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import List, Tuple, Optional
+
+from selfhealing.settings import get_anti_flapping_settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,31 +53,39 @@ class AntiFlappingGuard:
         models.py#L24 (RecoveryGateConfig.stabilization_period_seconds 패턴)
     """
     
-    # 레벨 전환 간 최소 대기 시간 (초) - SSOT 사용
-    level_cooldown_seconds: int = EMERGENCY_LEVEL_COOLDOWN_SECONDS
+    # 레벨 전환 간 최소 대기 시간 (초) - Settings에서 로드
+    level_cooldown_seconds: int = field(
+        default_factory=lambda: get_anti_flapping_settings().level_cooldown_seconds
+    )
     """레벨 전환 후 다음 전환까지의 최소 대기 시간."""
     
     # 복구 후 대기 시간 (재활성화 제한)
-    cooldown_after_recovery_seconds: int = 600  # 10분
+    cooldown_after_recovery_seconds: int = field(
+        default_factory=lambda: get_anti_flapping_settings().cooldown_after_recovery_seconds
+    )
     """복구 완료 후 일정 시간 동안 재활성화 제한."""
     
     # 복구 전 최소 안정 유지 시간
-    min_stable_duration_before_recovery_seconds: int = 600  # 10분
+    min_stable_duration_before_recovery_seconds: int = field(
+        default_factory=lambda: get_anti_flapping_settings().min_stable_duration_before_recovery_seconds
+    )
     """10분간 안정 상태 유지 후에만 복구 가능."""
     
     # 시간당 최대 전환 횟수
-    max_level_transitions_per_hour: int = 3
+    max_level_transitions_per_hour: int = field(
+        default_factory=lambda: get_anti_flapping_settings().max_level_transitions_per_hour
+    )
     """플래핑 감지 임계값: 시간당 3회 초과 시 경고."""
     
     # 플래핑 감지 시 강제 쿨다운
-    flapping_lockout_minutes: int = 30
+    flapping_lockout_minutes: int = field(
+        default_factory=lambda: get_anti_flapping_settings().flapping_lockout_minutes
+    )
     """플래핑 감지 시 30분간 레벨 변경 잠금."""
     
     # Recovery Hysteresis Factor (72번 문서 §5.1.1)
     recovery_hysteresis_factor: float = field(
-        default_factory=lambda: float(
-            os.environ.get("SELFHEALING_RECOVERY_HYSTERESIS_FACTOR", "1.15")
-        )
+        default_factory=lambda: get_anti_flapping_settings().recovery_hysteresis_factor
     )
     """
     복구 윈도우 히스테리시스 팩터.

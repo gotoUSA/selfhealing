@@ -9,53 +9,99 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from selfhealing.settings import get_throttle_settings
+
 
 @dataclass
 class ThrottleConfig:
     """Configuration for throttle services."""
     
     # Basic rate limiting
-    initial_limit: int = 100  # requests per window
-    window_seconds: int = 60  # window size
+    initial_limit: int = field(
+        default_factory=lambda: get_throttle_settings().initial_limit
+    )
+    window_seconds: int = field(
+        default_factory=lambda: get_throttle_settings().window_seconds
+    )
     
     # Adaptive throttling (Netflix Gradient)
-    min_limit: int = 10  # minimum limit (never go below)
-    max_limit: int = 500  # maximum limit (never exceed)
+    min_limit: int = field(
+        default_factory=lambda: get_throttle_settings().min_limit
+    )
+    max_limit: int = field(
+        default_factory=lambda: get_throttle_settings().max_limit
+    )
     
     # Gradient calculation
-    sample_interval_ms: int = 500  # RTT sampling interval
-    smoothing_factor: float = 0.5  # exponential smoothing (0-1)
+    sample_interval_ms: int = field(
+        default_factory=lambda: get_throttle_settings().sample_interval_ms
+    )
+    smoothing_factor: float = field(
+        default_factory=lambda: get_throttle_settings().smoothing_factor
+    )
     
     # Adjustment rates
-    decrease_ratio: float = 0.9  # multiply by this when RTT increasing
-    increase_step: int = 1  # add this when RTT decreasing
+    decrease_ratio: float = field(
+        default_factory=lambda: get_throttle_settings().decrease_ratio
+    )
+    increase_step: int = field(
+        default_factory=lambda: get_throttle_settings().increase_step
+    )
     
     # SLA thresholds (ms) - trigger aggressive throttling
-    sla_warning_ms: int = 200  # start throttling at this RTT
-    sla_critical_ms: int = 500  # aggressive throttling at this RTT
+    sla_warning_ms: int = field(
+        default_factory=lambda: get_throttle_settings().sla_warning_ms
+    )
+    sla_critical_ms: int = field(
+        default_factory=lambda: get_throttle_settings().sla_critical_ms
+    )
     
     # Emergency mode
-    emergency_limit: int = 10  # requests per window in emergency
+    emergency_limit: int = field(
+        default_factory=lambda: get_throttle_settings().emergency_limit
+    )
     
     # Redis key prefix
-    key_prefix: str = "selfhealing:throttle"
+    key_prefix: str = field(
+        default_factory=lambda: get_throttle_settings().key_prefix
+    )
+    
+    @classmethod
+    def from_settings(cls) -> "ThrottleConfig":
+        """Create config from settings."""
+        settings = get_throttle_settings()
+        return cls(
+            initial_limit=settings.initial_limit,
+            window_seconds=settings.window_seconds,
+            min_limit=settings.min_limit,
+            max_limit=settings.max_limit,
+            sample_interval_ms=settings.sample_interval_ms,
+            smoothing_factor=settings.smoothing_factor,
+            decrease_ratio=settings.decrease_ratio,
+            increase_step=settings.increase_step,
+            sla_warning_ms=settings.sla_warning_ms,
+            sla_critical_ms=settings.sla_critical_ms,
+            emergency_limit=settings.emergency_limit,
+            key_prefix=settings.key_prefix,
+        )
     
     @classmethod
     def from_dict(cls, data: dict) -> "ThrottleConfig":
         """Create config from dictionary."""
+        settings = get_throttle_settings()
         return cls(
-            initial_limit=data.get("initial_limit", 100),
-            window_seconds=data.get("window_seconds", 60),
-            min_limit=data.get("min_limit", 10),
-            max_limit=data.get("max_limit", 500),
-            sample_interval_ms=data.get("sample_interval_ms", 500),
-            smoothing_factor=data.get("smoothing_factor", 0.5),
-            decrease_ratio=data.get("decrease_ratio", 0.9),
-            increase_step=data.get("increase_step", 1),
-            sla_warning_ms=data.get("sla_warning_ms", 200),
-            sla_critical_ms=data.get("sla_critical_ms", 500),
-            emergency_limit=data.get("emergency_limit", 10),
-            key_prefix=data.get("key_prefix", "selfhealing:throttle"),
+            initial_limit=data.get("initial_limit", settings.initial_limit),
+            window_seconds=data.get("window_seconds", settings.window_seconds),
+            min_limit=data.get("min_limit", settings.min_limit),
+            max_limit=data.get("max_limit", settings.max_limit),
+            sample_interval_ms=data.get("sample_interval_ms", settings.sample_interval_ms),
+            smoothing_factor=data.get("smoothing_factor", settings.smoothing_factor),
+            decrease_ratio=data.get("decrease_ratio", settings.decrease_ratio),
+            increase_step=data.get("increase_step", settings.increase_step),
+            sla_warning_ms=data.get("sla_warning_ms", settings.sla_warning_ms),
+            sla_critical_ms=data.get("sla_critical_ms", settings.sla_critical_ms),
+            emergency_limit=data.get("emergency_limit", settings.emergency_limit),
+            key_prefix=data.get("key_prefix", settings.key_prefix),
         )
 
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from selfhealing.settings import get_config
+from selfhealing.settings import get_dlq_settings
 
 
 # =============================================================================
@@ -31,7 +31,7 @@ class DLQConfig:
 
     @classmethod
     def from_settings(cls) -> "DLQConfig":
-        """Load configuration from RuntimeConfigManager (preferred) or core config."""
+        """Load configuration from RuntimeConfigManager (preferred) or DLQSettings."""
         # Try RuntimeConfigManager first (runtime-configurable)
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -50,16 +50,16 @@ class DLQConfig:
         except Exception:
             pass  # Fall through to static config
         
-        # Fallback to static core config
-        dlq_settings = get_config().dlq
+        # Fallback to DLQSettings (Pydantic Settings)
+        dlq_settings = get_dlq_settings()
         return cls(
             enabled=dlq_settings.enabled,
             retention_days=dlq_settings.retention_days,
             max_replay_attempts=dlq_settings.max_replay_attempts,
-            max_retries=getattr(dlq_settings, "max_retries", 3),
-            retry_delay=getattr(dlq_settings, "retry_delay", 60),
-            expiry_hours=getattr(dlq_settings, "expiry_hours", 72),
-            batch_size=getattr(dlq_settings, "batch_size", 10),
+            max_retries=dlq_settings.max_retries,
+            retry_delay=dlq_settings.retry_delay,
+            expiry_hours=dlq_settings.expiry_hours,
+            batch_size=dlq_settings.batch_size,
         )
 
 

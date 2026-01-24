@@ -24,10 +24,11 @@ Reference:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Set
+
+from selfhealing.settings import get_critical_worker_settings
 
 logger = logging.getLogger(__name__)
 
@@ -120,41 +121,53 @@ class CriticalPathDedicatedWorkerConfig:
     # Queue Names
     # ==========================================================================
     
-    critical_queue_name: str = "selfhealing.critical"
+    critical_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().critical_queue_name
+    )
     """P0 전용 큐 (Abort, Kill Switch 전용)."""
     
-    high_priority_queue_name: str = "selfhealing.high"
+    high_priority_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().high_priority_queue_name
+    )
     """P1-P2 고우선순위 큐 (Escalation, Recovery)."""
     
-    default_queue_name: str = "selfhealing.default"
+    default_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().default_queue_name
+    )
     """P3+ 일반 큐 (Alert, Audit, Archive)."""
     
-    recovery_queue_name: str = "selfhealing.recovery"
+    recovery_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().recovery_queue_name
+    )
     """복구 전용 큐."""
     
-    notification_queue_name: str = "selfhealing.notifications"
+    notification_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().notification_queue_name
+    )
     """알림 전용 큐."""
     
-    maintenance_queue_name: str = "selfhealing.maintenance"
+    maintenance_queue_name: str = field(
+        default_factory=lambda: get_critical_worker_settings().maintenance_queue_name
+    )
     """유지보수 태스크 큐."""
     
     # ==========================================================================
     # Worker Counts
     # ==========================================================================
     
-    critical_worker_count: int = field(default_factory=lambda: int(
-        os.environ.get("SELFHEALING_CRITICAL_WORKER_COUNT", "2")
-    ))
+    critical_worker_count: int = field(
+        default_factory=lambda: get_critical_worker_settings().critical_worker_count
+    )
     """전용 Worker 수 (최소 1개 보장)."""
     
-    high_priority_worker_count: int = field(default_factory=lambda: int(
-        os.environ.get("SELFHEALING_HIGH_WORKER_COUNT", "4")
-    ))
+    high_priority_worker_count: int = field(
+        default_factory=lambda: get_critical_worker_settings().high_priority_worker_count
+    )
     """고우선순위 Worker 수."""
     
-    default_worker_count: int = field(default_factory=lambda: int(
-        os.environ.get("SELFHEALING_DEFAULT_WORKER_COUNT", "8")
-    ))
+    default_worker_count: int = field(
+        default_factory=lambda: get_critical_worker_settings().default_worker_count
+    )
     """일반 Worker 수."""
     
     # ==========================================================================

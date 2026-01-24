@@ -109,18 +109,32 @@ class TestEnvironmentVariableSupport:
     
     def test_env_var_sets_default(self, monkeypatch):
         """환경변수로 기본값 설정."""
-        monkeypatch.setenv("SELFHEALING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
+        # 환경변수 설정 전에 Settings 캐시 초기화
+        import selfhealing.settings.anti_flapping as anti_flapping_settings
+        anti_flapping_settings._settings = None
+        
+        monkeypatch.setenv("SELFHEALING_ANTIFLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
         
         # AntiFlappingGuard 생성 시 환경변수 값 사용
         guard = AntiFlappingGuard()
         assert guard.recovery_hysteresis_factor == 1.30
+        
+        # 테스트 후 캐시 초기화
+        anti_flapping_settings._settings = None
     
     def test_explicit_value_overrides_env(self, monkeypatch):
         """명시적 값이 환경변수보다 우선."""
-        monkeypatch.setenv("SELFHEALING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
+        # 환경변수 설정 전에 Settings 캐시 초기화
+        import selfhealing.settings.anti_flapping as anti_flapping_settings
+        anti_flapping_settings._settings = None
+        
+        monkeypatch.setenv("SELFHEALING_ANTIFLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
         
         guard = AntiFlappingGuard(recovery_hysteresis_factor=1.50)
         assert guard.recovery_hysteresis_factor == 1.50
+        
+        # 테스트 후 캐시 초기화
+        anti_flapping_settings._settings = None
 
 
 class TestHysteresisIntegration:

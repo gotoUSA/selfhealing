@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from selfhealing.settings import get_config
+from selfhealing.settings import get_security_settings
 from selfhealing.services.security.policies import ActionPolicy
 
 
@@ -115,8 +115,7 @@ class SecurityConfig:
     @classmethod
     def from_settings(cls) -> "SecurityConfig":
         """Load configuration from settings."""
-        config = get_config()
-        security = config.security
+        security = get_security_settings()
         return cls(
             rate_limit_window_seconds=security.rate_limit_window_seconds,
             rate_limit_max_requests=security.rate_limit_max_requests,

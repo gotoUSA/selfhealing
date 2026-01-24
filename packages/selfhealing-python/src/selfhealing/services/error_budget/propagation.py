@@ -38,10 +38,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import (
-    DEFAULT_PROPAGATION_DECAY,
-    DEFAULT_PROPAGATION_MAX_HOPS,
     DEFAULT_LEVEL_MULTIPLIERS,
 )
+from selfhealing.settings import get_error_budget_propagation_settings
 
 
 logger = logging.getLogger(__name__)
@@ -64,16 +63,24 @@ class PropagationConfig:
         enabled: 전파 활성화 여부
     """
     
-    base_multiplier: float = 5.0
+    base_multiplier: float = field(
+        default_factory=lambda: get_error_budget_propagation_settings().base_multiplier
+    )
     """장애 도메인 기본 가중치."""
     
-    decay_per_hop: float = DEFAULT_PROPAGATION_DECAY
+    decay_per_hop: float = field(
+        default_factory=lambda: get_error_budget_propagation_settings().decay_per_hop
+    )
     """홉당 감쇠율 (1-hop: 50% 감쇠)."""
     
-    min_multiplier: float = 1.0
+    min_multiplier: float = field(
+        default_factory=lambda: get_error_budget_propagation_settings().min_multiplier
+    )
     """최소 가중치 (감쇠 하한)."""
     
-    max_hops: int = DEFAULT_PROPAGATION_MAX_HOPS
+    max_hops: int = field(
+        default_factory=lambda: get_error_budget_propagation_settings().max_hops
+    )
     """
     최대 전파 홉 수.
     
@@ -81,8 +88,22 @@ class PropagationConfig:
     리뷰 §3.2.3 반영.
     """
     
-    enabled: bool = True
+    enabled: bool = field(
+        default_factory=lambda: get_error_budget_propagation_settings().enabled
+    )
     """전파 활성화 여부."""
+    
+    @classmethod
+    def from_settings(cls) -> "PropagationConfig":
+        """Create config from settings."""
+        settings = get_error_budget_propagation_settings()
+        return cls(
+            base_multiplier=settings.base_multiplier,
+            decay_per_hop=settings.decay_per_hop,
+            min_multiplier=settings.min_multiplier,
+            max_hops=settings.max_hops,
+            enabled=settings.enabled,
+        )
 
 
 # =============================================================================
