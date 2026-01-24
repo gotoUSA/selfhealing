@@ -133,6 +133,28 @@ from selfhealing.settings.resilient_recorder import (
     reset_resilient_recorder_settings,
 )
 
+# Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.error_budget_propagation import (
+    ErrorBudgetPropagationSettings,
+    get_error_budget_propagation_settings,
+    reset_error_budget_propagation_settings,
+)
+from selfhealing.settings.anti_flapping import (
+    AntiFlappingSettings,
+    get_anti_flapping_settings,
+    reset_anti_flapping_settings,
+)
+from selfhealing.settings.throttle import (
+    ThrottleSettings,
+    get_throttle_settings,
+    reset_throttle_settings,
+)
+from selfhealing.settings.critical_worker import (
+    CriticalWorkerSettings,
+    get_critical_worker_settings,
+    reset_critical_worker_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -299,4 +321,21 @@ __all__ = [
     "ResilientRecorderSettings",
     "get_resilient_recorder_settings",
     "reset_resilient_recorder_settings",
+    # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    # Error Budget Propagation
+    "ErrorBudgetPropagationSettings",
+    "get_error_budget_propagation_settings",
+    "reset_error_budget_propagation_settings",
+    # Anti-Flapping
+    "AntiFlappingSettings",
+    "get_anti_flapping_settings",
+    "reset_anti_flapping_settings",
+    # Throttle
+    "ThrottleSettings",
+    "get_throttle_settings",
+    "reset_throttle_settings",
+    # Critical Worker
+    "CriticalWorkerSettings",
+    "get_critical_worker_settings",
+    "reset_critical_worker_settings",
 ]

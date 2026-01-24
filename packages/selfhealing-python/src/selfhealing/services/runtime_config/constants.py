@@ -27,6 +27,11 @@ from selfhealing.settings import (
     RedisKeyGuardSettings,
     RecoveryShutdownSettings,
     ResilientRecorderSettings,
+    # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    ErrorBudgetPropagationSettings,
+    AntiFlappingSettings,
+    ThrottleSettings,
+    CriticalWorkerSettings,
 )
 
 # Legacy aliases for backward compatibility
@@ -52,6 +57,11 @@ RecoveryCircuitBreakerConfig = RecoveryCircuitBreakerSettings
 RedisKeyGuardConfig = RedisKeyGuardSettings
 RecoveryShutdownConfig = RecoveryShutdownSettings
 ResilientRecorderConfig = ResilientRecorderSettings
+# Week 2 HIGH Settings aliases
+ErrorBudgetPropagationConfig = ErrorBudgetPropagationSettings
+AntiFlappingConfig = AntiFlappingSettings
+ThrottleConfig = ThrottleSettings
+CriticalWorkerConfig = CriticalWorkerSettings
 
 # Storage keys for each config type
 STORAGE_KEYS = {
@@ -81,6 +91,11 @@ STORAGE_KEYS = {
     "redis_key_guard": "runtime_config:redis_key_guard",
     "recovery_shutdown": "runtime_config:recovery_shutdown",
     "resilient_recorder": "runtime_config:resilient_recorder",
+    # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "error_budget_propagation": "runtime_config:error_budget_propagation",
+    "anti_flapping": "runtime_config:anti_flapping",
+    "throttle": "runtime_config:throttle",
+    "critical_worker": "runtime_config:critical_worker",
 }
 
 # Default config classes
@@ -110,6 +125,11 @@ CONFIG_CLASSES = {
     "redis_key_guard": RedisKeyGuardConfig,
     "recovery_shutdown": RecoveryShutdownConfig,
     "resilient_recorder": ResilientRecorderConfig,
+    # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "error_budget_propagation": ErrorBudgetPropagationConfig,
+    "anti_flapping": AntiFlappingConfig,
+    "throttle": ThrottleConfig,
+    "critical_worker": CriticalWorkerConfig,
 }
 
 # Default SLO configuration

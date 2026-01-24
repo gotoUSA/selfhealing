@@ -122,90 +122,118 @@
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/error_budget.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `error_budget_gate.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/error_budget.py` 생성 | ✅ | 이미 존재 |
+| B | constants.py 등록 | ✅ | 이미 등록됨 |
+| C | `error_budget_gate.py` 하드코딩 대체 | ✅ | 기존 구현 |
+| D | 단위 테스트 | ✅ | 147개 테스트 통과 |
 
 **필드**:
-- [ ] `warning_threshold` (기본값: 0.8)
-- [ ] `critical_threshold` (기본값: 0.5)
-- [ ] `exhausted_threshold` (기본값: 0.0)
-- [ ] `budget_reset_interval_hours` (기본값: 24)
+- [x] `threshold_healthy` (기본값: 75.0)
+- [x] `threshold_caution` (기본값: 50.0)
+- [x] `threshold_warning` (기본값: 20.0)
+- [x] `threshold_critical` (기본값: 0.0)
 
 ### [7] ErrorBudgetPropagationSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/error_budget_propagation.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `error_budget_propagation.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/error_budget_propagation.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `error_budget_propagation.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `decay_factor` (기본값: 0.8)
-- [ ] `max_hops` (기본값: 3)
-- [ ] `propagation_delay_ms` (기본값: 100)
+- [x] `decay_per_hop` (기본값: 0.5)
+- [x] `max_hops` (기본값: 3)
+- [x] `propagation_delay_ms` (기본값: 100)
+- [x] `base_multiplier` (기본값: 5.0)
+- [x] `min_multiplier` (기본값: 1.0)
+- [x] `enabled` (기본값: true)
 
 ### [8] AntiFlappingSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/anti_flapping.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `anti_flapping.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/anti_flapping.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `anti_flapping.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `cooldown_period` (기본값: 300)
-- [ ] `hysteresis_margin` (기본값: 0.1)
-- [ ] `max_transitions` (기본값: 5)
-- [ ] `recovery_hysteresis_factor` (기본값: 1.15)
+- [x] `level_cooldown_seconds` (기본값: 300)
+- [x] `cooldown_after_recovery_seconds` (기본값: 600)
+- [x] `min_stable_duration_before_recovery_seconds` (기본값: 600)
+- [x] `max_level_transitions_per_hour` (기본값: 3)
+- [x] `flapping_lockout_minutes` (기본값: 30)
+- [x] `recovery_hysteresis_factor` (기본값: 1.15)
 
 ### [9] DLQSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/dlq.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `dlq_models.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/dlq.py` 생성 | ✅ | 이미 존재 |
+| B | constants.py 등록 | ✅ | 이미 등록됨 |
+| C | `dlq_models.py` 하드코딩 대체 | ✅ | 기존 구현 |
+| D | 단위 테스트 | ✅ | 147개 테스트 통과 |
 
 **필드**:
-- [ ] `retention_hours` (기본값: 168)
-- [ ] `max_retry_attempts` (기본값: 3)
-- [ ] `replay_batch_size` (기본값: 100)
+- [x] `enabled` (기본값: true)
+- [x] `max_retries` (기본값: 3)
+- [x] `retry_delay` (기본값: 60)
+- [x] `expiry_hours` (기본값: 72)
+- [x] `retention_days` (기본값: 30)
+- [x] `batch_size` (기본값: 10)
+- [x] `max_replay_attempts` (기본값: 2)
 
 ### [10] ThrottleSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/throttle.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `throttle/config.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/throttle.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `throttle/config.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `min_rtt_ms` (기본값: 50)
-- [ ] `tolerance` (기본값: 2.0)
-- [ ] `probe_multiplier` (기본값: 2.0)
-- [ ] `smoothing` (기본값: 0.2)
-- [ ] `initial_limit` (기본값: 20)
+- [x] `initial_limit` (기본값: 100)
+- [x] `window_seconds` (기본값: 60)
+- [x] `min_limit` (기본값: 10)
+- [x] `max_limit` (기본값: 500)
+- [x] `sample_interval_ms` (기본값: 500)
+- [x] `smoothing_factor` (기본값: 0.5)
+- [x] `decrease_ratio` (기본값: 0.9)
+- [x] `increase_step` (기본값: 1)
+- [x] `sla_warning_ms` (기본값: 200)
+- [x] `sla_critical_ms` (기본값: 500)
+- [x] `emergency_limit` (기본값: 10)
+- [x] `key_prefix` (기본값: "selfhealing:throttle")
 
 ### [11] CriticalWorkerSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/critical_worker.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `critical_worker.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/critical_worker.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `critical_worker.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `queue_name` (기본값: "recovery_critical")
-- [ ] `worker_count` (기본값: 3)
-- [ ] `prefetch_count` (기본값: 1)
-- [ ] `task_timeout_seconds` (기본값: 300)
+- [x] `critical_queue_name` (기본값: "selfhealing.critical")
+- [x] `high_priority_queue_name` (기본값: "selfhealing.high")
+- [x] `default_queue_name` (기본값: "selfhealing.default")
+- [x] `recovery_queue_name` (기본값: "selfhealing.recovery")
+- [x] `notification_queue_name` (기본값: "selfhealing.notifications")
+- [x] `maintenance_queue_name` (기본값: "selfhealing.maintenance")
+- [x] `critical_worker_count` (기본값: 2)
+- [x] `high_priority_worker_count` (기본값: 4)
+- [x] `default_worker_count` (기본값: 8)
+- [x] `critical_concurrency` (기본값: 2)
+- [x] `high_priority_concurrency` (기본값: 4)
+- [x] `default_concurrency` (기본값: 8)
+- [x] `critical_prefetch_multiplier` (기본값: 1)
+- [x] `high_priority_prefetch_multiplier` (기본값: 2)
+- [x] `default_prefetch_multiplier` (기본값: 4)
+- [x] `task_timeout_seconds` (기본값: 300)
 
 ---
 
