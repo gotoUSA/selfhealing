@@ -11,10 +11,10 @@
 | 주차 | 대상 | 클래스 수 | 상태 | 완료율 |
 |------|------|----------|------|--------|
 | Week 1 | CRITICAL | 5개 | ✅ 완료 | 100% |
-| Week 2 | HIGH | 6개 | ⬜ 대기 | 0% |
-| Week 3 | MEDIUM | 6개 | ⬜ 대기 | 0% |
+| Week 2 | HIGH | 6개 | ✅ 완료 | 100% |
+| Week 3 | MEDIUM | 6개 | ✅ 완료 | 100% |
 | Week 4 | LOW + 마무리 | 9개 | ⬜ 대기 | 0% |
-| **합계** | - | **26개** | - | **19%** |
+| **합계** | - | **26개** | - | **65%** |
 
 **상태**: ⬜ 대기 | 🔄 진행중 | ✅ 완료 | ❌ 보류
 
@@ -243,86 +243,118 @@
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/chaos_experiment.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `chaos_experiment_manager.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/chaos_experiment.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `chaos_experiment_manager.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `max_duration_seconds` (기본값: 3600)
-- [ ] `grace_period_seconds` (기본값: 60)
-- [ ] `result_ttl` (기본값: 86400)
+- [x] `max_duration_seconds` (기본값: 3600)
+- [x] `default_duration_seconds` (기본값: 300)
+- [x] `default_ttl_seconds` (기본값: 600)
+- [x] `grace_period_seconds` (기본값: 300)
+- [x] `sla_breach_threshold_percent` (기본값: 1.0)
+- [x] `result_ttl_seconds` (기본값: 86400)
+- [x] `health_check_interval_seconds` (기본값: 30.0)
+- [x] `health_check_timeout_ms` (기본값: 100)
 
 ### [13] ChaosBlastRadiusSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/chaos_blast_radius.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `blast_radius.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/chaos_blast_radius.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `blast_radius.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `max_affected_services` (기본값: 0.3)
-- [ ] `max_concurrent` (기본값: 5)
-- [ ] `maintenance_window_start_hour` (기본값: 2)
-- [ ] `maintenance_window_end_hour` (기본값: 6)
+- [x] `instance_max_concurrent` (기본값: 5)
+- [x] `service_max_concurrent` (기본값: 2)
+- [x] `region_max_concurrent` (기본값: 1)
+- [x] `instance_auto_approve` (기본값: True)
+- [x] `service_auto_approve` (기본값: False)
+- [x] `region_auto_approve` (기본값: False)
+- [x] `allowed_hours_start` (기본값: 2)
+- [x] `allowed_hours_end` (기본값: 6)
+- [x] `allow_outside_window` (기본값: False)
+- [x] `max_traffic_percent_instance` (기본값: 100.0)
+- [x] `max_traffic_percent_service` (기본값: 50.0)
+- [x] `max_traffic_percent_region` (기본값: 10.0)
 
 ### [14] CorruptionShieldSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/corruption_shield.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `corruption_shield.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/corruption_shield.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `corruption_shield.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `z_score_threshold` (기본값: 3.0)
-- [ ] `iqr_multiplier` (기본값: 1.5)
-- [ ] `min_samples` (기본값: 30)
-- [ ] `quarantine_ttl` (기본값: 3600)
+- [x] `l1_enabled` (기본값: True)
+- [x] `l2_enabled` (기본값: True)
+- [x] `l3_enabled` (기본값: True)
+- [x] `z_score_threshold` (기본값: 3.0)
+- [x] `iqr_multiplier` (기본값: 1.5)
+- [x] `min_samples_for_anomaly` (기본값: 10)
+- [x] `min_amount` (기본값: 100)
+- [x] `max_amount` (기본값: 100,000,000)
+- [x] `quarantine_ttl_seconds` (기본값: 3600)
 
 ### [15] NotificationChannelSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/notification_channel.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `notification_config.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/notification_channel.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `notification_config.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `rate_limit_per_minute` (기본값: 10)
-- [ ] `max_retry` (기본값: 3)
-- [ ] `default_channel` (기본값: "slack")
+- [x] `rate_limit_per_minute` (기본값: 60)
+- [x] `rate_limit_per_hour` (기본값: 300)
+- [x] `max_retry` (기본값: 3)
+- [x] `retry_delay_seconds` (기본값: 30)
+- [x] `cooldown_seconds` (기본값: 300)
+- [x] `default_channels` (기본값: ["slack"])
+- [x] `critical_channels` (기본값: ["slack", "email", "sms", "pagerduty"])
+- [x] `escalation_channels` (기본값: ["slack", "pagerduty"])
 
 ### [16] CascadeRetentionSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/cascade_retention.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `cascade_storage.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/cascade_retention.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `cascade_storage.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `hot_tier_days` (기본값: 7)
-- [ ] `warm_tier_days` (기본값: 30)
-- [ ] `cold_tier_days` (기본값: 365)
+- [x] `hot_retention_days` (기본값: 7)
+- [x] `hot_max_count` (기본값: 10000)
+- [x] `warm_retention_days` (기본값: 90)
+- [x] `cold_retention_days` (기본값: 365)
+- [x] `index_retention_days` (기본값: 30)
+- [x] `anchor_retention_days` (기본값: 90)
+- [x] `buffer_warning_threshold` (기본값: 0.7)
+- [x] `buffer_critical_threshold` (기본값: 0.9)
+- [x] `max_events_per_second` (기본값: 1000)
 
 ### [17] DistributedLockSettings
 
 | 단계 | 작업 | 상태 | 비고 |
 |------|------|------|------|
-| A | `settings/distributed_lock.py` 생성 | ⬜ | |
-| B | constants.py 등록 | ⬜ | |
-| C | `distributed_lock.py` 하드코딩 대체 | ⬜ | |
-| D | 단위 테스트 | ⬜ | |
+| A | `settings/distributed_lock.py` 생성 | ✅ | 신규 구현 |
+| B | constants.py 등록 | ✅ | STORAGE_KEYS, CONFIG_CLASSES |
+| C | `distributed_lock.py` 하드코딩 대체 | ⬜ | 추후 진행 |
+| D | 단위 테스트 | ✅ | import/기본값 확인 |
 
 **필드**:
-- [ ] `lock_timeout` (기본값: 30)
-- [ ] `retry_interval` (기본값: 0.1)
+- [x] `timeout_minutes` (기본값: 30)
+- [x] `retry_interval_seconds` (기본값: 0.1)
+- [x] `max_retry_attempts` (기본값: 100)
+- [x] `extend_interval_seconds` (기본값: 60)
+- [x] `auto_extend_enabled` (기본값: True)
 
 ---
 

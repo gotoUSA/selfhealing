@@ -32,6 +32,13 @@ from selfhealing.settings import (
     AntiFlappingSettings,
     ThrottleSettings,
     CriticalWorkerSettings,
+    # Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    ChaosExperimentSettings,
+    ChaosBlastRadiusSettings,
+    CorruptionShieldSettings,
+    NotificationChannelSettings,
+    CascadeRetentionSettings,
+    DistributedLockSettings,
 )
 
 # Legacy aliases for backward compatibility
@@ -62,6 +69,13 @@ ErrorBudgetPropagationConfig = ErrorBudgetPropagationSettings
 AntiFlappingConfig = AntiFlappingSettings
 ThrottleConfig = ThrottleSettings
 CriticalWorkerConfig = CriticalWorkerSettings
+# Week 3 MEDIUM Settings aliases
+ChaosExperimentConfig = ChaosExperimentSettings
+ChaosBlastRadiusConfig = ChaosBlastRadiusSettings
+CorruptionShieldConfig = CorruptionShieldSettings
+NotificationChannelConfig = NotificationChannelSettings
+CascadeRetentionConfig = CascadeRetentionSettings
+DistributedLockConfig = DistributedLockSettings
 
 # Storage keys for each config type
 STORAGE_KEYS = {
@@ -96,6 +110,13 @@ STORAGE_KEYS = {
     "anti_flapping": "runtime_config:anti_flapping",
     "throttle": "runtime_config:throttle",
     "critical_worker": "runtime_config:critical_worker",
+    # Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "chaos_experiment": "runtime_config:chaos_experiment",
+    "chaos_blast_radius": "runtime_config:chaos_blast_radius",
+    "corruption_shield": "runtime_config:corruption_shield",
+    "notification_channel": "runtime_config:notification_channel",
+    "cascade_retention": "runtime_config:cascade_retention",
+    "distributed_lock": "runtime_config:distributed_lock",
 }
 
 # Default config classes
@@ -130,6 +151,13 @@ CONFIG_CLASSES = {
     "anti_flapping": AntiFlappingConfig,
     "throttle": ThrottleConfig,
     "critical_worker": CriticalWorkerConfig,
+    # Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    "chaos_experiment": ChaosExperimentConfig,
+    "chaos_blast_radius": ChaosBlastRadiusConfig,
+    "corruption_shield": CorruptionShieldConfig,
+    "notification_channel": NotificationChannelConfig,
+    "cascade_retention": CascadeRetentionConfig,
+    "distributed_lock": DistributedLockConfig,
 }
 
 # Default SLO configuration

@@ -155,6 +155,38 @@ from selfhealing.settings.critical_worker import (
     reset_critical_worker_settings,
 )
 
+# Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.chaos_experiment import (
+    ChaosExperimentSettings,
+    get_chaos_experiment_settings,
+    reset_chaos_experiment_settings,
+)
+from selfhealing.settings.chaos_blast_radius import (
+    ChaosBlastRadiusSettings,
+    get_chaos_blast_radius_settings,
+    reset_chaos_blast_radius_settings,
+)
+from selfhealing.settings.corruption_shield import (
+    CorruptionShieldSettings,
+    get_corruption_shield_settings,
+    reset_corruption_shield_settings,
+)
+from selfhealing.settings.notification_channel import (
+    NotificationChannelSettings,
+    get_notification_channel_settings,
+    reset_notification_channel_settings,
+)
+from selfhealing.settings.cascade_retention import (
+    CascadeRetentionSettings,
+    get_cascade_retention_settings,
+    reset_cascade_retention_settings,
+)
+from selfhealing.settings.distributed_lock import (
+    DistributedLockSettings,
+    get_distributed_lock_settings,
+    reset_distributed_lock_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -338,4 +370,29 @@ __all__ = [
     "CriticalWorkerSettings",
     "get_critical_worker_settings",
     "reset_critical_worker_settings",
+    # Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    # Chaos Experiment
+    "ChaosExperimentSettings",
+    "get_chaos_experiment_settings",
+    "reset_chaos_experiment_settings",
+    # Chaos Blast Radius
+    "ChaosBlastRadiusSettings",
+    "get_chaos_blast_radius_settings",
+    "reset_chaos_blast_radius_settings",
+    # Corruption Shield
+    "CorruptionShieldSettings",
+    "get_corruption_shield_settings",
+    "reset_corruption_shield_settings",
+    # Notification Channel
+    "NotificationChannelSettings",
+    "get_notification_channel_settings",
+    "reset_notification_channel_settings",
+    # Cascade Retention
+    "CascadeRetentionSettings",
+    "get_cascade_retention_settings",
+    "reset_cascade_retention_settings",
+    # Distributed Lock
+    "DistributedLockSettings",
+    "get_distributed_lock_settings",
+    "reset_distributed_lock_settings",
 ]
