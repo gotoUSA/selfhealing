@@ -148,9 +148,11 @@ class HealthCheckService:
         start_time = time.time()
         try:
             conn = connections[alias]
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
+            
+            # Repository를 통해 ping 실행
+            from selfhealing.adapters.postgres.repository import PostgresRepository
+            repo = PostgresRepository(db_alias=alias)
+            repo.ping()
             
             latency_ms = (time.time() - start_time) * 1000
             

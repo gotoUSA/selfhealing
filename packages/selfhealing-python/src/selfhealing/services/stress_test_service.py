@@ -19,10 +19,13 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from django.conf import settings
 from django.db import connection, connections
+
+if TYPE_CHECKING:
+    from selfhealing.adapters.postgres.repository import PostgresRepository
 
 logger = logging.getLogger(__name__)
 
@@ -179,16 +182,28 @@ class StressTestService:
     스트레스 테스트 서비스.
     
     DB Connection Pool 관련 테스트 로직을 캡슐화합니다.
+    PostgresRepository를 통해 Raw SQL을 캡슐화합니다.
     """
     
     # 점유 중인 커넥션들을 저장하는 클래스 변수
     _held_connections: list = []
     _held_connections_lock: Optional[threading.Lock] = None
     
-    def __init__(self):
-        """서비스 초기화."""
+    def __init__(self, repository: Optional["PostgresRepository"] = None):
+        """
+        서비스 초기화.
+        
+        Args:
+            repository: PostgresRepository 인스턴스 (없으면 기본 인스턴스 생성)
+        """
         if StressTestService._held_connections_lock is None:
             StressTestService._held_connections_lock = threading.Lock()
+        
+        if repository is None:
+            from selfhealing.adapters.postgres.repository import get_postgres_repository
+            self._repo = get_postgres_repository()
+        else:
+            self._repo = repository
     
     # =========================================================================
     # Pool Information
@@ -275,20 +290,8 @@ class StressTestService:
             
             conn = connections["default"]
             
-            # PostgreSQL 연결 통계 조회
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT
-                        count(*) as total_connections,
-                        count(*) FILTER (WHERE state = 'active') as active,
-                        count(*) FILTER (WHERE state = 'idle') as idle,
-                        count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx
-                    FROM pg_stat_activity
-                    WHERE datname = current_database()
-                """
-                )
-                row = cursor.fetchone()
+            # PostgreSQL 연결 통계 조회 (Repository 사용)
+            stats = self._repo.get_connection_stats()
             
             is_exhausted = pool_info.get("pool_exhausted", False)
             
@@ -296,10 +299,10 @@ class StressTestService:
                 status="exhausted" if is_exhausted else "healthy",
                 sqlalchemy_pool=pool_info,
                 pg_stats={
-                    "total_connections": row[0],
-                    "active": row[1],
-                    "idle": row[2],
-                    "idle_in_transaction": row[3],
+                    "total_connections": stats.total_connections,
+                    "active": stats.active,
+                    "idle": stats.idle,
+                    "idle_in_transaction": stats.idle_in_transaction,
                 },
                 connection_usable=conn.is_usable(),
                 use_connection_pool=os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
@@ -326,9 +329,8 @@ class StressTestService:
         """지정된 시간 동안 DB 연결을 점유하는 느린 쿼리 실행."""
         start = time.time()
         try:
-            with connection.cursor() as cursor:
-                cursor.execute(f"SELECT pg_sleep({seconds})")
-                cursor.fetchone()
+            # Repository를 통해 pg_sleep 실행
+            self._repo.execute_slow_query(seconds)
             
             elapsed = time.time() - start
             return StressTestResult(
@@ -361,12 +363,11 @@ class StressTestService:
         
         start = time.time()
         try:
-            # 연결을 열고 오래 유지
-            conn = connections["default"]
-            cursor = conn.cursor()
+            # Repository를 통해 커서 생성 (연결 점유)
+            cursor = self._repo.create_cursor()
             
-            # 연결 점유 (닫지 않음)
-            cursor.execute("SELECT 1")
+            # ping으로 연결 점유
+            self._repo.execute_with_cursor(cursor, "SELECT 1")
             
             # 의도적 지연
             time.sleep(hold_seconds)
@@ -396,25 +397,14 @@ class StressTestService:
         """무거운 쿼리 실행."""
         start = time.time()
         try:
-            with connection.cursor() as cursor:
-                # STRESS TEST ONLY: This query uses a configurable table for testing.
-                stress_table = getattr(settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation")
-                cursor.execute(
-                    f"""
-                    SELECT
-                        COUNT(*) as total_products,
-                        AVG(price) as avg_price,
-                        MAX(price) as max_price,
-                        MIN(price) as min_price
-                    FROM {stress_table}
-                    WHERE is_active = true
-                """
-                )
-                row = cursor.fetchone()
-                
-                # 추가 지연 (1초)
-                cursor.execute("SELECT pg_sleep(1)")
-                cursor.fetchone()
+            # STRESS TEST ONLY: This query uses a configurable table for testing.
+            stress_table = getattr(settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation")
+            
+            # Repository를 통해 집계 쿼리 실행
+            total, avg_price, max_price, min_price = self._repo.execute_aggregate_query(stress_table)
+            
+            # 추가 지연 (1초)
+            self._repo.pg_sleep(1)
             
             elapsed = time.time() - start
             return StressTestResult(
@@ -422,10 +412,10 @@ class StressTestService:
                 elapsed_seconds=elapsed,
                 extra={
                     "stats": {
-                        "total_products": row[0],
-                        "avg_price": float(row[1]) if row[1] else 0,
-                        "max_price": float(row[2]) if row[2] else 0,
-                        "min_price": float(row[3]) if row[3] else 0,
+                        "total_products": total,
+                        "avg_price": avg_price,
+                        "max_price": max_price,
+                        "min_price": min_price,
                     },
                 },
             )
@@ -442,29 +432,6 @@ class StressTestService:
     # Advisory Lock Operations
     # =========================================================================
     
-    def _try_acquire_lock(self, cursor, lock_id: int, exclusive: bool, wait: bool) -> bool:
-        """Try to acquire advisory lock. Returns True if acquired."""
-        if exclusive:
-            if wait:
-                cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
-                return True
-            cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
-        else:
-            if wait:
-                cursor.execute("SELECT pg_advisory_lock_shared(%s)", [lock_id])
-                return True
-            cursor.execute("SELECT pg_try_advisory_lock_shared(%s)", [lock_id])
-        
-        result = cursor.fetchone()
-        return result[0] if result else False
-    
-    def _release_lock(self, cursor, lock_id: int, exclusive: bool) -> None:
-        """Release advisory lock."""
-        if exclusive:
-            cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-        else:
-            cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
-    
     def acquire_advisory_lock(
         self,
         lock_id: int = 12345,
@@ -477,9 +444,8 @@ class StressTestService:
         start = time.time()
         
         try:
-            with connection.cursor() as cursor:
-                lock_acquired = self._try_acquire_lock(cursor, lock_id, exclusive, wait)
-                
+            # Repository의 컨텍스트 매니저 사용
+            with self._repo.advisory_lock_context(lock_id, exclusive, wait) as lock_acquired:
                 if not lock_acquired:
                     elapsed = time.time() - start
                     logger.info(f"[StressTestService] Lock {lock_id} not acquired (conflict)")
@@ -492,9 +458,8 @@ class StressTestService:
                 
                 logger.info(f"[StressTestService] Lock {lock_id} acquired, holding for {hold_seconds}s")
                 time.sleep(hold_seconds)
-                
-                self._release_lock(cursor, lock_id, exclusive)
             
+            # 컨텍스트 매니저가 자동으로 락 해제
             elapsed = time.time() - start
             logger.info(f"[StressTestService] Lock {lock_id} released after {elapsed:.2f}s")
             
@@ -554,19 +519,17 @@ class StressTestService:
             while time.time() < end_time:
                 attempt_start = time.time()
                 
-                with connection.cursor() as cursor:
-                    # 비대기 모드로 락 시도
-                    cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
-                    result = cursor.fetchone()
-                    
-                    if result and result[0]:
-                        success_count += 1
-                        # 락 유지
-                        time.sleep(lock_hold_ms / 1000.0)
-                        # 락 해제
-                        cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-                    else:
-                        fail_count += 1
+                # Repository를 통해 비대기 모드로 락 시도
+                lock_acquired = self._repo.try_advisory_lock(lock_id)
+                
+                if lock_acquired:
+                    success_count += 1
+                    # 락 유지
+                    time.sleep(lock_hold_ms / 1000.0)
+                    # 락 해제
+                    self._repo.release_advisory_lock(lock_id)
+                else:
+                    fail_count += 1
                 
                 wait_ms = (time.time() - attempt_start) * 1000
                 total_wait_ms += wait_ms
@@ -614,30 +577,29 @@ class StressTestService:
         deadlock_count = 0
         
         try:
-            with connection.cursor() as cursor:
-                # 1. 락 타임아웃을 극단적으로 축소 (세션 레벨)
-                cursor.execute(f"SET lock_timeout = '{lock_timeout_ms}ms'")
-                cursor.execute(f"SET statement_timeout = '{lock_timeout_ms * 10}ms'")
-                
+            # Repository의 타임아웃 컨텍스트 매니저 사용
+            with self._repo.timeout_context(
+                lock_timeout_ms=lock_timeout_ms, 
+                statement_timeout_ms=lock_timeout_ms * 10
+            ):
                 logger.warning(
                     f"[StressTestService] 🔥 BURST STARTED: lock_timeout={lock_timeout_ms}ms, "
                     f"duration={burst_duration_seconds}s"
                 )
                 
-                # 2. 먼저 하나의 락을 잡아서 유지 (다른 요청들이 실패하도록)
+                # 먼저 하나의 락을 잡아서 유지 (다른 요청들이 실패하도록)
                 try:
-                    cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
+                    self._repo.acquire_advisory_lock(lock_id, wait=True)
                     
-                    # 3. burst 동안 반복적으로 새 연결에서 락 시도 (타임아웃 유발)
+                    # burst 동안 반복적으로 새 연결에서 락 시도 (타임아웃 유발)
                     end_time = start + burst_duration_seconds
                     
                     while time.time() < end_time:
                         try:
-                            cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id + 1])
-                            result = cursor.fetchone()
-                            if result and result[0]:
+                            lock_acquired = self._repo.try_advisory_lock(lock_id + 1)
+                            if lock_acquired:
                                 success_count += 1
-                                cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id + 1])
+                                self._repo.release_advisory_lock(lock_id + 1)
                             else:
                                 timeout_count += 1
                         except Exception as inner_e:
@@ -652,15 +614,13 @@ class StressTestService:
                         time.sleep(0.01)  # 10ms
                     
                     # 메인 락 해제
-                    cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
+                    self._repo.release_advisory_lock(lock_id)
                     
                 except Exception as lock_e:
                     logger.error(f"[StressTestService] Main lock failed: {lock_e}")
                     timeout_count += 1
-                
-                # 4. 타임아웃 설정 복원
-                cursor.execute("SET lock_timeout = '0'")
-                cursor.execute("SET statement_timeout = '0'")
+            
+            # 타임아웃 컨텍스트 매니저가 자동으로 타임아웃 복원
             
             elapsed = time.time() - start
             total_attempts = timeout_count + success_count + deadlock_count
@@ -729,14 +689,15 @@ class StressTestService:
                             pass
                     StressTestService._held_connections.clear()
             
-            # 여러 커넥션 점유
+            # 여러 커넥션 점유 (Repository 사용)
             for i in range(connections_to_hold):
                 try:
-                    cursor = connection.cursor()
+                    cursor = self._repo.create_cursor()
                     
                     # 커넥션을 busy 상태로 유지
-                    cursor.execute("SELECT pg_backend_pid(), pg_sleep(0.01)")
-                    cursor.fetchone()
+                    self._repo.execute_with_cursor(
+                        cursor, "SELECT pg_backend_pid(), pg_sleep(0.01)"
+                    )
                     
                     if StressTestService._held_connections_lock:
                         with StressTestService._held_connections_lock:
@@ -795,15 +756,12 @@ class StressTestService:
         
         try:
             if error_type == "db_error":
-                # 의도적인 DB 에러 발생
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT * FROM __nonexistent_table_for_cb_test__")
+                # 의도적인 DB 에러 발생 (Repository 사용)
+                self._repo.execute_nonexistent_table_query()
                     
             elif error_type == "timeout":
-                # 타임아웃 에러 발생
-                with connection.cursor() as cursor:
-                    cursor.execute("SET statement_timeout = '1ms'")
-                    cursor.execute("SELECT pg_sleep(1)")
+                # 타임아웃 에러 발생 (Repository 사용)
+                self._repo.execute_timeout_query(timeout_ms=1, sleep_seconds=1)
                     
             elif error_type == "exception":
                 # Python 예외 발생

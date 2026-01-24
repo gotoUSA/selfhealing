@@ -584,19 +584,10 @@ def compute_pool_status() -> Dict[str, Any]:
         
         conn = connections["default"]
         
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT
-                    count(*) as total_connections,
-                    count(*) FILTER (WHERE state = 'active') as active,
-                    count(*) FILTER (WHERE state = 'idle') as idle,
-                    count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx
-                FROM pg_stat_activity
-                WHERE datname = current_database()
-                """
-            )
-            row = cursor.fetchone()
+        # Repository를 통해 연결 통계 조회
+        from selfhealing.adapters.postgres.repository import get_postgres_repository
+        repo = get_postgres_repository()
+        stats = repo.get_connection_stats()
             
         is_exhausted = pool_info.get("pool_exhausted", False)
         
@@ -604,10 +595,10 @@ def compute_pool_status() -> Dict[str, Any]:
             "status": "exhausted" if is_exhausted else "healthy",
             "sqlalchemy_pool": pool_info,
             "pg_stats": {
-                "total_connections": row[0],
-                "active": row[1],
-                "idle": row[2],
-                "idle_in_transaction": row[3],
+                "total_connections": stats.total_connections,
+                "active": stats.active,
+                "idle": stats.idle,
+                "idle_in_transaction": stats.idle_in_transaction,
             },
             "connection_usable": conn.is_usable(),
             "use_connection_pool": os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",

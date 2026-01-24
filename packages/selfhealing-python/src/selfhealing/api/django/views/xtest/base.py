@@ -107,13 +107,12 @@ def collect_system_snapshot() -> Dict[str, Any]:
             "memory_available_mb": memory.available / (1024 * 1024),
         }
         
-        # DB 연결 수 (가능한 경우)
+        # DB 연결 수 (Repository 사용)
         try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
-                active_connections = cursor.fetchone()[0]
-                snapshot["db_active_connections"] = active_connections
+            from selfhealing.adapters.postgres.repository import get_postgres_repository
+            repo = get_postgres_repository()
+            active_connections = repo.get_active_connection_count()
+            snapshot["db_active_connections"] = active_connections
         except Exception:
             snapshot["db_active_connections"] = None
             

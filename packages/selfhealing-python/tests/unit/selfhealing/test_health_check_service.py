@@ -29,17 +29,17 @@ class TestHealthCheckService:
     # check_database Tests
     # =========================================================================
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_check_database_success(self, mock_connections):
+    def test_check_database_success(self, mock_connections, mock_repo_class):
         """정상 DB 연결 확인."""
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock(return_value=False)
+        mock_repo = MagicMock()
+        mock_repo.ping.return_value = True
+        mock_repo_class.return_value = mock_repo
         
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
-        mock_conn.cursor.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
 
         result = self.service.check_database("default")
@@ -53,10 +53,16 @@ class TestHealthCheckService:
         assert result.latency_ms is not None
         assert result.latency_ms >= 0
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_check_database_connection_failure(self, mock_connections):
+    def test_check_database_connection_failure(self, mock_connections, mock_repo_class):
         """DB 연결 실패 확인."""
-        mock_connections.__getitem__.side_effect = Exception("Connection refused")
+        mock_repo = MagicMock()
+        mock_repo.ping.side_effect = Exception("Connection refused")
+        mock_repo_class.return_value = mock_repo
+        
+        mock_conn = MagicMock()
+        mock_connections.__getitem__.return_value = mock_conn
 
         result = self.service.check_database("default")
 
@@ -70,19 +76,19 @@ class TestHealthCheckService:
     # check_all_databases Tests
     # =========================================================================
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_check_all_databases(self, mock_connections):
+    def test_check_all_databases(self, mock_connections, mock_repo_class):
         """모든 DB 연결 확인."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default", "replica"]))
         
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock(return_value=False)
+        mock_repo = MagicMock()
+        mock_repo.ping.return_value = True
+        mock_repo_class.return_value = mock_repo
         
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
-        mock_conn.cursor.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
 
         results = self.service.check_all_databases()
@@ -256,28 +262,35 @@ class TestHealthCheckService:
         """is_alive는 항상 True."""
         assert self.service.is_alive() is True
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_is_ready_true(self, mock_connections):
+    def test_is_ready_true(self, mock_connections, mock_repo_class):
         """is_ready - 정상."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
         
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock(return_value=False)
+        mock_repo = MagicMock()
+        mock_repo.ping.return_value = True
+        mock_repo_class.return_value = mock_repo
         
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
-        mock_conn.cursor.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
 
         assert self.service.is_ready() is True
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_is_ready_false(self, mock_connections):
+    def test_is_ready_false(self, mock_connections, mock_repo_class):
         """is_ready - 실패."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
-        mock_connections.__getitem__.side_effect = Exception("Connection refused")
+        
+        mock_repo = MagicMock()
+        mock_repo.ping.side_effect = Exception("Connection refused")
+        mock_repo_class.return_value = mock_repo
+        
+        mock_conn = MagicMock()
+        mock_connections.__getitem__.return_value = mock_conn
 
         assert self.service.is_ready() is False
 
