@@ -231,5 +231,32 @@ services:
       redis:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Audit Integration Test Runner
+  # ---------------------------------------------------------------------------
+  test-audit-integration:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/self_healing/integration/test_audit_wal_redis_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - TEST_DB_AVAILABLE=true
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
+
