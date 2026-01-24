@@ -3,102 +3,37 @@ Self-Healing Pool Stress Test Endpoints.
 
 이 엔드포인트들은 의도적으로 DB Connection Pool을 고갈시킵니다.
 테스트 전용이며, 프로덕션에서는 절대 사용하지 마세요!
+
+Note:
+- 비즈니스 로직은 StressTestService(services/stress_test_service.py)로 분리됨
+- View는 Request/Response 처리만 담당
 """
 
-import os
-import time
+import json
 import logging
-from django.conf import settings
+
 from django.http import JsonResponse
-from django.db import connection, connections
 from django.views.decorators.http import require_GET
 from django.views.decorators.csrf import csrf_exempt
 
-# SQLAlchemy Pool 상태 조회를 위한 import
-try:
-    from sqlalchemy.pool import QueuePool
-    from sqlalchemy.exc import TimeoutError as SATimeoutError
-
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    SQLALCHEMY_AVAILABLE = False
-    SATimeoutError = Exception
+from selfhealing.services.stress_test_service import get_stress_test_service
 
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Backward Compatibility - Re-export get_pool_info
+# =============================================================================
+
 def get_pool_info():
-    """SQLAlchemy Pool 정보 조회"""
-    try:
-        conn = connections["default"]
+    """SQLAlchemy Pool 정보 조회 (backward compatibility)."""
+    service = get_stress_test_service()
+    return service.get_pool_info()
 
-        # 연결이 없으면 생성
-        conn.ensure_connection()
 
-        # 방법 1: conn.connection._pool (dj_db_conn_pool 1.2.x)
-        if hasattr(conn, "connection") and conn.connection is not None:
-            raw_conn = conn.connection
-            if hasattr(raw_conn, "_pool"):
-                pool = raw_conn._pool
-                pool_size = pool.size()
-                checkedout = pool.checkedout()
-                checkedin = pool.checkedin()
-                overflow = pool.overflow()
-                max_overflow = getattr(pool, "_max_overflow", 0)
-
-                return {
-                    "pool_type": type(pool).__name__,
-                    "pool_size": pool_size,
-                    "max_overflow": max_overflow,
-                    "checkedin": checkedin,
-                    "checkedout": checkedout,
-                    "overflow": overflow,
-                    "total_capacity": pool_size + max_overflow,
-                    "available": checkedin,
-                    "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
-                }
-
-        # 방법 2: pool_container 사용 (일부 버전)
-        try:
-            from dj_db_conn_pool.core.mixins.core import pool_container
-
-            if pool_container.has("default"):
-                pool = pool_container.get("default")
-                pool_size = pool.size()
-                checkedout = pool.checkedout()
-                checkedin = pool.checkedin()
-                overflow = pool.overflow()
-                max_overflow = getattr(pool, "_max_overflow", 0)
-
-                return {
-                    "pool_type": type(pool).__name__,
-                    "pool_size": pool_size,
-                    "max_overflow": max_overflow,
-                    "checkedin": checkedin,
-                    "checkedout": checkedout,
-                    "overflow": overflow,
-                    "total_capacity": pool_size + max_overflow,
-                    "available": checkedin,
-                    "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
-                }
-        except ImportError:
-            pass
-
-        # 방법 3: conn.pool.pool (구버전)
-        if hasattr(conn, "pool") and conn.pool is not None and hasattr(conn.pool, "pool"):
-            pool = conn.pool.pool
-            return {
-                "pool_type": type(pool).__name__,
-                "pool_size": pool.size(),
-                "checkedin": pool.checkedin(),
-                "checkedout": pool.checkedout(),
-                "overflow": pool.overflow(),
-                "pool_exhausted": pool.checkedout() >= pool.size() + pool._max_overflow,
-            }
-
-        return {"pool_type": "django_default", "note": "No SQLAlchemy pool detected"}
-    except Exception as e:
-        return {"pool_type": "unknown", "error": str(e)}
+# =============================================================================
+# Slow Query Endpoints
+# =============================================================================
 
 
 @require_GET
@@ -108,37 +43,12 @@ def slow_query_5s(request):
 
     GET /api/self-healing/stress/slow-5s/
     """
-    start = time.time()
-    try:
-        with connection.cursor() as cursor:
-            # PostgreSQL에서 5초 대기
-            cursor.execute("SELECT pg_sleep(5)")
-            cursor.fetchone()
-
-        elapsed = time.time() - start
-        return JsonResponse(
-            {"status": "success", "elapsed_seconds": round(elapsed, 2), "message": "Connection held for 5 seconds"}
-        )
-    except SATimeoutError as e:
-        # Pool 고갈!
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] POOL EXHAUSTED! slow_query_5s timeout after {elapsed:.2f}s: {e}")
-        return JsonResponse(
-            {
-                "status": "pool_exhausted",
-                "elapsed_seconds": round(elapsed, 2),
-                "error": "Connection pool exhausted - no available connections",
-                "error_type": "SQLAlchemy TimeoutError",
-            },
-            status=503,
-        )
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] slow_query_5s failed after {elapsed:.2f}s: {e}")
-        return JsonResponse(
-            {"status": "error", "elapsed_seconds": round(elapsed, 2), "error": str(e), "error_type": type(e).__name__},
-            status=503,
-        )
+    service = get_stress_test_service()
+    result = service.execute_slow_query(seconds=5)
+    
+    if result.status in ("pool_exhausted", "error"):
+        return JsonResponse(result.to_dict(), status=503)
+    return JsonResponse(result.to_dict())
 
 
 @require_GET
@@ -148,36 +58,12 @@ def slow_query_10s(request):
 
     GET /api/self-healing/stress/slow-10s/
     """
-    start = time.time()
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_sleep(10)")
-            cursor.fetchone()
-
-        elapsed = time.time() - start
-        return JsonResponse(
-            {"status": "success", "elapsed_seconds": round(elapsed, 2), "message": "Connection held for 10 seconds"}
-        )
-    except SATimeoutError as e:
-        # Pool 고갈!
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] POOL EXHAUSTED! slow_query_10s timeout after {elapsed:.2f}s: {e}")
-        return JsonResponse(
-            {
-                "status": "pool_exhausted",
-                "elapsed_seconds": round(elapsed, 2),
-                "error": "Connection pool exhausted - no available connections",
-                "error_type": "SQLAlchemy TimeoutError",
-            },
-            status=503,
-        )
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] slow_query_10s failed after {elapsed:.2f}s: {e}")
-        return JsonResponse(
-            {"status": "error", "elapsed_seconds": round(elapsed, 2), "error": str(e), "error_type": type(e).__name__},
-            status=503,
-        )
+    service = get_stress_test_service()
+    result = service.execute_slow_query(seconds=10)
+    
+    if result.status in ("pool_exhausted", "error"):
+        return JsonResponse(result.to_dict(), status=503)
+    return JsonResponse(result.to_dict())
 
 
 @require_GET
@@ -191,36 +77,13 @@ def connection_leak_simulation(request):
     ⚠️ 테스트 전용! 프로덕션에서 절대 사용 금지!
     """
     hold_seconds = int(request.GET.get("seconds", 30))
-    hold_seconds = min(hold_seconds, 60)  # 최대 60초
-
-    start = time.time()
-    try:
-        # 연결을 열고 오래 유지
-        conn = connections["default"]
-        cursor = conn.cursor()
-
-        # 연결 점유 (닫지 않음)
-        cursor.execute("SELECT 1")
-
-        # 의도적 지연
-        time.sleep(hold_seconds)
-
-        # 명시적으로 닫지 않음 (누수 시뮬레이션)
-        # cursor.close()  # 의도적으로 주석 처리
-
-        elapsed = time.time() - start
-        return JsonResponse(
-            {
-                "status": "leak_simulated",
-                "held_seconds": hold_seconds,
-                "elapsed_seconds": round(elapsed, 2),
-                "warning": "Connection intentionally not closed",
-            }
-        )
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] leak simulation failed after {elapsed:.2f}s: {e}")
-        return JsonResponse({"status": "error", "elapsed_seconds": round(elapsed, 2), "error": str(e)}, status=503)
+    
+    service = get_stress_test_service()
+    result = service.simulate_connection_leak(hold_seconds=hold_seconds)
+    
+    if result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
+    return JsonResponse(result.to_dict())
 
 
 @require_GET
@@ -250,63 +113,13 @@ def pool_status(request):
         except ImportError:
             pass  # Fall through to direct computation
     
-    # Direct computation
-    try:
-        # SQLAlchemy Pool 정보 먼저 시도
-        pool_info = get_pool_info()
-
-        conn = connections["default"]
-
-        # PostgreSQL 연결 통계 조회
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT
-                    count(*) as total_connections,
-                    count(*) FILTER (WHERE state = 'active') as active,
-                    count(*) FILTER (WHERE state = 'idle') as idle,
-                    count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx
-                FROM pg_stat_activity
-                WHERE datname = current_database()
-            """
-            )
-            row = cursor.fetchone()
-
-        is_exhausted = pool_info.get("pool_exhausted", False)
-
-        response_data = {
-            "status": "exhausted" if is_exhausted else "healthy",
-            "sqlalchemy_pool": pool_info,
-            "pg_stats": {
-                "total_connections": row[0],
-                "active": row[1],
-                "idle": row[2],
-                "idle_in_transaction": row[3],
-            },
-            "connection_usable": conn.is_usable(),
-            "use_connection_pool": os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
-        }
-
-        # Pool 고갈 시 503 반환
-        if is_exhausted:
-            return JsonResponse(response_data, status=503)
-
-        return JsonResponse(response_data)
-    except SATimeoutError as e:
-        # SQLAlchemy Pool Timeout = Pool 고갈!
-        logger.error(f"[PoolStress] Pool exhausted! TimeoutError: {e}")
-        return JsonResponse(
-            {
-                "status": "exhausted",
-                "error": "Connection pool exhausted",
-                "error_type": "SQLAlchemy TimeoutError",
-                "detail": str(e),
-            },
-            status=503,
-        )
-    except Exception as e:
-        logger.error(f"[PoolStress] pool_status failed: {e}")
-        return JsonResponse({"status": "error", "error": str(e)}, status=503)
+    # Direct computation via service
+    service = get_stress_test_service()
+    result = service.get_pool_status()
+    
+    if result.status in ("exhausted", "error"):
+        return JsonResponse(result.to_dict(), status=503)
+    return JsonResponse(result.to_dict())
 
 
 @require_GET
@@ -316,83 +129,21 @@ def heavy_concurrent_query(request):
 
     GET /api/self-healing/stress/heavy-query/
     """
-    start = time.time()
-    try:
-        with connection.cursor() as cursor:
-            # ⚠️ STRESS TEST ONLY: This query uses a configurable table for testing.
-            # Configure via SELFHEALING_STRESS_TEST_TABLE setting.
-            # The actual table doesn't matter - this is purely for connection pool testing.
-            stress_table = getattr(settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation")
-            cursor.execute(
-                f"""
-                SELECT
-                    COUNT(*) as total_products,
-                    AVG(price) as avg_price,
-                    MAX(price) as max_price,
-                    MIN(price) as min_price
-                FROM {stress_table}
-                WHERE is_active = true
-            """
-            )
-            row = cursor.fetchone()
-
-            # 추가 지연 (1초)
-            cursor.execute("SELECT pg_sleep(1)")
-            cursor.fetchone()
-
-        elapsed = time.time() - start
-        return JsonResponse(
-            {
-                "status": "success",
-                "elapsed_seconds": round(elapsed, 2),
-                "stats": {
-                    "total_products": row[0],
-                    "avg_price": float(row[1]) if row[1] else 0,
-                    "max_price": float(row[2]) if row[2] else 0,
-                    "min_price": float(row[3]) if row[3] else 0,
-                },
-            }
-        )
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[PoolStress] heavy_query failed after {elapsed:.2f}s: {e}")
-        return JsonResponse({"status": "error", "elapsed_seconds": round(elapsed, 2), "error": str(e)}, status=503)
-
-
-# =============================================================================
-# 🔥 Advisory Lock API - 비침투적 DB 락 테스트
-# =============================================================================
-# "특정 비즈니스 테이블을 건드리지 않고도 pg_advisory_lock으로 완벽한 비침투적 테스트"
-# =============================================================================
-
-def _try_acquire_lock(cursor, lock_id: int, exclusive: bool, wait: bool) -> bool:
-    """Try to acquire advisory lock. Returns True if acquired."""
-    if exclusive:
-        if wait:
-            cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
-            return True
-        cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
-    else:
-        if wait:
-            cursor.execute("SELECT pg_advisory_lock_shared(%s)", [lock_id])
-            return True
-        cursor.execute("SELECT pg_try_advisory_lock_shared(%s)", [lock_id])
+    service = get_stress_test_service()
+    result = service.execute_heavy_query()
     
-    result = cursor.fetchone()
-    return result[0] if result else False
+    if result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
+    return JsonResponse(result.to_dict())
 
 
-def _release_lock(cursor, lock_id: int, exclusive: bool) -> None:
-    """Release advisory lock."""
-    if exclusive:
-        cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-    else:
-        cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
+# =============================================================================
+# ��� Advisory Lock API - 비침투적 DB 락 테스트
+# =============================================================================
 
 
 def _parse_lock_request_body(request) -> dict:
     """Parse lock request body with defaults."""
-    import json
     try:
         body = json.loads(request.body) if request.body else {}
     except json.JSONDecodeError:
@@ -433,78 +184,23 @@ def advisory_lock_acquire(request):
         return JsonResponse({"error": "POST method required"}, status=405)
     
     params = _parse_lock_request_body(request)
-    lock_id = params["lock_id"]
-    hold_seconds = params["hold_seconds"]
-    exclusive = params["exclusive"]
-    wait = params["wait"]
     
-    start = time.time()
+    service = get_stress_test_service()
+    result = service.acquire_advisory_lock(
+        lock_id=params["lock_id"],
+        hold_seconds=params["hold_seconds"],
+        exclusive=params["exclusive"],
+        wait=params["wait"],
+    )
     
-    try:
-        with connection.cursor() as cursor:
-            lock_acquired = _try_acquire_lock(cursor, lock_id, exclusive, wait)
-            
-            if not lock_acquired:
-                elapsed = time.time() - start
-                logger.info(f"[AdvisoryLock] Lock {lock_id} not acquired (conflict)")
-                return JsonResponse(
-                    {
-                        "status": "conflict",
-                        "lock_id": lock_id,
-                        "elapsed_seconds": round(elapsed, 2),
-                        "message": "Lock held by another session",
-                    },
-                    status=409,
-                )
-            
-            logger.info(f"[AdvisoryLock] Lock {lock_id} acquired, holding for {hold_seconds}s")
-            time.sleep(hold_seconds)
-            
-            _release_lock(cursor, lock_id, exclusive)
-        
-        elapsed = time.time() - start
-        logger.info(f"[AdvisoryLock] Lock {lock_id} released after {elapsed:.2f}s")
-        
-        return JsonResponse(
-            {
-                "status": "success",
-                "lock_id": lock_id,
-                "held_seconds": hold_seconds,
-                "elapsed_seconds": round(elapsed, 2),
-                "exclusive": exclusive,
-                "message": f"Advisory lock {lock_id} acquired and released successfully",
-            }
-        )
+    if result.status == "conflict":
+        return JsonResponse(result.to_dict(), status=409)
+    elif result.status == "lock_timeout":
+        return JsonResponse(result.to_dict(), status=423)  # Locked
+    elif result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
     
-    except Exception as e:
-        elapsed = time.time() - start
-        error_str = str(e).lower()
-        
-        # 락 타임아웃 또는 데드락 감지
-        if "lock" in error_str or "timeout" in error_str or "deadlock" in error_str:
-            logger.warning(f"[AdvisoryLock] Lock contention detected: {e}")
-            return JsonResponse(
-                {
-                    "status": "lock_timeout",
-                    "lock_id": lock_id,
-                    "elapsed_seconds": round(elapsed, 2),
-                    "error": str(e),
-                    "error_type": "LockTimeout",
-                },
-                status=423,  # Locked
-            )
-        
-        logger.error(f"[AdvisoryLock] Failed after {elapsed:.2f}s: {e}")
-        return JsonResponse(
-            {
-                "status": "error",
-                "lock_id": lock_id,
-                "elapsed_seconds": round(elapsed, 2),
-                "error": str(e),
-                "error_type": type(e).__name__,
-            },
-            status=503,
-        )
+    return JsonResponse(result.to_dict())
 
 
 @csrf_exempt
@@ -528,78 +224,32 @@ def advisory_lock_contention(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     
-    import json
     try:
         body = json.loads(request.body) if request.body else {}
     except json.JSONDecodeError:
         body = {}
     
     lock_id = int(body.get("lock_id", 99999))
-    duration_seconds = min(int(body.get("duration_seconds", 5)), 30)
-    lock_hold_ms = min(int(body.get("lock_hold_ms", 100)), 5000)
+    duration_seconds = int(body.get("duration_seconds", 5))
+    lock_hold_ms = int(body.get("lock_hold_ms", 100))
     
-    start = time.time()
-    success_count = 0
-    fail_count = 0
-    total_wait_ms = 0
+    service = get_stress_test_service()
+    result = service.run_lock_contention(
+        lock_id=lock_id,
+        duration_seconds=duration_seconds,
+        lock_hold_ms=lock_hold_ms,
+    )
     
-    try:
-        end_time = start + duration_seconds
-        
-        while time.time() < end_time:
-            attempt_start = time.time()
-            
-            with connection.cursor() as cursor:
-                # 비대기 모드로 락 시도
-                cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id])
-                result = cursor.fetchone()
-                
-                if result and result[0]:
-                    success_count += 1
-                    # 락 유지
-                    time.sleep(lock_hold_ms / 1000.0)
-                    # 락 해제
-                    cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-                else:
-                    fail_count += 1
-            
-            wait_ms = (time.time() - attempt_start) * 1000
-            total_wait_ms += wait_ms
-        
-        elapsed = time.time() - start
-        total_attempts = success_count + fail_count
-        
-        return JsonResponse(
-            {
-                "status": "completed",
-                "lock_id": lock_id,
-                "duration_seconds": round(elapsed, 2),
-                "total_attempts": total_attempts,
-                "success_count": success_count,
-                "fail_count": fail_count,
-                "success_rate_percent": round(success_count / total_attempts * 100, 2) if total_attempts > 0 else 0,
-                "avg_wait_ms": round(total_wait_ms / total_attempts, 2) if total_attempts > 0 else 0,
-                "lock_hold_ms": lock_hold_ms,
-            }
-        )
+    if result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
     
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[AdvisoryLock] Contention test failed: {e}")
-        return JsonResponse(
-            {
-                "status": "error",
-                "elapsed_seconds": round(elapsed, 2),
-                "error": str(e),
-            },
-            status=503,
-        )
+    return JsonResponse(result.to_dict())
 
 
 @csrf_exempt
 def controlled_burst_failure(request):
     """
-    🔥 Controlled Burst Failure - "폭풍 전야 → 시스템 붕괴 → 자율 복구" 연출.
+    Controlled Burst Failure - "폭풍 전야 -> 시스템 붕괴 -> 자율 복구" 연출.
     
     POST /api/self-healing/stress/burst-failure/
     
@@ -623,122 +273,33 @@ def controlled_burst_failure(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     
-    import json
     try:
         body = json.loads(request.body) if request.body else {}
     except json.JSONDecodeError:
         body = {}
     
     lock_id = int(body.get("lock_id", 777))
-    lock_timeout_ms = max(int(body.get("lock_timeout_ms", 1)), 1)  # 최소 1ms
-    burst_duration_seconds = min(int(body.get("burst_duration_seconds", 10)), 30)
-    concurrent_locks = min(int(body.get("concurrent_locks", 50)), 100)
+    lock_timeout_ms = int(body.get("lock_timeout_ms", 1))
+    burst_duration_seconds = int(body.get("burst_duration_seconds", 10))
+    concurrent_locks = int(body.get("concurrent_locks", 50))
     
-    start = time.time()
-    timeout_count = 0
-    success_count = 0
-    deadlock_count = 0
+    service = get_stress_test_service()
+    result = service.run_controlled_burst_failure(
+        lock_id=lock_id,
+        lock_timeout_ms=lock_timeout_ms,
+        burst_duration_seconds=burst_duration_seconds,
+        concurrent_locks=concurrent_locks,
+    )
     
-    try:
-        with connection.cursor() as cursor:
-            # 1. 락 타임아웃을 극단적으로 축소 (세션 레벨)
-            cursor.execute(f"SET lock_timeout = '{lock_timeout_ms}ms'")
-            cursor.execute(f"SET statement_timeout = '{lock_timeout_ms * 10}ms'")
-            
-            logger.warning(f"[BurstFailure] 🔥 BURST STARTED: lock_timeout={lock_timeout_ms}ms, duration={burst_duration_seconds}s")
-            
-            # 2. 먼저 하나의 락을 잡아서 유지 (다른 요청들이 실패하도록)
-            try:
-                cursor.execute("SELECT pg_advisory_lock(%s)", [lock_id])
-                
-                # 3. burst 동안 반복적으로 새 연결에서 락 시도 (타임아웃 유발)
-                end_time = start + burst_duration_seconds
-                attempt_count = 0
-                
-                while time.time() < end_time:
-                    attempt_count += 1
-                    
-                    # 새로운 커서로 락 시도 (같은 트랜잭션이라 실패함)
-                    try:
-                        # 매우 짧은 타임아웃으로 락 시도
-                        cursor.execute("SELECT pg_try_advisory_lock(%s)", [lock_id + 1])
-                        result = cursor.fetchone()
-                        if result and result[0]:
-                            success_count += 1
-                            cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id + 1])
-                        else:
-                            timeout_count += 1
-                    except Exception as inner_e:
-                        error_str = str(inner_e).lower()
-                        if "timeout" in error_str or "lock" in error_str:
-                            timeout_count += 1
-                        elif "deadlock" in error_str:
-                            deadlock_count += 1
-                        else:
-                            timeout_count += 1
-                    
-                    # 짧은 간격으로 반복
-                    time.sleep(0.01)  # 10ms
-                
-                # 메인 락 해제
-                cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
-                
-            except Exception as lock_e:
-                logger.error(f"[BurstFailure] Main lock failed: {lock_e}")
-                timeout_count += 1
-            
-            # 4. 타임아웃 설정 복원
-            cursor.execute("SET lock_timeout = '0'")
-            cursor.execute("SET statement_timeout = '0'")
-        
-        elapsed = time.time() - start
-        
-        logger.warning(f"[BurstFailure] 🔥 BURST COMPLETED: timeouts={timeout_count}, deadlocks={deadlock_count}")
-        
-        return JsonResponse(
-            {
-                "status": "burst_completed",
-                "lock_id": lock_id,
-                "lock_timeout_ms": lock_timeout_ms,
-                "burst_duration_seconds": round(elapsed, 2),
-                "total_attempts": timeout_count + success_count + deadlock_count,
-                "timeout_count": timeout_count,
-                "success_count": success_count,
-                "deadlock_count": deadlock_count,
-                "failure_rate_percent": round(
-                    (timeout_count + deadlock_count) / max(1, timeout_count + success_count + deadlock_count) * 100, 2
-                ),
-                "message": "Controlled burst failure completed - check DLQ for captured failures",
-            }
-        )
+    if result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
     
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[BurstFailure] Test failed: {e}")
-        return JsonResponse(
-            {
-                "status": "error",
-                "elapsed_seconds": round(elapsed, 2),
-                "timeout_count": timeout_count,
-                "error": str(e),
-            },
-            status=503,
-        )
+    return JsonResponse(result.to_dict())
 
 
 # =============================================================================
-# 🔥 Pool Exhaustion API - CB 트리거를 위한 실제 풀 고갈
+# ��� Pool Exhaustion API - CB 트리거를 위한 실제 풀 고갈
 # =============================================================================
-
-# 전역 변수로 점유 중인 커넥션들을 저장
-_held_connections = []
-_held_connections_lock = None
-
-try:
-    import threading
-    _held_connections_lock = threading.Lock()
-except ImportError:
-    pass
 
 
 @csrf_exempt
@@ -760,92 +321,27 @@ def pool_exhaust(request):
     
     ⚠️ 테스트 전용! 시스템에 의도적으로 장애를 발생시킵니다!
     """
-    global _held_connections
-    
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     
-    import json
     try:
         body = json.loads(request.body) if request.body else {}
     except json.JSONDecodeError:
         body = {}
     
-    connections_to_hold = min(int(body.get("connections_to_hold", 10)), 20)
-    hold_seconds = min(int(body.get("hold_seconds", 30)), 60)
+    connections_to_hold = int(body.get("connections_to_hold", 10))
+    hold_seconds = int(body.get("hold_seconds", 30))
     
-    start = time.time()
-    held_count = 0
+    service = get_stress_test_service()
+    result = service.exhaust_pool(
+        connections_to_hold=connections_to_hold,
+        hold_seconds=hold_seconds,
+    )
     
-    try:
-        logger.warning(f"[PoolExhaust] 🔥 Starting pool exhaustion: {connections_to_hold} connections for {hold_seconds}s")
-        
-        # 기존 점유 커넥션 정리
-        if _held_connections_lock:
-            with _held_connections_lock:
-                for conn_info in _held_connections:
-                    try:
-                        conn_info['cursor'].close()
-                    except:
-                        pass
-                _held_connections.clear()
-        
-        # 여러 커넥션 점유
-        for i in range(connections_to_hold):
-            try:
-                # 새 커넥션 획득 (Django의 connection은 thread-local이라 다른 방식 필요)
-                from django.db import connection as db_conn
-                cursor = db_conn.cursor()
-                
-                # 커넥션을 busy 상태로 유지 (SELECT 실행)
-                cursor.execute("SELECT pg_backend_pid(), pg_sleep(0.01)")
-                cursor.fetchone()
-                
-                if _held_connections_lock:
-                    with _held_connections_lock:
-                        _held_connections.append({'cursor': cursor, 'created_at': time.time()})
-                
-                held_count += 1
-                logger.info(f"[PoolExhaust] Held connection {i+1}/{connections_to_hold}")
-                
-            except Exception as e:
-                logger.warning(f"[PoolExhaust] Failed to acquire connection {i+1}: {e}")
-                break
-        
-        # 커넥션 유지하면서 대기
-        logger.warning(f"[PoolExhaust] 🔥 Holding {held_count} connections for {hold_seconds}s")
-        time.sleep(hold_seconds)
-        
-        # 커넥션 반환
-        if _held_connections_lock:
-            with _held_connections_lock:
-                for conn_info in _held_connections:
-                    try:
-                        conn_info['cursor'].close()
-                    except:
-                        pass
-                _held_connections.clear()
-        
-        elapsed = time.time() - start
-        logger.warning(f"[PoolExhaust] 🔥 Pool exhaustion completed after {elapsed:.2f}s")
-        
-        return JsonResponse({
-            "status": "exhaustion_completed",
-            "connections_held": held_count,
-            "hold_seconds": hold_seconds,
-            "elapsed_seconds": round(elapsed, 2),
-            "message": "Pool exhaustion completed - connections released"
-        })
-        
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"[PoolExhaust] Failed: {e}")
-        return JsonResponse({
-            "status": "error",
-            "connections_held": held_count,
-            "elapsed_seconds": round(elapsed, 2),
-            "error": str(e)
-        }, status=503)
+    if result.status == "error":
+        return JsonResponse(result.to_dict(), status=503)
+    
+    return JsonResponse(result.to_dict())
 
 
 @csrf_exempt
@@ -867,7 +363,6 @@ def trigger_cb_failure(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     
-    import json
     try:
         body = json.loads(request.body) if request.body else {}
     except json.JSONDecodeError:
@@ -875,35 +370,11 @@ def trigger_cb_failure(request):
     
     error_type = body.get("error_type", "db_error")
     
-    start = time.time()
+    service = get_stress_test_service()
+    result = service.trigger_cb_failure(error_type=error_type)
     
-    try:
-        if error_type == "db_error":
-            # 의도적인 DB 에러 발생
-            with connection.cursor() as cursor:
-                # 존재하지 않는 테이블 쿼리 -> DB 에러
-                cursor.execute("SELECT * FROM __nonexistent_table_for_cb_test__")
-                
-        elif error_type == "timeout":
-            # 타임아웃 에러 발생
-            with connection.cursor() as cursor:
-                cursor.execute("SET statement_timeout = '1ms'")
-                cursor.execute("SELECT pg_sleep(1)")  # 1ms 타임아웃에 1초 sleep -> 타임아웃
-                
-        elif error_type == "exception":
-            # Python 예외 발생
-            raise Exception("Intentional test exception for CB trigger")
-        
-        # 정상적으로 여기까지 오면 안됨
-        return JsonResponse({"status": "unexpected_success"})
-        
-    except Exception as e:
-        elapsed = time.time() - start
-        # 503으로 반환하여 CB가 이 실패를 카운트하도록 함
-        return JsonResponse({
-            "status": "intentional_failure",
-            "error_type": error_type,
-            "error": str(e),
-            "elapsed_seconds": round(elapsed, 2),
-            "message": "This failure is intentional for CB testing"
-        }, status=503)
+    # 의도적 실패이므로 503 반환하여 CB가 카운트하도록 함
+    if result.status == "intentional_failure":
+        return JsonResponse(result.to_dict(), status=503)
+    
+    return JsonResponse(result.to_dict())
