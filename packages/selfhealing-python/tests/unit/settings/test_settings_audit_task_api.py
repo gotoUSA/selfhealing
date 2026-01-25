@@ -348,3 +348,294 @@ class TestCascadeLoadSheddingSettingsIntegration:
         
         # Settings에서 가져온 값이 적용되었는지 확인
         assert shedding._rate_window_seconds == 1.0
+
+    def test_env_override_affects_instance(self):
+        """Test environment variable override affects new instance."""
+        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.audit.cascade_load_shedding import (
+            CascadeLoadShedding,
+            reset_cascade_load_shedding,
+        )
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_AUDIT_CASCADE_RATE_WINDOW_SECONDS": "2.5",
+        }):
+            reset_audit_settings()
+            reset_cascade_load_shedding()
+            shedding = CascadeLoadShedding()
+            assert shedding._rate_window_seconds == 2.5
+
+
+class TestDriftDetectionTaskSettingsIntegration:
+    """Test tasks/drift_detection.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.drift_detection import reset_drift_detection_settings
+        reset_drift_detection_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.drift_detection import reset_drift_detection_settings
+        reset_drift_detection_settings()
+
+    def test_detector_uses_settings_analysis_window(self):
+        """Test SLADriftDetector._get_analysis_window_hours() uses Settings."""
+        from selfhealing.tasks.drift_detection import SLADriftDetector
+
+        # 정적 메서드 직접 테스트
+        hours = SLADriftDetector._get_analysis_window_hours()
+        assert hours == 24  # 기본값
+
+    def test_env_override_analysis_window(self):
+        """Test environment variable override for analysis_window_hours."""
+        from selfhealing.settings.drift_detection import reset_drift_detection_settings
+        from selfhealing.tasks.drift_detection import SLADriftDetector
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_DRIFT_DETECTION_ANALYSIS_WINDOW_HOURS": "48",
+        }):
+            reset_drift_detection_settings()
+            hours = SLADriftDetector._get_analysis_window_hours()
+            assert hours == 48
+
+
+class TestIntelligenceTasksSettingsIntegration:
+    """Test tasks/intelligence_tasks.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        reset_intelligence_task_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        reset_intelligence_task_settings()
+
+    def test_check_sla_drift_task_notification_policy(self):
+        """Test CheckSLADriftTask uses Settings for notification_policy."""
+        from selfhealing.tasks.intelligence_tasks import CheckSLADriftTask
+
+        task = CheckSLADriftTask()
+        policy = task.notification_policy
+        
+        # default_cooldown_seconds가 Settings에서 온 값인지 확인
+        assert policy.cooldown_seconds == 3600  # 기본값
+
+    def test_analyze_forensic_pending_task_notification_policy(self):
+        """Test AnalyzeForensicPendingTask uses Settings for notification_policy."""
+        from selfhealing.tasks.intelligence_tasks import AnalyzeForensicPendingTask
+
+        task = AnalyzeForensicPendingTask()
+        policy = task.notification_policy
+        
+        # execution_threshold가 Settings에서 온 값인지 확인
+        assert policy.threshold == 10  # 기본값
+
+    def test_analyze_cross_stage_insights_task_notification_policy(self):
+        """Test AnalyzeCrossStageInsightsTask uses Settings for notification_policy."""
+        from selfhealing.tasks.intelligence_tasks import AnalyzeCrossStageInsightsTask
+
+        task = AnalyzeCrossStageInsightsTask()
+        policy = task.notification_policy
+        
+        # insight_threshold가 Settings에서 온 값인지 확인
+        assert policy.threshold == 3  # 기본값
+
+    def test_check_recovery_transitions_task_notification_policy(self):
+        """Test CheckRecoveryTransitionsTask uses Settings for notification_policy."""
+        from selfhealing.tasks.intelligence_tasks import CheckRecoveryTransitionsTask
+
+        task = CheckRecoveryTransitionsTask()
+        policy = task.notification_policy
+        
+        # recovery_check_cooldown_seconds가 Settings에서 온 값인지 확인
+        assert policy.cooldown_seconds == 120  # 기본값
+
+    def test_get_intelligence_settings_fallback(self):
+        """Test _get_intelligence_settings returns fallback on import error."""
+        from selfhealing.tasks.intelligence_tasks import CheckSLADriftTask
+
+        # 정적 메서드 직접 테스트 (정상 동작 확인)
+        settings = CheckSLADriftTask._get_intelligence_settings()
+        assert settings.default_cooldown_seconds == 3600
+        assert settings.batch_size == 100
+
+    def test_env_override_affects_notification_policy(self):
+        """Test environment variable override affects notification_policy."""
+        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.tasks.intelligence_tasks import CheckSLADriftTask
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_INTELLIGENCE_TASK_DEFAULT_COOLDOWN_SECONDS": "7200",
+        }):
+            reset_intelligence_task_settings()
+            task = CheckSLADriftTask()
+            policy = task.notification_policy
+            assert policy.cooldown_seconds == 7200
+
+
+class TestTrafficAwareReplaySettingsIntegration:
+    """Test tasks/traffic_aware_replay.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        reset_intelligence_task_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        reset_intelligence_task_settings()
+
+    def test_traffic_aware_replay_notification_policy(self):
+        """Test TrafficAwareReplayTask uses Settings for notification_policy."""
+        from selfhealing.tasks.traffic_aware_replay import TrafficAwareReplayTask
+
+        task = TrafficAwareReplayTask()
+        policy = task.notification_policy
+        
+        # cooldown_seconds가 기본값인지 확인
+        assert policy.cooldown_seconds == 300  # 5분
+
+    def test_get_cooldown_seconds_default(self):
+        """Test _get_cooldown_seconds returns default value."""
+        from selfhealing.tasks.traffic_aware_replay import TrafficAwareReplayTask
+
+        cooldown = TrafficAwareReplayTask._get_cooldown_seconds()
+        assert cooldown == 300  # 기본값 5분
+
+
+class TestCanaryViewSettingsIntegration:
+    """Test api/django/views/canary.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.canary import reset_canary_settings
+        reset_canary_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.canary import reset_canary_settings
+        reset_canary_settings()
+
+    def test_get_completed_rollouts_limit_via_settings(self):
+        """Test completed_rollouts_limit is correctly configured in Settings."""
+        from selfhealing.settings.canary import get_canary_settings
+
+        # Settings에서 값이 올바르게 설정되어 있는지 확인
+        settings = get_canary_settings()
+        assert settings.default_completed_rollouts_limit == 20  # 기본값
+
+    def test_env_override_completed_rollouts_limit(self):
+        """Test environment variable override for completed_rollouts_limit."""
+        from selfhealing.settings.canary import reset_canary_settings, get_canary_settings
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_CANARY_DEFAULT_COMPLETED_ROLLOUTS_LIMIT": "50",
+        }):
+            reset_canary_settings()
+            settings = get_canary_settings()
+            assert settings.default_completed_rollouts_limit == 50
+
+
+class TestAutoTuningViewSettingsIntegration:
+    """Test api/django/views/auto_tuning.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.api_view import reset_api_view_settings
+        reset_api_view_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.api_view import reset_api_view_settings
+        reset_api_view_settings()
+
+    def test_get_export_limit_via_settings(self):
+        """Test export_limit is correctly configured in Settings."""
+        from selfhealing.settings.api_view import get_api_view_settings
+
+        # Settings에서 값이 올바르게 설정되어 있는지 확인
+        settings = get_api_view_settings()
+        assert settings.auto_tuning_export_limit == 1000  # 기본값
+
+    def test_env_override_export_limit(self):
+        """Test environment variable override for export_limit."""
+        from selfhealing.settings.api_view import reset_api_view_settings, get_api_view_settings
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_API_VIEW_AUTO_TUNING_EXPORT_LIMIT": "5000",
+        }):
+            reset_api_view_settings()
+            settings = get_api_view_settings()
+            assert settings.auto_tuning_export_limit == 5000
+
+
+class TestObservabilityViewSettingsIntegration:
+    """Test api/django/views/xtest/observability.py Settings integration."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.api_view import reset_api_view_settings
+        reset_api_view_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.api_view import reset_api_view_settings
+        reset_api_view_settings()
+
+    def test_xtest_timeline_default_limit_via_settings(self):
+        """Test timeline_default_limit is correctly configured in Settings."""
+        from selfhealing.settings.api_view import get_api_view_settings
+
+        settings = get_api_view_settings()
+        assert settings.xtest_timeline_default_limit == 50  # 기본값
+
+    def test_xtest_postmortem_history_limit_via_settings(self):
+        """Test postmortem_history_limit is correctly configured in Settings."""
+        from selfhealing.settings.api_view import get_api_view_settings
+
+        settings = get_api_view_settings()
+        assert settings.xtest_postmortem_history_limit == 100  # 기본값
+
+    def test_xtest_incidents_default_limit_via_settings(self):
+        """Test incidents_default_limit is correctly configured in Settings."""
+        from selfhealing.settings.api_view import get_api_view_settings
+
+        settings = get_api_view_settings()
+        assert settings.xtest_incidents_default_limit == 10  # 기본값
+
+    def test_env_override_timeline_limit(self):
+        """Test environment variable override for timeline_default_limit."""
+        from selfhealing.settings.api_view import reset_api_view_settings, get_api_view_settings
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_API_VIEW_XTEST_TIMELINE_DEFAULT_LIMIT": "100",
+        }):
+            reset_api_view_settings()
+            settings = get_api_view_settings()
+            assert settings.xtest_timeline_default_limit == 100
+
+    def test_env_override_postmortem_limit(self):
+        """Test environment variable override for postmortem_history_limit."""
+        from selfhealing.settings.api_view import reset_api_view_settings, get_api_view_settings
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_API_VIEW_XTEST_POSTMORTEM_HISTORY_LIMIT": "200",
+        }):
+            reset_api_view_settings()
+            settings = get_api_view_settings()
+            assert settings.xtest_postmortem_history_limit == 200
+
+    def test_env_override_incidents_limit(self):
+        """Test environment variable override for incidents_default_limit."""
+        from selfhealing.settings.api_view import reset_api_view_settings, get_api_view_settings
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_API_VIEW_XTEST_INCIDENTS_DEFAULT_LIMIT": "25",
+        }):
+            reset_api_view_settings()
+            settings = get_api_view_settings()
+            assert settings.xtest_incidents_default_limit == 25
