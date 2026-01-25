@@ -217,47 +217,47 @@ class CriticalPathDedicatedWorkerConfig:
     """유지보수 태스크: 일반 큐에서 처리."""
     
     # ==========================================================================
-    # Queue Configurations
+    # Queue Configurations (settings로부터 동적 로드)
     # ==========================================================================
     
     queue_configs: Dict[str, WorkerQueueConfig] = field(default_factory=lambda: {
         "critical": WorkerQueueConfig(
-            queue_name="selfhealing.critical",
-            worker_count=2,
-            concurrency=2,
-            prefetch_multiplier=1,
+            queue_name=get_critical_worker_settings().critical_queue_name,
+            worker_count=get_critical_worker_settings().critical_worker_count,
+            concurrency=get_critical_worker_settings().critical_concurrency,
+            prefetch_multiplier=get_critical_worker_settings().critical_prefetch_multiplier,
             priority_range=(0, 0),
             description="P0 전용 - Abort, Kill Switch",
         ),
         "high": WorkerQueueConfig(
-            queue_name="selfhealing.high",
-            worker_count=4,
-            concurrency=4,
-            prefetch_multiplier=2,
+            queue_name=get_critical_worker_settings().high_priority_queue_name,
+            worker_count=get_critical_worker_settings().high_priority_worker_count,
+            concurrency=get_critical_worker_settings().high_priority_concurrency,
+            prefetch_multiplier=get_critical_worker_settings().high_priority_prefetch_multiplier,
             priority_range=(1, 2),
             description="P1-P2 고우선순위 - Escalation, Recovery",
         ),
         "recovery": WorkerQueueConfig(
-            queue_name="selfhealing.recovery",
-            worker_count=4,
-            concurrency=4,
-            prefetch_multiplier=2,
+            queue_name=get_critical_worker_settings().recovery_queue_name,
+            worker_count=get_critical_worker_settings().high_priority_worker_count,
+            concurrency=get_critical_worker_settings().high_priority_concurrency,
+            prefetch_multiplier=get_critical_worker_settings().high_priority_prefetch_multiplier,
             priority_range=(2, 3),
             description="복구 전용",
         ),
         "notifications": WorkerQueueConfig(
-            queue_name="selfhealing.notifications",
-            worker_count=2,
-            concurrency=4,
-            prefetch_multiplier=4,
+            queue_name=get_critical_worker_settings().notification_queue_name,
+            worker_count=2,  # 알림 전용은 2개로 유지
+            concurrency=get_critical_worker_settings().default_concurrency // 2,
+            prefetch_multiplier=get_critical_worker_settings().default_prefetch_multiplier,
             priority_range=(3, 4),
             description="알림 전용",
         ),
         "default": WorkerQueueConfig(
-            queue_name="selfhealing.default",
-            worker_count=8,
-            concurrency=8,
-            prefetch_multiplier=4,
+            queue_name=get_critical_worker_settings().default_queue_name,
+            worker_count=get_critical_worker_settings().default_worker_count,
+            concurrency=get_critical_worker_settings().default_concurrency,
+            prefetch_multiplier=get_critical_worker_settings().default_prefetch_multiplier,
             priority_range=(5, 10),
             description="일반 + 유지보수",
         ),

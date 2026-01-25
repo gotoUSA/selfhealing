@@ -2,7 +2,7 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: Step 1 완료
+- **상태**: Step 2 완료
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/services/coordination/`
 
@@ -11,6 +11,8 @@
 ## 1. 개요
 
 Coordination 서비스에서 발견된 하드코딩된 설정값들을 Pydantic Settings 체계로 마이그레이션하는 상세 계획.
+
+**진행 상태**: Step 2 완료
 
 ---
 
@@ -280,10 +282,10 @@ Celery 데코레이터의 `max_retries`, `default_retry_delay`는 태스크 정�
 
 - [x] 모든 신규 settings 모듈이 Pydantic v1/v2 호환
 - [x] 환경변수 없이 기본값으로 정상 동작
-- [ ] Recovery 태스크 정상 실행
-- [ ] Worker Pool 설정 적용 확인
-- [ ] Regional Policy 정책별 동작 검증
-- [ ] Namespace Emergency 설정 적용 확인
+- [x] Recovery 태스크 정상 실행 (Step 2 완료)
+- [x] Worker Pool 설정 적용 확인 (Step 2 완료)
+- [x] Regional Policy 정책별 동작 검증 (Step 2 완료)
+- [ ] Namespace Emergency 설정 적용 확인 (Step 3 예정)
 - [x] 기존 단위 테스트 100% 통과
 
 ---
@@ -310,3 +312,40 @@ Celery 데코레이터의 `max_retries`, `default_retry_delay`는 태스크 정�
   - RecoveryCoordinatorSettings: LEVEL별 기본값, 안정성 검사 설정
   - CriticalWorkerSettings Worker Pool: 환경별 설정, get_pool_config_for_env()
   - Settings Module Exports: 정상 export 확인
+
+---
+
+## 11. Step 2 완료 내역 (2026-01-25)
+
+### 11.1 Coordination 서비스 리팩토링
+
+| 파일 | 변경 내용 |
+|-----|---------|
+| `recovery_tasks.py` | `get_recovery_beat_schedule()`: RecoveryTasksSettings에서 interval 값 로드 |
+| `critical_worker.py` | `queue_configs`: CriticalWorkerSettings에서 큐 이름, 워커 수, 동시성, 프리페치 배수 로드 |
+| `regional_recovery_policy.py` | `get_default_regional_configs()`: RegionalRecoveryPolicySettings에서 기본값 로드, 레거시 `DEFAULT_REGIONAL_CONFIGS` 유지 |
+| `redis_key_guard.py` | `volatile_key_ttl`, `key_pattern_configs`: RedisKeyGuardSettings에서 TTL 값 로드 |
+| `recovery_shutdown.py` | 이미 Step 1에서 완전 연동됨 (변경 없음) |
+| `recovery_coordinator.py` | `_get_recovery_steps()`: RecoveryCoordinatorSettings에서 LEVEL별 파라미터 로드, `check_recovery_trigger()`: stability check 파라미터 로드, `_handle_health_check()`: 기본값을 settings에서 로드 |
+
+### 11.2 새 함수/메서드
+
+| 함수/메서드 | 설명 |
+|-----------|------|
+| `get_default_regional_configs()` | settings 기반 리전별 설정을 동적으로 생성 (캐시됨) |
+| `reset_default_regional_configs()` | 캐시 초기화 (테스트용) |
+
+### 11.3 테스트
+
+- `tests/unit/coordination/test_coordination_settings_integration.py` (15 tests, 100% passed)
+  - TestRecoveryTasksSettingsIntegration: beat schedule settings 연동 검증
+  - TestCriticalWorkerSettingsIntegration: queue_configs settings 연동 검증
+  - TestRegionalRecoveryPolicySettingsIntegration: 리전 설정 동적 생성 검증
+  - TestRedisKeyGuardSettingsIntegration: TTL 및 메모리 임계값 settings 연동 검증
+  - TestRecoveryCoordinatorSettingsIntegration: 복구 단계 및 안정성 검사 settings 연동 검증
+
+### 11.4 통합 테스트 결과
+
+```
+Step 1 + Step 2 전체: 44 tests, 100% passed (1.05s)
+```

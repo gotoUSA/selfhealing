@@ -157,13 +157,13 @@ class RedisKeyPriorityEviction:
         "selfhealing:*:budget:*",
     ])
     
-    # P3-P4: 휘발 가능 키 TTL (초)
+    # P3-P4: 휘발 가능 키 TTL (초) - Settings에서 로드
     volatile_key_ttl: Dict[str, int] = field(default_factory=lambda: {
-        "cache:*": 3600,              # 1시간
-        "metrics:realtime:*": 600,    # 10분
-        "metrics:aggregate:*": 7200,  # 2시간
-        "audit:event:*": 604800,      # 7일
-        "temp:*": 300,                # 5분
+        "cache:*": get_redis_key_guard_settings().cache_ttl_seconds,
+        "metrics:realtime:*": get_redis_key_guard_settings().metrics_realtime_ttl_seconds,
+        "metrics:aggregate:*": get_redis_key_guard_settings().metrics_aggregate_ttl_seconds,
+        "audit:event:*": get_redis_key_guard_settings().audit_event_ttl_seconds,
+        "temp:*": get_redis_key_guard_settings().temp_key_ttl_seconds,
     })
     
     # 메모리 경고 임계값 (%) - Settings에서 로드
@@ -176,9 +176,9 @@ class RedisKeyPriorityEviction:
         get_redis_key_guard_settings().memory_critical_threshold
     )
     
-    # 키 패턴별 상세 설정
+    # 키 패턴별 상세 설정 - Settings에서 TTL 로드
     key_pattern_configs: List[KeyPatternConfig] = field(default_factory=lambda: [
-        # P0: 거버넌스
+        # P0: 거버넌스 (TTL 없음)
         KeyPatternConfig(
             pattern="selfhealing:*:emergency:*",
             priority=RedisKeyPriority.P0_GOVERNANCE,
@@ -191,7 +191,7 @@ class RedisKeyPriorityEviction:
             default_ttl_seconds=None,
             description="Governance 모드 데이터",
         ),
-        # P1: 복구
+        # P1: 복구 (TTL 없음)
         KeyPatternConfig(
             pattern="selfhealing:*:recovery:session:*",
             priority=RedisKeyPriority.P1_RECOVERY,
@@ -204,31 +204,31 @@ class RedisKeyPriorityEviction:
             default_ttl_seconds=None,
             description="복구 분산 락",
         ),
-        # P2: 버짓
+        # P2: 버짓 (TTL 없음)
         KeyPatternConfig(
             pattern="selfhealing:*:budget:*",
             priority=RedisKeyPriority.P2_BUDGET,
             default_ttl_seconds=None,
             description="Error Budget 데이터",
         ),
-        # P3: 캐시
+        # P3: 캐시 (settings에서 TTL 로드)
         KeyPatternConfig(
             pattern="cache:*",
             priority=RedisKeyPriority.P3_CACHE,
-            default_ttl_seconds=3600,
+            default_ttl_seconds=get_redis_key_guard_settings().cache_ttl_seconds,
             description="일반 캐시 데이터",
         ),
         KeyPatternConfig(
             pattern="metrics:*",
             priority=RedisKeyPriority.P3_CACHE,
-            default_ttl_seconds=7200,
+            default_ttl_seconds=get_redis_key_guard_settings().metrics_aggregate_ttl_seconds,
             description="메트릭 데이터",
         ),
-        # P4: 감사
+        # P4: 감사 (settings에서 TTL 로드)
         KeyPatternConfig(
             pattern="audit:event:*",
             priority=RedisKeyPriority.P4_AUDIT,
-            default_ttl_seconds=604800,
+            default_ttl_seconds=get_redis_key_guard_settings().audit_event_ttl_seconds,
             description="감사 이벤트 (7일 보관)",
         ),
     ])

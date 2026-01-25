@@ -43,6 +43,7 @@ from selfhealing.services.coordination.regional_recovery_policy import (
     get_regional_recovery_policy_engine,
 )
 from selfhealing.settings.celery_task import get_celery_task_settings
+from selfhealing.settings.recovery_tasks import get_recovery_tasks_settings
 
 
 logger = logging.getLogger(__name__)
@@ -706,32 +707,35 @@ def get_recovery_beat_schedule() -> Dict[str, Any]:
     """
     Recovery 태스크용 Celery Beat 스케줄.
     
+    RecoveryTasksSettings에서 interval 설정을 가져와 스케줄을 생성합니다.
     celery.py에서 이 함수를 호출하여 스케줄을 등록합니다.
     
     Returns:
         Beat 스케줄 딕셔너리
     """
+    settings = get_recovery_tasks_settings()
+    
     return {
         "check-recovery-trigger-every-minute": {
             "task": "selfhealing.check_recovery_trigger",
-            "schedule": DEFAULT_TRIGGER_CHECK_INTERVAL,
+            "schedule": settings.trigger_check_interval,
             "args": ("global",),
             "options": {"queue": "selfhealing_recovery"},
         },
         "monitor-recovery-health-every-30s": {
             "task": "selfhealing.monitor_recovery_health",
-            "schedule": DEFAULT_HEALTH_MONITOR_INTERVAL,
+            "schedule": settings.health_monitor_interval,
             "args": ("global",),
             "options": {"queue": "selfhealing_recovery"},
         },
         "check-stale-pending-every-10min": {
             "task": "selfhealing.check_stale_pending_recoveries",
-            "schedule": DEFAULT_STALE_CHECK_INTERVAL * 60,
+            "schedule": settings.stale_check_interval * 60,
             "options": {"queue": "selfhealing_notifications"},
         },
         "cleanup-old-sessions-daily": {
             "task": "selfhealing.cleanup_old_recovery_sessions",
-            "schedule": 86400,  # 24시간
+            "schedule": 86400,  # 24시간 (고정)
             "options": {"queue": "selfhealing_maintenance"},
         },
     }

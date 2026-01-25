@@ -47,6 +47,7 @@ from .recovery_audit import (
     RecoveryAuditEventType,
     get_recovery_audit_recorder,
 )
+from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
 
 if TYPE_CHECKING:
     from selfhealing.core.state_backend import StateBackend
@@ -672,7 +673,7 @@ class RecoveryCoordinator:
         복구 트리거 조건 확인.
         
         Emergency 상황에서 복구 가능 여부를 확인합니다.
-        조건: error_rate < 10% for 10 minutes
+        RecoveryCoordinatorSettings의 stability_check 파라미터를 사용합니다.
         
         Args:
             namespace: 네임스페이스
@@ -680,6 +681,8 @@ class RecoveryCoordinator:
         Returns:
             복구 가능 여부 및 상세 정보
         """
+        settings = get_recovery_coordinator_settings()
+        
         # 현재 Emergency 레벨 확인 시도
         current_level = self._get_current_emergency_level(namespace)
 
@@ -690,11 +693,11 @@ class RecoveryCoordinator:
                 "current_level": "NORMAL",
             }
 
-        # 안정화 조건 확인 (10분간 error_rate < 10%)
+        # 안정화 조건 확인 (settings에서 duration, threshold 가져옴)
         stability_check = self._check_stability(
             namespace=namespace,
-            duration_minutes=10,
-            error_rate_threshold=0.1,
+            duration_minutes=settings.stability_check_duration_minutes,
+            error_rate_threshold=settings.stability_check_error_rate_threshold,
         )
 
         return {
@@ -747,8 +750,17 @@ class RecoveryCoordinator:
         
         지정된 시간 동안 에러율이 임계값 이하인지 확인.
         """
-        duration_minutes = step.params.get("duration_minutes", 5)
-        error_rate_threshold = step.params.get("error_rate_threshold", 0.1)
+        settings = get_recovery_coordinator_settings()
+        
+        # step.params에서 값이 없으면 settings에서 기본값 사용
+        duration_minutes = step.params.get(
+            "duration_minutes", 
+            settings.stability_check_duration_minutes
+        )
+        error_rate_threshold = step.params.get(
+            "error_rate_threshold", 
+            settings.stability_check_error_rate_threshold
+        )
 
         # Health Check 상태로 전환
         session.status = RecoveryStatus.HEALTH_CHECK
@@ -848,21 +860,101 @@ class RecoveryCoordinator:
         namespace: str = "global",
     ) -> List[RecoveryStep]:
         """
-        복구 단계 목록 조회 (깊은 복사).
+        복구 단계 목록 조회 (settings 기반 동적 생성).
         
-        Phase 3.5: 리전별 정책 통합 시 namespace 파라미터 사용.
+        RecoveryCoordinatorSettings에서 레벨별 파라미터를 가져와 
+        복구 단계를 동적으로 생성합니다.
         """
-        steps = self.DEFAULT_RECOVERY_STEPS.get(trigger_level, [])
-        # 깊은 복사하여 반환
-        return [
-            RecoveryStep(
-                step_type=s.step_type,
-                order=s.order,
-                wait_after_seconds=s.wait_after_seconds,
-                params=dict(s.params),
-            )
-            for s in steps
-        ]
+        settings = get_recovery_coordinator_settings()
+        
+        # 레벨별 파라미터 매핑
+        level_params = {
+            "LEVEL_3": {
+                "health_check_wait": settings.level3_health_check_wait_after,
+                "health_check_duration": settings.level3_health_check_duration_minutes,
+                "health_check_success": settings.level3_health_check_success_threshold,
+                "health_check_error": settings.level3_health_check_error_rate_threshold,
+                "canary_wait": settings.level3_canary_resume_wait_after,
+                "governance_wait": settings.level3_governance_normal_wait_after,
+                "include_governance": True,
+            },
+            "LEVEL_2": {
+                "health_check_wait": settings.level2_health_check_wait_after,
+                "health_check_duration": settings.level2_health_check_duration_minutes,
+                "health_check_success": settings.level2_health_check_success_threshold,
+                "health_check_error": settings.level2_health_check_error_rate_threshold,
+                "canary_wait": settings.level2_canary_resume_wait_after,
+                "include_governance": False,
+            },
+            "LEVEL_1": {
+                "health_check_wait": settings.level1_health_check_wait_after,
+                "health_check_duration": settings.level1_health_check_duration_minutes,
+                "health_check_success": settings.level1_health_check_success_threshold,
+                "health_check_error": settings.level1_health_check_error_rate_threshold,
+                "include_governance": False,
+            },
+        }
+        
+        params = level_params.get(trigger_level)
+        if not params:
+            # 레거시 지원: DEFAULT_RECOVERY_STEPS에서 가져오기
+            steps = self.DEFAULT_RECOVERY_STEPS.get(trigger_level, [])
+            return [
+                RecoveryStep(
+                    step_type=s.step_type,
+                    order=s.order,
+                    wait_after_seconds=s.wait_after_seconds,
+                    params=dict(s.params),
+                )
+                for s in steps
+            ]
+        
+        # 동적 단계 생성
+        steps: List[RecoveryStep] = []
+        order = 1
+        
+        # Step 1: BUDGET_RESET (항상 포함)
+        steps.append(RecoveryStep(
+            step_type=RecoveryStepType.BUDGET_RESET,
+            order=order,
+            wait_after_seconds=0,
+            params={"target_multiplier": 1.0},
+        ))
+        order += 1
+        
+        # Step 2: HEALTH_CHECK (항상 포함)
+        steps.append(RecoveryStep(
+            step_type=RecoveryStepType.HEALTH_CHECK,
+            order=order,
+            wait_after_seconds=params.get("health_check_wait", 0),
+            params={
+                "duration_minutes": params["health_check_duration"],
+                "success_threshold": params["health_check_success"],
+                "error_rate_threshold": params["health_check_error"],
+            },
+        ))
+        order += 1
+        
+        # Step 3: CANARY_RESUME (LEVEL_1 제외)
+        if trigger_level in ["LEVEL_3", "LEVEL_2"]:
+            steps.append(RecoveryStep(
+                step_type=RecoveryStepType.CANARY_RESUME,
+                order=order,
+                wait_after_seconds=params.get("canary_wait", 60),
+                params={"resume_paused_only": True},
+            ))
+            order += 1
+        
+        # Step 4: GOVERNANCE_NORMAL (LEVEL_3만)
+        if params.get("include_governance") and trigger_level == "LEVEL_3":
+            steps.append(RecoveryStep(
+                step_type=RecoveryStepType.GOVERNANCE_NORMAL,
+                order=order,
+                wait_after_seconds=params.get("governance_wait", 300),
+                params={"reason": "[AUTO-RECOVERY] Stability confirmed"},
+            ))
+        
+        return steps
     
     def _handle_all_steps_completed(self, session: RecoverySession) -> None:
         """

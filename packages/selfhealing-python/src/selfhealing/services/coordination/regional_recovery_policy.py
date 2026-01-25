@@ -184,22 +184,99 @@ class RegionalRecoveryConfig:
 
 
 # =============================================================================
-# 기본 리전별 설정
+# 기본 리전별 설정 (settings 기반 동적 생성)
 # =============================================================================
 
+def _build_default_regional_configs() -> Dict[str, RegionalRecoveryConfig]:
+    """
+    settings에서 기본값을 가져와 리전별 설정 생성.
+    
+    Returns:
+        리전별 RegionalRecoveryConfig 딕셔너리
+    """
+    settings = _get_settings()
+    
+    return {
+        # 서울 리전: 결제 비중이 커서 보수적 (CRITICAL)
+        "seoul": RegionalRecoveryConfig(
+            namespace="seoul",
+            description="Seoul region - payment heavy, conservative recovery",
+            stability_check_duration_minutes=10,  # CRITICAL은 더 긴 안정화
+            error_rate_threshold=0.05,  # 더 엄격한 5%
+            success_rate_threshold=0.98,  # 더 높은 98%
+            require_manual_approval=True,  # 수동 승인 필수
+            approval_timeout_minutes=30,
+            approval_escalation_intervals=settings.get_escalation_intervals(),
+            priority=100,  # 최우선
+        ),
+        # 도쿄 리전: 중간 중요도 (HIGH)
+        "tokyo": RegionalRecoveryConfig(
+            namespace="tokyo",
+            description="Tokyo region - standard recovery",
+            stability_check_duration_minutes=7,
+            error_rate_threshold=settings.error_rate_threshold,
+            success_rate_threshold=settings.success_rate_threshold,
+            require_manual_approval=False,
+            approval_timeout_minutes=settings.approval_timeout_minutes,
+            approval_escalation_intervals=settings.get_escalation_intervals(),
+            priority=50,
+        ),
+        # 오레곤 리전: 분석 위주, 느슨한 정책 (MEDIUM)
+        "oregon": RegionalRecoveryConfig(
+            namespace="oregon",
+            description="Oregon region - analytics, relaxed recovery",
+            stability_check_duration_minutes=5,
+            error_rate_threshold=0.15,  # 더 느슨한 15%
+            success_rate_threshold=0.90,  # 더 낮은 90%
+            require_manual_approval=False,
+            approval_timeout_minutes=settings.approval_timeout_minutes,
+            approval_escalation_intervals=settings.get_escalation_intervals(),
+            priority=10,
+        ),
+        # 글로벌: 기본 설정 (LOW)
+        "global": RegionalRecoveryConfig.from_settings(
+            namespace="global",
+            description="Global namespace - default recovery",
+            priority=0,
+        ),
+    }
+
+
+# 초기화 시 사용할 기본 설정 (lazy loading)
+_default_regional_configs: Optional[Dict[str, RegionalRecoveryConfig]] = None
+
+
+def get_default_regional_configs() -> Dict[str, RegionalRecoveryConfig]:
+    """
+    기본 리전별 설정 반환 (캐시됨).
+    
+    Returns:
+        리전별 RegionalRecoveryConfig 딕셔너리
+    """
+    global _default_regional_configs
+    if _default_regional_configs is None:
+        _default_regional_configs = _build_default_regional_configs()
+    return _default_regional_configs
+
+
+def reset_default_regional_configs() -> None:
+    """캐시 초기화 (테스트용)."""
+    global _default_regional_configs
+    _default_regional_configs = None
+
+
+# 레거시 호환용 (deprecated, use get_default_regional_configs instead)
 DEFAULT_REGIONAL_CONFIGS: Dict[str, RegionalRecoveryConfig] = {
-    # 서울 리전: 결제 비중이 커서 보수적
     "seoul": RegionalRecoveryConfig(
         namespace="seoul",
         description="Seoul region - payment heavy, conservative recovery",
         stability_check_duration_minutes=10,
-        error_rate_threshold=0.05,  # 더 엄격한 5%
-        success_rate_threshold=0.98,  # 더 높은 98%
-        require_manual_approval=True,  # 수동 승인 필수
+        error_rate_threshold=0.05,
+        success_rate_threshold=0.98,
+        require_manual_approval=True,
         approval_timeout_minutes=30,
-        priority=100,  # 최우선
+        priority=100,
     ),
-    # 도쿄 리전: 중간 중요도
     "tokyo": RegionalRecoveryConfig(
         namespace="tokyo",
         description="Tokyo region - standard recovery",
@@ -209,7 +286,6 @@ DEFAULT_REGIONAL_CONFIGS: Dict[str, RegionalRecoveryConfig] = {
         require_manual_approval=False,
         priority=50,
     ),
-    # 오레곤 리전: 분석 위주, 느슨한 정책
     "oregon": RegionalRecoveryConfig(
         namespace="oregon",
         description="Oregon region - analytics, relaxed recovery",
@@ -219,7 +295,6 @@ DEFAULT_REGIONAL_CONFIGS: Dict[str, RegionalRecoveryConfig] = {
         require_manual_approval=False,
         priority=10,
     ),
-    # 글로벌: 기본 설정
     "global": RegionalRecoveryConfig(
         namespace="global",
         description="Global namespace - default recovery",
@@ -265,10 +340,10 @@ class RegionalRecoveryPolicyEngine:
     ):
         """
         Args:
-            default_configs: 초기 리전별 설정 (없으면 DEFAULT_REGIONAL_CONFIGS 사용)
+            default_configs: 초기 리전별 설정 (없으면 settings 기반 기본값 사용)
         """
         self._configs: Dict[str, RegionalRecoveryConfig] = dict(
-            default_configs or DEFAULT_REGIONAL_CONFIGS
+            default_configs if default_configs is not None else get_default_regional_configs()
         )
         self._lock = threading.RLock()
     
