@@ -441,3 +441,149 @@ class TestBackwardCompatibility:
         from selfhealing.metrics.safe_gauge.core import SafeGauge
         assert hasattr(SafeGauge, "DEFAULT_MAX_LABEL_COMBINATIONS")
         assert SafeGauge.DEFAULT_MAX_LABEL_COMBINATIONS == 1000
+
+
+# =============================================================================
+# 11. Mock Redis로 TTL 적용 검증 테스트
+# =============================================================================
+
+class TestRedisTtlAppliedToMock:
+    """
+    Settings에서 가져온 TTL 값이 실제 Redis 호출에 적용되는지 검증.
+    
+    Mock Redis를 사용하여 setex, expire 등의 호출 시 TTL 값이 올바르게 전달되는지 확인합니다.
+    """
+
+    def test_rate_limit_storage_uses_settings_ttl(self):
+        """RedisRateLimitStorage가 Settings TTL로 Redis 호출하는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.rate_limit import reset_rate_limit_settings
+        from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+
+        reset_rate_limit_settings()
+
+        # Mock Redis
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+
+        # 어댑터 생성 (Settings에서 TTL 가져옴)
+        storage = RedisRateLimitStorage(redis_client=mock_redis)
+
+        # TTL이 Settings에서 가져온 값인지 확인
+        assert storage._ttl == 3600  # 기본값
+
+    def test_rate_limit_storage_custom_ttl_override(self):
+        """생성자에서 TTL 오버라이드 가능."""
+        from unittest.mock import MagicMock
+        from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+
+        mock_redis = MagicMock()
+        storage = RedisRateLimitStorage(redis_client=mock_redis, ttl=7200)
+
+        assert storage._ttl == 7200
+
+    def test_rate_limit_storage_ttl_from_env(self):
+        """환경 변수로 설정된 TTL이 적용되는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.rate_limit import reset_rate_limit_settings
+        from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+
+        reset_rate_limit_settings()
+
+        with mock.patch.dict(os.environ, {"SELFHEALING_RATELIMIT_REDIS_TTL": "1800"}):
+            reset_rate_limit_settings()
+            mock_redis = MagicMock()
+            storage = RedisRateLimitStorage(redis_client=mock_redis)
+
+            assert storage._ttl == 1800
+
+        reset_rate_limit_settings()
+
+    def test_airgap_adapter_uses_settings_ttl(self):
+        """RedisAirGapAdapter가 Settings TTL로 Redis 호출하는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.airgap import reset_airgap_settings
+        from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
+
+        reset_airgap_settings()
+
+        mock_redis = MagicMock()
+        adapter = RedisAirGapAdapter(redis_client=mock_redis)
+
+        # Settings에서 가져온 TTL 확인
+        assert adapter.default_ttl == 3600
+
+        # write_summary 호출 시 TTL 적용 확인
+        adapter.write_summary("test_key", "test_value")
+        mock_redis.setex.assert_called_once()
+        call_args = mock_redis.setex.call_args
+        assert call_args[0][1] == 3600  # TTL 인자
+
+    def test_airgap_adapter_ttl_from_env(self):
+        """환경 변수로 설정된 AirGap TTL이 적용되는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.airgap import reset_airgap_settings
+        from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
+
+        reset_airgap_settings()
+
+        with mock.patch.dict(os.environ, {"SELFHEALING_AIRGAP_REDIS_TTL": "1800"}):
+            reset_airgap_settings()
+            mock_redis = MagicMock()
+            adapter = RedisAirGapAdapter(redis_client=mock_redis)
+
+            assert adapter.default_ttl == 1800
+
+            adapter.write_summary("test_key", "test_value")
+            call_args = mock_redis.setex.call_args
+            assert call_args[0][1] == 1800
+
+        reset_airgap_settings()
+
+    def test_audit_buffer_uses_settings_ttl(self):
+        """RedisAuditBuffer가 Settings TTL로 Redis expire 호출하는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+
+        reset_audit_settings()
+
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_redis.pipeline.return_value = mock_pipe
+
+        buffer = RedisAuditBuffer(redis_client=mock_redis)
+
+        # Settings에서 가져온 TTL 확인
+        assert buffer._ttl_seconds == 86400
+
+        # log 호출 시 expire에 TTL 전달 확인
+        buffer.log({"event": "test"}, domain="test")
+        mock_pipe.expire.assert_called_once()
+        call_args = mock_pipe.expire.call_args
+        assert call_args[0][1] == 86400  # TTL 인자
+
+    def test_audit_buffer_ttl_from_env(self):
+        """환경 변수로 설정된 Audit Buffer TTL이 적용되는지 확인."""
+        from unittest.mock import MagicMock
+        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+
+        reset_audit_settings()
+
+        with mock.patch.dict(os.environ, {"SELFHEALING_AUDIT_BUFFER_REDIS_TTL": "172800"}):
+            reset_audit_settings()
+            mock_redis = MagicMock()
+            mock_pipe = MagicMock()
+            mock_redis.pipeline.return_value = mock_pipe
+
+            buffer = RedisAuditBuffer(redis_client=mock_redis)
+
+            assert buffer._ttl_seconds == 172800
+
+            buffer.log({"event": "test"}, domain="test")
+            call_args = mock_pipe.expire.call_args
+            assert call_args[0][1] == 172800
+
+        reset_audit_settings()
