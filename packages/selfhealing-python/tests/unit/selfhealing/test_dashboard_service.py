@@ -217,8 +217,6 @@ class TestDashboardServiceWithMockedRepo:
     @pytest.fixture
     def mock_stats_repo(self):
         """Create a mock statistics repository."""
-        from selfhealing.core.types import StatusCounts
-
         mock = MagicMock()
         mock.get_status_counts.return_value = StatusCounts(
             total=80, pending=10, resolved=50, failed=5, archived=15

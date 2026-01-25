@@ -217,10 +217,10 @@ class TestHealthCheckService:
     # get_overall_health Tests
     # =========================================================================
 
-    @patch("django.utils.timezone")
+    @patch("django.utils.timezone.now")
     @patch.object(HealthCheckService, "_get_circuit_breaker_count")
     @patch.object(HealthCheckService, "check_database")
-    def test_get_overall_health_healthy(self, mock_check_db, mock_get_count, mock_timezone):
+    def test_get_overall_health_healthy(self, mock_check_db, mock_get_count, mock_now):
         """전체 헬스 체크 - 정상."""
         mock_check_db.return_value = DatabaseCheck(
             alias="default", vendor="postgresql", is_connected=True, is_usable=True
@@ -228,7 +228,7 @@ class TestHealthCheckService:
         
         mock_get_count.return_value = 5
         
-        mock_timezone.now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
+        mock_now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
 
         result = self.service.get_overall_health()
 
@@ -238,14 +238,14 @@ class TestHealthCheckService:
         assert result.checks["circuit_breaker"] == "enabled"
         assert result.services_count == 5
 
-    @patch("django.utils.timezone")
+    @patch("django.utils.timezone.now")
     @patch.object(HealthCheckService, "check_database")
-    def test_get_overall_health_degraded(self, mock_check_db, mock_timezone):
+    def test_get_overall_health_degraded(self, mock_check_db, mock_now):
         """전체 헬스 체크 - 저하."""
         mock_check_db.return_value = DatabaseCheck(
             alias="default", is_connected=False, is_usable=False, error="Connection refused"
         )
-        mock_timezone.now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
+        mock_now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
 
         result = self.service.get_overall_health()
 

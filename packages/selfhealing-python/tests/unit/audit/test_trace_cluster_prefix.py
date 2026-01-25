@@ -119,7 +119,7 @@ class TestGenerateTraceId:
         set_cluster_prefix_enabled(True)
         
         # ClusterIdentity import 실패 시뮬레이션
-        with patch("selfhealing.audit.trace.get_cluster_identity", side_effect=Exception("Test error")):
+        with patch("selfhealing.core.cluster_identity.get_cluster_identity", side_effect=Exception("Test error")):
             # 재임포트 필요 없음 - 함수 내에서 import 시도
             trace_id = generate_trace_id()
             

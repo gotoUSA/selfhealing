@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from selfhealing.core.apply_strategy import ApplyStrategy, ApplyOptions
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.services.audit import log_config_apply_audit
+from selfhealing.settings.audit_settings import get_audit_settings
 
 logger = logging.getLogger(__name__)
 

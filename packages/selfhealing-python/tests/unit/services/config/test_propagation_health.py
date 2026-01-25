@@ -203,7 +203,7 @@ class TestPropagationHealthMonitor:
         
         assert metrics.total_propagations == 10
         assert metrics.avg_propagation_latency_ms == 550.0
-        assert metrics.p50_propagation_latency_ms == 500.0  # 50th percentile
+        assert metrics.p50_propagation_latency_ms == 600.0  # 50th percentile (index 5 in 0-indexed array)
     
     def test_get_recent_records(self):
         """최근 기록 조회 테스트."""

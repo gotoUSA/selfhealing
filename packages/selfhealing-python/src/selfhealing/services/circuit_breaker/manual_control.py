@@ -52,44 +52,6 @@ class ManualControlMixin:
     # Manual Control Operations
     # =========================================================================
 
-    def _check_kill_switch(
-        self, service_name: str, action: str, override_kill_switch: bool
-    ) -> CircuitBreakerResult | None:
-        """Check kill switch and return error result if blocked."""
-        if _is_system_enabled() or override_kill_switch:
-            return None
-        
-        logger.warning(
-            f"[CircuitBreaker] {action} blocked: Kill Switch is active. "
-            f"service={service_name}. Use override_kill_switch=True for manual control."
-        )
-        return CircuitBreakerResult.failed(
-            service_name=service_name,
-            error="Kill Switch is active: use override_kill_switch=True for manual control",
-        )
-
-    def _audit_kill_switch_override(
-        self, service_name: str, action: str, reason: str, controlled_by_id: int | None
-    ) -> None:
-        """Audit kill switch override if needed."""
-        if _is_system_enabled():
-            return
-        
-        logger.warning(
-            f"[CircuitBreaker] Kill Switch override for {action}: "
-            f"service={service_name}, controlled_by_id={controlled_by_id}"
-        )
-        try:
-            from selfhealing.services.audit_helpers import log_kill_switch_override_audit
-            log_kill_switch_override_audit(
-                service_name=service_name,
-                action=action,
-                reason=reason,
-                controlled_by_id=controlled_by_id,
-            )
-        except Exception as e:
-            logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
-
     def _resolve_controlled_by_id(
         self, controlled_by: Any, controlled_by_id: int | None
     ) -> int | None:
@@ -127,16 +89,14 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
+        controlled_by_id = self._resolve_controlled_by_id(controlled_by, controlled_by_id)
+
         # Kill Switch 체크
-        kill_switch_result = self._check_kill_switch(service_name, "force_open", override_kill_switch)
+        kill_switch_result = self._check_kill_switch(
+            service_name, "force_open", reason, controlled_by_id, override_kill_switch
+        )
         if kill_switch_result:
             return kill_switch_result
-        
-        # Kill Switch override 시 Audit 기록
-        if override_kill_switch:
-            self._audit_kill_switch_override(service_name, "force_open", reason, controlled_by_id)
-
-        controlled_by_id = self._resolve_controlled_by_id(controlled_by, controlled_by_id)
 
         decision_logger = DecisionLogger(service_name=service_name)
         decision_logger.intervention_evaluated(

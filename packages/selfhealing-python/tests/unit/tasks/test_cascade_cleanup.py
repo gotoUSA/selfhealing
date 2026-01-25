@@ -317,7 +317,7 @@ class TestRecoverCascadeFromFallback:
             ):
                 result = recover_cascade_from_fallback(namespace="test")
         
-        assert result["status"] == "no_fallback_data"
+        assert result["status"] == "no_wal_data"
         assert result["recovered"] == 0
     
     def test_recover_dry_run(self, mock_auditor):

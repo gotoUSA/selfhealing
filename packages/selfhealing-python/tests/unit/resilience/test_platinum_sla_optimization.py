@@ -457,14 +457,15 @@ class TestAsyncHealingLogger:
         AsyncHealingLogger.start()
         
         # BATCH_SIZE 이상의 이벤트 추가
-        for i in range(AsyncHealingLogger.BATCH_SIZE + 1):
+        batch_size = AsyncHealingLogger._get_batch_size()
+        for i in range(batch_size + 1):
             AsyncHealingLogger.log({'type': 'test', 'index': i})
         
         # 배치 처리 대기
         time.sleep(2)
         
         # 배치로 플러시됨
-        assert len(flushed_events) >= AsyncHealingLogger.BATCH_SIZE
+        assert len(flushed_events) >= batch_size
     
     def test_manual_flush(self):
         """수동 플러시"""
