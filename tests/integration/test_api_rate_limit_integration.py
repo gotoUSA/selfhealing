@@ -20,8 +20,14 @@ class TestApiRateLimitSettingsIntegration:
         yield
         reset_api_rate_limit_settings()
 
-    def test_get_rate_limit_config_uses_settings(self, monkeypatch):
-        """_get_setting 함수가 ApiRateLimitSettings의 환경변수 오버라이드를 사용하는지 검증."""
+    def test_get_rate_limit_config_uses_settings_when_runtime_config_fails(self, monkeypatch):
+        """
+        get_rate_limit_config()가 RuntimeConfigManager 실패 시 settings 값을 fallback으로 사용하는지 검증.
+        
+        우선순위:
+        1. RuntimeConfigManager (성공 시)
+        2. ApiRateLimitSettings (RuntimeConfigManager 실패 시 fallback)
+        """
         from selfhealing.settings.api_rate_limit import reset_api_rate_limit_settings
         
         # 환경변수로 설정 변경
@@ -30,15 +36,49 @@ class TestApiRateLimitSettingsIntegration:
         
         reset_api_rate_limit_settings()
         
-        # _get_setting 헬퍼 함수 테스트 (settings에서 값을 가져오는 핵심 함수)
+        # RuntimeConfigManager를 mock하여 실패하게 만듦
+        import selfhealing.api.django.rate_limit as rate_limit_module
+        
+        def mock_get_runtime_config_manager():
+            raise ImportError("RuntimeConfigManager not available for test")
+        
+        # services.runtime_config 모듈 import를 실패하게 만듦
+        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        
+        def mock_import(name, *args, **kwargs):
+            if name == "selfhealing.services.runtime_config":
+                raise ImportError("Mocked import failure")
+            return original_import(name, *args, **kwargs)
+        
+        monkeypatch.setattr("builtins.__import__", mock_import)
+        
+        # 이제 get_rate_limit_config 호출 - RuntimeConfigManager가 실패하므로 settings fallback 사용
+        from selfhealing.api.django.rate_limit import get_rate_limit_config
+        
+        config = get_rate_limit_config()
+        
+        # Settings에서 환경변수 오버라이드된 값이 반환되어야 함
+        assert config["control_api_rate_limit"] == 250
+        assert config["emergency_rate_limit"] == 25
+
+    def test_get_setting_helper_reads_from_settings(self, monkeypatch):
+        """_get_setting 헬퍼 함수가 ApiRateLimitSettings에서 값을 올바르게 읽는지 검증."""
+        from selfhealing.settings.api_rate_limit import reset_api_rate_limit_settings
+        
+        # 환경변수로 설정 변경
+        monkeypatch.setenv("SELFHEALING_API_RATE_DEFAULT_LIMIT", "999")
+        monkeypatch.setenv("SELFHEALING_API_RATE_EMERGENCY_LIMIT", "99")
+        
+        reset_api_rate_limit_settings()
+        
         from selfhealing.api.django.rate_limit import _get_setting, _FALLBACK_DEFAULT_RATE_LIMIT
         
         # Settings에서 환경변수 오버라이드된 값을 가져오는지 확인
         default_limit = _get_setting("default_limit", _FALLBACK_DEFAULT_RATE_LIMIT)
         emergency_limit = _get_setting("emergency_limit", 10)
         
-        assert default_limit == 250
-        assert emergency_limit == 25
+        assert default_limit == 999
+        assert emergency_limit == 99
 
     def test_local_memory_rate_limiter_uses_settings(self, monkeypatch):
         """LocalMemoryRateLimiter가 settings 값을 사용하는지 검증."""
