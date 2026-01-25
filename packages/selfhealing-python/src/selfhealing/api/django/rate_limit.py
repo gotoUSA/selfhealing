@@ -35,23 +35,44 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Configuration Constants (Fallback Defaults)
+# Configuration Constants (from Settings - 환경변수 기반)
 # =============================================================================
 
-# Normal mode settings (Redis available) - fallback if RuntimeConfig unavailable
-DEFAULT_RATE_LIMIT = 100  # requests per minute
-DEFAULT_WINDOW_SECONDS = 60
 
-# Emergency mode settings (Redis unavailable)
-# 10x stricter because local memory is not distributed
-EMERGENCY_RATE_LIMIT = 10  # requests per minute per pod
-EMERGENCY_WINDOW_SECONDS = 60
+def _get_api_rate_limit_settings():
+    """ApiRateLimitSettings 인스턴스를 가져옵니다 (lazy import)."""
+    try:
+        from selfhealing.settings.api_rate_limit import get_api_rate_limit_settings
+        return get_api_rate_limit_settings()
+    except ImportError:
+        return None
 
-# Control API path prefix
-CONTROL_API_PATH_PREFIX = "/api/self-healing/"
+
+def _get_setting(attr: str, fallback):
+    """Settings에서 값을 가져오거나 fallback 반환."""
+    settings = _get_api_rate_limit_settings()
+    if settings is not None:
+        return getattr(settings, attr, fallback)
+    return fallback
+
+
+# Fallback 상수 (settings 로드 실패 시 사용)
+_FALLBACK_DEFAULT_RATE_LIMIT = 100
+_FALLBACK_DEFAULT_WINDOW_SECONDS = 60
+_FALLBACK_EMERGENCY_RATE_LIMIT = 10
+_FALLBACK_EMERGENCY_WINDOW_SECONDS = 60
+_FALLBACK_CONTROL_API_PATH_PREFIX = "/api/self-healing/"
 
 # Fallback log path
 FALLBACK_LOG_PATH = Path("logs/rate_limit_fallback.jsonl")
+
+
+# 하위 호환성을 위한 상수 (deprecated, settings 사용 권장)
+DEFAULT_RATE_LIMIT = _FALLBACK_DEFAULT_RATE_LIMIT
+DEFAULT_WINDOW_SECONDS = _FALLBACK_DEFAULT_WINDOW_SECONDS
+EMERGENCY_RATE_LIMIT = _FALLBACK_EMERGENCY_RATE_LIMIT
+EMERGENCY_WINDOW_SECONDS = _FALLBACK_EMERGENCY_WINDOW_SECONDS
+CONTROL_API_PATH_PREFIX = _FALLBACK_CONTROL_API_PATH_PREFIX
 
 
 # =============================================================================
@@ -61,7 +82,12 @@ FALLBACK_LOG_PATH = Path("logs/rate_limit_fallback.jsonl")
 
 def get_rate_limit_config() -> dict:
     """
-    Get rate limit configuration from RuntimeConfigManager.
+    Get rate limit configuration from RuntimeConfigManager or Settings.
+    
+    우선순위:
+    1. RuntimeConfigManager (런타임 동적 설정)
+    2. ApiRateLimitSettings (환경변수 기반)
+    3. 하드코딩 fallback 상수
     
     Returns:
         dict with keys:
@@ -70,6 +96,12 @@ def get_rate_limit_config() -> dict:
         - emergency_rate_limit: int (requests/minute for emergency mode)
         - emergency_window_seconds: int
     """
+    # Settings에서 기본값 로드
+    default_limit = _get_setting("default_limit", _FALLBACK_DEFAULT_RATE_LIMIT)
+    default_window = _get_setting("default_window_seconds", _FALLBACK_DEFAULT_WINDOW_SECONDS)
+    emergency_limit = _get_setting("emergency_limit", _FALLBACK_EMERGENCY_RATE_LIMIT)
+    emergency_window = _get_setting("emergency_window_seconds", _FALLBACK_EMERGENCY_WINDOW_SECONDS)
+    
     try:
         from selfhealing.services.runtime_config import get_runtime_config_manager
         
@@ -77,19 +109,19 @@ def get_rate_limit_config() -> dict:
         config = manager.get_rate_limit_config()
         
         return {
-            "control_api_rate_limit": config.get("control_api_rate_limit", DEFAULT_RATE_LIMIT),
-            "control_api_window_seconds": config.get("control_api_window_seconds", DEFAULT_WINDOW_SECONDS),
-            "emergency_rate_limit": config.get("emergency_rate_limit", EMERGENCY_RATE_LIMIT),
-            "emergency_window_seconds": config.get("emergency_window_seconds", EMERGENCY_WINDOW_SECONDS),
+            "control_api_rate_limit": config.get("control_api_rate_limit", default_limit),
+            "control_api_window_seconds": config.get("control_api_window_seconds", default_window),
+            "emergency_rate_limit": config.get("emergency_rate_limit", emergency_limit),
+            "emergency_window_seconds": config.get("emergency_window_seconds", emergency_window),
         }
     except Exception as e:
-        # Fallback to constants if RuntimeConfig fails
-        logger.warning(f"[RateLimit] Failed to get RuntimeConfig, using defaults: {e}")
+        # Fallback to Settings if RuntimeConfig fails
+        logger.warning(f"[RateLimit] Failed to get RuntimeConfig, using settings: {e}")
         return {
-            "control_api_rate_limit": DEFAULT_RATE_LIMIT,
-            "control_api_window_seconds": DEFAULT_WINDOW_SECONDS,
-            "emergency_rate_limit": EMERGENCY_RATE_LIMIT,
-            "emergency_window_seconds": EMERGENCY_WINDOW_SECONDS,
+            "control_api_rate_limit": default_limit,
+            "control_api_window_seconds": default_window,
+            "emergency_rate_limit": emergency_limit,
+            "emergency_window_seconds": emergency_window,
         }
 
 
@@ -148,15 +180,21 @@ class LocalMemoryRateLimiter:
     
     def __init__(
         self,
-        max_requests: int = EMERGENCY_RATE_LIMIT,
-        window_seconds: int = EMERGENCY_WINDOW_SECONDS,
+        max_requests: int | None = None,
+        window_seconds: int | None = None,
     ):
+        # Settings에서 기본값 로드, fallback 사용
+        if max_requests is None:
+            max_requests = _get_setting("emergency_limit", _FALLBACK_EMERGENCY_RATE_LIMIT)
+        if window_seconds is None:
+            window_seconds = _get_setting("emergency_window_seconds", _FALLBACK_EMERGENCY_WINDOW_SECONDS)
+        
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._requests: dict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
         self._last_cleanup = time.time()
-        self._cleanup_interval = 60  # Cleanup every 60 seconds
+        self._cleanup_interval = _get_setting("local_cleanup_interval", 60)
     
     def is_allowed(self, key: str) -> Tuple[bool, int]:
         """
@@ -242,11 +280,9 @@ class RedisHealthChecker:
     - Periodic ping to check Redis status
     - Circuit breaker to stop connection attempts after failures
     - Jitter-based recovery to prevent thundering herd
-    """
     
-    PING_INTERVAL = 5  # Check every 5 seconds
-    FAILURE_THRESHOLD = 3  # 3 consecutive failures = UNHEALTHY
-    RECOVERY_JITTER_MAX = 10  # Max 10 seconds random delay on recovery
+    설정값은 ApiRateLimitSettings에서 로드됩니다.
+    """
     
     def __init__(self):
         self._state = RedisHealthState.HEALTHY
@@ -255,6 +291,21 @@ class RedisHealthChecker:
         self._recovery_time: Optional[float] = None
         self._redis_client = None
         self._lock = threading.Lock()
+    
+    @property
+    def ping_interval(self) -> int:
+        """Redis 헬스체크 간격 (초)."""
+        return _get_setting("redis_ping_interval", 5)
+    
+    @property
+    def failure_threshold(self) -> int:
+        """UNHEALTHY 상태 전환을 위한 연속 실패 횟수."""
+        return _get_setting("redis_failure_threshold", 3)
+    
+    @property
+    def recovery_jitter_max(self) -> int:
+        """복구 시 Thundering Herd 방지를 위한 최대 지터 (초)."""
+        return _get_setting("redis_recovery_jitter_max", 10)
     
     @property
     def is_healthy(self) -> bool:
@@ -281,7 +332,7 @@ class RedisHealthChecker:
         now = time.time()
         
         # Rate limit health checks
-        if now - self._last_check_time < self.PING_INTERVAL:
+        if now - self._last_check_time < self.ping_interval:
             return self.is_healthy
         
         with self._lock:
@@ -324,7 +375,7 @@ class RedisHealthChecker:
         """Handle Redis connection failure."""
         self._consecutive_failures += 1
         
-        if self._consecutive_failures >= self.FAILURE_THRESHOLD:
+        if self._consecutive_failures >= self.failure_threshold:
             if self._state != RedisHealthState.UNHEALTHY:
                 self._state = RedisHealthState.UNHEALTHY
                 logger.critical(
@@ -335,7 +386,7 @@ class RedisHealthChecker:
     
     def _initiate_recovery(self):
         """Start recovery with jitter to prevent thundering herd."""
-        jitter = random.uniform(1, self.RECOVERY_JITTER_MAX)
+        jitter = random.uniform(1, self.recovery_jitter_max)
         self._recovery_time = time.time() + jitter
         self._state = RedisHealthState.RECOVERING
         
@@ -471,7 +522,8 @@ class HybridRateLimitMiddleware:
     
     def __call__(self, request: HttpRequest) -> HttpResponse:
         # Only apply to Control API
-        if not request.path.startswith(CONTROL_API_PATH_PREFIX):
+        control_api_prefix = _get_setting("control_api_path_prefix", _FALLBACK_CONTROL_API_PATH_PREFIX)
+        if not request.path.startswith(control_api_prefix):
             return self.get_response(request)
         
         # Hook Registry bypass check (Domain-Free, Audit-Logged)

@@ -299,6 +299,13 @@ from selfhealing.settings.hash_chain import (
     reset_hash_chain_settings,
 )
 
+# API Module Settings (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
+from selfhealing.settings.api_rate_limit import (
+    ApiRateLimitSettings,
+    get_api_rate_limit_settings,
+    reset_api_rate_limit_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -593,4 +600,8 @@ __all__ = [
     "HashChainSettings",
     "get_hash_chain_settings",
     "reset_hash_chain_settings",
+    # API Rate Limit (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
+    "ApiRateLimitSettings",
+    "get_api_rate_limit_settings",
+    "reset_api_rate_limit_settings",
 ]

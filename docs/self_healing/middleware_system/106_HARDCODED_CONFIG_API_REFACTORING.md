@@ -2,9 +2,38 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: 계획
+- **상태**: 진행중 (Step 1, 2 완료)
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/api/`
+- **마지막 업데이트**: 2026-01-25
+
+---
+
+## 구현 완료 요약
+
+### Step 1, 2 완료 (2026-01-25)
+
+**생성된 파일:**
+- `settings/api_rate_limit.py` - ApiRateLimitSettings 클래스
+- `tests/unit/settings/test_api_rate_limit_settings.py` - 순수 단위 테스트 (16개)
+- `tests/integration/test_api_rate_limit_integration.py` - Django 통합 테스트 (5개)
+
+**수정된 파일:**
+- `settings/__init__.py` - ApiRateLimitSettings export 추가
+- `api/django/rate_limit.py` - settings 연동, 하드코딩 상수 제거
+
+**구현된 환경변수:**
+| 환경변수 | 기본값 | 설명 |
+|---------|--------|------|
+| `SELFHEALING_API_RATE_DEFAULT_LIMIT` | 100 | 분당 최대 요청 수 (Redis 정상) |
+| `SELFHEALING_API_RATE_DEFAULT_WINDOW_SECONDS` | 60 | Rate Limit 윈도우 크기 |
+| `SELFHEALING_API_RATE_EMERGENCY_LIMIT` | 10 | 분당 최대 요청 수 (Redis 장애) |
+| `SELFHEALING_API_RATE_EMERGENCY_WINDOW_SECONDS` | 60 | 비상 모드 윈도우 크기 |
+| `SELFHEALING_API_RATE_CONTROL_API_PATH_PREFIX` | /api/self-healing/ | Rate Limit 적용 경로 |
+| `SELFHEALING_API_RATE_REDIS_PING_INTERVAL` | 5 | Redis 헬스체크 간격 |
+| `SELFHEALING_API_RATE_REDIS_FAILURE_THRESHOLD` | 3 | UNHEALTHY 판정 연속 실패 횟수 |
+| `SELFHEALING_API_RATE_REDIS_RECOVERY_JITTER_MAX` | 10 | Thundering Herd 방지 최대 지터 |
+| `SELFHEALING_API_RATE_LOCAL_CLEANUP_INTERVAL` | 60 | 로컬 메모리 정리 간격 |
 
 ---
 
@@ -149,20 +178,24 @@ ApiMiddlewareSettings(BaseSettings)
 
 ## 6. 구현 순서
 
-### Step 1: 신규 Settings 생성 (1일)
-1. `settings/api_rate_limit.py` 생성
-2. `settings/api_middleware.py` 생성
-3. 환경변수 파싱 및 검증 로직 추가
+### Step 1: 신규 Settings 생성 (1일) ✅ 완료 (2026-01-25)
+1. [x] `settings/api_rate_limit.py` 생성
+2. [ ] `settings/api_middleware.py` 생성 (해당 미들웨어 파일 부재로 생략)
+3. [x] 환경변수 파싱 및 검증 로직 추가
 
-### Step 2: Rate Limit 모듈 리팩토링 (1일)
-4. `api/django/rate_limit.py` - settings 연동
-5. Rate Limit 관련 테스트 업데이트
+### Step 2: Rate Limit 모듈 리팩토링 (1일) ✅ 완료 (2026-01-25)
+4. [x] `api/django/rate_limit.py` - settings 연동
+5. [x] Rate Limit 관련 테스트 업데이트
+   - `tests/unit/settings/test_api_rate_limit_settings.py` (16개 테스트 통과)
+   - `tests/integration/test_api_rate_limit_integration.py` (5개 테스트 통과)
 
-### Step 3: Middleware 모듈 리팩토링 (1일)
-6. `api/django/middleware_health.py` - settings 연동
-7. `api/django/circuit_breaker_middleware.py` - settings 연동
-8. `api/django/timeout_middleware.py` - settings 연동
-9. 미들웨어 테스트 업데이트
+### Step 3: Middleware 모듈 리팩토링 (1일) ⏸️ 보류 (해당 파일 부재)
+6. [ ] `api/django/middleware_health.py` - 파일 부재로 생략
+7. [ ] `api/django/circuit_breaker_middleware.py` - 파일 부재로 생략
+8. [ ] `api/django/timeout_middleware.py` - 파일 부재로 생략
+9. [ ] 미들웨어 테스트 업데이트
+
+> **참고**: 문서에 언급된 `middleware_health.py`, `circuit_breaker_middleware.py`, `timeout_middleware.py` 파일은 실제 코드베이스에 존재하지 않음. 해당 파일이 추가되면 이 단계 진행.
 
 ### Step 4: FastAPI 통합 (해당 시) (0.5일)
 10. `api/fastapi/` 모듈 검토 및 적용
