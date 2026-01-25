@@ -498,8 +498,8 @@ class TestIntegrityAuditTrail:
     
     def test_max_redis_entries_trimmed(self, mock_redis):
         """Should trim Redis list to max size."""
-        trail = IntegrityAuditTrail(redis_client=mock_redis)
-        trail.MAX_REDIS_ENTRIES = 5  # Low limit for testing
+        # 명시적으로 max_redis_entries를 작게 설정한 인스턴스 생성
+        trail = IntegrityAuditTrail(redis_client=mock_redis, max_redis_entries=5)
         
         for i in range(10):
             trail.record(IntegrityEventType.CHAIN_VERIFIED, f"Event {i}")

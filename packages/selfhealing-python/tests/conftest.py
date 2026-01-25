@@ -8,6 +8,87 @@ from datetime import datetime
 
 
 # =============================================================================
+# Settings Singleton Reset Fixtures (테스트 격리용)
+# =============================================================================
+
+@pytest.fixture(autouse=True, scope="function")
+def auto_reset_audit_settings():
+    """
+    모든 테스트 전후에 Audit 관련 Settings 싱글톤을 자동으로 리셋하는 fixture.
+    
+    Step 3 리팩토링 후 Audit 모듈이 Pydantic Settings를 사용하므로,
+    환경변수 변경이 다른 테스트에 영향을 주지 않도록 격리합니다.
+    
+    리셋 대상 Settings:
+    - HashChainSettings: AtomicMergeSwap, ShardedDateLock, IntegrityAuditTrail
+    - AuditIntegritySettings: DailyHashAnchor, CrossClusterLinker, HealthScore, S3WORM
+    - CascadeRetentionSettings: CascadeEventAuditor
+    - ResilientRecorderSettings: InMemoryAuditBuffer
+    - AuditSettings: get_recommended_retention
+    - AuditWatchdogSettings: AuditWatchdog
+    """
+    # Setup: 테스트 전에 settings 리셋
+    _reset_all_audit_settings()
+    
+    yield
+    
+    # Teardown: 테스트 후에도 리셋 (다음 테스트를 위해)
+    _reset_all_audit_settings()
+
+
+def _reset_all_audit_settings():
+    """모든 Audit 관련 Settings 싱글톤을 리셋합니다."""
+    try:
+        from selfhealing.settings import hash_chain
+        hash_chain.reset_hash_chain_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.settings import audit_integrity
+        audit_integrity.reset_audit_integrity_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.settings import cascade_retention
+        cascade_retention.reset_cascade_retention_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.settings import resilient_recorder
+        resilient_recorder.reset_resilient_recorder_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.settings import audit_settings
+        audit_settings.reset_audit_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.settings import audit_watchdog
+        audit_watchdog.reset_audit_watchdog_settings()
+    except (ImportError, AttributeError):
+        pass
+    
+    # Audit 모듈 싱글톤 리셋 (Settings 연동되어 있는 클래스들)
+    try:
+        from selfhealing.audit.resilience.buffer import InMemoryAuditBuffer
+        InMemoryAuditBuffer.reset_instance()
+    except (ImportError, AttributeError):
+        pass
+    
+    try:
+        from selfhealing.audit.cascade_auditor import reset_cascade_auditor
+        reset_cascade_auditor()
+    except (ImportError, AttributeError):
+        pass
+
+
+# =============================================================================
 # Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 

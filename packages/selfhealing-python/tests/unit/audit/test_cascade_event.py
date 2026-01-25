@@ -672,9 +672,9 @@ class TestCascadeEventAuditor:
     
     def test_index_max_size(self, cascade_auditor):
         """인덱스 최대 크기 유지 테스트."""
-        # MAX_INDEX_SIZE를 작게 설정
-        original_max = cascade_auditor.MAX_INDEX_SIZE
-        cascade_auditor.MAX_INDEX_SIZE = 5
+        # _max_index_size 인스턴스 변수를 작게 설정
+        original_max = cascade_auditor._max_index_size
+        cascade_auditor._max_index_size = 5
         
         try:
             # 10개 이벤트 기록
@@ -688,10 +688,10 @@ class TestCascadeEventAuditor:
             
             events = cascade_auditor.get_recent_events("test", limit=100)
             
-            # MAX_INDEX_SIZE 만큼만 유지
+            # _max_index_size 만큼만 유지
             assert len(events) == 5
         finally:
-            cascade_auditor.MAX_INDEX_SIZE = original_max
+            cascade_auditor._max_index_size = original_max
 
 
 class TestCascadeEventAuditorSingleton:

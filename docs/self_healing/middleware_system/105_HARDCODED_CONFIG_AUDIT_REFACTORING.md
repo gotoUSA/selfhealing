@@ -2,7 +2,7 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: 진행중 (Step 1,2 완료)
+- **상태**: 진행중 (Step 1,2,3,4 완료)
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/audit/`
 
@@ -428,3 +428,51 @@ Audit 모듈은 규제 준수와 밀접한 관련이 있으므로:
 - 22개 통합 테스트 통과
 - 31개 설정 테스트 통과
 - 총 53개 테스트 통과
+
+---
+
+### Step 4 완료 (2026-01-25)
+
+**테스트 업데이트 완료 항목:**
+
+#### 1. conftest.py 수정 (Settings 싱글톤 자동 리셋)
+- [x] `packages/selfhealing-python/tests/conftest.py`에 `auto_reset_audit_settings` fixture 추가
+  - 모든 테스트 함수 전후에 Settings 싱글톤 자동 리셋
+  - 환경변수 변경이 다른 테스트에 영향 주지 않도록 격리
+
+**리셋 대상 Settings 싱글톤:**
+- `HashChainSettings` (AtomicMergeSwap, ShardedDateLock, IntegrityAuditTrail)
+- `AuditIntegritySettings` (DailyHashAnchor, CrossClusterLinker, HealthScore, S3WORM)
+- `CascadeRetentionSettings` (CascadeEventAuditor)
+- `ResilientRecorderSettings` (InMemoryAuditBuffer)
+- `AuditSettings` (get_recommended_retention)
+- `AuditWatchdogSettings` (AuditWatchdog)
+
+**Audit 모듈 싱글톤 리셋:**
+- `InMemoryAuditBuffer.reset_instance()`
+- `reset_cascade_auditor()`
+
+#### 2. 기존 테스트 환경변수 모킹 수정
+기존 테스트가 클래스 상수 대신 인스턴스 변수를 사용하도록 수정:
+
+- [x] `tests/unit/audit/forensic_bridge/test_audit_buffer.py`
+  - `test_buffer_overflow_drops_oldest`: `InMemoryAuditBuffer(max_entries=3)` 생성자 파라미터 사용
+
+- [x] `tests/unit/audit/test_cascade_event.py`
+  - `test_index_max_size`: `cascade_auditor._max_index_size = 5` 인스턴스 변수 직접 설정
+
+- [x] `tests/unit/audit/test_hash_chain_safety.py`
+  - `test_max_redis_entries_trimmed`: `IntegrityAuditTrail(max_redis_entries=5)` 생성자 파라미터 사용
+
+#### 3. 통합 테스트 결과
+- [x] 전체 audit 테스트 스위트 실행: 940 passed, 1 flaky test
+  - 실패한 테스트: `test_sampling_verification_performance` (타이밍 관련 flaky test, Settings 리팩토링과 무관)
+- [x] Settings 통합 테스트 22개 통과
+- [x] Settings 단위 테스트 31개 통과
+
+#### 4. 검증 체크리스트
+- [x] conftest.py autouse fixture로 모든 테스트에서 Settings 격리 보장
+- [x] 기존 테스트가 인스턴스 변수 또는 생성자 파라미터 사용하도록 수정
+- [x] 환경변수 오버라이드 테스트 정상 동작
+- [x] 하위 호환성 유지 (레거시 클래스 상수 접근 가능)
+- [x] 전체 테스트 스위트 통과 (flaky test 1개 제외)

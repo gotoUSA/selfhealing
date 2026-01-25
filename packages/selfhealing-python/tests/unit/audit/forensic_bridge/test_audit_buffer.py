@@ -39,28 +39,27 @@ class TestInMemoryAuditBuffer:
         from selfhealing.audit.resilience import InMemoryAuditBuffer
         
         InMemoryAuditBuffer.reset_instance()
-        buffer = InMemoryAuditBuffer.get_instance()
+        # 명시적으로 max_entries를 작게 설정한 인스턴스 생성
+        buffer = InMemoryAuditBuffer(max_entries=3)
+        # 싱글톤 인스턴스도 교체
+        InMemoryAuditBuffer._instance = buffer
         buffer.clear()
         
-        # MAX_ENTRIES를 임시로 줄여서 테스트
-        original_max = InMemoryAuditBuffer.MAX_ENTRIES
-        InMemoryAuditBuffer.MAX_ENTRIES = 3
+        buffer.add({"id": 1})
+        buffer.add({"id": 2})
+        buffer.add({"id": 3})
         
-        try:
-            buffer.add({"id": 1})
-            buffer.add({"id": 2})
-            buffer.add({"id": 3})
-            
-            # 4번째 추가 시 1번이 삭제됨
-            result = buffer.add({"id": 4})
-            
-            assert result is False  # dropped 발생
-            assert buffer.get_buffer_size() == 3
-            
-            stats = buffer.get_stats()
-            assert stats["total_dropped"] == 1
-        finally:
-            InMemoryAuditBuffer.MAX_ENTRIES = original_max
+        # 4번째 추가 시 1번이 삭제됨
+        result = buffer.add({"id": 4})
+        
+        assert result is False  # dropped 발생
+        assert buffer.get_buffer_size() == 3
+        
+        stats = buffer.get_stats()
+        assert stats["total_dropped"] == 1
+        
+        # 정리
+        InMemoryAuditBuffer.reset_instance()
     
     def test_buffer_flush_success(self):
         """버퍼 플러시 성공."""
