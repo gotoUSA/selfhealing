@@ -2,7 +2,7 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: 계획
+- **상태**: 진행중 (Step 1,2 완료)
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/audit/`
 
@@ -342,8 +342,42 @@ Audit 모듈은 규제 준수와 밀접한 관련이 있으므로:
 
 ## 9. 검증 체크리스트
 
-- [ ] 모든 신규/확장 settings 모듈이 Pydantic v1/v2 호환
-- [ ] 환경변수 없이 기본값으로 정상 동작
+### Step 1,2 완료 (2026-01-25)
+
+**구현 완료 항목:**
+- [x] `settings/audit_integrity.py` 확장
+  - `anchor_retention_days` (90일, 30-365일)
+  - `cross_cluster_local_ttl_days` (90일, 30-365일)
+  - `cross_cluster_global_ttl_days` (365일, 90-730일)
+  - `health_healthy_threshold` (95.0, 80-100)
+  - `health_warning_threshold` (80.0, 50-95)
+  - `health_critical_threshold` (50.0, 0-80)
+  - `s3_worm_retention_days` (365일, 90-2555일)
+- [x] `settings/cascade_retention.py` 확장
+  - `max_cascade_index_size` (10000, 1000-100000)
+- [x] `settings/resilient_recorder.py` 확장
+  - `memory_buffer_max_entries` (10000, 100-100000)
+  - `memory_buffer_flush_interval` (30.0초, 5.0-300.0초)
+- [x] `settings/audit_settings.py` 확장
+  - `compliance_max_retention_days` (365일, 90-2555일)
+- [x] `settings/hash_chain.py` 신규 생성
+  - `merge_swap_timeout_seconds` (300초, 60-600초)
+  - `merge_swap_blocking_timeout_seconds` (10.0초, 1.0-60.0초)
+  - `date_lock_timeout_seconds` (120초, 30-300초)
+  - `date_lock_blocking_timeout_seconds` (5.0초, 0.5-30.0초)
+  - `integrity_trail_max_redis_entries` (1000개, 100-10000개)
+- [x] `settings/__init__.py`에 HashChainSettings export 추가
+- [x] 테스트 파일 생성: `tests/unit/settings/test_audit_module_settings.py`
+- [x] 31개 테스트 모두 통과
+
+**Validator 추가:**
+- [x] health_score 임계값 순서 검증 (healthy > warning > critical)
+- [x] cross_cluster TTL 순서 검증 (global >= local)
+- [x] lock timeout 검증 (timeout > blocking_timeout)
+
+**남은 작업 (Step 3 이후):**
+- [ ] Audit 모듈 코드에 settings 연동
+- [ ] 환경변수 없이 기본값으로 정상 동작 검증
 - [ ] Hash Chain 무결성 검증 통과
 - [ ] Cold Storage 아카이브 정상 동작
 - [ ] Health Score 계산 정상 동작

@@ -128,6 +128,16 @@ class CascadeRetentionSettings(BaseSettings):
         description="초당 최대 이벤트 처리 수",
     )
 
+    # ==========================================================================
+    # Cascade Auditor - from audit/cascade_auditor.py
+    # ==========================================================================
+    max_cascade_index_size: int = Field(
+        default=10000,
+        ge=1000,
+        le=100000,
+        description="Cascade 인덱스 최대 크기. Redis 메모리 사용량 제한용.",
+    )
+
     @model_validator(mode="after")
     def validate_tier_order(self) -> "CascadeRetentionSettings":
         """보관 기간 순서 검증: Hot < Warm < Cold."""

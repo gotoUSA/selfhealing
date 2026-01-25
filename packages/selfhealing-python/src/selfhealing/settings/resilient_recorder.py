@@ -140,6 +140,23 @@ class ResilientRecorderSettings(BaseSettings):
             )
         return v
 
+    # ==========================================================================
+    # In-Memory Audit Buffer - from audit/resilience/buffer.py
+    # ==========================================================================
+    memory_buffer_max_entries: int = Field(
+        default=10000,
+        ge=100,
+        le=100000,
+        description="WAL 실패 시 메모리 버퍼 최대 엔트리 수. 메모리 고갈 방지용.",
+    )
+
+    memory_buffer_flush_interval: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=300.0,
+        description="메모리 버퍼 플러시 시도 간격 (초). 30초 기본.",
+    )
+
 
 # =============================================================================
 # Singleton Pattern (cached settings)

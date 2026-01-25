@@ -130,6 +130,67 @@ class AuditIntegritySettings(BaseSettings):
         description="일반 감사 로그 보관 기간 (일). 1년 기본.",
     )
 
+    # ==========================================================================
+    # Anchor - from audit/integrity/anchor.py
+    # ==========================================================================
+    anchor_retention_days: int = Field(
+        default=90,
+        ge=30,
+        le=365,
+        description="일일 해시 앵커 보관 기간 (일). 90일 기본.",
+    )
+
+    # ==========================================================================
+    # Cross Cluster - from audit/integrity/cross_cluster_linker.py
+    # ==========================================================================
+    cross_cluster_local_ttl_days: int = Field(
+        default=90,
+        ge=30,
+        le=365,
+        description="로컬 클러스터 앵커 TTL (일). 90일 기본.",
+    )
+
+    cross_cluster_global_ttl_days: int = Field(
+        default=365,
+        ge=90,
+        le=730,
+        description="글로벌 클러스터 앵커 TTL (일). 1년 기본.",
+    )
+
+    # ==========================================================================
+    # Health Score - from audit/integrity/health_score.py
+    # ==========================================================================
+    health_healthy_threshold: float = Field(
+        default=95.0,
+        ge=80.0,
+        le=100.0,
+        description="무결성 건강 상태 임계값 (%). 95% 이상이면 정상.",
+    )
+
+    health_warning_threshold: float = Field(
+        default=80.0,
+        ge=50.0,
+        le=95.0,
+        description="무결성 경고 상태 임계값 (%). 80% 이상이면 경고.",
+    )
+
+    health_critical_threshold: float = Field(
+        default=50.0,
+        ge=0.0,
+        le=80.0,
+        description="무결성 위험 상태 임계값 (%). 50% 미만이면 위험.",
+    )
+
+    # ==========================================================================
+    # S3 WORM - from audit/backends/s3_worm.py
+    # ==========================================================================
+    s3_worm_retention_days: int = Field(
+        default=365,
+        ge=90,
+        le=2555,
+        description="S3 WORM 객체 보관 기간 (일). 1년 기본, 법적 요구사항에 따라 설정.",
+    )
+
     @model_validator(mode="after")
     def validate_retention(self) -> "AuditIntegritySettings":
         """아카이브 임계치가 보관 기간보다 작은지 검증."""
@@ -137,6 +198,31 @@ class AuditIntegritySettings(BaseSettings):
             raise ValueError(
                 f"archive_threshold_days ({self.archive_threshold_days}) must be less than "
                 f"retention_days ({self.retention_days})"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_health_thresholds(self) -> "AuditIntegritySettings":
+        """Health score 임계값 순서 검증: healthy > warning > critical."""
+        if self.health_healthy_threshold <= self.health_warning_threshold:
+            raise ValueError(
+                f"health_healthy_threshold ({self.health_healthy_threshold}) must be greater than "
+                f"health_warning_threshold ({self.health_warning_threshold})"
+            )
+        if self.health_warning_threshold <= self.health_critical_threshold:
+            raise ValueError(
+                f"health_warning_threshold ({self.health_warning_threshold}) must be greater than "
+                f"health_critical_threshold ({self.health_critical_threshold})"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_cross_cluster_ttl(self) -> "AuditIntegritySettings":
+        """Cross cluster TTL 순서 검증: global >= local."""
+        if self.cross_cluster_global_ttl_days < self.cross_cluster_local_ttl_days:
+            raise ValueError(
+                f"cross_cluster_global_ttl_days ({self.cross_cluster_global_ttl_days}) must be >= "
+                f"cross_cluster_local_ttl_days ({self.cross_cluster_local_ttl_days})"
             )
         return self
 

@@ -139,6 +139,16 @@ class AuditSettings(BaseSettings):
         description="Cascade Load Shedding Rate Limit 윈도우 크기 (초)",
     )
 
+    # ==========================================================================
+    # Compliance Retention - from audit/config.py
+    # ==========================================================================
+    compliance_max_retention_days: int = Field(
+        default=365,
+        ge=90,
+        le=2555,
+        description="법적 요구사항에 따른 최대 보관 기간 (일). 기본 1년, 최대 7년.",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

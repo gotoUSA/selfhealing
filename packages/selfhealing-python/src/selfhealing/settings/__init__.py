@@ -292,6 +292,13 @@ from selfhealing.settings.decision_engine import (
     reset_decision_engine_settings,
 )
 
+# Audit Module Settings (105_HARDCODED_CONFIG_AUDIT_REFACTORING.md Step 2)
+from selfhealing.settings.hash_chain import (
+    HashChainSettings,
+    get_hash_chain_settings,
+    reset_hash_chain_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -582,4 +589,8 @@ __all__ = [
     "DecisionEngineSettings",
     "get_decision_engine_settings",
     "reset_decision_engine_settings",
+    # Hash Chain (105_HARDCODED_CONFIG_AUDIT_REFACTORING.md Step 2)
+    "HashChainSettings",
+    "get_hash_chain_settings",
+    "reset_hash_chain_settings",
 ]
