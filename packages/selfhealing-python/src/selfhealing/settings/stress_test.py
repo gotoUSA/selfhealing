@@ -84,6 +84,80 @@ class StressTestSettings(BaseSettings):
         description="Burst 테스트 시 요청 간 대기 시간 (ms)",
     )
 
+    # ==========================================================================
+    # Advisory Lock Defaults (from stress_views.py)
+    # ==========================================================================
+    default_lock_id: int = Field(
+        default=12345,
+        ge=1,
+        le=1000000,
+        description="Advisory Lock 기본 ID",
+    )
+    default_lock_hold_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Advisory Lock 기본 유지 시간 (초)",
+    )
+    max_lock_hold_seconds: int = Field(
+        default=60,
+        ge=1,
+        le=300,
+        description="Advisory Lock 최대 유지 시간 (초)",
+    )
+    default_lock_hold_ms: int = Field(
+        default=100,
+        ge=1,
+        le=10000,
+        description="Lock Contention 시 각 락 유지 시간 (ms)",
+    )
+    default_contention_duration_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=30,
+        description="Lock Contention 기본 지속 시간 (초)",
+    )
+    contention_lock_id: int = Field(
+        default=99999,
+        ge=1,
+        le=1000000,
+        description="Lock Contention 기본 Lock ID",
+    )
+    burst_lock_id: int = Field(
+        default=777,
+        ge=1,
+        le=1000000,
+        description="Burst Failure 기본 Lock ID",
+    )
+    default_burst_duration_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Burst Failure 기본 지속 시간 (초)",
+    )
+    default_concurrent_locks: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Burst Failure 기본 동시 락 시도 수",
+    )
+
+    # ==========================================================================
+    # Pool Exhaustion Settings (from stress_views.py)
+    # ==========================================================================
+    default_connections_to_hold: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Pool Exhaust 시 점유할 기본 커넥션 수",
+    )
+    default_pool_hold_seconds: int = Field(
+        default=30,
+        ge=1,
+        le=60,
+        description="Pool Exhaust 시 커넥션 유지 시간 (초)",
+    )
+
     @field_validator("max_burst_duration_seconds")
     @classmethod
     def validate_burst_duration(cls, v: int) -> int:

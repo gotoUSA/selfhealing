@@ -152,7 +152,7 @@ class RoutingPolicy:
     Notification routing policy.
 
     Defines which channels to use based on priority and category.
-    
+
     92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [15] NotificationChannelSettings 참조.
     """
 
@@ -190,17 +190,17 @@ class RoutingPolicy:
             NotificationCategory.CHAOS: _get_notification_channel_settings().cooldown_seconds,
         }
     )
-    
+
     @classmethod
     def from_settings(cls) -> "RoutingPolicy":
         """
         LayeredSettings에서 라우팅 정책 생성.
-        
+
         Returns:
             Settings 기반 RoutingPolicy
         """
         settings = _get_notification_channel_settings()
-        
+
         return cls(
             cooldown_seconds={
                 NotificationCategory.SECURITY: 60,
@@ -646,19 +646,19 @@ def format_cb_slack_blocks(
     priority: NotificationPriority,
 ) -> Dict[str, Any]:
     """
-    Circuit Breaker 알림용 Slack Block Kit 메시지 포맷.
-    
-Actionable Alert 설계 원칙:
-    - 거버넌스 유지: 원클릭 해제 대신 Admin 제어판으로 이동
-    - 컨텍스트 유지: 쿼리 파라미터로 해당 서비스 즉시 조회
-    - 안전성: 운영자가 상태 확인 후 판단 가능
-    
-    Args:
-        payload: 알림 페이로드
-        priority: 효과적 우선순위 (에스컬레이션 적용 후)
-        
-    Returns:
-        Slack Block Kit 형식의 메시지 딕셔너리
+        Circuit Breaker 알림용 Slack Block Kit 메시지 포맷.
+
+    Actionable Alert 설계 원칙:
+        - 거버넌스 유지: 원클릭 해제 대신 Admin 제어판으로 이동
+        - 컨텍스트 유지: 쿼리 파라미터로 해당 서비스 즉시 조회
+        - 안전성: 운영자가 상태 확인 후 판단 가능
+
+        Args:
+            payload: 알림 페이로드
+            priority: 효과적 우선순위 (에스컬레이션 적용 후)
+
+        Returns:
+            Slack Block Kit 형식의 메시지 딕셔너리
     """
     severity_emoji = {
         NotificationPriority.CRITICAL: "🔴",
@@ -667,17 +667,17 @@ Actionable Alert 설계 원칙:
         NotificationPriority.LOW: "🔵",
         NotificationPriority.INFO: "⚪",
     }.get(priority, "⚪")
-    
+
     metadata = payload.metadata or {}
     service_name = metadata.get("service_name", "unknown")
     trace_url = metadata.get("trace_url")
     trigger_time = metadata.get("trigger_time", "")
-    
+
     # Actionable URLs
     dashboard_url = metadata.get("dashboard_url")
     admin_url = metadata.get("admin_url")
     runbook_url = metadata.get("runbook_url")
-    
+
     blocks = [
         {
             "type": "header",
@@ -702,110 +702,122 @@ Actionable Alert 설계 원칙:
             },
         },
     ]
-    
+
     # Trace URL 섹션 (있는 경우)
     if trace_url:
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Trace:*\n<{trace_url}|View in Jaeger>",
-            },
-        })
-    
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Trace:*\n<{trace_url}|View in Jaeger>",
+                },
+            }
+        )
+
     # Actionable 버튼 섹션
     action_elements = []
-    
+
     if dashboard_url:
-        action_elements.append({
-            "type": "button",
-            "text": {
-                "type": "plain_text",
-                "text": "📊 Dashboard",
-                "emoji": True,
-            },
-            "url": dashboard_url,
-            "action_id": "view_dashboard",
-        })
-    
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "📊 Dashboard",
+                    "emoji": True,
+                },
+                "url": dashboard_url,
+                "action_id": "view_dashboard",
+            }
+        )
+
     if admin_url:
-        action_elements.append({
-            "type": "button",
-            "text": {
-                "type": "plain_text",
-                "text": "⚙️ Admin Panel",
-                "emoji": True,
-            },
-            "url": admin_url,
-            "action_id": "view_admin",
-            "style": "primary",
-        })
-    
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "⚙️ Admin Panel",
+                    "emoji": True,
+                },
+                "url": admin_url,
+                "action_id": "view_admin",
+                "style": "primary",
+            }
+        )
+
     if runbook_url:
-        action_elements.append({
-            "type": "button",
-            "text": {
-                "type": "plain_text",
-                "text": "📖 Runbook",
-                "emoji": True,
-            },
-            "url": runbook_url,
-            "action_id": "view_runbook",
-        })
-    
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "📖 Runbook",
+                    "emoji": True,
+                },
+                "url": runbook_url,
+                "action_id": "view_runbook",
+            }
+        )
+
     if action_elements:
-        blocks.append({
-            "type": "actions",
-            "elements": action_elements,
-        })
-    
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": action_elements,
+            }
+        )
+
     # 컨텍스트 섹션 (타임스탬프)
     context_text = f"Event: {payload.category.value}"
     if trigger_time:
         context_text += f" | Time: {trigger_time}"
-    
-    blocks.append({
-        "type": "context",
-        "elements": [
-            {
-                "type": "mrkdwn",
-                "text": context_text,
-            },
-        ],
-    })
-    
+
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": context_text,
+                },
+            ],
+        }
+    )
+
     return {"blocks": blocks}
 
 
 def format_cb_notification_with_actions(payload: NotificationPayload) -> Dict[str, Any]:
     """
     Circuit Breaker 알림을 Actionable Alert 형식으로 포맷.
-    
+
     이 함수는 SecurityNotificationService에서 호출되어
     Slack으로 전송될 메시지를 Actionable 버튼이 포함된 Block Kit 형식으로 변환합니다.
-    
+
     Args:
         payload: 알림 페이로드
-        
+
     Returns:
         Actionable 버튼이 포함된 Slack Block Kit 메시지
     """
     try:
         from selfhealing.services.emergency_mode import get_emergency_manager
-        
+
         manager = get_emergency_manager()
         level = manager.get_current_level()
-        
+
         # Emergency Level에 따른 우선순위 조정
         priority = payload.priority
         if level >= 3 and priority in (NotificationPriority.LOW, NotificationPriority.INFO, NotificationPriority.MEDIUM):
             priority = NotificationPriority.HIGH
         elif level >= 2 and priority in (NotificationPriority.LOW, NotificationPriority.INFO):
             priority = NotificationPriority.MEDIUM
-            
+
     except ImportError:
         priority = payload.priority
     except Exception:
         priority = payload.priority
-    
+
     return format_cb_slack_blocks(payload, priority)
