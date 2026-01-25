@@ -113,9 +113,9 @@ class SLADriftDetector:
                 "metrics": {},
             }
 
-            # Time windows for analysis
+            # Time windows for analysis - Settings에서 조회
             current_time = now()
-            analysis_window = timedelta(hours=24)
+            analysis_window = timedelta(hours=self._get_analysis_window_hours())
             window_start = current_time - analysis_window
 
             for domain, sla_threshold in all_thresholds.items():
@@ -148,6 +148,15 @@ class SLADriftDetector:
                 "error": str(e),
                 "checked_at": now().isoformat(),
             }
+
+    @staticmethod
+    def _get_analysis_window_hours() -> int:
+        """Settings에서 analysis_window_hours 조회."""
+        try:
+            from selfhealing.settings.drift_detection import get_drift_detection_settings
+            return get_drift_detection_settings().analysis_window_hours
+        except Exception:
+            return 24  # 기본값
 
     def _analyze_domain_sla(
         self,

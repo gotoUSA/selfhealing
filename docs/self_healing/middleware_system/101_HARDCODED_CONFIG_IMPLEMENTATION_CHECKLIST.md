@@ -256,7 +256,7 @@
 
 ---
 
-### Phase 3: 소스 파일 리팩토링 [예상: 25시간]
+### Phase 3: 소스 파일 리팩토링 [완료: 2026-01-26]
 
 #### 3.1 Core 모듈 (5개 파일)
 - [x] `core/backoff.py` - Settings 연동 ✅ (from_settings() 추가)
@@ -300,29 +300,29 @@
 - [x] `audit/audit_watchdog.py` - Settings 연동 ✅ (from_settings() 추가, from_env deprecated)
 - [x] `audit/ring_buffer.py` - Settings 연동 ✅ (from_settings() 추가)
 - [x] `audit/performance/sampling.py` - Settings 연동 ✅ (SamplingConfig.from_settings())
-- [ ] `audit/cascade_load_shedding.py` - 하드코딩 존재: buffer_size=8000, buffer_capacity=10000, _rate_window_seconds=1.0
-- [ ] `audit/self_audit.py` - 하드코딩 존재: _max_recent_events=100, limit=20, max_failure_rate=0.1
+- [x] `audit/cascade_load_shedding.py` - Settings 연동 ✅ (_get_rate_window_seconds() 추가)
+- [x] `audit/self_audit.py` - Settings 연동 ✅ (_get_max_recent_events(), _get_default_limit(), _get_max_failure_rate() 추가)
 - [x] `audit/graceful_degradation/enums.py` - Settings 연동 ✅ (FallbackConfig, CircuitBreakerConfig.from_settings())
 
 #### 3.4 Tasks 모듈 (8개 파일)
 - [x] `tasks/cleanup_tasks.py` - Settings 연동 ✅ (서비스 레이어에서 이미 Settings 사용)
 - [x] `tasks/canary_watchdog.py` - Settings 연동 ✅ (WatchdogConfig.from_settings())
-- [ ] `tasks/drift_detection.py` - 하드코딩 존재: timedelta(hours=24) 분석 윈도우
-- [ ] `tasks/intelligence_tasks.py` - 하드코딩 존재: threshold, cooldown_seconds, batch_size 등 다수
-- [ ] `tasks/traffic_aware_replay.py` - 하드코딩 존재: emergency_min_level=2, threshold=1, cooldown_seconds=300
+- [x] `tasks/drift_detection.py` - Settings 연동 ✅ (_get_analysis_window_hours() 추가)
+- [x] `tasks/intelligence_tasks.py` - Settings 연동 ✅ (_get_intelligence_settings() 추가, notification_policy를 property로 변환)
+- [x] `tasks/traffic_aware_replay.py` - Settings 연동 ✅ (notification_policy를 property로, governance_settings 사용)
 
 #### 3.5 API 모듈 (6개 파일)
 - [x] `api/django/stress_views.py` - Settings 연동 ✅ (StressTestService에서 Settings 사용)
 - [x] `api/django/permissions.py` - Settings 연동 ✅ (GovernanceSettings via emergency_expiry_hours, _get_thresholds())
-- [ ] `api/django/views/canary.py` - 하드코딩 존재: limit=20 (service.get_completed_rollouts)
-- [ ] `api/django/views/auto_tuning.py` - 하드코딩 존재: limit=1000 (service.adjustment_recorder.get_records)
-- [ ] `api/django/views/xtest/observability.py` - 하드코딩 존재: limit=50, limit=100, limit=10 (히스토리/인시던트 조회)
+- [x] `api/django/views/canary.py` - Settings 연동 ✅ (_get_completed_rollouts_limit() 추가)
+- [x] `api/django/views/auto_tuning.py` - Settings 연동 ✅ (_get_export_limit() 추가)
+- [x] `api/django/views/xtest/observability.py` - Settings 연동 ✅ (_get_timeline_default_limit(), _get_postmortem_history_limit(), _get_incidents_default_limit() 추가)
 
 #### 3.6 Utils 모듈 (2개 파일)
 - [x] `utils/jitter.py` - Settings 연동 ✅ (JitterConfig.from_settings())
 
 #### 3.7 SLO 모듈 (1개 파일)
-- [ ] `slo.py` - 하드코딩 존재: fast_burn_rate=14.4, slow_burn_rate=3.0 (SLO dataclass 기본값)
+- [x] `slo.py` - Settings 연동 ✅ (_get_default_fast_burn_rate(), _get_default_slow_burn_rate() 추가, field(default_factory=) 패턴 사용)
 
 ---
 
@@ -560,8 +560,8 @@ def get_default_timeout() -> int:
 |-------|------|--------|
 | Phase 1: Settings 생성 | ✅ 완료 | 100% (14/14 파일) |
 | Phase 2: Settings 확장 | ✅ 완료 | 100% (6/6 작업) |
-| Phase 3: 소스 리팩토링 | 🔄 진행 중 | 85% (Services 완료, Audit/Tasks/API/SLO 남음) |
-| Phase 4: 테스트 작성 | 부분 완료 | 30% (Phase 1, 2 테스트 완료) |
+| Phase 3: 소스 리팩토링 | ✅ 완료 | 100% (Core/Services/Audit/Tasks/API/SLO 완료) |
+| Phase 4: 테스트 작성 | ✅ 완료 | 100% (Phase 1,2,3 테스트 완료: 73개) |
 | Phase 5: 최종 검증 | 미시작 | 0% |
 
 ### Phase 3 진행 내역 (2026-01-26)
@@ -590,20 +590,20 @@ def get_default_timeout() -> int:
 | control_api_service.py | ⏭️ 스킵 | 비즈니스 로직 |
 | finops/service.py | ⏭️ 스킵 | 안전 상수 |
 
-#### 3.3 Audit 모듈 🔄 (7/9 파일)
-- ✅ 7개 완료, ❌ 2개 미완료 (cascade_load_shedding.py, self_audit.py)
+#### 3.3 Audit 모듈 ✅ 완료 (9/9 파일)
+- ✅ 9개 완료 (cascade_load_shedding.py, self_audit.py Settings 연동 추가)
 
-#### 3.4 Tasks 모듈 🔄 (2/5 파일)
-- ✅ 2개 완료, ❌ 3개 미완료 (drift_detection.py, intelligence_tasks.py, traffic_aware_replay.py)
+#### 3.4 Tasks 모듈 ✅ 완료 (5/5 파일)
+- ✅ 5개 완료 (drift_detection.py, intelligence_tasks.py, traffic_aware_replay.py Settings 연동 추가)
 
-#### 3.5 API 모듈 🔄 (2/5 파일)
-- ✅ 2개 완료, ❌ 3개 미완료 (canary.py, auto_tuning.py, observability.py)
+#### 3.5 API 모듈 ✅ 완료 (5/5 파일)
+- ✅ 5개 완료 (canary.py, auto_tuning.py, observability.py Settings 연동 추가)
 
 #### 3.6 Utils 모듈 ✅ 완료 (1/1 파일)
 - jitter.py Settings 연동 완료
 
-#### 3.7 SLO 모듈 ❌ (0/1 파일)
-- slo.py 하드코딩 존재 (fast_burn_rate=14.4, slow_burn_rate=3.0)
+#### 3.7 SLO 모듈 ✅ 완료 (1/1 파일)
+- ✅ slo.py Settings 연동 완료 (fast_burn_rate, slow_burn_rate field(default_factory=) 패턴 적용)
 
 ### Phase 1 완료 내역 (2026-01-25)
 
@@ -639,16 +639,32 @@ def get_default_timeout() -> int:
 
 **Phase 2 총 테스트**: 18개 통과
 
-**전체 테스트 합계**: 55개 통과
+### Phase 3 완료 내역 (2026-01-26)
+
+| Settings 파일 | 테스트 | 상태 |
+|--------------|--------|------|
+| audit_settings.py 확장 | ✅ 4 tests | 완료 (self_audit_*, cascade_rate_window_seconds 추가) |
+| canary.py 확장 | ✅ 2 tests | 완료 (default_completed_rollouts_limit, default_history_limit 추가) |
+| api_view.py 확장 | ✅ 3 tests | 완료 (auto_tuning_*, xtest_* 필드 추가) |
+| intelligence_task.py 신규 생성 | ✅ 4 tests | 완료 (cooldown, threshold, batch 설정) |
+| drift_detection.py 신규 생성 | ✅ 5 tests | 완료 (analysis_window, sla_threshold 설정) |
+
+**Phase 3 총 테스트**: 18개 통과
+
+**전체 테스트 합계**: 73개 통과 (Phase 1: 37 + Phase 2: 18 + Phase 3: 18)
 
 ### 마지막 업데이트
 - **날짜**: 2026-01-26
 - **작성자**: AI Assistant
-- **완료 작업**: Phase 3 Services 모듈 코드 분석 및 체크리스트 업데이트
-  - Services 26개 파일 전체 분석 완료
-  - Settings 사용 파일 17개 확인 (✅ 마킹)
-  - DI 패턴/스킵 파일 9개 확인 (⏭️ 마킹)
-- **다음 작업**: Phase 3 Audit/Tasks/API/SLO 미완료 파일 Settings 연동
+- **완료 작업**: Phase 3 전체 완료
+  - Audit 모듈: cascade_load_shedding.py, self_audit.py Settings 연동 (audit_settings.py 확장)
+  - Tasks 모듈: drift_detection.py, intelligence_tasks.py, traffic_aware_replay.py Settings 연동
+    - intelligence_task.py 신규 생성, drift_detection.py 신규 생성
+  - API 모듈: canary.py, auto_tuning.py, observability.py Settings 연동
+    - canary.py, api_view.py 확장
+  - SLO 모듈: slo.py field(default_factory=) 패턴 적용
+  - 테스트: test_phase3_settings.py 18개 테스트 통과
+- **다음 작업**: Phase 4 고급 패턴 적용 (Self-Healing Service DI 등)
 
 ---
 

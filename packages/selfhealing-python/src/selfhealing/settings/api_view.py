@@ -115,6 +115,47 @@ class ApiViewSettings(BaseSettings):
         description="스로틀 어댑터 최대 리밋",
     )
 
+    # ==========================================================================
+    # Auto-Tuning Views - from views/auto_tuning.py (Phase 3 리팩토링)
+    # ==========================================================================
+    auto_tuning_export_limit: int = Field(
+        default=1000,
+        ge=100,
+        le=10000,
+        description="Auto-Tuning CSV 내보내기 최대 레코드 수",
+    )
+
+    auto_tuning_default_page_size: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="Auto-Tuning 히스토리 기본 페이지 크기",
+    )
+
+    # ==========================================================================
+    # XTest Observability Views - from views/xtest/observability.py (Phase 3 리팩토링)
+    # ==========================================================================
+    xtest_timeline_default_limit: int = Field(
+        default=50,
+        ge=10,
+        le=500,
+        description="XTest 타임라인 조회 기본 limit",
+    )
+
+    xtest_postmortem_history_limit: int = Field(
+        default=100,
+        ge=50,
+        le=500,
+        description="Postmortem 생성 시 히스토리 조회 limit",
+    )
+
+    xtest_incidents_default_limit: int = Field(
+        default=10,
+        ge=5,
+        le=100,
+        description="XTest 인시던트 목록 조회 기본 limit",
+    )
+
     @model_validator(mode="after")
     def validate_limits(self) -> "ApiViewSettings":
         """default_limit이 max_limit보다 작은지 검증."""

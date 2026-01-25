@@ -80,6 +80,23 @@ class CanarySettings(BaseSettings):
         description="전파 요청 기본 만료 시간 (시간)",
     )
 
+    # ==========================================================================
+    # API View Settings (from views/canary.py - Phase 3 리팩토링)
+    # ==========================================================================
+    default_completed_rollouts_limit: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="완료된 롤아웃 목록 조회 기본 limit",
+    )
+
+    default_history_limit: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="롤아웃 히스토리 조회 기본 limit",
+    )
+
     @field_validator("lock_timeout_minutes")
     @classmethod
     def validate_lock_timeout(cls, v: int) -> int:

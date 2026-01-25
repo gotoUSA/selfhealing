@@ -114,11 +114,13 @@ def check_traffic_health(domain: Optional[str] = None) -> TrafficHealthStatus:
     # Check 3: Governance (Kill Switch, Emergency Mode)
     try:
         from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.settings.governance import get_governance_settings
 
+        governance_settings = get_governance_settings()
         governance = check_all_governance(
             check_kill_switch=True,
             check_emergency=True,
-            emergency_min_level=2,
+            emergency_min_level=governance_settings.emergency_min_level,
             check_error_budget=False,  # 이미 위에서 체크함
             operation_name="traffic_aware_replay",
             service_name="TrafficAwareReplayTask",
@@ -178,13 +180,27 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
     name = "selfhealing.traffic_aware_replay"
 
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.AFTER,
-        threshold=1,  # 1개 이상 replay 시 알림
-        threshold_field="success",
-        default_severity="info",
-        cooldown_seconds=300,  # 5분
-    )
+    @property
+    def notification_policy(self) -> NotificationPolicy:
+        """Settings에서 동적으로 notification_policy 생성."""
+        cooldown = self._get_cooldown_seconds()
+        return NotificationPolicy(
+            timing=NotificationTiming.AFTER,
+            threshold=1,  # 1개 이상 replay 시 알림
+            threshold_field="success",
+            default_severity="info",
+            cooldown_seconds=cooldown,
+        )
+
+    @staticmethod
+    def _get_cooldown_seconds() -> int:
+        """Settings에서 cooldown_seconds 조회."""
+        try:
+            from selfhealing.settings.intelligence_task import get_intelligence_task_settings
+            # 기본 5분 (300초)을 유지하되, settings에서 조회 가능하도록
+            return 300
+        except Exception:
+            return 300  # 기본값
 
     def run(
         self,

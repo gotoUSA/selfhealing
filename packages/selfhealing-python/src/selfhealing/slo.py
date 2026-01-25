@@ -92,9 +92,27 @@ class SLO:
     warning_threshold: Optional[float] = None  # Alert when dropping below this
     critical_threshold: Optional[float] = None  # Critical alert threshold
 
-    # Error budget burn rate thresholds
-    fast_burn_rate: float = 14.4  # 1-hour: consume 2% budget = critical
-    slow_burn_rate: float = 3.0  # 6-hour: consume 5% budget = warning
+    # Error budget burn rate thresholds - Settings에서 기본값 사용
+    fast_burn_rate: float = field(default_factory=lambda: _get_default_fast_burn_rate())
+    slow_burn_rate: float = field(default_factory=lambda: _get_default_slow_burn_rate())
+
+
+def _get_default_fast_burn_rate() -> float:
+    """Settings에서 default_fast_burn_rate 조회."""
+    try:
+        from selfhealing.settings.slo import get_slo_settings
+        return get_slo_settings().default_fast_burn_rate
+    except Exception:
+        return 14.4  # Google SRE 기본값
+
+
+def _get_default_slow_burn_rate() -> float:
+    """Settings에서 default_slow_burn_rate 조회."""
+    try:
+        from selfhealing.settings.slo import get_slo_settings
+        return get_slo_settings().default_slow_burn_rate
+    except Exception:
+        return 3.0  # Google SRE 기본값
 
     def __post_init__(self) -> None:
         if self.warning_threshold is None:

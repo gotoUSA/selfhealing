@@ -123,8 +123,35 @@ class SelfAuditLogger:
         self._start_time = datetime.now(timezone.utc)
         self._stats = SelfAuditStats()
         self._recent_events: List[Dict[str, Any]] = []
-        self._max_recent_events = 100
+        self._max_recent_events = self._get_max_recent_events()
         self._stats_lock = threading.Lock()
+
+    @staticmethod
+    def _get_max_recent_events() -> int:
+        """Settings에서 max_recent_events 조회."""
+        try:
+            from selfhealing.settings.audit_settings import get_audit_settings
+            return get_audit_settings().self_audit_max_recent_events
+        except Exception:
+            return 100  # 기본값
+
+    @staticmethod
+    def _get_default_limit() -> int:
+        """Settings에서 default_limit 조회."""
+        try:
+            from selfhealing.settings.audit_settings import get_audit_settings
+            return get_audit_settings().self_audit_default_limit
+        except Exception:
+            return 20  # 기본값
+
+    @staticmethod
+    def _get_max_failure_rate() -> float:
+        """Settings에서 max_failure_rate 조회."""
+        try:
+            from selfhealing.settings.audit_settings import get_audit_settings
+            return get_audit_settings().self_audit_max_failure_rate
+        except Exception:
+            return 0.1  # 기본값
 
     @classmethod
     def get_instance(cls) -> "SelfAuditLogger":
@@ -228,16 +255,18 @@ class SelfAuditLogger:
                 uptime_seconds=uptime,
             )
 
-    def get_recent_events(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_events(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         최근 이벤트 조회.
 
         Args:
-            limit: 최대 개수
+            limit: 최대 개수 (None이면 Settings에서 기본값 사용)
 
         Returns:
             최근 이벤트 목록
         """
+        if limit is None:
+            limit = self._get_default_limit()
         with self._stats_lock:
             return list(self._recent_events[-limit:])
 
@@ -253,16 +282,18 @@ class SelfAuditLogger:
                 return 0.0
             return self._stats.failure_events / self._stats.total_events
 
-    def is_healthy(self, max_failure_rate: float = 0.1) -> bool:
+    def is_healthy(self, max_failure_rate: Optional[float] = None) -> bool:
         """
         헬스 체크.
 
         Args:
-            max_failure_rate: 최대 허용 실패율
+            max_failure_rate: 최대 허용 실패율 (None이면 Settings에서 기본값 사용)
 
         Returns:
             True if healthy
         """
+        if max_failure_rate is None:
+            max_failure_rate = self._get_max_failure_rate()
         return self.get_failure_rate() <= max_failure_rate
 
 

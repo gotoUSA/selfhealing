@@ -45,13 +45,23 @@ class HealingTimelineView(XTestModeMixin, APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @staticmethod
+    def _get_timeline_default_limit() -> int:
+        """Settings에서 timeline_default_limit 조회."""
+        try:
+            from selfhealing.settings.api_view import get_api_view_settings
+            return get_api_view_settings().xtest_timeline_default_limit
+        except Exception:
+            return 50  # 기본값
+
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
 
         service_filter = request.query_params.get("service")
-        limit = int(request.query_params.get("limit", 50))
+        default_limit = self._get_timeline_default_limit()
+        limit = int(request.query_params.get("limit", default_limit))
 
         try:
             # 이벤트 버스에서 히스토리 조회
@@ -395,7 +405,8 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
             from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
             bus = get_event_bus()
-            history = bus.get_history(limit=100)
+            history_limit = self._get_postmortem_history_limit()
+            history = bus.get_history(limit=history_limit)
             cb_service = get_circuit_breaker_service()
 
             affected, unaffected = _collect_service_states(cb_service)
@@ -413,6 +424,7 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
             )
 
             add_healing_incident(postmortem)
+
             logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
 
             return Response({"status": "success", "postmortem": postmortem, "timestamp": timezone.now().isoformat()})
@@ -423,6 +435,15 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
                 {"status": "error", "error": "postmortem_generation_failed", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @staticmethod
+    def _get_postmortem_history_limit() -> int:
+        """Settings에서 postmortem_history_limit 조회."""
+        try:
+            from selfhealing.settings.api_view import get_api_view_settings
+            return get_api_view_settings().xtest_postmortem_history_limit
+        except Exception:
+            return 100  # 기본값
 
 
 class RecordHealingEventView(XTestModeMixin, APIView):
@@ -488,7 +509,8 @@ class GetHealingIncidentsView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        limit = int(request.query_params.get("limit", 10))
+        default_limit = self._get_incidents_default_limit()
+        limit = int(request.query_params.get("limit", default_limit))
 
         incidents = get_healing_incidents(limit)
 
@@ -500,6 +522,15 @@ class GetHealingIncidentsView(XTestModeMixin, APIView):
                 "timestamp": timezone.now().isoformat(),
             }
         )
+
+    @staticmethod
+    def _get_incidents_default_limit() -> int:
+        """Settings에서 incidents_default_limit 조회."""
+        try:
+            from selfhealing.settings.api_view import get_api_view_settings
+            return get_api_view_settings().xtest_incidents_default_limit
+        except Exception:
+            return 10  # 기본값
 
 
 __all__ = [

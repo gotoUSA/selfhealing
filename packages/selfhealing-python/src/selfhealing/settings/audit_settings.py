@@ -105,6 +105,40 @@ class AuditSettings(BaseSettings):
         description="Pool 모니터 통계 이력 최대 보관 수",
     )
 
+    # ==========================================================================
+    # Self-Audit - from self_audit.py (Phase 3 리팩토링)
+    # ==========================================================================
+    self_audit_max_recent_events: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Self-Audit 최근 이벤트 최대 보관 수",
+    )
+
+    self_audit_default_limit: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="Self-Audit 이벤트 조회 기본 limit",
+    )
+
+    self_audit_max_failure_rate: float = Field(
+        default=0.1,
+        ge=0.01,
+        le=1.0,
+        description="Self-Audit 헬스 체크 최대 허용 실패율 (0.1 = 10%)",
+    )
+
+    # ==========================================================================
+    # Cascade Load Shedding - from cascade_load_shedding.py (Phase 3 리팩토링)
+    # ==========================================================================
+    cascade_rate_window_seconds: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Cascade Load Shedding Rate Limit 윈도우 크기 (초)",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

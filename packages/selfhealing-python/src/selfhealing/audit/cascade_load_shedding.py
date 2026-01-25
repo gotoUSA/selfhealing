@@ -132,7 +132,16 @@ class CascadeLoadShedding:
         
         # Rate limiting
         self._event_timestamps: List[float] = []
-        self._rate_window_seconds = 1.0
+        self._rate_window_seconds = self._get_rate_window_seconds()
+
+    @staticmethod
+    def _get_rate_window_seconds() -> float:
+        """Settings에서 rate_window_seconds 조회."""
+        try:
+            from selfhealing.settings.audit_settings import get_audit_settings
+            return get_audit_settings().cascade_rate_window_seconds
+        except Exception:
+            return 1.0  # 기본값
     
     def should_accept(
         self,

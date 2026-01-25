@@ -284,7 +284,8 @@ class AutoTuningHistoryView(APIView):
         
         if history_id:
             # 특정 조정 상세
-            records = service.adjustment_recorder.get_records(limit=1000)
+            limit = self._get_export_limit()
+            records = service.adjustment_recorder.get_records(limit=limit)
             for record in records:
                 if record.record_id == history_id:
                     return Response(record.to_dict())
@@ -292,6 +293,15 @@ class AutoTuningHistoryView(APIView):
                 {"error": "History record not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    @staticmethod
+    def _get_export_limit() -> int:
+        """Settings에서 export_limit 조회."""
+        try:
+            from selfhealing.settings.api_view import get_api_view_settings
+            return get_api_view_settings().auto_tuning_export_limit
+        except Exception:
+            return 1000  # 기본값
         
         # 목록 조회
         start_date = request.query_params.get("start_date")

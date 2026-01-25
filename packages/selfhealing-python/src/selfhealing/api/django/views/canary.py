@@ -174,7 +174,8 @@ class CanaryRolloutListView(APIView):
         
         # 완료된 롤아웃 포함 시
         if include_completed:
-            completed = service.get_completed_rollouts(limit=20)
+            limit = self._get_completed_rollouts_limit()
+            completed = service.get_completed_rollouts(limit=limit)
             rollouts = rollouts + completed
         
         # config_type 필터링
@@ -186,6 +187,15 @@ class CanaryRolloutListView(APIView):
             "count": len(rollouts),
             "rollouts": [_format_rollout_summary(r) for r in rollouts],
         })
+
+    @staticmethod
+    def _get_completed_rollouts_limit() -> int:
+        """Settings에서 completed_rollouts_limit 조회."""
+        try:
+            from selfhealing.settings.canary import get_canary_settings
+            return get_canary_settings().default_completed_rollouts_limit
+        except Exception:
+            return 20  # 기본값
     
     def post(self, request: Request) -> Response:
         """새 롤아웃 생성."""

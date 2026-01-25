@@ -12,7 +12,7 @@ Tasks:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -48,14 +48,38 @@ class CheckSLADriftTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.check_sla_drift"
-    
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.REALTIME,
-        threshold=1,  # 경고 1개 이상일 때만 알림
-        threshold_field="warnings_count",
-        default_severity="warning",
-        cooldown_seconds=3600,  # 1시간
-    )
+
+    @property
+    def notification_policy(self) -> NotificationPolicy:
+        """Settings에서 동적으로 notification_policy 생성."""
+        settings = self._get_intelligence_settings()
+        return NotificationPolicy(
+            timing=NotificationTiming.REALTIME,
+            threshold=1,  # 경고 1개 이상일 때만 알림
+            threshold_field="warnings_count",
+            default_severity="warning",
+            cooldown_seconds=settings.default_cooldown_seconds,
+        )
+
+    @staticmethod
+    def _get_intelligence_settings():
+        """IntelligenceTaskSettings 조회."""
+        try:
+            from selfhealing.settings.intelligence_task import get_intelligence_task_settings
+            return get_intelligence_task_settings()
+        except Exception:
+            # 임시 객체 반환
+            class _FallbackSettings:
+                default_cooldown_seconds = 3600
+                execution_threshold = 10
+                analysis_threshold_minutes = 60
+                batch_size = 100
+                severity_high_threshold = 50
+                severity_medium_threshold = 10
+                reconciliation_cutoff_minutes = 30
+                insight_threshold = 3
+                recovery_check_cooldown_seconds = 120
+            return _FallbackSettings()
 
     def run(self) -> Dict[str, Any]:
         """SLA 드리프트 감지 태스크 실행."""
@@ -133,7 +157,7 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
     알림: 의심 항목 10개 이상일 때 즉시 (REALTIME)
     
     Args:
-        threshold_minutes: 분석 기준 시간 (기본 60분)
+        threshold_minutes: 분석 기준 시간 (None이면 Settings에서 기본값 사용)
     
     Returns:
         dict: {
@@ -145,17 +169,25 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.analyze_forensic_pending"
-    
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.REALTIME,
-        threshold=10,  # 10개 이상일 때만
-        threshold_field="suspicious_count",
-        default_severity="warning",
-        cooldown_seconds=3600,  # 1시간
-    )
 
-    def run(self, threshold_minutes: int = 60) -> Dict[str, Any]:
+    @property
+    def notification_policy(self) -> NotificationPolicy:
+        """Settings에서 동적으로 notification_policy 생성."""
+        settings = CheckSLADriftTask._get_intelligence_settings()
+        return NotificationPolicy(
+            timing=NotificationTiming.REALTIME,
+            threshold=settings.execution_threshold,  # 10개 이상일 때만
+            threshold_field="suspicious_count",
+            default_severity="warning",
+            cooldown_seconds=settings.default_cooldown_seconds,
+        )
+
+    def run(self, threshold_minutes: Optional[int] = None) -> Dict[str, Any]:
         """포렌식 분석 태스크 실행."""
+        settings = CheckSLADriftTask._get_intelligence_settings()
+        if threshold_minutes is None:
+            threshold_minutes = settings.analysis_threshold_minutes
+
         logger.info(
             f"[AnalyzeForensicPending] Starting analysis for items "
             f"pending over {threshold_minutes} minutes"
@@ -165,7 +197,7 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
             # Django 어댑터 사용 시도
             try:
                 from shopping.tasks.drift_detection_tasks import analyze_pending_operations
-                raw_result = analyze_pending_operations(batch_size=100)
+                raw_result = analyze_pending_operations(batch_size=settings.batch_size)
             except ImportError:
                 # 독립 실행 (테스트용)
                 raw_result = {
@@ -254,10 +286,11 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
 
     def _get_severity(self, result: Dict[str, Any]) -> str:
         """의심 항목 수에 따른 심각도 결정."""
+        settings = CheckSLADriftTask._get_intelligence_settings()
         count = result.get("suspicious_count", 0)
-        if count >= 50:
+        if count >= settings.severity_high_threshold:
             return "critical"
-        elif count >= 10:
+        elif count >= settings.severity_medium_threshold:
             return "warning"
         return "info"
 
@@ -300,14 +333,18 @@ class AnalyzeCrossStageInsightsTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.analyze_cross_stage_insights"
-    
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.AGGREGATED,
-        aggregate=True,
-        threshold=3,  # 인사이트 3개 이상일 때만
-        threshold_field="insight_count",
-        default_severity="info",
-    )
+
+    @property
+    def notification_policy(self) -> NotificationPolicy:
+        """Settings에서 동적으로 notification_policy 생성."""
+        settings = CheckSLADriftTask._get_intelligence_settings()
+        return NotificationPolicy(
+            timing=NotificationTiming.AGGREGATED,
+            aggregate=True,
+            threshold=settings.insight_threshold,  # 인사이트 3개 이상일 때만
+            threshold_field="insight_count",
+            default_severity="info",
+        )
 
     def run(self) -> Dict[str, Any]:
         """Cross-Stage 인사이트 분석 태스크 실행."""
@@ -431,14 +468,18 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.check_recovery_transitions"
-    
-    notification_policy = NotificationPolicy(
-        timing=NotificationTiming.REALTIME,
-        threshold=1,  # 변화 1개 이상일 때만
-        threshold_field="transitions_count",
-        default_severity="info",
-        cooldown_seconds=120,  # 2분
-    )
+
+    @property
+    def notification_policy(self) -> NotificationPolicy:
+        """Settings에서 동적으로 notification_policy 생성."""
+        settings = CheckSLADriftTask._get_intelligence_settings()
+        return NotificationPolicy(
+            timing=NotificationTiming.REALTIME,
+            threshold=1,  # 변화 1개 이상일 때만
+            threshold_field="transitions_count",
+            default_severity="info",
+            cooldown_seconds=settings.recovery_check_cooldown_seconds,
+        )
 
     def run(self) -> Dict[str, Any]:
         """복구 상태 체크 태스크 실행."""
@@ -554,15 +595,16 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
             verified_count = 0
             high_variance_count = 0
             
-            # 승인/거부 30분 지난 항목 필터링
-            cutoff = get_now() - timedelta(minutes=30)
+            # 승인/거부 cutoff분 지난 항목 필터링 (Settings에서 조회)
+            settings = CheckSLADriftTask._get_intelligence_settings()
+            cutoff = get_now() - timedelta(minutes=settings.reconciliation_cutoff_minutes)
             
             for shadow in service.get_all_shadow_budgets():
                 # 이미 검증된 항목 스킵
                 if shadow.verified_at:
                     continue
                 
-                # 승인/거부 후 30분 경과 확인
+                # 승인/거부 후 cutoff분 경과 확인
                 if shadow.reviewed_at and shadow.reviewed_at < cutoff:
                     variance = self._verify_accuracy(shadow, service)
                     verified_count += 1
