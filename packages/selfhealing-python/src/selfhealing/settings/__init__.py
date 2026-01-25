@@ -244,6 +244,21 @@ from selfhealing.settings.regional_recovery_policy import (
     reset_regional_recovery_policy_settings,
 )
 
+# Coordination Settings (104_HARDCODED_CONFIG_COORDINATION_REFACTORING.md Step 1)
+from selfhealing.settings.recovery_tasks import (
+    RecoveryTasksSettings,
+    get_recovery_tasks_settings,
+    reset_recovery_tasks_settings,
+)
+from selfhealing.settings.recovery_coordinator import (
+    RecoveryCoordinatorSettings,
+    get_recovery_coordinator_settings,
+    reset_recovery_coordinator_settings,
+)
+from selfhealing.settings.critical_worker import (
+    DeploymentEnvironment,
+)
+
 # Core Module Settings (103_HARDCODED_CONFIG_CORE_REFACTORING.md Step 1, 2)
 from selfhealing.settings.runtime_feedback import (
     RuntimeFeedbackSettings,
@@ -530,6 +545,17 @@ __all__ = [
     "RegionalRecoveryPolicySettings",
     "get_regional_recovery_policy_settings",
     "reset_regional_recovery_policy_settings",
+    # Coordination Settings (104_HARDCODED_CONFIG_COORDINATION_REFACTORING.md)
+    # Recovery Tasks
+    "RecoveryTasksSettings",
+    "get_recovery_tasks_settings",
+    "reset_recovery_tasks_settings",
+    # Recovery Coordinator
+    "RecoveryCoordinatorSettings",
+    "get_recovery_coordinator_settings",
+    "reset_recovery_coordinator_settings",
+    # Deployment Environment (Critical Worker)
+    "DeploymentEnvironment",
     # Core Module Settings (Runtime Feedback, Auto Rollback, Safety Bounds, etc.)
     # Runtime Feedback
     "RuntimeFeedbackSettings",

@@ -2,7 +2,7 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: 계획
+- **상태**: Step 1 완료
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/services/coordination/`
 
@@ -278,10 +278,35 @@ Celery 데코레이터의 `max_retries`, `default_retry_delay`는 태스크 정�
 
 ## 9. 검증 체크리스트
 
-- [ ] 모든 신규 settings 모듈이 Pydantic v1/v2 호환
-- [ ] 환경변수 없이 기본값으로 정상 동작
+- [x] 모든 신규 settings 모듈이 Pydantic v1/v2 호환
+- [x] 환경변수 없이 기본값으로 정상 동작
 - [ ] Recovery 태스크 정상 실행
 - [ ] Worker Pool 설정 적용 확인
 - [ ] Regional Policy 정책별 동작 검증
 - [ ] Namespace Emergency 설정 적용 확인
-- [ ] 기존 단위 테스트 100% 통과
+- [x] 기존 단위 테스트 100% 통과
+
+---
+
+## 10. Step 1 완료 내역 (2026-01-25)
+
+### 10.1 생성된 Settings 모듈
+
+| 파일 | 설명 | 환경변수 접두어 |
+|-----|------|----------------|
+| `settings/recovery_tasks.py` | Celery 복구 태스크별 재시도 설정 | `SELFHEALING_RECOVERY_TASKS_` |
+| `settings/recovery_coordinator.py` | RecoveryStep 기본값 (LEVEL별) | `SELFHEALING_RECOVERY_COORD_` |
+
+### 10.2 확장된 Settings 모듈
+
+| 파일 | 추가 내용 |
+|-----|---------|
+| `settings/critical_worker.py` | DeploymentEnvironment Enum, 환경별 Worker Pool 설정 (MINIMAL/STANDARD/HIGH_AVAILABILITY/BURST/ENTERPRISE) |
+
+### 10.3 테스트
+
+- `tests/unit/settings/test_coordination_settings.py` (29 tests, 100% passed)
+  - RecoveryTasksSettings: 기본값, 환경변수 오버라이드, 유효성 검증
+  - RecoveryCoordinatorSettings: LEVEL별 기본값, 안정성 검사 설정
+  - CriticalWorkerSettings Worker Pool: 환경별 설정, get_pool_config_for_env()
+  - Settings Module Exports: 정상 export 확인
