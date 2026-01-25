@@ -6,8 +6,8 @@ cgroup v1/v2 지원 리소스 모니터링 유틸리티.
 Cgroup 기반으로 컨테이너의 메모리/CPU 제한을 감지하고,
 Chaos Experiment의 Resource Exhaustion이 안전 한계 내에서 동작하도록 합니다.
 
-설정값은 StateCacheSettings를 통해 환경변수로 오버라이드 가능:
-- SELFHEALING_STATE_CACHE_RESOURCE_SAFETY_MARGIN
+설정값은 ResourceMonitorSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_RESOURCE_SAFETY_MARGIN
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from selfhealing.settings.state_cache import get_state_cache_settings
+from selfhealing.settings.resource_monitor import get_resource_monitor_settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,8 @@ class CgroupResourceMonitor:
 
     @classmethod
     def _get_default_safety_margin(cls) -> float:
-        """기본 안전 마진 (15%). StateCacheSettings에서 로드."""
-        return get_state_cache_settings().resource_safety_margin
+        """기본 안전 마진 (15%). ResourceMonitorSettings에서 로드."""
+        return get_resource_monitor_settings().safety_margin
     
     @classmethod
     def get_memory_max_bytes(cls) -> Optional[int]:

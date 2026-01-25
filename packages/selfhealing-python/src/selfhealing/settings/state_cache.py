@@ -3,12 +3,10 @@ CBStateCache Settings - Pydantic v2.
 
 Circuit Breaker 상태 캐시 설정.
 TTL 및 Jitter 범위를 환경변수로 설정 가능.
-CgroupResourceMonitor 안전 마진 설정도 포함.
 
 Environment Variables:
     SELFHEALING_STATE_CACHE_BASE_TTL=5.0
     SELFHEALING_STATE_CACHE_JITTER_RANGE=0.5
-    SELFHEALING_STATE_CACHE_RESOURCE_SAFETY_MARGIN=0.15
 """
 
 import logging
@@ -54,16 +52,6 @@ class StateCacheSettings(BaseSettings):
         ge=0.0,
         le=10.0,
         description="랜덤 지터 범위 (초). TTL에 ±jitter_range 만큼 랜덤 적용.",
-    )
-
-    # ==========================================================================
-    # Resource Monitor 안전 마진 (CgroupResourceMonitor용)
-    # ==========================================================================
-    resource_safety_margin: float = Field(
-        default=0.15,
-        ge=0.05,
-        le=0.5,
-        description="리소스 사용량 안전 마진 (0.15 = 15%). Chaos Experiment 시 여유분.",
     )
 
     @model_validator(mode="after")

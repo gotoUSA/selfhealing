@@ -258,6 +258,7 @@ settings/
 | `settings/auto_rollback.py` | `SELFHEALING_ROLLBACK_` | error_rate_major/critical, latency_major/critical_ms, failures_alert/emergency |
 | `settings/safety_bounds.py` | `SELFHEALING_BOUNDS_` | 8개 파라미터별 min/max/max_change |
 | `settings/state_cache.py` | `SELFHEALING_STATE_CACHE_` | base_ttl, jitter_range |
+| `settings/resource_monitor.py` | `SELFHEALING_RESOURCE_` | safety_margin, cpu_margin |
 | `settings/apply_strategy.py` | `SELFHEALING_APPLY_` | config 타입별 delay, default_grace_timeout |
 | `settings/decision_engine.py` | `SELFHEALING_DECISION_` | min_change_ratio, 신뢰도/안정성 매핑 |
 
@@ -288,13 +289,26 @@ Core 모듈 8개 리팩토링 완료:
 | `core/adaptive_jitter.py` | `settings/jitter.py` | 임계값 상수를 classmethod로 변경하여 settings에서 조회 |
 | `core/safety_bounds.py` | `settings/safety_bounds.py` | DEFAULT_BOUNDS 딕셔너리를 classmethod로 변경하여 settings에서 동적 로드 |
 | `core/state_cache.py` | `settings/state_cache.py` | BASE_TTL, JITTER_RANGE를 classmethod로 변경 |
-| `core/resource_monitor.py` | `settings/state_cache.py` | DEFAULT_SAFETY_MARGIN을 classmethod로 변경 (resource_safety_margin 필드 추가) |
+| `core/resource_monitor.py` | `settings/resource_monitor.py` | DEFAULT_SAFETY_MARGIN을 classmethod로 변경 (별도 settings 파일 분리) |
 | `core/apply_strategy.py` | `settings/apply_strategy.py` | DEFAULT_APPLY_STRATEGIES를 함수로 변경하여 settings에서 delay 로드 |
 | `core/decision_engine.py` | `settings/decision_engine.py` | MIN_CHANGE_RATIO를 property로, _calculate_confidence를 settings 메서드 활용으로 변경 |
 
 ### Step 3 테스트 결과
 
 - 테스트 파일: `packages/selfhealing-python/tests/unit/core/test_core_settings_integration.py`
-- 총 19개 테스트 PASSED
+- 총 20개 테스트 PASSED (resource_monitor 환경변수 오버라이드 테스트 1개 추가)
 - 기존 settings 테스트 26개도 여전히 PASSED
+
+### Step 3 추가 리팩토링 (2026-01-25)
+
+`resource_monitor.py`용 settings를 `state_cache.py`에서 분리:
+
+**이유**:
+- 의미적 결합도 없음 (캐시 TTL ↔ 메모리 안전 마진)
+- 환경변수 혼란 방지 (`SELFHEALING_STATE_CACHE_RESOURCE_*` → `SELFHEALING_RESOURCE_*`)
+- 향후 CPU/디스크 마진 등 확장 용이
+
+| 신규 파일 | 환경변수 prefix | 설정 |
+|----------|----------------|------|
+| `settings/resource_monitor.py` | `SELFHEALING_RESOURCE_` | safety_margin (0.15), cpu_margin (0.10) |
 

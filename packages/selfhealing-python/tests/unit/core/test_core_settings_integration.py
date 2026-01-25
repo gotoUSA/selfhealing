@@ -267,7 +267,6 @@ class TestStateCacheSettingsIntegration:
 
         assert settings.base_ttl == 5.0
         assert settings.jitter_range == 0.5
-        assert settings.resource_safety_margin == 0.15
 
     def test_state_cache_uses_settings(self):
         """CBStateCache가 settings 값을 사용해야 함."""
@@ -283,29 +282,51 @@ class TestStateCacheSettingsIntegration:
 
 
 class TestResourceMonitorSettingsIntegration:
-    """CgroupResourceMonitor와 StateCacheSettings 연동 테스트."""
+    """CgroupResourceMonitor와 ResourceMonitorSettings 연동 테스트."""
 
     def test_default_safety_margin(self):
         """기본 안전 마진이 원래 하드코딩된 값과 일치해야 함."""
-        from selfhealing.settings.state_cache import (
-            reset_state_cache_settings,
-            get_state_cache_settings,
+        from selfhealing.settings.resource_monitor import (
+            reset_resource_monitor_settings,
+            get_resource_monitor_settings,
         )
 
-        reset_state_cache_settings()
-        settings = get_state_cache_settings()
+        reset_resource_monitor_settings()
+        settings = get_resource_monitor_settings()
 
-        assert settings.resource_safety_margin == 0.15
+        assert settings.safety_margin == 0.15
 
     def test_resource_monitor_uses_settings(self):
         """CgroupResourceMonitor가 settings 값을 사용해야 함."""
-        from selfhealing.settings.state_cache import reset_state_cache_settings
+        from selfhealing.settings.resource_monitor import reset_resource_monitor_settings
         from selfhealing.core.resource_monitor import CgroupResourceMonitor
 
-        reset_state_cache_settings()
+        reset_resource_monitor_settings()
 
         margin = CgroupResourceMonitor._get_default_safety_margin()
         assert margin == 0.15
+
+    def test_environment_variable_override(self):
+        """환경변수로 안전 마진 오버라이드 가능해야 함."""
+        from selfhealing.settings.resource_monitor import (
+            reset_resource_monitor_settings,
+            get_resource_monitor_settings,
+        )
+
+        reset_resource_monitor_settings()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_RESOURCE_SAFETY_MARGIN": "0.20",
+            },
+        ):
+            reset_resource_monitor_settings()
+            settings = get_resource_monitor_settings()
+
+            assert settings.safety_margin == 0.20
+
+        reset_resource_monitor_settings()
 
 
 class TestApplyStrategySettingsIntegration:
