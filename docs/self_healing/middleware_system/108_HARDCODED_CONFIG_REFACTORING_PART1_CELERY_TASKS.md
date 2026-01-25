@@ -250,13 +250,33 @@ DEFAULT_STALE_CHECK_INTERVAL = 10
 
 | 항목 | 확인 |
 |------|------|
-| 모든 `max_retries` 하드코딩 제거 | ☐ |
-| 모든 `default_retry_delay` 하드코딩 제거 | ☐ |
-| 모든 `time_limit` 하드코딩 제거 | ☐ |
-| Settings 파일에 환경변수 매핑 완료 | ☐ |
-| 기본값이 기존 하드코딩 값과 동일 | ☐ |
-| 단위 테스트 통과 | ☐ |
-| 통합 테스트 통과 | ☐ |
+| 모든 `max_retries` 하드코딩 제거 | ☑ |
+| 모든 `default_retry_delay` 하드코딩 제거 | ☑ |
+| 모든 `time_limit` 하드코딩 제거 | ☑ |
+| Settings 파일에 환경변수 매핑 완료 | ☑ |
+| 기본값이 기존 하드코딩 값과 동일 | ☑ |
+| 단위 테스트 통과 | ☑ |
+| 통합 테스트 통과 | ☑ |
+
+### 4.1 완료된 작업 상세
+
+#### Settings 파일 확장/생성
+- `settings/cleanup.py`: Celery Task 재시도 설정 8개 필드 추가
+- `settings/daily_report.py`: 신규 생성 (max_retries, retry_delay 등)
+- `settings/governance.py`: expiry_check_max_retries, expiry_check_retry_delay 추가
+- `settings/apply_strategy.py`: pending/graceful 태스크 설정 및 cleanup_max_age_hours 추가
+- `settings/chaos.py`: scheduler_* 관련 7개 필드 추가
+
+#### Task 파일 수정
+- `services/coordination/recovery_tasks.py`: 4개 태스크 Settings 기반으로 변경
+- `tasks/cleanup_tasks.py`: 4개 태스크 Settings 기반으로 변경
+- `tasks/daily_report.py`: 1개 태스크 Settings 기반으로 변경
+- `tasks/governance.py`: 1개 태스크 Settings 기반으로 변경
+- `tasks/config_apply.py`: 3개 태스크 Settings 기반으로 변경
+- `tasks/chaos_scheduler.py`: 4개 태스크 Settings 기반으로 변경
+
+#### 테스트
+- `tests/unit/settings/test_celery_task_settings_108.py`: 27개 테스트 작성 및 통과
 
 ---
 

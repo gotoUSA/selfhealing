@@ -166,12 +166,16 @@ def purge_archived_dlq_entries(
 
 try:
     from celery import shared_task
+    from selfhealing.settings.cleanup import get_cleanup_settings
+
+    # 모듈 로드 시점에 설정값 캐싱
+    _cleanup_settings = get_cleanup_settings()
 
     @shared_task(
         name="selfhealing.archive_old_dlq_entries",
         bind=True,
-        max_retries=2,
-        default_retry_delay=300,
+        max_retries=_cleanup_settings.archive_dlq_max_retries,
+        default_retry_delay=_cleanup_settings.archive_dlq_retry_delay,
     )
     def archive_old_dlq_entries_task(self, older_than_days: int = 30):
         """Celery task wrapper for archive_old_dlq_entries."""
@@ -180,8 +184,8 @@ try:
     @shared_task(
         name="selfhealing.cleanup_expired_config",
         bind=True,
-        max_retries=2,
-        default_retry_delay=300,
+        max_retries=_cleanup_settings.expired_config_max_retries,
+        default_retry_delay=_cleanup_settings.expired_config_retry_delay,
     )
     def cleanup_expired_config_task(self, older_than_hours: int = 24):
         """Celery task wrapper for cleanup_expired_config."""
@@ -190,8 +194,8 @@ try:
     @shared_task(
         name="selfhealing.expire_approval_requests",
         bind=True,
-        max_retries=2,
-        default_retry_delay=300,
+        max_retries=_cleanup_settings.approval_max_retries,
+        default_retry_delay=_cleanup_settings.approval_retry_delay,
     )
     def expire_approval_requests_task(self, older_than_hours: int = 72):
         """Celery task wrapper for expire_approval_requests."""
@@ -200,8 +204,8 @@ try:
     @shared_task(
         name="selfhealing.purge_archived_dlq_entries",
         bind=True,
-        max_retries=1,  # 고위험 작업은 재시도 제한
-        default_retry_delay=600,
+        max_retries=_cleanup_settings.purge_dlq_max_retries,
+        default_retry_delay=_cleanup_settings.purge_dlq_retry_delay,
     )
     def purge_archived_dlq_entries_task(
         self, older_than_days: int = 90, dry_run: bool = False

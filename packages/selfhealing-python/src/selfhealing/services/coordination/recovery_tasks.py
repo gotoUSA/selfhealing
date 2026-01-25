@@ -79,10 +79,12 @@ def _get_default_retry_delay() -> int:
     return _get_task_settings().default_retry_delay
 
 
-# Legacy constants for backward compatibility (deprecated)
-DEFAULT_TRIGGER_CHECK_INTERVAL = 60
-DEFAULT_HEALTH_MONITOR_INTERVAL = 30
-DEFAULT_STALE_CHECK_INTERVAL = 10
+# =============================================================================
+# Celery Task 설정값 캐싱 (모듈 로드 시점)
+# Celery는 데코레이터 인자에서 함수 호출을 지원하므로 getter 직접 사용 가능
+# =============================================================================
+
+_recovery_settings = get_recovery_tasks_settings()
 
 
 # =============================================================================
@@ -92,8 +94,8 @@ DEFAULT_STALE_CHECK_INTERVAL = 10
 @shared_task(
     name="selfhealing.check_recovery_trigger",
     bind=True,
-    max_retries=3,
-    default_retry_delay=60,
+    max_retries=_recovery_settings.check_trigger_max_retries,
+    default_retry_delay=_recovery_settings.check_trigger_retry_delay,
     queue="selfhealing_recovery",
 )
 def check_recovery_trigger_task(
@@ -255,8 +257,8 @@ def check_recovery_trigger_task(
 @shared_task(
     name="selfhealing.execute_recovery_step",
     bind=True,
-    max_retries=3,
-    default_retry_delay=30,
+    max_retries=_recovery_settings.execute_step_max_retries,
+    default_retry_delay=_recovery_settings.execute_step_retry_delay,
     queue="selfhealing_recovery",
 )
 def execute_recovery_step_task(
@@ -409,8 +411,8 @@ def execute_recovery_step_task(
 @shared_task(
     name="selfhealing.monitor_recovery_health",
     bind=True,
-    max_retries=2,
-    default_retry_delay=15,
+    max_retries=_recovery_settings.monitor_recovery_max_retries,
+    default_retry_delay=_recovery_settings.monitor_recovery_retry_delay,
     queue="selfhealing_recovery",
 )
 def monitor_recovery_health_task(
@@ -516,7 +518,7 @@ def monitor_recovery_health_task(
 @shared_task(
     name="selfhealing.check_stale_pending_recoveries",
     bind=True,
-    max_retries=1,
+    max_retries=_recovery_settings.cleanup_stale_max_retries,
     queue="selfhealing_notifications",
 )
 def check_stale_pending_recoveries_task(

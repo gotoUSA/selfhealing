@@ -52,12 +52,16 @@ def generate_daily_autonomous_report(
 
 try:
     from celery import shared_task
+    from selfhealing.settings.daily_report import get_daily_report_settings
+
+    # 모듈 로드 시점에 설정값 캐싱
+    _daily_report_settings = get_daily_report_settings()
 
     @shared_task(
         name="selfhealing.tasks.daily_report.generate_daily_autonomous_report",
         bind=False,
-        max_retries=2,
-        default_retry_delay=300,
+        max_retries=_daily_report_settings.max_retries,
+        default_retry_delay=_daily_report_settings.retry_delay,
     )
     def generate_daily_autonomous_report_task(
         date_str: Optional[str] = None,

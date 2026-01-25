@@ -5,6 +5,7 @@ ApplyStrategy Settings - Pydantic v2.
 config 타입별 기본 지연 시간을 환경변수로 설정 가능.
 
 Environment Variables:
+    # 설정 타입별 지연 시간
     SELFHEALING_APPLY_SLA_DELAY=0
     SELFHEALING_APPLY_METRICS_DELAY=0
     SELFHEALING_APPLY_NOTIFICATION_DELAY=0
@@ -17,6 +18,13 @@ Environment Variables:
     SELFHEALING_APPLY_SECURITY_DELAY=60
     SELFHEALING_APPLY_ERROR_BUDGET_DELAY=30
     SELFHEALING_APPLY_DEFAULT_GRACE_TIMEOUT=60
+    
+    # Celery Task 재시도 설정
+    SELFHEALING_APPLY_PENDING_MAX_RETRIES=3
+    SELFHEALING_APPLY_PENDING_RETRY_DELAY=10
+    SELFHEALING_APPLY_GRACEFUL_MAX_RETRIES=10
+    SELFHEALING_APPLY_GRACEFUL_RETRY_DELAY=5
+    SELFHEALING_APPLY_CLEANUP_MAX_AGE_HOURS=24
 """
 
 import logging
@@ -133,6 +141,49 @@ class ApplyStrategySettings(BaseSettings):
         ge=10,
         le=600,
         description="GRACEFUL 전략 사용 시 기본 최대 대기 시간 (초)",
+    )
+
+    # ==========================================================================
+    # Celery Task 재시도 설정 (apply_pending_config_changes)
+    # ==========================================================================
+    pending_max_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="대기 중인 설정 적용 태스크 최대 재시도 횟수",
+    )
+    pending_retry_delay: int = Field(
+        default=10,
+        ge=1,
+        le=300,
+        description="대기 중인 설정 적용 태스크 재시도 지연 (초)",
+    )
+
+    # ==========================================================================
+    # Celery Task 재시도 설정 (apply_graceful_config_change)
+    # 진행 중인 작업 완료 대기가 필요하므로 재시도 횟수가 많음
+    # ==========================================================================
+    graceful_max_retries: int = Field(
+        default=10,
+        ge=0,
+        le=20,
+        description="Graceful 설정 적용 태스크 최대 재시도 횟수",
+    )
+    graceful_retry_delay: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Graceful 설정 적용 태스크 재시도 지연 (초)",
+    )
+
+    # ==========================================================================
+    # 만료 설정 정리 (cleanup_expired_config_changes)
+    # ==========================================================================
+    cleanup_max_age_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="만료된 설정 변경 정리 기준 시간 (시)",
     )
 
     def get_delay_for_config_type(self, config_type: str) -> int:

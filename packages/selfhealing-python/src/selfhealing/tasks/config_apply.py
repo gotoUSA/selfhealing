@@ -17,15 +17,19 @@ import logging
 from datetime import datetime, timezone
 
 from celery import shared_task
+from selfhealing.settings.apply_strategy import get_apply_strategy_settings
 
 logger = logging.getLogger(__name__)
+
+# 모듈 로드 시점에 설정값 캐싱
+_apply_settings = get_apply_strategy_settings()
 
 
 @shared_task(
     name="selfhealing.apply_pending_config_changes",
     bind=True,
-    max_retries=3,
-    default_retry_delay=10,
+    max_retries=_apply_settings.pending_max_retries,
+    default_retry_delay=_apply_settings.pending_retry_delay,
 )
 def apply_pending_config_changes(self):
     """
@@ -96,8 +100,8 @@ def apply_pending_config_changes(self):
 @shared_task(
     name="selfhealing.apply_graceful_config_change",
     bind=True,
-    max_retries=10,
-    default_retry_delay=5,
+    max_retries=_apply_settings.graceful_max_retries,
+    default_retry_delay=_apply_settings.graceful_retry_delay,
 )
 def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 60):
     """
@@ -216,13 +220,20 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
 
 @shared_task(name="selfhealing.cleanup_expired_config_changes")
-def cleanup_expired_config_changes(max_age_hours: int = 24):
+def cleanup_expired_config_changes(max_age_hours: int = None):
     """
     Cleanup old pending changes that were never applied.
 
     Should be scheduled to run periodically (e.g., daily).
+    
+    Args:
+        max_age_hours: 만료 기준 시간 (기본값: 설정에서 로드)
     """
     from selfhealing.services.pending_config import get_pending_config_service
+
+    # 설정값 사용 (인자가 None이면 설정에서 가져옴)
+    if max_age_hours is None:
+        max_age_hours = _apply_settings.cleanup_max_age_hours
 
     try:
         pending_service = get_pending_config_service()

@@ -11,9 +11,15 @@ Replaces:
 Environment Variables:
     SELFHEALING_CHAOS_MAX_BLAST_RADIUS=0.10
     SELFHEALING_CHAOS_DRY_RUN_DEFAULT=true
-
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
+    
+    # Chaos Scheduler Celery Task 재시도 설정
+    SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_MAX_RETRIES=0
+    SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_SOFT_TIME_LIMIT=300
+    SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_TIME_LIMIT=360
+    SELFHEALING_CHAOS_SCHEDULER_REPORT_MAX_RETRIES=3
+    SELFHEALING_CHAOS_SCHEDULER_REPORT_RETRY_DELAY=300
+    SELFHEALING_CHAOS_SCHEDULER_CLEANUP_MAX_RETRIES=1
+    SELFHEALING_CHAOS_SCHEDULER_PENDING_CHECK_MAX_RETRIES=1
 """
 
 import logging
@@ -122,6 +128,65 @@ class ChaosSettings(BaseSettings):
         ge=0,
         le=10000,
         description="Maximum latency injection in milliseconds",
+    )
+
+    # ==========================================================================
+    # Chaos Scheduler Celery Task 재시도 설정 (run_scheduled_experiments_task)
+    # Chaos 실험은 재시도하지 않음 (안전을 위해)
+    # ==========================================================================
+    scheduler_experiment_max_retries: int = Field(
+        default=0,
+        ge=0,
+        le=3,
+        description="스케줄된 실험 태스크 최대 재시도 횟수 (0 권장)",
+    )
+    scheduler_experiment_soft_time_limit: int = Field(
+        default=300,
+        ge=60,
+        le=1800,
+        description="스케줄된 실험 태스크 소프트 타임 리밋 (초)",
+    )
+    scheduler_experiment_time_limit: int = Field(
+        default=360,
+        ge=120,
+        le=2400,
+        description="스케줄된 실험 태스크 하드 타임 리밋 (초)",
+    )
+
+    # ==========================================================================
+    # Chaos Scheduler Celery Task 재시도 설정 (generate_daily_resilience_report_task)
+    # ==========================================================================
+    scheduler_report_max_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="일일 복원력 리포트 생성 태스크 최대 재시도 횟수",
+    )
+    scheduler_report_retry_delay: int = Field(
+        default=300,
+        ge=30,
+        le=1800,
+        description="일일 복원력 리포트 생성 태스크 재시도 지연 (초)",
+    )
+
+    # ==========================================================================
+    # Chaos Scheduler Celery Task 재시도 설정 (cleanup_expired_approvals_task)
+    # ==========================================================================
+    scheduler_cleanup_max_retries: int = Field(
+        default=1,
+        ge=0,
+        le=5,
+        description="만료된 승인 정리 태스크 최대 재시도 횟수",
+    )
+
+    # ==========================================================================
+    # Chaos Scheduler Celery Task 재시도 설정 (check_pending_approvals_task)
+    # ==========================================================================
+    scheduler_pending_check_max_retries: int = Field(
+        default=1,
+        ge=0,
+        le=5,
+        description="대기 중인 승인 확인 태스크 최대 재시도 횟수",
     )
 
     @field_validator("max_blast_radius", "max_failure_rate")

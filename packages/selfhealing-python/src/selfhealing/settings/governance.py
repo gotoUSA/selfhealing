@@ -11,9 +11,10 @@ Replaces:
 Environment Variables:
     SELFHEALING_GOVERNANCE_THRESHOLD_OPERATOR=0.15
     SELFHEALING_GOVERNANCE_EMERGENCY_EXPIRY_HOURS=8
-
-Reference:
-- docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
+    
+    # Celery Task 재시도 설정
+    SELFHEALING_GOVERNANCE_EXPIRY_CHECK_MAX_RETRIES=3
+    SELFHEALING_GOVERNANCE_EXPIRY_CHECK_RETRY_DELAY=60
 """
 
 import logging
@@ -155,6 +156,22 @@ class GovernanceSettings(BaseSettings):
     require_reason_for_changes: bool = Field(
         default=True,
         description="Require reason for configuration changes",
+    )
+
+    # ==========================================================================
+    # Celery Task 재시도 설정 (check_emergency_mode_expiry_task)
+    # ==========================================================================
+    expiry_check_max_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="긴급 모드 만료 체크 태스크 최대 재시도 횟수",
+    )
+    expiry_check_retry_delay: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="긴급 모드 만료 체크 태스크 재시도 지연 (초)",
     )
 
     @field_validator("default_mode")

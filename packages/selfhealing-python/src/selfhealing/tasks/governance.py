@@ -136,12 +136,16 @@ def get_governance_beat_schedule() -> Dict[str, Dict[str, Any]]:
 
 try:
     from celery import shared_task
+    from selfhealing.settings.governance import get_governance_settings
+
+    # 모듈 로드 시점에 설정값 캐싱
+    _governance_settings = get_governance_settings()
 
     @shared_task(
         name="selfhealing.tasks.governance.check_emergency_mode_expiry",
         bind=True,
-        max_retries=3,
-        default_retry_delay=60,
+        max_retries=_governance_settings.expiry_check_max_retries,
+        default_retry_delay=_governance_settings.expiry_check_retry_delay,
         autoretry_for=(Exception,),
         retry_backoff=True,
     )

@@ -299,11 +299,25 @@ from selfhealing.settings.hash_chain import (
     reset_hash_chain_settings,
 )
 
-# API Module Settings (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
+# API Rate Limit (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
 from selfhealing.settings.api_rate_limit import (
     ApiRateLimitSettings,
     get_api_rate_limit_settings,
     reset_api_rate_limit_settings,
+)
+
+# Daily Report Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+from selfhealing.settings.daily_report import (
+    DailyReportSettings,
+    get_daily_report_settings,
+    reset_daily_report_settings,
+)
+
+# Cleanup Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+from selfhealing.settings.cleanup import (
+    CleanupSettings,
+    get_cleanup_settings,
+    reset_cleanup_settings,
 )
 
 # 고급 기능
@@ -604,4 +618,12 @@ __all__ = [
     "ApiRateLimitSettings",
     "get_api_rate_limit_settings",
     "reset_api_rate_limit_settings",
+    # Daily Report Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+    "DailyReportSettings",
+    "get_daily_report_settings",
+    "reset_daily_report_settings",
+    # Cleanup Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+    "CleanupSettings",
+    "get_cleanup_settings",
+    "reset_cleanup_settings",
 ]

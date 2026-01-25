@@ -21,7 +21,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
+from selfhealing.settings.chaos import get_chaos_settings
+
 logger = logging.getLogger(__name__)
+
+# 모듈 로드 시점에 설정값 캐싱
+_chaos_settings = get_chaos_settings()
 
 
 # =============================================================================
@@ -229,9 +234,9 @@ def register_celery_tasks(app):
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.run_scheduled_experiments_task",
         bind=True,
-        max_retries=0,  # Don't retry chaos experiments
-        soft_time_limit=300,  # 5 minute soft limit
-        time_limit=360,  # 6 minute hard limit
+        max_retries=_chaos_settings.scheduler_experiment_max_retries,
+        soft_time_limit=_chaos_settings.scheduler_experiment_soft_time_limit,
+        time_limit=_chaos_settings.scheduler_experiment_time_limit,
     )
     def run_scheduled_experiments_task(self):
         """Celery task wrapper for run_scheduled_experiments."""
@@ -240,8 +245,8 @@ def register_celery_tasks(app):
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.generate_daily_resilience_report_task",
         bind=True,
-        max_retries=3,
-        default_retry_delay=300,  # 5 minutes
+        max_retries=_chaos_settings.scheduler_report_max_retries,
+        default_retry_delay=_chaos_settings.scheduler_report_retry_delay,
     )
     def generate_daily_resilience_report_task(self):
         """Celery task wrapper for generate_daily_resilience_report."""
@@ -254,7 +259,7 @@ def register_celery_tasks(app):
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.cleanup_expired_approvals_task",
         bind=True,
-        max_retries=1,
+        max_retries=_chaos_settings.scheduler_cleanup_max_retries,
     )
     def cleanup_expired_approvals_task(self):
         """Celery task wrapper for cleanup_expired_approvals."""
@@ -263,7 +268,7 @@ def register_celery_tasks(app):
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.check_pending_approvals_task",
         bind=True,
-        max_retries=1,
+        max_retries=_chaos_settings.scheduler_pending_check_max_retries,
     )
     def check_pending_approvals_task(self):
         """Celery task wrapper for check_and_alert_pending_approvals."""
