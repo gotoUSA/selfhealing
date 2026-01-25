@@ -92,6 +92,37 @@ class ForensicSettings(BaseSettings):
         description="Patterns to match sensitive keys for sanitization",
     )
 
+    # ==========================================================================
+    # Rate Limiter Settings (from services/forensic_audit_bridge.py ForensicRateLimiter)
+    # ==========================================================================
+    rate_limit_exception_limit: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="분당 예외 캡처 최대 횟수",
+    )
+
+    rate_limit_snapshot_limit: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description="분당 메모리 스냅샷 최대 횟수",
+    )
+
+    rate_limit_anomaly_limit: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="분당 이상 탐지 최대 횟수",
+    )
+
+    rate_limit_window_seconds: float = Field(
+        default=60.0,
+        ge=10.0,
+        le=600.0,
+        description="Rate Limiter 슬라이딩 윈도우 크기 (초)",
+    )
+
 
 # Singleton instance (cached)
 _settings: Optional[ForensicSettings] = None

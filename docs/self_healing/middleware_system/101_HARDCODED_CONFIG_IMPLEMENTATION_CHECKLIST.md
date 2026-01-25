@@ -149,15 +149,16 @@
 - `failure_threshold`: DEGRADED 전환 임계값 (기본 5회)
 - `recovery_timeout_seconds`: 복구 대기 시간 (기본 30초)
 
-#### 1.13 settings/forensic.py (기존 파일 존재 - Phase 2로 연기)
+#### 1.13 settings/forensic.py 확장 ✅
 - [x] 기존 파일 확인: `settings/forensic.py` 이미 존재
-- [ ] Phase 2에서 ForensicRateLimiter 관련 필드 추가 예정
+- [x] ForensicRateLimiter 관련 필드 추가 완료
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestForensicSettingsRateLimiterExtension`
 
-기존 forensic.py에 추가 필요 필드 (services/forensic_audit_bridge.py ForensicRateLimiter):
-- `exception_limit`: 분당 예외 캡처 최대 횟수 (기본 10)
-- `snapshot_limit`: 분당 스냅샷 최대 횟수 (기본 1)
-- `anomaly_limit`: 분당 이상 탐지 최대 횟수 (기본 5)
-- `window_seconds`: 윈도우 크기 (기본 60.0초)
+설정 필드 (services/forensic_audit_bridge.py ForensicRateLimiter 기반):
+- `rate_limit_exception_limit`: 분당 예외 캡처 최대 횟수 (기본 10)
+- `rate_limit_snapshot_limit`: 분당 스냅샷 최대 횟수 (기본 1)
+- `rate_limit_anomaly_limit`: 분당 이상 탐지 최대 횟수 (기본 5)
+- `rate_limit_window_seconds`: 윈도우 크기 (기본 60.0초)
 
 #### 1.14 settings/graceful_degradation.py ✅
 - [x] 파일 생성: `settings/graceful_degradation.py`

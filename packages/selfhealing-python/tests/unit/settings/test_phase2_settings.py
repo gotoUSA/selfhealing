@@ -387,3 +387,67 @@ class TestSteadyStateSettings:
         # 상한 초과
         with pytest.raises(ValueError):
             SteadyStateSettings(error_rate_max_percent=150.0)  # le=100.0
+
+
+# =============================================================================
+# ForensicSettings Rate Limiter Extension Tests
+# =============================================================================
+
+
+class TestForensicSettingsRateLimiterExtension:
+    """ForensicSettings Rate Limiter 확장 필드 테스트."""
+
+    def setup_method(self):
+        """Reset settings before each test."""
+        from selfhealing.settings.forensic import reset_forensic_settings
+        reset_forensic_settings()
+
+    def teardown_method(self):
+        """Reset settings after each test."""
+        from selfhealing.settings.forensic import reset_forensic_settings
+        reset_forensic_settings()
+
+    def test_rate_limiter_default_values(self):
+        """Rate Limiter 관련 필드 기본값 검증 (ForensicRateLimiter 기반)."""
+        from selfhealing.settings.forensic import get_forensic_settings
+
+        settings = get_forensic_settings()
+
+        # ForensicRateLimiter 기본값과 동일해야 함
+        assert settings.rate_limit_exception_limit == 10
+        assert settings.rate_limit_snapshot_limit == 1
+        assert settings.rate_limit_anomaly_limit == 5
+        assert settings.rate_limit_window_seconds == 60.0
+
+    def test_rate_limiter_env_override(self):
+        """Rate Limiter 환경 변수 오버라이드 테스트."""
+        from selfhealing.settings.forensic import (
+            get_forensic_settings,
+            reset_forensic_settings,
+        )
+
+        with mock.patch.dict(os.environ, {
+            "SELFHEALING_FORENSIC_RATE_LIMIT_EXCEPTION_LIMIT": "20",
+            "SELFHEALING_FORENSIC_RATE_LIMIT_SNAPSHOT_LIMIT": "3",
+            "SELFHEALING_FORENSIC_RATE_LIMIT_ANOMALY_LIMIT": "10",
+            "SELFHEALING_FORENSIC_RATE_LIMIT_WINDOW_SECONDS": "120.0",
+        }):
+            reset_forensic_settings()
+            settings = get_forensic_settings()
+
+            assert settings.rate_limit_exception_limit == 20
+            assert settings.rate_limit_snapshot_limit == 3
+            assert settings.rate_limit_anomaly_limit == 10
+            assert settings.rate_limit_window_seconds == 120.0
+
+    def test_rate_limiter_validation_bounds(self):
+        """Rate Limiter 범위 검증."""
+        from selfhealing.settings.forensic import ForensicSettings
+
+        # 유효한 범위
+        settings = ForensicSettings(rate_limit_exception_limit=50)
+        assert settings.rate_limit_exception_limit == 50
+
+        # 하한 미만
+        with pytest.raises(ValueError):
+            ForensicSettings(rate_limit_exception_limit=0)  # ge=1
