@@ -91,6 +91,20 @@ class ThrottleSettings(BaseSettings):
         description="지수 평활화 계수 (0-1, 높을수록 반응적)",
     )
 
+    sample_window_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=300.0,
+        description="RTT 샘플 윈도우 크기 (초). GradientCalculator에서 샘플 조회 범위",
+    )
+
+    gradient_min_samples: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        description="그래디언트 계산에 필요한 최소 샘플 수",
+    )
+
     # ==========================================================================
     # Adjustment Rates
     # ==========================================================================

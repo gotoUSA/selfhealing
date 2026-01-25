@@ -99,6 +99,78 @@ class ErrorBudgetPropagationSettings(BaseSettings):
         description="전파 지연 시간 (ms) - 급격한 전파 방지",
     )
 
+    # ==========================================================================
+    # Multiplier Caps (from services/error_budget/constants.py)
+    # ==========================================================================
+    max_crisis_multiplier_cap: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="Emergency Level 기반 최대 가중치 Cap (LEVEL_3 × 도메인 가중치 결합 후 상한)",
+    )
+
+    max_domain_multiplier: float = Field(
+        default=24.0,
+        ge=1.0,
+        le=100.0,
+        description="도메인 기반 최대 가중치 (SLA 기반 역수 가중치의 최대값, 1h SLA = 24.0)",
+    )
+
+    max_combined_multiplier: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="Level + Domain 결합 후 최대 가중치 (MultiplierPrecedenceResolver에서 사용)",
+    )
+
+    # ==========================================================================
+    # Cache Settings (from services/error_budget/constants.py)
+    # ==========================================================================
+    default_cache_ttl_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="CrisisMultiplierProvider 기본 캐시 TTL (격상 시 즉시 무효화됨)",
+    )
+
+    # ==========================================================================
+    # Refund Settings (from services/error_budget/constants.py)
+    # ==========================================================================
+    refund_ratio: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="오탐 시 기본 환불 비율 (50%). 100% 환불은 시스템 요동 유발 가능",
+    )
+
+    refund_proposal_expiry_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="환불 제안 만료 시간 (24시간). 미처리 제안은 자동 만료됨",
+    )
+
+    # ==========================================================================
+    # Combine Strategy (from services/error_budget/constants.py)
+    # ==========================================================================
+    default_combine_strategy: str = Field(
+        default="max",
+        description="Level/Domain 가중치 결합 기본 전략 (max: 큰 값, sum: 합산, multiply: 곱셈)",
+    )
+
+    @field_validator("default_combine_strategy")
+    @classmethod
+    def validate_combine_strategy(cls, v: str) -> str:
+        """결합 전략 유효성 검증."""
+        valid_strategies = {"max", "sum", "multiply"}
+        if v not in valid_strategies:
+            raise ValueError(f"default_combine_strategy must be one of {valid_strategies}")
+        if v == "multiply":
+            logger.warning(
+                "[SafeDefault] 'multiply' strategy is risky, ensure multiplier caps are set"
+            )
+        return v
+
     @field_validator("min_multiplier")
     @classmethod
     def validate_min_multiplier(cls, v: float, info) -> float:

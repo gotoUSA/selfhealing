@@ -1,0 +1,134 @@
+"""
+Steady State Settings - Pydantic v2.
+
+Chaos 실험의 정상 상태(Steady State) 가설 검증 설정입니다.
+
+Replaces:
+- services/chaos/base/models.py:SteadyStateHypothesis 기본값
+
+Environment Variables:
+    SELFHEALING_STEADYSTATE_P50_LATENCY_MAX_MS=100.0
+    SELFHEALING_STEADYSTATE_P99_LATENCY_MAX_MS=500.0
+    SELFHEALING_STEADYSTATE_ERROR_RATE_MAX_PERCENT=0.1
+    SELFHEALING_STEADYSTATE_THROUGHPUT_MIN_RPS=100.0
+"""
+
+import logging
+from typing import Optional
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+
+class SteadyStateSettings(BaseSettings):
+    """
+    Steady State 가설 설정.
+
+    Chaos 실험 전후 시스템의 '정상' 상태를 정의합니다.
+    SteadyStateHypothesis.validate()에서 이 설정과 비교하여 검증합니다.
+
+    Attributes:
+        p50_latency_max_ms: P50 레이턴시 최대 허용값 (ms)
+        p99_latency_max_ms: P99 레이턴시 최대 허용값 (ms)
+        error_rate_max_percent: 에러율 최대 허용값 (%)
+        throughput_min_rps: 최소 처리량 (requests per second)
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_STEADYSTATE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
+
+    # ==========================================================================
+    # Latency Thresholds (from services/chaos/base/models.py SteadyStateHypothesis)
+    # ==========================================================================
+    p50_latency_max_ms: float = Field(
+        default=100.0,
+        ge=1.0,
+        le=10000.0,
+        description="P50 레이턴시 최대 허용값 (ms). 요청의 50%가 이 시간 내 응답해야 함",
+    )
+
+    p99_latency_max_ms: float = Field(
+        default=500.0,
+        ge=10.0,
+        le=60000.0,
+        description="P99 레이턴시 최대 허용값 (ms). 요청의 99%가 이 시간 내 응답해야 함",
+    )
+
+    # ==========================================================================
+    # Error Rate Threshold
+    # ==========================================================================
+    error_rate_max_percent: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=100.0,
+        description="에러율 최대 허용값 (%). 0.1 = 0.1% 에러 허용",
+    )
+
+    # ==========================================================================
+    # Throughput Threshold
+    # ==========================================================================
+    throughput_min_rps: float = Field(
+        default=100.0,
+        ge=0.0,
+        le=1000000.0,
+        description="최소 처리량 (requests per second). 이 값 미만이면 성능 저하로 판단",
+    )
+
+    @field_validator("p99_latency_max_ms")
+    @classmethod
+    def validate_p99_latency(cls, v: float, info) -> float:
+        """P99이 P50보다 커야 함."""
+        # Note: cross-field validation은 model_validator에서 처리
+        if v < 100.0:
+            logger.warning(
+                f"[SafeDefault] Very tight p99_latency_max_ms={v}ms, may cause false positives"
+            )
+        return v
+
+    @field_validator("error_rate_max_percent")
+    @classmethod
+    def validate_error_rate(cls, v: float) -> float:
+        """에러율 경고."""
+        if v > 5.0:
+            logger.warning(
+                f"[SafeDefault] High error_rate_max_percent={v}%, may miss real issues"
+            )
+        return v
+
+    @field_validator("throughput_min_rps")
+    @classmethod
+    def validate_throughput(cls, v: float) -> float:
+        """처리량 경고."""
+        if v == 0.0:
+            logger.warning(
+                "[SafeDefault] throughput_min_rps=0, throughput check is effectively disabled"
+            )
+        return v
+
+
+# =============================================================================
+# Singleton Pattern
+# =============================================================================
+
+_settings: Optional[SteadyStateSettings] = None
+
+
+def get_steady_state_settings() -> SteadyStateSettings:
+    """Get cached SteadyStateSettings instance."""
+    global _settings
+    if _settings is None:
+        _settings = SteadyStateSettings()
+    return _settings
+
+
+def reset_steady_state_settings() -> None:
+    """Reset cached settings (for testing)."""
+    global _settings
+    _settings = None

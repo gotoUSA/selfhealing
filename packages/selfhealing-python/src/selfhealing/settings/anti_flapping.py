@@ -104,6 +104,30 @@ class AntiFlappingSettings(BaseSettings):
         ),
     )
 
+    # ==========================================================================
+    # AntiFlappingWindow Settings (from services/idempotency_service.py)
+    # ==========================================================================
+    window_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="AntiFlappingWindow 슬라이딩 윈도우 크기 (초)",
+    )
+
+    similarity_threshold: float = Field(
+        default=0.01,
+        ge=0.001,
+        le=0.5,
+        description="유사 판정 임계값 (0.01 = 1% 이내 = 유사)",
+    )
+
+    max_similar_changes: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="윈도우 내 최대 유사 변경 횟수 (초과 시 플래핑 판정)",
+    )
+
     @field_validator("recovery_hysteresis_factor")
     @classmethod
     def validate_hysteresis_factor(cls, v: float) -> float:

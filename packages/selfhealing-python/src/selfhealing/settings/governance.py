@@ -82,6 +82,13 @@ class GovernanceSettings(BaseSettings):
         description="Hours for final warning",
     )
 
+    emergency_min_level: int = Field(
+        default=2,
+        ge=1,
+        le=3,
+        description="거버넌스 체크에서 비상 모드 차단 최소 레벨 (1=LEVEL_1, 2=LEVEL_2, 3=LEVEL_3)",
+    )
+
     # ==========================================================================
     # Operating Mode (from core/config.py lines 349)
     # ==========================================================================

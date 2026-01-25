@@ -178,135 +178,80 @@
 
 ---
 
-### Phase 2: 기존 Settings 확장 [예상: 3시간]
+### Phase 2: 기존 Settings 확장 [완료: 2026-01-25]
 
-#### 2.1 settings/error_budget_propagation.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_error_budget_propagation_settings.py`
+#### 2.1 settings/error_budget_propagation.py 확장 ✅
+- [x] 필드 추가
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestErrorBudgetPropagationSettingsExtension`
 
-```python
-# 추가할 설정 필드 (services/error_budget/constants.py 기반)
-# 파일: services/error_budget/constants.py
-SELFHEALING_ERRORBUDGET_MAX_CRISIS_MULTIPLIER_CAP = 10.0     # Line 34
-SELFHEALING_ERRORBUDGET_MAX_DOMAIN_MULTIPLIER = 24.0         # Line 42
-SELFHEALING_ERRORBUDGET_MAX_COMBINED_MULTIPLIER = 10.0       # Line 50
-SELFHEALING_ERRORBUDGET_CACHE_TTL_SECONDS = 30.0             # Line 62
-SELFHEALING_ERRORBUDGET_REFUND_RATIO = 0.5                   # Line 146
-SELFHEALING_ERRORBUDGET_REFUND_EXPIRY_HOURS = 24             # Line 153
-```
+설정 필드 (services/error_budget/constants.py 기반):
+- `max_crisis_multiplier_cap`: Emergency Level 기반 최대 가중치 Cap (기본 10.0)
+- `max_domain_multiplier`: 도메인 기반 최대 가중치 (기본 24.0)
+- `max_combined_multiplier`: Level + Domain 결합 후 최대 가중치 (기본 10.0)
+- `default_cache_ttl_seconds`: CrisisMultiplierProvider 기본 캐시 TTL (기본 30.0초)
+- `refund_ratio`: 오탐 시 기본 환불 비율 (기본 0.5)
+- `refund_proposal_expiry_hours`: 환불 제안 만료 시간 (기본 24시간)
+- `default_combine_strategy`: Level/Domain 가중치 결합 기본 전략 (기본 "max")
 
-#### 2.2 settings/slo.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_slo_settings.py`
+#### 2.2 settings/slo.py 확장 ⏭️ (이미 완료)
+- [x] 필드 확인: `default_fast_burn_rate`, `default_slow_burn_rate` 이미 존재
+- 추가 작업 불필요
 
-```python
-# 추가할 설정 필드 (slo.py 기반)
-# 파일: slo.py
-SELFHEALING_SLO_FAST_BURN_RATE = 14.4                # Line 95
-SELFHEALING_SLO_SLOW_BURN_RATE = 3.0                 # Line 96
-```
+#### 2.3 settings/throttle.py 확장 ✅
+- [x] 필드 추가
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestThrottleSettingsExtension`
 
-#### 2.3 settings/throttle.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_throttle_settings.py`
+설정 필드 (services/throttle/adaptive.py GradientCalculator 기반):
+- `sample_window_seconds`: RTT 샘플 윈도우 크기 (기본 10.0초)
+- `gradient_min_samples`: 그래디언트 계산에 필요한 최소 샘플 수 (기본 3)
 
-```python
-# 추가할 설정 필드 (services/throttle/adaptive.py 기반)
-# 파일: services/throttle/adaptive.py
-SELFHEALING_THROTTLE_SMOOTHING_FACTOR = 0.5          # Line 62
-SELFHEALING_THROTTLE_SAMPLE_WINDOW_SECONDS = 10.0    # Line 63
-SELFHEALING_THROTTLE_MIN_SAMPLES = 3                 # Line 64
-```
+#### 2.4 settings/chaos_blast_radius.py 확장 ⏭️ (이미 완료)
+- [x] 필드 확인: `allowed_hours_start`, `allowed_hours_end` 등 모든 필드 이미 존재
+- 추가 작업 불필요
 
-#### 2.4 settings/chaos_blast_radius.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_chaos_blast_radius_settings.py`
+#### 2.5 settings/critical_worker.py 확장 ⏭️ (이미 완료)
+- [x] 필드 확인: 큐별 worker_count, concurrency, prefetch_multiplier 모든 필드 이미 존재
+- 추가 작업 불필요
 
-```python
-# 추가할 설정 필드 (services/chaos/blast_radius.py 기반)
-# 파일: services/chaos/blast_radius.py
-SELFHEALING_CHAOS_ALLOWED_HOURS_START = 2            # Line 86
-SELFHEALING_CHAOS_ALLOWED_HOURS_END = 6              # Line 90
-SELFHEALING_CHAOS_MAX_FAILURE_PERCENT = 5.0          # Line 180
-```
+#### 2.6 settings/anti_flapping.py 확장 ✅
+- [x] 필드 추가
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestAntiFlappingSettingsExtension`
 
-#### 2.5 settings/critical_worker.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_critical_worker_settings.py`
+설정 필드 (services/idempotency_service.py AntiFlappingWindow 기반):
+- `window_seconds`: 슬라이딩 윈도우 크기 (기본 60초)
+- `similarity_threshold`: 유사 판정 임계값 (기본 0.01 = 1%)
+- `max_similar_changes`: 윈도우 내 최대 유사 변경 횟수 (기본 3)
 
-```python
-# 추가할 설정 필드 (services/coordination/critical_worker.py 기반)
-# 파일: services/coordination/critical_worker.py
-# 큐별 설정은 JSON 형태로 저장
-SELFHEALING_CRITICAL_WORKER_QUEUE_CONFIGS = {
-    "critical": {"worker_count": 2, "concurrency": 2, "prefetch_multiplier": 1},
-    "high": {"worker_count": 4, "concurrency": 4, "prefetch_multiplier": 2},
-    "recovery": {"worker_count": 4, "concurrency": 4, "prefetch_multiplier": 2},
-    "notifications": {"worker_count": 2, "concurrency": 4, "prefetch_multiplier": 4},
-    "default": {"worker_count": 8, "concurrency": 8, "prefetch_multiplier": 4},
-}
-```
+#### 2.7 settings/retry.py 확장 ⏭️ (이미 완료)
+- [x] 필드 확인: `max_attempts`, `backoff_base`, `max_delay`, `jitter_percent` 모든 필드 이미 존재
+- 추가 작업 불필요
 
-#### 2.6 settings/anti_flapping.py 확장
-- [ ] 필드 추가
-- [ ] 테스트 업데이트: `tests/unit/settings/test_anti_flapping_settings.py`
+#### 2.8 settings/governance.py 확장 ✅
+- [x] 필드 추가
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestGovernanceSettingsExtension`
 
-```python
-# 추가할 설정 필드 (services/idempotency_service.py 기반)
-# 파일: services/idempotency_service.py - AntiFlappingWindow
-SELFHEALING_ANTI_FLAPPING_WINDOW_SECONDS = 60        # Line 774
-SELFHEALING_ANTI_FLAPPING_SIMILARITY_THRESHOLD = 0.01  # Line 775
-SELFHEALING_ANTI_FLAPPING_MAX_SIMILAR_CHANGES = 3    # Line 776
-```
+설정 필드 (services/governance_checks.py 기반):
+- `emergency_min_level`: 거버넌스 체크에서 비상 모드 차단 최소 레벨 (기본 2)
 
-#### 2.7 settings/retry.py 확장 (또는 신규)
-- [ ] 필드 추가
-- [ ] 테스트: `tests/unit/settings/test_retry_settings.py`
+#### 2.9 settings/sampling.py ✅ (신규 생성)
+- [x] 파일 생성: `settings/sampling.py`
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestSamplingSettings`
 
-```python
-# 추가할 설정 필드 (services/retry_handler.py 기반)
-# 파일: services/retry_handler.py - RetryConfig
-SELFHEALING_RETRY_MAX_ATTEMPTS = 3                   # Line 76
-SELFHEALING_RETRY_BACKOFF_BASE = 4                   # Line 77
-SELFHEALING_RETRY_BACKOFF_MAX = 180                  # Line 78
-SELFHEALING_RETRY_JITTER_PERCENT = 25                # Line 79
-```
+설정 필드 (audit/performance/sampling.py SamplingConfig 기반):
+- `sample_rate`: 샘플링 비율 (기본 0.1 = 10%)
+- `min_samples`: 최소 샘플 수 (기본 10)
+- `max_samples`: 최대 샘플 수 (기본 1000)
+- `full_verify_on_failure`: 샘플 검증 실패 시 전체 검증 수행 여부 (기본 True)
 
-#### 2.8 settings/governance.py (신규 또는 확장)
-- [ ] 파일 생성/확장
-- [ ] 테스트: `tests/unit/settings/test_governance_settings.py`
+#### 2.10 settings/steady_state.py ✅ (신규 생성)
+- [x] 파일 생성: `settings/steady_state.py`
+- [x] 테스트: `tests/unit/settings/test_phase2_settings.py::TestSteadyStateSettings`
 
-```python
-# 필요한 설정 필드 (services/governance_checks.py 기반)
-# 파일: services/governance_checks.py
-SELFHEALING_GOVERNANCE_EMERGENCY_MIN_LEVEL = 2       # Line 340, 403, 535, 621
-```
-
-#### 2.9 settings/sampling.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트: `tests/unit/settings/test_sampling_settings.py`
-
-```python
-# 필요한 설정 필드 (audit/performance/sampling.py 기반)
-# 파일: audit/performance/sampling.py
-SELFHEALING_SAMPLING_SAMPLE_RATE = 0.1               # Line 20
-SELFHEALING_SAMPLING_MIN_SAMPLES = 10                # Line 21
-SELFHEALING_SAMPLING_MAX_SAMPLES = 1000              # Line 22
-```
-
-#### 2.10 settings/steady_state.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트: `tests/unit/settings/test_steady_state_settings.py`
-
-```python
-# 필요한 설정 필드 (services/chaos/base/models.py 기반)
-# 파일: services/chaos/base/models.py - SteadyStateHypothesis
-SELFHEALING_STEADY_STATE_P50_LATENCY_MAX_MS = 100.0      # Line 186
-SELFHEALING_STEADY_STATE_P99_LATENCY_MAX_MS = 500.0      # Line 187
-SELFHEALING_STEADY_STATE_ERROR_RATE_MAX_PERCENT = 0.1    # Line 191
-SELFHEALING_STEADY_STATE_THROUGHPUT_MIN_RPS = 100.0      # Line 194
-SELFHEALING_STEADY_STATE_INJECTION_RATE = 0.001          # Line 35
-```
+설정 필드 (services/chaos/base/models.py SteadyStateHypothesis 기반):
+- `p50_latency_max_ms`: P50 레이턴시 최대 허용값 (기본 100.0ms)
+- `p99_latency_max_ms`: P99 레이턴시 최대 허용값 (기본 500.0ms)
+- `error_rate_max_percent`: 에러율 최대 허용값 (기본 0.1%)
+- `throughput_min_rps`: 최소 처리량 (기본 100.0 rps)
 
 ---
 
@@ -613,9 +558,9 @@ def get_default_timeout() -> int:
 | Phase | 상태 | 완료율 |
 |-------|------|--------|
 | Phase 1: Settings 생성 | ✅ 완료 | 100% (14/14 파일) |
-| Phase 2: Settings 확장 | 미시작 | 0% |
+| Phase 2: Settings 확장 | ✅ 완료 | 100% (6/6 작업) |
 | Phase 3: 소스 리팩토링 | 미시작 | 0% |
-| Phase 4: 테스트 작성 | 부분 완료 | 10% (Phase 1 테스트 완료) |
+| Phase 4: 테스트 작성 | 부분 완료 | 30% (Phase 1, 2 테스트 완료) |
 | Phase 5: 최종 검증 | 미시작 | 0% |
 
 ### Phase 1 완료 내역 (2026-01-25)
@@ -637,13 +582,28 @@ def get_default_timeout() -> int:
 | graceful_degradation.py | ✅ 2 tests | 완료 |
 | ring_buffer.py | ✅ 4 tests | 완료 |
 
-**총 테스트**: 37개 통과
+**Phase 1 총 테스트**: 37개 통과
+
+### Phase 2 완료 내역 (2026-01-25)
+
+| 작업 | 테스트 | 상태 |
+|-----|--------|------|
+| error_budget_propagation.py 확장 | ✅ 3 tests | 완료 |
+| throttle.py 확장 | ✅ 2 tests | 완료 |
+| anti_flapping.py 확장 | ✅ 2 tests | 완료 |
+| governance.py 확장 | ✅ 2 tests | 완료 |
+| sampling.py 신규 생성 | ✅ 4 tests | 완료 |
+| steady_state.py 신규 생성 | ✅ 5 tests | 완료 |
+
+**Phase 2 총 테스트**: 18개 통과
+
+**전체 테스트 합계**: 55개 통과
 
 ### 마지막 업데이트
 - **날짜**: 2026-01-25
 - **작성자**: AI Assistant
-- **완료 작업**: Phase 1 완료 (14개 Settings 파일 생성, 37개 테스트 통과)
-- **다음 작업**: Phase 2 시작 (기존 Settings 확장)
+- **완료 작업**: Phase 2 완료 (4개 Settings 확장, 2개 Settings 신규 생성, 18개 테스트 통과)
+- **다음 작업**: Phase 3 시작 (소스 파일 리팩토링)
 
 ---
 
