@@ -2,7 +2,7 @@
 
 ## 문서 정보
 - **작성일**: 2026-01-25
-- **상태**: Step 2 완료
+- **상태**: Step 4 완료
 - **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
 - **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/services/coordination/`
 
@@ -12,7 +12,7 @@
 
 Coordination 서비스에서 발견된 하드코딩된 설정값들을 Pydantic Settings 체계로 마이그레이션하는 상세 계획.
 
-**진행 상태**: Step 2 완료
+**진행 상태**: Step 4 완료
 
 ---
 
@@ -285,8 +285,9 @@ Celery 데코레이터의 `max_retries`, `default_retry_delay`는 태스크 정�
 - [x] Recovery 태스크 정상 실행 (Step 2 완료)
 - [x] Worker Pool 설정 적용 확인 (Step 2 완료)
 - [x] Regional Policy 정책별 동작 검증 (Step 2 완료)
-- [ ] Namespace Emergency 설정 적용 확인 (Step 3 예정)
+- [x] Namespace Emergency 설정 적용 확인 (Step 3 완료)
 - [x] 기존 단위 테스트 100% 통과
+- [x] 환경변수 모킹 테스트 추가 (Step 4 완료)
 
 ---
 
@@ -348,4 +349,64 @@ Celery 데코레이터의 `max_retries`, `default_retry_delay`는 태스크 정�
 
 ```
 Step 1 + Step 2 전체: 44 tests, 100% passed (1.05s)
+```
+
+---
+
+## 12. Step 3 완료 내역 (2026-01-25)
+
+### 12.1 Namespace Emergency 리팩토링
+
+| 파일 | 변경 내용 |
+|-----|---------|
+| `tracker.py` | `_get_emergency_expiry_hours()`: settings.expiry_hours 로드, `_get_cache_ttl_seconds()`: settings.cache_ttl_seconds 로드 |
+| `cascade_detector.py` | `_get_escalation_threshold()`: settings.escalation_threshold 로드, `_get_cascade_window_minutes()`: settings.cascade_window_minutes 로드 |
+
+### 12.2 Settings 연동 방식
+
+| 함수 | 설명 |
+|-----|------|
+| `_get_emergency_expiry_hours()` | NamespaceEmergencySettings에서 expiry_hours 로드, ImportError 시 기본값 8 |
+| `_get_cache_ttl_seconds()` | NamespaceEmergencySettings에서 cache_ttl_seconds 로드, ImportError 시 기본값 30.0 |
+| `_get_escalation_threshold()` | NamespaceEmergencySettings에서 escalation_threshold 로드, ImportError 시 기본값 2 |
+| `_get_cascade_window_minutes()` | NamespaceEmergencySettings에서 cascade_window_minutes 로드, ImportError 시 기본값 30 |
+
+### 12.3 하위 호환성 상수 유지
+
+| 파일 | 상수 | 용도 |
+|-----|-----|------|
+| `tracker.py` | `DEFAULT_EMERGENCY_EXPIRY_HOURS` | 레거시 코드 호환 (권장하지 않음) |
+| `tracker.py` | `CACHE_TTL_SECONDS` | 레거시 코드 호환 (권장하지 않음) |
+| `cascade_detector.py` | `DEFAULT_ESCALATION_THRESHOLD` | 레거시 코드 호환 |
+| `cascade_detector.py` | `DEFAULT_CASCADE_WINDOW_MINUTES` | 레거시 코드 호환 |
+
+---
+
+## 13. Step 4 완료 내역 (2026-01-25)
+
+### 13.1 테스트 파일 생성
+
+| 파일 | 테스트 수 | 설명 |
+|-----|---------|------|
+| `tests/unit/settings/test_namespace_emergency_settings.py` | 18 | NamespaceEmergencySettings 기본값, 환경변수 오버라이드, 값 범위 검증, 싱글톤 패턴 |
+| `tests/unit/services/namespace_emergency/test_namespace_emergency_settings_integration.py` | 16 | tracker, cascade_detector의 settings 연동 검증 |
+
+### 13.2 테스트 케이스
+
+**test_namespace_emergency_settings.py (18 tests)**:
+- TestNamespaceEmergencySettingsDefaults: cascade_detector, tracker, audit_trail 기본값 검증
+- TestNamespaceEmergencySettingsEnvOverride: 환경변수 오버라이드 검증 (5개 설정)
+- TestNamespaceEmergencySettingsValidation: 값 범위 유효성 검증 (5개 설정)
+- TestNamespaceEmergencySettingsSingleton: 싱글톤 패턴, reset 함수 검증
+- TestNamespaceEmergencySettingsModuleExports: 모듈 export 확인
+
+**test_namespace_emergency_settings_integration.py (16 tests)**:
+- TestTrackerSettingsIntegration: `_get_emergency_expiry_hours()`, `_get_cache_ttl_seconds()` 검증
+- TestCascadeDetectorSettingsIntegration: `_get_escalation_threshold()`, `_get_cascade_window_minutes()` 검증
+- TestLegacyConstantsCompatibility: 하위 호환성 상수 존재 확인
+
+### 13.3 통합 테스트 결과
+
+```
+Step 1 + Step 2 + Step 3 + Step 4 전체: 202 tests, 100% passed (5.82s)
 ```
