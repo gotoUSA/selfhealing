@@ -1,0 +1,244 @@
+# 103. Core 모듈 하드코딩된 설정값 리팩토링 계획
+
+## 문서 정보
+- **작성일**: 2026-01-25
+- **상태**: 계획
+- **관련 문서**: 102_HARDCODED_CONFIG_FINAL_AUDIT.md
+- **대상 디렉토리**: `packages/selfhealing-python/src/selfhealing/core/`
+
+---
+
+## 1. 개요
+
+Core 모듈에서 발견된 하드코딩된 설정값들을 Pydantic Settings 체계로 마이그레이션하는 상세 계획.
+
+---
+
+## 2. 대상 파일 및 설정값
+
+### 2.1 runtime_feedback.py
+
+**위치**: L86-90  
+**현재 구조**: 클래스 레벨 상수
+
+| 상수명 | 현재 값 | 용도 | 환경변수명 (제안) |
+|-------|--------|-----|------------------|
+| `MAX_CONSECUTIVE_FAILURES` | 3 | 최대 연속 실패 횟수 | `SELFHEALING_RUNTIME_MAX_CONSECUTIVE_FAILURES` |
+| `POST_ROLLBACK_COOLDOWN` | 120 | 롤백 후 쿨다운 (초) | `SELFHEALING_RUNTIME_ROLLBACK_COOLDOWN` |
+| `POST_ADJUSTMENT_WAIT` | 30 | 조정 후 대기 시간 (초) | `SELFHEALING_RUNTIME_ADJUSTMENT_WAIT` |
+
+**구현 방안**:
+- `settings/runtime_feedback.py` 신규 생성
+- Pydantic BaseSettings 클래스로 정의
+- 기존 클래스 상수를 settings getter로 교체
+
+---
+
+### 2.2 auto_rollback_guard.py
+
+**위치**: L135-142  
+**현재 구조**: 클래스 레벨 상수
+
+| 상수명 | 현재 값 | 용도 | 환경변수명 (제안) |
+|-------|--------|-----|------------------|
+| `ERROR_RATE_MAJOR` | 0.1 | Major 등급 에러율 | `SELFHEALING_ROLLBACK_ERROR_RATE_MAJOR` |
+| `ERROR_RATE_CRITICAL` | 0.3 | Critical 등급 에러율 | `SELFHEALING_ROLLBACK_ERROR_RATE_CRITICAL` |
+| `LATENCY_MAJOR_MS` | 5000 | Major 레이턴시 (ms) | `SELFHEALING_ROLLBACK_LATENCY_MAJOR_MS` |
+| `LATENCY_CRITICAL_MS` | 10000 | Critical 레이턴시 (ms) | `SELFHEALING_ROLLBACK_LATENCY_CRITICAL_MS` |
+| `CONSECUTIVE_FAILURES_ALERT` | 3 | 알림 발생 실패 횟수 | `SELFHEALING_ROLLBACK_FAILURES_ALERT` |
+| `CONSECUTIVE_FAILURES_EMERGENCY` | 5 | 긴급상태 실패 횟수 | `SELFHEALING_ROLLBACK_FAILURES_EMERGENCY` |
+
+**구현 방안**:
+- `settings/auto_rollback.py` 신규 생성
+- 기존 상수를 property로 변경하여 settings에서 값을 가져옴
+
+---
+
+### 2.3 adaptive_jitter.py
+
+**위치**: L43-46  
+**현재 구조**: 클래스 레벨 상수
+
+| 상수명 | 현재 값 | 용도 | 환경변수명 (제안) |
+|-------|--------|-----|------------------|
+| `ERROR_BUDGET_DANGER_THRESHOLD` | 0.2 | 에러 버짓 위험 임계값 | `SELFHEALING_JITTER_BUDGET_DANGER_THRESHOLD` |
+| `ERROR_BUDGET_SAFE_THRESHOLD` | 0.5 | 에러 버짓 안전 임계값 | `SELFHEALING_JITTER_BUDGET_SAFE_THRESHOLD` |
+| `LOAD_HIGH_THRESHOLD` | 0.8 | 고부하 임계값 | `SELFHEALING_JITTER_LOAD_HIGH_THRESHOLD` |
+| `LOAD_LOW_THRESHOLD` | 0.3 | 저부하 임계값 | `SELFHEALING_JITTER_LOAD_LOW_THRESHOLD` |
+
+**구현 방안**:
+- 기존 `settings/jitter.py` 확장
+- 새로운 threshold 필드 추가
+
+---
+
+### 2.4 safety_bounds.py
+
+**위치**: L53-90  
+**현재 구조**: 딕셔너리 기반 바운드 정의
+
+| 설정 그룹 | min | max | max_change_per_cycle |
+|----------|-----|-----|---------------------|
+| timeout_ms | 100 | 30000 | 0.3 |
+| max_retries | 0 | 10 | 0.5 |
+| failure_threshold | 0.1 | 0.9 | 0.2 |
+| backoff_factor | 0.01 | 1.0 | 0.5 |
+| batch_size | 10 | 10000 | 0.2 |
+| concurrency | 10 | 5000 | 0.3 |
+| half_open_timeout_ms | 1000 | 60000 | 0.3 |
+| success_threshold | 1 | 100 | 0.2 |
+
+**구현 방안**:
+- `settings/safety_bounds.py` 신규 생성
+- 중첩된 Pydantic 모델로 각 바운드 그룹 정의
+- 환경변수: `SELFHEALING_BOUNDS_{GROUP}_{FIELD}` 형식
+
+---
+
+### 2.5 state_cache.py
+
+**위치**: L38-39  
+**현재 구조**: 클래스 레벨 상수
+
+| 상수명 | 현재 값 | 용도 | 환경변수명 (제안) |
+|-------|--------|-----|------------------|
+| `BASE_TTL` | 5.0 | 기본 TTL (초) | `SELFHEALING_STATE_CACHE_BASE_TTL` |
+| `JITTER_RANGE` | 0.5 | 랜덤 지터 범위 | `SELFHEALING_STATE_CACHE_JITTER_RANGE` |
+
+**구현 방안**:
+- `settings/state_cache.py` 신규 생성
+
+---
+
+### 2.6 resource_monitor.py
+
+**위치**: L41  
+**현재 구조**: 클래스 레벨 상수
+
+| 상수명 | 현재 값 | 용도 | 환경변수명 (제안) |
+|-------|--------|-----|------------------|
+| `DEFAULT_SAFETY_MARGIN` | 0.15 | 기본 안전 마진 | `SELFHEALING_RESOURCE_SAFETY_MARGIN` |
+
+**구현 방안**:
+- 기존 core 관련 settings 모듈에 추가
+
+---
+
+### 2.7 apply_strategy.py
+
+**위치**: L101-126  
+**현재 구조**: ApplyPlan 객체 내 기본값
+
+| 전략 | delay_seconds | 용도 |
+|-----|--------------|------|
+| IMMEDIATE | 10 | 즉시 적용 |
+| GRADUAL | 10 | 점진적 적용 |
+| CANARY_FIRST | 30 | 카나리 우선 |
+| PEAK_AVOIDANCE | 30 | 피크 회피 |
+| MAINTENANCE_WINDOW | 60 | 유지보수 윈도우 |
+| STAGED_ROLLOUT | 30 | 단계적 롤아웃 |
+
+**구현 방안**:
+- `settings/apply_strategy.py` 신규 생성
+- 전략별 딜레이 값을 환경변수로 설정 가능하게 함
+
+---
+
+### 2.8 decision_engine.py
+
+**위치**: L119, L244-267  
+**현재 구조**: 클래스 상수 및 조건문 내 매직 넘버
+
+| 항목 | 현재 값 | 용도 |
+|-----|--------|------|
+| `MIN_CHANGE_RATIO` | 0.05 | 최소 변경 비율 |
+| sample_confidence 매핑 | 0.3~0.9 | 샘플 수 기반 신뢰도 |
+| stability_factor 매핑 | 0.7~1.0 | CV 기반 안정성 계수 |
+
+**구현 방안**:
+- `settings/decision_engine.py` 신규 생성
+- confidence/stability 매핑은 nested settings로 정의
+
+---
+
+## 3. 신규 Settings 모듈 구조
+
+```
+settings/
+├── runtime_feedback.py     # NEW
+├── auto_rollback.py        # NEW
+├── safety_bounds.py        # NEW
+├── state_cache.py          # NEW
+├── apply_strategy.py       # NEW
+├── decision_engine.py      # NEW
+├── jitter.py               # EXTEND
+└── ... (기존 파일들)
+```
+
+---
+
+## 4. 구현 순서
+
+### Step 1: Settings 모듈 생성 (1-2일)
+1. `settings/runtime_feedback.py` 생성
+2. `settings/auto_rollback.py` 생성
+3. `settings/safety_bounds.py` 생성
+4. `settings/state_cache.py` 생성
+5. `settings/apply_strategy.py` 생성
+6. `settings/decision_engine.py` 생성
+
+### Step 2: 기존 Settings 확장 (0.5일)
+7. `settings/jitter.py`에 threshold 필드 추가
+
+### Step 3: Core 모듈 리팩토링 (2-3일)
+8. `core/runtime_feedback.py` - settings 연동
+9. `core/auto_rollback_guard.py` - settings 연동
+10. `core/adaptive_jitter.py` - settings 연동
+11. `core/safety_bounds.py` - settings 연동
+12. `core/state_cache.py` - settings 연동
+13. `core/resource_monitor.py` - settings 연동
+14. `core/apply_strategy.py` - settings 연동
+15. `core/decision_engine.py` - settings 연동
+
+### Step 4: 테스트 업데이트 (1일)
+16. 단위 테스트에 환경변수 모킹 추가
+17. 통합 테스트 검증
+
+### Step 5: 문서화 (0.5일)
+18. 환경변수 문서 업데이트
+19. 마이그레이션 가이드 작성
+
+---
+
+## 5. 예상 소요 시간
+
+| 단계 | 예상 소요 |
+|-----|----------|
+| Settings 모듈 생성 | 1-2일 |
+| 기존 Settings 확장 | 0.5일 |
+| Core 모듈 리팩토링 | 2-3일 |
+| 테스트 업데이트 | 1일 |
+| 문서화 | 0.5일 |
+| **총계** | **5-7일** |
+
+---
+
+## 6. 위험 요소 및 완화 방안
+
+| 위험 | 영향도 | 완화 방안 |
+|-----|-------|----------|
+| 기존 테스트 실패 | 높음 | 기본값을 현재 하드코딩된 값과 동일하게 설정 |
+| 순환 임포트 | 중간 | settings는 최소 의존성으로 유지 |
+| 런타임 오버헤드 | 낮음 | settings 인스턴스 캐싱 활용 |
+| 환경변수 충돌 | 낮음 | `SELFHEALING_` 네임스페이스 일관 적용 |
+
+---
+
+## 7. 검증 체크리스트
+
+- [ ] 모든 신규 settings 모듈이 Pydantic v1/v2 호환
+- [ ] 환경변수 없이 기본값으로 정상 동작
+- [ ] 환경변수 설정 시 값 오버라이드 확인
+- [ ] 기존 단위 테스트 100% 통과
+- [ ] 통합 테스트 통과
+- [ ] mypy 타입 체크 통과
