@@ -16,8 +16,14 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _get_default_retention_days() -> int:
+    """Get default S3 WORM retention days from settings."""
+    return get_audit_integrity_settings().s3_worm_retention_days
 
 
 class S3WORMBackend(AuditBackend):
@@ -39,7 +45,7 @@ class S3WORMBackend(AuditBackend):
         self,
         bucket: str = "selfhealing-audit-logs",
         prefix: str = "audit/",
-        retention_days: int = 365,
+        retention_days: Optional[int] = None,
         retention_mode: str = "GOVERNANCE",  # or "COMPLIANCE"
         region: Optional[str] = None,
     ):
@@ -49,13 +55,13 @@ class S3WORMBackend(AuditBackend):
         Args:
             bucket: S3 bucket name (must have Object Lock enabled)
             prefix: Key prefix for audit logs
-            retention_days: Object retention period in days
+            retention_days: Object retention period in days (default from AuditIntegritySettings)
             retention_mode: GOVERNANCE (can be overridden) or COMPLIANCE (immutable)
             region: AWS region
         """
         self._bucket = bucket
         self._prefix = prefix
-        self._retention_days = retention_days
+        self._retention_days = retention_days if retention_days is not None else _get_default_retention_days()
         self._retention_mode = retention_mode
         self._region = region
         self._client = None

@@ -376,10 +376,55 @@ Audit 모듈은 규제 준수와 밀접한 관련이 있으므로:
 - [x] lock timeout 검증 (timeout > blocking_timeout)
 
 **남은 작업 (Step 3 이후):**
-- [ ] Audit 모듈 코드에 settings 연동
-- [ ] 환경변수 없이 기본값으로 정상 동작 검증
-- [ ] Hash Chain 무결성 검증 통과
-- [ ] Cold Storage 아카이브 정상 동작
-- [ ] Health Score 계산 정상 동작
-- [ ] 기존 단위 테스트 100% 통과
-- [ ] 컴플라이언스 요구사항 충족 확인
+- [x] Audit 모듈 코드에 settings 연동
+- [x] 환경변수 없이 기본값으로 정상 동작 검증
+- [x] Hash Chain 무결성 검증 통과
+- [x] Cold Storage 아카이브 정상 동작
+- [x] Health Score 계산 정상 동작
+- [x] 기존 단위 테스트 100% 통과
+- [x] 컴플라이언스 요구사항 충족 확인
+
+---
+
+### Step 3 완료 (2026-01-25)
+
+**Audit 모듈 리팩토링 완료 항목:**
+- [x] `audit/hash_chain_safety.py` - settings 연동
+  - `AtomicMergeSwap`: `_timeout`, `_blocking_timeout` → HashChainSettings
+  - `ShardedDateLock`: `_timeout`, `_blocking_timeout` → HashChainSettings
+  - `IntegrityAuditTrail`: `_max_redis_entries` → HashChainSettings
+- [x] `audit/cascade_auditor.py` - settings 연동
+  - `CascadeEventAuditor._max_index_size` → CascadeRetentionSettings
+- [x] `audit/integrity/anchor.py` - settings 연동
+  - `DailyHashAnchor._retention_days` → AuditIntegritySettings
+- [x] `audit/resilience/buffer.py` - settings 연동
+  - `InMemoryAuditBuffer._max_entries`, `_flush_interval_seconds` → ResilientRecorderSettings
+- [x] `audit/integrity/cross_cluster_linker.py` - settings 연동
+  - `CrossClusterAuditLinker._local_anchor_ttl`, `_global_anchor_ttl` → AuditIntegritySettings
+- [x] `audit/integrity/health_score.py` - settings 연동
+  - `IntegrityHealthScore._healthy_threshold`, `_warning_threshold`, `_critical_threshold` → AuditIntegritySettings
+- [x] `audit/audit_watchdog.py` - 이미 `from_settings()` 메서드로 연동됨
+- [x] `audit/config.py` - settings 연동
+  - `get_recommended_retention()` 기본값 → AuditSettings
+- [x] `audit/backends/s3_worm.py` - settings 연동
+  - `S3WORMBackend._retention_days` → AuditIntegritySettings
+
+**이미 연동된 파일 (Step 1,2):**
+- [x] `audit/integrity/sequence.py` - 이미 AuditIntegritySettings 사용
+- [x] `audit/integrity/cold_storage.py` - 이미 AuditIntegritySettings 사용
+
+**하위 호환성 유지:**
+- 모든 클래스에 레거시 클래스 상수 유지 (`DEFAULT_TIMEOUT_SECONDS`, `MAX_INDEX_SIZE` 등)
+- 생성자에서 `Optional` 파라미터로 명시적 오버라이드 지원
+
+**테스트 파일 추가:**
+- [x] `tests/unit/audit/test_audit_module_settings_integration.py` (22개 테스트)
+  - Settings 연동 검증 테스트
+  - 환경변수 오버라이드 테스트
+  - 명시적 값 오버라이드 테스트
+  - 하위 호환성 테스트 (레거시 상수 접근)
+
+**테스트 결과:**
+- 22개 통합 테스트 통과
+- 31개 설정 테스트 통과
+- 총 53개 테스트 통과

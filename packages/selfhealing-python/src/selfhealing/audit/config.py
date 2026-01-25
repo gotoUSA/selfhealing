@@ -197,6 +197,12 @@ COMPLIANCE_RETENTION_DAYS = {
 }
 
 
+def _get_default_max_retention() -> int:
+    """Get default max retention days from settings."""
+    from selfhealing.settings.audit_settings import get_audit_settings
+    return get_audit_settings().compliance_max_retention_days
+
+
 def get_recommended_retention(standards: List[str]) -> int:
     """
     규정 목록에 따른 권장 보존 기간 반환.
@@ -207,7 +213,7 @@ def get_recommended_retention(standards: List[str]) -> int:
     Returns:
         최대 보존 기간 (일)
     """
-    max_days = 365  # 기본 1년
+    max_days = _get_default_max_retention()
     
     for std in standards:
         days = COMPLIANCE_RETENTION_DAYS.get(std.upper())

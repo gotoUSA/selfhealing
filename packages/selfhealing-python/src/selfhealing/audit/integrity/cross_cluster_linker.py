@@ -6,12 +6,6 @@ Cross-Cluster Audit Linker.
 설계 원칙:
 - 체인은 클러스터별로 독립 (Local Chain) - 성능 보장
 - 일일 앵커만 글로벌 저장소에 통합 (Global Anchoring) - 전사 무결성
-
-코드 근거:
-- redis_manager.py: RedisHashChainManager 존재 (단일 클러스터)
-- 43번 문서: DailyHashAnchor 설계 존재 (미구현)
-
-Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 from __future__ import annotations
 
@@ -22,7 +16,19 @@ from dataclasses import dataclass, field
 from datetime import datetime, date, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
+
 logger = logging.getLogger(__name__)
+
+
+def _get_local_anchor_ttl_days() -> int:
+    """Get local anchor TTL from settings."""
+    return get_audit_integrity_settings().cross_cluster_local_ttl_days
+
+
+def _get_global_anchor_ttl_days() -> int:
+    """Get global anchor TTL from settings."""
+    return get_audit_integrity_settings().cross_cluster_global_ttl_days
 
 
 @dataclass
@@ -125,7 +131,7 @@ class CrossClusterAuditLinker:
     GLOBAL_ANCHOR_KEY_TEMPLATE = "selfhealing:global:anchor:{date}"
     GLOBAL_ANCHOR_LIST_KEY = "selfhealing:global:anchor:list"
     
-    # TTL
+    # Legacy constants for backward compatibility
     LOCAL_ANCHOR_TTL_DAYS = 90
     GLOBAL_ANCHOR_TTL_DAYS = 365
     
@@ -135,6 +141,8 @@ class CrossClusterAuditLinker:
         global_redis: Optional[Any] = None,
         cluster_identity: Optional["ClusterIdentity"] = None,
         key_prefix: str = "selfhealing:",
+        local_anchor_ttl_days: Optional[int] = None,
+        global_anchor_ttl_days: Optional[int] = None,
     ):
         """
         Initialize CrossClusterAuditLinker.
@@ -144,11 +152,15 @@ class CrossClusterAuditLinker:
             global_redis: 글로벌 Redis 클라이언트 (없으면 local 사용)
             cluster_identity: 클러스터 식별 정보
             key_prefix: Redis 키 프리픽스
+            local_anchor_ttl_days: 로컬 앵커 TTL (default from AuditIntegritySettings)
+            global_anchor_ttl_days: 글로벌 앵커 TTL (default from AuditIntegritySettings)
         """
         self._local_redis = local_redis
         self._global_redis = global_redis or local_redis
         self._identity = cluster_identity
         self._key_prefix = key_prefix
+        self._local_anchor_ttl = local_anchor_ttl_days if local_anchor_ttl_days is not None else _get_local_anchor_ttl_days()
+        self._global_anchor_ttl = global_anchor_ttl_days if global_anchor_ttl_days is not None else _get_global_anchor_ttl_days()
         self._initialized = False
     
     def _ensure_initialized(self) -> None:
@@ -233,7 +245,7 @@ class CrossClusterAuditLinker:
             self._local_redis.set(
                 anchor_key,
                 json.dumps(anchor.to_dict()),
-                ex=self.LOCAL_ANCHOR_TTL_DAYS * 86400
+                ex=self._local_anchor_ttl * 86400
             )
             
             logger.info(
@@ -327,7 +339,7 @@ class CrossClusterAuditLinker:
             self._global_redis.set(
                 global_key,
                 json.dumps(global_anchor.to_dict()),
-                ex=self.GLOBAL_ANCHOR_TTL_DAYS * 86400
+                ex=self._global_anchor_ttl * 86400
             )
             
             # 앵커 목록에 추가

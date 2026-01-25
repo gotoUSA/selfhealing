@@ -13,9 +13,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from selfhealing.audit.integrity.models import compute_hash
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_anchor_retention_days() -> int:
+    """Get anchor retention days from settings."""
+    return get_audit_integrity_settings().anchor_retention_days
 
 
 class DailyHashAnchor:
@@ -38,19 +44,21 @@ class DailyHashAnchor:
         {prefix}audit:hash_chain:anchor:{YYYY-MM-DD} -> {sequence, hash, timestamp}
         
     Retention:
-        Anchors are automatically deleted after 90 days (configurable).
+        Anchors are automatically deleted after 90 days (configurable via AuditIntegritySettings).
         This provides sufficient history for audits while limiting storage.
     """
     
     ANCHOR_KEY_PREFIX = "audit:hash_chain:anchor:"
     STATE_KEY = "audit:hash_chain:state"
+    
+    # Legacy constant for backward compatibility
     DEFAULT_RETENTION_DAYS = 90
     
     def __init__(
         self,
         redis_client: Any,
         key_prefix: str = "selfhealing:",
-        retention_days: int = DEFAULT_RETENTION_DAYS,
+        retention_days: Optional[int] = None,
     ):
         """
         Initialize DailyHashAnchor.
@@ -58,11 +66,11 @@ class DailyHashAnchor:
         Args:
             redis_client: Redis client instance
             key_prefix: Key prefix for Redis keys
-            retention_days: Number of days to retain anchors
+            retention_days: Number of days to retain anchors (default from AuditIntegritySettings)
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._retention_days = retention_days
+        self._retention_days = retention_days if retention_days is not None else _get_anchor_retention_days()
     
     def _get_anchor_key(self, date: str) -> str:
         """Build Redis key for anchor."""

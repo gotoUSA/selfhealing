@@ -22,7 +22,34 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from selfhealing.settings.hash_chain import get_hash_chain_settings
+
 logger = logging.getLogger(__name__)
+
+
+def _get_merge_swap_timeout() -> int:
+    """Get merge swap timeout from settings."""
+    return get_hash_chain_settings().merge_swap_timeout_seconds
+
+
+def _get_merge_swap_blocking_timeout() -> float:
+    """Get merge swap blocking timeout from settings."""
+    return get_hash_chain_settings().merge_swap_blocking_timeout_seconds
+
+
+def _get_date_lock_timeout() -> int:
+    """Get date lock timeout from settings."""
+    return get_hash_chain_settings().date_lock_timeout_seconds
+
+
+def _get_date_lock_blocking_timeout() -> float:
+    """Get date lock blocking timeout from settings."""
+    return get_hash_chain_settings().date_lock_blocking_timeout_seconds
+
+
+def _get_integrity_trail_max_entries() -> int:
+    """Get max Redis entries for integrity trail from settings."""
+    return get_hash_chain_settings().integrity_trail_max_redis_entries
 
 
 # =============================================================================
@@ -482,14 +509,16 @@ class AtomicMergeSwap:
     """
     
     LOCK_KEY = "audit:hash_chain:reconcile:global_lock"
+    
+    # Legacy constant for backward compatibility
     DEFAULT_TIMEOUT_SECONDS = 300  # 5 minutes
     
     def __init__(
         self,
         redis_client: Any,
         key_prefix: str = "selfhealing:",
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-        blocking_timeout: float = 10.0,
+        timeout_seconds: Optional[float] = None,
+        blocking_timeout: Optional[float] = None,
     ):
         """
         Initialize atomic merge swap.
@@ -497,13 +526,13 @@ class AtomicMergeSwap:
         Args:
             redis_client: Redis client instance
             key_prefix: Prefix for Redis keys
-            timeout_seconds: Lock auto-expire time
-            blocking_timeout: Max time to wait for lock
+            timeout_seconds: Lock auto-expire time (default from HashChainSettings)
+            blocking_timeout: Max time to wait for lock (default from HashChainSettings)
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds
-        self._blocking_timeout = blocking_timeout
+        self._timeout = timeout_seconds if timeout_seconds is not None else _get_merge_swap_timeout()
+        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_merge_swap_blocking_timeout()
         self._lock_token: Optional[str] = None
         self.acquired = False
     
@@ -602,6 +631,8 @@ class ShardedDateLock:
     """
     
     LOCK_KEY_PREFIX = "audit:hash_chain:reconcile:date_lock:"
+    
+    # Legacy constant for backward compatibility
     DEFAULT_TIMEOUT_SECONDS = 120  # 2 minutes per date
     
     def __init__(
@@ -609,8 +640,8 @@ class ShardedDateLock:
         redis_client: Any,
         date: str,
         key_prefix: str = "selfhealing:",
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-        blocking_timeout: float = 5.0,
+        timeout_seconds: Optional[float] = None,
+        blocking_timeout: Optional[float] = None,
     ):
         """
         Initialize date-specific lock.
@@ -619,14 +650,14 @@ class ShardedDateLock:
             redis_client: Redis client instance
             date: Date string (YYYY-MM-DD)
             key_prefix: Prefix for Redis keys
-            timeout_seconds: Lock auto-expire time
-            blocking_timeout: Max time to wait (short, to try next date)
+            timeout_seconds: Lock auto-expire time (default from HashChainSettings)
+            blocking_timeout: Max time to wait (default from HashChainSettings)
         """
         self._redis = redis_client
         self._date = date
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds
-        self._blocking_timeout = blocking_timeout
+        self._timeout = timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
+        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_date_lock_blocking_timeout()
         self._lock_token: Optional[str] = None
         self.acquired = False
     
@@ -722,6 +753,8 @@ class IntegrityAuditTrail:
     """
     
     REDIS_KEY = "audit:hash_chain:integrity_trail"
+    
+    # Legacy constant for backward compatibility
     MAX_REDIS_ENTRIES = 1000
     
     def __init__(
@@ -729,6 +762,7 @@ class IntegrityAuditTrail:
         redis_client: Optional[Any] = None,
         log_dir: Optional[Path] = None,
         key_prefix: str = "selfhealing:",
+        max_redis_entries: Optional[int] = None,
     ):
         """
         Initialize integrity audit trail.
@@ -737,10 +771,12 @@ class IntegrityAuditTrail:
             redis_client: Redis client (optional, for Redis storage)
             log_dir: Directory for file storage (optional)
             key_prefix: Prefix for Redis keys
+            max_redis_entries: Max entries in Redis list (default from HashChainSettings)
         """
         self._redis = redis_client
         self._log_dir = Path(log_dir) if log_dir else None
         self._key_prefix = key_prefix
+        self._max_redis_entries = max_redis_entries if max_redis_entries is not None else _get_integrity_trail_max_entries()
         self._lock = threading.Lock()
         
         if self._log_dir:
@@ -788,7 +824,7 @@ class IntegrityAuditTrail:
                 try:
                     redis_key = self._get_redis_key()
                     self._redis.lpush(redis_key, json.dumps(event))
-                    self._redis.ltrim(redis_key, 0, self.MAX_REDIS_ENTRIES - 1)
+                    self._redis.ltrim(redis_key, 0, self._max_redis_entries - 1)
                 except Exception as e:
                     logger.warning(f"[IntegrityTrail] Redis write failed: {e}")
             

@@ -11,12 +11,6 @@ Purpose:
     - "Current integrity: 100%"
     - "Today: 3 potential chain breaks auto-repaired"
     - "Last 24h: 0 orphaned sequences"
-
-Industry Standards:
-    - SRE Golden Signals: Latency, Traffic, Errors, Saturation
-    - Netflix Zuul: Circuit breaker health dashboards
-    - Uber: System health score aggregation
-    - Google SRE: Error budgets with visual indicators
 """
 
 from __future__ import annotations
@@ -28,7 +22,24 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from selfhealing.settings.audit_integrity import get_audit_integrity_settings
+
 logger = logging.getLogger(__name__)
+
+
+def _get_healthy_threshold() -> float:
+    """Get healthy threshold from settings."""
+    return get_audit_integrity_settings().health_healthy_threshold
+
+
+def _get_warning_threshold() -> float:
+    """Get warning threshold from settings."""
+    return get_audit_integrity_settings().health_warning_threshold
+
+
+def _get_critical_threshold() -> float:
+    """Get critical threshold from settings."""
+    return get_audit_integrity_settings().health_critical_threshold
 
 
 @dataclass
@@ -106,7 +117,7 @@ class IntegrityHealthScore:
     GAUGE_RECOVERIES_TODAY = "selfhealing_integrity_recoveries_today"
     COUNTER_TOTAL_RECOVERIES = "selfhealing_integrity_recoveries_total"
     
-    # Health score thresholds
+    # Legacy constants for backward compatibility
     HEALTHY_THRESHOLD = 95.0
     WARNING_THRESHOLD = 80.0
     CRITICAL_THRESHOLD = 50.0
@@ -115,6 +126,9 @@ class IntegrityHealthScore:
         self,
         redis_client: Optional[Any] = None,
         prometheus_registry: Optional[Any] = None,
+        healthy_threshold: Optional[float] = None,
+        warning_threshold: Optional[float] = None,
+        critical_threshold: Optional[float] = None,
     ):
         """
         Initialize IntegrityHealthScore.
@@ -122,9 +136,17 @@ class IntegrityHealthScore:
         Args:
             redis_client: Redis client for fetching chain state
             prometheus_registry: Prometheus registry for metrics
+            healthy_threshold: Healthy score threshold (default from AuditIntegritySettings)
+            warning_threshold: Warning score threshold (default from AuditIntegritySettings)
+            critical_threshold: Critical score threshold (default from AuditIntegritySettings)
         """
         self._redis = redis_client
         self._lock = threading.Lock()
+        
+        # Health thresholds from settings
+        self._healthy_threshold = healthy_threshold if healthy_threshold is not None else _get_healthy_threshold()
+        self._warning_threshold = warning_threshold if warning_threshold is not None else _get_warning_threshold()
+        self._critical_threshold = critical_threshold if critical_threshold is not None else _get_critical_threshold()
         
         # In-memory event buffer (last 24h)
         self._recovery_events: List[RecoveryEvent] = []
@@ -303,7 +325,7 @@ class IntegrityHealthScore:
             metrics.health_score = 100.0  # No sequences = healthy (no issues)
         
         # Determine if healthy
-        metrics.is_healthy = metrics.health_score >= self.HEALTHY_THRESHOLD
+        metrics.is_healthy = metrics.health_score >= self._healthy_threshold
         
         # Days since last break
         if self._last_break_date:
@@ -396,11 +418,11 @@ class IntegrityHealthScore:
         """
         metrics = self.get_current_metrics()
         
-        if metrics.health_score >= self.HEALTHY_THRESHOLD:
+        if metrics.health_score >= self._healthy_threshold:
             return "HEALTHY"
-        elif metrics.health_score >= self.WARNING_THRESHOLD:
+        elif metrics.health_score >= self._warning_threshold:
             return "WARNING"
-        elif metrics.health_score >= self.CRITICAL_THRESHOLD:
+        elif metrics.health_score >= self._critical_threshold:
             return "CRITICAL"
         else:
             return "CRITICAL"
@@ -442,9 +464,9 @@ class IntegrityHealthScore:
         """Generate human-readable status message."""
         if metrics.health_score >= 100:
             base = "Integrity: 100% - All sequences verified"
-        elif metrics.health_score >= self.HEALTHY_THRESHOLD:
+        elif metrics.health_score >= self._healthy_threshold:
             base = f"Integrity: {metrics.health_score:.1f}% - Healthy"
-        elif metrics.health_score >= self.WARNING_THRESHOLD:
+        elif metrics.health_score >= self._warning_threshold:
             base = f"Integrity: {metrics.health_score:.1f}% - Warning: {metrics.degraded_sequences} degraded"
         else:
             base = f"Integrity: {metrics.health_score:.1f}% - Critical: Immediate attention required"

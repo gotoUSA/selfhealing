@@ -13,8 +13,20 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from selfhealing.settings.resilient_recorder import get_resilient_recorder_settings
+
 
 logger = logging.getLogger(__name__)
+
+
+def _get_max_entries() -> int:
+    """Get max entries from settings."""
+    return get_resilient_recorder_settings().memory_buffer_max_entries
+
+
+def _get_flush_interval() -> float:
+    """Get flush interval from settings."""
+    return get_resilient_recorder_settings().memory_buffer_flush_interval
 
 
 class InMemoryAuditBuffer:
@@ -25,9 +37,9 @@ class InMemoryAuditBuffer:
     시스템 정상화 시 파일로 플러시합니다.
     
     설계 원칙:
-    - 최대 10,000개 엔트리 보관 (메모리 고갈 방지)
+    - 최대 엔트리 수는 ResilientRecorderSettings에서 설정 (기본 10,000개)
     - FIFO: 용량 초과 시 가장 오래된 엔트리 삭제
-    - 주기적 플러시 시도 (30초 간격)
+    - 주기적 플러시 시도 (기본 30초 간격)
     
     Thread-safe: RLock 사용
     """
@@ -35,17 +47,30 @@ class InMemoryAuditBuffer:
     _instance: Optional["InMemoryAuditBuffer"] = None
     _lock = threading.Lock()
     
+    # Legacy constants for backward compatibility
     MAX_ENTRIES = 10_000
     FLUSH_INTERVAL_SECONDS = 30.0
     
-    def __init__(self):
-        """InMemoryAuditBuffer 초기화."""
+    def __init__(
+        self,
+        max_entries: Optional[int] = None,
+        flush_interval_seconds: Optional[float] = None,
+    ):
+        """
+        InMemoryAuditBuffer 초기화.
+        
+        Args:
+            max_entries: 최대 엔트리 수 (default from ResilientRecorderSettings)
+            flush_interval_seconds: 플러시 간격 (default from ResilientRecorderSettings)
+        """
         self._buffer: List[Dict[str, Any]] = []
         self._buffer_lock = threading.RLock()
         self._last_flush_attempt: Optional[datetime] = None
         self._flush_failures: int = 0
         self._total_dropped: int = 0
         self._total_buffered: int = 0
+        self._max_entries = max_entries if max_entries is not None else _get_max_entries()
+        self._flush_interval_seconds = flush_interval_seconds if flush_interval_seconds is not None else _get_flush_interval()
     
     @classmethod
     def get_instance(cls) -> "InMemoryAuditBuffer":
@@ -74,7 +99,7 @@ class InMemoryAuditBuffer:
         """
         with self._buffer_lock:
             dropped = False
-            if len(self._buffer) >= self.MAX_ENTRIES:
+            if len(self._buffer) >= self._max_entries:
                 # FIFO: 가장 오래된 엔트리 삭제
                 self._buffer.pop(0)
                 self._total_dropped += 1
@@ -141,7 +166,8 @@ class InMemoryAuditBuffer:
         with self._buffer_lock:
             return {
                 "buffered_entries": len(self._buffer),
-                "max_entries": self.MAX_ENTRIES,
+                "max_entries": self._max_entries,
+                "flush_interval_seconds": self._flush_interval_seconds,
                 "total_buffered": self._total_buffered,
                 "total_dropped": self._total_dropped,
                 "flush_failures": self._flush_failures,

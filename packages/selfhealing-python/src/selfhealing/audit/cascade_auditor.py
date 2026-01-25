@@ -56,8 +56,14 @@ from selfhealing.audit.cascade_event import (
     get_priority_for_trigger,
     CascadeEventPriority,
 )
+from selfhealing.settings.cascade_retention import get_cascade_retention_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _get_max_cascade_index_size() -> int:
+    """Get max cascade index size from settings."""
+    return get_cascade_retention_settings().max_cascade_index_size
 
 
 # =============================================================================
@@ -94,17 +100,23 @@ class CascadeEventAuditor:
     CASCADE_INDEX_KEY = "selfhealing:{namespace}:audit:cascade_index"
     LAST_HASH_KEY = "selfhealing:{namespace}:audit:cascade_last_hash"
     
-    # 인덱스 최대 크기
+    # Legacy constant for backward compatibility
     MAX_INDEX_SIZE = 10000
     
-    def __init__(self, enable_load_shedding: bool = True) -> None:
+    def __init__(
+        self,
+        enable_load_shedding: bool = True,
+        max_index_size: Optional[int] = None,
+    ) -> None:
         """
         Args:
             enable_load_shedding: Load Shedding 활성화 여부
+            max_index_size: 인덱스 최대 크기 (default from CascadeRetentionSettings)
         """
         self._lock = threading.RLock()
         self._enable_load_shedding = enable_load_shedding
         self._load_shedding = None  # Lazy init
+        self._max_index_size = max_index_size if max_index_size is not None else _get_max_cascade_index_size()
     
     def _get_backend(self):
         """State backend 획득."""
@@ -774,8 +786,8 @@ class CascadeEventAuditor:
         ids.insert(0, cascade_id)
         
         # 최대 크기 유지
-        if len(ids) > self.MAX_INDEX_SIZE:
-            ids = ids[:self.MAX_INDEX_SIZE]
+        if len(ids) > self._max_index_size:
+            ids = ids[:self._max_index_size]
         
         backend.set(key, {"ids": ids})
     
@@ -833,7 +845,7 @@ class CascadeEventAuditor:
         decision = load_shedding.should_accept(
             trigger_type=trigger_type,
             buffer_size=buffer_size,
-            buffer_capacity=self.MAX_INDEX_SIZE,
+            buffer_capacity=self._max_index_size,
         )
         
         if not decision["accepted"]:
@@ -1090,7 +1102,7 @@ class CascadeEventAuditor:
         
         status = load_shedding.get_status(
             buffer_size=buffer_size,
-            buffer_capacity=self.MAX_INDEX_SIZE,
+            buffer_capacity=self._max_index_size,
         )
         status["enabled"] = True
         status["namespace"] = namespace
