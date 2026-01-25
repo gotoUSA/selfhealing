@@ -244,6 +244,39 @@ from selfhealing.settings.regional_recovery_policy import (
     reset_regional_recovery_policy_settings,
 )
 
+# Core Module Settings (103_HARDCODED_CONFIG_CORE_REFACTORING.md Step 1, 2)
+from selfhealing.settings.runtime_feedback import (
+    RuntimeFeedbackSettings,
+    get_runtime_feedback_settings,
+    reset_runtime_feedback_settings,
+)
+from selfhealing.settings.auto_rollback import (
+    AutoRollbackSettings,
+    get_auto_rollback_settings,
+    reset_auto_rollback_settings,
+)
+from selfhealing.settings.safety_bounds import (
+    SafetyBoundsSettings,
+    ParameterBoundConfig,
+    get_safety_bounds_settings,
+    reset_safety_bounds_settings,
+)
+from selfhealing.settings.state_cache import (
+    StateCacheSettings,
+    get_state_cache_settings,
+    reset_state_cache_settings,
+)
+from selfhealing.settings.apply_strategy import (
+    ApplyStrategySettings,
+    get_apply_strategy_settings,
+    reset_apply_strategy_settings,
+)
+from selfhealing.settings.decision_engine import (
+    DecisionEngineSettings,
+    get_decision_engine_settings,
+    reset_decision_engine_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -497,4 +530,30 @@ __all__ = [
     "RegionalRecoveryPolicySettings",
     "get_regional_recovery_policy_settings",
     "reset_regional_recovery_policy_settings",
+    # Core Module Settings (Runtime Feedback, Auto Rollback, Safety Bounds, etc.)
+    # Runtime Feedback
+    "RuntimeFeedbackSettings",
+    "get_runtime_feedback_settings",
+    "reset_runtime_feedback_settings",
+    # Auto Rollback
+    "AutoRollbackSettings",
+    "get_auto_rollback_settings",
+    "reset_auto_rollback_settings",
+    # Safety Bounds
+    "SafetyBoundsSettings",
+    "ParameterBoundConfig",
+    "get_safety_bounds_settings",
+    "reset_safety_bounds_settings",
+    # State Cache
+    "StateCacheSettings",
+    "get_state_cache_settings",
+    "reset_state_cache_settings",
+    # Apply Strategy
+    "ApplyStrategySettings",
+    "get_apply_strategy_settings",
+    "reset_apply_strategy_settings",
+    # Decision Engine
+    "DecisionEngineSettings",
+    "get_decision_engine_settings",
+    "reset_decision_engine_settings",
 ]

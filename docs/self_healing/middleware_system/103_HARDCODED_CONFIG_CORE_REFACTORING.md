@@ -236,9 +236,44 @@ settings/
 
 ## 7. 검증 체크리스트
 
-- [ ] 모든 신규 settings 모듈이 Pydantic v1/v2 호환
-- [ ] 환경변수 없이 기본값으로 정상 동작
-- [ ] 환경변수 설정 시 값 오버라이드 확인
+- [x] 모든 신규 settings 모듈이 Pydantic v2 호환 (2026-01-25 완료)
+- [x] 환경변수 없이 기본값으로 정상 동작 (2026-01-25 완료)
+- [x] 환경변수 설정 시 값 오버라이드 확인 (2026-01-25 완료)
+- [x] 신규 settings 단위 테스트 26개 통과 (2026-01-25 완료)
 - [ ] 기존 단위 테스트 100% 통과
 - [ ] 통합 테스트 통과
 - [ ] mypy 타입 체크 통과
+
+---
+
+## 8. 완료 내역
+
+### Step 1 완료 (2026-01-25)
+
+신규 Settings 모듈 6개 생성:
+
+| 파일 | 환경변수 prefix | 주요 설정 |
+|-----|----------------|----------|
+| `settings/runtime_feedback.py` | `SELFHEALING_RUNTIME_` | max_consecutive_failures, rollback_cooldown, adjustment_wait |
+| `settings/auto_rollback.py` | `SELFHEALING_ROLLBACK_` | error_rate_major/critical, latency_major/critical_ms, failures_alert/emergency |
+| `settings/safety_bounds.py` | `SELFHEALING_BOUNDS_` | 8개 파라미터별 min/max/max_change |
+| `settings/state_cache.py` | `SELFHEALING_STATE_CACHE_` | base_ttl, jitter_range |
+| `settings/apply_strategy.py` | `SELFHEALING_APPLY_` | config 타입별 delay, default_grace_timeout |
+| `settings/decision_engine.py` | `SELFHEALING_DECISION_` | min_change_ratio, 신뢰도/안정성 매핑 |
+
+### Step 2 완료 (2026-01-25)
+
+기존 `settings/jitter.py` 확장:
+
+| 추가 필드 | 기본값 | 설명 |
+|----------|-------|------|
+| `error_budget_danger_threshold` | 0.2 | 에러 버짓 위험 임계값 |
+| `error_budget_safe_threshold` | 0.5 | 에러 버짓 안전 임계값 |
+| `load_high_threshold` | 0.8 | 고부하 임계값 |
+| `load_low_threshold` | 0.3 | 저부하 임계값 |
+
+### 테스트 결과
+
+- 테스트 파일: `packages/selfhealing-python/tests/unit/settings/test_core_module_settings.py`
+- 총 26개 테스트 PASSED
+
