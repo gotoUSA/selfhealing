@@ -171,7 +171,7 @@ services:
     build: .
     command: >
       sh -c "python manage.py migrate --noinput &&
-             python -m pytest tests/ -v --tb=short --no-cov 
+             python -m pytest tests/ -v --tb=short --no-cov
              --ignore=tests/load --ignore=tests/_unclassified --ignore=tests/hybrid -x"
     volumes:
       - .:/code
@@ -257,6 +257,27 @@ services:
       redis:
         condition: service_healthy
 
+  # Settings Redis TTL 통합 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-settings-redis-ttl
+  test-settings-redis-ttl:
+    build: .
+    command: >
+      sh -c "pip install redis pytest -q &&
+             python manage.py migrate --noinput &&
+             python -m pytest tests/integration/selfhealing/test_settings_redis_ttl_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - REDIS_URL=redis://redis:6379/15
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
-

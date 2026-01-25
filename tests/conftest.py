@@ -91,10 +91,30 @@ def _check_db_connection() -> bool:
 
 
 def _check_redis_connection() -> bool:
-    """Redis 연결 확인."""
+    """
+    Redis 연결 확인.
+    
+    테스트용 포트(16379)를 먼저 확인하고, 없으면 기본 포트(6379)도 확인합니다.
+    docker-compose.test.yml을 사용할 때는 16379 포트가 사용됩니다.
+    """
     try:
         import redis
         config = RedisTestConfig()
+        
+        # 테스트용 포트(16379) 먼저 확인
+        try:
+            client = redis.Redis(
+                host=config.DEFAULT_HOST,
+                port=config.TEST_PORT,
+                db=config.TEST_DB,
+            )
+            client.ping()
+            client.close()
+            return True
+        except Exception:
+            pass
+        
+        # 기본 포트(6379) 확인 (로컬 Redis)
         client = redis.Redis(
             host=config.DEFAULT_HOST,
             port=config.DEFAULT_PORT,
