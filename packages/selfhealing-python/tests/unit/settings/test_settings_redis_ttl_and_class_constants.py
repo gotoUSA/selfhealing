@@ -1,15 +1,26 @@
 """
-클래스/모듈 레벨 상수 Settings 연동 테스트 (109 문서).
+Redis TTL 및 클래스 레벨 상수의 Settings 연동 테스트.
 
-테스트 대상:
-1. RateLimitSettings.redis_ttl
-2. AirGapSettings.redis_ttl
-3. AuditSettings.buffer_redis_ttl
-4. ErrorBudgetSettings.multiplier_cache_ttl, multiplier_max
-5. DashboardSettings.stale_threshold_minutes, max_regional_status (기존)
-6. MetricsSettings.snapshot_max_age
-7. SafeGaugeSettings.max_label_combinations
-8. AuditIntegritySettings.archive_threshold_days, cold_retention_years (기존)
+환경 변수를 통해 런타임에 변경 가능한 설정값들의 연동을 검증합니다.
+
+테스트 대상 Settings 필드:
+- RateLimitSettings.redis_ttl: Rate Limit 상태 Redis 저장 TTL
+- AirGapSettings.redis_ttl: Air-Gap 중간 저장소 TTL  
+- AuditSettings.buffer_redis_ttl: 감사 버퍼 Redis TTL
+- ErrorBudgetSettings.multiplier_cache_ttl: 위기 가중치 캐시 TTL
+- ErrorBudgetSettings.multiplier_max: 최대 위기 가중치
+- DashboardSettings.stale_threshold_minutes: 데이터 방치 임계치
+- DashboardSettings.max_regional_status: 리전 상태 표시 수
+- MetricsSettings.snapshot_max_age: 메트릭 스냅샷 최대 유효 기간
+- SafeGaugeSettings.max_label_combinations: Prometheus 레이블 조합 제한
+- AuditIntegritySettings.archive_threshold_days: Cold Storage 아카이브 임계치
+- AuditIntegritySettings.cold_retention_years: Cold Storage 보관 기간
+
+테스트 범위:
+1. 기본값 검증
+2. 환경 변수 로드 검증  
+3. 헬퍼 함수 동작 검증
+4. 하위 호환성 (레거시 상수 유지) 검증
 """
 
 import os
@@ -23,7 +34,7 @@ import pytest
 # =============================================================================
 
 class TestRateLimitSettingsRedisTtl:
-    """RateLimitSettings.redis_ttl 필드 테스트."""
+    """Rate Limit Redis 저장소 TTL 설정 테스트."""
 
     def test_default_redis_ttl(self):
         """기본 Redis TTL 값 (3600초)."""
