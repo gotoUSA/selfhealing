@@ -148,6 +148,16 @@ class CeleryTaskSettings(BaseSettings):
         description="스테일 체크 간격 (분)",
     )
 
+    # ==========================================================================
+    # Celery Inspector Timeout (from adapters/queues/celery_adapter.py)
+    # ==========================================================================
+    inspect_timeout: int = Field(
+        default=2,
+        ge=1,
+        le=30,
+        description="Celery inspect 호출 타임아웃 (초). 워커 상태 확인 시 사용.",
+    )
+
     @model_validator(mode="after")
     def validate_time_limits(self) -> "CeleryTaskSettings":
         """soft_time_limit이 time_limit보다 작은지 검증."""

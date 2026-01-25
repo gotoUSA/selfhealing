@@ -97,6 +97,16 @@ class CanarySettings(BaseSettings):
         description="롤아웃 히스토리 조회 기본 limit",
     )
 
+    # ==========================================================================
+    # Propagation Request TTL (from cross_cluster.py line 848)
+    # ==========================================================================
+    propagation_ttl: int = Field(
+        default=604800,
+        ge=3600,
+        le=2592000,
+        description="전파 요청 Redis TTL (초). 기본값 604800 = 7일",
+    )
+
     @field_validator("lock_timeout_minutes")
     @classmethod
     def validate_lock_timeout(cls, v: int) -> int:

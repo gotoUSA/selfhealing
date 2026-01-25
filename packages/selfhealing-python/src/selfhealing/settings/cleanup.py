@@ -154,6 +154,26 @@ class CleanupSettings(BaseSettings):
         description="DLQ 영구 삭제 태스크 재시도 지연 (초)",
     )
 
+    # ==========================================================================
+    # Recovery Session Cleanup (from recovery_tasks.py line 606)
+    # ==========================================================================
+    recovery_max_age_hours: int = Field(
+        default=168,
+        ge=24,
+        le=720,
+        description="복구 세션 보관 기간 (시간). 기본값 168 = 7일",
+    )
+
+    # ==========================================================================
+    # Approval Request Cleanup (from pending_recovery_approval.py line 537)
+    # ==========================================================================
+    approval_cleanup_max_age_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="완료된 승인 요청 보관 기간 (시간)",
+    )
+
     @field_validator("purge_older_than_days")
     @classmethod
     def validate_purge_days(cls, v: int, info) -> int:

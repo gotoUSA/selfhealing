@@ -292,8 +292,19 @@ class TTLCache:
             self._cache.clear()
 
 
+def _create_governance_cache() -> TTLCache:
+    """거버넌스 캐시 생성. Settings에서 TTL을 가져옵니다."""
+    try:
+        from selfhealing.settings.governance import get_governance_settings
+        _settings = get_governance_settings()
+        return TTLCache(default_ttl=_settings.cache_ttl)
+    except Exception:
+        # 설정 로드 실패 시 기본값 사용
+        return TTLCache(default_ttl=30.0)
+
+
 # Global cache instance
-_governance_cache = TTLCache(default_ttl=30.0)
+_governance_cache = _create_governance_cache()
 
 
 def invalidate_governance_cache() -> None:

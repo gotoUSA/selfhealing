@@ -44,6 +44,7 @@ from selfhealing.services.coordination.regional_recovery_policy import (
 )
 from selfhealing.settings.celery_task import get_celery_task_settings
 from selfhealing.settings.recovery_tasks import get_recovery_tasks_settings
+from selfhealing.settings.cleanup import get_cleanup_settings
 
 
 logger = logging.getLogger(__name__)
@@ -605,7 +606,7 @@ def check_stale_pending_recoveries_task(
     queue="selfhealing_maintenance",
 )
 def cleanup_old_recovery_sessions_task(
-    max_age_hours: int = 168,  # 7일
+    max_age_hours: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     오래된 복구 세션 정리 태스크.
@@ -613,12 +614,17 @@ def cleanup_old_recovery_sessions_task(
     지정된 기간 이상 된 완료/중단된 세션을 정리합니다.
     
     Args:
-        max_age_hours: 보관 기간 (시간)
+        max_age_hours: 보관 기간 (시간). None이면 Settings에서 로드.
     
     Returns:
         Dict containing:
         - cleaned_count: 정리된 세션 수
     """
+    # Settings에서 기본값 로드
+    if max_age_hours is None:
+        _cleanup_settings = get_cleanup_settings()
+        max_age_hours = _cleanup_settings.recovery_max_age_hours
+    
     logger.info(f"[cleanup_old_recovery_sessions] max_age={max_age_hours}h")
     
     try:

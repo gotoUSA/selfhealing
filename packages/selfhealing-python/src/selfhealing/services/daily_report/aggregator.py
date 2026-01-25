@@ -10,6 +10,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from selfhealing.settings.daily_report import get_daily_report_settings
+
 from .models import DailyAutonomousReport, TaskResultEntry
 
 logger = logging.getLogger(__name__)
@@ -59,7 +61,8 @@ class DailyReportCollector:
                     "severity": entry.severity,
                 }
             )
-            cache.set(cache_key, current, timeout=86400 * 2)  # 2 days TTL
+            _settings = get_daily_report_settings()
+            cache.set(cache_key, current, timeout=_settings.cache_ttl)
 
         except ImportError:
             # Fallback to memory storage

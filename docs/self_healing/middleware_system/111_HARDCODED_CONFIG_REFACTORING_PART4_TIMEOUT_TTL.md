@@ -172,15 +172,50 @@
 
 | 항목 | 완료 |
 |------|------|
-| Settings 파일 생성/확장 | ☐ |
-| 헬퍼 함수 생성 | ☐ |
-| 코드 수정 | ☐ |
-| 하위 호환성 유지 | ☐ |
-| 단위 테스트 | ☐ |
+| Settings 파일 생성/확장 | ✅ |
+| 헬퍼 함수 생성 | ✅ |
+| 코드 수정 | ✅ |
+| 하위 호환성 유지 | ✅ |
+| 단위 테스트 | ✅ |
 
 ---
 
-## 6. 관련 문서
+## 6. 구현 결과
+
+### 6.1 생성/수정된 Settings 파일
+
+| 파일 | 추가된 필드 | 환경 변수 |
+|------|-------------|-----------|
+| `settings/http_client.py` (신규) | `default_timeout` | `SELFHEALING_HTTP_CLIENT_DEFAULT_TIMEOUT` |
+| `settings/celery_task.py` | `inspect_timeout` | `SELFHEALING_CELERY_INSPECT_TIMEOUT` |
+| `settings/canary.py` | `propagation_ttl` | `SELFHEALING_CANARY_PROPAGATION_TTL` |
+| `settings/daily_report.py` | `cache_ttl` | `SELFHEALING_DAILY_REPORT_CACHE_TTL` |
+| `settings/governance.py` | `cache_ttl` | `SELFHEALING_GOVERNANCE_CACHE_TTL` |
+| `settings/chaos.py` | `experiment_lock_ttl` | `SELFHEALING_CHAOS_EXPERIMENT_LOCK_TTL` |
+| `settings/cleanup.py` | `recovery_max_age_hours`, `approval_cleanup_max_age_hours` | `SELFHEALING_CLEANUP_RECOVERY_MAX_AGE_HOURS`, `SELFHEALING_CLEANUP_APPROVAL_CLEANUP_MAX_AGE_HOURS` |
+
+### 6.2 리팩토링된 코드 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `services/http_client.py` | `timeout` 파라미터가 None이면 Settings에서 로드 |
+| `adapters/queues/celery_adapter.py` | `inspect(timeout=2)` → Settings에서 로드 |
+| `services/canary/cross_cluster.py` | `ttl = 60 * 60 * 24 * 7` → Settings에서 로드 |
+| `services/daily_report/aggregator.py` | `timeout=86400 * 2` → Settings에서 로드 |
+| `services/governance_checks.py` | `TTLCache(default_ttl=30.0)` → Settings에서 로드 |
+| `tasks/chaos_scheduler.py` | `ttl_seconds=120` → Settings에서 로드 |
+| `services/coordination/recovery_tasks.py` | `max_age_hours=168` → Settings에서 로드 |
+| `services/coordination/pending_recovery_approval.py` | `max_age_hours=24` → Settings에서 로드 |
+
+### 6.3 단위 테스트
+
+- 테스트 파일: `tests/unit/settings/test_timeout_ttl_settings_111.py`
+- 테스트 수: 25개
+- 테스트 결과: 모두 통과
+
+---
+
+## 7. 관련 문서
 
 - [108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md](108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
 - [109_HARDCODED_CONFIG_REFACTORING_PART2_CLASS_CONSTANTS.md](109_HARDCODED_CONFIG_REFACTORING_PART2_CLASS_CONSTANTS.md)

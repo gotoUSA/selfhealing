@@ -534,17 +534,26 @@ class PendingRecoveryApprovalManager:
     
     def cleanup_old_requests(
         self,
-        max_age_hours: int = 24,
+        max_age_hours: Optional[int] = None,
     ) -> int:
         """
         오래된 요청 정리.
         
         Args:
-            max_age_hours: 보관 기간 (시간)
+            max_age_hours: 보관 기간 (시간). None이면 Settings에서 로드.
         
         Returns:
             정리된 요청 수
         """
+        # Settings에서 기본값 로드
+        if max_age_hours is None:
+            try:
+                from selfhealing.settings.cleanup import get_cleanup_settings
+                _cleanup_settings = get_cleanup_settings()
+                max_age_hours = _cleanup_settings.approval_cleanup_max_age_hours
+            except Exception:
+                max_age_hours = 24  # 폴백
+        
         with self._lock:
             cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
             to_remove = []

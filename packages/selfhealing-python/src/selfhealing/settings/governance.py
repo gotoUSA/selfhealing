@@ -159,6 +159,16 @@ class GovernanceSettings(BaseSettings):
     )
 
     # ==========================================================================
+    # Governance Check Cache TTL (from governance_checks.py line 296)
+    # ==========================================================================
+    cache_ttl: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="거버넌스 체크 캐시 TTL (초). 시스템 상태 캐싱에 사용.",
+    )
+
+    # ==========================================================================
     # Celery Task 재시도 설정 (check_emergency_mode_expiry_task)
     # ==========================================================================
     expiry_check_max_retries: int = Field(

@@ -48,6 +48,8 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, field
+
+from selfhealing.settings.canary import get_canary_settings
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
@@ -845,7 +847,8 @@ class CrossClusterPropagationRequest:
                 request_id=request.request_id,
             )
             try:
-                ttl = 60 * 60 * 24 * 7  # 7일
+                _settings = get_canary_settings()
+                ttl = _settings.propagation_ttl  # Settings에서 TTL 로드 (기본값: 7일)
                 self.redis_client.setex(
                     key,
                     ttl,

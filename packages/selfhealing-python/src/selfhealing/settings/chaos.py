@@ -189,6 +189,16 @@ class ChaosSettings(BaseSettings):
         description="대기 중인 승인 확인 태스크 최대 재시도 횟수",
     )
 
+    # ==========================================================================
+    # Zombie Hunter Distributed Lock TTL (from chaos_scheduler.py line 441)
+    # ==========================================================================
+    experiment_lock_ttl: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="좀비 실험 롤백용 분산 락 TTL (초). 레이스 컨디션 방지.",
+    )
+
     @field_validator("max_blast_radius", "max_failure_rate")
     @classmethod
     def validate_safety_limits(cls, v: float) -> float:

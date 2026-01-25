@@ -29,6 +29,7 @@ from selfhealing.interfaces.task_queue import (
     TaskNotFoundError,
     TaskTimeoutError,
 )
+from selfhealing.settings.celery_task import get_celery_task_settings
 
 logger = logging.getLogger(__name__)
 
@@ -485,7 +486,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
         """Check if Celery broker and backend are healthy."""
         try:
             # Ping workers
-            inspect = self._app.control.inspect(timeout=2)
+            _settings = get_celery_task_settings()
+            inspect = self._app.control.inspect(timeout=_settings.inspect_timeout)
             ping_result = inspect.ping()
             return ping_result is not None and len(ping_result) > 0
         except Exception as e:
@@ -495,7 +497,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
     def worker_count(self) -> int:
         """Get number of active workers."""
         try:
-            inspect = self._app.control.inspect(timeout=2)
+            _settings = get_celery_task_settings()
+            inspect = self._app.control.inspect(timeout=_settings.inspect_timeout)
             ping_result = inspect.ping()
             if ping_result:
                 return len(ping_result)

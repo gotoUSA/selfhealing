@@ -11,6 +11,8 @@ import logging
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
+from selfhealing.settings.http_client import get_http_client_settings
+
 logger = logging.getLogger(__name__)
 
 # Context variable for chaos experiment status
@@ -41,17 +43,18 @@ class SelfHealingHttpClient:
     def __init__(
         self,
         base_headers: Optional[Dict[str, str]] = None,
-        timeout: float = 30.0,
+        timeout: Optional[float] = None,
     ):
         """
         초기화.
         
         Args:
             base_headers: 모든 요청에 포함할 기본 헤더
-            timeout: 기본 타임아웃 (초)
+            timeout: 기본 타임아웃 (초). None이면 Settings에서 로드.
         """
+        _settings = get_http_client_settings()
         self.base_headers = base_headers or {}
-        self.default_timeout = timeout
+        self.default_timeout = timeout if timeout is not None else _settings.default_timeout
         self._experiment_id: Optional[str] = None
     
     def _get_headers(
