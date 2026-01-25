@@ -116,6 +116,7 @@ class RuntimeFeedbackLoop:
         self._state = FeedbackLoopState.STOPPED
         self._lock = threading.RLock()
         self._running = False
+        self._stop_event = threading.Event()  # 빠른 종료를 위한 이벤트
         self._thread: Optional[threading.Thread] = None
         
         # 롤백용 스냅샷
@@ -142,6 +143,7 @@ class RuntimeFeedbackLoop:
                 return False
             
             self._running = True
+            self._stop_event.clear()  # 이벤트 초기화
             self._state = FeedbackLoopState.RUNNING
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
@@ -153,9 +155,10 @@ class RuntimeFeedbackLoop:
         with self._lock:
             self._running = False
             self._state = FeedbackLoopState.STOPPED
+            self._stop_event.set()  # 대기 중인 스레드 즉시 깨우기
         
         if self._thread:
-            self._thread.join(timeout=5)
+            self._thread.join(timeout=1)  # 1초면 충분 (Event로 즉시 깨어남)
             self._thread = None
         
         logger.info("[RuntimeFeedback] Stopped")
@@ -194,7 +197,9 @@ class RuntimeFeedbackLoop:
                 logger.error(f"[RuntimeFeedback] Loop error: {e}")
                 self._handle_loop_error(e)
             
-            time.sleep(self.interval_seconds)
+            # Event.wait()는 set() 시 즉시 반환 (time.sleep 대신 사용)
+            if self._stop_event.wait(timeout=self.interval_seconds):
+                break  # 종료 신호 수신
     
     def _handle_loop_error(self, error: Exception):
         """루프 에러 핸들링"""

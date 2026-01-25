@@ -86,15 +86,8 @@ class TestRegionalIsolationGate:
         reset_regional_isolation_gate()
         reset_cluster_identity()
     
-    def test_isolate_region_no_redis(self):
-        """Redis 없이 리전 격리 시 False 반환."""
-        from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
-        
-        gate = RegionalIsolationGate(global_redis=None)
-        
-        result = gate.isolate_region("tokyo", reason="Test", duration_seconds=60)
-        
-        assert result is False
+    # NOTE: test_isolate_region_no_redis는 실제 Redis 연결을 시도하므로
+    # tests/integration/selfhealing/test_regional_gate_integration.py로 이동됨
     
     def test_isolate_region_with_mock_redis(self):
         """Mock Redis로 리전 격리."""

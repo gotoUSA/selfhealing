@@ -256,15 +256,8 @@ class TestCrossClusterAuditLinker:
         reset_cross_cluster_audit_linker()
         reset_cluster_identity()
     
-    def test_create_local_anchor_no_redis(self):
-        """Redis 없이 로컬 앵커 생성 시 None 반환."""
-        from selfhealing.audit.integrity.cross_cluster_linker import CrossClusterAuditLinker
-        
-        linker = CrossClusterAuditLinker(local_redis=None, global_redis=None)
-        
-        anchor = linker.create_local_anchor()
-        
-        assert anchor is None
+    # NOTE: test_create_local_anchor_no_redis는 실제 Redis 연결을 시도하므로
+    # tests/integration/selfhealing/test_regional_gate_integration.py로 이동됨
     
     def test_create_local_anchor_with_mock_redis(self):
         """Mock Redis로 로컬 앵커 생성."""

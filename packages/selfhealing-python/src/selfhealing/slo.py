@@ -96,24 +96,6 @@ class SLO:
     fast_burn_rate: float = field(default_factory=lambda: _get_default_fast_burn_rate())
     slow_burn_rate: float = field(default_factory=lambda: _get_default_slow_burn_rate())
 
-
-def _get_default_fast_burn_rate() -> float:
-    """Settings에서 default_fast_burn_rate 조회."""
-    try:
-        from selfhealing.settings.slo import get_slo_settings
-        return get_slo_settings().default_fast_burn_rate
-    except Exception:
-        return 14.4  # Google SRE 기본값
-
-
-def _get_default_slow_burn_rate() -> float:
-    """Settings에서 default_slow_burn_rate 조회."""
-    try:
-        from selfhealing.settings.slo import get_slo_settings
-        return get_slo_settings().default_slow_burn_rate
-    except Exception:
-        return 3.0  # Google SRE 기본값
-
     def __post_init__(self) -> None:
         if self.warning_threshold is None:
             # Default: warn when 50% of error budget consumed
@@ -160,6 +142,24 @@ def _get_default_slow_burn_rate() -> float:
             "warning_threshold": self.warning_threshold,
             "critical_threshold": self.critical_threshold,
         }
+
+
+def _get_default_fast_burn_rate() -> float:
+    """Settings에서 default_fast_burn_rate 조회."""
+    try:
+        from selfhealing.settings.slo import get_slo_settings
+        return get_slo_settings().default_fast_burn_rate
+    except Exception:
+        return 14.4  # Google SRE 기본값
+
+
+def _get_default_slow_burn_rate() -> float:
+    """Settings에서 default_slow_burn_rate 조회."""
+    try:
+        from selfhealing.settings.slo import get_slo_settings
+        return get_slo_settings().default_slow_burn_rate
+    except Exception:
+        return 3.0  # Google SRE 기본값
 
 
 @dataclass

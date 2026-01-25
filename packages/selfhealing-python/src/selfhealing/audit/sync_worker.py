@@ -282,7 +282,7 @@ class AuditSyncWorker:
             logger.info("[AuditSyncWorker] Started")
             return True
     
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 1.0) -> None:
         """
         워커 중지.
         

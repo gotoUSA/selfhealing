@@ -387,12 +387,5 @@ class TestRedisAuditBuffer:
         call_args = mock_pipe.lpush.call_args
         assert "custom:audit:myapp" in str(call_args)
     
-    def test_factory_function_no_redis(self):
-        """Redis 없을 때 팩토리 함수."""
-        from selfhealing.adapters.audit.redis_buffer import create_redis_audit_buffer
-        
-        # 존재하지 않는 Redis URL
-        result = create_redis_audit_buffer("redis://nonexistent:6379")
-        
-        # Redis 연결 실패 시 None 반환
-        assert result is None
+    # NOTE: test_factory_function_no_redis는 실제 Redis 연결을 시도하므로
+    # tests/integration/selfhealing/test_regional_gate_integration.py로 이동됨

@@ -90,7 +90,7 @@ class PendingSequenceWatchdog:
             self._thread.start()
             logger.info("[PendingWatchdog] Started")
     
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 1.0) -> None:
         """Stop watchdog thread."""
         with self._lock:
             if not self._is_running:
